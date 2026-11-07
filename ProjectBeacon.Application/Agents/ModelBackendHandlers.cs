@@ -59,7 +59,7 @@ internal static class ModelBackendMappers
 {
     public static LocalModelBackendDto ToDto(LocalModelBackend backend) =>
         new(backend.Id, backend.Name, backend.BackendType, backend.LaunchCommand,
-            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent, backend.Note, backend.OpenCodeModel);
+            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent, backend.Note, backend.ProviderModelId);
 
     public static AgentTemplateDto ToDto(AgentTemplate template) =>
         new(template.Id, template.Name, template.Mode, template.SoloBackendId,
@@ -83,7 +83,7 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         var name = request.Name?.Trim() ?? string.Empty;
         if (name.Length == 0 || name.Length > 200)
             return Result.Failure<LocalModelBackendDto>("Name is required (max 200 characters).");
-        var openCodeModel = request.OpenCodeModel?.Trim() ?? string.Empty;
+        var providerModelId = request.ProviderModelId?.Trim() ?? string.Empty;
         var launch = request.BackendType == ModelBackendType.LlamaCpp
             ? request.LaunchCommand?.Trim() ?? string.Empty
             : string.Empty;
@@ -92,9 +92,9 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             if (string.IsNullOrWhiteSpace(launch) || launch.Length > 1000)
                 return Result.Failure<LocalModelBackendDto>("LaunchCommand is required (max 1000 characters).");
         }
-        else if (openCodeModel.Length == 0 || openCodeModel.Length > 200 || !openCodeModel.Contains('/'))
+        else if (providerModelId.Length == 0 || providerModelId.Length > 200 || !providerModelId.Contains('/'))
         {
-            return Result.Failure<LocalModelBackendDto>("OpenCode model id is required, like xai/grok-3.");
+            return Result.Failure<LocalModelBackendDto>("Provider model id is required, like xai/grok-3.");
         }
         if ((request.Note?.Length ?? 0) > 2000)
             return Result.Failure<LocalModelBackendDto>("Note is too long (max 2000 characters).");
@@ -110,7 +110,7 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id && b.UserId == request.UserId, ct);
             if (existing is null)
                 return Result.Failure<LocalModelBackendDto>("Model backend not found.", ErrorKind.NotFound);
-            existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
+            existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, providerModelId);
             await DesiredState.BumpUserAsync(db, request.UserId, ct);
             await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);
             await db.SaveChangesAsync(ct);
@@ -118,7 +118,7 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         }
 
         var backend = LocalModelBackend.Create(name, request.BackendType, launch,
-            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
+            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note, providerModelId);
         db.LocalModelBackends.Add(backend);
         await DesiredState.BumpUserAsync(db, request.UserId, ct);
         await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);

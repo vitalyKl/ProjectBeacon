@@ -8,12 +8,11 @@ using System.Text.Json;
 /// </summary>
 public static class WorkstationProbe
 {
-    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? opencodeServe = null)
+    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? agentRuntimeStatus = null)
     {
         var probe = new Dictionary<string, object?>
         {
             ["git"] = Which("git"),
-            ["opencode"] = Which("opencode"),
             ["llamaServer"] = Which("llama-server") ?? Which("llama-server.exe"),
             ["llamaSwap"] = Which("llama-swap") ?? Which("llama-swap.exe"),
             ["node"] = Which("node"),
@@ -29,12 +28,8 @@ public static class WorkstationProbe
             probe["llamaSwapStatus"] = llamaSwapStatus;
         if (hostLoad is not null)
             probe["hostLoad"] = hostLoad;
-        if (opencodeServe is not null)
-        {
-            // New name is runtime-neutral. Keep the old key for clients that still read it.
-            probe["agentRuntime"] = opencodeServe;
-            probe["opencodeServe"] = opencodeServe;
-        }
+        if (agentRuntimeStatus is not null)
+            probe["agentRuntime"] = agentRuntimeStatus;
         return JsonSerializer.Serialize(probe);
     }
 

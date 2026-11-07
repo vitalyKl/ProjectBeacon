@@ -20,7 +20,7 @@ using Domain.Entities.Tasks;
 public interface IBeaconDb : IAsyncDisposable
 {
     DbSet<User> Users { get; }
-    DbSet<OpenCodeConnection> OpenCodeConnections { get; }
+    DbSet<AgentProviderConnection> AgentProviderConnections { get; }
     DbSet<UserSession> Sessions { get; }
     DbSet<Org> Orgs { get; }
     DbSet<OrgMember> OrgMembers { get; }

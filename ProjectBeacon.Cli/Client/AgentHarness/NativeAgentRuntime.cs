@@ -1954,7 +1954,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             return new ResolvedProvider("beacon-local", $"http://127.0.0.1:{port}/v1", null, modelId, true);
         }
 
-        using var response = await _controlPlane.GetAsync("/v1/devices/me/opencode-connections", ct);
+        using var response = await _controlPlane.GetAsync("/v1/devices/me/provider-connections", ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Could not load provider connections (HTTP {(int)response.StatusCode}).");
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -2139,9 +2139,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static string TranscriptPath(WorkstationSettings settings, Guid _, string? id)
     {
-        var parent = string.IsNullOrWhiteSpace(settings.OpencodeDataDir)
+        var parent = string.IsNullOrWhiteSpace(settings.AgentDataDir)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon")
-            : Path.GetDirectoryName(Path.GetFullPath(settings.OpencodeDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            : Path.GetDirectoryName(Path.GetFullPath(settings.AgentDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(parent, "sessions", (id ?? Guid.NewGuid().ToString("N")) + ".json");
     }
 

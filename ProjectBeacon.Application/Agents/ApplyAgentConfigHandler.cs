@@ -7,7 +7,7 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Project, device, user, run mode, and the backend ids to write into OpenCode and the role bindings.
+/// Project, device, user, run mode, and the backend ids to bind to pipeline roles.
 /// </summary>
 public record ApplyAgentConfigRequest(
     Guid ProjectId,
@@ -21,49 +21,46 @@ public record ApplyAgentConfigRequest(
 /// <summary>
 /// Command for apply agent config.
 /// </summary>
-public record ApplyAgentConfigCommand(ApplyAgentConfigRequest Request, ActorContext Actor) : ICommand<Result<WorkstationCommandDto>>;
+public record ApplyAgentConfigCommand(ApplyAgentConfigRequest Request, ActorContext Actor) : ICommand<Result>;
 /// <summary>
-/// Binds the selected role models and enqueues an OpenCode apply command on the project device. Fails when the project, runtime, or a backend is missing.
+/// Binds the selected role models for the project. Fails when the project, runtime, or a backend is missing.
 /// </summary>
-public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCommand, Result<WorkstationCommandDto>>
+public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
     private readonly SetRoleBindingHandler _setBinding;
-    private readonly EnqueueCommandHandler _enqueue;
 
     public ApplyAgentConfigHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService authorization,
-        SetRoleBindingHandler setBinding,
-        EnqueueCommandHandler enqueue)
+        SetRoleBindingHandler setBinding)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
         _setBinding = setBinding;
-        _enqueue = enqueue;
     }
 
-    public async Task<Result<WorkstationCommandDto>> HandleAsync(ApplyAgentConfigCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(ApplyAgentConfigCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
         if (command.Actor.UserId != request.UserId || !command.Actor.IsHuman)
-            return Result.Forbidden<WorkstationCommandDto>();
+            return Result.Forbidden();
 
         await using var db = _dbFactory.CreateDbContext();
         var access = await _authorization.CanAsync(
             db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.ProjectId, ct: ct);
         if (!access.Success)
-            return Result.Forbidden<WorkstationCommandDto>();
+            return Result.Forbidden();
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
         if (!member)
-            return Result.Failure<WorkstationCommandDto>("Project not found.");
+            return Result.Failure("Project not found.");
 
         var resolved = await ProjectRuntimeResolver.ResolveAsync(db, request.ProjectId, request.DeviceId, ct);
         if (!resolved.Success)
-            return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+            return Result.Failure(resolved.Error ?? CommandSandbox.RuntimeRequired);
 
         var backends = await db.LocalModelBackends
             .Where(b => b.UserId == request.UserId)
@@ -75,12 +72,12 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
         {
             var solo = request.SoloBackendId ?? backends.FirstOrDefault()?.Id;
             if (solo is not { } soloId)
-                return Result.Failure<WorkstationCommandDto>("A model backend is required.");
+                return Result.Failure("A model backend is required.");
             foreach (var role in new[] { PipelineRole.Planner, PipelineRole.Actor, PipelineRole.Review })
             {
                 var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, soloId), command.Actor), ct);
                 if (!bound.Success)
-                    return Result.Failure<WorkstationCommandDto>(bound.Error ?? "Failed to bind role.");
+                    return Result.Failure(bound.Error ?? "Failed to bind role.");
             }
         }
         else
@@ -97,21 +94,10 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
                     continue;
                 var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, backendId), command.Actor), ct);
                 if (!bound.Success)
-                    return Result.Failure<WorkstationCommandDto>(bound.Error ?? "Failed to bind role.");
+                    return Result.Failure(bound.Error ?? "Failed to bind role.");
             }
         }
 
-        var payload = OpencodePayload.BuildApply(
-            request.Mode,
-            backends,
-            request.Mode == AgentRunMode.Solo ? request.SoloBackendId ?? backends.FirstOrDefault()?.Id : null,
-            request.PlannerBackendId,
-            request.ActorBackendId,
-            request.ReviewBackendId);
-
-        return await _enqueue.HandleAsync(
-            new EnqueueCommandCommand(new EnqueueCommandRequest(
-                request.DeviceId, request.UserId, WorkstationCommandKind.ApplyOpencode, payload, request.ProjectId)),
-            ct);
+        return Result.Ok();
     }
 }

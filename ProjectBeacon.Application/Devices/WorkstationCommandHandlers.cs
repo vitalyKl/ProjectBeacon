@@ -28,6 +28,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(EnqueueCommandCommand command, CancellationToken ct = default)
     {
+        var descriptor = WorkstationCommandCatalog.Get(command.Request.Kind);
+        if (!descriptor.Enabled)
+            return Result.Failure<WorkstationCommandDto>("This workstation command has been retired.", ErrorKind.Validation);
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
@@ -123,8 +126,6 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
                 payloadJson = json.ToJsonString();
             }
-            if (command.Request.Kind == WorkstationCommandKind.ApplyOpencode)
-                payloadJson = DesiredState.WithRevision(payloadJson ?? "{}", runtime.ConfigRevision);
         }
 
         var queued = WorkstationCommand.Create(

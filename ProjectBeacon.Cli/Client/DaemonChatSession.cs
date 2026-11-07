@@ -26,7 +26,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
@@ -38,7 +38,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 
     public DaemonChatSession(
         DaemonDependencies deps,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonLlamaSync llamaSync,
         IDaemonRuntimeState state,
         DaemonTiming timing)
@@ -145,9 +145,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
             else
             {
-                // Compatibility path for existing runtime/test adapters; the production OpenCode
-                // runtime implements capabilities and never reaches this branch.
-                await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+                throw new InvalidOperationException("Agent switching is not supported by the selected runtime.");
             }
             return (true, "{}", null);
         }
@@ -184,7 +182,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
             else
             {
-                settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+                throw new InvalidOperationException("Interactive forms are not supported by the selected runtime.");
             }
             return settled
                 ? (true, "{}", null)
@@ -246,19 +244,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         // Baseline: the last assistant message before the prompt; an ended turn from an
         // earlier prompt must not close this one.
         var baselineMessageId = (await runtime.GetTurnStatusAsync(externalId, ct))?.MessageId;
-        // Open the live text stream before the prompt so no delta is missed. v1 servers have no
-        // event feed (the stream method is a no-op for them) and polling stays the backstop.
+        // Open the live text stream before the prompt so no delta is missed. Transcript polling remains the backstop.
         var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var streamBuffers = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
         Task streamTask;
         if (capabilities is { SupportsLiveDeltas: true })
         {
             streamTask = capabilities.StreamTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
-        }
-        else if (capabilities is null)
-        {
-            // Compatibility path for pre-capability runtimes and existing test adapters.
-            streamTask = _gate.OpenCode.StreamSessionTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
         }
         else
         {
@@ -286,10 +278,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         {
             if (capabilities is { SupportsAgentSwitch: true })
                 await capabilities.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
-            else if (capabilities is null)
-                await _gate.OpenCode.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
-            else if (normalizedAgentMode == "plan")
-                return (false, null, "The selected agent runtime cannot enforce Plan mode.");
+            else
+                return (false, null, $"The selected agent runtime cannot switch to {normalizedAgentMode} mode.");
         }
 
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
@@ -420,7 +410,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                 ? configuredContextLimit
                 : capabilities is not null
                     ? await capabilities.ReadContextLimitAsync(model, ct)
-                    : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
+                    : null;
             await PostChatAsync(ApiRoutes.ChatSessionUsage(chatId), new ChatUsageReportRequest(
                 usage.PromptTokens,
                 usage.CompletionTokens,
@@ -481,10 +471,6 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             IReadOnlyList<AgentRuntimeForm> forms;
             if (capabilities is { SupportsForms: true })
                 forms = await capabilities.ListPendingFormsAsync(externalId, ct);
-            else if (capabilities is null)
-                forms = (await _gate.OpenCode.ListPendingFormsAsync(externalId, ct))
-                    .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
-                    .ToArray();
             else
                 return false;
 

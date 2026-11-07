@@ -182,11 +182,10 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetChatModelHandler>();
         services.AddTransient<SetChatModelHandler>();
         services.AddTransient<NudgeModelsHandler>();
-        services.AddTransient<ListOpenCodeConnectionsHandler>();
-        services.AddTransient<SaveOpenCodeConnectionHandler>();
-        services.AddTransient<DeleteOpenCodeConnectionHandler>();
-        services.AddTransient<NudgeOpenCodeHandler>();
-        services.AddTransient<DeviceOpenCodeConnectionsHandler>();
+        services.AddTransient<ListAgentProviderConnectionsHandler>();
+        services.AddTransient<SaveAgentProviderConnectionHandler>();
+        services.AddTransient<DeleteAgentProviderConnectionHandler>();
+        services.AddTransient<DeviceProviderConnectionsHandler>();
         services.AddTransient<GetTotpStatusHandler>();
         services.AddTransient<BeginTotpHandler>();
         services.AddTransient<ConfirmTotpHandler>();

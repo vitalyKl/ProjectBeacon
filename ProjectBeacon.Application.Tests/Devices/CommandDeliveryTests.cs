@@ -23,14 +23,14 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.ListDir)]
     [InlineData(WorkstationCommandKind.Install)]
     [InlineData(WorkstationCommandKind.InitProject)]
-    [InlineData(WorkstationCommandKind.ApplyOpencode)]
+    [InlineData(WorkstationCommandKind.RetiredAgentConfigApply)]
     [InlineData(WorkstationCommandKind.ScanGguf)]
     [InlineData(WorkstationCommandKind.ReloadProxy)]
     [InlineData(WorkstationCommandKind.UnloadProxy)]
     [InlineData(WorkstationCommandKind.SwapModel)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
     [InlineData(WorkstationCommandKind.ChatAbort)]
-    [InlineData(WorkstationCommandKind.ConfigureOpenCode)]
+    [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     public void IsAtMostOnce_IdempotentKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
@@ -42,14 +42,14 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.ListDir)]
     [InlineData(WorkstationCommandKind.Install)]
     [InlineData(WorkstationCommandKind.InitProject)]
-    [InlineData(WorkstationCommandKind.ApplyOpencode)]
+    [InlineData(WorkstationCommandKind.RetiredAgentConfigApply)]
     [InlineData(WorkstationCommandKind.ScanGguf)]
     [InlineData(WorkstationCommandKind.ReloadProxy)]
     [InlineData(WorkstationCommandKind.UnloadProxy)]
     [InlineData(WorkstationCommandKind.SwapModel)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
     [InlineData(WorkstationCommandKind.ChatAbort)]
-    [InlineData(WorkstationCommandKind.ConfigureOpenCode)]
+    [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     public void IsIdempotent_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {
@@ -72,10 +72,10 @@ public sealed class CommandDeliveryTests
     // ReconcileBacked: a reconciliation loop re-drives the command if it is lost.
     // This does NOT authorize re-execution on retry.
     [Theory]
-    [InlineData(WorkstationCommandKind.ApplyOpencode)]
+    [InlineData(WorkstationCommandKind.RetiredAgentConfigApply)]
     [InlineData(WorkstationCommandKind.ReloadProxy)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
-    [InlineData(WorkstationCommandKind.ConfigureOpenCode)]
+    [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     public void IsReconcileBacked_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {

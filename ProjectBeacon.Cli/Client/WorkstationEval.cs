@@ -18,19 +18,17 @@ public static class WorkstationEval
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
         CancellationToken ct)
-        => RunEvalTurnAsync(root, payloadJson, null, runtime, pollInterval, idleTimeout, maxDuration, ct, null);
+        => RunEvalTurnAsync(root, payloadJson, runtime, pollInterval, idleTimeout, maxDuration, ct, null);
 
     public static async Task<Result<string>> RunEvalTurnAsync(
         string root,
         string payloadJson,
-        ClientOpenCodeServe? openCode,
         IAgentRuntime runtime,
         TimeSpan pollInterval,
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
         CancellationToken ct,
-        AgentHarnessAuthorization? harnessAuthorization = null,
-        string? runtimeName = null)
+        AgentHarnessAuthorization? harnessAuthorization = null)
     {
         if (string.IsNullOrWhiteSpace(root))
             return Result.Failure<string>("root is required.");
@@ -117,7 +115,6 @@ public static class WorkstationEval
             validatedPath.Value!,
             pinnedRevision,
             evalRunId,
-            openCode,
             ct);
         if (workspaceResult.Workspace is null)
             return Result.Failure<string>(workspaceResult.Error ?? "Could not prepare an isolated eval workspace.");
@@ -128,22 +125,11 @@ public static class WorkstationEval
             ? null
             : harnessAuthorization with { WorkingDirectory = evalDirectory };
 
-        if (openCode is not null)
-        {
-            await openCode.TickAsync(evalDirectory, ct);
-            if (!openCode.Status.Healthy)
-                return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
-        }
-        else if (runtime is IAgentRuntimeCapabilities capabilities)
-        {
-            var readiness = await capabilities.EnsureReadyAsync(evalDirectory, ct);
-            if (!readiness.Ready)
-                return Result.Failure<string>(readiness.Error ?? "The selected agent runtime is not ready.");
-        }
-        else
-        {
-            return Result.Failure<string>("The selected agent runtime does not expose readiness checks.");
-        }
+        if (runtime is not IAgentRuntimeCapabilities capabilities)
+            return Result.Failure<string>("The native agent runtime does not expose readiness checks.");
+        var readiness = await capabilities.EnsureReadyAsync(evalDirectory, ct);
+        if (!readiness.Ready)
+            return Result.Failure<string>(readiness.Error ?? "The native agent runtime is not ready.");
 
         var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
         await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions)
@@ -203,8 +189,7 @@ public static class WorkstationEval
         }
 
         // A timeout or caller cancellation must stop the provider before the isolated worktree
-        // is removed. Native AbortAsync waits for the active turn; OpenCode receives its interrupt
-        // request. Never delete the workspace while a turn may still be using it.
+        // is removed. Native AbortAsync waits for the active turn. Never delete the workspace while a turn may still be using it.
         if (!turnEnded && !idle)
         {
             using var abortTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -263,13 +248,12 @@ public static class WorkstationEval
                 checkOutput = checkResult.Output;
             }
         }
-        var selectedRuntime = runtimeName
-            ?? (payload.TryGetProperty("runtime", out var runtimeElement) && runtimeElement.ValueKind == JsonValueKind.String
+        var requestedRuntime = payload.TryGetProperty("runtime", out var runtimeElement)
+            && runtimeElement.ValueKind == JsonValueKind.String
                 ? runtimeElement.GetString()
-                : null)
-            ?? (runtime is NativeAgentRuntime ? "native" : "opencode");
-        if (selectedRuntime is not ("native" or "opencode"))
-            return Result.Failure<string>("Eval runtime must be 'native' or 'opencode'.");
+                : "native";
+        if (!string.Equals(requestedRuntime, "native", StringComparison.Ordinal))
+            return Result.Failure<string>("Only the native agent runtime is supported.");
 
         var result = new
         {
@@ -281,7 +265,7 @@ public static class WorkstationEval
             exitCode,
             checkOutput,
             interrupted = !idle,
-            transcriptRef = $"{selectedRuntime}:session/{sessionId}"
+            transcriptRef = $"native:session/{sessionId}"
         };
         return Result.Ok(JsonSerializer.Serialize(result));
     }

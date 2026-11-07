@@ -149,7 +149,6 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     .ToListAsync(ct);
                 var candidates = runtimes
                     .Join(devices, r => r.DeviceId, d => d.Id, (runtime, device) => new { Runtime = runtime, Device = device })
-                    .Where(x => IsNativeRuntime(x.Device.WorkstationJson))
                     .ToList();
 
                 if (candidates.Count > 0)
@@ -169,9 +168,8 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     if (backend is null)
                         return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
 
-                    var model = backend.BackendType == ModelBackendType.LlamaCpp || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
-                        ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
-                        : backend.OpenCodeModel.Trim();
+                    var model = ChatModelSelection.ResolveBackendModelId(
+                        backend.BackendType, backend.Name, backend.ProviderModelId);
                     var payload = JsonSerializer.Serialize(new
                     {
                         projectId = session.ProjectId,
@@ -198,7 +196,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             // has actually been prepared. Never report Active for a session that nobody can run.
             if (pipelineCommand is null)
                 return Result.Failure<PipelineSessionDto>(
-                    "No native pipeline workstation is configured for this project. Assign an online workstation with AgentRuntime=native and configure a model for this role.");
+                    "No online pipeline workstation is configured for this project. Assign an online workstation and configure a model for this role.");
 
             try
             {
@@ -229,25 +227,6 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
         });
     }
 
-    private static bool IsNativeRuntime(string? workstationJson)
-    {
-        if (string.IsNullOrWhiteSpace(workstationJson))
-            return true;
-        try
-        {
-            using var doc = JsonDocument.Parse(workstationJson);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                return false;
-            // Match the workstation settings UI: a missing runtime field means native.
-            return !doc.RootElement.TryGetProperty("agentRuntime", out var runtime)
-                || (runtime.ValueKind == JsonValueKind.String
-                    && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase));
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
 }
 /// <summary>
 /// Closes an approved pipeline. Requires review notes and a completed review check.

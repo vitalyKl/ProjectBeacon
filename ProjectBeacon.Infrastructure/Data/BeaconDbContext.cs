@@ -19,7 +19,7 @@ using Domain.Enums;
 public class BeaconDbContext : DbContext, IBeaconDb
 {
     public DbSet<User> Users => Set<User>();
-    public DbSet<OpenCodeConnection> OpenCodeConnections => Set<OpenCodeConnection>();
+    public DbSet<AgentProviderConnection> AgentProviderConnections => Set<AgentProviderConnection>();
     public DbSet<UserSession> Sessions => Set<UserSession>();
     public DbSet<Org> Orgs => Set<Org>();
     public DbSet<OrgMember> OrgMembers => Set<OrgMember>();

@@ -63,10 +63,17 @@ public sealed class WorkstationCommandPayloadsTests
         Assert.Equal("native", payload.Runtime);
     }
 
-    [Fact]
-    public void EvalTurn_RejectsUnsupportedRuntime()
+    [Theory]
+    [InlineData("shell")]
+    [InlineData("opencode")]
+    public void EvalTurn_RejectsNonNativeRuntime(string runtime)
     {
-        var json = $$"""{"evalRunId":"{{Guid.NewGuid()}}","taskId":"{{Guid.NewGuid()}}","runtime":"shell"}""";
+        var json = JsonSerializer.Serialize(new
+        {
+            evalRunId = Guid.NewGuid(),
+            taskId = Guid.NewGuid(),
+            runtime
+        });
 
         Assert.False(WorkstationCommandPayloads.TryReadEvalTurn(json, out _));
     }

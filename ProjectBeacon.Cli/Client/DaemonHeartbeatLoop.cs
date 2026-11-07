@@ -10,14 +10,14 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
     private readonly ClientLlamaSwap _llama;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly IDaemonLlamaSync _llamaSync;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
 
     public DaemonHeartbeatLoop(
         DaemonDependencies deps,
         IDaemonLlamaSync llamaSync,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonRuntimeState state,
         DaemonTiming timing)
     {
@@ -37,6 +37,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
             try
             {
                 WorkstationSettings? settings;
+                string? settingsError = null;
                 try
                 {
                     settings = _loadSettings();
@@ -46,6 +47,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                     // Keep heartbeats flowing so the Web UI can show the unavailable runtime.
                     // A null workstationJson leaves the last successfully reported settings intact.
                     settings = null;
+                    settingsError = ex.Message;
                     _state.Log($"workstation settings unavailable; skipping settings sync: {ex.Message}");
                 }
 
@@ -54,10 +56,13 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                     var synced = await _llamaSync.TrySyncAsync(settings, ct);
                     if (!synced)
                         _state.Log("llama-swap sync deferred while model generations are active");
+                    // Keep the last workspace where possible; native runtime readiness must not launch or switch model processes.
+                    await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings.ProjectsRoot, ct);
                 }
-
-                // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
-                await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
+                else if (settingsError is not null)
+                {
+                    _gate.ReportUnavailable(settingsError);
+                }
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync(ApiRoutes.DeviceHeartbeat, new WorkstationHeartbeatRequest(
                     WorkstationProbe.ProbeJson(

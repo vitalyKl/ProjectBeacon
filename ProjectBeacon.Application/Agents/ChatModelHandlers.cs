@@ -61,7 +61,7 @@ public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, R
     }
 }
 /// <summary>
-/// Uses the requested model string when it is set. Otherwise maps the user's chat backend to an OpenCode model id.
+/// Uses the requested model string when it is set. Otherwise resolves the user's selected provider model id.
 /// </summary>
 public static class ChatModelSelection
 {
@@ -72,19 +72,18 @@ public static class ChatModelSelection
         var preferred = await db.Users.Where(u => u.Id == userId).Select(u => u.ChatModelBackendId).FirstOrDefaultAsync(ct);
         if (preferred is not Guid backendId)
             return null;
-        var kind = await db.LocalModelBackends
+        var backend = await db.LocalModelBackends
             .Where(b => b.Id == backendId && b.UserId == userId)
-            .Select(b => new { b.BackendType, b.Name, b.OpenCodeModel })
             .FirstOrDefaultAsync(ct);
-        if (kind is null || string.IsNullOrWhiteSpace(kind.Name))
-            return null;
-        return OpencodePayload.OpenCodeId(new LocalModelBackendDto(
-            backendId, kind.Name, kind.BackendType, "", 0, 0, [], userId, null, false, "", kind.OpenCodeModel));
+        return backend is null ? null : ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId);
     }
-    /// <summary>
-    /// Resolves the configured context window for the exact selected model. Prefer this value
-    /// to OpenCode's fallback catalog context when a custom model has an incomplete definition.
-    /// </summary>
+
+    public static string ResolveBackendModelId(ModelBackendType backendType, string name, string providerModelId)
+        => backendType == ModelBackendType.LlamaCpp
+            ? $"beacon-local/{name.Trim()}"
+            : providerModelId.Trim();
+
+    /// <summary>Resolves the configured context window for the exact selected model.</summary>
     public static async Task<int?> ResolveContextLimitAsync(
         IBeaconDb db, Guid userId, string? resolvedModel, CancellationToken ct)
     {
@@ -93,21 +92,17 @@ public static class ChatModelSelection
 
         var backends = await db.LocalModelBackends
             .Where(b => b.UserId == userId)
-            .Select(b => new { b.Name, b.BackendType, b.OpenCodeModel, b.ContextSize })
+            .Select(b => new { b.Name, b.BackendType, b.ProviderModelId, b.ContextSize })
             .ToListAsync(ct);
 
         foreach (var backend in backends)
         {
             if (backend.ContextSize <= 0)
                 continue;
-            var modelId = backend.BackendType == ModelBackendType.LlamaCpp
-                || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
-                    ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
-                    : backend.OpenCodeModel.Trim();
+            var modelId = ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId);
             if (string.Equals(modelId, resolvedModel.Trim(), StringComparison.Ordinal))
                 return backend.ContextSize;
         }
         return null;
     }
-
 }

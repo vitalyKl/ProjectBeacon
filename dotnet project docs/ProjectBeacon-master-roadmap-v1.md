@@ -459,7 +459,7 @@ UI не должен придумывать собственные статус�
 **Backend:**
 
 - §3.1 `Один sandbox contract для всех локальных операций`
-- §3.2 `Один root boundary для Chat / Eval / OpenCode / File tools`
+- §3.2 `Один root boundary для Chat / Eval / Native agent runtime / File tools`
 - §3.3 `Project-rooted commands должны ссылаться на runtime binding`
 
 **UI:**
@@ -477,7 +477,7 @@ Backend:
 - ProjectRuntime;
 - unified root validation;
 - project-relative path model;
-- Chat/Eval/OpenCode sandbox;
+- Chat/Eval/Native agent runtime sandbox;
 - command scope enforcement.
 
 UI:
@@ -493,7 +493,7 @@ UI:
 
 ## Gate
 
-Пользователь может понять, что происходит на локальном ПК, не зная внутренней архитектуры daemon/OpenCode/llama runtime.
+Пользователь может понять, что происходит на локальном ПК, не зная внутренней архитектуры daemon/agent runtime/llama runtime.
 
 ---
 
@@ -538,7 +538,7 @@ CI зелёный, а visual regression имеет зафиксированны�
 
 ## Цель
 
-Устранить инфраструктурные зависимости из domain/application contracts и одновременно сделать agent runtime независимым от OpenCode.
+Устранить инфраструктурные зависимости из domain/application contracts и сделать NativeAgentRuntime единственным workstation agent runtime.
 
 ## Читать
 
@@ -570,11 +570,11 @@ IAgentRuntime
  └── Dispose
 ```
 
-и OpenCode adapter поверх него.
+и NativeAgentRuntime как production implementation.
 
 UI:
 
-- не использовать OpenCode terminology там, где пользователю нужен generic agent concept;
+- не использовать provider- или implementation-specific terminology там, где пользователю нужен generic agent concept;
 - технические runtime details показывать только там, где они помогают диагностике.
 
 ## Gate
@@ -712,7 +712,7 @@ Current project
 
 **Backend:**
 
-- §3.2 `Chat/Eval/OpenCode sandboxing`
+- §3.2 `Chat/Eval/Native runtime sandboxing`
 - §10 `Agent Runtime abstraction`
 - §12 `Subtask tool/path restrictions`
 - §14 `Process lifecycle audit`

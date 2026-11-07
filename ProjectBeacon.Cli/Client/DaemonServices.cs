@@ -3,33 +3,25 @@ namespace ProjectBeacon.Cli.Client;
 using Application.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 
-/// <summary>
-/// Process objects the daemon already owns. The container must not dispose them.
-/// </summary>
+/// <summary>Process objects owned by the workstation daemon and its runtime factory.</summary>
 internal sealed class DaemonDependencies
 {
     public DaemonDependencies(
         HttpClient http,
         ClientLlamaSwap llama,
-        ClientOpenCodeServe openCode,
-        IAgentRuntime runtime,
         Func<WorkstationSettings> loadSettings,
-        Func<IDaemonLlamaSync, IAgentRuntime>? runtimeFactory = null)
+        Func<IDaemonLlamaSync, IAgentRuntime> runtimeFactory)
     {
         Http = http;
         Llama = llama;
-        OpenCode = openCode;
-        Runtime = runtime;
         LoadSettings = loadSettings;
         RuntimeFactory = runtimeFactory;
     }
 
     public HttpClient Http { get; }
     public ClientLlamaSwap Llama { get; }
-    public ClientOpenCodeServe OpenCode { get; }
-    public IAgentRuntime Runtime { get; }
     public Func<WorkstationSettings> LoadSettings { get; }
-    public Func<IDaemonLlamaSync, IAgentRuntime>? RuntimeFactory { get; }
+    public Func<IDaemonLlamaSync, IAgentRuntime> RuntimeFactory { get; }
 }
 
 internal static class DaemonServices
@@ -42,8 +34,8 @@ internal static class DaemonServices
         services.AddSingleton(state);
         services.AddSingleton<IDaemonLlamaSync, DaemonLlamaSync>();
         services.AddSingleton<IAgentRuntime>(sp =>
-            deps.RuntimeFactory?.Invoke(sp.GetRequiredService<IDaemonLlamaSync>()) ?? deps.Runtime);
-        services.AddSingleton<IDaemonOpenCodeGate, DaemonOpenCodeGate>();
+            deps.RuntimeFactory(sp.GetRequiredService<IDaemonLlamaSync>()));
+        services.AddSingleton<IDaemonAgentRuntimeGate, DaemonAgentRuntimeGate>();
         services.AddSingleton<IDaemonChatSession, DaemonChatSession>();
         services.AddSingleton<IDaemonCommandExecutor, DaemonCommandExecutor>();
         services.AddSingleton<IDaemonLoop, DaemonHeartbeatLoop>();

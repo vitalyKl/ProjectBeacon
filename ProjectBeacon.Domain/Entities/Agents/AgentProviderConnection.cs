@@ -3,12 +3,12 @@ namespace ProjectBeacon.Domain.Entities.Agents;
 using ProjectBeacon.Domain.Common;
 
 /// <summary>
-/// A user's OpenCode provider connection. User-owned, not tenant-scoped.
+/// A user's model provider connection. User-owned, not tenant-scoped.
 /// <see cref="ApiKeyCipher"/> is stored as supplied; this type does not hash or encrypt it.
 /// </summary>
-public class OpenCodeConnection : Entity
+public class AgentProviderConnection : Entity
 {
-    public OpenCodeConnection() { }
+    public AgentProviderConnection() { }
 
     public Guid UserId { get; private set; }
     public string ProviderId { get; private set; } = string.Empty;
@@ -20,9 +20,9 @@ public class OpenCodeConnection : Entity
     /// <summary>
     /// Creates a connection for <paramref name="userId"/>. <paramref name="providerId"/> is trimmed and lowercased; a null cipher is stored as empty.
     /// </summary>
-    public static OpenCodeConnection Create(Guid userId, string providerId, string modelId, string? baseUrl, string? apiKeyCipher)
+    public static AgentProviderConnection Create(Guid userId, string providerId, string modelId, string? baseUrl, string? apiKeyCipher)
     {
-        var row = Entity.New<OpenCodeConnection>();
+        var row = Entity.New<AgentProviderConnection>();
         row.UserId = userId;
         row.ProviderId = providerId.Trim().ToLowerInvariant();
         row.ModelId = modelId.Trim();

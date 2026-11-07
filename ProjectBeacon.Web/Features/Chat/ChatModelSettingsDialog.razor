@@ -9,7 +9,7 @@
         <MudSelectItem T="string?" Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
         @foreach (var backend in _models)
         {
-            <MudSelectItem T="string?" Value="@(OpencodePayload.OpenCodeId(backend))">@backend.Name</MudSelectItem>
+            <MudSelectItem T="string?" Value="@(ChatModelSelection.ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId))">@backend.Name</MudSelectItem>
         }
     </MudSelect>
 
@@ -63,7 +63,7 @@
 
     private LocalModelBackendDto? SelectedBackend =>
         _models.FirstOrDefault(backend =>
-            string.Equals(OpencodePayload.OpenCodeId(backend), _model, StringComparison.Ordinal));
+            string.Equals(ChatModelSelection.ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId), _model, StringComparison.Ordinal));
 
     private Task OnModelChanged(string? value)
     {

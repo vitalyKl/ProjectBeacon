@@ -135,7 +135,9 @@ public sealed class IssueHarnessTokenHandler(
                 .FirstOrDefaultAsync(run => run.Id == evalScope.EvalRunId
                     && run.ProjectId == projectId
                     && run.TaskId == evalScope.TaskId, ct);
-            if (evalRun is null || !string.Equals(evalRun.Runtime, evalScope.Runtime, StringComparison.Ordinal))
+            if (evalRun is null
+                || !string.Equals(evalRun.Runtime, "native", StringComparison.Ordinal)
+                || !string.Equals(evalScope.Runtime, "native", StringComparison.Ordinal))
                 return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or its pinned runtime does not match the command.", ErrorKind.Forbidden);
         }
 

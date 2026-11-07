@@ -19,7 +19,7 @@ public record LocalModelBackendDto(
     DateTime? UpdatedAt,
     bool Concurrent = false,
     string Note = "",
-    string OpenCodeModel = "");
+    string ProviderModelId = "");
 /// <summary>
 /// A project pipeline role bound to a model backend.
 /// </summary>
@@ -61,7 +61,7 @@ public record UpsertLocalModelBackendRequest(
     IReadOnlyList<string>? ExtraFlags = null,
     bool Concurrent = false,
     string? Note = null,
-    string? OpenCodeModel = null);
+    string? ProviderModelId = null);
 /// <summary>
 /// Command for upsert local model backend.
 /// </summary>

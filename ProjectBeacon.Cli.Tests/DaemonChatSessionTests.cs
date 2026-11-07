@@ -7,7 +7,6 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 {
     private readonly List<CapturedPost> _posts = [];
     private readonly HttpClient _http;
-    private readonly ClientOpenCodeServe _openCode = new() { SkipRealProcess = true };
     private readonly ClientLlamaSwap _llama;
     private readonly string _dir;
 
@@ -23,7 +22,6 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _openCode.DisposeAsync();
         await _llama.DisposeAsync();
         _http.Dispose();
         try { Directory.Delete(_dir, true); } catch { }
@@ -37,7 +35,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         await RunPromptAsync(JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             projectId,
             text = "hello",
             model = (string?)null
@@ -55,12 +53,12 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         var chatId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var runtime = new AgentSwitchRuntime();
-        var chat = BuildSession(_openCode, runtime);
+        var chat = BuildSession(runtime);
 
         var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             projectId,
             text = "outline the changes",
             model = (string?)null,
@@ -79,7 +77,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         await RunPromptAsync(JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "hello",
             model = (string?)null
         }));
@@ -92,11 +90,6 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     public async Task Prompt_PublishesStreamedSnapshotThenFinalPartOnSameKey()
     {
         var chatId = Guid.NewGuid();
-        _openCode.TestStream = (sessionId, onDelta, ct) =>
-        {
-            Assert.Equal("oc-1", sessionId);
-            return onDelta("text", "m1", 0, "Hel", ct);
-        };
         var timing = new DaemonTiming
         {
             ChatPollInterval = TimeSpan.FromMilliseconds(1),
@@ -105,15 +98,15 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         };
         var runtime = new FinalPartRuntime();
         var chat = new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
-            new StubGate(_openCode, runtime),
+            NewDependencies(runtime),
+            new StubGate(runtime),
             new StubLlamaSync(),
             new StubState(),
             timing);
         var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "hello",
             model = (string?)null
         }), CancellationToken.None);
@@ -144,14 +137,14 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             DelayAsync = (_, ct) => Task.CompletedTask
         };
         var chat = new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
-            new StubGate(_openCode, runtime), new StubLlamaSync(), new StubState(), timing);
+            NewDependencies(runtime),
+            new StubGate(runtime), new StubLlamaSync(), new StubState(), timing);
         var (ok, _, error) = await chat.PromptAsync(
             _dir,
             JsonSerializer.Serialize(new
             {
                 chatSessionId = chatId,
-                externalSessionId = "oc-1",
+                externalSessionId = "native-session-1",
                 projectId,
                 text = "run a tool",
                 model = (string?)null
@@ -177,7 +170,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         await RunPromptAsync(JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "hello",
             model = (string?)null,
             contextLimit = 65536
@@ -209,15 +202,15 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             DelayAsync = (_, ct) => Task.CompletedTask
         };
         var chat = new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
-            new StubGate(_openCode, runtime),
+            NewDependencies(runtime),
+            new StubGate(runtime),
             new StubLlamaSync(),
             new StubState(),
             timing);
         var (ok, result, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "hello",
             model = (string?)null
         }), CancellationToken.None);
@@ -235,11 +228,11 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     {
         var chatId = Guid.NewGuid();
         var runtime = new BlockingRuntime();
-        var chat = BuildSession(_openCode, runtime);
+        var chat = BuildSession(runtime);
         var promptTask = chat.PromptAsync(_dir, JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "keep working",
             model = (string?)null
         }), CancellationToken.None);
@@ -247,7 +240,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         await runtime.PromptStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
         var (abortOk, _, abortError) = await chat.AbortAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1"
+            externalSessionId = "native-session-1"
         }), CancellationToken.None);
         Assert.True(abortOk, abortError);
 
@@ -261,10 +254,6 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     public async Task Prompt_SurfacesPendingFormOnceWhileTurnRuns()
     {
         var chatId = Guid.NewGuid();
-        _openCode.TestPendingForms = (sessionId, ct) => Task.FromResult<IReadOnlyList<OpenCodeFormInfo>>(
-            sessionId == "oc-1"
-                ? [new OpenCodeFormInfo("f1", "Pick an option", "{}", @"[{""key"":""choice"",""type"":""string""}]")]
-                : []);
         var runtime = new LateEndRuntime();
         var timing = new DaemonTiming
         {
@@ -273,15 +262,15 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             DelayAsync = (_, ct) => Task.CompletedTask
         };
         var chat = new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
-            new StubGate(_openCode, runtime),
+            NewDependencies(runtime),
+            new StubGate(runtime),
             new StubLlamaSync(),
             new StubState(),
             timing);
         var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
         {
             chatSessionId = chatId,
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             text = "hello",
             model = (string?)null
         }), CancellationToken.None);
@@ -303,27 +292,30 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SwitchAgent_PassesThroughToServe()
+    public async Task SwitchAgent_UsesNativeRuntimeCapability()
     {
-        var chat = BuildSession(_openCode);
+        var runtime = new AgentSwitchRuntime();
+        var chat = BuildSession(runtime);
         var (ok, result, error) = await chat.SwitchAgentAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             chatSessionId = Guid.NewGuid(),
             projectId = Guid.NewGuid(),
             agent = "plan"
         }), CancellationToken.None);
+
         Assert.True(ok, error);
         Assert.Equal("{}", result);
+        Assert.Equal("plan", runtime.SwitchedAgent);
     }
 
     [Fact]
     public async Task SwitchAgent_MissingAgent_Rejected()
     {
-        var chat = BuildSession(_openCode);
+        var chat = BuildSession();
         var (ok, _, error) = await chat.SwitchAgentAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             agent = (string?)null
         }), CancellationToken.None);
         Assert.False(ok);
@@ -331,51 +323,42 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SwitchAgent_FailurePostsErrorPart()
+    public async Task SwitchAgent_RuntimeFailurePostsErrorPart()
     {
         var chatId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
-        // A v1 serve has no agent endpoint; the failure must surface as a chat error part.
-        await using var failServe = new ClientOpenCodeServe { SkipRealProcess = false };
-        var chat = BuildSession(failServe);
+        var runtime = new AgentSwitchRuntime { FailSwitch = true };
+        var chat = BuildSession(runtime);
         var (ok, _, error) = await chat.SwitchAgentAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             chatSessionId = chatId,
             projectId,
             agent = "plan"
         }), CancellationToken.None);
+
         Assert.False(ok);
-        Assert.Contains("only supported by OpenCode 2.x", error!);
+        Assert.Contains("Selected agent is unavailable", error);
         var part = _posts.Single(x => x.Path == $"/v1/chat/sessions/{chatId}/parts");
         Assert.Equal(projectId.ToString(), part.ProjectHeader);
         using var doc = JsonDocument.Parse(part.Body!);
         Assert.Equal("error", doc.RootElement.GetProperty("kind").GetString());
         Assert.StartsWith("agent:", doc.RootElement.GetProperty("externalId").GetString());
-        Assert.Contains("only supported by OpenCode 2.x", doc.RootElement.GetProperty("body").GetString());
+        Assert.Contains("Selected agent is unavailable", doc.RootElement.GetProperty("body").GetString());
     }
 
     [Fact]
-    public async Task ReplyForm_ReportsAlreadySettled()
+    public async Task ReplyForm_ReportsAlreadySettledByNativeRuntime()
     {
-        var chatId = Guid.NewGuid();
-        await using var serve = new ClientOpenCodeServe
-        {
-            SkipRealProcess = false,
-            SendAsync = (request, _) =>
-            {
-                Assert.Equal("/api/session/oc-1/form/f1/reply", request.RequestUri!.AbsolutePath);
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict));
-            }
-        };
-        serve.HandleStdoutLine("server password secret-pw");
-        var chat = BuildSession(serve);
+        var runtime = new AgentSwitchRuntime();
+        var chat = BuildSession(runtime);
         var (ok, result, error) = await chat.ReplyFormAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             formId = "f1",
             answerJson = JsonSerializer.Serialize(new { choice = "b" })
         }), CancellationToken.None);
+
         Assert.True(ok, error);
         Assert.Contains("alreadySettled", result!);
         Assert.Contains("true", result!);
@@ -384,10 +367,10 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     [Fact]
     public async Task ReplyForm_MissingPayload_Rejected()
     {
-        var chat = BuildSession(_openCode);
+        var chat = BuildSession();
         var (ok, _, error) = await chat.ReplyFormAsync(JsonSerializer.Serialize(new
         {
-            externalSessionId = "oc-1",
+            externalSessionId = "native-session-1",
             formId = (string?)null,
             answerJson = (string?)null
         }), CancellationToken.None);
@@ -395,7 +378,10 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.Equal("externalSessionId, formId, and answerJson are required.", error);
     }
 
-    private DaemonChatSession BuildSession(ClientOpenCodeServe serve, IAgentRuntime? suppliedRuntime = null)
+    private DaemonDependencies NewDependencies(IAgentRuntime runtime)
+        => new(_http, _llama, () => new WorkstationSettings(), _ => runtime);
+
+    private DaemonChatSession BuildSession(IAgentRuntime? suppliedRuntime = null)
     {
         var runtime = suppliedRuntime ?? new StubRuntime();
         var timing = new DaemonTiming
@@ -405,8 +391,8 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             DelayAsync = (_, ct) => Task.CompletedTask
         };
         return new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, serve, runtime, () => new WorkstationSettings()),
-            new StubGate(serve, runtime),
+            NewDependencies(runtime),
+            new StubGate(runtime),
             new StubLlamaSync(),
             new StubState(),
             timing);
@@ -422,8 +408,8 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             DelayAsync = (_, ct) => Task.CompletedTask
         };
         var chat = new DaemonChatSession(
-            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
-            new StubGate(_openCode, runtime),
+            NewDependencies(runtime),
+            new StubGate(runtime),
             new StubLlamaSync(),
             new StubState(),
             timing);
@@ -452,7 +438,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     {
         private int _statusCalls;
 
-        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
+        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("native-session-1");
 
         public virtual Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
 
@@ -479,8 +465,9 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     {
         public string? SwitchedAgent { get; private set; }
         public string? AgentAtPrompt { get; private set; }
-        public bool SupportsForms => false;
+        public bool SupportsForms => true;
         public bool SupportsAgentSwitch => true;
+        public bool FailSwitch { get; init; }
         public bool SupportsReasoningEffort => true;
         public bool SupportsLiveDeltas => false;
 
@@ -501,6 +488,8 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
         public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
         {
+            if (FailSwitch)
+                throw new InvalidOperationException("Selected agent is unavailable.");
             SwitchedAgent = agent;
             return Task.CompletedTask;
         }
@@ -523,7 +512,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public TaskCompletionSource<bool> PromptStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int AbortCalls => Volatile.Read(ref _abortCalls);
 
-        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
+        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("native-session-1");
 
         public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null)
         {
@@ -577,9 +566,31 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         }
     }
 
-    private sealed class FinalPartRuntime : StubRuntime
+    private sealed class FinalPartRuntime : StubRuntime, IAgentRuntimeCapabilities
     {
-        // The poller sees the final text under the same kind-scoped key the stream used.
+        public bool SupportsForms => false;
+        public bool SupportsAgentSwitch => false;
+        public bool SupportsReasoningEffort => true;
+        public bool SupportsLiveDeltas => true;
+
+        public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+            => Task.FromResult(new AgentRuntimeReadiness(true, null, workingDirectory));
+
+        public Task StreamTextAsync(
+            string sessionId,
+            Func<string, string, int, string, CancellationToken, Task> onDelta,
+            CancellationToken ct)
+            => onDelta("text", "m1", 0, "Hel", ct);
+
+        public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+
+        public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
+            => Task.FromResult(false);
+
+        public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct) => Task.CompletedTask;
+        public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct) => Task.FromResult<int?>(null);
+
         public override async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
         {
             await Task.CompletedTask;
@@ -592,7 +603,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     {
         public int StatusCalls;
 
-        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
+        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("native-session-1");
 
         public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
 
@@ -618,12 +629,15 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
     /// <summary>The turn ends on the 10th status call (poll i=8), so the form polls at i=0 and
     /// i=8 both see the pending form and the second must dedupe it.</summary>
-    private sealed class LateEndRuntime : IAgentRuntime
+    private sealed class LateEndRuntime : IAgentRuntime, IAgentRuntimeCapabilities
     {
         public int StatusCalls;
+        public bool SupportsForms => true;
+        public bool SupportsAgentSwitch => false;
+        public bool SupportsReasoningEffort => true;
+        public bool SupportsLiveDeltas => false;
 
-        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
-
+        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("native-session-1");
         public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
 
         public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
@@ -640,25 +654,38 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
                 : new AgentTurnStatus(false, null, null, "m1"));
         }
 
-        public Task AbortAsync(string sessionId, CancellationToken ct) => Task.CompletedTask;
+        public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+            => Task.FromResult(new AgentRuntimeReadiness(true, null, workingDirectory));
 
+        public Task StreamTextAsync(
+            string sessionId,
+            Func<string, string, int, string, CancellationToken, Task> onDelta,
+            CancellationToken ct) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([
+                new AgentRuntimeForm("f1", "Pick an option", "{}", @"[{""key"":""choice"",""type"":""string""}]")
+            ]);
+
+        public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
+            => Task.FromResult(false);
+
+        public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct) => Task.CompletedTask;
+        public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct) => Task.FromResult<int?>(null);
+        public Task AbortAsync(string sessionId, CancellationToken ct) => Task.CompletedTask;
         public Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
             => Task.FromResult(new AgentSessionUsage(0, 0, 0, 0));
-
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class StubGate : IDaemonOpenCodeGate
+    private sealed class StubGate : IDaemonAgentRuntimeGate
     {
-        public StubGate(ClientOpenCodeServe openCode, IAgentRuntime runtime)
-        {
-            OpenCode = openCode;
-            Runtime = runtime;
-        }
-
-        public ClientOpenCodeServe OpenCode { get; }
+        public StubGate(IAgentRuntime runtime) => Runtime = runtime;
         public IAgentRuntime Runtime { get; }
-        public Task TryTickAsync(string? projectsRoot, CancellationToken ct) => Task.CompletedTask;
+        public string? RuntimeWorkingDirectory => null;
+        public object RuntimeStatusWire() => new { runtime = "native", available = true, healthy = true };
+        public void ReportUnavailable(string error) { }
+        public Task TryTickAsync(string? workingDirectory, CancellationToken ct) => Task.CompletedTask;
         public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
             => Runtime is IAgentRuntimeCapabilities capabilities
                 ? capabilities.EnsureReadyAsync(workingDirectory, ct)
