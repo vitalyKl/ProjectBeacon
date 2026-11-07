@@ -2441,4 +2441,19 @@ orthstar</value>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
     <value>Upload fehlgeschlagen: {0}</value>
   </data>
+  <data name="RoleProfileInstructions" xml:space="preserve">
+    <value>Rollenspezifische Anweisungen</value>
+  </data>
+  <data name="RoleProfileInstructionsDescription" xml:space="preserve">
+    <value>Diese Anweisungen werden dem Prompt jeder Rolle hinzugefügt. Sie gewähren keine Tools und setzen weder Aufgaben- noch Sicherheitsgrenzen außer Kraft.</value>
+  </data>
+  <data name="PlannerProfileInstructions" xml:space="preserve">
+    <value>Anweisungen für das Planerprofil</value>
+  </data>
+  <data name="ActorProfileInstructions" xml:space="preserve">
+    <value>Anweisungen für das Akteurprofil</value>
+  </data>
+  <data name="ReviewProfileInstructions" xml:space="preserve">
+    <value>Anweisungen für das Prüfprofil</value>
+  </data>
 </root>
