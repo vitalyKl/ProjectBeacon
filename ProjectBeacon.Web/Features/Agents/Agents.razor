@@ -220,9 +220,10 @@ else
     protected override async Task OnInitializedAsync()
     {
         var user = (await Auth.GetAuthenticationStateAsync()).User;
+        _caller = ActorContextFactory.FromPrincipal(user);
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal(user));
+        var current = await CurrentProject.HandleAsync(_caller);
         _project = current.Value;
         await ReloadAsync();
     }
