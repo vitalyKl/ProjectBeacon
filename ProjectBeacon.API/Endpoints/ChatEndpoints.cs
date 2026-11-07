@@ -15,7 +15,7 @@ public static class ChatEndpoints
 {
     /// <summary>
     /// Human routes under <c>/v1/chat/sessions</c> use <c>RequireHuman</c>.
-    /// <c>POST .../parts</c> and <c>POST .../idle</c> use <c>RequireDevice</c>.
+    /// <c>POST .../parts</c>, <c>POST .../idle</c>, and <c>POST .../usage</c> use <c>RequireDevice</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapChatEndpoints(this IEndpointRouteBuilder app)
     {
