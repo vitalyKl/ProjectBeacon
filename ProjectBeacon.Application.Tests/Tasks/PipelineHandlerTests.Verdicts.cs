@@ -9,6 +9,7 @@ using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
 {
@@ -46,7 +47,7 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal("Actor", report.AuthorRole);
             Assert.Equal("Implementation completed", report.Abstract);
             Assert.Equal("Implemented and verified the feature.", report.Content);
-            Assert.Equal(actor.Value.Id, report.AuthorSessionId);
+            Assert.Equal(actor.Value!.Id, report.AuthorSessionId);
         }
     }
 
