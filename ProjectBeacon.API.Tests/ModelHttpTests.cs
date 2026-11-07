@@ -73,6 +73,7 @@ public sealed class ModelHttpTests
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
+        Assert.Equal("conflict", blockedBody.GetProperty("code").GetString());
 
         var unbind = await client.DeleteAsync("/v1/models/bind/planner", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, unbind.StatusCode);
