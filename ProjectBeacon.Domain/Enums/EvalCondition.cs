@@ -5,6 +5,6 @@ public enum EvalCondition
 {
     WithBrief,
     WithoutBrief,
-    OpenCode,
-    Native
+    HistoricalComparisonA,
+    HistoricalComparisonB
 }
