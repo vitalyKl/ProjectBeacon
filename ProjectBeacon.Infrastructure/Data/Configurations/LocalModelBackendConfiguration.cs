@@ -20,7 +20,7 @@ public class LocalModelBackendConfiguration : IEntityTypeConfiguration<LocalMode
         entity.Ignore(e => e.ExtraFlags);
         entity.Property(e => e.ExtraFlagsJson).IsRequired();
         entity.Property(e => e.Note).HasMaxLength(2000);
-        entity.Property(e => e.OpenCodeModel).HasMaxLength(200);
+        entity.Property(e => e.ProviderModelId).HasMaxLength(200);
         entity.Property(e => e.UpdatedAt);
         entity.HasIndex(e => e.UserId);
     }
