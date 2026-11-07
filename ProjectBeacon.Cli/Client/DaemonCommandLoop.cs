@@ -208,7 +208,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         _state.Publish(s => s with
         {
             LastCommand = command.Kind.ToString(),
-            LastCommandAt = DateTimeOffset.Now,
+            LastCommandAt = _timing.TimeProvider.GetLocalNow(),
             LastCommandOk = ok,
             Error = ok ? null : error
         });
