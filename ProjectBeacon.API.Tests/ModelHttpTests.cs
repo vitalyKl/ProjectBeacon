@@ -60,7 +60,7 @@ public sealed class ModelHttpTests
             launchCommand = "http://127.0.0.1:1234/v1",
             contextSize = 4096,
             ttl = 0,
-            openCodeModel = "xai/grok-3"
+            providerModelId = "xai/grok-3"
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
