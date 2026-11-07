@@ -3,7 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Agents;
 using ProjectBeacon.Domain.Common;
 
 /// <summary>
-/// A user's OpenCode provider connection. User-owned, not tenant-scoped.
+/// A user's model provider connection. User-owned, not tenant-scoped.
 /// <see cref="ApiKeyCipher"/> is stored as supplied; this type does not hash or encrypt it.
 /// </summary>
 public class AgentProviderConnection : Entity
