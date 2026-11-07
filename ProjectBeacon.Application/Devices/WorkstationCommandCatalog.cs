@@ -125,5 +125,5 @@ public static class WorkstationCommandCatalog
         new(kind, id, summary, 1, WorkstationCommandScope.ProjectRuntime, retry, payload,
             "Project membership, runtime binding, and payload sandboxing are enforced server-side.",
             lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes),
-            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation);
+            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation, enabled);
 }
