@@ -7,7 +7,7 @@ ProjectBeacon.Application/Agents/ProjectMcpServerHandlers.cs|2|Loads project-sco
 ProjectBeacon.Application/Auth/LoginHandlers.cs|9|Accepts invite and login flows using opaque invite credentials, then validates invite, organization, and project membership relationships explicitly.
 ProjectBeacon.Application/Authorization/AuthorizationService.cs|9|Implements central authorization by resolving the actor's project and organization memberships across tenant boundaries.
 ProjectBeacon.Application/Chat/ChatHandlers.cs|8|Resolves chat sessions, parts, and project membership by explicit session and actor identifiers for authenticated chat operations.
-ProjectBeacon.Application/Devices/CommandCompletions.cs|10|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers.
+ProjectBeacon.Application/Devices/CommandCompletions.cs|9|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers.
 ProjectBeacon.Application/Devices/CommandRecovery.cs|1|Recovers stale pipeline work by its persisted command/session identifiers across the request tenant boundary.
 ProjectBeacon.Application/Devices/DesiredState.cs|2|Updates desired device and project-runtime revisions for the explicitly selected device or project.
 ProjectBeacon.Application/Devices/DeviceLifecycleHandlers.cs|4|Creates and maintains device identity and runtime links after validating the owning user and project references.
