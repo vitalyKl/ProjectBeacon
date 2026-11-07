@@ -10,7 +10,7 @@ ProjectBeacon.Application/Chat/ChatHandlers.cs|8|Resolves chat sessions, parts, 
 ProjectBeacon.Application/Devices/CommandCompletions.cs|9|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers.
 ProjectBeacon.Application/Devices/CommandRecovery.cs|1|Recovers stale pipeline work by its persisted command/session identifiers across the request tenant boundary.
 ProjectBeacon.Application/Devices/DesiredState.cs|2|Updates desired device and project-runtime revisions for the explicitly selected device or project.
-ProjectBeacon.Application/Devices/DeviceLifecycleHandlers.cs|4|Creates and maintains device identity and runtime links after validating the owning user and project references.
+ProjectBeacon.Application/Devices/DeviceLifecycleHandlers.cs|2|Creates and maintains device identity and runtime links after validating the owning user and project references.
 ProjectBeacon.Application/Devices/DeviceLlamaSwapProxy.cs|2|Resolves the device's active project runtimes and memberships before proxying the authorized model operation.
 ProjectBeacon.Application/Devices/HarnessTokenCommands.cs|9|Authenticates harness tokens and resolves their explicit device, command, chat, task, subtask, eval, and project scopes.
 ProjectBeacon.Application/Devices/ProjectRuntimeHandlers.cs|11|Creates, attaches, detaches, and reports project runtime links after explicitly checking project membership, admin role, and device ownership.
