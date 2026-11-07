@@ -155,7 +155,7 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
-            return Result.Failure<RoleBindingDto>("Project scope is not resolved.");
+            return Result.Forbidden<RoleBindingDto>();
 
         var access = command.Actor.IsApiToken
             ? await _authorization.CanAsync(
@@ -210,7 +210,7 @@ public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBinding
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
-            return Result.Failure("Project scope is not resolved.");
+            return Result.Forbidden();
 
         var access = command.Actor.IsApiToken
             ? await _authorization.CanAsync(
