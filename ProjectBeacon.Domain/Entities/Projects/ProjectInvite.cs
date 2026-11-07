@@ -23,7 +23,9 @@ public class ProjectInvite : Entity, IProjectScoped
 
     public Project Project { get; private set; } = null!;
 
-    public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId, string tokenHash)
+    public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId, string tokenHash) => Create(projectId, email, role, invitedByUserId, tokenHash, DateTime.UtcNow);
+
+    public static ProjectInvite Create
     {
         var invite = Entity.New<ProjectInvite>();
         invite.ProjectId = projectId;
@@ -32,18 +34,20 @@ public class ProjectInvite : Entity, IProjectScoped
         invite.Status = InviteStatus.Pending;
         invite.InvitedByUserId = invitedByUserId;
         invite.TokenHash = tokenHash;
-        invite.CreatedAt = DateTime.UtcNow;
-        invite.ExpiredAt = DateTime.UtcNow + TimeSpan.FromDays(7);
+        invite.CreatedAt = now;
+        invite.ExpiredAt = now + TimeSpan.FromDays(7);
         return invite;
     }
 
-    public bool TryAccept()
+    public bool TryAccept() => TryAccept(DateTime.UtcNow);
+
+    public bool TryAccept(DateTime now)
     {
-        if (Status != InviteStatus.Pending || ExpiredAt < DateTime.UtcNow)
+        if (Status != InviteStatus.Pending || ExpiredAt < now)
             return false;
 
         Status = InviteStatus.Accepted;
-        AcceptedAt = DateTime.UtcNow;
+        AcceptedAt = now;
         return true;
     }
 
