@@ -1,6 +1,6 @@
 # ProjectBeacon — workstation-native agent harness
 
-**Состояние на 2026-11-07:** NativeAgentRuntime — единственная поддерживаемая реализация agent runtime. OpenCode process, server API adapter, config writer, runtime selector и OpenCode/Native parity mode удаляются. Исторические данные и зашифрованные provider credentials сохраняются миграциями.
+**Состояние на 2026-11-07:** NativeAgentRuntime — единственная поддерживаемая реализация agent runtime. Legacy process integration, server API adapter, config writer, runtime selector и parity mode удалены. Исторические данные и зашифрованные provider credentials сохраняются миграциями.
 
 CI для feature-ветки удаления должен быть зелёным на Windows, Linux и macOS до слияния. После этого требуется live acceptance на реальной workstation с выбранной локальной моделью и облачными provider credentials; CI сам по себе не заменяет этот прогон.
 
@@ -22,11 +22,11 @@ ProjectBeacon API/Web/Worker хранят задачи, права, команд
 
 ### 1. Runtime и daemon
 
-**Native-only реализация находится в feature-ветке удаления OpenCode.**
+**Native-only реализация подготовлена к выпуску в основной ветке.**
 
 - `IAgentRuntime` и `IAgentRuntimeCapabilities` остаются контрактом runtime; production composition создаёт только `NativeAgentRuntime`.
 - Runtime selector в Workstation settings удаляется. Старый `agentRuntime` JSON key игнорируется; workstation всегда запускает Native.
-- OpenCode server process, HTTP/event adapter, OpenCode-specific gate и fallback paths удаляются. Остаётся нейтральный `DaemonAgentRuntimeGate`.
+- Legacy server process, HTTP/event adapter, runtime-specific gate и fallback paths удалены. Остаётся нейтральный `DaemonAgentRuntimeGate`.
 - Readiness проверяет рабочую директорию и возвращает предупреждения локального runtime без сетевого обращения к provider.
 - Heartbeat не запускает модель и не переключает runtime.
 
@@ -67,17 +67,17 @@ ProjectBeacon API/Web/Worker хранят задачи, права, команд
 ### 6. Eval
 
 - Остаётся существующий A/B eval WithBrief / WithoutBrief с одинаковыми закреплёнными model controls; оба запуска выполняются Native.
-- Удалён OpenCode/Native parity comparison, поскольку второго runtime больше нет.
+- Удалён runtime parity comparison, поскольку поддерживается один runtime.
 - Старые EvalRun runtime labels нормализуются миграцией, исторические comparison conditions сохраняются под нейтральными enum values.
 - EvalRun закрепляет model, temperature, reasoning effort, permissions, timeout, repository revision и check command.
 - Каждый run выполняется в отдельном detached worktree на закреплённой ревизии; рабочая копия пользователя остаётся чистой.
-- Transcript refs имеют Native prefix. Pending legacy OpenCode eval commands должны быть завершены миграцией, а не повторно выданы Native runtime.
+- Transcript refs имеют Native prefix. Pending eval commands от прежнего runtime должны быть завершены миграцией, а не повторно выданы Native runtime.
 
 ### 7. Миграция данных и очистка
 
-- `OpenCodeConnection` переносится в `AgentProviderConnection`; таблица и индекс переименовываются без удаления строк или ciphertext.
-- `OpenCodeModel` переносится в `ProviderModelId` без изменения значений.
-- Существующие workstation transcript paths переносятся из `opencodeDataDir` в `agentDataDir` без перемещения файлов.
+- Legacy provider credentials переносятся в `AgentProviderConnection`; таблица и индекс переименовываются без удаления строк или ciphertext.
+- Поле модели переименовано в `ProviderModelId` без изменения значений.
+- Существующие workstation transcript paths переносятся из legacy-ключа каталога в `agentDataDir` без перемещения файлов.
 - Старые команды внешней конфигурации выводятся из эксплуатации и не должны переисполняться новым клиентом.
 - Исторические EF migrations с прежними именами остаются в цепочке миграций; новые migrations выполняют безопасное переименование и backfill.
 
@@ -91,14 +91,14 @@ CI должен проходить на Windows, Linux и macOS:
 - tool UI parts: раздельные Native tool cards, streaming → final metadata и защита завершённой карточки от запоздавшей streaming-дельты;
 - MCP: allowlists, scope и выдача token только действующей команде;
 - eval: WithBrief/WithoutBrief на Native, scoped token, миграция и transcript refs;
-- daemon: Native-only composition, settings migration и отсутствие зависимости от OpenCode executable/process/API;
+- daemon: Native-only composition, settings migration и отсутствие зависимости от внешнего agent executable/process/API;
 - database: сохранность provider credentials при переименовании таблицы, индекса и model column; безопасное прекращение pending legacy commands.
 
 ## Последний оставшийся этап: live acceptance на workstation
 
 После зелёного CI на точном merge candidate выполнить контролируемый прогон:
 
-1. Запустить свежий workstation client на чистой машине, где OpenCode не установлен. Убедиться, что daemon стартует, readiness отображается, а никакие OpenCode executable/ports/processes не проверяются.
+1. Запустить свежий workstation client на чистой машине, без стороннего agent runtime. Убедиться, что daemon стартует, readiness отображается, а никакие внешние executable/ports/processes не проверяются.
 2. Выполнить обычный chat turn и turn с реальными MCP tools; проверить streaming text/reasoning, tool results, usage и отсутствие повторного выполнения side effects.
 3. Запустить pipeline на тестовой задаче: Planner создаёт subtask; Actor выполняет разрешённую работу и отправляет subtask_report_result; Reviewer выставляет verdict. Проверить завершение command/session и отсутствие повторного запуска.
 4. Запустить WithBrief/WithoutBrief eval на одной revision, сравнить check exit code/output и token usage.
