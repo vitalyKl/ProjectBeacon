@@ -13,7 +13,7 @@ using ProjectBeacon.API.Auth;
 public static class DeviceEndpoints
 {
     /// <summary>
-    /// <c>RequireDevice</c> covers heartbeat, claim, complete, llama-swap config, and OpenCode connections.
+    /// <c>RequireDevice</c> covers heartbeat, claim, complete, llama-swap config, and provider connections.
     /// Create, list, revoke, enqueue, and runtime attach are <c>RequireHuman</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapDeviceEndpoints(this IEndpointRouteBuilder app)
@@ -33,7 +33,7 @@ public static class DeviceEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapGet(ApiRoutes.DeviceAgentProviderConnections, GetAgentProviderConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet(ApiRoutes.DeviceProviderConnections, GetAgentProviderConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
     /// <summary>
@@ -190,10 +190,10 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> GetAgentProviderConnections(
-        DeviceAgentProviderConnectionsHandler handler, HttpContext ctx, CancellationToken ct)
+        DeviceProviderConnectionsHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new DeviceAgentProviderConnectionsCommand(actor.DeviceId!.Value), ct);
+        var result = await handler.HandleAsync(new DeviceProviderConnectionsCommand(actor.DeviceId!.Value), ct);
         return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
