@@ -28,6 +28,7 @@ public sealed class ApiContractsTests
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
+        Assert.Equal("{}", JsonSerializer.Serialize(new EmptyRequest(), options));
         Assert.Equal(
             """{"success":true,"resultJson":"{}","error":null,"generation":4}""",
             JsonSerializer.Serialize(new CommandCompletionRequest(true, "{}", null, 4), options));
