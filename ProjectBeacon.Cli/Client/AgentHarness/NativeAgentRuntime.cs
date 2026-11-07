@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Domain.Common;
 using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
@@ -1844,12 +1845,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static readonly HashSet<string> PlanAllowedTools = new(StringComparer.Ordinal)
     {
-        "read_file", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers", "hash_range",
-        "get_project", "list_tasks", "get_task", "list_task_steps",
-        "list_context_nodes", "get_context_node", "export_agents_md",
-        "list_constraints", "list_decisions", "list_milestones", "get_milestone",
-        "list_labels", "match_label", "list_reports", "get_report",
-        "task_pipeline_status", "context_compile", "model_status", "suggest_command_prefixes",
+        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
+        McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
+        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
+        McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "suggest_command_prefixes",
         "run_log", "service_status", "service_logs"
     };
 
@@ -1886,9 +1887,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static readonly HashSet<string> CacheableReadOnlyTools = new(StringComparer.Ordinal)
     {
-        "read_file", "list_files", "get_project", "list_projects", "get_task", "list_tasks",
-        "get_milestone", "list_milestones", "get_label", "list_labels", "context_compile",
-        "context_get", "search_code"
+        McpToolNames.ReadFile, "list_files", McpToolNames.GetProject, "list_projects", McpToolNames.GetTask, McpToolNames.ListTasks,
+        McpToolNames.GetMilestone, McpToolNames.ListMilestones, "get_label", McpToolNames.ListLabels, McpToolNames.ContextCompile,
+        "context_get", McpToolNames.SearchCode
     };
 
     private static bool MayRequestUserInput(string? tool)
@@ -1953,7 +1954,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             return new ResolvedProvider("beacon-local", $"http://127.0.0.1:{port}/v1", null, modelId, true);
         }
 
-        using var response = await _controlPlane.GetAsync("/v1/devices/me/opencode-connections", ct);
+        using var response = await _controlPlane.GetAsync("/v1/devices/me/provider-connections", ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Could not load provider connections (HTTP {(int)response.StatusCode}).");
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -2138,9 +2139,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static string TranscriptPath(WorkstationSettings settings, Guid _, string? id)
     {
-        var parent = string.IsNullOrWhiteSpace(settings.OpencodeDataDir)
+        var parent = string.IsNullOrWhiteSpace(settings.AgentDataDir)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon")
-            : Path.GetDirectoryName(Path.GetFullPath(settings.OpencodeDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            : Path.GetDirectoryName(Path.GetFullPath(settings.AgentDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(parent, "sessions", (id ?? Guid.NewGuid().ToString("N")) + ".json");
     }
 

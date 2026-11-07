@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Application.Runtime;
 
 internal interface IDaemonChatSession
@@ -25,7 +26,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
@@ -37,7 +38,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 
     public DaemonChatSession(
         DaemonDependencies deps,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonLlamaSync llamaSync,
         IDaemonRuntimeState state,
         DaemonTiming timing)
@@ -144,9 +145,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
             else
             {
-                // Compatibility path for existing runtime/test adapters; the production OpenCode
-                // runtime implements capabilities and never reaches this branch.
-                await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+                throw new InvalidOperationException("Agent switching is not supported by the selected runtime.");
             }
             return (true, "{}", null);
         }
@@ -157,13 +156,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             if (chatId != Guid.Empty)
             {
                 var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{agent}:{error}")))[..16];
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-                {
-                    role = "assistant",
-                    kind = "error",
-                    body = error,
-                    externalId = $"agent:{hash}"
-                }, projectId, ct);
+                await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "error", error, $"agent:{hash}"), projectId, ct);
             }
             return (false, null, error);
         }
@@ -189,7 +182,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
             else
             {
-                settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+                throw new InvalidOperationException("Interactive forms are not supported by the selected runtime.");
             }
             return settled
                 ? (true, "{}", null)
@@ -251,19 +244,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         // Baseline: the last assistant message before the prompt; an ended turn from an
         // earlier prompt must not close this one.
         var baselineMessageId = (await runtime.GetTurnStatusAsync(externalId, ct))?.MessageId;
-        // Open the live text stream before the prompt so no delta is missed. v1 servers have no
-        // event feed (the stream method is a no-op for them) and polling stays the backstop.
+        // Open the live text stream before the prompt so no delta is missed. Transcript polling remains the backstop.
         var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var streamBuffers = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
         Task streamTask;
         if (capabilities is { SupportsLiveDeltas: true })
         {
             streamTask = capabilities.StreamTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
-        }
-        else if (capabilities is null)
-        {
-            // Compatibility path for pre-capability runtimes and existing test adapters.
-            streamTask = _gate.OpenCode.StreamSessionTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
         }
         else
         {
@@ -274,14 +261,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         {
             var key = messageId + ":" + kind + ":" + ordinal;
             var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
-            return PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-            {
-                role = "assistant",
-                kind,
-                body,
-                externalId = key,
-                complete = false
-            }, projectId, streamCt);
+            return PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", kind, body, key, Complete: false), projectId, streamCt);
         }
         var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
@@ -298,10 +278,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         {
             if (capabilities is { SupportsAgentSwitch: true })
                 await capabilities.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
-            else if (capabilities is null)
-                await _gate.OpenCode.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
-            else if (normalizedAgentMode == "plan")
-                return (false, null, "The selected agent runtime cannot enforce Plan mode.");
+            else
+                return (false, null, $"The selected agent runtime cannot switch to {normalizedAgentMode} mode.");
         }
 
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
@@ -340,20 +318,18 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     if (publishedSnapshots.TryGetValue(key, out var previous) && previous == snapshot)
                         continue;
                     await PostChatAsync(
-                        $"/v1/chat/sessions/{chatId}/parts",
-                        new
-                        {
-                            role = part.Role,
-                            kind = part.Kind,
-                            body = part.Body,
-                            externalId = part.ExternalId,
-                            tool = part.Tool,
-                            toolStatus = part.ToolStatus,
-                            toolInput = part.ToolInput,
-                            toolResult = part.ToolResult,
-                            durationMs = part.DurationMs,
-                            complete = part.Complete
-                        },
+                        ApiRoutes.ChatSessionParts(chatId),
+                        new ChatPartRequest(
+                            part.Role,
+                            part.Kind,
+                            part.Body,
+                            part.ExternalId,
+                            part.Tool,
+                            part.ToolStatus,
+                            part.ToolInput,
+                            part.ToolResult,
+                            part.DurationMs,
+                            part.Complete),
                         projectId,
                         ct);
                     publishedSnapshots[key] = snapshot;
@@ -434,16 +410,14 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                 ? configuredContextLimit
                 : capabilities is not null
                     ? await capabilities.ReadContextLimitAsync(model, ct)
-                    : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
-            await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
-            {
-                promptTokens = usage.PromptTokens,
-                completionTokens = usage.CompletionTokens,
-                assistantMessages = usage.AssistantMessages,
-                totalCost = usage.TotalCost,
-                generationSeconds = usage.GenerationSeconds,
-                contextLimit
-            }, projectId, ct);
+                    : null;
+            await PostChatAsync(ApiRoutes.ChatSessionUsage(chatId), new ChatUsageReportRequest(
+                usage.PromptTokens,
+                usage.CompletionTokens,
+                usage.AssistantMessages,
+                usage.TotalCost,
+                contextLimit,
+                usage.GenerationSeconds), projectId, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -470,7 +444,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
         }
 
-        await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
+        await PostChatAsync(ApiRoutes.ChatSessionIdle(chatId), new EmptyRequest(), projectId, ct);
         return (true, JsonSerializer.Serialize(new
         {
             sessionId = externalId,
@@ -486,13 +460,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         // Stable external id derived from the error text so a repeated identical error dedupes on the API.
         var body = ClipError(turn.Error!);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..16];
-        await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-        {
-            role = "assistant",
-            kind = "error",
-            body,
-            externalId = $"error:{hash}"
-        }, projectId, ct);
+        await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "error", body, $"error:{hash}"), projectId, ct);
     }
 
     private async Task<bool> SurfacePendingFormsAsync(
@@ -503,10 +471,6 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             IReadOnlyList<AgentRuntimeForm> forms;
             if (capabilities is { SupportsForms: true })
                 forms = await capabilities.ListPendingFormsAsync(externalId, ct);
-            else if (capabilities is null)
-                forms = (await _gate.OpenCode.ListPendingFormsAsync(externalId, ct))
-                    .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
-                    .ToArray();
             else
                 return false;
 
@@ -521,14 +485,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     metadata = form.Metadata,
                     fields = JsonNode.Parse(form.FieldsJson)
                 });
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-                {
-                    role = "assistant",
-                    kind = "question",
-                    body,
-                    externalId = $"form:{form.Id}",
-                    complete = true
-                }, projectId, ct);
+                await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "question", body, $"form:{form.Id}", Complete: true), projectId, ct);
             }
             return forms.Count > 0;
         }
@@ -555,8 +512,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         try
         {
             using var response = await _http.PostAsJsonAsync(
-                $"/v1/commands/{authorization.CommandId:D}/progress",
-                new { generation = authorization.Generation, progressJson },
+                ApiRoutes.CommandProgress(authorization.CommandId),
+                new CommandProgressRequest(authorization.Generation, progressJson),
                 ct);
             if (!response.IsSuccessStatusCode)
                 _state.Log($"chat command progress report returned HTTP {(int)response.StatusCode}");
@@ -587,7 +544,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             activeTurn.Cancel();
 
         for (var attempt = 0; attempt < 200 && !_activeTurns.IsEmpty; attempt++)
-            await Task.Delay(50);
+            await _timing.DelayAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None);
 
         foreach (var externalId in _chatExternalSessions.Values.Distinct(StringComparer.Ordinal))
         {

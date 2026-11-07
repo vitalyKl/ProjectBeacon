@@ -3,21 +3,22 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Infrastructure.Attachments
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject IAttachmentService Attachments
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-        <MudText Typo="Typo.h6">Attachments</MudText>
-        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Reload" Disabled="@_busy">Refresh</MudButton>
+        <MudText Typo="Typo.h6">@L["TaskAttachmentsTitle"]</MudText>
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Reload" Disabled="@_busy">@L["TaskAttachmentsRefresh"]</MudButton>
     </MudStack>
     <div class="d-flex flex-wrap align-center gap-2 mt-2">
         <InputFile OnChange="Upload" multiple disabled="@_busy" />
-        <MudText Typo="Typo.caption">Up to 10 MB per file</MudText>
+        <MudText Typo="Typo.caption">@L["TaskAttachmentsLimit"]</MudText>
     </div>
     @if (_busy) { <MudProgressLinear Indeterminate="true" Class="mt-2" /> }
-    @if (_items.Count == 0 && !_busy) { <MudText Typo="Typo.caption" Class="mt-2">No attachments yet.</MudText> }
+    @if (_items.Count == 0 && !_busy) { <MudText Typo="Typo.caption" Class="mt-2">@L["TaskAttachmentsEmpty"]</MudText> }
     <div class="d-flex flex-column gap-3 mt-3">
         @foreach (var item in _items)
         {
@@ -70,7 +71,7 @@
             }
             _loadedTaskId = Task.Id;
         }
-        catch (Exception ex) { Snackbar.Add($"Could not load attachments: {ex.Message}", Severity.Error); }
+        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
         finally { _busy = false; }
     }
 
@@ -85,15 +86,15 @@
             {
                 if (file.Size is <= 0 or > PhysicalAttachmentService.MaxFileLength)
                 {
-                    Snackbar.Add($"{file.Name}: file exceeds the 10 MB limit.", Severity.Warning);
+                    Snackbar.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
                     continue;
                 }
                 await using var stream = file.OpenReadStream(PhysicalAttachmentService.MaxFileLength);
                 await Attachments.UploadTaskAsync(Task.ProjectId, Task.Id, actor, stream, file.Name, file.ContentType, file.Size);
             }
-            Snackbar.Add("Attachments uploaded.", Severity.Success);
+            Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
         }
-        catch (Exception ex) { Snackbar.Add($"Upload failed: {ex.Message}", Severity.Error); }
+        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsUploadFailed"].Value, ex.Message), Severity.Error); }
         finally { _busy = false; }
         await Reload();
     }

@@ -190,6 +190,8 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
         var summary = command.Request.Summary?.Trim();
         if (string.IsNullOrWhiteSpace(diffRef) || string.IsNullOrWhiteSpace(summary))
             return Result.Failure<PipelineStateDto>("DiffRef and Summary are required.");
+        if (summary.Length > Subtask.MaxSummaryLength)
+            return Result.Failure<PipelineStateDto>($"Summary exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the summary and retry.");
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.AsNoTracking()
@@ -264,6 +266,8 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
         var reason = command.Request.Reason?.Trim();
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure<PipelineStateDto>("Reason is required.");
+        if (reason.Length > Subtask.MaxSummaryLength)
+            return Result.Failure<PipelineStateDto>($"Failure reason exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the reason and retry.");
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.AsNoTracking()

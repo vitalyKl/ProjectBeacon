@@ -18,16 +18,24 @@ using System.Text.Json.Nodes;
 public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public EnqueueCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public EnqueueCommandHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(EnqueueCommandCommand command, CancellationToken ct = default)
     {
+        var descriptor = WorkstationCommandCatalog.Get(command.Request.Kind);
+        if (!descriptor.Enabled)
+            return Result.Failure<WorkstationCommandDto>("This workstation command has been retired.", ErrorKind.Validation);
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
             return Result.Failure<WorkstationCommandDto>("Device not found.");
-        if (!device.IsOnline(DateTime.UtcNow))
+        if (!device.IsOnline(_timeProvider.GetUtcNow().UtcDateTime))
             return Result.Failure<WorkstationCommandDto>("Device is not connected.", ErrorKind.Conflict);
 
         if (command.Request.ProjectId is { } projectId)
@@ -118,8 +126,6 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
                 payloadJson = json.ToJsonString();
             }
-            if (command.Request.Kind == WorkstationCommandKind.ApplyOpencode)
-                payloadJson = DesiredState.WithRevision(payloadJson ?? "{}", runtime.ConfigRevision);
         }
 
         var queued = WorkstationCommand.Create(
@@ -147,13 +153,18 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public ClaimNextCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ClaimNextCommandHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<WorkstationCommandDto?>> HandleAsync(ClaimNextCommandCommand command, CancellationToken ct = default)
     {
         var wait = command.Request.Wait ?? TimeSpan.Zero;
-        var deadline = DateTime.UtcNow + wait;
+        var deadline = _timeProvider.GetUtcNow().UtcDateTime + wait;
         string? instanceId = null;
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -179,12 +190,12 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
             var next = await pending.OrderBy(c => c.CreatedAt).FirstOrDefaultAsync(ct);
             if (next is null)
             {
-                if (DateTime.UtcNow >= deadline)
+                if (_timeProvider.GetUtcNow().UtcDateTime >= deadline)
                     return Result.Ok<WorkstationCommandDto?>(null);
 
                 try
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), _timeProvider, ct);
                 }
                 catch (OperationCanceledException)
                 {
@@ -200,7 +211,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 if (string.IsNullOrWhiteSpace(localRoot))
                 {
                     // Guarded fail: only take effect if the row is still pending.
-                    var now = DateTime.UtcNow;
+                    var now = _timeProvider.GetUtcNow().UtcDateTime;
                     var updated = await db.WorkstationCommands
                         .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
                         .ExecuteUpdateAsync(s => s
@@ -217,7 +228,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
 
             // Guarded claim: succeeds only if the row is still pending. The claim grants the
             // kind's execution lease and records the claiming process instance.
-            var startedAt = DateTime.UtcNow;
+            var startedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var lease = CommandLease.For(next.Kind);
             var claimed = await db.WorkstationCommands
                 .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
@@ -516,36 +527,26 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
                     $"Pipeline session cannot report progress from status {session.Status}.",
                     ErrorKind.Conflict);
 
-            var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
-            var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
-            if (activity["forms"] is null)
-                activity["forms"] = reportedForms;
-
-            // Keep answered forms in the durable task transcript even after the runtime removes
-            // them from its pending-form registry on the next poll.
+            ProjectBeacon.Domain.Common.PipelineActivityV1 incomingActivity;
             try
             {
-                var previous = JsonNode.Parse(session.ActivityJson) as JsonObject;
-                if (previous?["forms"] is JsonArray previousForms)
-                {
-                    foreach (var answered in previousForms.OfType<JsonObject>().Where(form => form["answer"] is not null))
-                    {
-                        var id = answered["id"]?.GetValue<string>();
-                        if (!string.IsNullOrWhiteSpace(id)
-                            && !reportedForms.OfType<JsonObject>().Any(form =>
-                                string.Equals(form["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
-                            reportedForms.Add(answered.DeepClone());
-                    }
-                }
+                incomingActivity = ProjectBeacon.Domain.Common.PipelineActivityV1.Parse(request.ProgressJson);
             }
             catch (JsonException)
             {
-                // A malformed prior snapshot must not prevent a fresh device update.
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline activity snapshot must be a valid version 1 JSON object.");
             }
 
-            activity["deviceId"] = request.DeviceId.ToString("D");
-            activity["commandId"] = request.CommandId.ToString("D");
-            var activityJson = activity.ToJsonString();
+            // Keep answered forms in the durable task transcript even after the runtime removes
+            // them from its pending-form registry on the next poll.
+            ProjectBeacon.Domain.Common.PipelineActivityV1.TryParse(session.ActivityJson, out var previousActivity);
+            var activity = incomingActivity.PreserveAnsweredForms(previousActivity) with
+            {
+                DeviceId = request.DeviceId.ToString("D"),
+                CommandId = request.CommandId.ToString("D")
+            };
+            var activityJson = activity.ToJson();
             if (string.IsNullOrWhiteSpace(activityJson) || activityJson.Length > 262144)
                 return Result.Failure<WorkstationCommandDto>(
                     "Pipeline activity snapshot must be a non-empty JSON payload of at most 256 KiB.");

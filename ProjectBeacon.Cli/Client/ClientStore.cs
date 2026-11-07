@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 /// <summary>
 /// Persisted control-plane URL, device token, and device id. Default file is client.json beside the user profile data. NeedsWizard is true until both URL and token are set.
 /// </summary>
@@ -117,7 +118,6 @@ public sealed class WorkstationSettings
     public string? LlamaSwapBin { get; set; }
     public int LlamaSwapPort { get; set; } = 8080;
     public bool UseOwnSwapper { get; set; }
-    public string AgentRuntime { get; set; } = "opencode";
     /// <summary>Workstation-wide native command policy: off, ask, or auto. Defaults to ask.</summary>
     public string CommandPolicy { get; set; } = "ask";
     public int ConcurrentPortBase { get; set; } = 9000;
@@ -125,7 +125,7 @@ public sealed class WorkstationSettings
     public int PipelineTurnTimeoutMinutes { get; set; } = 60;
     /// <summary>Abort a pipeline turn after this many minutes without transcript/tool/form progress.</summary>
     public int PipelineIdleTimeoutMinutes { get; set; } = 15;
-    public string? OpencodeDataDir { get; set; }
+    public string? AgentDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
     public string? BeaconPath { get; set; }
 
@@ -149,7 +149,16 @@ public sealed class WorkstationSettings
         try
         {
             var json = File.ReadAllText(path);
-            return (JsonSerializer.Deserialize<WorkstationSettings>(json, JsonOptions) ?? new WorkstationSettings(), null);
+            // Migrate the old transcript directory key. Runtime selection is intentionally
+            // ignored: the workstation now has one supported native agent runtime.
+            var root = JsonNode.Parse(json) as JsonObject
+                ?? throw new JsonException("Workstation settings must be a JSON object.");
+            if (!root.ContainsKey("agentDataDir")
+                && root.TryGetPropertyValue("opencodeDataDir", out var legacyDataDirectory))
+                root["agentDataDir"] = legacyDataDirectory?.DeepClone();
+            root.Remove("opencodeDataDir");
+            root.Remove("agentRuntime");
+            return (JsonSerializer.Deserialize<WorkstationSettings>(root.ToJsonString(), JsonOptions) ?? new WorkstationSettings(), null);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -162,7 +171,7 @@ public sealed class WorkstationSettings
         var (settings, error) = TryRead(path);
         if (error is null)
             return settings;
-        throw new InvalidDataException($"{error}. Delete the file or re-save it from the client TUI (s).");
+        throw new InvalidDataException($"Could not load workstation settings: {error}. Delete the file or re-save it from the client TUI (s).");
     }
 
     public void Save(string? path = null)

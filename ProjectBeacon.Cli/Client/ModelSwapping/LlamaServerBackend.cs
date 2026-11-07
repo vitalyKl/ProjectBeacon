@@ -18,7 +18,7 @@ public sealed class LlamaServerBackend : IModelBackend
         TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(16)
     };
 
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private readonly HttpClient _http;
     private readonly ModelBackendFsm _fsm = new();
     private readonly object _restartGate = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);
@@ -29,6 +29,16 @@ public sealed class LlamaServerBackend : IModelBackend
     private DateTimeOffset _readySince;
     private CancellationTokenSource? _superviseCts;
     private Task? _superviseTask;
+    public LlamaServerBackend() : this(null)
+    {
+    }
+
+    internal LlamaServerBackend(HttpMessageHandler? handler)
+    {
+        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        _http.Timeout = TimeSpan.FromSeconds(5);
+    }
+
     internal TimeSpan SupervisePollDelay { get; set; } = TimeSpan.FromSeconds(2);
     internal Task? Supervision => _superviseTask;
 

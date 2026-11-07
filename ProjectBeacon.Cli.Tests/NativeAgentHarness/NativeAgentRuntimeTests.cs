@@ -24,7 +24,7 @@ public sealed class NativeAgentRuntimeTests
         var mcp = new StubMcpToolClient();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
@@ -224,13 +224,13 @@ public sealed class NativeAgentRuntimeTests
         await using var llama = new ClientLlamaSwap();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") });
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") });
         try
         {
             var session = await runtime.CreateSessionAsync("agent mode", CancellationToken.None);
             await runtime.SwitchAgentAsync(session, "plan", CancellationToken.None);
 
-            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            var transcriptPath = Path.Combine(temp, ".beacon-agent", "sessions", session + ".json");
             using (var transcript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath)))
             {
                 Assert.Equal("plan", transcript.RootElement.GetProperty("agentMode").GetString());
@@ -320,7 +320,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -341,14 +341,14 @@ public sealed class NativeAgentRuntimeTests
         try
         {
             var session = await runtime.CreateSessionAsync("test", CancellationToken.None);
-            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            var transcriptPath = Path.Combine(temp, ".beacon-agent", "sessions", session + ".json");
             Assert.True(File.Exists(transcriptPath));
             using (var transcript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath)))
             {
                 var systemPrompt = transcript.RootElement.GetProperty("messages")[0].GetProperty("content").GetString();
                 Assert.Contains("ProjectBeacon workstation assistant", systemPrompt, StringComparison.Ordinal);
                 Assert.DoesNotContain("Native Agent Harness", systemPrompt, StringComparison.Ordinal);
-                Assert.DoesNotContain("OpenCode", systemPrompt, StringComparison.Ordinal);
+                Assert.DoesNotContain("external agent server", systemPrompt, StringComparison.OrdinalIgnoreCase);
             }
             var ready = await runtime.EnsureReadyAsync(project, CancellationToken.None);
             Assert.True(ready.Ready);
@@ -400,7 +400,7 @@ public sealed class NativeAgentRuntimeTests
             control,
             llama,
             new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(client));
         try
@@ -469,7 +469,7 @@ public sealed class NativeAgentRuntimeTests
             control,
             llama,
             new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
@@ -547,7 +547,7 @@ public sealed class NativeAgentRuntimeTests
         await using var llama = new ClientLlamaSwap();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider);
         try
         {
@@ -587,7 +587,7 @@ public sealed class NativeAgentRuntimeTests
         await using var llama = new ClientLlamaSwap();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider);
         try
         {
@@ -617,9 +617,9 @@ public sealed class NativeAgentRuntimeTests
     public async Task NativeRuntimeRejectsSessionIdsThatCouldEscapeTranscriptDirectory()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-session-path-" + Guid.NewGuid().ToString("N"));
-        var dataDirectory = Path.Combine(temp, ".opencode", "data");
-        var outsideTranscript = Path.Combine(temp, ".opencode", "outside.json");
-        Directory.CreateDirectory(Path.Combine(temp, ".opencode", "sessions"));
+        var dataDirectory = Path.Combine(temp, ".beacon-agent", "data");
+        var outsideTranscript = Path.Combine(temp, ".beacon-agent", "outside.json");
+        Directory.CreateDirectory(Path.Combine(temp, ".beacon-agent", "sessions"));
         Directory.CreateDirectory(Path.GetDirectoryName(outsideTranscript)!);
         await File.WriteAllTextAsync(outsideTranscript, new JsonObject
         {
@@ -654,7 +654,7 @@ public sealed class NativeAgentRuntimeTests
             new StubLlamaSync(),
             () => new WorkstationSettings
             {
-                OpencodeDataDir = dataDirectory,
+                AgentDataDir = dataDirectory,
                 LlamaSwapPort = 8080
             });
 
@@ -675,8 +675,8 @@ public sealed class NativeAgentRuntimeTests
     public async Task NativeRuntimeRecoversUnrecordedToolResultsAfterRestartWithoutReplayingTools()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tool-recovery-" + Guid.NewGuid().ToString("N"));
-        var dataDirectory = Path.Combine(temp, ".opencode", "data");
-        var sessionsDirectory = Path.Combine(temp, ".opencode", "sessions");
+        var dataDirectory = Path.Combine(temp, ".beacon-agent", "data");
+        var sessionsDirectory = Path.Combine(temp, ".beacon-agent", "sessions");
         Directory.CreateDirectory(sessionsDirectory);
         var sessionId = Guid.NewGuid().ToString("N");
         var transcriptPath = Path.Combine(sessionsDirectory, sessionId + ".json");
@@ -754,7 +754,7 @@ public sealed class NativeAgentRuntimeTests
             new StubLlamaSync(),
             () => new WorkstationSettings
             {
-                OpencodeDataDir = dataDirectory,
+                AgentDataDir = dataDirectory,
                 LlamaSwapPort = 8080
             },
             providerFactory: (_, _, _) => provider);
@@ -818,8 +818,8 @@ public sealed class NativeAgentRuntimeTests
     public async Task NativeRuntimeReleasesTurnReservationWhenInitialTranscriptPersistFails()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-persist-failure-" + Guid.NewGuid().ToString("N"));
-        var dataDirectory = Path.Combine(temp, ".opencode", "data");
-        var sessionsDirectory = Path.Combine(temp, ".opencode", "sessions");
+        var dataDirectory = Path.Combine(temp, ".beacon-agent", "data");
+        var sessionsDirectory = Path.Combine(temp, ".beacon-agent", "sessions");
         Directory.CreateDirectory(sessionsDirectory);
 
         using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -836,7 +836,7 @@ public sealed class NativeAgentRuntimeTests
             new StubLlamaSync(),
             () => new WorkstationSettings
             {
-                OpencodeDataDir = dataDirectory,
+                AgentDataDir = dataDirectory,
                 LlamaSwapPort = 8080
             },
             providerFactory: (_, _, _) => new RequestRecordingProvider());
@@ -893,7 +893,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -969,7 +969,7 @@ public sealed class NativeAgentRuntimeTests
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["tool_call_id"]?.GetValue<string>() == "call-1"
                 && message["content"]?.GetValue<string>() == expectedToolResult);
-            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".opencode", "sessions", session + ".json"));
+            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".beacon-agent", "sessions", session + ".json"));
             Assert.Contains("[Tool result truncated: original length 20000 characters;", transcript, StringComparison.Ordinal);
             Assert.DoesNotContain(originalToolResult, transcript, StringComparison.Ordinal);
             Assert.DoesNotContain("never-persist-this-token", transcript, StringComparison.Ordinal);
@@ -997,7 +997,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1045,7 +1045,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Contains("before [DONE]", status.Error!, StringComparison.Ordinal);
             Assert.Equal(0, mcp.CallCount);
             var transcript = JsonNode.Parse(await File.ReadAllTextAsync(
-                Path.Combine(temp, ".opencode", "sessions", session + ".json")))!;
+                Path.Combine(temp, ".beacon-agent", "sessions", session + ".json")))!;
             Assert.DoesNotContain(transcript["messages"]!.AsArray(), message =>
                 message?["role"]?.GetValue<string>() == "tool");
         }
@@ -1067,7 +1067,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1133,7 +1133,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1176,7 +1176,7 @@ public sealed class NativeAgentRuntimeTests
                 new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
 
             await mcp.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", sessionId + ".json");
+            var transcriptPath = Path.Combine(temp, ".beacon-agent", "sessions", sessionId + ".json");
             var duringToolCall = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
             Assert.DoesNotContain(duringToolCall["messages"]!.AsArray(), message =>
                 message?["role"]?.GetValue<string>() == "tool");
@@ -1221,7 +1221,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1295,7 +1295,7 @@ public sealed class NativeAgentRuntimeTests
         var mcp = new StubMcpToolClient();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
-            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            () => new WorkstationSettings { AgentDataDir = Path.Combine(temp, ".beacon-agent", "data") },
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
@@ -1383,7 +1383,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1418,7 +1418,7 @@ public sealed class NativeAgentRuntimeTests
             }
 
             Assert.True(provider.SummaryCalls > 0);
-            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".opencode", "sessions", session + ".json"));
+            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".beacon-agent", "sessions", session + ".json"));
             Assert.Contains("Continuation checkpoint (internal state; preserve and follow it)", transcript, StringComparison.Ordinal);
             Assert.Contains("User message 4", transcript, StringComparison.Ordinal);
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
@@ -1443,7 +1443,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1484,7 +1484,7 @@ public sealed class NativeAgentRuntimeTests
             }
 
             Assert.Equal(1, provider.SummaryCalls);
-            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            var transcriptPath = Path.Combine(temp, ".beacon-agent", "sessions", session + ".json");
             var transcript = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
             var messages = transcript["messages"]!.AsArray();
             var transcriptText = transcript.ToJsonString();
@@ -1591,7 +1591,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1633,7 +1633,7 @@ public sealed class NativeAgentRuntimeTests
 
             Assert.Equal(1, provider.SummaryCalls);
             var transcript = JsonNode.Parse(await File.ReadAllTextAsync(
-                Path.Combine(temp, ".opencode", "sessions", session + ".json")))!.AsObject();
+                Path.Combine(temp, ".beacon-agent", "sessions", session + ".json")))!.AsObject();
             var checkpoint = transcript["messages"]!.AsArray()
                 .Select(message => message?["content"]?.GetValue<string>())
                 .First(content => content is not null
@@ -1660,7 +1660,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 
@@ -1691,7 +1691,7 @@ public sealed class NativeAgentRuntimeTests
 
         // Seven stored messages plus the new prompt make eight: system, a checkpoint and the six
         // retained messages. The only thing left to compress is the checkpoint itself.
-        var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+        var transcriptPath = Path.Combine(temp, ".beacon-agent", "sessions", session + ".json");
         var stored = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
         var systemMessage = stored["messages"]!.AsArray()[0]!.DeepClone();
         stored["messages"] = new JsonArray(
@@ -1757,7 +1757,7 @@ public sealed class NativeAgentRuntimeTests
         new WorkstationSettings
         {
             ProjectsRoot = project,
-            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
             LlamaSwapPort = 8080
         }.Save(settingsPath);
 

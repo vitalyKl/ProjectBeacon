@@ -42,7 +42,7 @@
         }
         else
         {
-            <MudTextField @bind-Value="_openCodeModel" Label="@L["OpenCodeModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["OpenCodeModelHint"]" />
+            <MudTextField @bind-Value="_providerModelId" Label="@L["ProviderModelId"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["ProviderModelIdHint"]" />
         }
         <MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
         <MudSwitch @bind-Value="_concurrent" Label="@L["LoadWithOthers"]" Color="Color.Primary" Class="mt-3" />
@@ -70,7 +70,7 @@
     private bool _concurrent;
     private string _extraFlags = string.Empty;
     private string _note = string.Empty;
-    private string _openCodeModel = string.Empty;
+    private string _providerModelId = string.Empty;
     private bool _saving;
     private string? _gguf;
     private List<GgufFile> _ggufs = [];
@@ -83,7 +83,7 @@
             _type = backend.BackendType;
             _launchCommand = backend.LaunchCommand;
             _note = backend.Note;
-            _openCodeModel = backend.OpenCodeModel;
+            _providerModelId = backend.ProviderModelId;
             _contextSize = backend.ContextSize;
             _ttl = backend.Ttl;
             _concurrent = backend.Concurrent;
@@ -164,9 +164,9 @@
             Snackbar.Add(L["PickGgufFirst"].Value, Severity.Warning);
             return;
         }
-        if (_type != ModelBackendType.LlamaCpp && !_openCodeModel.Contains('/'))
+        if (_type != ModelBackendType.LlamaCpp && !_providerModelId.Contains('/'))
         {
-            Snackbar.Add(L["OpenCodeModelHint"].Value, Severity.Warning);
+            Snackbar.Add(L["ProviderModelIdHint"].Value, Severity.Warning);
             return;
         }
         if (_type == ModelBackendType.LlamaCpp && !_launchCommand.Contains("${PORT}", StringComparison.Ordinal)
@@ -180,7 +180,7 @@
                 .ToList();
             var result = await SaveBackend.HandleAsync(new UpsertLocalModelBackendCommand(new UpsertLocalModelBackendRequest(
                 Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl, UserId,
-                flags.Count > 0 ? flags : null, _concurrent, _note, _openCodeModel)));
+                flags.Count > 0 ? flags : null, _concurrent, _note, _providerModelId)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

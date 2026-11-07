@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
+using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 
@@ -109,10 +110,13 @@ public sealed class PipelineSessionTests
 
         session.UpdateActivity("{\"state\":\"waiting-for-user\"}", waitingForUser: true);
         Assert.Equal(SessionStatus.WaitingForUser, session.Status);
-        Assert.Equal("{\"state\":\"waiting-for-user\"}", session.ActivityJson);
+        var waitingSnapshot = PipelineActivityV1.Parse(session.ActivityJson);
+        Assert.Equal(PipelineActivityV1.CurrentVersion, waitingSnapshot.Version);
+        Assert.Equal("waiting-for-user", waitingSnapshot.State);
 
         session.UpdateActivity("{\"state\":\"running\"}", waitingForUser: false);
         Assert.Equal(SessionStatus.Active, session.Status);
+        Assert.Equal("running", PipelineActivityV1.Parse(session.ActivityJson).State);
     }
 
     [Fact]

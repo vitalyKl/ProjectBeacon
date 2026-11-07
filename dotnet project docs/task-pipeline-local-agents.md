@@ -13,15 +13,15 @@ Each role is a new session. Prompt text is `SessionPrompts`.
 
 ## Execution
 
-Pipeline execution uses the native workstation runtime only. A project must have an online attached workstation whose saved `agentRuntime` is `native`, and the relevant pipeline role must resolve to an existing model backend (the semantic task phase when phases are configured, otherwise the project role binding).
+Pipeline execution uses the Native workstation runtime only. A project must have an online attached workstation, and the relevant pipeline role must resolve to an existing model backend (the semantic task phase when phases are configured, otherwise the project role binding). There is no runtime selector; legacy runtime selector values are ignored and old transcript-directory settings are read only as a migration alias.
 
-`ManualSessionSpawner` is the `ISessionSpawner` registered for pipeline sessions. It resolves the role model and prepares the launch spec; it does not spawn a process. `StartPipeline` creates the planner session and the task page immediately launches it. The workstation command `RunPipelineSession` is then claimed and executed by the daemon's native harness. The same command path is used for actor and review sessions.
+`ManualSessionSpawner` is the `ISessionSpawner` registered for pipeline sessions. It resolves the role model and prepares the launch spec; it does not spawn a process. `StartPipeline` creates the planner session and the task page immediately launches it. The workstation command `RunPipelineSession` is then claimed and executed by the daemon's NativeAgentRuntime. The same command path is used for actor and review sessions.
 
-`LaunchSessionHandler` must reject a session if no online native executor or model is available. It must never change `Ready` to `Active` without enqueuing a real workstation command. OpenCode is not a pipeline runtime; it remains available for workstation chat only.
+`LaunchSessionHandler` must reject a session if no online workstation executor or model is available. It must never change `Ready` to `Active` without enqueuing a real workstation command. NativeAgentRuntime is the only supported chat and pipeline runtime.
 
-The task pipeline query exposes server-computed preflight state. The UI disables Start/Launch actions when the required native workstation or role model is missing and displays the reason. Legacy workstation settings without an explicit `agentRuntime` value are interpreted as `native`; an explicit `opencode` value remains OpenCode.
+The task pipeline query exposes server-computed preflight state. The UI disables Start/Launch actions when the required workstation or role model is missing and displays the reason. Legacy workstation settings are migrated to the Native runtime.
 
-Progress snapshots are posted by the daemon while a native turn runs. They update `PipelineSession.ActivityJson` and `LastActivityAt`; a missing recent signal is displayed as stale rather than as active work. A command that is still Pending is shown as queued, not as an agent actively generating. Command completion persists `FailureReason`. A failed Actor command also marks its still-InProgress subtask Failed, so review and retry logic cannot be blocked by an orphaned status. Retrying a failed session creates a new session using the current role binding and preserves the previous attempt for diagnosis.
+Progress snapshots are posted by the daemon while an agent turn runs. They update `PipelineSession.ActivityJson` and `LastActivityAt`; a missing recent signal is displayed as stale rather than as active work. A command that is still Pending is shown as queued, not as an agent actively generating. Command completion persists `FailureReason`. A failed Actor command also marks its still-InProgress subtask Failed, so review and retry logic cannot be blocked by an orphaned status. Retrying a failed session creates a new session using the current role binding and preserves the previous attempt for diagnosis.
 
 ## Actor queue and timeouts
 

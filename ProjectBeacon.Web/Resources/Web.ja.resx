@@ -129,58 +129,58 @@
 <data name="ChatModelHint" xml:space="preserve">
     <value>メッセージが別のモデルを指定しないとき、アプリのチャットが使います。保存すると、実行中のクライアントにエージェント実行環境の更新を指示します。</value>
   </data>
-<data name="OpenCodeModel" xml:space="preserve">
-    <value>エージェントモデル</value>
+<data name="AgentProviderModel" xml:space="preserve">
+    <value>プロバイダーモデル ID</value>
   </data>
-<data name="OpenCodeModelHint" xml:space="preserve">
-    <value>OpenCode が既に知っているプロバイダーとモデル。例: xai/grok-3。保存した接続がキーを渡せます。そうでなければ、マシンで opencode auth login してください。</value>
+<data name="AgentProviderModelHint" xml:space="preserve">
+    <value>anthropic/claude-sonnet-4-5 のように、プロバイダーとモデルを指定します。認証情報には保存済みのプロバイダー接続を使用します。</value>
   </data>
-<data name="OpenCodeConnections" xml:space="preserve">
+<data name="AgentProviderConnections" xml:space="preserve">
     <value>モデル接続</value>
   </data>
-<data name="OpenCodeConnectionsLead" xml:space="preserve">
-    <value>OpenCode が使うオンラインモデルを指定します。ローカルの llama.cpp モデルは Agents で別に追加します。</value>
+<data name="AgentProviderConnectionsLead" xml:space="preserve">
+    <value>AgentProvider が使うオンラインモデルを指定します。ローカルの llama.cpp モデルは Agents で別に追加します。</value>
   </data>
-<data name="OpenCodeStepPick" xml:space="preserve">
+<data name="AgentProviderStepPick" xml:space="preserve">
     <value>サービスを選ぶか、provider/model を自分で入力します。</value>
   </data>
-<data name="OpenCodeStepKey" xml:space="preserve">
+<data name="AgentProviderStepKey" xml:space="preserve">
     <value>そのコンピュータでまだサインインしていない場合だけ、API キーを貼り付けます。</value>
   </data>
-<data name="OpenCodeStepSave" xml:space="preserve">
-    <value>保存します。実行中の beacon client が OpenCode を更新して再起動します。</value>
+<data name="AgentProviderStepSave" xml:space="preserve">
+    <value>保存します。実行中の beacon client が AgentProvider を更新して再起動します。</value>
   </data>
-<data name="OpenCodeOwnServer" xml:space="preserve">
+<data name="AgentProviderOwnServer" xml:space="preserve">
     <value>独自サーバー</value>
   </data>
-<data name="OpenCodeOnePerService" xml:space="preserve">
+<data name="AgentProviderOnePerService" xml:space="preserve">
     <value>各サービスはモデルを1つだけ保持します。再保存するとそのモデルを置き換えます。</value>
   </data>
-<data name="OpenCodeModelExample" xml:space="preserve">
+<data name="AgentProviderModelExample" xml:space="preserve">
     <value>provider/model の形で書きます。例: xai/grok-3。</value>
   </data>
-<data name="OpenCodeBaseUrlHint" xml:space="preserve">
+<data name="AgentProviderBaseUrlHint" xml:space="preserve">
     <value>独自の OpenAI 互換サーバーのアドレス。</value>
   </data>
-<data name="OpenCodeKeySaved" xml:space="preserve">
+<data name="AgentProviderKeySaved" xml:space="preserve">
     <value>キーを保存しました</value>
   </data>
-<data name="OpenCodeProvider" xml:space="preserve">
+<data name="AgentProviderProvider" xml:space="preserve">
     <value>プロバイダー</value>
   </data>
-<data name="OpenCodeBaseUrl" xml:space="preserve">
+<data name="AgentProviderBaseUrl" xml:space="preserve">
     <value>ベース URL</value>
   </data>
-<data name="OpenCodeApiKey" xml:space="preserve">
+<data name="AgentProviderApiKey" xml:space="preserve">
     <value>API キー</value>
   </data>
-<data name="OpenCodeApiKeyHint" xml:space="preserve">
+<data name="AgentProviderApiKeyHint" xml:space="preserve">
     <value>任意。このコンピュータが既にサインイン済みなら空のままにします。以前保存したキーを残す場合も空です。</value>
   </data>
-<data name="OpenCodeConnectionSaved" xml:space="preserve">
-    <value>保存しました。beacon client が動いていれば、今 OpenCode を更新します。</value>
+<data name="AgentProviderConnectionSaved" xml:space="preserve">
+    <value>保存しました。beacon client が動いていれば、今 AgentProvider を更新します。</value>
   </data>
-<data name="NoOpenCodeConnections" xml:space="preserve">
+<data name="NoAgentProviderConnections" xml:space="preserve">
     <value>接続はまだありません。</value>
   </data>
 <data name="DangerZone" xml:space="preserve">
@@ -1243,7 +1243,7 @@
     <value>参照</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>デバイス上で初期化（.gitignore、opencode.json）</value>
+    <value>デバイス上で初期化（.gitignore）</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>上へ</value>
@@ -1294,7 +1294,7 @@
     <value>llama-server 実行ファイル</value>
   </data>
 <data name="HistoryDir" xml:space="preserve">
-    <value>OpenCode の履歴ディレクトリ</value>
+    <value>AgentProvider の履歴ディレクトリ</value>
   </data>
 <data name="ProjectsRoot" xml:space="preserve">
     <value>プロジェクトのルート</value>
@@ -1370,9 +1370,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1480,7 +1477,7 @@
     <value>作業を計画し、タスクを割り当て、エージェントの段階を調整。人間のレビュー、パイプライン状態、結果を可視化します。</value>
   </data>
 <data name="LandingHow3" xml:space="preserve">
-    <value>ワークステーションクライアントが Native harness または OpenCode を実行し、モデルを接続してローカル MCP ツールを呼び出します。サーバーはコードを実行しません。</value>
+    <value>ワークステーションクライアントが Native harness または AgentProvider を実行し、モデルを接続してローカル MCP ツールを呼び出します。サーバーはコードを実行しません。</value>
   </data>
 <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>含まれるもの</value>
@@ -1495,7 +1492,7 @@
     <value>決定には影響が付くので、エージェントがそれを尊重する理由があります。</value>
   </data>
 <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>ユーザー単位のエージェント、モデルバックエンド、タスクロールを一度設定。Native harness または OpenCode を利用できます。</value>
+    <value>ユーザー単位のエージェント、モデルバックエンド、タスクロールを一度設定。Native harness または AgentProvider を利用できます。</value>
   </data>
 <data name="LandingFeatureDevices" xml:space="preserve">
     <value>ワークステーションクライアントは外向きHTTPSで接続。エージェント実行、ローカルモデル、ワークスペースへのアクセスは自分のマシンに残ります。</value>
@@ -1559,7 +1556,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>ProjectBeacon はクラウドでエージェントを実行しますか？</value>
   </data>
 <data name="LandingFaq1A" xml:space="preserve">
-    <value>いいえ。エージェントの実行ループは beacon client を通じて自分のワークステーションで動きます。Native harness または OpenCode を選べます。Web/API/Worker は作業を調整しますが、モデルやワークスペース内のコードは実行しません。</value>
+    <value>いいえ。エージェントの実行ループは beacon client を通じて自分のワークステーションで動きます。Native harness または AgentProvider を選べます。Web/API/Worker は作業を調整しますが、モデルやワークスペース内のコードは実行しません。</value>
   </data>
 <data name="LandingFaq2Q" xml:space="preserve">
     <value>モデルはどこで動き、コードはどこにありますか？</value>
@@ -1577,7 +1574,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>Native harness を使う必要がありますか？</value>
   </data>
 <data name="LandingFaq4A" xml:space="preserve">
-    <value>いいえ。OpenCode も引き続きサポートされます。ワークステーションごとにランタイムを選択できます。Native harness はモデルとツールのループをローカルで実行し、ProjectBeacon の既存MCPツールを使う代替手段です。</value>
+    <value>いいえ。AgentProvider も引き続きサポートされます。ワークステーションごとにランタイムを選択できます。Native harness はモデルとツールのループをローカルで実行し、ProjectBeacon の既存MCPツールを使う代替手段です。</value>
   </data>
 <data name="LandingFaq5Q" xml:space="preserve">
     <value>ProjectBeacon はホスト型SaaSですか？</value>
@@ -1619,7 +1616,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>今はフォルダを飛ばし、後でダッシュボードから付けられます。</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>ワークステーション上のそのフォルダに .gitignore と opencode.json を書き込みます。</value>
+    <value>ワークステーションにプロジェクトフォルダーを作成し、必要な .gitignore ルールを書き込みます。</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>プロジェクトフォルダ</value>
@@ -2081,11 +2078,8 @@ orthstar</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>エージェントランタイム</value>
   </data>
-<data name="AgentRuntimeOpenCode" xml:space="preserve">
-    <value>OpenCode（既定）</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>ネイティブハーネス（実験的）</value>
+    <value>ネイティブ実行環境</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>ランタイムの変更はワークステーション クライアントの再起動後に反映されます。</value>
@@ -2115,7 +2109,7 @@ orthstar</value>
 <data name="LandingTaskContext" xml:space="preserve"><value>コンテキストブリーフ · プロジェクトルール</value></data>
 <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
 <data name="LandingRuntimeTitle" xml:space="preserve"><value>エージェントランタイム</value></data>
-<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness または OpenCode · ローカルまたはクラウドモデル</value></data>
+<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness または AgentProvider · ローカルまたはクラウドモデル</value></data>
 <data name="LandingVisualCaption" xml:space="preserve"><value>ワークフロー全体を一か所で管理</value></data>
 <data name="LandingPrinciplesTitle" xml:space="preserve"><value>製品の原則</value></data>
 <data name="LandingPrincipleLocal" xml:space="preserve"><value>自分のワークステーションで実行</value></data>
@@ -2136,16 +2130,16 @@ orthstar</value>
 <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>自分のワークステーション</value></data>
 <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · ランタイム選択 · モデル接続</value></data>
 <data name="LandingArchitectureRuntime" xml:space="preserve"><value>ローカルエージェントランタイム</value></data>
-<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness または OpenCode · MCP stdio · ワークスペース</value></data>
+<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness または AgentProvider · MCP stdio · ワークスペース</value></data>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>AIワークフローを自分の手に</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>自分の ProjectBeacon ホストを用意し、ワークステーションを接続してください。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>AI開発のためのローカルファーストなコントロールプレーン</value></data>
 
   <data name="AgentModeHint" xml:space="preserve">
-    <value>ワークステーションで対話チャットに使用する OpenCode プロファイルを設定します。タスクパイプラインの既定モデルは「タスク種別」で個別に設定します。</value>
+    <value>ワークステーションで対話チャットに使用する AgentProvider プロファイルを設定します。タスクパイプラインの既定モデルは「タスク種別」で個別に設定します。</value>
   </data>
   <data name="AgentTemplateModelsScopeHint" xml:space="preserve">
-    <value>これらはワークステーション全体に適用されるロール別の既定値と OpenCode 設定です。タスクの該当フェーズに専用モデルが設定されていない場合にのみ、パイプラインセッションでロール設定が使用されます。</value>
+    <value>これらはワークステーション全体に適用されるロール別の既定値と AgentProvider 設定です。タスクの該当フェーズに専用モデルが設定されていない場合にのみ、パイプラインセッションでロール設定が使用されます。</value>
   </data>
   <data name="PipelineStartHint" xml:space="preserve">
     <value>Planner を起動してタスクを分析し、実行計画を準備します。</value>
@@ -2418,5 +2412,41 @@ orthstar</value>
   </data>
   <data name="WorkCancelled" xml:space="preserve">
     <value>作業をキャンセルしました。</value>
+  </data>
+  <data name="ChatInputTokens" xml:space="preserve">
+    <value>入力コンテキスト</value>
+  </data>
+  <data name="ContextInputEstimate" xml:space="preserve">
+    <value>入力トークン数の推定値</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>プロバイダーモデル ID</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>xai/grok-3 や anthropic/claude-sonnet-4-5 のように provider/model 形式で指定します。</value>
+  </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>添付ファイル</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>1ファイルあたり最大10 MB</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>添付ファイルはまだありません。</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>添付ファイルを読み込めませんでした: {0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}: ファイルサイズが10 MBの上限を超えています。</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>添付ファイルをアップロードしました。</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>アップロードに失敗しました: {0}</value>
   </data>
 </root>

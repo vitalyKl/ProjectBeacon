@@ -83,6 +83,16 @@ public static class CommandRecovery
     /// resolve dependent state (eval run, review run, chat session).
     /// Returns the number of recovered rows.
     /// </summary>
+    public static Task<int> RecoverAsync(
+        IBeaconDb db,
+        TimeProvider timeProvider,
+        CancellationToken ct,
+        PipelineActorQueueDispatcher? pipelineQueue = null)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        return RecoverAsync(db, timeProvider.GetUtcNow().UtcDateTime, ct, pipelineQueue);
+    }
+
     public static async Task<int> RecoverAsync(
         IBeaconDb db,
         DateTime now,

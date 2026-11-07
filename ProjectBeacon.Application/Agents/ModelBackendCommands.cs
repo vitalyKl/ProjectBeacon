@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 using Application.Runtime;
 /// <summary>
@@ -18,7 +19,7 @@ public record LocalModelBackendDto(
     DateTime? UpdatedAt,
     bool Concurrent = false,
     string Note = "",
-    string OpenCodeModel = "");
+    string ProviderModelId = "");
 /// <summary>
 /// A project pipeline role bound to a model backend.
 /// </summary>
@@ -60,7 +61,7 @@ public record UpsertLocalModelBackendRequest(
     IReadOnlyList<string>? ExtraFlags = null,
     bool Concurrent = false,
     string? Note = null,
-    string? OpenCodeModel = null);
+    string? ProviderModelId = null);
 /// <summary>
 /// Command for upsert local model backend.
 /// </summary>
@@ -80,7 +81,10 @@ public record SetRoleBindingRequest(PipelineRole Role, Guid ModelBackendId);
 /// <summary>
 /// Command for set role binding.
 /// </summary>
-public record SetRoleBindingCommand(SetRoleBindingRequest Request) : ICommand<Result<RoleBindingDto>>;
+public record SetRoleBindingCommand(
+    SetRoleBindingRequest Request,
+    ActorContext Actor,
+    Guid? RequestedProjectId = null) : ICommand<Result<RoleBindingDto>>;
 /// <summary>
 /// Fields for remove role binding.
 /// </summary>
@@ -88,7 +92,10 @@ public record RemoveRoleBindingRequest(PipelineRole Role);
 /// <summary>
 /// Command for remove role binding.
 /// </summary>
-public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request) : ICommand<Result>;
+public record RemoveRoleBindingCommand(
+    RemoveRoleBindingRequest Request,
+    ActorContext Actor,
+    Guid? RequestedProjectId = null) : ICommand<Result>;
 /// <summary>
 /// Command for get model registry.
 /// </summary>

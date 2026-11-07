@@ -8,6 +8,7 @@ using Application.Security;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Common;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
@@ -24,7 +25,10 @@ public sealed record IssueHarnessTokenCommand(Guid CommandId, int Generation, Ac
 /// <summary>Ephemeral credential returned only to the authenticated workstation.</summary>
 public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null, IReadOnlyList<McpServerConfiguration>? McpServers = null);
 
-public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
+public sealed class IssueHarnessTokenHandler(
+    IBeaconDbFactory dbFactory,
+    ISecretProtector secrets,
+    TimeProvider? timeProvider = null)
     : ICommandHandler<IssueHarnessTokenCommand, Result<HarnessTokenDto>>
 {
     private const ApiTokenCapability HarnessCapabilities =
@@ -41,7 +45,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
             return Result.Failure<HarnessTokenDto>("A valid command generation is required.", ErrorKind.Conflict);
 
         await using var db = dbFactory.CreateDbContext();
-        var now = DateTime.UtcNow;
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
             .FirstOrDefaultAsync(d => d.Id == deviceId, ct);
@@ -68,9 +72,24 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
             return Result.Failure<HarnessTokenDto>("The command belongs to a different workstation process instance.", ErrorKind.Forbidden);
 
         IReadOnlyList<string>? allowedMcpTools = null;
-        if (work.Kind == WorkstationCommandKind.RunPipelineSession)
+        if (work.Kind == WorkstationCommandKind.ChatPrompt)
         {
-            if (!TryReadPipelineScope(work.PayloadJson, out var scope) || scope.ProjectId != projectId)
+            if (!WorkstationCommandPayloads.TryReadChatPrompt(work.PayloadJson, out var chatPayload))
+                return Result.Failure<HarnessTokenDto>("The chat command has an invalid session scope.", ErrorKind.Forbidden);
+
+            var chat = await db.ChatSessions.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == chatPayload.ChatSessionId
+                    && s.ProjectId == projectId
+                    && s.DeviceId == deviceId
+                    && s.ArchivedAt == null
+                    && s.Status == ChatSessionStatus.Streaming
+                    && s.ExternalSessionId == chatPayload.ExternalSessionId, ct);
+            if (chat is null)
+                return Result.Failure<HarnessTokenDto>("The chat command does not match an active database session.", ErrorKind.Forbidden);
+        }
+        else if (work.Kind == WorkstationCommandKind.RunPipelineSession)
+        {
+            if (!WorkstationCommandPayloads.TryReadPipelineSession(work.PayloadJson, out var scope) || scope.ProjectId != projectId)
                 return Result.Failure<HarnessTokenDto>("The pipeline command has an invalid session scope.", ErrorKind.Forbidden);
 
             var session = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
@@ -109,14 +128,16 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
 
         else if (work.Kind == WorkstationCommandKind.RunEvalTurn)
         {
-            if (!TryReadEvalScope(work.PayloadJson, out var evalScope))
+            if (!WorkstationCommandPayloads.TryReadEvalTurn(work.PayloadJson, out var evalScope))
                 return Result.Failure<HarnessTokenDto>("The eval command has an invalid run scope.", ErrorKind.Forbidden);
 
             var evalRun = await db.EvalRuns.IgnoreQueryFilters().AsNoTracking()
                 .FirstOrDefaultAsync(run => run.Id == evalScope.EvalRunId
                     && run.ProjectId == projectId
                     && run.TaskId == evalScope.TaskId, ct);
-            if (evalRun is null || !string.Equals(evalRun.Runtime, evalScope.Runtime, StringComparison.Ordinal))
+            if (evalRun is null
+                || !string.Equals(evalRun.Runtime, "native", StringComparison.Ordinal)
+                || !string.Equals(evalScope.Runtime, "native", StringComparison.Ordinal))
                 return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or its pinned runtime does not match the command.", ErrorKind.Forbidden);
         }
 
@@ -184,84 +205,4 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
         return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools, mcpServers));
     }
 
-    private static bool TryReadEvalScope(string payload, out EvalCommandScope scope)
-    {
-        scope = default;
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !TryReadGuid(root, "evalRunId", out var evalRunId)
-                || !TryReadGuid(root, "taskId", out var taskId)
-                || !root.TryGetProperty("runtime", out var runtime)
-                || runtime.ValueKind != JsonValueKind.String)
-                return false;
-
-            var runtimeName = runtime.GetString()?.Trim().ToLowerInvariant();
-            if (runtimeName is not ("native" or "opencode"))
-                return false;
-
-            scope = new EvalCommandScope(evalRunId, taskId, runtimeName);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryReadPipelineScope(string payload, out PipelineCommandScope scope)
-    {
-        scope = default;
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !TryReadGuid(root, "projectId", out var projectId)
-                || !TryReadGuid(root, "taskId", out var taskId)
-                || !TryReadGuid(root, "sessionId", out var sessionId)
-                || !root.TryGetProperty("role", out var roleValue)
-                || roleValue.ValueKind != JsonValueKind.String
-                || !Enum.TryParse(roleValue.GetString(), true, out PipelineRole role)
-                || !Enum.IsDefined(typeof(PipelineRole), role)
-                || !TryReadNullableGuid(root, "subtaskId", out var subtaskId))
-                return false;
-
-            scope = new PipelineCommandScope(projectId, taskId, sessionId, role, subtaskId);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryReadGuid(JsonElement root, string name, out Guid value)
-    {
-        value = Guid.Empty;
-        return root.TryGetProperty(name, out var element)
-            && element.ValueKind == JsonValueKind.String
-            && Guid.TryParse(element.GetString(), out value)
-            && value != Guid.Empty;
-    }
-
-    private static bool TryReadNullableGuid(JsonElement root, string name, out Guid? value)
-    {
-        value = null;
-        if (!root.TryGetProperty(name, out var element) || element.ValueKind == JsonValueKind.Null)
-            return true;
-        if (element.ValueKind != JsonValueKind.String
-            || !Guid.TryParse(element.GetString(), out var parsed)
-            || parsed == Guid.Empty)
-            return false;
-        value = parsed;
-        return true;
-    }
-
-    private readonly record struct PipelineCommandScope(
-        Guid ProjectId, Guid TaskId, Guid SessionId, PipelineRole Role, Guid? SubtaskId);
-
-    private readonly record struct EvalCommandScope(Guid EvalRunId, Guid TaskId, string Runtime);
 }

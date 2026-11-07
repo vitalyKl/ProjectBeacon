@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 
 public static partial class McpStdioServer
 {
@@ -75,68 +76,68 @@ public static partial class McpStdioServer
 
     private static readonly string[] ReadOnlyWorkspaceTools =
     [
-        "read_file", "get_tree", "search_code", "get_changed_scope",
-        "get_signatures", "get_callers", "hash_range"
+        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,
+        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange
     ];
 
     private static readonly string[] PlannerSupervisorTools =
     [
-        "context_compile", "task_create_subtask", "pipeline_start_actor",
-        "pipeline_launch_session", "task_pipeline_status", "pipeline_start_review"
+        McpToolNames.ContextCompile, McpToolNames.TaskCreateSubtask, McpToolNames.PipelineStartActor,
+        McpToolNames.PipelineLaunchSession, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
     ];
 
     private static readonly string[] ReviewerSupervisorTools =
     [
-        "task_pipeline_status", "task_review_verdict", "pipeline_approve"
+        McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict, McpToolNames.PipelineApprove
     ];
 
     private static readonly string[] PlannerTools =
     [
         ..ReadOnlyWorkspaceTools,
-        "get_project",
-        "list_context_nodes", "get_context_node", "export_agents_md",
-        "list_constraints", "list_decisions", "list_milestones", "list_labels", "match_label",
+        McpToolNames.GetProject,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
+        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.ListLabels, McpToolNames.MatchLabel,
         ..PlannerSupervisorTools
     ];
 
     private static readonly string[] ReviewerTools =
     [
         ..ReadOnlyWorkspaceTools,
-        "get_project",
-        "list_context_nodes", "get_context_node",
+        McpToolNames.GetProject,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         ..ReviewerSupervisorTools
     ];
 
     private static readonly string[] ActorTerminalTools =
     [
-        "subtask_report_result", "pipeline_fail_subtask"
+        McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask
     ];
 
     private static readonly string[] EvalAllowedTools =
     [
         ..ReadOnlyWorkspaceTools,
-        "write_file", "apply_patch",
-        "get_project", "list_tasks", "get_task", "list_task_steps",
-        "list_context_nodes", "get_context_node", "export_agents_md",
-        "list_constraints", "list_decisions", "list_milestones", "get_milestone",
-        "list_labels", "match_label", "list_reports", "get_report"
+        McpToolNames.WriteFile, McpToolNames.ApplyPatch,
+        McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
+        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport
     ];
 
     private static readonly string[] ActorForbiddenTools =
     [
-        "task_create_subtask", "task_review_verdict", "task_pipeline_status",
-        "pipeline_start", "pipeline_start_actor", "pipeline_launch_session",
-        "pipeline_start_review", "pipeline_approve", "pipeline_force_close",
-        "model_bind", "model_status", "model_upsert", "model_delete", "model_unbind",
-        "proxy_reload", "proxy_unload",
-        "create_task", "update_task", "set_task_status", "set_task_substage",
-        "claim_task", "add_task_comment", "set_task_dependencies", "add_review_notes",
-        "list_task_steps", "add_task_step", "toggle_task_step", "delete_task_step", "finish_work",
-        "upsert_context_node", "delete_context_node",
-        "create_constraint", "activate_constraint", "reject_constraint",
-        "record_decision", "accept_decision", "deprecate_decision", "supersede_decision",
-        "create_milestone", "update_milestone", "delete_milestone", "close_milestone", "reopen_milestone",
-        "add_label_path", "generate_report"
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict, McpToolNames.TaskPipelineStatus,
+        McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
+        McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
+        McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,
+        McpToolNames.ProxyReload, McpToolNames.ProxyUnload,
+        McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus, McpToolNames.SetTaskSubstage,
+        McpToolNames.ClaimTask, McpToolNames.AddTaskComment, McpToolNames.SetTaskDependencies, McpToolNames.AddReviewNotes,
+        McpToolNames.ListTaskSteps, McpToolNames.AddTaskStep, McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork,
+        McpToolNames.UpsertContextNode, McpToolNames.DeleteContextNode,
+        McpToolNames.CreateConstraint, McpToolNames.ActivateConstraint, McpToolNames.RejectConstraint,
+        McpToolNames.RecordDecision, McpToolNames.AcceptDecision, McpToolNames.DeprecateDecision, McpToolNames.SupersedeDecision,
+        McpToolNames.CreateMilestone, McpToolNames.UpdateMilestone, McpToolNames.DeleteMilestone, McpToolNames.CloseMilestone, McpToolNames.ReopenMilestone,
+        McpToolNames.AddLabelPath, McpToolNames.GenerateReport
     ];
 
     private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)
@@ -184,9 +185,14 @@ public static partial class McpStdioServer
     }
 
     private static bool IsGrantedToSubtask(IReadOnlyList<string> grants, string tool)
-        => grants.Any(entry =>
+    {
+        var aliases = McpToolCatalog.TryGet(tool, out var descriptor)
+            ? descriptor!.Aliases
+            : [$"beacon_{tool}"];
+        return grants.Any(entry =>
             string.Equals(entry, tool, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry, "beacon_" + tool, StringComparison.OrdinalIgnoreCase));
+            || aliases.Any(alias => string.Equals(entry, alias, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private static string? RejectActorToolGrant(
         string tool,

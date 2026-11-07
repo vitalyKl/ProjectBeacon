@@ -14,7 +14,7 @@
 {
     <div class="beacon-chat-session-head">
         <div class="beacon-chat-session-title">
-            <strong>@Session.Title</strong>
+            <strong title="@Session.Title">@Session.Title</strong>
             @if (!string.IsNullOrEmpty(Phase))
             {
                 <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
@@ -39,7 +39,7 @@
         <div class="beacon-chat-question-tabs d-flex flex-wrap gap-1">
             @foreach (var q in _pendingQuestions)
             {
-                <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)">@q.Title</MudButton>
+                <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)" title="@q.Title">@q.Title</MudButton>
             }
         </div>
     }
@@ -62,7 +62,7 @@
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
                        Class="beacon-chat-config-button" OnClick="ConfigureModel" Disabled="@Busy"
-                       title="@L["ChatModelSettings"].Value">
+                       title="@ModelSummary">
                 @ModelSummary
             </MudButton>
             <MudButton Variant="Variant.Text" Size="Size.Small" Class="beacon-chat-mode-toggle"
@@ -76,11 +76,17 @@
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Info" Class="beacon-chat-model-progress" />
             }
-            <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
+            <MudText Typo="Typo.caption" Class="beacon-chat-model-status" title="@ModelStatusLabel">@ModelStatusLabel</MudText>
         }
         @if (UsageLabel is { } usage)
         {
-            <MudText Typo="Typo.caption" Class="beacon-chat-usage">@usage</MudText>
+            <div class="beacon-chat-usage" title="@usage">
+                <MudText Typo="Typo.caption" Class="beacon-chat-usage-label">@usage</MudText>
+                @if (UsagePercent is { } percent)
+                {
+                    <MudProgressLinear Value="@percent" Color="@(percent >= 90 ? Color.Warning : Color.Primary)" Class="beacon-chat-usage-meter" />
+                }
+            </div>
         }
     </div>
     <form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
@@ -143,19 +149,37 @@
     [Parameter] public string? ModelName { get; set; }
     [Parameter] public int? SelectedContextLimit { get; set; }
 
-    // Session totals reported by the device: prompt tokens, the model's context limit, and cost.
+    // PromptTokens is the input context consumed by the model. Cost and output
+    // throughput are supplementary and must not hide the primary context metric.
+    private int? EffectiveContextLimit =>
+        Model is null ? Session?.ContextLimit : SelectedContextLimit;
+
+    private int? UsagePercent
+    {
+        get
+        {
+            if (Session?.PromptTokens is not int prompt
+                || EffectiveContextLimit is not int limit
+                || limit <= 0)
+                return null;
+            return Math.Clamp((int)Math.Round(prompt * 100.0 / limit), 0, 100);
+        }
+    }
+
     private string? UsageLabel
     {
         get
         {
-            if (Session is not { PromptTokens: not null, TotalCost: not null })
+            if (Session is null || Session.PromptTokens is not int prompt)
                 return null;
-            var prompt = Session.PromptTokens!.Value;
-            var currentLimit = Model is null ? Session.ContextLimit : SelectedContextLimit;
-            var tokens = currentLimit is { } limit ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
-            var label = string.Format(L["ChatUsage"].Value, tokens, "$" + Session.TotalCost!.Value.ToString("0.####"));
-            if (Session is { CompletionTokens: not null, GenerationSeconds: { } seconds } && seconds > 0)
-                label += "  \u2022  " + string.Format(L["ChatUsageSpeed"].Value, Math.Round(Session.CompletionTokens!.Value / seconds, 1));
+
+            var limit = EffectiveContextLimit;
+            var tokens = limit is > 0 ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
+            var label = $"{L["ChatInputTokens"].Value}: {tokens}";
+            if (Session.TotalCost is { } cost)
+                label += " · $" + cost.ToString("0.####");
+            if (Session.CompletionTokens is { } completion && Session.GenerationSeconds is { } seconds && seconds > 0)
+                label += " · " + string.Format(L["ChatUsageSpeed"].Value, Math.Round(completion / seconds, 1));
             return label;
         }
     }
@@ -260,7 +284,7 @@
 
     private LocalModelBackendDto? SelectedBackend =>
         Models.FirstOrDefault(backend =>
-            string.Equals(OpencodePayload.OpenCodeId(backend), Model, StringComparison.Ordinal));
+            string.Equals(ChatModelSelection.ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId), Model, StringComparison.Ordinal));
 
     private string ModelSummary
     {

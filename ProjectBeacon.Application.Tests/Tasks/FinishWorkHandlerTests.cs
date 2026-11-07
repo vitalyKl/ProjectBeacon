@@ -537,7 +537,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public bool FilterUnscoped => _inner.FilterUnscoped;
 
         public DbSet<User> Users => _inner.Users;
-        public DbSet<OpenCodeConnection> OpenCodeConnections => _inner.OpenCodeConnections;
+        public DbSet<AgentProviderConnection> AgentProviderConnections => _inner.AgentProviderConnections;
         public DbSet<UserSession> Sessions => _inner.Sessions;
         public DbSet<Org> Orgs => _inner.Orgs;
         public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;
@@ -611,7 +611,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public bool FilterUnscoped => _inner.FilterUnscoped;
 
         public DbSet<User> Users => _inner.Users;
-        public DbSet<OpenCodeConnection> OpenCodeConnections => _inner.OpenCodeConnections;
+        public DbSet<AgentProviderConnection> AgentProviderConnections => _inner.AgentProviderConnections;
         public DbSet<UserSession> Sessions => _inner.Sessions;
         public DbSet<Org> Orgs => _inner.Orgs;
         public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;

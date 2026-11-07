@@ -25,7 +25,7 @@ Beacon is a control plane for a solo developer or a small team running coding ag
 ```text
 User
 ├── Account / security
-├── Agents & models          user-owned registry, templates, MCP defaults, OpenCode connections
+├── Agents & models          user-owned registry, templates, MCP defaults, provider connections
 ├── Workstations             user-owned devices (not tenant-filtered)
 └── Projects
     ├── Project settings
@@ -43,7 +43,7 @@ Agents are not a project feature. `/agents` redirects to `/settings/agents`. App
 |---|---|---|
 | API | `ProjectBeacon.API` | Thin `/v1` endpoints. Also mapped by the Web host. |
 | Web | `ProjectBeacon.Web` | Blazor Server + MudBlazor. Calls Application handlers in-process. Does not read the user's disk and does not start model processes. `:5083` http / `:7118` https. |
-| Workstation client | `ProjectBeacon.Cli` (`beacon client`) | Outbound HTTPS: enroll, heartbeat, long-poll commands. Owns the working tree, OpenCode config, and the model process. |
+| Workstation client | `ProjectBeacon.Cli` (`beacon client`) | Outbound HTTPS: enroll, heartbeat, long-poll commands. Owns the working tree, NativeAgentRuntime, provider credentials in memory, and model process. |
 | MCP | `beacon mcp` | Stdio file tools on `--root`, plus control-plane tools when an API URL and token are set. |
 | Worker | `ProjectBeacon.Worker` | Expires sessions, API tokens, password-reset tokens, and invites. Unscoped database role. No workstation commands, no model process, no GitHub sync. |
 
@@ -66,7 +66,7 @@ Business writes go through Application handlers. Razor must not inject `BeaconDb
 - `AUTH_LOCAL_INVITE_ONLY=true` requires an invite on register.
 - Member roles are `Owner`, `Admin`, `Member`. Project and token mutations go through `ProjectAuthorization`.
 
-Workstation boundary: device commands (`ListDir`, `InitProject`, `ApplyOpencode`, `SaveWorkstation`, `Install`, `ReloadProxy`, `UnloadProxy`, …) run only on the selected online device. Kind values are the `WorkstationCommandKind` names. File MCP tools stay inside `--root`. There is no shell tool on MCP.
+Workstation boundary: device commands (`ListDir`, `InitProject`, `SaveWorkstation`, `Install`, `ReloadProxy`, `UnloadProxy`, chat/eval/pipeline operations, …) run only on the selected online device. Kind values are the `WorkstationCommandKind` names. File MCP tools stay inside `--root`. There is no shell tool on MCP.
 
 ## 6. Model runtime
 
@@ -82,9 +82,9 @@ Desired and applied revisions exist so the client can reconcile configuration. C
 
 ## 7. Agent runtime and pipeline
 
-`IAgentRuntime` (`CreateSession`, `SendPrompt`, `StreamParts`, `Abort`, `ReadUsage`) is implemented on the client by `OpenCodeAgentRuntime`. That is the workstation/chat harness path.
+`IAgentRuntime` (`CreateSession`, `SendPrompt`, `StreamParts`, `Abort`, `ReadUsage`) is implemented on the client by `NativeAgentRuntime`, the only supported workstation chat and agent harness.
 
-Pipeline role sessions still use `ManualSessionSpawner` (`ISessionSpawner` in Application). Do not describe the client as the pipeline harness.
+Pipeline role sessions still use `ManualSessionSpawner` (`ISessionSpawner` in Application) to resolve role models and prepare launch specs. The resulting workstation command is executed by `NativeAgentRuntime`.
 
 Pipeline phases, each a new session:
 

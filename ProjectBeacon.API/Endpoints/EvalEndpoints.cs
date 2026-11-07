@@ -41,9 +41,7 @@ public static class EvalEndpoints
             body.ReasoningEffort,
             body.ToolPermissions,
             body.TimeoutSeconds,
-            body.RepoRevision,
-            body.Runtime,
-            body.CompareRuntimes)), ct);
+            body.RepoRevision)), ct);
 
         return result.Success
             ? Results.Ok(result.Value)
@@ -63,7 +61,5 @@ public static class EvalEndpoints
         string? ReasoningEffort = null,
         string? ToolPermissions = null,
         int? TimeoutSeconds = null,
-        string? RepoRevision = null,
-        string Runtime = "opencode",
-        bool CompareRuntimes = false);
+        string? RepoRevision = null);
 }

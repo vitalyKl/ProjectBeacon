@@ -132,8 +132,8 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 | GET | `/v1/models/proxy/status` | Human + ApiToken | TaskRead | RequireHumanOrApiToken | device proxy | ENFORCED |
 | POST | `/v1/models` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
 | DELETE | `/v1/models/{id}` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
-| POST | `/v1/models/bind` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
-| DELETE | `/v1/models/bind/{role}` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
+| POST | `/v1/models/bind` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken + Application Project Administer (human) / TaskWrite (token) | project | Direct Application invocation enforces the same policy |
+| DELETE | `/v1/models/bind/{role}` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken + Application Project Administer (human) / TaskWrite (token) | project | Direct Application invocation enforces the same policy |
 | POST | `/v1/models/proxy/reload` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | device proxy | ENFORCED |
 | POST | `/v1/models/proxy/unload` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | device proxy | ENFORCED |
 
@@ -255,7 +255,7 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 | POST | `/v1/projects/{p}/runtimes` | Human only | — | RequireHuman | project | ENFORCED |
 | DELETE | `/v1/projects/{p}/runtimes/{id}` | Human only | — | RequireHuman | project | ENFORCED |
 | GET | `/v1/devices/me/llamaswap-config` | Device only | — | RequireDevice | device (own) | ENFORCED |
-| GET | `/v1/devices/me/opencode-connections` | Device only | — | RequireDevice | device (own) | ENFORCED |
+| GET | `/v1/devices/me/provider-connections` | Device only | — | RequireDevice | device (own) | ENFORCED |
 
 ## 4. Verification
 

@@ -60,22 +60,28 @@ public sealed class ModelHttpTests
             launchCommand = "http://127.0.0.1:1234/v1",
             contextSize = 4096,
             ttl = 0,
-            openCodeModel = "xai/grok-3"
+            providerModelId = "xai/grok-3"
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal("m1-upd", updatedBody.GetProperty("name").GetString());
 
+        // Role bindings require a human project administrator.
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "planner", modelBackendId = modelId }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, bind.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var blocked = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
+        Assert.Equal("conflict", blockedBody.GetProperty("code").GetString());
 
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         var unbind = await client.DeleteAsync("/v1/models/bind/planner", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, unbind.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var del = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
@@ -149,7 +155,8 @@ public sealed class ModelHttpTests
             name = "rw",
             capabilities = 3
         });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
+        // Invalid role parsing is checked after the human actor route gate.
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
         var bad = await client.DeleteAsync("/v1/models/bind/notarole", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);

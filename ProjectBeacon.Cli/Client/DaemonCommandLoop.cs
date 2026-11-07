@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ProjectBeacon.Domain.Enums;
+using Domain.Common;
 
 internal interface IDaemonLoop
 {
@@ -38,7 +39,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         {
             try
             {
-                var claimed = await _http.GetAsync("/v1/devices/me/commands?wait=25", ct);
+                var claimed = await _http.GetAsync(ApiRoutes.DeviceCommandsClaim, ct);
                 if (claimed.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
                 if (!claimed.IsSuccessStatusCode)
@@ -150,7 +151,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             try
             {
                 using var response = await _http.GetAsync(
-                    "/v1/devices/me/commands?wait=1&controlOnly=true", pollingToken);
+                    ApiRoutes.DeviceCommandsControlClaim, pollingToken);
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
                 if (!response.IsSuccessStatusCode)
@@ -207,7 +208,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         _state.Publish(s => s with
         {
             LastCommand = command.Kind.ToString(),
-            LastCommandAt = DateTimeOffset.Now,
+            LastCommandAt = _timing.TimeProvider.GetLocalNow(),
             LastCommandOk = ok,
             Error = ok ? null : error
         });
@@ -233,13 +234,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             string? transportError = null;
             try
             {
-                response = await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new
-                {
-                    success = ok,
-                    resultJson = result,
-                    error,
-                    generation = command.Generation
-                }, ct);
+                response = await _http.PostAsJsonAsync(ApiRoutes.CommandComplete(command.Id), new CommandCompletionRequest(ok, result, error, command.Generation), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -4,11 +4,11 @@ using Domain.Entities.Agents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 /// <summary>
-/// EF mapping for OpenCode connections. User and provider together are unique.
+/// EF mapping for user-owned model provider connections. User and provider together are unique.
 /// </summary>
-public class OpenCodeConnectionConfiguration : IEntityTypeConfiguration<OpenCodeConnection>
+public class AgentProviderConnectionConfiguration : IEntityTypeConfiguration<AgentProviderConnection>
 {
-    public void Configure(EntityTypeBuilder<OpenCodeConnection> entity)
+    public void Configure(EntityTypeBuilder<AgentProviderConnection> entity)
     {
         entity.HasKey(e => e.Id);
         entity.Property(e => e.ProviderId).IsRequired().HasMaxLength(80);

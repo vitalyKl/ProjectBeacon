@@ -2,7 +2,9 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
+using Domain.Entities.Tasks;
 
 internal readonly record struct McpToolText(bool IsError, string Text);
 
@@ -30,10 +32,23 @@ internal static partial class McpApiTools
         ..ModelTools(),
     ];
 
-    private static readonly HashSet<string> Names =
-        Tools.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+    static McpApiTools()
+    {
+        var implementationNames = Tools.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+        var missing = implementationNames.Where(name =>
+            !McpToolCatalog.TryGet(name, out var descriptor) || descriptor!.Handler != McpToolHandler.Api).ToArray();
+        var unimplemented = McpToolCatalog.All
+            .Where(descriptor => descriptor.Handler == McpToolHandler.Api)
+            .Select(descriptor => descriptor.Name)
+            .Where(name => !implementationNames.Contains(name))
+            .ToArray();
+        if (missing.Length > 0 || unimplemented.Length > 0)
+            throw new InvalidOperationException(
+                $"MCP API tool registry mismatch (unregistered: {string.Join(", ", missing)}; no handler: {string.Join(", ", unimplemented)}).");
+    }
 
-    public static bool IsApiTool(string name) => Names.Contains(name);
+    public static bool IsApiTool(string name) =>
+        McpToolCatalog.TryGet(name, out var descriptor) && descriptor!.Handler == McpToolHandler.Api;
 
     public static IEnumerable<JsonObject> Definitions()
     {
@@ -115,6 +130,10 @@ internal static partial class McpApiTools
     public static Task<McpToolText> ReportResultAsync(
         Guid taskId, Guid subtaskId, string diffRef, string summary, BeaconApiClient api, CancellationToken ct = default)
     {
+        if (summary.Length > Subtask.MaxSummaryLength)
+            return Task.FromResult(new McpToolText(true,
+                $"Summary exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten it and retry."));
+
         var body = new JsonObject
         {
             ["taskId"] = taskId.ToString("D"),

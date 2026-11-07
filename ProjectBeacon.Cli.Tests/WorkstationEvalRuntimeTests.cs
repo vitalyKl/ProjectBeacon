@@ -40,14 +40,12 @@ public sealed class WorkstationEvalRuntimeTests
             var result = await WorkstationEval.RunEvalTurnAsync(
                 root,
                 payload,
-                null,
                 runtime,
                 TimeSpan.FromMilliseconds(1),
                 TimeSpan.FromSeconds(1),
                 TimeSpan.FromSeconds(5),
                 TestContext.Current.CancellationToken,
-                authorization,
-                "native");
+                authorization);
 
             Assert.True(result.Success, result.Error);
             Assert.Equal(authorization, runtime.Controls!.HarnessAuthorization);
@@ -82,13 +80,11 @@ public sealed class WorkstationEvalRuntimeTests
             var result = await WorkstationEval.RunEvalTurnAsync(
                 root,
                 payload,
-                null,
                 runtime,
                 TimeSpan.FromMilliseconds(1),
                 TimeSpan.FromSeconds(5),
                 TimeSpan.FromMilliseconds(1),
-                TestContext.Current.CancellationToken,
-                runtimeName: "native");
+                TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.Error);
             Assert.Equal(1, runtime.AbortCount);
@@ -142,14 +138,12 @@ public sealed class WorkstationEvalRuntimeTests
             var result = await WorkstationEval.RunEvalTurnAsync(
                 root,
                 payload,
-                null,
                 runtime,
                 TimeSpan.FromMilliseconds(1),
                 TimeSpan.FromSeconds(1),
                 TimeSpan.FromSeconds(5),
                 TestContext.Current.CancellationToken,
-                authorization,
-                "native");
+                authorization);
 
             Assert.True(result.Success, result.Error);
             Assert.NotEqual(root, runtime.CapturedWorkingDirectory);

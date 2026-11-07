@@ -4,7 +4,7 @@ using ProjectBeacon.Application.Runtime;
 
 /// <summary>
 /// Fail-closed runtime used when the configured workstation runtime cannot be resolved.
-/// It deliberately never delegates to OpenCode.
+/// It reports the unavailable state explicitly and never silently switches to another runtime.
 /// </summary>
 internal sealed class UnavailableAgentRuntime(string error) : IAgentRuntime, IAgentRuntimeCapabilities
 {

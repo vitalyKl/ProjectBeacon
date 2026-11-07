@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
+using Domain.Common;
 using System.Text.Json;
 
 internal sealed class DaemonHeartbeatLoop : IDaemonLoop
@@ -9,14 +10,14 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
     private readonly ClientLlamaSwap _llama;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly IDaemonLlamaSync _llamaSync;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
 
     public DaemonHeartbeatLoop(
         DaemonDependencies deps,
         IDaemonLlamaSync llamaSync,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonRuntimeState state,
         DaemonTiming timing)
     {
@@ -36,6 +37,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
             try
             {
                 WorkstationSettings? settings;
+                string? settingsError = null;
                 try
                 {
                     settings = _loadSettings();
@@ -45,6 +47,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                     // Keep heartbeats flowing so the Web UI can show the unavailable runtime.
                     // A null workstationJson leaves the last successfully reported settings intact.
                     settings = null;
+                    settingsError = ex.Message;
                     _state.Log($"workstation settings unavailable; skipping settings sync: {ex.Message}");
                 }
 
@@ -53,24 +56,25 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                     var synced = await _llamaSync.TrySyncAsync(settings, ct);
                     if (!synced)
                         _state.Log("llama-swap sync deferred while model generations are active");
+                    // Keep the last workspace where possible; native runtime readiness must not launch or switch model processes.
+                    await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings.ProjectsRoot, ct);
                 }
-
-                // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
-                await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
-                var host = HostLoadSampler.Sample();
-                var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
+                else if (settingsError is not null)
                 {
-                    probeJson = WorkstationProbe.ProbeJson(
+                    _gate.ReportUnavailable(settingsError);
+                }
+                var host = HostLoadSampler.Sample();
+                var heartbeat = await _http.PostAsJsonAsync(ApiRoutes.DeviceHeartbeat, new WorkstationHeartbeatRequest(
+                    WorkstationProbe.ProbeJson(
                         _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire()),
-                    workstationJson = settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
-                    instanceId = DaemonInstance.Id
-                }, ct);
+                    settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
+                    DaemonInstance.Id), ct);
                 var code = (int)heartbeat.StatusCode;
                 _state.Publish(s => s with
                 {
                     Connected = heartbeat.IsSuccessStatusCode,
                     HeartbeatStatus = code,
-                    LastHeartbeatAt = DateTimeOffset.Now,
+                    LastHeartbeatAt = _timing.TimeProvider.GetLocalNow(),
                     Llama = _llama.Status,
                     Host = host,
                     Error = heartbeat.IsSuccessStatusCode ? null : $"heartbeat {code}"

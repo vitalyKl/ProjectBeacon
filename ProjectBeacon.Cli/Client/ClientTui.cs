@@ -188,7 +188,7 @@ public static class ClientTui
         settings.ModelsRoot = PromptPath("Models root", settings.ModelsRoot ?? WorkstationSettings.DefaultModelsRoot);
         settings.LlamaSwapBin = PromptOptional("llama-swap binary", settings.LlamaSwapBin);
         settings.LlamaCppBin = PromptOptional("llama-server binary", settings.LlamaCppBin);
-        settings.OpencodeDataDir = PromptOptional("OpenCode history dir", settings.OpencodeDataDir);
+        settings.AgentDataDir = PromptOptional("Agent data dir", settings.AgentDataDir);
         settings.BeaconPath = PromptOptional("beacon executable", settings.BeaconPath ?? Environment.ProcessPath);
         settings.LlamaSwapPort = AnsiConsole.Ask("llama-swap port:", settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080);
         AnsiConsole.MarkupLine("[grey]Command execution policy applies to native agents on this workstation. Auto skips consent; it is not an OS sandbox.[/]");
@@ -302,9 +302,16 @@ public static class ClientTui
                 {
                     var update = await ClientUpdater.CheckAsync(ct);
                     AnsiConsole.MarkupLine($"[grey]Client {Markup.Escape(update.CurrentVersion)} · latest {Markup.Escape(update.LatestVersion)}[/]");
-                    if (!update.UpdateAvailable)
+                    if (!update.NewerVersionAvailable)
                     {
                         AnsiConsole.MarkupLine("[green]The client is up to date.[/]");
+                        await Task.Delay(900, ct);
+                        break;
+                    }
+                    if (!update.PackageAvailable)
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"[yellow]Client {Markup.Escape(update.LatestVersion)} is available, but the {Markup.Escape(update.RuntimeIdentifier)} update package has not been published yet. Try again shortly.[/]");
                         await Task.Delay(900, ct);
                         break;
                     }
@@ -329,6 +336,11 @@ public static class ClientTui
                         {
                             AnsiConsole.MarkupLine("[green]Update staged. The updater helper will restart Beacon; see L (Logs) for the final result.[/]");
                             stopAfterUpdate = true;
+                        }
+                        else if (scheduled?.NewerVersionAvailable == true)
+                        {
+                            AnsiConsole.MarkupLine(
+                                $"[yellow]Client {Markup.Escape(scheduled.LatestVersion)} is available, but the {Markup.Escape(scheduled.RuntimeIdentifier)} update package is not currently available.[/]");
                         }
                         else
                         {
@@ -436,7 +448,7 @@ public static class ClientTui
     {
         var table = new Table().Border(TableBorder.Rounded).AddColumn("Tool").AddColumn("Path");
         using var doc = JsonDocument.Parse(json);
-        foreach (var name in new[] { "git", "node", "docker", "dotnet", "opencode", "llamaSwap", "llamaServer" })
+        foreach (var name in new[] { "git", "node", "docker", "dotnet", "llamaSwap", "llamaServer" })
         {
             var value = doc.RootElement.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String
                 ? el.GetString()

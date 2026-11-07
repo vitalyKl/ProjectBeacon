@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Application.Devices;
 
-using Application.Agents;
 using Application.Auth;
 using Application.Common;
 using Application.Security;
@@ -140,7 +139,6 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
         }
         RecordHostSample(db, device.Id, command.Request.ProbeJson);
         await QueueReconcileAsync(db, device, ct);
-        await QueueProjectAppliesAsync(db, device, ct);
         await db.SaveChangesAsync(ct);
         var stale = await db.DeviceHostSamples
             .Where(s => s.DeviceId == device.Id)
@@ -170,41 +168,6 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
             WorkstationCommandKind.ReconcileDesired,
             DesiredState.ReconcilePayload(device),
             requestedByUserId: device.UserId));
-    }
-
-    private static async Task QueueProjectAppliesAsync(IBeaconDb db, DaemonDevice device, CancellationToken ct)
-    {
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.DeviceId == device.Id && r.AppliedConfigRevision < r.ConfigRevision)
-            .ToListAsync(ct);
-        if (runtimes.Count == 0)
-            return;
-
-        var pending = await db.WorkstationCommands
-            .Where(c => c.DeviceId == device.Id
-                && c.Kind == WorkstationCommandKind.ApplyOpencode
-                && (c.Status == WorkstationCommandStatus.Pending || c.Status == WorkstationCommandStatus.Running))
-            .Select(c => c.ProjectId)
-            .ToListAsync(ct);
-        var backends = await db.LocalModelBackends
-            .Where(b => b.UserId == device.UserId)
-            .ToListAsync(ct);
-        var dtos = backends.Select(ModelBackendMappers.ToDto).ToList();
-        foreach (var runtime in runtimes)
-        {
-            if (pending.Contains(runtime.ProjectId))
-                continue;
-            var bindings = await db.RoleBindings.IgnoreQueryFilters()
-                .Where(r => r.ProjectId == runtime.ProjectId)
-                .ToListAsync(ct);
-            var payload = OpencodePayload.FromBindings(bindings, dtos, runtime.ConfigRevision);
-            db.WorkstationCommands.Add(WorkstationCommand.Create(
-                device.Id,
-                WorkstationCommandKind.ApplyOpencode,
-                payload,
-                runtime.ProjectId,
-                device.UserId));
-        }
     }
 
     private static void RecordHostSample(IBeaconDb db, Guid deviceId, string? probeJson)

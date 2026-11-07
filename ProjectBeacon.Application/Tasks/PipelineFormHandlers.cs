@@ -1,11 +1,11 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Domain.Enums;
+using Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 public sealed record ReplyPipelineFormRequest(
@@ -44,17 +44,18 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
             || request.UserId == Guid.Empty || formId.Length == 0)
             return Result.Failure<PipelineSessionDto>("Task, session, user, and form identifiers are required.");
 
-        JsonNode answer;
+        JsonElement answer;
         try
         {
-            answer = JsonNode.Parse(request.AnswerJson);
+            using var answerDocument = JsonDocument.Parse(request.AnswerJson);
+            if (answerDocument.RootElement.ValueKind != JsonValueKind.Object)
+                return Result.Failure<PipelineSessionDto>("Answer must be a JSON object.");
+            answer = answerDocument.RootElement.Clone();
         }
         catch (JsonException)
         {
             return Result.Failure<PipelineSessionDto>("Answer must be a JSON object.");
         }
-        if (answer is not JsonObject)
-            return Result.Failure<PipelineSessionDto>("Answer must be a JSON object.");
 
         await using var db = _dbFactory.CreateDbContext();
         var session = await db.PipelineSessions
@@ -69,29 +70,26 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
         if (!member)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        JsonObject activity;
+        PipelineActivityV1 activity;
         try
         {
-            activity = JsonNode.Parse(session.ActivityJson) as JsonObject ?? new JsonObject();
+            activity = PipelineActivityV1.Parse(session.ActivityJson);
         }
         catch (JsonException)
         {
             return Result.Failure<PipelineSessionDto>("Pipeline activity data is corrupted.");
         }
 
-        var externalSessionId = activity["externalSessionId"]?.GetValue<string>();
-        var deviceIdText = activity["deviceId"]?.GetValue<string>();
+        var externalSessionId = activity.ExternalSessionId;
         if (string.IsNullOrWhiteSpace(externalSessionId)
-            || !Guid.TryParse(deviceIdText, out var deviceId))
+            || !Guid.TryParse(activity.DeviceId, out var deviceId))
             return Result.Failure<PipelineSessionDto>("The workstation session is not available.");
 
-        if (activity["forms"] is not JsonArray forms)
-            return Result.Failure<PipelineSessionDto>("No pending form was found.");
-        var form = forms.OfType<JsonObject>()
-            .FirstOrDefault(item => string.Equals(item["id"]?.GetValue<string>(), formId, StringComparison.Ordinal));
+        var form = activity.Forms.FirstOrDefault(item =>
+            string.Equals(item.Id, formId, StringComparison.Ordinal));
         if (form is null)
             return Result.Failure<PipelineSessionDto>("Question not found.");
-        if (form["answer"] is not null)
+        if (form.Answer is not null)
             return Result.Failure<PipelineSessionDto>("Question already answered.", ErrorKind.Conflict);
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
@@ -103,17 +101,23 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
             deviceId,
             request.UserId,
             WorkstationCommandKind.ChatReplyForm,
-            JsonSerializer.Serialize(new { externalSessionId, formId, answerJson = answer.ToJsonString() }),
+            JsonSerializer.Serialize(new { externalSessionId, formId, answerJson = answer.GetRawText() }),
             session.ProjectId)), ct);
         if (!queued.Success)
             return Result.Failure<PipelineSessionDto>(queued.Error ?? "Could not deliver the answer to the workstation.");
 
-        form["answer"] = answer.DeepClone();
-        activity["forms"] = forms;
-        activity["state"] = "running";
-        activity["activity"] = "Answer sent; agent is continuing";
-        activity["updatedAt"] = DateTimeOffset.UtcNow;
-        session.UpdateActivity(activity.ToJsonString(), waitingForUser: false);
+        var updatedActivity = activity with
+        {
+            Forms = activity.Forms
+                .Select(existing => string.Equals(existing.Id, formId, StringComparison.Ordinal)
+                    ? existing with { Answer = answer }
+                    : existing)
+                .ToArray(),
+            State = "running",
+            Activity = "Answer sent; agent is continuing",
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        session.UpdateActivity(updatedActivity.ToJson(), waitingForUser: false);
         await db.SaveChangesAsync(ct);
         return Result.Ok(PipelineMappers.ToDto(session));
     }

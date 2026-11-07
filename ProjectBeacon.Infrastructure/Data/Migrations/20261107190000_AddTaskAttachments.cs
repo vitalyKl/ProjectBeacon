@@ -7,7 +7,7 @@ using ProjectBeacon.Infrastructure.Data;
 namespace ProjectBeacon.Infrastructure.Data.Migrations;
 
 [DbContext(typeof(BeaconDbContext))]
-[Migration("20261106120000_AddTaskAttachments")]
+[Migration("20261107190000_AddTaskAttachments")]
 public sealed class AddTaskAttachments : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

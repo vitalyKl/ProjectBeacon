@@ -63,6 +63,8 @@ jobs:
         run: dotnet build ProjectBeacon.sln --no-restore
       - name: No pending model changes
         run: |
+          # Release compiler/MSBuild server memory before starting EF design-time services.
+          dotnet build-server shutdown
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test — API
@@ -95,6 +97,31 @@ jobs:
         if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Report failed test details from TRX
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          failures = 0
+          for path in sorted(glob.glob("TestResults/**/*.trx", recursive=True)):
+              root = ET.parse(path).getroot()
+              for result in root.iter():
+                  if not result.tag.endswith("UnitTestResult") or result.get("outcome") != "Failed":
+                      continue
+                  failures += 1
+                  name = result.get("testName", "<unknown test>")
+                  print(f"::group::FAILED TEST: {name} ({path})")
+                  for node in result.iter():
+                      tag = node.tag.rsplit("}", 1)[-1]
+                      if tag in ("Message", "StackTrace") and node.text:
+                          print(f"{tag}:\\n{node.text}")
+                  print("::endgroup::")
+          if failures == 0:
+              print("No failed tests found in TRX reports.")
+          PY
       - name: Verify test results (TRX guards)
         if: always()
         shell: bash

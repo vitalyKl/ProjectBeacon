@@ -3,7 +3,6 @@ namespace ProjectBeacon.Cli.Tests;
 using Application.Common;
 using ProjectBeacon.Cli.Client;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 public sealed class WorkstationActionsTests : IDisposable
 {
@@ -21,119 +20,18 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
-    public void InitProject_WritesGitignoreAndOpencode()
+    public void InitProject_WritesGitignoreAndKeepsAgentDataOutsideProject()
     {
         var full = Path.Combine(_dir, "app");
-        var payload = JsonSerializer.Serialize(new
-        {
-            path = "app",
-            createGit = false,
-            historyInProject = true,
-            mcp = new
-            {
-                beacon = new
-                {
-                    type = "local",
-                    command = new[] { "beacon", "mcp", "--root", "." },
-                    enabled = true
-                }
-            },
-            model = "beacon-local/qwen"
-        });
+        var result = WorkstationSetup.InitProject(_dir, JsonSerializer.Serialize(new { path = "app", createGit = false }));
 
-        var result = WorkstationSetup.InitProject(_dir, payload);
         Assert.True(result.Success, result.Error);
-        Assert.True(Directory.Exists(Path.Combine(full, ".opencode", "data")));
+        Assert.True(Directory.Exists(full));
         var gitignore = File.ReadAllText(Path.Combine(full, ".gitignore"));
-        Assert.Contains(".opencode/data/", gitignore);
         Assert.Contains(".env", gitignore);
-        var opc = File.ReadAllText(Path.Combine(full, "opencode.json"));
-        Assert.Contains("beacon", opc);
-        Assert.Contains("\"read\": \"deny\"", opc);
-        Assert.Contains("beacon-local/qwen", opc);
-        using var valDoc = JsonDocument.Parse(result.Value!);
-        Assert.Equal(full, valDoc.RootElement.GetProperty("path").GetString());
-    }
-
-    [Fact]
-    public void ApplyOpencode_MergesMcp()
-    {
-        var path = Path.Combine(_dir, "merge");
-        Directory.CreateDirectory(path);
-        File.WriteAllText(Path.Combine(path, "opencode.json"), """{"$schema":"https://opencode.ai/config.json","autoupdate":false}""");
-        var result = OpencodeConfig.ApplyOpencode(_dir, JsonSerializer.Serialize(new
-        {
-            path = "merge",
-            mcp = new { context7 = new { type = "remote", url = "https://mcp.context7.com/mcp", enabled = true } }
-        }));
-        Assert.True(result.Success);
-        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
-        Assert.Contains("autoupdate", opc);
-        Assert.Contains("context7", opc);
-        Assert.Contains("deny", opc);
-    }
-
-    [Fact]
-    public void ApplyOpencode_MergesProviderAndAgents()
-    {
-        var path = Path.Combine(_dir, "prov");
-        Directory.CreateDirectory(path);
-        var payload = new JsonObject
-        {
-            ["path"] = "prov",
-            ["model"] = "beacon-local/qwen",
-            ["provider"] = new JsonObject
-            {
-                ["beacon-local"] = new JsonObject
-                {
-                    ["npm"] = "@ai-sdk/openai-compatible",
-                    ["options"] = new JsonObject { ["baseURL"] = "http://127.0.0.1:8080/v1" }
-                }
-            },
-            ["agent"] = new JsonObject { ["build"] = new JsonObject { ["model"] = "beacon-local/qwen" } },
-            ["providers"] = new JsonObject
-            {
-                ["beacon-local"] = new JsonObject
-                {
-                    ["package"] = "@opencode/ai/providers/openai-compatible",
-                    ["models"] = new JsonObject
-                    {
-                        ["qwen"] = new JsonObject { ["name"] = "qwen" }
-                    }
-                }
-            }
-        };
-        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
-        Assert.True(result.Success);
-        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
-        Assert.Contains("beacon-local", opc);
-        Assert.Contains("127.0.0.1:8080", opc);
-        Assert.Contains("\"build\"", opc);
-        using var mergedDoc = JsonDocument.Parse(opc);
-        Assert.Equal("@opencode/ai/providers/openai-compatible",
-            mergedDoc.RootElement.GetProperty("providers").GetProperty("beacon-local").GetProperty("package").GetString());
-    }
-
-    [Fact]
-    public void ApplyOpencode_McpReplace_DropsPreviousServers()
-    {
-        var path = Path.Combine(_dir, "replace");
-        Directory.CreateDirectory(path);
-        File.WriteAllText(Path.Combine(path, "opencode.json"), """{"mcp":{"old":{"type":"remote","url":"https://old"}}}""");
-        var payload = new JsonObject
-        {
-            ["path"] = "replace",
-            ["mcpReplace"] = true,
-            ["mcp"] = new JsonObject
-            {
-                ["beacon"] = new JsonObject { ["type"] = "local", ["command"] = new JsonArray("beacon", "mcp") }
-            }
-        };
-        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
-        Assert.True(result.Success);
-        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
-        Assert.Contains("beacon", opc);
-        Assert.DoesNotContain("https://old", opc);
+        Assert.Contains("*.gguf", gitignore);
+        Assert.False(Directory.Exists(Path.Combine(full, ".beacon-agent")));
+        Assert.False(File.Exists(Path.Combine(full, "opencode.json")));
     }
 
     [Fact]
@@ -147,16 +45,21 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
-    public void SaveWorkstation_PersistsNativeRuntime_AndRejectsUnknownValues()
+    public void SaveWorkstation_MigratesLegacyTranscriptDirectoryAndIgnoresRuntimeSelector()
     {
-        var file = Path.Combine(_dir, "workstation-runtime.json");
-        Assert.Equal("opencode", new WorkstationSettings().AgentRuntime);
+        var file = Path.Combine(_dir, "workstation.json");
+        var legacyDirectory = Path.Combine(_dir, ".opencode", "data");
 
-        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"native"}""", file);
-        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+        var json = WorkstationSetup.SaveWorkstation(
+            JsonSerializer.Serialize(new { agentRuntime = "opencode", opencodeDataDir = legacyDirectory }),
+            file);
 
-        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"future-runtime"}""", file);
-        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+        var loaded = WorkstationSettings.Load(file);
+        Assert.Equal(legacyDirectory, loaded.AgentDataDir);
+        using var saved = JsonDocument.Parse(json);
+        Assert.Equal(legacyDirectory, saved.RootElement.GetProperty("agentDataDir").GetString());
+        Assert.False(saved.RootElement.TryGetProperty("agentRuntime", out _));
+        Assert.False(saved.RootElement.TryGetProperty("opencodeDataDir", out _));
     }
 
     [Fact]
@@ -180,8 +83,9 @@ public sealed class WorkstationActionsTests : IDisposable
         var file = Path.Combine(_dir, ".gitignore");
         WorkstationSetup.MergeGitignore(file);
         WorkstationSetup.MergeGitignore(file);
-        var lines = File.ReadAllLines(file).Where(l => l.StartsWith(".opencode/data")).Count();
-        Assert.Equal(1, lines);
+        var lines = File.ReadAllLines(file);
+        Assert.Equal(1, lines.Count(line => line == ".env"));
+        Assert.Equal(1, lines.Count(line => line == "*.gguf"));
     }
 
     [Fact]
@@ -335,43 +239,6 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
-    public void ApplyOpencode_OutsideRoot_Rejected()
-    {
-        var outside = Path.Combine(Path.GetTempPath(), "beacon-outside-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            Directory.CreateDirectory(outside);
-            var payload = JsonSerializer.Serialize(new { path = "../" + Path.GetFileName(outside) });
-            var result = OpencodeConfig.ApplyOpencode(_dir, payload);
-            Assert.False(result.Success);
-            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
-        }
-        finally
-        {
-            try { Directory.Delete(outside, true); } catch { }
-        }
-    }
-
-    [Fact]
-    public void ApplyOpencode_MissingRoot_Fails()
-    {
-        var path = Path.Combine(_dir, "merge");
-        Directory.CreateDirectory(path);
-        var payload = JsonSerializer.Serialize(new { path });
-        var result = OpencodeConfig.ApplyOpencode("", payload);
-        Assert.False(result.Success);
-        Assert.Equal("missing root", result.Error);
-    }
-
-    [Fact]
-    public void ApplyOpencode_MissingPath_UsesRoot()
-    {
-        var result = OpencodeConfig.ApplyOpencode(_dir, "{}");
-        Assert.True(result.Success, result.Error);
-        Assert.True(File.Exists(Path.Combine(_dir, "opencode.json")));
-    }
-
-    [Fact]
     public void ProbeJson_HasOs()
     {
         var json = WorkstationProbe.ProbeJson();
@@ -381,14 +248,14 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
-    public void ProbeJson_ReportsRuntimeNeutralAgentStatusAndKeepsLegacyAlias()
+    public void ProbeJson_ReportsRuntimeNeutralAgentStatus()
     {
-        var json = WorkstationProbe.ProbeJson(opencodeServe: new { runtime = "native", healthy = true });
+        var json = WorkstationProbe.ProbeJson(agentRuntimeStatus: new { runtime = "native", healthy = true });
         using var doc = JsonDocument.Parse(json);
 
         Assert.Equal("native", doc.RootElement.GetProperty("agentRuntime").GetProperty("runtime").GetString());
         Assert.True(doc.RootElement.GetProperty("agentRuntime").GetProperty("healthy").GetBoolean());
-        Assert.Equal("native", doc.RootElement.GetProperty("opencodeServe").GetProperty("runtime").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("opencodeServe", out _));
     }
 
     [Fact]
@@ -426,34 +293,6 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
-    public void ApplyOpencode_WritesToolDisciplineInstructions()
-    {
-        var path = Path.Combine(_dir, "discipline");
-        Directory.CreateDirectory(path);
-        var payload = new JsonObject { ["path"] = "discipline" };
-        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
-        Assert.True(result.Success);
-        var instrFile = Path.Combine(path, ".opencode", "instructions", "beacon-tool-discipline.md");
-        Assert.True(File.Exists(instrFile));
-        var content = File.ReadAllText(instrFile);
-        Assert.Contains("Beacon Tool Discipline", content);
-        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
-        Assert.Contains("beacon-tool-discipline", opc);
-    }
-
-    [Fact]
-    public void ApplyOpencode_InstructionsIdempotent()
-    {
-        var path = Path.Combine(_dir, "discipline2");
-        Directory.CreateDirectory(path);
-        var payload = new JsonObject { ["path"] = "discipline2" };
-        OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
-        OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
-        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
-        Assert.Equal(1, opc.Split("beacon-tool-discipline").Length - 1);
-    }
-
-    [Fact]
     public void Which_FallsBackToShimWhenNoLaunchableTwin()
     {
         if (!OperatingSystem.IsWindows())
@@ -465,64 +304,4 @@ public sealed class WorkstationActionsTests : IDisposable
         Assert.Equal(Path.Combine(bin, "fakebin"), found);
     }
 
-    [Fact]
-    public void ReplaceBeaconCommand_ReplacesBareBeaconWithAbsolutePath()
-    {
-        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp","--root","."],"enabled":true}}""");
-        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
-        using var outDoc = JsonDocument.Parse(result.GetRawText());
-        var command = outDoc.RootElement.GetProperty("beacon").GetProperty("command");
-        Assert.Equal("/opt/beacon/beacon", command[0].GetString());
-        Assert.Equal("mcp", command[1].GetString());
-        Assert.Equal(".", command[3].GetString());
-    }
-
-    [Fact]
-    public void ReplaceBeaconCommand_LeavesNonBeaconServersAlone()
-    {
-        using var doc = JsonDocument.Parse("""{"ctx7":{"type":"remote","url":"https://x"},"other":{"type":"local","command":["node","server.js"]}}""");
-        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
-        Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
-    }
-
-    [Fact]
-    public void ReplaceBeaconCommand_LeavesExistingAbsolutePathAlone()
-    {
-        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["/opt/beacon/beacon","mcp"]}}""");
-        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/other");
-        Assert.Equal("/opt/beacon/beacon", doc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
-        Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
-    }
-
-    [Fact]
-    public void ReplaceBeaconCommand_UsesBeaconPathFromSettingsFile()
-    {
-        var settingsFile = Path.Combine(_dir, "workstation.json");
-        var beacon = Path.Combine(_dir, "bin", "beacon");
-        Directory.CreateDirectory(Path.GetDirectoryName(beacon)!);
-        File.WriteAllText(beacon, "");
-        new WorkstationSettings { BeaconPath = beacon }.Save(settingsFile);
-        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp"]}}""");
-        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, settingsPath: settingsFile);
-        using var outDoc = JsonDocument.Parse(result.GetRawText());
-        Assert.Equal(beacon, outDoc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
-    }
-
-    [Fact]
-    public void ResolveBeaconPath_FallsBackToProcessPath()
-    {
-        var settingsFile = Path.Combine(_dir, "workstation-empty.json");
-        new WorkstationSettings().Save(settingsFile);
-        var resolved = OpencodeConfig.ResolveBeaconPath(settingsFile);
-        Assert.Equal(Environment.ProcessPath, resolved);
-    }
-
-    [Fact]
-    public void ResolveBeaconPath_IgnoresMissingOverride()
-    {
-        var settingsFile = Path.Combine(_dir, "workstation-missing.json");
-        new WorkstationSettings { BeaconPath = Path.Combine(_dir, "no-such", "beacon") }.Save(settingsFile);
-        var resolved = OpencodeConfig.ResolveBeaconPath(settingsFile);
-        Assert.Equal(Environment.ProcessPath, resolved);
-    }
 }

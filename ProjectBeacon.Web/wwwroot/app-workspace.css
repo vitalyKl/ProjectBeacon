@@ -1,0 +1,659 @@
+/* Panels, metrics, dashboard, board, task workflow and responsive workspace layout. */
+
+.beacon-card {
+    background-color: var(--color-surface-1);
+    border-radius: var(--radius-small);
+}
+
+.beacon-board-card {
+    padding: var(--beacon-board-card-pad);
+}
+
+.beacon-board-card .beacon-card-title {
+    font-size: var(--type-card);
+    line-height: 1.45;
+}
+
+.beacon-board-card .mud-typography-body2 {
+    font-size: var(--type-secondary);
+}
+
+.beacon-panel {
+    background-color: var(--color-surface-2);
+    border-radius: var(--radius-small);
+    padding: var(--space-4) var(--space-5);
+}
+
+.beacon-qr-code {
+    display: block;
+    width: 180px;
+    height: 180px;
+    padding: var(--space-2);
+    border: var(--border-hairline) solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-qr-background);
+}
+
+.beacon-report-task-select {
+    width: 100%;
+    max-width: 420px;
+}
+
+.beacon-step-done {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+}
+
+.beacon-ops-panel.beacon-panel,
+.beacon-panel.beacon-surface-operational,
+.beacon-panel.beacon-surface-attention,
+.beacon-panel.beacon-surface-section,
+.beacon-panel.beacon-surface-inline {
+    padding: 0;
+    overflow: hidden;
+}
+
+.beacon-panel.beacon-surface-operational {
+    border: var(--border-hairline) solid var(--color-border);
+    background: var(--color-surface-2);
+}
+
+.beacon-panel.beacon-surface-section {
+    border: 0;
+    border-top: var(--border-hairline) solid var(--color-border);
+    border-radius: 0;
+    background: transparent;
+}
+
+.beacon-panel.beacon-surface-inline {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.beacon-panel.beacon-surface-attention {
+    border: var(--border-hairline) solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+    background: color-mix(in srgb, var(--color-warning-background) 55%, var(--color-surface-2));
+}
+
+.beacon-attention-banner {
+    min-height: 58px;
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border: var(--border-hairline) solid color-mix(in srgb, var(--color-warning) 18%, transparent);
+    border-radius: var(--radius-small);
+    background: var(--color-warning-background);
+}
+
+.beacon-attention-banner > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.beacon-attention-banner strong { font-size: var(--type-section); font-weight: 650; }
+.beacon-attention-banner span {
+    color: var(--color-text-secondary);
+    font-size: var(--type-secondary);
+}
+
+.beacon-metric-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin: var(--space-4) 0;
+    border: var(--border-hairline) solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-surface-2);
+}
+
+.beacon-metric {
+    position: relative;
+    padding: var(--space-4);
+}
+
+.beacon-metric + .beacon-metric::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 1px;
+    background: var(--color-border);
+}
+
+.beacon-metric-label {
+    color: var(--color-text-muted);
+    font-size: var(--type-caption);
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.beacon-metric-value {
+    margin-top: var(--space-1);
+    font: 500 var(--type-metric)/1.2 var(--font-mono);
+    letter-spacing: -0.04em;
+}
+
+.beacon-metric-note {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--type-secondary);
+}
+
+.beacon-ops-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 0.8fr;
+    gap: var(--space-3);
+}
+
+.beacon-ops-grid .span-2 { grid-column: span 2; }
+.beacon-ops-grid .span-3 { grid-column: span 3; }
+
+.beacon-ops-head {
+    min-height: 48px;
+    padding: var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.beacon-ops-title { font-size: var(--type-section); font-weight: 650; letter-spacing: -0.01em; }
+.beacon-ops-sub, .beacon-ops-empty { color: var(--color-text-muted); font-size: var(--type-secondary); }
+.beacon-ops-empty, .beacon-ops-pad { padding: var(--space-3); }
+
+.beacon-run-row, .beacon-health-row, .beacon-attention-item, .beacon-activity-row {
+    display: grid;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-hairline) solid var(--color-border);
+    color: inherit;
+    text-decoration: none;
+}
+
+.beacon-run-row { grid-template-columns: auto 1.2fr 1fr auto; }
+.beacon-health-row { grid-template-columns: 8px 1fr 120px; }
+.beacon-attention-item { grid-template-columns: 5px 1fr; }
+.beacon-activity-row { grid-template-columns: auto 1fr auto; }
+.beacon-activity-row .beacon-state { font-size: var(--type-secondary); }
+
+.beacon-run-row > span, .beacon-health-row > span, .beacon-attention-item > span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.beacon-run-row strong, .beacon-health-row strong, .beacon-attention-item strong {
+    font-size: var(--type-card);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.beacon-run-row span span, .beacon-health-row span span, .beacon-attention-item span span, .beacon-activity-row time,
+.beacon-activity-row span {
+    color: var(--color-text-muted);
+    font-size: var(--type-caption);
+}
+
+.beacon-avatar-mark {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-small);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.beacon-progress {
+    height: 4px;
+    overflow: hidden;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-3);
+}
+
+.beacon-progress > span {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+}
+
+.beacon-progress.is-success > span { background: var(--color-success); }
+.beacon-progress.is-warning > span { background: var(--color-warning); }
+
+.beacon-severity {
+    width: 4px;
+    height: 28px;
+    border-radius: var(--radius-control);
+    background: var(--color-warning);
+}
+
+.beacon-severity.is-danger { background: var(--color-danger); }
+
+.beacon-node-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-success);
+}
+
+.beacon-node-dot.is-offline { background: var(--color-danger); }
+
+.beacon-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.beacon-status-chip::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.beacon-relation {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.beacon-relation > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+}
+
+.beacon-relation > div + div { border-left: var(--border-hairline) solid var(--color-border); }
+.beacon-relation small { color: var(--color-text-muted); font-size: var(--type-caption); letter-spacing: 0.06em; text-transform: uppercase; }
+.beacon-relation strong { font-size: var(--type-card); }
+
+.beacon-empty { display: block; margin-top: var(--space-4); }
+
+@media (max-width: 1100px) {
+    .beacon-ops-grid { grid-template-columns: 1fr; }
+    .beacon-ops-grid .span-2, .beacon-ops-grid .span-3 { grid-column: auto; }
+    .beacon-metric-strip { grid-template-columns: 1fr 1fr; }
+    .beacon-run-row { grid-template-columns: auto 1fr; }
+    .beacon-relation { grid-template-columns: 1fr 1fr; }
+    .beacon-split-3 { grid-template-columns: 1fr; }
+}
+
+.beacon-phase-strip {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+}
+
+.beacon-section-row {
+    cursor: pointer;
+    width: 100%;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    font-size: var(--type-secondary);
+}
+
+.beacon-split-3 {
+    display: grid;
+    grid-template-columns: minmax(200px, 0.9fr) minmax(240px, 1.1fr) minmax(200px, 0.9fr);
+    gap: var(--space-3);
+    align-items: start;
+}
+
+.beacon-main .mud-typography-h6 {
+    font-size: var(--type-section);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.beacon-main .mud-table-cell {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--type-body);
+}
+
+.beacon-main .mud-table-head .mud-table-cell {
+    font-size: var(--type-caption);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.beacon-section-row:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+.beacon-phase-tick {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    min-width: 7rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.beacon-phase-tick.is-open {
+    color: var(--mud-palette-primary);
+}
+
+.beacon-phase-mark {
+    display: block;
+    width: 100%;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-1);
+}
+
+.beacon-phase-mark.active {
+    background: var(--mud-palette-info);
+}
+
+.beacon-phase-mark.done {
+    background: var(--mud-palette-success);
+}
+
+.beacon-phase-mark.failed {
+    background: var(--mud-palette-error);
+}
+
+.beacon-phase-mark.warning {
+    background: var(--color-warning);
+}
+
+.beacon-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+}
+
+.beacon-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
+.beacon-stage-track {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+}
+
+.beacon-stage {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.beacon-stage .mud-typography-caption {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+}
+
+.beacon-stage.is-current .mud-typography-caption {
+    color: var(--color-text-primary);
+}
+
+.beacon-stage.is-current:has(.beacon-phase-mark.warning) .mud-typography-caption {
+    color: var(--color-warning);
+}
+
+.beacon-budget-label {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.beacon-track {
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-surface-1);
+    overflow: hidden;
+}
+
+.beacon-track .mud-progress-linear-bars {
+    border-radius: var(--radius-pill);
+}
+
+.mud-chip.mud-chip-filled.mud-chip-color-success {
+    background-color: var(--color-success-background) !important;
+    color: var(--color-success) !important;
+}
+
+.mud-chip.mud-chip-filled.mud-chip-color-info {
+    background-color: var(--color-info-background) !important;
+    color: var(--color-info) !important;
+}
+
+.mud-chip.mud-chip-filled.mud-chip-color-warning {
+    background-color: var(--color-warning-background) !important;
+    color: var(--color-warning) !important;
+}
+
+.mud-chip.mud-chip-filled.mud-chip-color-error {
+    background-color: var(--color-danger-background) !important;
+    color: var(--color-danger) !important;
+}
+
+.mud-chip.mud-chip-filled.mud-chip-color-default,
+.mud-chip.mud-chip-filled:not([class*="mud-chip-color-"]) {
+    background-color: var(--color-bg-surface-hover) !important;
+    color: var(--color-text-secondary) !important;
+}
+
+.mud-chip {
+    border-radius: var(--radius-small);
+    font-weight: 600;
+}
+
+.kanban-board.mud-drop-container,
+.kanban-board {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-3);
+    width: 100%;
+    overflow-x: auto;
+}
+
+.kanban-column {
+    flex: 1 1 0;
+    min-width: 240px;
+}
+
+.kanban-zone {
+    min-height: calc(var(--space-16) + var(--space-12));
+    height: 100%;
+    padding: var(--space-2) var(--space-3);
+}
+
+.beacon-nav-label {
+    padding: var(--space-2) var(--space-3) var(--space-1);
+    font-size: var(--type-caption);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-sidebar-muted);
+}
+
+.beacon-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.beacon-page-header.is-actions {
+    justify-content: flex-end;
+    margin-bottom: var(--space-4);
+}
+
+.beacon-task-title {
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+}
+
+.beacon-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+.beacon-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.beacon-action-danger {
+    margin-left: auto;
+}
+
+.beacon-board-filter {
+    display: none;
+}
+
+@media (max-width: 1024px) and (min-width: 768px) {
+    .beacon-chat-dock {
+        width: 320px;
+    }
+
+    .kanban-column {
+        min-width: 220px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .beacon-board-filter {
+        display: inline-flex;
+    }
+
+    .kanban-board.mud-drop-container,
+    .kanban-board {
+        flex-direction: column;
+        overflow-x: visible;
+    }
+
+    .kanban-column {
+        flex: none;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .kanban-zone {
+        min-height: 0;
+        height: auto;
+    }
+
+    .kanban-board.kanban-show-todo .kanban-column:not(.kanban-column-todo),
+    .kanban-board.kanban-show-inprogress .kanban-column:not(.kanban-column-inprogress),
+    .kanban-board.kanban-show-done .kanban-column:not(.kanban-column-done) {
+        display: none;
+    }
+}
+
+@media (max-width: 599.98px) {
+    .mud-dialog-container {
+        align-items: stretch;
+    }
+
+    .mud-dialog {
+        margin: 0;
+        width: 100%;
+        max-width: 100% !important;
+        max-height: 100vh;
+        max-height: 100dvh;
+        height: 100%;
+        border-radius: 0;
+    }
+}
+
+@media (max-width: 599.98px) {
+    .beacon-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .beacon-page-actions {
+        justify-content: flex-start;
+    }
+}
+
+.kanban-header {
+    gap: var(--space-2);
+}
+
+.kanban-header .mud-typography {
+    font-size: var(--type-secondary);
+    font-weight: 650;
+    color: var(--color-text-primary);
+}
+
+.kanban-header .kanban-header-count {
+    font-size: var(--type-caption);
+    color: var(--color-text-muted);
+}
+
+.mud-drop-item {
+    user-select: none;
+    cursor: grab;
+}
+
+.beacon-card-title {
+    cursor: pointer;
+}
+
+.beacon-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.beacon-card-title-row .beacon-card-title {
+    flex-grow: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.beacon-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-accent);
+    visibility: hidden;
+    flex-shrink: 0;
+}
+
+.beacon-card-interactive:active .beacon-status-dot,
+.beacon-card-interactive:focus-within .beacon-status-dot {
+    visibility: visible;
+}
+

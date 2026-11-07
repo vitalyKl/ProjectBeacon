@@ -15,8 +15,8 @@ public sealed class EvalRun : Entity, IProjectScoped
     public Guid TaskId { get; private set; }
     public string? PairId { get; private set; }
     public EvalCondition Condition { get; private set; }
-    /// <summary>The runtime pinned for this eval; defaults to OpenCode for existing records.</summary>
-    public string Runtime { get; private set; } = "opencode";
+    /// <summary>The runtime pinned for this eval. ProjectBeacon currently supports the native workstation runtime.</summary>
+    public string Runtime { get; private set; } = "native";
     public int PromptTokens { get; private set; }
     public int CompletionTokens { get; private set; }
     public int TurnCount { get; private set; }
@@ -45,8 +45,12 @@ public sealed class EvalRun : Entity, IProjectScoped
         return run;
     }
 
-    public void Pin(string model, double temperature, string reasoningEffort, string toolPermissions, int timeoutSeconds, string repoRevision, string checkCommand, string runtime = "opencode")
+    public void Pin(string model, double temperature, string reasoningEffort, string toolPermissions, int timeoutSeconds, string repoRevision, string checkCommand, string runtime = "native")
     {
+        var normalizedRuntime = runtime.Trim().ToLowerInvariant();
+        if (!string.Equals(normalizedRuntime, "native", StringComparison.Ordinal))
+            throw new ArgumentException("Only the native workstation runtime is supported for eval runs.", nameof(runtime));
+
         Model = model.Trim();
         Temperature = temperature;
         ReasoningEffort = reasoningEffort.Trim();
@@ -54,7 +58,7 @@ public sealed class EvalRun : Entity, IProjectScoped
         TimeoutSeconds = timeoutSeconds;
         RepoRevision = repoRevision.Trim();
         CheckCommand = checkCommand.Trim();
-        Runtime = runtime.Trim().ToLowerInvariant();
+        Runtime = normalizedRuntime;
     }
 
     /// <summary>

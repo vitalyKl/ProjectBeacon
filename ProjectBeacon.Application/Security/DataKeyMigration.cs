@@ -56,7 +56,7 @@ public static class DataKeyMigration
 
         while (true)
         {
-            var batch = await db.OpenCodeConnections
+            var batch = await db.AgentProviderConnections
                 .Where(c => c.ApiKeyCipher != "" && !c.ApiKeyCipher.StartsWith(ISecretProtector.V2Prefix))
                 .Take(BatchSize)
                 .ToListAsync(ct);
@@ -86,7 +86,7 @@ public static class DataKeyMigration
     private static async Task<int> CountRemainingAsync(IBeaconDb db, CancellationToken ct)
         => await db.Users
             .CountAsync(u => u.TotpSecretCipher != "" && !u.TotpSecretCipher.StartsWith(ISecretProtector.V2Prefix), ct)
-           + await db.OpenCodeConnections
+           + await db.AgentProviderConnections
             .CountAsync(c => c.ApiKeyCipher != "" && !c.ApiKeyCipher.StartsWith(ISecretProtector.V2Prefix), ct);
 
     private static bool ReEncrypt(Func<string> open, ISecretProtector secrets, Action<string> write)

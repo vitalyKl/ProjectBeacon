@@ -1,5 +1,6 @@
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Web.Features.Chat
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CompileBriefHandler CompileBrief
 
@@ -10,9 +11,9 @@
             @L["CompileBrief"]
         </MudButton>
     </MudStack>
-    <div class="beacon-budget mt-2">
+    <div class="beacon-budget mt-2 beacon-task-context-usage">
         <div class="beacon-budget-label">
-            <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
+            <span class="mud-typography mud-typography-caption">@L["ContextInputEstimate"]</span>
             <span class="mud-typography mud-typography-caption">@_tokens / @_budget</span>
         </div>
         <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
@@ -27,7 +28,7 @@
     }
     @if (!string.IsNullOrEmpty(_markdown))
     {
-        <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_markdown</MudText>
+        <ChatMarkdown Text="@(_markdown ?? string.Empty)" />
     }
 </MudPaper>
 

@@ -96,7 +96,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task LaunchSession_WithoutNativeRuntime_FailsAndLeavesSessionReady()
+    public async Task LaunchSession_WithoutOnlineWorkstation_FailsAndLeavesSessionReady()
     {
         var (projectId, task) = await SeedTaskAsync("Pipeline without native runtime");
         var session = PipelineSession.Create(
@@ -118,7 +118,7 @@ public sealed partial class PipelineHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.False(launched.Success);
-        Assert.Contains("No native pipeline workstation", launched.Error);
+        Assert.Contains("No online pipeline workstation", launched.Error);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.PipelineSessions.AsNoTracking()

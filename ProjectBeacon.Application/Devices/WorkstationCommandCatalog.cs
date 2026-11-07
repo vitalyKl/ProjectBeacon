@@ -10,6 +10,13 @@ public enum WorkstationCommandScope
     ProjectRuntime
 }
 
+/// <summary>The daemon queue used to execute a workstation command.</summary>
+public enum WorkstationCommandLane
+{
+    Main,
+    Control
+}
+
 /// <summary>
 /// Static metadata for a workstation command. Execution and authorization remain in their
 /// dedicated handlers; this catalog centralizes command context, retry, and contract metadata.
@@ -22,7 +29,12 @@ public sealed record WorkstationCommandDescriptor(
     WorkstationCommandScope Scope,
     OperationRetrySemantics RetrySemantics,
     string PayloadContract,
-    string SecurityPolicy);
+    string SecurityPolicy,
+    WorkstationCommandLane Lane,
+    bool StartsControlLane,
+    TimeSpan LeaseDuration,
+    bool ReconcileBacked,
+    bool Enabled = true);
 
 /// <summary>
 /// Authoritative metadata catalog for every persisted workstation command kind.
@@ -47,22 +59,22 @@ public static class WorkstationCommandCatalog
             Device(WorkstationCommandKind.ListDir, "workspace.list-directory", "List a directory inside the configured workspace.", OperationRetrySemantics.ReadOnly, "{path:string}"),
             Device(WorkstationCommandKind.Install, "device.install-tool", "Install a supported workstation tool.", OperationRetrySemantics.GuardedMutation, "{tool:string}"),
             Project(WorkstationCommandKind.InitProject, "workspace.initialize", "Initialize project-local development configuration.", OperationRetrySemantics.Idempotent, "{projectId:guid}"),
-            Project(WorkstationCommandKind.ApplyOpencode, "agent.apply-config", "Apply the selected agent and model configuration.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
+            Device(WorkstationCommandKind.RetiredAgentConfigApply, "legacy.agent-config.apply", "Retired legacy external-agent configuration command.", OperationRetrySemantics.Reconciliation, "{}", enabled: false),
             Device(WorkstationCommandKind.ScanGguf, "model.scan-local", "Discover local GGUF models.", OperationRetrySemantics.ReadOnly, "{}"),
             Device(WorkstationCommandKind.ReloadProxy, "model-proxy.reload", "Reload the local model proxy configuration.", OperationRetrySemantics.Reconciliation, "{}"),
             Device(WorkstationCommandKind.UnloadProxy, "model-proxy.unload", "Unload a local model from the model proxy.", OperationRetrySemantics.Idempotent, "{}"),
             Device(WorkstationCommandKind.SwapModel, "model.swap", "Switch the active local model.", OperationRetrySemantics.GuardedMutation, "{model:string}"),
-            Device(WorkstationCommandKind.SaveWorkstation, "device.save-config", "Persist workstation desired configuration.", OperationRetrySemantics.GuardedMutation, "{revision:integer,...}"),
+            Device(WorkstationCommandKind.SaveWorkstation, "device.save-config", "Persist workstation desired configuration.", OperationRetrySemantics.GuardedMutation, "{revision:integer,...}", reconcileBacked: true),
             Project(WorkstationCommandKind.ChatEnsureSession, "chat.ensure-session", "Ensure a chat runtime session exists.", OperationRetrySemantics.AtMostOnce, "{sessionId?:guid}"),
-            Project(WorkstationCommandKind.ChatPrompt, "chat.prompt", "Submit one prompt to a chat session.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,prompt:string}"),
-            Device(WorkstationCommandKind.ChatAbort, "chat.abort", "Abort a running chat operation.", OperationRetrySemantics.Idempotent, "{sessionId:guid}"),
-            Device(WorkstationCommandKind.ChatSwitchAgent, "chat.switch-agent", "Switch the active agent for a chat session.", OperationRetrySemantics.AtMostOnce, "{externalSessionId:string,agent:string,chatSessionId?:guid,projectId?:guid}"),
-            Device(WorkstationCommandKind.ChatReplyForm, "chat.reply-form", "Submit an answer to a pending chat form.", OperationRetrySemantics.AtMostOnce, "{externalSessionId:string,formId:string,answerJson:string}"),
-            Device(WorkstationCommandKind.ConfigureOpenCode, "agent.configure-opencode", "Reconcile OpenCode runtime configuration.", OperationRetrySemantics.Reconciliation, "{revision?:integer,...}"),
+            Project(WorkstationCommandKind.ChatPrompt, "chat.prompt", "Submit one prompt to a chat session.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,prompt:string}", startsControlLane: true),
+            Device(WorkstationCommandKind.ChatAbort, "chat.abort", "Abort a running chat operation.", OperationRetrySemantics.Idempotent, "{sessionId:guid}", lane: WorkstationCommandLane.Control),
+            Device(WorkstationCommandKind.ChatSwitchAgent, "chat.switch-agent", "Switch the active agent for a chat session.", OperationRetrySemantics.AtMostOnce, "{externalSessionId:string,agent:string,chatSessionId?:guid,projectId?:guid}", lane: WorkstationCommandLane.Control),
+            Device(WorkstationCommandKind.ChatReplyForm, "chat.reply-form", "Submit an answer to a pending chat form.", OperationRetrySemantics.AtMostOnce, "{externalSessionId:string,formId:string,answerJson:string}", lane: WorkstationCommandLane.Control),
+            Device(WorkstationCommandKind.RetiredProviderSync, "legacy.provider.sync", "Retired legacy external-agent provider synchronization command.", OperationRetrySemantics.Reconciliation, "{}", enabled: false),
             Project(WorkstationCommandKind.RunEvalTurn, "eval.run-turn", "Run one evaluation turn.", OperationRetrySemantics.AtMostOnce, "{evalRunId:guid}"),
             Device(WorkstationCommandKind.ReconcileDesired, "device.reconcile", "Reconcile workstation desired state.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
             Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}"),
-            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}"),
+            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}", startsControlLane: true, leaseDuration: TimeSpan.FromMinutes(CommandLease.PipelineMinutes)),
             Device(WorkstationCommandKind.CheckClientUpdate, "device.check-client-update", "Check the latest signed-off workstation client release.", OperationRetrySemantics.ReadOnly, "{}"),
             Device(WorkstationCommandKind.UpdateClient, "device.update-client", "Download, verify, and install the latest workstation client release.", OperationRetrySemantics.AtMostOnce, "{}")
         };
@@ -83,13 +95,35 @@ public static class WorkstationCommandCatalog
         return byKind;
     }
 
-    private static WorkstationCommandDescriptor Device(WorkstationCommandKind kind, string id, string summary,
-        OperationRetrySemantics retry, string payload) =>
+    private static WorkstationCommandDescriptor Device(
+        WorkstationCommandKind kind,
+        string id,
+        string summary,
+        OperationRetrySemantics retry,
+        string payload,
+        WorkstationCommandLane lane = WorkstationCommandLane.Main,
+        bool startsControlLane = false,
+        TimeSpan? leaseDuration = null,
+        bool? reconcileBacked = null,
+        bool enabled = true) =>
         new(kind, id, summary, 1, WorkstationCommandScope.Device, retry, payload,
-            "Device ownership and command policy are enforced by the trusted Application boundary.");
+            "Device ownership and command policy are enforced by the trusted Application boundary.",
+            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes),
+            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation, enabled);
 
-    private static WorkstationCommandDescriptor Project(WorkstationCommandKind kind, string id, string summary,
-        OperationRetrySemantics retry, string payload) =>
+    private static WorkstationCommandDescriptor Project(
+        WorkstationCommandKind kind,
+        string id,
+        string summary,
+        OperationRetrySemantics retry,
+        string payload,
+        WorkstationCommandLane lane = WorkstationCommandLane.Main,
+        bool startsControlLane = false,
+        TimeSpan? leaseDuration = null,
+        bool? reconcileBacked = null,
+        bool enabled = true) =>
         new(kind, id, summary, 1, WorkstationCommandScope.ProjectRuntime, retry, payload,
-            "Project membership, runtime binding, and payload sandboxing are enforced server-side.");
+            "Project membership, runtime binding, and payload sandboxing are enforced server-side.",
+            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes),
+            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation, enabled);
 }

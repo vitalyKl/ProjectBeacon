@@ -16,10 +16,8 @@ public static class ClientHost
         if (storePath is not null)
             Environment.SetEnvironmentVariable("BEACON_CLIENT_STORE", storePath);
         var store = ClientStore.Load(storePath);
-        if (!string.IsNullOrWhiteSpace(opts.Url))
-            store.Url = opts.Url.TrimEnd('/');
-        if (!string.IsNullOrWhiteSpace(opts.Token))
-            store.Token = opts.Token;
+        store.Url = (ClientConfiguration.ResolveValue(opts.Url, null, store.Url) ?? string.Empty).TrimEnd('/');
+        store.Token = ClientConfiguration.ResolveValue(opts.Token, null, store.Token) ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(opts.Url) || !string.IsNullOrWhiteSpace(opts.Token))
             store.Save(storePath);
 
@@ -79,14 +77,12 @@ public static class ClientHost
             using var http = new HttpClient { BaseAddress = new Uri(store.Url.TrimEnd('/') + "/") };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
             await using var llama = new ClientLlamaSwap { VramChecker = new ModelSwapping.NvidiaSmiVramChecker() };
-            await using var openCode = new ClientOpenCodeServe();
             var fileLog = new ClientFileLog();
             await using var daemon = new WorkstationDaemon(
                 http,
                 llama,
                 () => WorkstationSettings.Load(),
-                interactive ? fileLog.Write : msg => { fileLog.Write(msg); Console.Error.WriteLine(msg); },
-                openCode);
+                interactive ? fileLog.Write : msg => { fileLog.Write(msg); Console.Error.WriteLine(msg); });
 
             if (interactive)
                 return await ClientTui.RunDashboardAsync(daemon, store, linked.Token, storePath);

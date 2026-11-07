@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using ProjectBeacon.Application.Common;
 /// <summary>
-/// InitProject writes .gitignore, merges opencode.json, and creates .opencode/data. Install allows only git, node, and docker through winget.
+/// InitProject prepares a project-local Git setup and ignore rules. Agent transcripts and provider configuration stay outside the repository.
 /// </summary>
 public static class WorkstationSetup
 {
@@ -32,24 +32,7 @@ public static class WorkstationSetup
         var gitignore = Path.Combine(full, ".gitignore");
         MergeGitignore(gitignore);
 
-        var historyInProject = !payloadRoot.TryGetProperty("historyInProject", out var hist) || hist.ValueKind != JsonValueKind.False;
-        var dataDir = Path.Combine(full, ".opencode", "data");
-        if (historyInProject)
-            Directory.CreateDirectory(dataDir);
-
-        var opencodePath = Path.Combine(full, "opencode.json");
-        var mcp = OpencodeConfig.ReplaceBeaconCommand(payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default);
-        var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
-        var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
-        var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
-        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider);
-
-        var local = Path.Combine(full, ".opencode", "local.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(local)!);
-        if (payloadRoot.TryGetProperty("localEnv", out var envEl) && envEl.ValueKind == JsonValueKind.Object)
-            File.WriteAllText(local, envEl.GetRawText());
-
-        return Result.Ok(JsonSerializer.Serialize(new { path = full, gitignore, opencode = opencodePath, historyDir = historyInProject ? dataDir : null }));
+        return Result.Ok(JsonSerializer.Serialize(new { path = full, gitignore }));
     }
 
     public static string SaveWorkstation(string payloadJson, string? settingsPath = null)
@@ -68,12 +51,6 @@ public static class WorkstationSetup
         if (root.TryGetProperty("useOwnSwapper", out var own) &&
             (own.ValueKind == JsonValueKind.True || own.ValueKind == JsonValueKind.False))
             settings.UseOwnSwapper = own.GetBoolean();
-        if (root.TryGetProperty("agentRuntime", out var runtime) && runtime.ValueKind == JsonValueKind.String)
-        {
-            var selected = runtime.GetString();
-            if (selected is "opencode" or "native")
-                settings.AgentRuntime = selected;
-        }
         if (root.TryGetProperty("commandPolicy", out var commandPolicy) && commandPolicy.ValueKind == JsonValueKind.String)
             settings.CommandPolicy = AgentHarness.CommandExecutionPolicy.NormalizeMode(commandPolicy.GetString());
         if (root.TryGetProperty("concurrentPortBase", out var cport) && cport.TryGetInt32(out var cp) && cp > 0)
@@ -82,8 +59,10 @@ public static class WorkstationSetup
             settings.PipelineTurnTimeoutMinutes = Math.Clamp(maxMinutes, 15, 60);
         if (root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle) && pipelineIdle.TryGetInt32(out var idleMinutes))
             settings.PipelineIdleTimeoutMinutes = Math.Clamp(idleMinutes, 1, 30);
-        if (root.TryGetProperty("opencodeDataDir", out var data) && data.ValueKind == JsonValueKind.String)
-            settings.OpencodeDataDir = data.GetString();
+        if (root.TryGetProperty("agentDataDir", out var data) && data.ValueKind == JsonValueKind.String)
+            settings.AgentDataDir = data.GetString();
+        else if (root.TryGetProperty("opencodeDataDir", out var legacyData) && legacyData.ValueKind == JsonValueKind.String)
+            settings.AgentDataDir = legacyData.GetString();
         if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)
             settings.ProjectsRoot = projects.GetString();
         settings.Save(settingsPath);
@@ -121,8 +100,6 @@ public static class WorkstationSetup
     {
         var required = new[]
         {
-            ".opencode/data/",
-            ".opencode/*.local.json",
             ".env",
             "*.gguf"
         };

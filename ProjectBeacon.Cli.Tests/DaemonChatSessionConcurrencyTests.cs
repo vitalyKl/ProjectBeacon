@@ -21,11 +21,10 @@ public sealed class DaemonChatSessionConcurrencyTests
             UseOwnSwapper = false,
             ConfigFile = Path.Combine(root, "llamaswap.yaml")
         };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
         var runtime = new ConcurrentSessionsRuntime();
-        var deps = new DaemonDependencies(http, llama, openCode, runtime, () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, llama, () => new WorkstationSettings(), _ => runtime);
         var state = new DaemonRuntimeState("http://localhost", null);
-        var gate = new DaemonOpenCodeGate(deps, runtime);
+        var gate = new DaemonAgentRuntimeGate(runtime);
         var chat = new DaemonChatSession(deps, gate, new NoopLlamaSync(), state, new DaemonTiming
         {
             ChatPollInterval = TimeSpan.FromMilliseconds(1),

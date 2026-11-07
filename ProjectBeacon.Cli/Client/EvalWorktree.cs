@@ -8,24 +8,18 @@ using System.Diagnostics;
 /// </summary>
 internal sealed class EvalWorktree : IAsyncDisposable
 {
-    private readonly string _originalWorkingDirectory;
     private readonly string? _repositoryRoot;
     private readonly string? _worktreeRoot;
-    private readonly ClientOpenCodeServe? _openCode;
     private bool _preserve;
 
     private EvalWorktree(
-        string originalWorkingDirectory,
         string workingDirectory,
         string? repositoryRoot,
-        string? worktreeRoot,
-        ClientOpenCodeServe? openCode)
+        string? worktreeRoot)
     {
-        _originalWorkingDirectory = originalWorkingDirectory;
         WorkingDirectory = workingDirectory;
         _repositoryRoot = repositoryRoot;
         _worktreeRoot = worktreeRoot;
-        _openCode = openCode;
     }
 
     public string WorkingDirectory { get; }
@@ -37,12 +31,11 @@ internal sealed class EvalWorktree : IAsyncDisposable
         string workingDirectory,
         string? pinnedRevision,
         Guid evalRunId,
-        ClientOpenCodeServe? openCode,
         CancellationToken ct)
     {
         var original = Path.GetFullPath(workingDirectory);
         if (string.IsNullOrWhiteSpace(pinnedRevision))
-            return (new EvalWorktree(original, original, null, null, null), null);
+            return (new EvalWorktree(original, null, null), null);
 
         var rootResult = await RunGitAsync(original, ct, "rev-parse", "--show-toplevel");
         if (rootResult.ExitCode != 0 || rootResult.TimedOut || string.IsNullOrWhiteSpace(rootResult.StdOut))
@@ -104,21 +97,13 @@ internal sealed class EvalWorktree : IAsyncDisposable
             return (null, "The pinned revision does not contain the eval working directory.");
         }
 
-        return (new EvalWorktree(original, targetDirectory, repositoryRoot, worktreeRoot, openCode), null);
+        return (new EvalWorktree(targetDirectory, repositoryRoot, worktreeRoot), null);
     }
 
     public async ValueTask DisposeAsync()
     {
         if (_worktreeRoot is null || _repositoryRoot is null || _preserve)
             return;
-
-        // OpenCode can keep the eval directory as its process working directory. Move it back
-        // before deleting the worktree (Windows does not allow deleting the active directory).
-        if (_openCode is not null)
-        {
-            try { await _openCode.TickAsync(_originalWorkingDirectory, CancellationToken.None); }
-            catch { /* The next daemon readiness check will retry starting OpenCode. */ }
-        }
 
         await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot);
     }

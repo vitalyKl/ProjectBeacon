@@ -156,9 +156,9 @@ public sealed class DataKeyMigrationTests : IDisposable
         var cipher = legacy
             ? SecretBox.Seal("conn-secret-" + provider, TestProtectors.LegacyKey)
             : TestProtectors.Dev().Seal("conn-secret-" + provider);
-        var row = OpenCodeConnection.Create(userId, provider, "model", null, cipher);
+        var row = AgentProviderConnection.Create(userId, provider, "model", null, cipher);
         var db = _dbFactory.CreateDbContext();
-        db.OpenCodeConnections.Add(row);
+        db.AgentProviderConnections.Add(row);
         await db.SaveChangesAsync();
         await db.DisposeAsync();
     }

@@ -111,7 +111,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
-                    b.Property<string>("OpenCodeModel")
+                    b.Property<string>("ProviderModelId")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -132,7 +132,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("LocalModelBackends");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.OpenCodeConnection", b =>
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProviderConnection", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -169,7 +169,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("UserId", "ProviderId")
                         .IsUnique();
 
-                    b.ToTable("OpenCodeConnections");
+                    b.ToTable("AgentProviderConnections");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.RoleBinding", b =>
@@ -787,7 +787,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("Runtime")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasDefaultValue("opencode")
+                        .HasDefaultValue("native")
                         .HasColumnType("character varying(32)");
 
                     b.Property<string>("CheckCommand")

@@ -290,16 +290,6 @@ internal sealed class DesiredStateCompletion : ICommandCompletion
         var revision = DesiredState.ReadRevision(row.PayloadJson) ?? DesiredState.ReadRevision(resultJson);
         if (revision is not { } value)
             return;
-        if (row.Kind == WorkstationCommandKind.ApplyOpencode && row.ProjectId is { } projectId)
-        {
-            // Monotone and bounded by the live revision: a stale ack can never move the applied
-            // revision backwards or acknowledge a revision the config no longer carries.
-            await db.ProjectRuntimes.IgnoreQueryFilters()
-                .Where(r => r.ProjectId == projectId && r.DeviceId == row.DeviceId
-                    && r.AppliedConfigRevision < value && r.ConfigRevision >= value)
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.AppliedConfigRevision, value), ct);
-            return;
-        }
         if (row.Kind is not (WorkstationCommandKind.SaveWorkstation or WorkstationCommandKind.ReconcileDesired))
             return;
         await db.DaemonDevices

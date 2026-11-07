@@ -13,11 +13,9 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     private readonly HttpClient _http;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ClientLlamaSwap _llama;
-    private readonly ClientOpenCodeServe _openCode;
-    private readonly bool _ownsOpenCode;
     private readonly DaemonTiming _timing;
     private readonly IDaemonRuntimeState _state;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonCommandExecutor _executor;
     private readonly IReadOnlyList<IDaemonLoop> _loops;
@@ -28,66 +26,25 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         ClientLlamaSwap llama,
         Func<WorkstationSettings>? loadSettings = null,
         Action<string>? log = null,
-        ClientOpenCodeServe? openCode = null)
+        TimeProvider? timeProvider = null)
     {
         _http = http;
         _llama = llama;
-        _ownsOpenCode = openCode is null;
-        _openCode = openCode ?? new ClientOpenCodeServe();
-        _timing = new DaemonTiming();
+        _timing = new DaemonTiming(timeProvider);
         _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log, _shutdown.Cancel);
         _llama.Log = message => _state.Log(message);
-        _openCode.Log = message => _state.Log(message);
         var settingsLoader = loadSettings ?? (() => WorkstationSettings.Load());
-        var openCodeRuntime = new OpenCodeAgentRuntime(_openCode);
         var deps = new DaemonDependencies(
             http,
             llama,
-            _openCode,
-            openCodeRuntime,
             settingsLoader,
-            llamaSync => SelectRuntime(settingsLoader, llama, llamaSync, openCodeRuntime));
+            llamaSync => new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg)));
         _services = DaemonServices.Build(deps, _timing, _state);
-        _gate = _services.GetRequiredService<IDaemonOpenCodeGate>();
+        _gate = _services.GetRequiredService<IDaemonAgentRuntimeGate>();
         _llamaSync = _services.GetRequiredService<IDaemonLlamaSync>();
-        var activeRuntime = _gate.Runtime switch
-        {
-            NativeAgentRuntime => "native",
-            OpenCodeAgentRuntime => "opencode",
-            UnavailableAgentRuntime => "unavailable",
-            _ => "custom"
-        };
-        _state.Log($"agent runtime selected: {activeRuntime}");
+        _state.Log("agent runtime selected: native");
         _executor = _services.GetRequiredService<IDaemonCommandExecutor>();
         _loops = _services.GetServices<IDaemonLoop>().ToArray();
-    }
-
-    private IAgentRuntime SelectRuntime(
-        Func<WorkstationSettings> settingsLoader,
-        ClientLlamaSwap llama,
-        IDaemonLlamaSync llamaSync,
-        IAgentRuntime openCodeRuntime)
-    {
-        try
-        {
-            var configured = settingsLoader().AgentRuntime;
-            var selected = configured?.Trim().ToLowerInvariant();
-            return selected switch
-            {
-                "native" => new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg)),
-                "opencode" => openCodeRuntime,
-                _ => new UnavailableAgentRuntime(
-                    $"Unsupported AgentRuntime value '{configured ?? "(null)"}'. Expected 'opencode' or 'native'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            // Keep the daemon alive so heartbeat diagnostics can report the settings error,
-            // but never silently run a different harness than the user selected.
-            var error = $"Could not load workstation settings; OpenCode fallback is disabled. {ex.Message}";
-            _state.Log(error);
-            return new UnavailableAgentRuntime(error);
-        }
     }
 
     internal TimeSpan HeartbeatInterval
@@ -179,8 +136,6 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         await _llama.DisposeAsync();
         _llamaSync.Release();
         _gate.Release();
-        if (_ownsOpenCode)
-            await _openCode.DisposeAsync();
         _shutdown.Dispose();
     }
 

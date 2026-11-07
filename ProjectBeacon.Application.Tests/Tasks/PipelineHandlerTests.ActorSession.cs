@@ -362,4 +362,57 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal(SubtaskStatus.Failed, againSub.Status);
         Assert.Equal(firstSub.Summary, againSub.Summary);
     }
+    [Fact]
+    public async Task ReportSubtaskResult_OversizedSummary_ReturnsValidationErrorInsteadOfDatabaseFailure()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner();
+        await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var sub = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+        Assert.True(sub.Success, sub.Error);
+        var actor = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        var result = await new ReportSubtaskResultHandler(factory)
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
+                task.Id, sub.Value.Id, "verified-diff", new string('x', Subtask.MaxSummaryLength + 1))),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("5000-character limit", result.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var row = await _db.Subtasks.AsNoTracking().SingleAsync(s => s.Id == sub.Value.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, row.Status);
+            Assert.Null(row.Summary);
+        }
+    }
+
+    [Fact]
+    public async Task FailSubtask_OversizedReason_ReturnsValidationError()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner();
+        await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var sub = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+        Assert.True(sub.Success, sub.Error);
+        await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+
+        var result = await new FailSubtaskHandler(factory)
+            .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(
+                task.Id, sub.Value.Id, new string('x', Subtask.MaxSummaryLength + 1))),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("5000-character limit", result.Error);
+    }
+
 }

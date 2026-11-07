@@ -2,49 +2,50 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> TaskTools() =>
     [
-        new("get_project", "Get the current project from the Beacon API.",
+        new(McpToolNames.GetProject, "Get the current project from the Beacon API.",
             () => Props(("projectId", "string", false)), ProjectGet),
-        new("list_tasks", "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
+        new(McpToolNames.ListTasks, "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
             () => Props(("projectId", "string", false), ("status", "string", false)), TasksList),
-        new("get_task", "Get one task, including comments and dependencies.",
+        new(McpToolNames.GetTask, "Get one task, including comments and dependencies.",
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskGet),
-        new("create_task", "Create a task in the current project. The new task becomes the active task context for this chat, so task_pipeline_status and pipeline_start can be called next without a task ID. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
+        new(McpToolNames.CreateTask, "Create a task in the current project. The new task becomes the active task context for this chat, so task_pipeline_status and pipeline_start can be called next without a task ID. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
             () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
                 ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
                 ("path", "string", false), ("projectId", "string", false)), TaskCreate),
-        new("update_task", "Update a task title, description, priority, type, label, or milestone.",
+        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone.",
             () => Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
                 ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
                 ("milestoneId", "string", false), ("projectId", "string", false)), TaskUpdate),
-        new("set_task_status", "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
+        new(McpToolNames.SetTaskStatus, "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
             () => Props(("taskId", "string", true), ("status", "string", true), ("projectId", "string", false)), TaskStatus),
-        new("set_task_substage", "Set the in-progress sub-stage shown on the board.",
+        new(McpToolNames.SetTaskSubstage, "Set the in-progress sub-stage shown on the board.",
             () => Props(("taskId", "string", true), ("subStage", "string", true)), TaskSubStage),
-        new("claim_task", "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
+        new(McpToolNames.ClaimTask, "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskClaim),
-        new("add_task_comment", "Add a comment on a task.",
+        new(McpToolNames.AddTaskComment, "Add a comment on a task.",
             () => Props(("taskId", "string", true), ("content", "string", true)), TaskComment),
-        new("task_attach_file", "Upload a file from the current workspace to the active task so it appears in the task attachments panel. Provide a workspace-relative path; files are limited to 10 MB.",
+        new(McpToolNames.TaskAttachFile, "Publish a user-facing file from the current workspace to the active task. Provide a workspace-relative path; files are limited to 10 MB.",
             () => Props(("path", "string", true), ("taskId", "string", false)), TaskAttachFile),
-        new("set_task_dependencies", "Replace the tasks this task depends on.",
+        new(McpToolNames.SetTaskDependencies, "Replace the tasks this task depends on.",
             () => Props(("taskId", "string", true), ("dependentTaskIds", "array", true)), TaskDependencies),
-        new("add_review_notes", "Save review notes required before a task can move to Done.",
+        new(McpToolNames.AddReviewNotes, "Save review notes required before a task can move to Done.",
             () => Props(("taskId", "string", true), ("reviewNotes", "string", true)), TaskReviewNotes),
-        new("list_task_steps", "List checklist steps on a task.",
+        new(McpToolNames.ListTaskSteps, "List checklist steps on a task.",
             () => Props(("taskId", "string", true)), StepsList),
-        new("add_task_step", "Add a checklist step.",
+        new(McpToolNames.AddTaskStep, "Add a checklist step.",
             () => Props(("taskId", "string", true), ("title", "string", true)), StepAdd),
-        new("toggle_task_step", "Mark a checklist step done or not done.",
+        new(McpToolNames.ToggleTaskStep, "Mark a checklist step done or not done.",
             () => Props(("stepId", "string", true), ("done", "boolean", true)), StepToggle),
-        new("delete_task_step", "Delete a checklist step.",
+        new(McpToolNames.DeleteTaskStep, "Delete a checklist step.",
             () => Props(("stepId", "string", true)), StepDelete),
-        new("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof. On a 409 conflict a competing finish won; re-read the task and retry.",
+        new(McpToolNames.FinishWork, "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof. On a 409 conflict a competing finish won; re-read the task and retry.",
             FinishSchema, Finish),
     ];
 
@@ -264,40 +265,43 @@ internal static partial class McpApiTools
         return await SendAsync(api, HttpMethod.Patch, $"v1/steps/{stepId:D}", new JsonObject { ["done"] = done.Value }, ct);
     }
 
-    private static async Task<McpToolText> StepDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
-    {
-        if (!TryGuid(args, "stepId", out var stepId))
-            return new McpToolText(true, "missing or invalid 'stepId'");
-        return await SendAsync(api, HttpMethod.Delete, $"v1/steps/{stepId:D}", null, ct);
-    }
-
-
     private static async Task<McpToolText> TaskAttachFile(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryTask(env, args, out var taskId, out var taskError))
             return new McpToolText(true, taskError);
         if (!TryProject(env, args, out var projectId, out var projectError))
             return new McpToolText(true, projectError);
+
         var relative = Text(args, "path");
         if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative))
             return new McpToolText(true, "'path' must be relative to the current workspace.");
+
         var root = env.Get("BEACON_WORKSPACE_ROOT");
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return new McpToolText(true, "Workspace root is unavailable.");
-        var rootPath = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+
+        var rootPath = Path.GetFullPath(root);
         var fullPath = Path.GetFullPath(Path.Combine(rootPath, relative));
-        if (!fullPath.StartsWith(rootPath + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        var relativeToRoot = Path.GetRelativePath(rootPath, fullPath);
+        if (Path.IsPathRooted(relativeToRoot)
+            || relativeToRoot == ".."
+            || relativeToRoot.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             return new McpToolText(true, "The file path escapes the current workspace.");
+        if (!File.Exists(fullPath))
+            return new McpToolText(true, "File not found in the current workspace.");
+
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
         var currentPath = fullPath;
-        while (!string.Equals(currentPath, rootPath, StringComparison.Ordinal))
+        while (!string.Equals(currentPath, rootPath, pathComparison))
         {
             if ((File.GetAttributes(currentPath) & FileAttributes.ReparsePoint) != 0)
                 return new McpToolText(true, "Symbolic links and reparse points are not allowed for task attachments.");
             currentPath = Path.GetDirectoryName(currentPath)
                 ?? throw new InvalidOperationException("Could not resolve the workspace path.");
         }
-        if (!File.Exists(fullPath))
-            return new McpToolText(true, "File not found in the current workspace.");
+
         var info = new FileInfo(fullPath);
         if (info.Length is <= 0 or > 10 * 1024 * 1024)
             return new McpToolText(true, "Files must be between 1 byte and 10 MB.");
@@ -319,6 +323,13 @@ internal static partial class McpApiTools
             $"v1/projects/{projectId:D}/tasks/{taskId:D}/attachments",
             bytes, Path.GetFileName(fullPath), type, ct);
         return new McpToolText(!result.Ok, result.Body);
+    }
+
+    private static async Task<McpToolText> StepDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryGuid(args, "stepId", out var stepId))
+            return new McpToolText(true, "missing or invalid 'stepId'");
+        return await SendAsync(api, HttpMethod.Delete, $"v1/steps/{stepId:D}", null, ct);
     }
 
     private static async Task<McpToolText> Finish(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)

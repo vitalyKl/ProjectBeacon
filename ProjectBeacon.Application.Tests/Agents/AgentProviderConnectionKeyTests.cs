@@ -12,15 +12,15 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-/// OpenCode connection save/read against v1 (legacy-keyed) and v2 (current-key) ciphertexts.
+/// Provider connection save/read against legacy and current ciphertexts.
 /// </summary>
-public sealed class OpenCodeConnectionKeyTests : IDisposable
+public sealed class AgentProviderConnectionKeyTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IDisposable _unscoped;
 
-    public OpenCodeConnectionKeyTests()
+    public AgentProviderConnectionKeyTests()
     {
         (_connection, _, _unscoped) = HandlerSqlite.Open();
         _dbFactory = HandlerSqlite.Factory(_connection);
@@ -37,16 +37,16 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
     {
         var user = await AddUser("save-v2");
 
-        var result = await new SaveOpenCodeConnectionHandler(_dbFactory, Nudge(), TestProtectors.Dev())
-            .HandleAsync(new SaveOpenCodeConnectionCommand(
-                new SaveOpenCodeConnectionRequest(user.Id, "xai", "grok-code-fast", null, "sk-v2-key")),
+        var result = await new SaveAgentProviderConnectionHandler(_dbFactory, TestProtectors.Dev())
+            .HandleAsync(new SaveAgentProviderConnectionCommand(
+                new SaveAgentProviderConnectionRequest(user.Id, "xai", "grok-code-fast", null, "sk-v2-key")),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.True(result.Value!.HasApiKey);
 
         await using var db = _dbFactory.CreateDbContext();
-        var row = await db.OpenCodeConnections.FirstAsync(c => c.UserId == user.Id, TestContext.Current.CancellationToken);
+        var row = await db.AgentProviderConnections.FirstAsync(c => c.UserId == user.Id, TestContext.Current.CancellationToken);
         Assert.StartsWith(ISecretProtector.V2Prefix, row.ApiKeyCipher);
     }
 
@@ -55,15 +55,15 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
     {
         var user = await AddUser("save-v1");
 
-        var result = await new SaveOpenCodeConnectionHandler(_dbFactory, Nudge(), TestProtectors.Dev(TestProtectors.LegacyKey, writeV2: false))
-            .HandleAsync(new SaveOpenCodeConnectionCommand(
-                new SaveOpenCodeConnectionRequest(user.Id, "xai", "grok-code-fast", null, "sk-v1-key")),
+        var result = await new SaveAgentProviderConnectionHandler(_dbFactory, TestProtectors.Dev(TestProtectors.LegacyKey, writeV2: false))
+            .HandleAsync(new SaveAgentProviderConnectionCommand(
+                new SaveAgentProviderConnectionRequest(user.Id, "xai", "grok-code-fast", null, "sk-v1-key")),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
 
         await using var db = _dbFactory.CreateDbContext();
-        var row = await db.OpenCodeConnections.FirstAsync(c => c.UserId == user.Id, TestContext.Current.CancellationToken);
+        var row = await db.AgentProviderConnections.FirstAsync(c => c.UserId == user.Id, TestContext.Current.CancellationToken);
         Assert.False(row.ApiKeyCipher.StartsWith(ISecretProtector.V2Prefix));
         Assert.Equal("sk-v1-key", TestProtectors.Dev(TestProtectors.LegacyKey).Open(row.ApiKeyCipher));
     }
@@ -75,8 +75,8 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
         await SaveKey(user.Id, "xai", "sk-v2-key");
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceOpenCodeConnectionsHandler(_dbFactory, TestProtectors.Dev())
-            .HandleAsync(new DeviceOpenCodeConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var row = result.Value!.First(c => c.ProviderId == "xai");
@@ -90,8 +90,8 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
         await AddConnection(user.Id, "openai", "gpt-x", SecretBox.Seal("sk-v1-key", TestProtectors.LegacyKey));
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceOpenCodeConnectionsHandler(_dbFactory, TestProtectors.Dev(TestProtectors.LegacyKey))
-            .HandleAsync(new DeviceOpenCodeConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev(TestProtectors.LegacyKey))
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Equal("sk-v1-key", result.Value!.First().ApiKey);
@@ -104,8 +104,8 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
         await AddConnection(user.Id, "openai", "gpt-x", SecretBox.Seal("sk-v1-key", TestProtectors.LegacyKey));
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceOpenCodeConnectionsHandler(_dbFactory, TestProtectors.Dev())
-            .HandleAsync(new DeviceOpenCodeConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Null(result.Value!.First().ApiKey);
@@ -123,17 +123,17 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
 
     private async Task SaveKey(Guid userId, string provider, string key)
     {
-        var handler = new SaveOpenCodeConnectionHandler(_dbFactory, Nudge(), TestProtectors.Dev());
-        var result = await handler.HandleAsync(new SaveOpenCodeConnectionCommand(
-            new SaveOpenCodeConnectionRequest(userId, provider, "model", null, key)));
+        var handler = new SaveAgentProviderConnectionHandler(_dbFactory, TestProtectors.Dev());
+        var result = await handler.HandleAsync(new SaveAgentProviderConnectionCommand(
+            new SaveAgentProviderConnectionRequest(userId, provider, "model", null, key)));
         Assert.True(result.Success, result.Error);
     }
 
     private async Task AddConnection(Guid userId, string provider, string model, string cipher)
     {
-        var row = OpenCodeConnection.Create(userId, provider, model, null, cipher);
+        var row = AgentProviderConnection.Create(userId, provider, model, null, cipher);
         var db = _dbFactory.CreateDbContext();
-        db.OpenCodeConnections.Add(row);
+        db.AgentProviderConnections.Add(row);
         await db.SaveChangesAsync();
         await db.DisposeAsync();
     }
@@ -148,5 +148,4 @@ public sealed class OpenCodeConnectionKeyTests : IDisposable
         return device.Id;
     }
 
-    private NudgeOpenCodeHandler Nudge() => new(_dbFactory, new EnqueueCommandHandler(_dbFactory));
 }

@@ -6,6 +6,7 @@
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Features.Chat
+@using ProjectBeacon.Domain.Common
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
 <MudExpansionPanels Elevation="0" Class="beacon-pipeline-activity">
@@ -18,7 +19,7 @@
                 {
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
-                <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
+                <span class="beacon-pipeline-activity-summary" title="@ActivityLabel">@ActivityLabel</span>
                 @if (Session.LastActivityAt is not null)
                 {
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@LastActivityLabel</MudText>
@@ -148,63 +149,58 @@
         _activity = string.Empty;
         try
         {
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            _state = ReadString(root, "state") ?? string.Empty;
-            _activity = ReadString(root, "activity") ?? string.Empty;
-            if (root.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
+            var snapshot = PipelineActivityV1.Parse(body);
+            _state = snapshot.State ?? string.Empty;
+            _activity = snapshot.Activity ?? string.Empty;
+            var sort = 0;
+            foreach (var part in snapshot.Parts)
             {
-                var sort = 0;
-                foreach (var part in parts.EnumerateArray())
-                {
-                    var kind = ReadString(part, "kind") ?? "text";
-                    var role = ReadString(part, "role") ?? "assistant";
-                    var externalId = ReadString(part, "externalId") ?? $"{sort}:{kind}";
-                    Parts.Add(new ChatPartDto(
-                        StableId(Session.Id, externalId),
-                        Session.Id,
-                        role,
-                        kind,
-                        ReadString(part, "body") ?? string.Empty,
-                        externalId,
-                        sort++,
-                        Session.LaunchedAt ?? DateTime.UtcNow,
-                        ReadString(part, "tool"),
-                        ReadString(part, "toolStatus"),
-                        ReadString(part, "toolInput"),
-                        ReadString(part, "toolResult"),
-                        ReadInt(part, "durationMs"),
-                        ReadBool(part, "complete")));
-                }
+                var kind = part.Kind ?? "text";
+                var role = part.Role ?? "assistant";
+                var externalId = part.ExternalId ?? $"{sort}:{kind}";
+                Parts.Add(new ChatPartDto(
+                    StableId(Session.Id, externalId),
+                    Session.Id,
+                    role,
+                    kind,
+                    part.Body ?? string.Empty,
+                    externalId,
+                    sort++,
+                    Session.LaunchedAt ?? DateTime.UtcNow,
+                    part.Tool,
+                    part.ToolStatus,
+                    part.ToolInput,
+                    part.ToolResult,
+                    part.DurationMs,
+                    part.Complete));
             }
-            if (root.TryGetProperty("forms", out var forms) && forms.ValueKind == JsonValueKind.Array)
+
+            foreach (var form in snapshot.Forms)
             {
-                foreach (var form in forms.EnumerateArray())
+                if (string.IsNullOrWhiteSpace(form.Id))
+                    continue;
+                var fieldsJson = form.Fields is { ValueKind: JsonValueKind.Array } fields
+                    ? fields.GetRawText()
+                    : "[]";
+                var bodyNode = new JsonObject
                 {
-                    var id = ReadString(form, "id");
-                    if (string.IsNullOrWhiteSpace(id))
-                        continue;
-                    var fields = form.TryGetProperty("fields", out var parsedFields) ? parsedFields.Clone() : JsonDocument.Parse("[]").RootElement.Clone();
-                    var bodyNode = new JsonObject
-                    {
-                        ["id"] = id,
-                        ["title"] = ReadString(form, "title"),
-                        ["description"] = ReadString(form, "metadata"),
-                        ["fields"] = JsonNode.Parse(fields.GetRawText())
-                    };
-                    if (form.TryGetProperty("answer", out var answer) && answer.ValueKind == JsonValueKind.Object)
-                        bodyNode["answer"] = JsonNode.Parse(answer.GetRawText());
-                    Forms.Add(new ChatPartDto(
-                        StableId(Session.Id, "form:" + id),
-                        Session.Id,
-                        "assistant",
-                        "question",
-                        bodyNode.ToJsonString(),
-                        "form:" + id,
-                        Parts.Count + Forms.Count,
-                        Session.LaunchedAt ?? DateTime.UtcNow,
-                        Complete: true));
-                }
+                    ["id"] = form.Id,
+                    ["title"] = form.Title,
+                    ["description"] = form.Metadata,
+                    ["fields"] = JsonNode.Parse(fieldsJson)
+                };
+                if (form.Answer is { ValueKind: JsonValueKind.Object } answer)
+                    bodyNode["answer"] = JsonNode.Parse(answer.GetRawText());
+                Forms.Add(new ChatPartDto(
+                    StableId(Session.Id, "form:" + form.Id),
+                    Session.Id,
+                    "assistant",
+                    "question",
+                    bodyNode.ToJsonString(),
+                    "form:" + form.Id,
+                    Parts.Count + Forms.Count,
+                    Session.LaunchedAt ?? DateTime.UtcNow,
+                    Complete: true));
             }
         }
         catch (JsonException)

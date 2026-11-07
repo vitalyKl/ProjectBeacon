@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Text.Json;
 using ProjectBeacon.Cli.Client;
 
 public sealed class ClientStoreTests : IDisposable
@@ -160,14 +161,22 @@ public sealed class ClientStoreTests : IDisposable
     }
 
     [Fact]
-    public void WorkstationSetup_SaveWorkstation_PersistsOnlySupportedAgentRuntimeValues()
+    public void WorkstationSetup_SaveWorkstation_MigratesLegacyTranscriptDirectoryAndIgnoresRuntimeSelector()
     {
         var file = Path.Combine(_dir, "workstation.json");
+        var legacyDirectory = Path.Combine(_dir, "old-transcripts");
 
-        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"native"}""", file);
-        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+        WorkstationSetup.SaveWorkstation(
+            JsonSerializer.Serialize(new { agentRuntime = "opencode", opencodeDataDir = legacyDirectory }),
+            file);
 
-        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"unknown"}""", file);
-        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+        var settings = WorkstationSettings.Load(file);
+        Assert.Equal(legacyDirectory, settings.AgentDataDir);
+
+        var saved = File.ReadAllText(file);
+        Assert.Contains("agentDataDir", saved);
+        Assert.DoesNotContain("agentRuntime", saved);
+        Assert.DoesNotContain("opencodeDataDir", saved);
     }
+
 }

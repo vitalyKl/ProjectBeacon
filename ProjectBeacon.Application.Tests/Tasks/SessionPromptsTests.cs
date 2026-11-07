@@ -17,5 +17,6 @@ public sealed class SessionPromptsTests
 
         Assert.Contains($"Assigned subtask ID: {subtask.Id:D}", prompt);
         Assert.Contains("lifecycle tools default to this assigned ID", prompt);
+        Assert.Contains("Keep Summary at or below 5000 characters", prompt);
     }
 }
