@@ -70,7 +70,7 @@ public sealed class ModelHttpTests
         Assert.Equal(HttpStatusCode.OK, bind.StatusCode);
 
         var blocked = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
 
