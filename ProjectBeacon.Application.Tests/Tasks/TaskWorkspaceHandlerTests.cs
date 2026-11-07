@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Authorization;
+using Application.Common;
 using Application.Persistence;
 using Application.Tasks;
 using Domain.Entities.Identity;
