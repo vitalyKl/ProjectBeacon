@@ -257,6 +257,33 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal("Model backend not found.", result.Error);
     }
 
+    [Theory]
+    [InlineData(ModelBackendType.FreeToken)]
+    [InlineData(ModelBackendType.OpenAiCompatible)]
+    public async Task SessionSpawner_DoesNotCreateLlamaSwapLaunchSpec_ForRemoteProviders(ModelBackendType backendType)
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var backend = LocalModelBackend.Create(
+            "remote", backendType, "must-not-run-as-process", 8192, 0, ownerId,
+            openCodeModel: "provider/model");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LocalModelBackends.Add(backend);
+            _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, backend.Id, projectId));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var spawner = new ManualSessionSpawner(new LlamaSwapCatalog());
+        var session = await spawner.SpawnAsync(
+            HandlerSqlite.Factory(_connection, Scope(projectId)).CreateDbContext(),
+            projectId, PipelineRole.Actor, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(backend.Id, session.ModelBackendId);
+        Assert.Equal("remote", session.ModelName);
+        Assert.Null(session.LaunchSpec);
+    }
+
     [Fact]
     public async Task SetRoleBinding_CreatesThenRepoints()
     {
