@@ -113,6 +113,7 @@ public sealed class InviteAndPasswordTests : IDisposable
             new RegisterCommand(new RegisterRequest("bob", "other@test.com", "password1", invited.Value!.Token)), TestContext.Current.CancellationToken);
         Assert.False(registered.Success);
         Assert.Equal("Email does not match invite.", registered.Error);
+        Assert.Equal(ErrorCodes.InviteEmailMismatch, registered.ErrorCode);
     }
 
     [Fact]

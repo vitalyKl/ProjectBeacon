@@ -166,7 +166,7 @@ public class AcceptInviteHandler
         if (orgInvite is not null)
         {
             if (!string.Equals(orgInvite.Email, user.Email, StringComparison.Ordinal))
-                return Result.Failure("Email does not match invite.");
+                return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch);
             if (!orgInvite.TryAccept())
                 return Result.Failure("Invite is no longer valid.");
             if (!await db.OrgMembers.IgnoreQueryFilters()
@@ -181,7 +181,7 @@ public class AcceptInviteHandler
         if (projectInvite is null)
             return Result.Failure("Invite not found.");
         if (!string.Equals(projectInvite.Email, user.Email, StringComparison.Ordinal))
-            return Result.Failure("Email does not match invite.");
+            return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch);
         if (!projectInvite.TryAccept())
             return Result.Failure("Invite is no longer valid.");
 

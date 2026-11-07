@@ -154,7 +154,7 @@ public static class AuthEndpoints
         var result = await handler.HandleAsync(new AcceptInviteRequest(token, actor));
         if (result.Success)
             return Results.Ok();
-        var status = result.Error == "Email does not match invite." ? 403 : 400;
+        var status = result.ErrorCode == ErrorCodes.InviteEmailMismatch ? 403 : 400;
         return result.FromResult(status);
     }
 
