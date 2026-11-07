@@ -98,6 +98,34 @@ public sealed class TaskWorkspaceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Workspace_ActorFromSameUserCannotReplaceAnotherSubtasksSection()
+    {
+        var (projectId, task) = await SeedTaskAsync();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var ownerId = Guid.NewGuid();
+        var firstActor = new ActorContext(ActorType.ApiToken, ownerId, false, Guid.NewGuid(),
+            null, null, null, ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite);
+        var secondActor = new ActorContext(ActorType.ApiToken, ownerId, false, Guid.NewGuid(),
+            null, null, null, ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite);
+        var firstSubtaskId = Guid.NewGuid();
+        var secondSubtaskId = Guid.NewGuid();
+        var writer = new WorkspaceWriteHandler(factory);
+
+        var created = await writer.HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "notes/actor-one", "Actor notes", "Findings from actor one",
+                "Actor one notes.", "create"), firstActor, "Actor", firstSubtaskId, Guid.NewGuid()));
+        Assert.True(created.Success, created.Error);
+
+        var replace = await writer.HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "notes/actor-one", "Actor notes", "Changed by actor two",
+                "Overwrite attempt.", "replace", ExpectedRevision: 1),
+            secondActor, "Actor", secondSubtaskId, Guid.NewGuid()));
+
+        Assert.False(replace.Success);
+        Assert.Equal(ErrorKind.Forbidden, replace.Kind);
+    }
+
+    [Fact]
     public async Task Workspace_ServerGeneratedReportsAreImmutable()
     {
         var (projectId, task) = await SeedTaskAsync();
