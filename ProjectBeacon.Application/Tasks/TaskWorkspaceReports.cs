@@ -6,10 +6,10 @@ using Domain.Enums;
 internal static class TaskWorkspaceReports
 {
     public static TaskWorkspaceSection Create(
-        Guid taskId, Guid projectId, Guid subtaskId, string content,
+        Guid taskId, Guid projectId, Guid subtaskId, int attempt, string content,
         string? abstractText, Guid? sessionId)
     {
-        var key = "report/" + subtaskId.ToString("N");
+        var key = "report/" + subtaskId.ToString("N") + "/attempt-" + attempt.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var title = "Subtask report " + subtaskId.ToString("N")[..8];
         var source = string.IsNullOrWhiteSpace(abstractText) ? content : abstractText.Trim();
         var summary = source[..Math.Min(source.Length, 200)];
