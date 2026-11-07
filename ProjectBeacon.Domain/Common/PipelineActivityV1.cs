@@ -21,8 +21,13 @@ public sealed record PipelineActivityV1
     public string? Activity { get; init; }
     public string? DeviceId { get; init; }
     public string? CommandId { get; init; }
+    public string? ExternalSessionId { get; init; }
+    public DateTimeOffset? UpdatedAt { get; init; }
     public IReadOnlyList<PipelineActivityPartV1> Parts { get; init; } = [];
     public IReadOnlyList<PipelineActivityFormV1> Forms { get; init; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }
 
     public static PipelineActivityV1 Parse(string? json)
     {
@@ -99,6 +104,9 @@ public sealed record PipelineActivityPartV1
     public string? ToolResult { get; init; }
     public int? DurationMs { get; init; }
     public bool Complete { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }
 }
 
 public sealed record PipelineActivityFormV1
@@ -112,4 +120,7 @@ public sealed record PipelineActivityFormV1
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Answer { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }
 }

@@ -43,6 +43,41 @@ public sealed class PipelineActivityV1Tests
     }
 
     [Fact]
+    public void Parse_PreservesFormReplyContextAndUnknownProperties()
+    {
+        const string json = """
+            {
+              "externalSessionId": "session-1",
+              "deviceId": "0c0e8c6f-81bd-49d0-bd8e-6daca86acb10",
+              "commandId": "aa35ff1c-10de-4857-819a-67af22a6d221",
+              "updatedAt": "2026-11-07T12:00:00+00:00",
+              "vendorMetadata": { "source": "runtime-v2" },
+              "forms": [
+                {
+                  "id": "confirm",
+                  "title": "Confirm",
+                  "fields": [],
+                  "answer": { "confirmed": true },
+                  "vendorField": "preserve-me"
+                }
+              ]
+            }
+            """;
+
+        var parsed = PipelineActivityV1.Parse(json);
+        var roundTripped = PipelineActivityV1.Parse(parsed.ToJson());
+
+        Assert.Equal("session-1", roundTripped.ExternalSessionId);
+        Assert.Equal("0c0e8c6f-81bd-49d0-bd8e-6daca86acb10", roundTripped.DeviceId);
+        Assert.Equal(DateTimeOffset.Parse("2026-11-07T12:00:00+00:00"), roundTripped.UpdatedAt);
+        Assert.Equal("runtime-v2",
+            roundTripped.AdditionalProperties!["vendorMetadata"].GetProperty("source").GetString());
+        Assert.True(roundTripped.Forms[0].Answer!.Value.GetProperty("confirmed").GetBoolean());
+        Assert.Equal("preserve-me",
+            roundTripped.Forms[0].AdditionalProperties!["vendorField"].GetString());
+    }
+
+    [Fact]
     public void TryParse_ReturnsFalseForMalformedLegacyData()
     {
         Assert.False(PipelineActivityV1.TryParse("not-json", out var parsed));
