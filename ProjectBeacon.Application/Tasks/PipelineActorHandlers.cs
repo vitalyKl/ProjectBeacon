@@ -194,7 +194,11 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             return Result.Failure<PipelineStateDto>($"Summary exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the summary and retry.");
 
         await using var db = _dbFactory.CreateDbContext();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var task = await db.Tasks.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
@@ -242,6 +246,7 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+        });
     }
 }
 
@@ -275,7 +280,11 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
             try { task.EnterExecuting(); }
@@ -304,5 +313,6 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
         await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(db, task.ProjectId, task.Id, subtask.Id, ct);
         await transaction.CommitAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+        });
     }
 }
