@@ -13,7 +13,7 @@ Each role is a new session. Prompt text is `SessionPrompts`.
 
 ## Execution
 
-Pipeline execution uses the Native workstation runtime only. A project must have an online attached workstation, and the relevant pipeline role must resolve to an existing model backend (the semantic task phase when phases are configured, otherwise the project role binding). There is no runtime selector; legacy `agentRuntime` values are ignored and old `opencodeDataDir` transcript paths are read only as a migration alias.
+Pipeline execution uses the Native workstation runtime only. A project must have an online attached workstation, and the relevant pipeline role must resolve to an existing model backend (the semantic task phase when phases are configured, otherwise the project role binding). There is no runtime selector; legacy runtime selector values are ignored and old transcript-directory settings are read only as a migration alias.
 
 `ManualSessionSpawner` is the `ISessionSpawner` registered for pipeline sessions. It resolves the role model and prepares the launch spec; it does not spawn a process. `StartPipeline` creates the planner session and the task page immediately launches it. The workstation command `RunPipelineSession` is then claimed and executed by the daemon's NativeAgentRuntime. The same command path is used for actor and review sessions.
 
