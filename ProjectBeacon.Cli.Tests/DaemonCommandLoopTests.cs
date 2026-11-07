@@ -148,7 +148,8 @@ public sealed class DaemonCommandLoopTests
         var executor = new ControlLaneExecutor(promptStarted, abortHandled);
         var state = new DaemonRuntimeState("http://localhost", null);
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
-        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, null!, () => new WorkstationSettings(),
+            _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused command-loop test runtime"));
         var loop = new DaemonCommandLoop(deps, executor, state, timing);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
@@ -216,7 +217,8 @@ public sealed class DaemonCommandLoopTests
         var executor = new CountingExecutor();
         var state = new DaemonRuntimeState("http://localhost", null);
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
-        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, null!, () => new WorkstationSettings(),
+            _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused command-loop test runtime"));
         return (new DaemonCommandLoop(deps, executor, state, timing), executor, state, api);
     }
 
