@@ -61,6 +61,8 @@ public static class WorkstationSetup
             settings.PipelineIdleTimeoutMinutes = Math.Clamp(idleMinutes, 1, 30);
         if (root.TryGetProperty("agentDataDir", out var data) && data.ValueKind == JsonValueKind.String)
             settings.AgentDataDir = data.GetString();
+        else if (root.TryGetProperty("opencodeDataDir", out var legacyData) && legacyData.ValueKind == JsonValueKind.String)
+            settings.AgentDataDir = legacyData.GetString();
         if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)
             settings.ProjectsRoot = projects.GetString();
         settings.Save(settingsPath);
