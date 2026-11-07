@@ -89,7 +89,7 @@ public sealed class WorkstationCommandCatalogTests
                 descriptor.RetrySemantics != OperationRetrySemantics.AtMostOnce,
                 CommandDelivery.IsIdempotent(kind));
             Assert.Equal(
-                descriptor.RetrySemantics == OperationRetrySemantics.Reconciliation,
+                descriptor.ReconcileBacked,
                 CommandDelivery.IsReconcileBacked(kind));
             Assert.Equal(descriptor.LeaseDuration, CommandLease.For(kind));
             Assert.Equal(controlLaneKinds.Contains(kind), descriptor.Lane == WorkstationCommandLane.Control);

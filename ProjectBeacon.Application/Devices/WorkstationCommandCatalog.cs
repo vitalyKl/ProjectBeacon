@@ -32,7 +32,8 @@ public sealed record WorkstationCommandDescriptor(
     string SecurityPolicy,
     WorkstationCommandLane Lane,
     bool StartsControlLane,
-    TimeSpan LeaseDuration);
+    TimeSpan LeaseDuration,
+    bool ReconcileBacked);
 
 /// <summary>
 /// Authoritative metadata catalog for every persisted workstation command kind.
@@ -62,7 +63,7 @@ public static class WorkstationCommandCatalog
             Device(WorkstationCommandKind.ReloadProxy, "model-proxy.reload", "Reload the local model proxy configuration.", OperationRetrySemantics.Reconciliation, "{}"),
             Device(WorkstationCommandKind.UnloadProxy, "model-proxy.unload", "Unload a local model from the model proxy.", OperationRetrySemantics.Idempotent, "{}"),
             Device(WorkstationCommandKind.SwapModel, "model.swap", "Switch the active local model.", OperationRetrySemantics.GuardedMutation, "{model:string}"),
-            Device(WorkstationCommandKind.SaveWorkstation, "device.save-config", "Persist workstation desired configuration.", OperationRetrySemantics.GuardedMutation, "{revision:integer,...}"),
+            Device(WorkstationCommandKind.SaveWorkstation, "device.save-config", "Persist workstation desired configuration.", OperationRetrySemantics.GuardedMutation, "{revision:integer,...}", reconcileBacked: true),
             Project(WorkstationCommandKind.ChatEnsureSession, "chat.ensure-session", "Ensure a chat runtime session exists.", OperationRetrySemantics.AtMostOnce, "{sessionId?:guid}"),
             Project(WorkstationCommandKind.ChatPrompt, "chat.prompt", "Submit one prompt to a chat session.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,prompt:string}", startsControlLane: true),
             Device(WorkstationCommandKind.ChatAbort, "chat.abort", "Abort a running chat operation.", OperationRetrySemantics.Idempotent, "{sessionId:guid}", lane: WorkstationCommandLane.Control),
@@ -101,10 +102,12 @@ public static class WorkstationCommandCatalog
         string payload,
         WorkstationCommandLane lane = WorkstationCommandLane.Main,
         bool startsControlLane = false,
-        TimeSpan? leaseDuration = null) =>
+        TimeSpan? leaseDuration = null,
+        bool? reconcileBacked = null) =>
         new(kind, id, summary, 1, WorkstationCommandScope.Device, retry, payload,
             "Device ownership and command policy are enforced by the trusted Application boundary.",
-            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes));
+            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes),
+            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation);
 
     private static WorkstationCommandDescriptor Project(
         WorkstationCommandKind kind,
@@ -114,8 +117,10 @@ public static class WorkstationCommandCatalog
         string payload,
         WorkstationCommandLane lane = WorkstationCommandLane.Main,
         bool startsControlLane = false,
-        TimeSpan? leaseDuration = null) =>
+        TimeSpan? leaseDuration = null,
+        bool? reconcileBacked = null) =>
         new(kind, id, summary, 1, WorkstationCommandScope.ProjectRuntime, retry, payload,
             "Project membership, runtime binding, and payload sandboxing are enforced server-side.",
-            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes));
+            lane, startsControlLane, leaseDuration ?? TimeSpan.FromMinutes(CommandLease.Minutes),
+            reconcileBacked ?? retry == OperationRetrySemantics.Reconciliation);
 }

@@ -16,5 +16,5 @@ public static class CommandDelivery
         !IsAtMostOnce(kind);
 
     public static bool IsReconcileBacked(WorkstationCommandKind kind) =>
-        WorkstationCommandCatalog.Get(kind).RetrySemantics == OperationRetrySemantics.Reconciliation;
+        WorkstationCommandCatalog.Get(kind).ReconcileBacked;
 }
