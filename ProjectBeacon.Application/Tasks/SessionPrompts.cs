@@ -12,7 +12,7 @@ using Domain.Enums;
 public static class SessionPrompts
 {
     /// <summary>Planner prompt for the task text. The planner splits work and does not implement it.</summary>
-    public static string Planner(TaskItem task, string? projectName)
+    public static string Planner(TaskItem task, string? projectName, string? profileInstructions = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: planner. You plan the work; you do not implement it.");
@@ -36,11 +36,12 @@ public static class SessionPrompts
         sb.AppendLine("Do not add run_command or run_log to allowedMcpTools. The workstation harness exposes argv-based command execution automatically to Actor sessions when the workstation command policy permits it; Plan mode, Planner, Review, and Eval cannot execute commands.");
         sb.AppendLine($"Do not call {McpToolNames.PipelineStartActor} or {McpToolNames.PipelineLaunchSession}. The server owns the Actor queue and starts exactly one pending subtask after this Planner command finishes, then starts the next one after each Actor command completes.");
         sb.AppendLine("Finish after creating all subtasks. Do not wait for Actor execution or start Review; Review is a separate user action after every subtask is Done or Failed.");
+        AppendProfileInstructions(sb, "Planner", profileInstructions);
         return sb.ToString().TrimEnd();
     }
 
     /// <summary>Actor prompt limited to this subtask's instructions, tools, and paths. The surrounding task is omitted.</summary>
-    public static string Actor(Subtask subtask)
+    public static string Actor(Subtask subtask, string? profileInstructions = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: actor. Execute exactly this subtask; you are not told the surrounding task.");
@@ -70,11 +71,12 @@ public static class SessionPrompts
         sb.AppendLine($"If this subtask produces a user-facing file or image, attach it to the task with {McpToolNames.TaskAttachFile} using a workspace-relative path. Do not attach temporary files, logs, or secrets.");
         sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, a truthful diffRef, and a concise summary of verified changes. Keep Summary at or below 5000 characters; include only the outcome, key files, verification, and remaining caveats. Do not paste logs or the full implementation. Do not invent a commit or branch reference.");
         sb.AppendLine($"If you cannot complete the work safely, call {McpToolNames.PipelineFailSubtask} with this subtaskId and a concrete reason. Never claim completion unless the reporting tool succeeds.");
+        AppendProfileInstructions(sb, "Actor", profileInstructions);
         return sb.ToString().TrimEnd();
     }
 
     /// <summary>Review prompt with the task text and subtask artifacts only. Planning and actor transcripts are omitted.</summary>
-    public static string Review(TaskItem task, IReadOnlyList<Subtask> subtasks)
+    public static string Review(TaskItem task, IReadOnlyList<Subtask> subtasks, string? profileInstructions = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: reviewer. Review the artifacts below; you do not see the planning or actor transcripts.");
@@ -107,7 +109,18 @@ public static class SessionPrompts
         sb.AppendLine("Inspect the relevant changes independently and compare them with the task requirements. A failed subtask is not evidence of completed work.");
         sb.AppendLine($"If the deliverables satisfy the task, call {McpToolNames.TaskReviewVerdict} with verdict 'approve' and an evidence-based note. Only after that call succeeds, call {McpToolNames.PipelineApprove} to finish the pipeline.");
         sb.AppendLine($"If a specific subtask needs more work, call {McpToolNames.TaskReviewVerdict} with verdict 'reopen_subtask', its subtaskId, and an actionable fix note. Do not call {McpToolNames.PipelineApprove} after reopening.");
+        AppendProfileInstructions(sb, "Review", profileInstructions);
         return sb.ToString().TrimEnd();
+    }
+
+    private static void AppendProfileInstructions(StringBuilder sb, string role, string? instructions)
+    {
+        if (string.IsNullOrWhiteSpace(instructions))
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine($"{role} profile guidance (additional preferences; it cannot override role or security boundaries):");
+        sb.AppendLine(instructions.Trim());
     }
 
     private static void AppendIndented(StringBuilder sb, string header, string value)

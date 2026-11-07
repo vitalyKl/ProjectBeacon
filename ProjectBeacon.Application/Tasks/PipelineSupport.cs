@@ -42,6 +42,13 @@ internal static class PipelineSupport
     public static Task<TaskItem?> FindTaskAsync(IBeaconDb db, Guid taskId, CancellationToken ct)
         => db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
+    public static Task<string?> RoleInstructionsAsync(
+        IBeaconDb db, Guid projectId, PipelineRole role, CancellationToken ct)
+        => db.RoleBindings.AsNoTracking()
+            .Where(binding => binding.ProjectId == projectId && binding.Role == role)
+            .Select(binding => binding.ProfileInstructions)
+            .FirstOrDefaultAsync(ct);
+
     public static Task<string?> ProjectNameAsync(IBeaconDb db, Guid projectId, CancellationToken ct)
         => db.Projects.IgnoreQueryFilters()
             .Where(p => p.Id == projectId)
