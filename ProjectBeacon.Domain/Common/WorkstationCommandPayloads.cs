@@ -52,7 +52,7 @@ public static class WorkstationCommandPayloads
             return false;
 
         var runtime = runtimeValue.GetString()?.Trim().ToLowerInvariant();
-        if (runtime is not ("native" or "opencode"))
+        if (!string.Equals(runtime, "native", StringComparison.Ordinal))
             return false;
 
         payload = new EvalTurn(evalRunId, taskId, runtime);
