@@ -2141,7 +2141,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     {
         var parent = string.IsNullOrWhiteSpace(settings.AgentDataDir)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon")
-            : Path.GetDirectoryName(Path.GetFullPath(settings.OpencodeDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            : Path.GetDirectoryName(Path.GetFullPath(settings.AgentDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(parent, "sessions", (id ?? Guid.NewGuid().ToString("N")) + ".json");
     }
 
