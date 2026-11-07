@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
 using Application.Agents;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
 using Domain.Entities.Projects;
@@ -269,12 +270,13 @@ public sealed class ModelBackendHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id)), TestContext.Current.CancellationToken);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal(projectId, created.Value!.ProjectId);
 
-        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id)), TestContext.Current.CancellationToken);
+        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(repointed.Success, repointed.Error);
         Assert.Equal(created.Value.Id, repointed.Value!.Id);
         Assert.Equal(second.Id, repointed.Value.ModelBackendId);
@@ -285,9 +287,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
     public async Task SetRoleBinding_UnknownBackend_Fails()
     {
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
-        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
+        var ownerId = await SeedOwnerAsync(projectId);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
 
-        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid())), TestContext.Current.CancellationToken);
+        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid()), actor), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -305,11 +309,13 @@ public sealed class ModelBackendHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var handler = new RemoveRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
+        var ownerId = await SeedOwnerAsync(projectId);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new RemoveRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner), actor), TestContext.Current.CancellationToken);
         Assert.True(removed.Success, removed.Error);
 
-        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
+        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner), actor), TestContext.Current.CancellationToken);
         Assert.False(again.Success);
         Assert.Equal("Role binding not found.", again.Error);
     }
