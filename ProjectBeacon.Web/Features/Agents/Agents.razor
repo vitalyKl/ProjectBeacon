@@ -24,8 +24,6 @@
 @inject ListRuntimesHandler ListRuntimes
 @inject GetRuntimeDiagnosticsHandler GetDiagnostics
 @inject ApplyAgentConfigHandler ApplyAgentConfig
-@inject EnqueueCommandHandler EnqueueCommand
-@inject GetCommandHandler GetCommand
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
@@ -213,9 +211,6 @@ else
     private Guid? _runtimeDeviceId;
     private List<RuntimeSummary> _runtimes = [];
     private string? _runtimePhase;
-    private string? _lifecycle;
-    private string? _lifecycleDetail;
-    private string? _lifecycleState;
 
     protected override async Task OnInitializedAsync()
     {
@@ -554,21 +549,14 @@ else
         _busy = true;
         try
         {
-            SetLifecycle(WorkstationCommandStatus.Pending, null);
             var applied = await ApplyAgentConfig.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
                 _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review), _caller));
             if (!applied.Success)
             {
-                SetLifecycle(WorkstationCommandStatus.Failed, applied.Error);
                 Snackbar.Add(applied.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            var finished = await WaitAsync(applied.Value!.Id);
-            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
-            {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
-                return;
-            }
+
             Snackbar.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
             await ReloadAsync();
         }
@@ -576,28 +564,6 @@ else
         {
             _busy = false;
         }
-    }
-
-    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
-    {
-        SetLifecycle(WorkstationCommandStatus.Pending, null);
-        for (var i = 0; i < 40; i++)
-        {
-            var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
-            if (!got.Success)
-            {
-                SetLifecycle(WorkstationCommandStatus.Failed, got.Error);
-                return null;
-            }
-            SetLifecycle(got.Value!.Status, got.Value.Error);
-            if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
-                return got.Value;
-            await Task.Delay(500);
-        }
-        _lifecycleState = "TimedOut";
-        _lifecycle = L["CommandTimedOut"].Value;
-        _lifecycleDetail = null;
-        return null;
     }
 
     private RuntimeSummary? SelectedRuntime => _runtimes.FirstOrDefault(r => r.DeviceId == _runtimeDeviceId);
@@ -617,28 +583,4 @@ else
         _solo = _planner = _actor = _review = null;
     }
 
-    private string StatusLabel(WorkstationCommandStatus status) => status switch
-    {
-        WorkstationCommandStatus.Pending => L["CommandQueued"].Value,
-        WorkstationCommandStatus.Running => L["CommandRunning"].Value,
-        WorkstationCommandStatus.Succeeded => L["CommandSucceeded"].Value,
-        WorkstationCommandStatus.Failed => L["CommandFailed"].Value,
-        WorkstationCommandStatus.Cancelled => L["CommandCancelled"].Value,
-        _ => status.ToString()
-    };
-
-    private void SetLifecycle(WorkstationCommandStatus status, string? detail)
-    {
-        _lifecycleState = status switch
-        {
-            WorkstationCommandStatus.Pending => "Queued",
-            WorkstationCommandStatus.Running => "Running",
-            WorkstationCommandStatus.Succeeded => "Succeeded",
-            WorkstationCommandStatus.Failed => "Failed",
-            WorkstationCommandStatus.Cancelled => "Cancelled",
-            _ => status.ToString()
-        };
-        _lifecycle = StatusLabel(status);
-        _lifecycleDetail = detail;
-    }
 }
