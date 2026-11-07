@@ -284,7 +284,7 @@
 
     private LocalModelBackendDto? SelectedBackend =>
         Models.FirstOrDefault(backend =>
-            string.Equals(OpencodePayload.OpenCodeId(backend), Model, StringComparison.Ordinal));
+            string.Equals(ChatModelSelection.ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId), Model, StringComparison.Ordinal));
 
     private string ModelSummary
     {
