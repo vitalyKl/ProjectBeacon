@@ -77,13 +77,13 @@ public sealed partial class DeviceHandlerTests
 
         var listed = await new ListCommandsHandler(Factory()).HandleAsync(
             new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
-        Assert.DoesNotContain(listed.Value!, c => c.Kind == WorkstationCommandKind.ApplyOpencode);
+        Assert.DoesNotContain(listed.Value!, c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply);
 
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         listed = await new ListCommandsHandler(Factory()).HandleAsync(
             new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
-        var apply = Assert.Single(listed.Value!, c => c.Kind == WorkstationCommandKind.ApplyOpencode);
+        var apply = Assert.Single(listed.Value!, c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply);
         Assert.Equal(project.Id, apply.ProjectId);
 
         var done = await new CompleteCommandHandler(Factory()).HandleAsync(
@@ -94,6 +94,6 @@ public sealed partial class DeviceHandlerTests
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var after = await new ListCommandsHandler(Factory()).HandleAsync(
             new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
-        Assert.Equal(1, after.Value!.Count(c => c.Kind == WorkstationCommandKind.ApplyOpencode));
+        Assert.Equal(1, after.Value!.Count(c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply));
     }
 }
