@@ -447,6 +447,34 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
+    public async Task ModelRoleBinding_NonAdminHuman_IsForbiddenByHttpRoute()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Model Binding Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Model Binding Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var outsiderJwt = await RegisterAndLogin(client, "model-outsider-http", "model-outsider-http@beacon.local");
+
+        // Tenant scope is selected for the request, but the actor has no project membership.
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var response = await client.PostAsJsonAsync("/v1/models/bind", new
+        {
+            role = "Actor",
+            modelBackendId = Guid.NewGuid()
+        }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ApiToken_WithReadCapabilities_CanReadProjectLabelsAndContextNodes()
     {
         await using var factory = new AuthApiFactory();

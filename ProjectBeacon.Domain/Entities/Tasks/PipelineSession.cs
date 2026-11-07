@@ -71,7 +71,7 @@ public class PipelineSession : Entity, IProjectScoped
             throw new InvalidOperationException($"Cannot update activity for session in status {Status}");
         if (string.IsNullOrWhiteSpace(activityJson) || activityJson.Length > 262144)
             throw new ArgumentException("Activity snapshot must be a non-empty JSON payload of at most 256 KiB.", nameof(activityJson));
-        ActivityJson = activityJson;
+        ActivityJson = PipelineActivityV1.Parse(activityJson).ToJson();
         LastActivityAt = DateTime.UtcNow;
         FailureReason = null;
         Status = waitingForUser ? SessionStatus.WaitingForUser : SessionStatus.Active;

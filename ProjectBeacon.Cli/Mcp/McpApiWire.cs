@@ -45,14 +45,29 @@ internal static partial class McpApiTools
     {
         if (status == 204)
             return new McpToolText(true, "HTTP 204");
+
         var trimmed = body.Trim();
         if (trimmed.Length > 2000)
             trimmed = trimmed[..2000];
+
         try
         {
-            var error = JsonNode.Parse(trimmed)?["error"];
-            if (error is JsonValue value && value.TryGetValue<string>(out var message) && !string.IsNullOrWhiteSpace(message))
-                return new McpToolText(true, $"HTTP {status}: {message}");
+            if (JsonNode.Parse(trimmed) is JsonObject problem)
+            {
+                var code = problem["code"]?.GetValue<string>();
+                var detail = problem["detail"]?.GetValue<string>();
+                var error = problem["error"]?.GetValue<string>();
+                var message = !string.IsNullOrWhiteSpace(detail) ? detail
+                    : !string.IsNullOrWhiteSpace(error) ? error
+                    : problem["title"]?.GetValue<string>();
+
+                if (!string.IsNullOrWhiteSpace(code))
+                    return new McpToolText(true, string.IsNullOrWhiteSpace(message)
+                        ? $"HTTP {status} [{code}]"
+                        : $"HTTP {status} [{code}]: {message}");
+                if (!string.IsNullOrWhiteSpace(message))
+                    return new McpToolText(true, $"HTTP {status}: {message}");
+            }
         }
         catch (JsonException)
         {

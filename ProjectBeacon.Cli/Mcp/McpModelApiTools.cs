@@ -2,23 +2,24 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> ModelTools() =>
     [
-        new("model_upsert", "Create or update a local model backend. backendType: FreeToken, LlamaCpp, OpenAiCompatible.",
+        new(McpToolNames.ModelUpsert, "Create or update a local model backend. backendType: FreeToken, LlamaCpp, OpenAiCompatible.",
             () => Props(("name", "string", true), ("backendType", "string", true), ("launchCommand", "string", true),
                 ("contextSize", "integer", true), ("ttl", "integer", true), ("id", "string", false),
                 ("extraFlags", "array", false), ("concurrent", "boolean", false)), ModelUpsert),
-        new("model_delete", "Delete a local model backend.",
+        new(McpToolNames.ModelDelete, "Delete a local model backend.",
             () => Props(("modelBackendId", "string", true)), ModelDelete),
-        new("model_unbind", "Remove a pipeline role binding. role: planner, actor, review.",
+        new(McpToolNames.ModelUnbind, "Remove a pipeline role binding. role: planner, actor, review.",
             () => Props(("role", "string", true)), ModelUnbind),
-        new("proxy_reload", "Ask the workstation to reload llama-swap.",
+        new(McpToolNames.ProxyReload, "Ask the workstation to reload llama-swap.",
             () => Props(), (_, api, _, ct) => SendAsync(api, HttpMethod.Post, "v1/models/proxy/reload", new JsonObject(), ct)),
-        new("proxy_unload", "Ask the workstation to unload llama-swap.",
+        new(McpToolNames.ProxyUnload, "Ask the workstation to unload llama-swap.",
             () => Props(), (_, api, _, ct) => SendAsync(api, HttpMethod.Post, "v1/models/proxy/unload", new JsonObject(), ct))
     ];
 

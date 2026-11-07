@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using ProjectBeacon.Cli.Client;
 
 internal static class NativeCommandRunner
 {
@@ -14,15 +15,6 @@ internal static class NativeCommandRunner
     private const int MaxTimeoutSeconds = 180;
     private const int DefaultLogPageSize = 100;
     private const int MaxLogPageSize = 250;
-
-    private static readonly string[] InheritedEnvironmentNames =
-    [
-        "PATH", "SystemRoot", "WINDIR", "COMSPEC",
-        "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_MULTILEVEL_LOOKUP",
-        "JAVA_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "GOROOT", "GOTOOLCHAIN",
-        "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LANG", "LC_ALL",
-        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER"
-    ];
 
     public static JsonObject ToolDefinition() => new()
     {
@@ -303,17 +295,16 @@ internal static class NativeCommandRunner
                 startInfo.ArgumentList.Add(argument);
         }
 
-        var inherited = InheritedEnvironmentNames
-            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
-            .Where(pair => pair.Value is not null)
-            .ToArray();
+        var inherited = ClientConfiguration.CaptureAllowedEnvironment(
+            ClientConfiguration.NativeCommandEnvironmentNames,
+            Environment.GetEnvironmentVariable);
         startInfo.Environment.Clear();
         foreach (var pair in inherited)
         {
-            if (string.Equals(pair.Name, "PATH", StringComparison.OrdinalIgnoreCase))
-                startInfo.Environment[pair.Name] = safePath;
+            if (string.Equals(pair.Key, "PATH", StringComparison.OrdinalIgnoreCase))
+                startInfo.Environment[pair.Key] = safePath;
             else
-                startInfo.Environment[pair.Name] = pair.Value!;
+                startInfo.Environment[pair.Key] = pair.Value;
         }
         startInfo.Environment["PATH"] = safePath;
         if (OperatingSystem.IsWindows())

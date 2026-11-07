@@ -16,7 +16,7 @@ public static class ActorRequirementExtensions
     /// Requires a human actor with <c>UserId</c>. Otherwise returns 403.
     /// </summary>
     public static IEndpointConventionBuilder RequireHuman(this IEndpointConventionBuilder builder)
-        => builder.AddEndpointFilter(async (ctx, next) =>
+        => builder.WithMetadata(new RouteActorRequirementMetadata(RouteActorRequirement.Human)).AddEndpointFilter(async (ctx, next) =>
         {
             var actor = ctx.HttpContext.GetActor();
             if (!actor.IsHuman || actor.UserId is null)
@@ -30,6 +30,7 @@ public static class ActorRequirementExtensions
     public static IEndpointConventionBuilder RequireDevice(this IEndpointConventionBuilder builder)
         => builder
             .WithMetadata(new AllowDeviceActorAttribute())
+            .WithMetadata(new RouteActorRequirementMetadata(RouteActorRequirement.Device))
             .AddEndpointFilter(async (ctx, next) =>
             {
                 var actor = ctx.HttpContext.GetActor();
@@ -43,7 +44,7 @@ public static class ActorRequirementExtensions
     /// </summary>
     /// <param name="capability">Capability the token must have. <c>Admin</c> satisfies any value.</param>
     public static IEndpointConventionBuilder RequireApiToken(this IEndpointConventionBuilder builder, ApiTokenCapability capability)
-        => builder.AddEndpointFilter(async (ctx, next) =>
+        => builder.WithMetadata(new RouteActorRequirementMetadata(RouteActorRequirement.ApiToken, capability)).AddEndpointFilter(async (ctx, next) =>
         {
             var actor = ctx.HttpContext.GetActor();
             if (!actor.IsApiToken || !HasCapability(actor.Capabilities, capability))
@@ -56,7 +57,7 @@ public static class ActorRequirementExtensions
     /// </summary>
     /// <param name="capability">Capability an API token must have. Ignored for a human actor. <c>Admin</c> satisfies any value.</param>
     public static IEndpointConventionBuilder RequireHumanOrApiToken(this IEndpointConventionBuilder builder, ApiTokenCapability capability)
-        => builder.AddEndpointFilter(async (ctx, next) =>
+        => builder.WithMetadata(new RouteActorRequirementMetadata(RouteActorRequirement.HumanOrApiToken, capability)).AddEndpointFilter(async (ctx, next) =>
         {
             var actor = ctx.HttpContext.GetActor();
             if (actor.IsHuman && actor.UserId is not null)

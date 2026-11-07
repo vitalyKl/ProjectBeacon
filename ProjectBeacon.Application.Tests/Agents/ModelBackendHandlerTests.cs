@@ -1,7 +1,10 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Common;
 using Application.Agents;
+using Application.Tasks;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
 using Domain.Entities.Projects;
@@ -125,6 +128,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal(created.Value.Id, updated.Value!.Id);
         Assert.Equal("new", updated.Value.Name);
         Assert.Equal(ModelBackendType.OpenAiCompatible, updated.Value.BackendType);
+        Assert.Equal(string.Empty, updated.Value.LaunchCommand);
         Assert.Equal(2048, updated.Value.ContextSize);
         Assert.False(updated.Value.Concurrent);
         Assert.Equal(1, await CountBackendsAsync());
@@ -256,6 +260,33 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal("Model backend not found.", result.Error);
     }
 
+    [Theory]
+    [InlineData(ModelBackendType.FreeToken)]
+    [InlineData(ModelBackendType.OpenAiCompatible)]
+    public async Task SessionSpawner_DoesNotCreateLlamaSwapLaunchSpec_ForRemoteProviders(ModelBackendType backendType)
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var backend = LocalModelBackend.Create(
+            "remote", backendType, "must-not-run-as-process", 8192, 0, ownerId,
+            openCodeModel: "provider/model");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LocalModelBackends.Add(backend);
+            _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, backend.Id, projectId));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var spawner = new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog());
+        await using var scopedDb = HandlerSqlite.Factory(_connection, Scope(projectId)).CreateDbContext();
+        var session = await spawner.SpawnAsync(
+            scopedDb, projectId, PipelineRole.Actor, Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(backend.Id, session.ModelBackendId);
+        Assert.Equal("remote", session.ModelName);
+        Assert.Null(session.LaunchSpec);
+    }
+
     [Fact]
     public async Task SetRoleBinding_CreatesThenRepoints()
     {
@@ -269,12 +300,13 @@ public sealed class ModelBackendHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id)), TestContext.Current.CancellationToken);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal(projectId, created.Value!.ProjectId);
 
-        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id)), TestContext.Current.CancellationToken);
+        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(repointed.Success, repointed.Error);
         Assert.Equal(created.Value.Id, repointed.Value!.Id);
         Assert.Equal(second.Id, repointed.Value.ModelBackendId);
@@ -282,12 +314,71 @@ public sealed class ModelBackendHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task SetRoleBinding_NonAdminActor_IsForbiddenAtApplicationBoundary()
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var outsider = User.Create("model-outsider", "model-outsider@beacon.local", "hash");
+        var backend = LocalModelBackend.Create("owner-model", ModelBackendType.LlamaCpp, "cmd", 1024, 0, ownerId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(outsider);
+            _db.LocalModelBackends.Add(backend);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(
+            HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+
+        var result = await handler.HandleAsync(
+            new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, backend.Id), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(ErrorCodes.Forbidden, result.ErrorCode);
+        Assert.Equal(0, await CountBindingsAsync());
+    }
+
+    [Fact]
+    public async Task SetRoleBinding_UnauthorizedRequestedProjectWithFailClosedScope_IsForbidden()
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var outsider = User.Create("scope-outsider", "scope-outsider@beacon.local", "hash");
+        var backend = LocalModelBackend.Create("owner-model", ModelBackendType.LlamaCpp, "cmd", 1024, 0, ownerId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(outsider);
+            _db.LocalModelBackends.Add(backend);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(
+            HandlerSqlite.Factory(_connection, EmptyGuidScope()), new AuthorizationService());
+
+        var result = await handler.HandleAsync(
+            new SetRoleBindingCommand(
+                new SetRoleBindingRequest(PipelineRole.Actor, backend.Id), actor, projectId),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(ErrorCodes.Forbidden, result.ErrorCode);
+        Assert.Equal(0, await CountBindingsAsync());
+    }
+
+    [Fact]
     public async Task SetRoleBinding_UnknownBackend_Fails()
     {
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
-        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
+        var ownerId = await SeedOwnerAsync(projectId);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
 
-        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid())), TestContext.Current.CancellationToken);
+        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid()), actor), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -305,11 +396,13 @@ public sealed class ModelBackendHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var handler = new RemoveRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
+        var ownerId = await SeedOwnerAsync(projectId);
+        var actor = new ActorContext(ActorType.Human, ownerId, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new RemoveRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner), actor), TestContext.Current.CancellationToken);
         Assert.True(removed.Success, removed.Error);
 
-        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
+        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner), actor), TestContext.Current.CancellationToken);
         Assert.False(again.Success);
         Assert.Equal("Role binding not found.", again.Error);
     }

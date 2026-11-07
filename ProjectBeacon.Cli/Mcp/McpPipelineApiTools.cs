@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 
@@ -9,19 +10,19 @@ internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> PipelineTools() =>
     [
-        new("pipeline_start", "Start the task pipeline. Uses BEACON_TASK_ID when taskId is omitted.",
+        new(McpToolNames.PipelineStart, "Start the task pipeline. Uses BEACON_TASK_ID when taskId is omitted.",
             () => Props(("taskId", "string", false)), PipelineStart),
-        new("pipeline_start_actor", "Start an actor session for a subtask.",
+        new(McpToolNames.PipelineStartActor, "Start an actor session for a subtask.",
             () => Props(("subtaskId", "string", true), ("taskId", "string", false)), PipelineActor),
-        new("pipeline_launch_session", "Launch a pipeline session on the workstation.",
+        new(McpToolNames.PipelineLaunchSession, "Launch a pipeline session on the workstation.",
             () => Props(("sessionId", "string", true)), PipelineLaunch),
-        new("pipeline_fail_subtask", "Fail an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match.",
+        new(McpToolNames.PipelineFailSubtask, "Fail an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match.",
             () => Props(("subtaskId", "string", false), ("reason", "string", true), ("taskId", "string", false)), PipelineFail),
-        new("pipeline_start_review", "Start the review stage of the pipeline.",
+        new(McpToolNames.PipelineStartReview, "Start the review stage of the pipeline.",
             () => Props(("taskId", "string", false)), PipelineReview),
-        new("pipeline_approve", "Approve the pipeline and close the task.",
+        new(McpToolNames.PipelineApprove, "Approve the pipeline and close the task.",
             () => Props(("note", "string", false), ("taskId", "string", false)), PipelineApprove),
-        new("pipeline_force_close", "Force-close a pipeline. The API token needs the Admin capability.",
+        new(McpToolNames.PipelineForceClose, "Force-close a pipeline. The API token needs the Admin capability.",
             () => Props(("reason", "string", false), ("taskId", "string", false)), PipelineForceClose),
     ];
 

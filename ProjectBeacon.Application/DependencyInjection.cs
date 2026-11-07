@@ -16,6 +16,7 @@ using Application.Decisions;
 using Application.Reports;
 using Application.Runtime;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 /// <summary>
 /// Registers Application handlers and the authorization service for the host.
 /// </summary>
@@ -23,6 +24,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationHandlers(this IServiceCollection services)
     {
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
 
         services.AddTransient<BootstrapHandler>();

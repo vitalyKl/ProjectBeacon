@@ -2,47 +2,48 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> TaskTools() =>
     [
-        new("get_project", "Get the current project from the Beacon API.",
+        new(McpToolNames.GetProject, "Get the current project from the Beacon API.",
             () => Props(("projectId", "string", false)), ProjectGet),
-        new("list_tasks", "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
+        new(McpToolNames.ListTasks, "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
             () => Props(("projectId", "string", false), ("status", "string", false)), TasksList),
-        new("get_task", "Get one task, including comments and dependencies.",
+        new(McpToolNames.GetTask, "Get one task, including comments and dependencies.",
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskGet),
-        new("create_task", "Create a task in the current project. The new task becomes the active task context for this chat, so task_pipeline_status and pipeline_start can be called next without a task ID. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
+        new(McpToolNames.CreateTask, "Create a task in the current project. The new task becomes the active task context for this chat, so task_pipeline_status and pipeline_start can be called next without a task ID. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
             () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
                 ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
                 ("path", "string", false), ("projectId", "string", false)), TaskCreate),
-        new("update_task", "Update a task title, description, priority, type, label, or milestone.",
+        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone.",
             () => Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
                 ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
                 ("milestoneId", "string", false), ("projectId", "string", false)), TaskUpdate),
-        new("set_task_status", "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
+        new(McpToolNames.SetTaskStatus, "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
             () => Props(("taskId", "string", true), ("status", "string", true), ("projectId", "string", false)), TaskStatus),
-        new("set_task_substage", "Set the in-progress sub-stage shown on the board.",
+        new(McpToolNames.SetTaskSubstage, "Set the in-progress sub-stage shown on the board.",
             () => Props(("taskId", "string", true), ("subStage", "string", true)), TaskSubStage),
-        new("claim_task", "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
+        new(McpToolNames.ClaimTask, "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskClaim),
-        new("add_task_comment", "Add a comment on a task.",
+        new(McpToolNames.AddTaskComment, "Add a comment on a task.",
             () => Props(("taskId", "string", true), ("content", "string", true)), TaskComment),
-        new("set_task_dependencies", "Replace the tasks this task depends on.",
+        new(McpToolNames.SetTaskDependencies, "Replace the tasks this task depends on.",
             () => Props(("taskId", "string", true), ("dependentTaskIds", "array", true)), TaskDependencies),
-        new("add_review_notes", "Save review notes required before a task can move to Done.",
+        new(McpToolNames.AddReviewNotes, "Save review notes required before a task can move to Done.",
             () => Props(("taskId", "string", true), ("reviewNotes", "string", true)), TaskReviewNotes),
-        new("list_task_steps", "List checklist steps on a task.",
+        new(McpToolNames.ListTaskSteps, "List checklist steps on a task.",
             () => Props(("taskId", "string", true)), StepsList),
-        new("add_task_step", "Add a checklist step.",
+        new(McpToolNames.AddTaskStep, "Add a checklist step.",
             () => Props(("taskId", "string", true), ("title", "string", true)), StepAdd),
-        new("toggle_task_step", "Mark a checklist step done or not done.",
+        new(McpToolNames.ToggleTaskStep, "Mark a checklist step done or not done.",
             () => Props(("stepId", "string", true), ("done", "boolean", true)), StepToggle),
-        new("delete_task_step", "Delete a checklist step.",
+        new(McpToolNames.DeleteTaskStep, "Delete a checklist step.",
             () => Props(("stepId", "string", true)), StepDelete),
-        new("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof. On a 409 conflict a competing finish won; re-read the task and retry.",
+        new(McpToolNames.FinishWork, "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof. On a 409 conflict a competing finish won; re-read the task and retry.",
             FinishSchema, Finish),
     ];
 

@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Mcp;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
+using ProjectBeacon.Cli.Client;
 
 internal sealed class BeaconApiClient
 {
@@ -22,20 +23,14 @@ internal sealed class BeaconApiClient
     internal static Resolution Resolve(McpEnvironment? env = null)
     {
         var lookup = env ?? McpEnvironment.Process;
-        var url = lookup.Get("BEACON_API_URL");
-        var token = lookup.Get("BEACON_API_TOKEN");
-        var hasUrl = !string.IsNullOrWhiteSpace(url);
-        var hasToken = !string.IsNullOrWhiteSpace(token);
-        if (hasUrl != hasToken)
+        var settings = ClientConfiguration.ResolveApi(lookup.Get);
+        if (settings.Misconfigured)
             return new Resolution(null, true);
-        if (!hasUrl)
+        if (!settings.Configured)
             return new Resolution(null, false);
-        if (!Uri.TryCreate(url!.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var baseUri)
-            || baseUri.Scheme is not ("http" or "https"))
-            return new Resolution(null, true);
 
-        var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(60) };
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token!.Trim());
+        var http = new HttpClient { BaseAddress = settings.BaseUri, Timeout = TimeSpan.FromSeconds(60) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", settings.Token);
         return new Resolution(new BeaconApiClient(http, lookup), false);
     }
 

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
+using Domain.Common;
 
 using Application.Chat;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,7 @@ public static class ChatEndpoints
 {
     /// <summary>
     /// Human routes under <c>/v1/chat/sessions</c> use <c>RequireHuman</c>.
-    /// <c>POST .../parts</c> and <c>POST .../idle</c> use <c>RequireDevice</c>.
+    /// <c>POST .../parts</c>, <c>POST .../idle</c>, and <c>POST .../usage</c> use <c>RequireDevice</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapChatEndpoints(this IEndpointRouteBuilder app)
     {
@@ -23,15 +24,15 @@ public static class ChatEndpoints
         app.MapGet("/v1/chat/sessions/{id:guid}", GetSession).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPatch("/v1/chat/sessions/{id:guid}", RenameSession).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/archive", ArchiveSession).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapGet("/v1/chat/sessions/{id:guid}/parts", ListParts).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet(ApiRoutes.ChatSessionPartsRoute, ListParts).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/chat/sessions/{id:guid}/events", ChatEvents).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/prompt", SendPrompt).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/agent", SwitchAgent).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/forms/{formId}/reply", ReplyForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapPost("/v1/chat/sessions/{id:guid}/usage", ReportUsage).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.ChatSessionPartsRoute, AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.ChatSessionIdleRoute, MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.ChatSessionUsageRoute, ReportUsage).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
     /// <summary>
@@ -61,19 +62,6 @@ public static class ChatEndpoints
     /// <summary>
     /// Body a device posts for the session's token totals and the active model's context limit.
     /// </summary>
-    public record UsageBody(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, int? ContextLimit = null, double GenerationSeconds = 0);
-
-    public record AppendBody(
-        string Role,
-        string Kind,
-        string Body,
-        string? ExternalId,
-        string? Tool,
-        string? ToolStatus,
-        string? ToolInput,
-        string? ToolResult,
-        int? DurationMs,
-        bool Complete = false);
 
     private static async Task<IResult> ListSessions(ListChatSessionsHandler handler, HttpContext ctx, CancellationToken ct)
     {
@@ -212,7 +200,7 @@ public static class ChatEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
-    private static async Task<IResult> AppendPart(Guid id, [FromBody] AppendBody body, AppendChatPartHandler handler, HttpContext ctx, CancellationToken ct)
+    private static async Task<IResult> AppendPart(Guid id, [FromBody] ChatPartRequest body, AppendChatPartHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(
@@ -221,7 +209,7 @@ public static class ChatEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> ReportUsage(Guid id, [FromBody] UsageBody body, ReportChatUsageHandler handler, HttpContext ctx, CancellationToken ct)
+    private static async Task<IResult> ReportUsage(Guid id, [FromBody] ChatUsageReportRequest body, ReportChatUsageHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new ReportChatUsageCommand(new ReportChatUsageRequest(

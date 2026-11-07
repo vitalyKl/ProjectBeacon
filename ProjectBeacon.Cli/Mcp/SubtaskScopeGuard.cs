@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 /// <summary>
 /// Enforces a subtask allowlist on MCP tools. An empty tool list does not restrict tools. An empty path list does not restrict paths. Several limited in-progress subtasks require an explicit subtask id.
 /// </summary>
@@ -14,7 +15,7 @@ public static class SubtaskScopeGuard
 
     private static readonly HashSet<string> PathTools = new(StringComparer.OrdinalIgnoreCase)
     {
-        "read_file", "write_file", "apply_patch", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers", "hash_range"
+        McpToolNames.ReadFile, McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange
     };
 
     public static bool UsesPath(string tool) => PathTools.Contains(tool);
@@ -118,9 +119,14 @@ public static class SubtaskScopeGuard
         => string.Equals(subtask.Status, "InProgress", StringComparison.OrdinalIgnoreCase);
 
     private static bool ToolAllowed(IReadOnlyList<string> tools, string tool)
-        => tools.Any(entry =>
+    {
+        var aliases = McpToolCatalog.TryGet(tool, out var descriptor)
+            ? descriptor!.Aliases
+            : [$"beacon_{tool}"];
+        return tools.Any(entry =>
             string.Equals(entry, tool, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry, "beacon_" + tool, StringComparison.OrdinalIgnoreCase));
+            || aliases.Any(alias => string.Equals(entry, alias, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private static bool PathAllowed(IReadOnlyList<string> prefixes, string path)
     {

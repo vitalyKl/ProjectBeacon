@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Authorization;
 using Application.Agents;
 using Application.Devices;
 using Domain.Entities.Identity;
@@ -40,10 +41,10 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
     {
         var (user, project, deviceId, backendId) = await SeedAsync();
         var factory = HandlerSqlite.Factory(_connection, Scope(project.Id));
-        var handler = new ApplyAgentConfigHandler(factory, new SetRoleBindingHandler(factory), new EnqueueCommandHandler(factory));
+        var handler = new ApplyAgentConfigHandler(factory, new AuthorizationService(), new SetRoleBindingHandler(factory, new AuthorizationService()), new EnqueueCommandHandler(factory));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)), TestContext.Current.CancellationToken);
+            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null), new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(WorkstationCommandKind.ApplyOpencode, result.Value!.Kind);
@@ -62,10 +63,11 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
     {
         var (user, project, deviceId, backendId) = await SeedAsync(attachRuntime: false);
         var factory = HandlerSqlite.Factory(_connection, Scope(project.Id));
-        var handler = new ApplyAgentConfigHandler(factory, new SetRoleBindingHandler(factory), new EnqueueCommandHandler(factory));
+        var handler = new ApplyAgentConfigHandler(factory, new AuthorizationService(), new SetRoleBindingHandler(factory, new AuthorizationService()), new EnqueueCommandHandler(factory));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)), TestContext.Current.CancellationToken);
+            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null),
+            new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);

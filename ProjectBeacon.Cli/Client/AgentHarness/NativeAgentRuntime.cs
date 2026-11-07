@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Domain.Common;
 using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
@@ -1844,12 +1845,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static readonly HashSet<string> PlanAllowedTools = new(StringComparer.Ordinal)
     {
-        "read_file", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers", "hash_range",
-        "get_project", "list_tasks", "get_task", "list_task_steps",
-        "list_context_nodes", "get_context_node", "export_agents_md",
-        "list_constraints", "list_decisions", "list_milestones", "get_milestone",
-        "list_labels", "match_label", "list_reports", "get_report",
-        "task_pipeline_status", "context_compile", "model_status", "suggest_command_prefixes",
+        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
+        McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
+        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
+        McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "suggest_command_prefixes",
         "run_log", "service_status", "service_logs"
     };
 
@@ -1886,9 +1887,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static readonly HashSet<string> CacheableReadOnlyTools = new(StringComparer.Ordinal)
     {
-        "read_file", "list_files", "get_project", "list_projects", "get_task", "list_tasks",
-        "get_milestone", "list_milestones", "get_label", "list_labels", "context_compile",
-        "context_get", "search_code"
+        McpToolNames.ReadFile, "list_files", McpToolNames.GetProject, "list_projects", McpToolNames.GetTask, McpToolNames.ListTasks,
+        McpToolNames.GetMilestone, McpToolNames.ListMilestones, "get_label", McpToolNames.ListLabels, McpToolNames.ContextCompile,
+        "context_get", McpToolNames.SearchCode
     };
 
     private static bool MayRequestUserInput(string? tool)

@@ -7,6 +7,8 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Application.CodeIndex;
 using Application.Mcp;
+using Domain.Common;
+using ProjectBeacon.Cli.Client;
 /// <summary>
 /// Stdio MCP server. File tools stay inside --root. Every control-plane tool goes through the authenticated /v1 API; no direct database path is available.
 /// </summary>
@@ -21,11 +23,8 @@ public static partial class McpStdioServer
     {
         var env = McpEnvironment.Process;
         var resolved = BeaconApiClient.Resolve(env);
-        Console.Error.WriteLine(resolved.Misconfigured
-            ? "beacon mcp: both BEACON_API_URL and BEACON_API_TOKEN must be set, with a valid HTTP(S) URL."
-            : resolved.Client is null
-                ? "beacon mcp: control-plane tools require BEACON_API_URL and BEACON_API_TOKEN; file tools remain available."
-                : "beacon mcp: authenticated API mode.");
+        Console.Error.WriteLine(ClientConfiguration.McpStartupDiagnostic(
+            resolved.Misconfigured, configured: resolved.Client is not null));
         return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client, env);
     }
 
@@ -141,7 +140,7 @@ public static partial class McpStdioServer
         };
     }
 
-    private static JsonArray Tools()
+    internal static JsonArray Tools()
     {
         var tools = new JsonArray();
         foreach (var tool in LocalTools())
@@ -176,40 +175,40 @@ public static partial class McpStdioServer
 
             return name switch
             {
-                "read_file" => FileResult(id, workspace.ReadFile(Arg(arguments, "path"))),
-                "write_file" => BoolResult(id, workspace.WriteFile(Arg(arguments, "path"), Arg(arguments, "content"))),
-                "apply_patch" => BoolResult(id, workspace.ApplyPatch(
+                McpToolNames.ReadFile => FileResult(id, workspace.ReadFile(Arg(arguments, "path"))),
+                McpToolNames.WriteFile => BoolResult(id, workspace.WriteFile(Arg(arguments, "path"), Arg(arguments, "content"))),
+                McpToolNames.ApplyPatch => BoolResult(id, workspace.ApplyPatch(
                     Arg(arguments, "path"),
                     Arg(arguments, "oldText"),
                     Arg(arguments, "newText"))),
-                "get_tree" => TextResult(id, index.GetTree(
+                McpToolNames.GetTree => TextResult(id, index.GetTree(
                     OptArg(arguments, "path"),
                     OptInt(arguments, "maxEntries") ?? CodeIndex.DefaultMaxEntries), FormatTree),
-                "search_code" => TextResult(id, index.Search(
+                McpToolNames.SearchCode => TextResult(id, index.Search(
                     Arg(arguments, "query"),
                     SplitPrefixes(OptArg(arguments, "path")),
                     OptInt(arguments, "maxMatches") ?? CodeIndex.DefaultMaxMatches), FormatSearch),
-                "get_changed_scope" => TextResult(id, index.GetChangedScope(
+                McpToolNames.GetChangedScope => TextResult(id, index.GetChangedScope(
                     SplitPrefixes(OptArg(arguments, "path")),
                     OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatFileList),
-                "get_signatures" => TextResult(id, index.GetSignatures(
+                McpToolNames.GetSignatures => TextResult(id, index.GetSignatures(
                     OptArg(arguments, "path") is { Length: > 0 } p ? SplitPrefixes(p) : null,
                     OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatSignatures),
-                "get_callers" => TextResult(id, index.GetCallers(
+                McpToolNames.GetCallers => TextResult(id, index.GetCallers(
                     Arg(arguments, "path"),
                     Arg(arguments, "symbolName"),
                     OptInt(arguments, "line") ?? 1), FormatCallers),
-                "hash_range" => TextResult(id, index.HashRange(
+                McpToolNames.HashRange => TextResult(id, index.HashRange(
                     Arg(arguments, "path"),
                     OptInt(arguments, "startLine") ?? 0,
                     OptInt(arguments, "endLine") ?? 0), h => h),
-                "model_bind" => await ModelBindAsync(id, arguments, api, env),
-                "model_status" => await ModelStatusAsync(id, api, env),
-                "task_create_subtask" => await TaskCreateSubtaskAsync(id, arguments, api, env),
-                "subtask_report_result" => await SubtaskReportResultAsync(id, arguments, api, env),
-                "task_review_verdict" => await TaskReviewVerdictAsync(id, arguments, api, env),
-                "task_pipeline_status" => await TaskPipelineStatusAsync(id, api, env),
-                "context_compile" => api is not null ? await ContextCompileAsync(id, workspace, index, api, env) : await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api, env)),
+                McpToolNames.ModelBind => await ModelBindAsync(id, arguments, api, env),
+                McpToolNames.ModelStatus => await ModelStatusAsync(id, api, env),
+                McpToolNames.TaskCreateSubtask => await TaskCreateSubtaskAsync(id, arguments, api, env),
+                McpToolNames.SubtaskReportResult => await SubtaskReportResultAsync(id, arguments, api, env),
+                McpToolNames.TaskReviewVerdict => await TaskReviewVerdictAsync(id, arguments, api, env),
+                McpToolNames.TaskPipelineStatus => await TaskPipelineStatusAsync(id, api, env),
+                McpToolNames.ContextCompile => api is not null ? await ContextCompileAsync(id, workspace, index, api, env) : await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api, env)),
                 _ when McpApiTools.IsApiTool(name) => await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api, env)),
                 _ => ToolError(id, $"Unknown tool: {name}")
             };
@@ -239,9 +238,7 @@ public static partial class McpStdioServer
     }
 
     private static bool IsControlPlaneTool(string name) =>
-        name is "model_bind" or "model_status" or "task_create_subtask"
-            or "subtask_report_result" or "task_review_verdict" or "task_pipeline_status" or "context_compile"
-        || McpApiTools.IsApiTool(name);
+        McpToolCatalog.IsControlPlaneTool(name);
 
     private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {

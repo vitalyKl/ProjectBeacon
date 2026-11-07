@@ -67,10 +67,10 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
     internal string ConfigFile { get; set; } = ConfigPath;
     internal bool UseOwnSwapper { get; set; }
     internal int ConcurrentPortBase { get; set; } = 9000;
-    private readonly Dictionary<string, LlamaServerBackend> _own = new();
+    private readonly Dictionary<string, IModelBackend> _own = new();
     private readonly SwapGroupCoordinator _coordinator = new();
     internal IVramChecker VramChecker { get; set; } = new NoopVramChecker();
-    internal LlamaServerBackend? OwnBackend(string name) => _own.TryGetValue(name, out var backend) ? backend : null;
+    internal LlamaServerBackend? OwnBackend(string name) => _own.TryGetValue(name, out var backend) ? backend as LlamaServerBackend : null;
     internal Action<string>? Log { get; set; }
     private string? _ownLastYaml;
     private string? _desiredSwapModel;

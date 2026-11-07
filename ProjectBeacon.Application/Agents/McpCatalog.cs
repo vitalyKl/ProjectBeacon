@@ -3,10 +3,16 @@ namespace ProjectBeacon.Application.Agents;
 using System.Text.Json.Nodes;
 
 /// <summary>Typed local MCP process configuration. Arguments are preserved exactly; no shell splitting occurs.</summary>
-public sealed record LocalMcpServer(string Name, string Executable, IReadOnlyList<string> Arguments, bool Enabled = true);
+public interface IMcpServerDescriptor
+{
+    string Name { get; }
+    bool Enabled { get; }
+}
+
+public sealed record LocalMcpServer(string Name, string Executable, IReadOnlyList<string> Arguments, bool Enabled = true) : IMcpServerDescriptor;
 
 /// <summary>Typed remote MCP endpoint configuration.</summary>
-public sealed record RemoteMcpServer(string Name, Uri Endpoint, bool Enabled = true);
+public sealed record RemoteMcpServer(string Name, Uri Endpoint, bool Enabled = true) : IMcpServerDescriptor;
 
 /// <summary>
 /// Compatibility input for existing persisted custom MCP settings. New callers should use
@@ -24,13 +30,13 @@ public static class McpCatalog
         bool serena,
         IEnumerable<CustomMcpServer>? custom = null) =>
         BuildTyped(localRoot, context7, serena,
-            (custom ?? []).Select(FromLegacy).Where(server => server is not null).Cast<object>());
+            (custom ?? []).Select(FromLegacy).Where(server => server is not null).Cast<IMcpServerDescriptor>());
 
     public static JsonObject BuildTyped(
         string localRoot,
         bool context7,
         bool serena,
-        IEnumerable<object>? custom = null)
+        IEnumerable<IMcpServerDescriptor>? custom = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(localRoot);
         var mcp = new JsonObject
@@ -52,12 +58,7 @@ public static class McpCatalog
 
         foreach (var server in custom)
         {
-            var name = server switch
-            {
-                LocalMcpServer local => local.Name,
-                RemoteMcpServer remote => remote.Name,
-                _ => throw new ArgumentException($"Unsupported MCP server descriptor '{server.GetType().Name}'.", nameof(custom))
-            };
+            var name = server.Name;
             name = ValidateName(name);
             if (name.Equals("beacon", StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -74,7 +75,7 @@ public static class McpCatalog
         return mcp;
     }
 
-    private static object? FromLegacy(CustomMcpServer server)
+    private static IMcpServerDescriptor? FromLegacy(CustomMcpServer server)
     {
         var name = ValidateName(server.Name);
         if (name.Equals("beacon", StringComparison.OrdinalIgnoreCase))
