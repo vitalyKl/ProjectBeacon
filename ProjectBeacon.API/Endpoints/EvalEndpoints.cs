@@ -61,6 +61,5 @@ public static class EvalEndpoints
         string? ReasoningEffort = null,
         string? ToolPermissions = null,
         int? TimeoutSeconds = null,
-        string? RepoRevision = null,
-        string? Reserved = null);
+        string? RepoRevision = null);
 }
