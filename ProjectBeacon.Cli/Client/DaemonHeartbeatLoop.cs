@@ -69,7 +69,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                 {
                     Connected = heartbeat.IsSuccessStatusCode,
                     HeartbeatStatus = code,
-                    LastHeartbeatAt = DateTimeOffset.Now,
+                    LastHeartbeatAt = _timing.TimeProvider.GetLocalNow(),
                     Llama = _llama.Status,
                     Host = host,
                     Error = heartbeat.IsSuccessStatusCode ? null : $"heartbeat {code}"
