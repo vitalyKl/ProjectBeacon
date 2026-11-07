@@ -452,7 +452,7 @@ public sealed partial class DeviceHandlerTests
             TestContext.Current.CancellationToken);
 
         var task = TaskItem.Create("Native eval task", project.Id);
-        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.Native);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.HistoricalComparisonB);
         run.Pin("beacon-local/test", 0.2, "low", "read", 120, "revision", "dotnet test", "native");
         var payload = JsonSerializer.Serialize(new
         {
