@@ -84,7 +84,7 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         {
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id && b.UserId == request.UserId, ct);
             if (existing is null)
-                return Result.Failure<LocalModelBackendDto>("Model backend not found.");
+                return Result.Failure<LocalModelBackendDto>("Model backend not found.", ErrorKind.NotFound);
             existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
             await DesiredState.BumpUserAsync(db, request.UserId, ct);
             await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);
@@ -119,14 +119,14 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
         var backend = await db.LocalModelBackends.FirstOrDefaultAsync(
             b => b.Id == command.Request.Id && b.UserId == command.Request.UserId, ct);
         if (backend is null)
-            return Result.Failure("Model backend not found.");
+            return Result.Failure("Model backend not found.", ErrorKind.NotFound);
 
         var boundRoles = await db.RoleBindings.IgnoreQueryFilters()
             .Where(r => r.ModelBackendId == backend.Id)
             .Select(r => r.Role)
             .ToListAsync(ct);
         if (boundRoles.Count > 0)
-            return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.");
+            return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.", ErrorKind.Conflict);
 
         db.LocalModelBackends.Remove(backend);
         await DesiredState.BumpUserAsync(db, command.Request.UserId, ct);
@@ -165,7 +165,7 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
             .Select(b => (Guid?)b.UserId)
             .FirstOrDefaultAsync(ct);
         if (backendOwner is null)
-            return Result.Failure<RoleBindingDto>("Model backend not found.");
+            return Result.Failure<RoleBindingDto>("Model backend not found.", ErrorKind.NotFound);
         var ownerIsMember = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == projectId && m.UserId == backendOwner.Value, ct);
         if (!ownerIsMember)
@@ -214,7 +214,7 @@ public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBinding
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
         if (binding is null)
-            return Result.Failure("Role binding not found.");
+            return Result.Failure("Role binding not found.", ErrorKind.NotFound);
 
         db.RoleBindings.Remove(binding);
         await DesiredState.BumpProjectAsync(db, projectId, ct);
