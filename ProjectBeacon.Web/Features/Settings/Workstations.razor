@@ -376,7 +376,7 @@
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
 
-    private string RuntimeLabel(string runtime) => runtime switch
+    private string RuntimeLabel(string? runtime) => runtime switch
     {
         "native" => L["AgentRuntimeNative"].Value,
         "opencode" => L["AgentRuntimeOpenCode"].Value,
