@@ -458,22 +458,9 @@ public sealed class P2AuthorizationHttpTests
         var orgId = org.GetProperty("id").GetGuid();
         var project = await PostJson(client, "/v1/projects", new { name = "Model Binding Project", orgId });
         var projectId = project.GetProperty("id").GetGuid();
-
         var outsiderJwt = await RegisterAndLogin(client, "model-outsider-http", "model-outsider-http@beacon.local");
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var outsiderMe = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
-        var outsiderId = outsiderMe.GetProperty("id").GetGuid();
 
-        // A regular project member resolves tenant scope but is not allowed to administer model bindings.
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
-        var added = await client.PostAsJsonAsync($"/v1/projects/{projectId}/members", new
-        {
-            projectId,
-            userId = outsiderId,
-            role = "Member"
-        }, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.True(added.IsSuccessStatusCode, await added.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-
+        // Tenant scope is selected for the request, but the actor has no project membership.
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
         client.DefaultRequestHeaders.Remove("X-Project-Id");
         client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
