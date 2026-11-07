@@ -362,7 +362,7 @@ Human chat/session routes use `RequireHuman()`. Device ingestion routes use `Req
 | POST | `/v1/projects/{projectId}/runtimes` | DeviceEndpoints.cs:24 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:141) | project | |
 | DELETE | `/v1/projects/{projectId}/runtimes/{id}` | DeviceEndpoints.cs:25 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:154) | project | |
 | GET | `/v1/devices/me/llamaswap-config` | DeviceEndpoints.cs:26 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:174) | device | |
-| GET | `/v1/devices/me/opencode-connections` | DeviceEndpoints.cs:27 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:164) | device | |
+| GET | `/v1/devices/me/provider-connections` | DeviceEndpoints.cs:27 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:164) | device | |
 
 ### 4.13 Model backends (`ModelEndpoints.cs`)
 
