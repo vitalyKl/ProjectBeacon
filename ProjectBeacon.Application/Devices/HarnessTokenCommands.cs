@@ -25,7 +25,10 @@ public sealed record IssueHarnessTokenCommand(Guid CommandId, int Generation, Ac
 /// <summary>Ephemeral credential returned only to the authenticated workstation.</summary>
 public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null, IReadOnlyList<McpServerConfiguration>? McpServers = null);
 
-public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
+public sealed class IssueHarnessTokenHandler(
+    IBeaconDbFactory dbFactory,
+    ISecretProtector secrets,
+    TimeProvider? timeProvider = null)
     : ICommandHandler<IssueHarnessTokenCommand, Result<HarnessTokenDto>>
 {
     private const ApiTokenCapability HarnessCapabilities =
@@ -42,7 +45,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
             return Result.Failure<HarnessTokenDto>("A valid command generation is required.", ErrorKind.Conflict);
 
         await using var db = dbFactory.CreateDbContext();
-        var now = DateTime.UtcNow;
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
             .FirstOrDefaultAsync(d => d.Id == deviceId, ct);

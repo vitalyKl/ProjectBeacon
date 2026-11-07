@@ -18,8 +18,13 @@ using System.Text.Json.Nodes;
 public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public EnqueueCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public EnqueueCommandHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(EnqueueCommandCommand command, CancellationToken ct = default)
     {
@@ -27,7 +32,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
             return Result.Failure<WorkstationCommandDto>("Device not found.");
-        if (!device.IsOnline(DateTime.UtcNow))
+        if (!device.IsOnline(_timeProvider.GetUtcNow().UtcDateTime))
             return Result.Failure<WorkstationCommandDto>("Device is not connected.", ErrorKind.Conflict);
 
         if (command.Request.ProjectId is { } projectId)
@@ -147,13 +152,18 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public ClaimNextCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ClaimNextCommandHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<WorkstationCommandDto?>> HandleAsync(ClaimNextCommandCommand command, CancellationToken ct = default)
     {
         var wait = command.Request.Wait ?? TimeSpan.Zero;
-        var deadline = DateTime.UtcNow + wait;
+        var deadline = _timeProvider.GetUtcNow().UtcDateTime + wait;
         string? instanceId = null;
         {
             await using var db = _dbFactory.CreateDbContext();
@@ -179,12 +189,12 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
             var next = await pending.OrderBy(c => c.CreatedAt).FirstOrDefaultAsync(ct);
             if (next is null)
             {
-                if (DateTime.UtcNow >= deadline)
+                if (_timeProvider.GetUtcNow().UtcDateTime >= deadline)
                     return Result.Ok<WorkstationCommandDto?>(null);
 
                 try
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), _timeProvider, ct);
                 }
                 catch (OperationCanceledException)
                 {
@@ -200,7 +210,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 if (string.IsNullOrWhiteSpace(localRoot))
                 {
                     // Guarded fail: only take effect if the row is still pending.
-                    var now = DateTime.UtcNow;
+                    var now = _timeProvider.GetUtcNow().UtcDateTime;
                     var updated = await db.WorkstationCommands
                         .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
                         .ExecuteUpdateAsync(s => s
@@ -217,7 +227,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
 
             // Guarded claim: succeeds only if the row is still pending. The claim grants the
             // kind's execution lease and records the claiming process instance.
-            var startedAt = DateTime.UtcNow;
+            var startedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var lease = CommandLease.For(next.Kind);
             var claimed = await db.WorkstationCommands
                 .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
