@@ -1,4 +1,5 @@
 /* Product landing — dark, workstation-first product story. */
+/* 1050/1100px are landing composition adjustments; shared shell thresholds use 960/768/600/480/390px. */
 .landing-shell {
     color: var(--color-text-primary);
     background:
@@ -249,7 +250,7 @@
     .landing-intro { gap: var(--space-8); }
     .landing-architecture { gap: var(--space-8); padding: var(--space-8); }
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-nav { min-height: 64px; padding-inline: var(--space-4); }
     .landing-nav-links { display: none; }
     .landing-nav-actions { margin-left: auto; }
@@ -286,7 +287,7 @@
     .landing-final-cta .landing-hero-actions { margin-top: var(--space-4); }
     .landing-footer { align-items: flex-start; flex-direction: column; gap: var(--space-3); padding-inline: var(--space-4); }
 }
-@media (max-width: 390px) {
+@media (max-width: 390.98px) {
     .landing-window-body { grid-template-columns: 1fr; }
     .landing-window-sidebar { display: none; }
     .landing-feature-grid { grid-template-columns: 1fr; }
@@ -321,7 +322,7 @@
     width: 100%;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-footer {
         align-items: flex-start;
         flex-direction: column;
@@ -526,7 +527,7 @@
     }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-nav {
         display: flex;
         min-height: 64px;
@@ -661,7 +662,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 479.98px) {
     .landing-main {
         padding-inline: 14px;
     }
