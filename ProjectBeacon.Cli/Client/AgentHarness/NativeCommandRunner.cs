@@ -301,10 +301,10 @@ internal static class NativeCommandRunner
         startInfo.Environment.Clear();
         foreach (var pair in inherited)
         {
-            if (string.Equals(pair.Name, "PATH", StringComparison.OrdinalIgnoreCase))
-                startInfo.Environment[pair.Name] = safePath;
+            if (string.Equals(pair.Key, "PATH", StringComparison.OrdinalIgnoreCase))
+                startInfo.Environment[pair.Key] = safePath;
             else
-                startInfo.Environment[pair.Name] = pair.Value!;
+                startInfo.Environment[pair.Key] = pair.Value;
         }
         startInfo.Environment["PATH"] = safePath;
         if (OperatingSystem.IsWindows())

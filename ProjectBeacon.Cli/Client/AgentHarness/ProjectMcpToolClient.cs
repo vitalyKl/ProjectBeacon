@@ -241,7 +241,7 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
             Environment.GetEnvironmentVariable);
         start.Environment.Clear();
         foreach (var pair in inherited)
-            start.Environment[pair.Name] = pair.Value!;
+            start.Environment[pair.Key] = pair.Value;
         foreach (var pair in config.Environment ?? new Dictionary<string, string>())
             start.Environment[pair.Key] = pair.Value;
 
