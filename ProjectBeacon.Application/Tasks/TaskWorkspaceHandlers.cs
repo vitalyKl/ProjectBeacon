@@ -63,7 +63,7 @@ public sealed class WorkspaceIndexHandler : IQueryHandler<WorkspaceIndexQuery, R
                 s.AuthorRole, s.AuthorProfileKey, s.AuthorSubtaskId, s.AuthorSessionId,
                 s.Revision, s.CreatedAt, s.UpdatedAt))
             .ToListAsync(ct);
-        return Result<IReadOnlyList<TaskWorkspaceSectionSummaryDto>>.Ok(result);
+        return Result.Ok(result);
     }
 }
 
