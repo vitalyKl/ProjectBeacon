@@ -123,7 +123,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("LocalModelBackends");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.OpenCodeConnection", b =>
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProviderConnection", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -160,7 +160,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("UserId", "ProviderId")
                         .IsUnique();
 
-                    b.ToTable("OpenCodeConnections");
+                    b.ToTable("AgentProviderConnections");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.RoleBinding", b =>
