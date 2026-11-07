@@ -246,6 +246,15 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal(WorkstationCommandStatus.Cancelled, command.Status);
             Assert.Null(command.LeaseExpiresAt);
             Assert.NotNull(command.CompletedAt);
+
+            var report = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id
+                    && section.AuthorSubtaskId == created.Value.Id
+                    && section.Kind == "Report",
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("report/" + created.Value.Id.ToString("N") + "/attempt-1", report.Key);
+            Assert.Equal("Server", report.AuthorType);
+            Assert.Equal("cancel the waiting Actor", report.Content);
         }
     }
 
