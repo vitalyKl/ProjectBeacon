@@ -65,7 +65,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     try
                     {
                         using var response = await _http.PostAsJsonAsync(
-                            $"/v1/commands/{command.Id:D}/progress",
+                            ApiRoutes.CommandProgress(command.Id),
                             new CommandProgressRequest(
                                 command.Generation,
                                 JsonSerializer.Serialize(progress, DaemonJson.Camel)),
@@ -129,7 +129,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         }
 
                         using var tokenResponse = await _http.PostAsJsonAsync(
-                            $"/v1/commands/{command.Id:D}/harness-token",
+                            ApiRoutes.CommandHarnessToken(command.Id),
                             new HarnessTokenRequest(command.Generation),
                             ct);
                         if (!tokenResponse.IsSuccessStatusCode)
@@ -303,7 +303,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, null, "Eval requires taskId and evalRunId.");
 
             using var tokenResponse = await _http.PostAsJsonAsync(
-                $"/v1/commands/{command.Id:D}/harness-token",
+                ApiRoutes.CommandHarnessToken(command.Id),
                 new HarnessTokenRequest(command.Generation),
                 ct);
             if (!tokenResponse.IsSuccessStatusCode)
@@ -431,7 +431,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         await using var sessionWorktree = createdWorktree.Workspace;
 
         using var tokenResponse = await _http.PostAsJsonAsync(
-            $"/v1/commands/{command.Id:D}/harness-token",
+            ApiRoutes.CommandHarnessToken(command.Id),
             new HarnessTokenRequest(command.Generation),
             ct);
         if (!tokenResponse.IsSuccessStatusCode)
@@ -594,7 +594,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             }, DaemonJson.Camel);
 
             using var response = await _http.PostAsJsonAsync(
-                $"/v1/commands/{command.Id:D}/progress",
+                ApiRoutes.CommandProgress(command.Id),
                 new CommandProgressRequest(command.Generation, snapshot),
                 tokenCt);
             if (!response.IsSuccessStatusCode)

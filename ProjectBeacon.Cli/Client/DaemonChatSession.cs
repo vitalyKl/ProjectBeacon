@@ -526,8 +526,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         try
         {
             using var response = await _http.PostAsJsonAsync(
-                $"/v1/commands/{authorization.CommandId:D}/progress",
-                new { generation = authorization.Generation, progressJson },
+                ApiRoutes.CommandProgress(authorization.CommandId),
+                new CommandProgressRequest(authorization.Generation, progressJson),
                 ct);
             if (!response.IsSuccessStatusCode)
                 _state.Log($"chat command progress report returned HTTP {(int)response.StatusCode}");
