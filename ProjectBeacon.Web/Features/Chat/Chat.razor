@@ -180,7 +180,7 @@ else
             {
                 var chosen = registry.Value.Backends.FirstOrDefault(b => b.Id == backendId);
                 if (chosen is not null)
-                    _model = OpencodePayload.OpenCodeId(chosen);
+                    _model = ChatModelSelection.ResolveBackendModelId(chosen.BackendType, chosen.Name, chosen.ProviderModelId);
             }
         }
         await LoadProxyStatus();
@@ -405,7 +405,7 @@ else
 
     private LocalModelBackendDto? SelectedBackend =>
         _models.FirstOrDefault(backend =>
-            string.Equals(OpencodePayload.OpenCodeId(backend), _model, StringComparison.Ordinal));
+            string.Equals(ChatModelSelection.ResolveBackendModelId(backend.BackendType, backend.Name, backend.ProviderModelId), _model, StringComparison.Ordinal));
 
     private string? SelectedBackendName => SelectedBackend?.Name;
 
