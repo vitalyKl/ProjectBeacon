@@ -114,6 +114,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         Assert.False(registered.Success);
         Assert.Equal("Email does not match invite.", registered.Error);
         Assert.Equal(ErrorCodes.InviteEmailMismatch, registered.ErrorCode);
+        Assert.Equal(ErrorKind.Forbidden, registered.Kind);
     }
 
     [Fact]

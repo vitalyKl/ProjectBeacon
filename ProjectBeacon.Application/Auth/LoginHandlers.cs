@@ -125,7 +125,7 @@ public class RegisterHandler
                 return Result.Failure<RegisterResponse>("Invite not found.");
             var inviteEmail = orgInvite?.Email ?? projectInvite!.Email;
             if (!string.Equals(inviteEmail, email, StringComparison.Ordinal))
-                return Result.Failure<RegisterResponse>("Email does not match invite.", ErrorCodes.InviteEmailMismatch);
+                return Result.Failure<RegisterResponse>("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
             if (orgInvite is not null && (orgInvite.Status != Domain.Enums.InviteStatus.Pending || orgInvite.ExpiredAt < DateTime.UtcNow))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             if (projectInvite is not null && (projectInvite.Status != Domain.Enums.InviteStatus.Pending || projectInvite.ExpiredAt < DateTime.UtcNow))
