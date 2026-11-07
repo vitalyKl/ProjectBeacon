@@ -25,7 +25,7 @@ public sealed class PipelineActivityV1Tests
     {
         Assert.Throws<JsonException>(() => PipelineActivityV1.Parse("""{"version":2}"""));
         Assert.Throws<JsonException>(() => PipelineActivityV1.Parse("[]"));
-        Assert.Throws<JsonException>(() => PipelineActivityV1.Parse("{"));
+        Assert.ThrowsAny<JsonException>(() => PipelineActivityV1.Parse("{"));
     }
 
     [Fact]
