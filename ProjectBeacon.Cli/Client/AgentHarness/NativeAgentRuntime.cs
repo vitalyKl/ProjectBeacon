@@ -1954,7 +1954,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             return new ResolvedProvider("beacon-local", $"http://127.0.0.1:{port}/v1", null, modelId, true);
         }
 
-        using var response = await _controlPlane.GetAsync("/v1/devices/me/opencode-connections", ct);
+        using var response = await _controlPlane.GetAsync("/v1/devices/me/provider-connections", ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Could not load provider connections (HTTP {(int)response.StatusCode}).");
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
