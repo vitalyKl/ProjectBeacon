@@ -386,7 +386,7 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Planner)
         {
-            if (TaskWorkspaceToolForRequest(segments, method) is { } plannerWorkspaceTool
+            if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } plannerWorkspaceTool
                 && (plannerWorkspaceTool != McpToolNames.WorkspaceWrite || method == HttpMethods.Post))
                 return true;
 
@@ -437,7 +437,7 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Review)
         {
-            if (TaskWorkspaceToolForRequest(segments, method) is { } reviewWorkspaceTool
+            if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } reviewWorkspaceTool
                 && reviewWorkspaceTool != McpToolNames.WorkspaceWrite)
                 return true;
 
