@@ -12,7 +12,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-/// OpenCode connection save/read against v1 (legacy-keyed) and v2 (current-key) ciphertexts.
+/// Provider connection save/read against legacy and current ciphertexts.
 /// </summary>
 public sealed class AgentProviderConnectionKeyTests : IDisposable
 {
