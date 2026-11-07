@@ -20,12 +20,20 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/pipeline", _taskId, _subtaskId));
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/pipeline", _taskId, _subtaskId));
-        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
-            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace/report%2Fabc", _taskId, _subtaskId));
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
-            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace/report%2Fabc", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceRead]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceWrite]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, resultPath, _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
@@ -187,7 +195,8 @@ public sealed class HarnessApiAuthorizationTests
         string method,
         string path,
         Guid? taskId = null,
-        Guid? subtaskId = null)
+        Guid? subtaskId = null,
+        IReadOnlyList<string>? allowedMcpTools = null)
         => ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             commandKind,
             role,
@@ -195,5 +204,6 @@ public sealed class HarnessApiAuthorizationTests
             taskId,
             subtaskId,
             method,
-            path);
+            path,
+            allowedMcpTools: allowedMcpTools);
 }

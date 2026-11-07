@@ -200,7 +200,8 @@ public sealed class ApiTokenAuthMiddleware
             context.Request.Path.Value,
             launchSessionTaskId,
             launchSessionRole,
-            launchSessionStatus);
+            launchSessionStatus,
+            scope.AllowedMcpTools);
         if (!allowed)
             return false;
 
@@ -282,20 +283,23 @@ public sealed class ApiTokenAuthMiddleware
                 {
                     if (pipeline.SubtaskId is not { } actorSubtaskId)
                         return null;
-                    var subtaskExists = await db.Subtasks.IgnoreQueryFilters()
-                        .AnyAsync(s => s.Id == actorSubtaskId
+                    var actorSubtask = await db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Id == actorSubtaskId
                             && s.TaskId == pipeline.TaskId
                             && s.ProjectId == projectId
                             && s.Status == SubtaskStatus.InProgress, ct);
-                    if (!subtaskExists)
+                    if (actorSubtask is null)
                         return null;
+                    return new HarnessCommandScope(
+                        kind, projectId, pipeline.TaskId, pipeline.SessionId,
+                        pipeline.Role, pipeline.SubtaskId, actorSubtask.AllowedMcpTools);
                 }
                 else if (pipeline.SubtaskId is not null)
                 {
                     return null;
                 }
 
-                return new HarnessCommandScope(kind, projectId, pipeline.TaskId, pipeline.SessionId, pipeline.Role, pipeline.SubtaskId);
+                return new HarnessCommandScope(kind, projectId, pipeline.TaskId, pipeline.SessionId, pipeline.Role, pipeline.SubtaskId, []);
             }
 
             if (kind == WorkstationCommandKind.RunEvalTurn)
@@ -337,7 +341,8 @@ public sealed class ApiTokenAuthMiddleware
         string? path,
         Guid? launchSessionTaskId = null,
         PipelineRole? launchSessionRole = null,
-        SessionStatus? launchSessionStatus = null)
+        SessionStatus? launchSessionStatus = null,
+        IReadOnlyList<string>? allowedMcpTools = null)
     {
         if (projectId == Guid.Empty || string.IsNullOrWhiteSpace(path))
             return false;
@@ -366,8 +371,8 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[3] == "pipeline")
                 return true;
 
-            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: true))
-                return true;
+            if (TaskWorkspaceToolForRequest(segments, method) is { } workspaceTool)
+                return IsMcpToolGranted(allowedMcpTools, workspaceTool);
 
             return method == HttpMethods.Post
                 && segments.Length == 6
@@ -381,7 +386,8 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Planner)
         {
-            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: true))
+            if (TaskWorkspaceToolForRequest(segments, method) is { } plannerWorkspaceTool
+                && (plannerWorkspaceTool != McpToolNames.WorkspaceWrite || method == HttpMethods.Post))
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
@@ -431,7 +437,8 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Review)
         {
-            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: false))
+            if (TaskWorkspaceToolForRequest(segments, method) is { } reviewWorkspaceTool
+                && reviewWorkspaceTool != McpToolNames.WorkspaceWrite)
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
@@ -448,19 +455,27 @@ public sealed class ApiTokenAuthMiddleware
         return false;
     }
 
-    private static bool IsTaskWorkspaceRequest(string[] segments, Guid taskId, string method, bool allowWrite)
+    private static string? TaskWorkspaceToolForRequest(string[] segments, string method)
     {
-        var taskWorkspaceRoute = segments.Length >= 4
-            && segments[0] == "v1"
-            && segments[1] == "tasks"
-            && GuidSegmentEquals(segments, 2, taskId)
-            && segments[3] == "workspace";
-        if (!taskWorkspaceRoute)
-            return false;
+        if (segments.Length < 4 || segments[0] != "v1"
+            || segments[1] != "tasks" || !Guid.TryParse(segments[2], out _)
+            || segments[3] != "workspace")
+            return null;
 
         if (method == HttpMethods.Get)
-            return segments.Length == 4 || segments.Length >= 5;
-        return allowWrite && method == HttpMethods.Post && segments.Length == 4;
+            return segments.Length == 4 ? McpToolNames.WorkspaceIndex
+                : segments.Length >= 5 ? McpToolNames.WorkspaceRead : null;
+        return method == HttpMethods.Post && segments.Length == 4
+            ? McpToolNames.WorkspaceWrite : null;
+    }
+
+    private static bool IsMcpToolGranted(IReadOnlyList<string>? grants, string tool)
+    {
+        if (grants is null || !McpToolCatalog.TryGet(tool, out var descriptor))
+            return false;
+        return grants.Any(grant =>
+            string.Equals(grant, tool, StringComparison.OrdinalIgnoreCase)
+            || descriptor!.Aliases.Any(alias => string.Equals(grant, alias, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool IsReadOnlyProjectRequest(
