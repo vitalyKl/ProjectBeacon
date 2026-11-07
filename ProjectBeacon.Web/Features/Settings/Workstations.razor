@@ -115,8 +115,9 @@
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
             }
+            <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @L["AgentRuntimeNative"]</MudText>
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
-            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_agentDataDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
             <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
                     <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
@@ -129,7 +130,6 @@
         </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @_probeOpencode</MudText>
         <MudText Typo="Typo.body2">@L["ProbeNode"]: @_probeNode</MudText>
         <MudText Typo="Typo.body2">@L["ProbeDocker"]: @_probeDocker</MudText>
         <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @_probeLlamaSwap</MudText>
