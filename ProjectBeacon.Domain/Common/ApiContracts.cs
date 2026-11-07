@@ -8,7 +8,7 @@ public static class ApiRoutes
     public const string CommandCompleteRoute = "/v1/commands/{id:guid}/complete";
     public const string CommandProgressRoute = "/v1/commands/{id:guid}/progress";
     public const string CommandHarnessTokenRoute = "/v1/commands/{id:guid}/harness-token";
-    public const string DeviceAgentProviderConnections = "/v1/devices/me/provider-connections";
+    public const string DeviceProviderConnections = "/v1/devices/me/provider-connections";
     public const string ChatSessionPartsRoute = "/v1/chat/sessions/{id:guid}/parts";
     public const string ChatSessionIdleRoute = "/v1/chat/sessions/{id:guid}/idle";
     public const string ChatSessionUsageRoute = "/v1/chat/sessions/{id:guid}/usage";
