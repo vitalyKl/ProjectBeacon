@@ -17,7 +17,8 @@ public sealed class DaemonCommandLoopConcurrencyTests
         var executor = new BlockingPromptExecutor();
         var state = new DaemonRuntimeState("http://localhost", null);
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.Delay(1, ct) };
-        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, null!, () => new WorkstationSettings(),
+            _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused concurrency test runtime"));
         var loop = new DaemonCommandLoop(deps, executor, state, timing);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
