@@ -265,54 +265,60 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             return Result.Failure<PipelineStateDto>($"Failure reason exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the reason and retry.");
 
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineStateDto>("Task not found.");
-        var subtask = await db.Subtasks.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
-        if (subtask is null)
-            return Result.Failure<PipelineStateDto>("Subtask not found.");
-        if (subtask.Status == SubtaskStatus.Done)
-            return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
-        if (subtask.Status == SubtaskStatus.Failed)
-        {
-            await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(db, task.ProjectId, task.Id, subtask.Id, ct);
-            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
-        }
-
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-        {
-            try { task.EnterExecuting(); }
-            catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
-            var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
-            if (entered == 0)
-                return Result.Failure<PipelineStateDto>("Pipeline state changed while failing; retry.");
-        }
 
-        var expectedStatus = subtask.Status;
-        subtask.ForceFail(reason);
-        var failed = await db.Subtasks
-            .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(s => s.Status, subtask.Status)
-                .SetProperty(s => s.Summary, subtask.Summary)
-                .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
-        if (failed == 0)
-            return Result.Failure<PipelineStateDto>("Subtask state changed while failing; retry.");
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
 
-        var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
-        var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
-        db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-            task.Id, task.ProjectId, subtask.Id, reason, command.Request.Abstract, actorSession?.Id));
-        await db.SaveChangesAsync(ct);
-        await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(db, task.ProjectId, task.Id, subtask.Id, ct);
-        await transaction.CommitAsync(ct);
-        return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+            var subtask = await db.Subtasks.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
+            if (subtask is null)
+                return Result.Failure<PipelineStateDto>("Subtask not found.");
+            if (subtask.Status == SubtaskStatus.Done)
+                return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
+            if (subtask.Status == SubtaskStatus.Failed)
+            {
+                await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
+                    db, task.ProjectId, task.Id, subtask.Id, ct);
+                await transaction.CommitAsync(ct);
+                return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+            }
+
+            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
+            {
+                try { task.EnterExecuting(); }
+                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
+                var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
+                if (entered == 0)
+                    return Result.Failure<PipelineStateDto>("Pipeline state changed while failing; retry.");
+            }
+
+            var expectedStatus = subtask.Status;
+            subtask.ForceFail(reason);
+            var failed = await db.Subtasks
+                .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(s => s.Status, subtask.Status)
+                    .SetProperty(s => s.Summary, subtask.Summary)
+                    .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
+            if (failed == 0)
+                return Result.Failure<PipelineStateDto>("Subtask state changed while failing; retry.");
+
+            var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
+            var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
+            db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
+                task.Id, task.ProjectId, subtask.Id, reason, command.Request.Abstract, actorSession?.Id));
+            await db.SaveChangesAsync(ct);
+            await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
+                db, task.ProjectId, task.Id, subtask.Id, ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
         });
     }
 }
