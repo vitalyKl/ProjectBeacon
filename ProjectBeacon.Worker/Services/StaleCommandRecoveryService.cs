@@ -32,7 +32,7 @@ public sealed class StaleCommandRecoveryService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(Interval, _timeProvider);
         do
         {
             try
