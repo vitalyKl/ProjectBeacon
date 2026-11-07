@@ -58,7 +58,7 @@ public sealed class TaskWorkspaceHandlerTests : IDisposable
         Assert.Equal(2, section.Revision);
 
         var read = await new WorkspaceReadHandler(factory).HandleAsync(new WorkspaceReadQuery(
-            new WorkspaceReadRequest(task.Id, "plan/overview", Offset: 5, Limit: 12)));
+            new WorkspaceReadRequest(task.Id, "plan/overview", Offset: 3, Limit: 12)));
         Assert.True(read.Success, read.Error);
         Assert.Equal("Inspect the ", read.Value!.Content);
     }
