@@ -119,6 +119,14 @@
                              Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
+                        <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
+                <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
+                    <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
+                    <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
+                    <MudTextField @bind-Value="_llamaCppBin" InputId="llamacpp-bin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
                 </div>
             </MudTabPanel>
             <MudTabPanel Text="@L["Probe"]">
@@ -131,16 +139,6 @@
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
             }
-                        <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
-                <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
-                    <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
-                    <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
-                    <MudTextField @bind-Value="_llamaCppBin" InputId="llamacpp-bin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
-                </MudExpansionPanel>
-            </MudExpansionPanels>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
-            <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
-        </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @(_probeGit ?? "-")</MudText>
         <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @(_probeOpencode ?? "-")</MudText>
