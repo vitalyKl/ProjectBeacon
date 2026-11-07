@@ -63,10 +63,11 @@ internal static class ModelBackendMappers
 
     public static AgentTemplateDto ToDto(AgentTemplate template) =>
         new(template.Id, template.Name, template.Mode, template.SoloBackendId,
-            template.PlannerBackendId, template.ActorBackendId, template.ReviewBackendId);
+            template.PlannerBackendId, template.ActorBackendId, template.ReviewBackendId,
+            template.PlannerInstructions, template.ActorInstructions, template.ReviewInstructions);
 
     public static RoleBindingDto ToDto(RoleBinding binding) =>
-        new(binding.Id, binding.Role, binding.ModelBackendId, binding.ProjectId);
+        new(binding.Id, binding.Role, binding.ModelBackendId, binding.ProjectId, binding.ProfileInstructions);
 }
 /// <summary>
 /// Creates or updates a user-owned model backend. Name is required and at most 200 characters. LlamaCpp requires a launch command. Context size and TTL must be non-negative.
@@ -188,6 +189,9 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
         if (!access.Success)
             return Result.Forbidden<RoleBindingDto>();
 
+        if (command.Request.ProfileInstructions is { Length: > 8000 })
+            return Result.Failure<RoleBindingDto>("Role profile instructions cannot exceed 8000 characters.");
+
         var backendOwner = await db.LocalModelBackends
             .Where(b => b.Id == command.Request.ModelBackendId)
             .Select(b => (Guid?)b.UserId)
@@ -202,12 +206,15 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
         if (binding is null)
         {
-            binding = RoleBinding.Create(command.Request.Role, command.Request.ModelBackendId, projectId);
+            binding = RoleBinding.Create(command.Request.Role, command.Request.ModelBackendId, projectId,
+                command.Request.ProfileInstructions);
             db.RoleBindings.Add(binding);
         }
         else
         {
             binding.ChangeBackend(command.Request.ModelBackendId);
+            if (command.Request.ProfileInstructions is not null)
+                binding.ChangeProfileInstructions(command.Request.ProfileInstructions);
         }
 
         await DesiredState.BumpProjectAsync(db, projectId, ct);
@@ -305,6 +312,11 @@ public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplate
         if (name.Length == 0 || name.Length > 200)
             return Result.Failure<AgentTemplateDto>("Name is required (max 200 characters).");
 
+        if ((request.PlannerInstructions?.Length ?? 0) > 8000
+            || (request.ActorInstructions?.Length ?? 0) > 8000
+            || (request.ReviewInstructions?.Length ?? 0) > 8000)
+            return Result.Failure<AgentTemplateDto>("Role profile instructions cannot exceed 8000 characters.");
+
         await using var db = _dbFactory.CreateDbContext();
         var ids = new[] { request.SoloBackendId, request.PlannerBackendId, request.ActorBackendId, request.ReviewBackendId }
             .Where(id => id is not null)
@@ -323,12 +335,14 @@ public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplate
             var existing = await db.AgentTemplates.FirstOrDefaultAsync(t => t.Id == id && t.UserId == request.UserId, ct);
             if (existing is null)
                 return Result.Failure<AgentTemplateDto>("Template not found.");
-            existing.Update(name, request.Mode, request.SoloBackendId, request.PlannerBackendId, request.ActorBackendId, request.ReviewBackendId);
+            existing.Update(name, request.Mode, request.SoloBackendId, request.PlannerBackendId, request.ActorBackendId, request.ReviewBackendId,
+                request.PlannerInstructions, request.ActorInstructions, request.ReviewInstructions);
             await db.SaveChangesAsync(ct);
             return Result.Ok(ModelBackendMappers.ToDto(existing));
         }
 
-        var created = AgentTemplate.Create(request.UserId, name, request.Mode, request.SoloBackendId, request.PlannerBackendId, request.ActorBackendId, request.ReviewBackendId);
+        var created = AgentTemplate.Create(request.UserId, name, request.Mode, request.SoloBackendId, request.PlannerBackendId, request.ActorBackendId, request.ReviewBackendId,
+            request.PlannerInstructions, request.ActorInstructions, request.ReviewInstructions);
         db.AgentTemplates.Add(created);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(created));

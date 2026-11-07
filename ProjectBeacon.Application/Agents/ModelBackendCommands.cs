@@ -27,7 +27,8 @@ public record RoleBindingDto(
     Guid Id,
     PipelineRole Role,
     Guid ModelBackendId,
-    Guid ProjectId);
+    Guid ProjectId,
+    string ProfileInstructions = "");
 /// <summary>
 /// A saved solo, planner, actor, and review backend selection.
 /// </summary>
@@ -38,7 +39,10 @@ public record AgentTemplateDto(
     Guid? SoloBackendId,
     Guid? PlannerBackendId,
     Guid? ActorBackendId,
-    Guid? ReviewBackendId);
+    Guid? ReviewBackendId,
+    string PlannerInstructions = "",
+    string ActorInstructions = "",
+    string ReviewInstructions = "");
 /// <summary>
 /// The user's backends and templates plus the current project's role bindings.
 /// </summary>
@@ -77,7 +81,7 @@ public record DeleteLocalModelBackendCommand(DeleteLocalModelBackendRequest Requ
 /// <summary>
 /// Fields for set role binding.
 /// </summary>
-public record SetRoleBindingRequest(PipelineRole Role, Guid ModelBackendId);
+public record SetRoleBindingRequest(PipelineRole Role, Guid ModelBackendId, string? ProfileInstructions = null);
 /// <summary>
 /// Command for set role binding.
 /// </summary>
@@ -111,7 +115,10 @@ public record SaveAgentTemplateRequest(
     Guid? SoloBackendId,
     Guid? PlannerBackendId,
     Guid? ActorBackendId,
-    Guid? ReviewBackendId);
+    Guid? ReviewBackendId,
+    string? PlannerInstructions = null,
+    string? ActorInstructions = null,
+    string? ReviewInstructions = null);
 /// <summary>
 /// Command for save agent template.
 /// </summary>
