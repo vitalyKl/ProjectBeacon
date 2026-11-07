@@ -68,6 +68,7 @@ else
         <div class="beacon-chat-mobile-session-bar">
             <select class="beacon-chat-mobile-session-select"
                     aria-label="@L["Chat"]"
+                    title="@(_selected?.Title ?? L["Chat"].Value)"
                     value="@(_selected?.Id.ToString() ?? string.Empty)"
                     disabled="@(_sessions.Count == 0)"
                     @onchange="OnMobileSessionChanged">

@@ -14,7 +14,7 @@
 {
     <div class="beacon-chat-session-head">
         <div class="beacon-chat-session-title">
-            <strong>@Session.Title</strong>
+            <strong title="@Session.Title">@Session.Title</strong>
             @if (!string.IsNullOrEmpty(Phase))
             {
                 <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
@@ -39,7 +39,7 @@
         <div class="beacon-chat-question-tabs d-flex flex-wrap gap-1">
             @foreach (var q in _pendingQuestions)
             {
-                <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)">@q.Title</MudButton>
+                <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)" title="@q.Title">@q.Title</MudButton>
             }
         </div>
     }
@@ -62,7 +62,7 @@
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
                        Class="beacon-chat-config-button" OnClick="ConfigureModel" Disabled="@Busy"
-                       title="@L["ChatModelSettings"].Value">
+                       title="@ModelSummary">
                 @ModelSummary
             </MudButton>
             <MudButton Variant="Variant.Text" Size="Size.Small" Class="beacon-chat-mode-toggle"
@@ -76,7 +76,7 @@
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Info" Class="beacon-chat-model-progress" />
             }
-            <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
+            <MudText Typo="Typo.caption" Class="beacon-chat-model-status" title="@ModelStatusLabel">@ModelStatusLabel</MudText>
         }
         @if (UsageLabel is { } usage)
         {

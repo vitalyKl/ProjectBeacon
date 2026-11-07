@@ -106,7 +106,7 @@ else
                         <a class="beacon-attention-item" href="@item.Href">
                             <span class="beacon-severity @item.Tone"></span>
                             <span>
-                                <strong>@item.Title</strong>
+                                <strong title="@item.Title">@item.Title</strong>
                                 <span>@item.Detail</span>
                             </span>
                         </a>
@@ -143,7 +143,7 @@ else
                         <div class="beacon-health-row">
                             <span class="beacon-node-dot @(device.Online ? "" : "is-offline")"></span>
                             <span>
-                                <strong>@device.Name</strong>
+                                <strong title="@device.Name">@device.Name</strong>
                                 <span>@(device.Online ? L["DeviceOnline"] : L["RuntimeOffline"])</span>
                             </span>
                             @if (LatestFor(device.Id)?.CpuPercent is { } cpu)
