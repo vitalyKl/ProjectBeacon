@@ -129,58 +129,58 @@
 <data name="ChatModelHint" xml:space="preserve">
     <value>消息未指定其他模型时，应用聊天会使用它。保存后会通知正在运行的客户端刷新代理运行时。</value>
   </data>
-<data name="OpenCodeModel" xml:space="preserve">
+<data name="AgentProviderModel" xml:space="preserve">
     <value>代理模型</value>
   </data>
-<data name="OpenCodeModelHint" xml:space="preserve">
-    <value>OpenCode 已知的提供方和模型，例如 xai/grok-3。已保存的连接可以提供密钥；否则请在这台机器上执行 opencode auth login。</value>
+<data name="AgentProviderModelHint" xml:space="preserve">
+    <value>AgentProvider 已知的提供方和模型，例如 xai/grok-3。已保存的连接可以提供密钥；否则请在这台机器上执行 native agent runtime auth login。</value>
   </data>
-<data name="OpenCodeConnections" xml:space="preserve">
+<data name="AgentProviderConnections" xml:space="preserve">
     <value>模型连接</value>
   </data>
-<data name="OpenCodeConnectionsLead" xml:space="preserve">
-    <value>告诉 OpenCode 使用哪个在线模型。本地 llama.cpp 模型在 Agents 中单独添加。</value>
+<data name="AgentProviderConnectionsLead" xml:space="preserve">
+    <value>告诉 AgentProvider 使用哪个在线模型。本地 llama.cpp 模型在 Agents 中单独添加。</value>
   </data>
-<data name="OpenCodeStepPick" xml:space="preserve">
+<data name="AgentProviderStepPick" xml:space="preserve">
     <value>选择服务，或自己输入 provider/model。</value>
   </data>
-<data name="OpenCodeStepKey" xml:space="preserve">
+<data name="AgentProviderStepKey" xml:space="preserve">
     <value>仅在尚未于该计算机登录时粘贴 API 密钥。</value>
   </data>
-<data name="OpenCodeStepSave" xml:space="preserve">
-    <value>保存。正在运行的 beacon client 会更新并重启 OpenCode。</value>
+<data name="AgentProviderStepSave" xml:space="preserve">
+    <value>保存。正在运行的 beacon client 会更新并重启 AgentProvider。</value>
   </data>
-<data name="OpenCodeOwnServer" xml:space="preserve">
+<data name="AgentProviderOwnServer" xml:space="preserve">
     <value>自有服务器</value>
   </data>
-<data name="OpenCodeOnePerService" xml:space="preserve">
+<data name="AgentProviderOnePerService" xml:space="preserve">
     <value>每个服务只保留一个模型。再次保存会替换该模型。</value>
   </data>
-<data name="OpenCodeModelExample" xml:space="preserve">
+<data name="AgentProviderModelExample" xml:space="preserve">
     <value>写成 provider/model，例如 xai/grok-3。</value>
   </data>
-<data name="OpenCodeBaseUrlHint" xml:space="preserve">
+<data name="AgentProviderBaseUrlHint" xml:space="preserve">
     <value>你自己的 OpenAI 兼容服务器地址。</value>
   </data>
-<data name="OpenCodeKeySaved" xml:space="preserve">
+<data name="AgentProviderKeySaved" xml:space="preserve">
     <value>密钥已保存</value>
   </data>
-<data name="OpenCodeProvider" xml:space="preserve">
+<data name="AgentProviderProvider" xml:space="preserve">
     <value>提供方</value>
   </data>
-<data name="OpenCodeBaseUrl" xml:space="preserve">
+<data name="AgentProviderBaseUrl" xml:space="preserve">
     <value>基础 URL</value>
   </data>
-<data name="OpenCodeApiKey" xml:space="preserve">
+<data name="AgentProviderApiKey" xml:space="preserve">
     <value>API 密钥</value>
   </data>
-<data name="OpenCodeApiKeyHint" xml:space="preserve">
+<data name="AgentProviderApiKeyHint" xml:space="preserve">
     <value>可选。如果这台计算机已经登录，或要保留先前保存的密钥，请留空。</value>
   </data>
-<data name="OpenCodeConnectionSaved" xml:space="preserve">
-    <value>已保存。如果 beacon client 正在运行，它会立即更新 OpenCode。</value>
+<data name="AgentProviderConnectionSaved" xml:space="preserve">
+    <value>已保存。如果 beacon client 正在运行，它会立即更新 AgentProvider。</value>
   </data>
-<data name="NoOpenCodeConnections" xml:space="preserve">
+<data name="NoAgentProviderConnections" xml:space="preserve">
     <value>还没有连接。</value>
   </data>
 <data name="DangerZone" xml:space="preserve">
@@ -1243,7 +1243,7 @@
     <value>浏览</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>在设备上初始化（.gitignore、opencode.json）</value>
+    <value>在设备上初始化（.gitignore、native agent runtime.json）</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>向上</value>
@@ -1294,7 +1294,7 @@
     <value>llama-server 程序</value>
   </data>
 <data name="HistoryDir" xml:space="preserve">
-    <value>OpenCode 历史目录</value>
+    <value>AgentProvider 历史目录</value>
   </data>
 <data name="ProjectsRoot" xml:space="preserve">
     <value>项目根目录</value>
@@ -1372,7 +1372,7 @@
     <value>git</value>
   </data>
 <data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
+    <value>native agent runtime</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1480,7 +1480,7 @@
     <value>规划工作、分配任务并协调代理阶段。人工审查、流水线状态和结果始终清晰可见。</value>
   </data>
 <data name="LandingHow3" xml:space="preserve">
-    <value>工作站客户端运行 Native harness 或 OpenCode，连接模型并调用本地 MCP 工具。服务器不会执行你的代码。</value>
+    <value>工作站客户端运行 Native harness 或 AgentProvider，连接模型并调用本地 MCP 工具。服务器不会执行你的代码。</value>
   </data>
 <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>包含的内容</value>
@@ -1495,7 +1495,7 @@
     <value>决策带有后果，代理才有理由遵守它们。</value>
   </data>
 <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>一次配置用户级代理、模型后端和任务角色。可使用 Native harness 或 OpenCode。</value>
+    <value>一次配置用户级代理、模型后端和任务角色。可使用 Native harness 或 AgentProvider。</value>
   </data>
 <data name="LandingFeatureDevices" xml:space="preserve">
     <value>工作站客户端通过出站 HTTPS 连接。代理执行、本地模型和工作区访问都留在你的机器上。</value>
@@ -1559,7 +1559,7 @@
     <value>ProjectBeacon 会在云端运行代理吗？</value>
   </data>
 <data name="LandingFaq1A" xml:space="preserve">
-    <value>不会。代理执行循环通过 beacon client 在你的工作站运行。你可以选择 Native harness 或 OpenCode。Web/API/Worker 服务负责协调工作，不会运行你的模型或执行工作区代码。</value>
+    <value>不会。代理执行循环通过 beacon client 在你的工作站运行。你可以选择 Native harness 或 AgentProvider。Web/API/Worker 服务负责协调工作，不会运行你的模型或执行工作区代码。</value>
   </data>
 <data name="LandingFaq2Q" xml:space="preserve">
     <value>我的模型在哪里运行，代码存放在哪里？</value>
@@ -1577,7 +1577,7 @@
     <value>必须使用 Native harness 吗？</value>
   </data>
 <data name="LandingFaq4A" xml:space="preserve">
-    <value>不必。OpenCode 仍然受支持。你可以为工作站选择运行时；Native harness 是一种本地执行模型/工具循环并复用 ProjectBeacon 现有 MCP 工具的替代方案。</value>
+    <value>不必。AgentProvider 仍然受支持。你可以为工作站选择运行时；Native harness 是一种本地执行模型/工具循环并复用 ProjectBeacon 现有 MCP 工具的替代方案。</value>
   </data>
 <data name="LandingFaq5Q" xml:space="preserve">
     <value>ProjectBeacon 是托管 SaaS 吗？</value>
@@ -1619,7 +1619,7 @@
     <value>现在可以跳过文件夹，以后在仪表板上再附加。</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>把 .gitignore 和 opencode.json 写入工作站上的该文件夹。</value>
+    <value>把 .gitignore 和 native agent runtime.json 写入工作站上的该文件夹。</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>项目文件夹</value>
@@ -2081,8 +2081,8 @@ orthstar</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>代理运行时</value>
   </data>
-<data name="AgentRuntimeOpenCode" xml:space="preserve">
-    <value>OpenCode（默认）</value>
+<data name="AgentRuntimeAgentProvider" xml:space="preserve">
+    <value>AgentProvider（默认）</value>
   </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
     <value>原生代理执行框架（实验性）</value>
@@ -2115,7 +2115,7 @@ orthstar</value>
 <data name="LandingTaskContext" xml:space="preserve"><value>上下文简报 · 项目规则</value></data>
 <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
 <data name="LandingRuntimeTitle" xml:space="preserve"><value>代理运行环境</value></data>
-<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness 或 OpenCode · 本地或云端模型</value></data>
+<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness 或 AgentProvider · 本地或云端模型</value></data>
 <data name="LandingVisualCaption" xml:space="preserve"><value>在一个地方管理完整工作流</value></data>
 <data name="LandingPrinciplesTitle" xml:space="preserve"><value>产品原则</value></data>
 <data name="LandingPrincipleLocal" xml:space="preserve"><value>在你的工作站运行</value></data>
@@ -2136,16 +2136,16 @@ orthstar</value>
 <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>你的工作站</value></data>
 <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · 运行时选择 · 模型连接</value></data>
 <data name="LandingArchitectureRuntime" xml:space="preserve"><value>本地代理运行环境</value></data>
-<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness 或 OpenCode · MCP stdio · 工作区</value></data>
+<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness 或 AgentProvider · MCP stdio · 工作区</value></data>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>掌控你的 AI 工作流</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>启动自己的 ProjectBeacon 主机并连接工作站。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>面向 AI 辅助开发的本地优先控制平面</value></data>
 
   <data name="AgentModeHint" xml:space="preserve">
-    <value>用于设置工作站交互式聊天所使用的 OpenCode 配置。任务流水线的默认模型请在“任务类型”中单独配置。</value>
+    <value>用于设置工作站交互式聊天所使用的 AgentProvider 配置。任务流水线的默认模型请在“任务类型”中单独配置。</value>
   </data>
   <data name="AgentTemplateModelsScopeHint" xml:space="preserve">
-    <value>这些是工作站级别的角色默认设置和 OpenCode 配置。只有当任务的相应阶段未指定专用模型时，流水线会话才会使用这些角色绑定。</value>
+    <value>这些是工作站级别的角色默认设置和 AgentProvider 配置。只有当任务的相应阶段未指定专用模型时，流水线会话才会使用这些角色绑定。</value>
   </data>
   <data name="PipelineStartHint" xml:space="preserve">
     <value>启动 Planner 分析此任务并准备执行计划。</value>
