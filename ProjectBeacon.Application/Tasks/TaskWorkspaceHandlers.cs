@@ -235,12 +235,15 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
             || !string.Equals(section.AuthorId, authorId, StringComparison.Ordinal))
             return false;
 
-        if (command.PipelineSubtaskId is { } subtaskId)
-            return section.AuthorSubtaskId == subtaskId;
-        if (command.PipelineSessionId is { } sessionId)
-            return section.AuthorSessionId == sessionId;
+        if (command.PipelineSubtaskId is { } subtaskId
+            && section.AuthorSubtaskId != subtaskId)
+            return false;
+        if (command.PipelineSessionId is { } sessionId
+            && section.AuthorSessionId != sessionId)
+            return false;
 
-        return section.AuthorSubtaskId is null && section.AuthorSessionId is null;
+        return command.PipelineSubtaskId is not null || command.PipelineSessionId is not null
+            || (section.AuthorSubtaskId is null && section.AuthorSessionId is null);
     }
 
     private static bool ValidKey(string key) =>
