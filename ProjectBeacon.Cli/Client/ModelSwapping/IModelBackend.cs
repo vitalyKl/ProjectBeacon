@@ -7,7 +7,7 @@ using ProjectBeacon.Infrastructure.LlamaSwap;
 /// delegating to the external <c>llama-swap</c> binary. Implementations read a pre-parsed
 /// <see cref="LlamaSwapModelSpec"/>, never the raw YAML.
 /// </summary>
-public interface IModelBackend
+public interface IModelBackend : IDisposable
 {
     string Name { get; }
     int Endpoint { get; }
