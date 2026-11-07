@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using Application.CodeIndex;
 using Application.Mcp;
 using Domain.Common;
+using ProjectBeacon.Cli.Client;
 /// <summary>
 /// Stdio MCP server. File tools stay inside --root. Every control-plane tool goes through the authenticated /v1 API; no direct database path is available.
 /// </summary>
@@ -22,11 +23,8 @@ public static partial class McpStdioServer
     {
         var env = McpEnvironment.Process;
         var resolved = BeaconApiClient.Resolve(env);
-        Console.Error.WriteLine(resolved.Misconfigured
-            ? "beacon mcp: both BEACON_API_URL and BEACON_API_TOKEN must be set, with a valid HTTP(S) URL."
-            : resolved.Client is null
-                ? "beacon mcp: control-plane tools require BEACON_API_URL and BEACON_API_TOKEN; file tools remain available."
-                : "beacon mcp: authenticated API mode.");
+        Console.Error.WriteLine(ClientConfiguration.McpStartupDiagnostic(
+            resolved.Misconfigured, configured: resolved.Client is not null));
         return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client, env);
     }
 

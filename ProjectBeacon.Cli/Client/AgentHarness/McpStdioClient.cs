@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Cli.Client;
 
 /// <summary>
 /// Minimal MCP stdio client for the existing <c>beacon mcp</c> server. The child receives a
@@ -16,14 +17,6 @@ using ProjectBeacon.Application.Runtime;
 internal sealed class McpStdioClient : IMcpToolClient
 {
     private const int MaxToolResultCharacters = 16_000;
-    private static readonly string[] SafeInheritedEnvironment =
-    [
-        "PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
-        "TEMP", "TMP", "TMPDIR", "SystemRoot", "WINDIR",
-        "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_CLI_HOME", "DOTNET_MULTILEVEL_LOOKUP",
-        "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"
-    ];
-
     private readonly Process _process;
     private readonly SemaphoreSlim _write = new(1, 1);
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonObject>> _pending = new();
@@ -347,10 +340,9 @@ internal sealed class McpStdioClient : IMcpToolClient
         start.ArgumentList.Add("--root");
         start.ArgumentList.Add(Path.GetFullPath(workingDirectory));
 
-        var inherited = SafeInheritedEnvironment
-            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
-            .Where(pair => pair.Value is not null)
-            .ToArray();
+        var inherited = ClientConfiguration.CaptureAllowedEnvironment(
+            ClientConfiguration.McpSubprocessEnvironmentNames,
+            Environment.GetEnvironmentVariable);
         start.Environment.Clear();
         foreach (var pair in inherited)
             start.Environment[pair.Name] = pair.Value!;

@@ -55,13 +55,17 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         }
 
         // Guarded stage claim before the spawn: only takes effect while the task is still executing.
-        var claimed = await db.Tasks
-            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Executing && t.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
+        var transition = await GuardedTransition.TryAsync(
+            db.Tasks.Where(t => t.Id == task.Id),
+            t => t.PipelineStage == TaskPipelineStage.Executing && t.Status == expectedStatus,
+            t => t.PipelineStage == task.PipelineStage && t.Status == task.Status,
+            update => update
                 .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status), ct);
-        if (claimed == 0)
-            return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting review; retry.");
+                .SetProperty(t => t.Status, task.Status),
+            ct);
+        if (transition != GuardedTransitionResult.Applied)
+            return Result.Failure<PipelineSessionDto>(
+                "Pipeline state changed while starting review; retry.", ErrorKind.Conflict);
 
         SpawnedSession? spawned = null;
         Exception? spawnFailure = null;

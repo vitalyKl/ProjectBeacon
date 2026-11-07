@@ -44,13 +44,17 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         }
 
         // Guarded stage claim before the spawn: only takes effect if the pipeline is not started.
-        var claimed = await db.Tasks
-            .Where(t => t.Id == task.Id && t.PipelineStage == null && t.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
+        var transition = await GuardedTransition.TryAsync(
+            db.Tasks.Where(t => t.Id == task.Id),
+            t => t.PipelineStage == null && t.Status == expectedStatus,
+            t => t.PipelineStage == task.PipelineStage && t.Status == task.Status,
+            update => update
                 .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status), ct);
-        if (claimed == 0)
-            return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting; retry.");
+                .SetProperty(t => t.Status, task.Status),
+            ct);
+        if (transition != GuardedTransitionResult.Applied)
+            return Result.Failure<PipelineSessionDto>(
+                "Pipeline state changed while starting; retry.", ErrorKind.Conflict);
 
         SpawnedSession? spawned = null;
         Exception? spawnFailure = null;
