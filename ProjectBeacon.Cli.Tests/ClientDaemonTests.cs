@@ -290,7 +290,8 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(probeJson));
         using var probe = JsonDocument.Parse(probeJson!);
         var runtime = probe.RootElement.GetProperty("agentRuntime");
-        Assert.Equal("unavailable", runtime.GetProperty("runtime").GetString());
+        Assert.Equal("native", runtime.GetProperty("runtime").GetString());
+        Assert.False(runtime.GetProperty("available").GetBoolean());
         Assert.False(runtime.GetProperty("healthy").GetBoolean());
         Assert.Contains(badSettings, runtime.GetProperty("error").GetString());
         Assert.Contains("Delete the file", runtime.GetProperty("error").GetString());
