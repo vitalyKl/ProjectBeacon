@@ -38,7 +38,7 @@ public sealed class PipelineActivityV1Tests
 
         var merged = current.PreserveAnsweredForms(previous);
 
-        Assert.Equal(["pending", "answered"], merged.Forms.Select(form => form.Id));
+        Assert.Equal(new[] { "pending", "answered" }, merged.Forms.Select(form => form.Id));
         Assert.Equal("yes", merged.Forms[1].Answer?.GetProperty("choice").GetString());
     }
 
