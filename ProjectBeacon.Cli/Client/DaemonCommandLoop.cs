@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ProjectBeacon.Domain.Enums;
-using ProjectBeacon.Application.Devices;
+using Domain.Common;
 
 internal interface IDaemonLoop
 {
@@ -39,7 +39,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         {
             try
             {
-                var claimed = await _http.GetAsync("/v1/devices/me/commands?wait=25", ct);
+                var claimed = await _http.GetAsync(ApiRoutes.DeviceCommandsClaim, ct);
                 if (claimed.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
                 if (!claimed.IsSuccessStatusCode)
@@ -51,7 +51,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await claimed.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, ct);
                 if (command is null)
                     continue;
-                if (WorkstationCommandCatalog.Get(command.Kind).StartsControlLane)
+                if (command.Kind is WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
                     await StartPromptWithControlLaneAsync(command, ct);
                 else
                     await ProcessCommandAsync(command, ct);
@@ -151,7 +151,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             try
             {
                 using var response = await _http.GetAsync(
-                    "/v1/devices/me/commands?wait=1&controlOnly=true", pollingToken);
+                    ApiRoutes.DeviceCommandsControlClaim, pollingToken);
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
                 if (!response.IsSuccessStatusCode)
@@ -163,7 +163,9 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await response.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, pollingToken);
                 if (command is null)
                     continue;
-                if (WorkstationCommandCatalog.Get(command.Kind).Lane != WorkstationCommandLane.Control)
+                if (command.Kind is not (WorkstationCommandKind.ChatAbort
+                    or WorkstationCommandKind.ChatSwitchAgent
+                    or WorkstationCommandKind.ChatReplyForm))
                 {
                     await ProcessCommandAsync(command, executionToken, rejectUnexpectedControlCommand: true);
                     continue;
@@ -232,13 +234,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             string? transportError = null;
             try
             {
-                response = await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new
-                {
-                    success = ok,
-                    resultJson = result,
-                    error,
-                    generation = command.Generation
-                }, ct);
+                response = await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new CommandCompletionRequest(ok, result, error, command.Generation), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

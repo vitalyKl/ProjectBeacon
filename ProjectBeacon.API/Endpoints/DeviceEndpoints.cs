@@ -5,6 +5,7 @@ using ProjectBeacon.API;
 using Application.Agents;
 using Application.Devices;
 using Domain.Enums;
+using Domain.Common;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
@@ -20,11 +21,11 @@ public static class DeviceEndpoints
         app.MapPost("/v1/devices", CreateDevice).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/devices", ListDevices).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/devices/{id:guid}", RevokeDevice).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPost("/v1/devices/me/heartbeat", Heartbeat).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapGet("/v1/devices/me/commands", ClaimCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapPost("/v1/commands/{id:guid}/complete", CompleteCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapPost("/v1/commands/{id:guid}/progress", ReportCommandProgress).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapPost("/v1/commands/{id:guid}/harness-token", IssueHarnessToken).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.DeviceHeartbeatRoute, Heartbeat).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet(ApiRoutes.DeviceCommandsRoute, ClaimCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.CommandCompleteRoute, CompleteCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.CommandProgressRoute, ReportCommandProgress).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.CommandHarnessTokenRoute, IssueHarnessToken).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/devices/{id:guid}/commands", EnqueueCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/commands/{id:guid}", GetCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/runtimes", ListRuntimes).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -32,7 +33,7 @@ public static class DeviceEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapGet("/v1/devices/me/opencode-connections", GetOpenCodeConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet(ApiRoutes.DeviceOpenCodeConnections, GetOpenCodeConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
     /// <summary>
@@ -42,7 +43,6 @@ public static class DeviceEndpoints
     /// <summary>
     /// Body for a device heartbeat: optional probe JSON, workstation JSON, and process instance id.
     /// </summary>
-    public record HeartbeatBody(string? ProbeJson, string? WorkstationJson, string? InstanceId = null);
     /// <summary>
     /// Body for queueing a device command. Kind is a WorkstationCommandKind name.
     /// </summary>
@@ -51,11 +51,8 @@ public static class DeviceEndpoints
     /// Body for finishing a device command: success, optional result JSON, optional error,
     /// and the claim generation the client received.
     /// </summary>
-    public record CompleteBody(bool Success, string? ResultJson, string? Error, int? Generation = null);
     /// <summary>Claim generation for which a short-lived harness token is requested.</summary>
-    public record HarnessTokenBody(int Generation);
     /// <summary>Progress snapshot reported by a device for the current command generation.</summary>
-    public record ProgressBody(int Generation, string ProgressJson);
     /// <summary>
     /// Body for binding a project to a device and a local root.
     /// </summary>
@@ -87,7 +84,7 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> Heartbeat(
-        [FromBody] HeartbeatBody? body, HeartbeatDeviceHandler handler, HttpContext ctx, CancellationToken ct)
+        [FromBody] WorkstationHeartbeatRequest? body, HeartbeatDeviceHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
@@ -107,7 +104,7 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> CompleteCommand(
-        Guid id, [FromBody] CompleteBody body, CompleteCommandHandler handler, HttpContext ctx, CancellationToken ct)
+        Guid id, [FromBody] CommandCompletionRequest body, CompleteCommandHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
@@ -116,7 +113,7 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> ReportCommandProgress(
-        Guid id, [FromBody] ProgressBody body, ReportCommandProgressHandler handler, HttpContext ctx, CancellationToken ct)
+        Guid id, [FromBody] CommandProgressRequest body, ReportCommandProgressHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
@@ -127,7 +124,7 @@ public static class DeviceEndpoints
 
     private static async Task<IResult> IssueHarnessToken(
         Guid id,
-        [FromBody] HarnessTokenBody body,
+        [FromBody] HarnessTokenRequest body,
         IssueHarnessTokenHandler handler,
         HttpContext ctx,
         CancellationToken ct)

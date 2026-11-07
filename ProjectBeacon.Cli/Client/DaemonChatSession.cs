@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Application.Runtime;
 
 internal interface IDaemonChatSession
@@ -157,13 +158,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             if (chatId != Guid.Empty)
             {
                 var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{agent}:{error}")))[..16];
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-                {
-                    role = "assistant",
-                    kind = "error",
-                    body = error,
-                    externalId = $"agent:{hash}"
-                }, projectId, ct);
+                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "error", error, $"agent:{hash}"), projectId, ct);
             }
             return (false, null, error);
         }
@@ -274,14 +269,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         {
             var key = messageId + ":" + kind + ":" + ordinal;
             var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
-            return PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-            {
-                role = "assistant",
-                kind,
-                body,
-                externalId = key,
-                complete = false
-            }, projectId, streamCt);
+            return PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", kind, body, key, Complete: false), projectId, streamCt);
         }
         var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
@@ -341,19 +329,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                         continue;
                     await PostChatAsync(
                         $"/v1/chat/sessions/{chatId}/parts",
-                        new
-                        {
-                            role = part.Role,
-                            kind = part.Kind,
-                            body = part.Body,
-                            externalId = part.ExternalId,
-                            tool = part.Tool,
-                            toolStatus = part.ToolStatus,
-                            toolInput = part.ToolInput,
-                            toolResult = part.ToolResult,
-                            durationMs = part.DurationMs,
-                            complete = part.Complete
-                        },
+                        new ChatPartRequest(
+                            part.Role,
+                            part.Kind,
+                            part.Body,
+                            part.ExternalId,
+                            part.Tool,
+                            part.ToolStatus,
+                            part.ToolInput,
+                            part.ToolResult,
+                            part.DurationMs,
+                            part.Complete),
                         projectId,
                         ct);
                     publishedSnapshots[key] = snapshot;
@@ -435,15 +421,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                 : capabilities is not null
                     ? await capabilities.ReadContextLimitAsync(model, ct)
                     : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
-            await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
-            {
-                promptTokens = usage.PromptTokens,
-                completionTokens = usage.CompletionTokens,
-                assistantMessages = usage.AssistantMessages,
-                totalCost = usage.TotalCost,
-                generationSeconds = usage.GenerationSeconds,
-                contextLimit
-            }, projectId, ct);
+            await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new ChatUsageReportRequest(
+                usage.PromptTokens,
+                usage.CompletionTokens,
+                usage.AssistantMessages,
+                usage.TotalCost,
+                contextLimit,
+                usage.GenerationSeconds), projectId, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -486,13 +470,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         // Stable external id derived from the error text so a repeated identical error dedupes on the API.
         var body = ClipError(turn.Error!);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..16];
-        await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-        {
-            role = "assistant",
-            kind = "error",
-            body,
-            externalId = $"error:{hash}"
-        }, projectId, ct);
+        await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "error", body, $"error:{hash}"), projectId, ct);
     }
 
     private async Task<bool> SurfacePendingFormsAsync(
@@ -521,14 +499,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     metadata = form.Metadata,
                     fields = JsonNode.Parse(form.FieldsJson)
                 });
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-                {
-                    role = "assistant",
-                    kind = "question",
-                    body,
-                    externalId = $"form:{form.Id}",
-                    complete = true
-                }, projectId, ct);
+                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "question", body, $"form:{form.Id}", Complete: true), projectId, ct);
             }
             return forms.Count > 0;
         }

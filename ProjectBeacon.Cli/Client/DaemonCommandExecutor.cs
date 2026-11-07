@@ -8,6 +8,7 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 using Application.Common;
 using Application.Devices;
 using Domain.Enums;
+using Domain.Common;
 
 internal interface IDaemonCommandExecutor
 {
@@ -65,11 +66,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     {
                         using var response = await _http.PostAsJsonAsync(
                             $"/v1/commands/{command.Id:D}/progress",
-                            new
-                            {
-                                generation = command.Generation,
-                                progressJson = JsonSerializer.Serialize(progress, DaemonJson.Camel)
-                            },
+                            new CommandProgressRequest(
+                                command.Generation,
+                                JsonSerializer.Serialize(progress, DaemonJson.Camel)),
                             token);
                         if (!response.IsSuccessStatusCode)
                             _state.Log($"client update progress report returned HTTP {(int)response.StatusCode}");
@@ -131,11 +130,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
                         using var tokenResponse = await _http.PostAsJsonAsync(
                             $"/v1/commands/{command.Id:D}/harness-token",
-                            new { generation = command.Generation },
+                            new HarnessTokenRequest(command.Generation),
                             ct);
                         if (!tokenResponse.IsSuccessStatusCode)
                             return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
-                        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+                        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenDto>(ct);
                         if (token is null || string.IsNullOrWhiteSpace(token.Token)
                             || token.ProjectId == Guid.Empty
                             || (requestedProjectId is { } requested && token.ProjectId != requested)
@@ -287,7 +286,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             if (requestedRuntime == "opencode")
             {
-                var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
+                var response = await _http.GetAsync(ApiRoutes.DeviceOpenCodeConnections, ct);
                 if (!response.IsSuccessStatusCode)
                     return (false, null, $"opencode connections {(int)response.StatusCode}");
                 var body = await response.Content.ReadAsStringAsync(ct);
@@ -305,11 +304,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
             using var tokenResponse = await _http.PostAsJsonAsync(
                 $"/v1/commands/{command.Id:D}/harness-token",
-                new { generation = command.Generation },
+                new HarnessTokenRequest(command.Generation),
                 ct);
             if (!tokenResponse.IsSuccessStatusCode)
                 return (false, null, $"Could not issue the short-lived eval harness token (HTTP {(int)tokenResponse.StatusCode}).");
-            var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+            var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenDto>(ct);
             if (token is null
                 || string.IsNullOrWhiteSpace(token.Token)
                 || token.ProjectId == Guid.Empty
@@ -433,11 +432,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
         using var tokenResponse = await _http.PostAsJsonAsync(
             $"/v1/commands/{command.Id:D}/harness-token",
-            new { generation = command.Generation },
+            new HarnessTokenRequest(command.Generation),
             ct);
         if (!tokenResponse.IsSuccessStatusCode)
             return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
-        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenDto>(ct);
         if (token is null || string.IsNullOrWhiteSpace(token.Token)
             || token.ProjectId != projectId
             || token.CommandId != command.Id
@@ -596,7 +595,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
             using var response = await _http.PostAsJsonAsync(
                 $"/v1/commands/{command.Id:D}/progress",
-                new { generation = command.Generation, progressJson = snapshot },
+                new CommandProgressRequest(command.Generation, snapshot),
                 tokenCt);
             if (!response.IsSuccessStatusCode)
             {
@@ -741,21 +740,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         return (true, JsonSerializer.Serialize(new { revision }), null);
     }
 
-    private sealed record HarnessTokenWire(
-        string Token,
-        Guid ProjectId,
-        Guid CommandId,
-        int Generation,
-        DateTime ExpiresAt,
-        IReadOnlyList<string>? AllowedMcpTools = null,
-        IReadOnlyList<McpServerConfiguration>? McpServers = null);
-
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
     {
         if (string.Equals(_loadSettings().AgentRuntime, "native", StringComparison.Ordinal))
             return (true, JsonSerializer.Serialize(new { runtime = "native", restarted = false }), null);
 
-        var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
+        var response = await _http.GetAsync(ApiRoutes.DeviceOpenCodeConnections, ct);
         if (!response.IsSuccessStatusCode)
             return (false, null, $"opencode connections {(int)response.StatusCode}");
         var body = await response.Content.ReadAsStringAsync(ct);
