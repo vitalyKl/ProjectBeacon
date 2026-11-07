@@ -167,7 +167,7 @@
     <value>Templates</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Workstation profile: sets the OpenCode mode and default Planner/Actor/Review role bindings. Those role models are fallbacks when a task has no phase-specific model configuration; task kinds below take precedence for configured phases.</value>
+    <value>Workstation profile: sets the AgentProvider mode and default Planner/Actor/Review role bindings. Those role models are fallbacks when a task has no phase-specific model configuration; task kinds below take precedence for configured phases.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>New template</value>
@@ -193,58 +193,58 @@
 <data name="ChatModelHint" xml:space="preserve">
     <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh the agent runtime.</value>
   </data>
-<data name="OpenCodeModel" xml:space="preserve">
+<data name="AgentProviderModel" xml:space="preserve">
     <value>Agent model</value>
   </data>
-<data name="OpenCodeModelHint" xml:space="preserve">
-    <value>Provider and model OpenCode already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with opencode auth login.</value>
+<data name="AgentProviderModelHint" xml:space="preserve">
+    <value>Provider and model AgentProvider already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with the native agent runtime auth login.</value>
   </data>
-<data name="OpenCodeConnections" xml:space="preserve">
+<data name="AgentProviderConnections" xml:space="preserve">
     <value>Model connections</value>
   </data>
-<data name="OpenCodeConnectionsLead" xml:space="preserve">
-    <value>Tell OpenCode which online model to use. A local llama.cpp model is added separately, under Agents.</value>
+<data name="AgentProviderConnectionsLead" xml:space="preserve">
+    <value>Tell AgentProvider which online model to use. A local llama.cpp model is added separately, under Agents.</value>
   </data>
-<data name="OpenCodeStepPick" xml:space="preserve">
+<data name="AgentProviderStepPick" xml:space="preserve">
     <value>Pick a service, or type provider/model yourself.</value>
   </data>
-<data name="OpenCodeStepKey" xml:space="preserve">
+<data name="AgentProviderStepKey" xml:space="preserve">
     <value>Paste an API key only if you have not already signed in on that computer.</value>
   </data>
-<data name="OpenCodeStepSave" xml:space="preserve">
-    <value>Save. The running beacon client updates OpenCode and restarts it.</value>
+<data name="AgentProviderStepSave" xml:space="preserve">
+    <value>Save. The running beacon client updates AgentProvider and restarts it.</value>
   </data>
-<data name="OpenCodeOwnServer" xml:space="preserve">
+<data name="AgentProviderOwnServer" xml:space="preserve">
     <value>Own server</value>
   </data>
-<data name="OpenCodeOnePerService" xml:space="preserve">
+<data name="AgentProviderOnePerService" xml:space="preserve">
     <value>Each service keeps one model. Saving it again replaces that model.</value>
   </data>
-<data name="OpenCodeModelExample" xml:space="preserve">
+<data name="AgentProviderModelExample" xml:space="preserve">
     <value>Write it as provider/model, for example xai/grok-3.</value>
   </data>
-<data name="OpenCodeBaseUrlHint" xml:space="preserve">
+<data name="AgentProviderBaseUrlHint" xml:space="preserve">
     <value>Address of your own OpenAI-compatible server.</value>
   </data>
-<data name="OpenCodeKeySaved" xml:space="preserve">
+<data name="AgentProviderKeySaved" xml:space="preserve">
     <value>Key saved</value>
   </data>
-<data name="OpenCodeProvider" xml:space="preserve">
+<data name="AgentProviderProvider" xml:space="preserve">
     <value>Provider</value>
   </data>
-<data name="OpenCodeBaseUrl" xml:space="preserve">
+<data name="AgentProviderBaseUrl" xml:space="preserve">
     <value>Base URL</value>
   </data>
-<data name="OpenCodeApiKey" xml:space="preserve">
+<data name="AgentProviderApiKey" xml:space="preserve">
     <value>API key</value>
   </data>
-<data name="OpenCodeApiKeyHint" xml:space="preserve">
+<data name="AgentProviderApiKeyHint" xml:space="preserve">
     <value>Optional. Leave blank if this computer is already signed in, or to keep a key you saved earlier.</value>
   </data>
-<data name="OpenCodeConnectionSaved" xml:space="preserve">
-    <value>Saved. If beacon client is running, it will update OpenCode now.</value>
+<data name="AgentProviderConnectionSaved" xml:space="preserve">
+    <value>Saved. If beacon client is running, it will update AgentProvider now.</value>
   </data>
-<data name="NoOpenCodeConnections" xml:space="preserve">
+<data name="NoAgentProviderConnections" xml:space="preserve">
     <value>No connections yet.</value>
   </data>
 <data name="DangerZone" xml:space="preserve">
@@ -1346,7 +1346,7 @@
     <value>MCP servers</value>
   </data>
 <data name="AgentModeHint" xml:space="preserve">
-    <value>Controls the OpenCode profile applied to your workstation for interactive chat. Task pipeline model defaults are configured separately under Task kinds.</value>
+    <value>Controls the AgentProvider profile applied to your workstation for interactive chat. Task pipeline model defaults are configured separately under Task kinds.</value>
   </data>
   <data name="AgentMode" xml:space="preserve">
     <value>Workstation chat mode</value>
@@ -1385,7 +1385,7 @@
     <value>llama-server binary</value>
   </data>
 <data name="HistoryDir" xml:space="preserve">
-    <value>OpenCode history directory</value>
+    <value>AgentProvider history directory</value>
   </data>
 <data name="ProjectsRoot" xml:space="preserve">
     <value>Projects root</value>
@@ -1571,7 +1571,7 @@
     <value>Plan work, assign tasks and coordinate agent stages. Human review, pipeline state and outcomes remain visible.</value>
   </data>
 <data name="LandingHow3" xml:space="preserve">
-    <value>The workstation client runs the native harness or OpenCode, connects models and invokes local MCP tools. The server never executes your code.</value>
+    <value>The workstation client runs the native harness or AgentProvider, connects models and invokes local MCP tools. The server never executes your code.</value>
   </data>
 <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>What ships</value>
@@ -1586,7 +1586,7 @@
     <value>Decisions carry consequences, so agents have a reason to respect them.</value>
   </data>
 <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>Configure user-level agents, model backends and task roles once. Use the native harness or keep OpenCode as your runtime.</value>
+    <value>Configure user-level agents, model backends and task roles once. Use the native harness or keep AgentProvider as your runtime.</value>
   </data>
 <data name="LandingFeatureDevices" xml:space="preserve">
     <value>The workstation client connects outbound over HTTPS. Agent execution, local models and workspace access stay on your machine.</value>
@@ -1650,7 +1650,7 @@ No Beacon-hosted coding agent.</value>
     <value>Does ProjectBeacon run the agent in the cloud?</value>
   </data>
 <data name="LandingFaq1A" xml:space="preserve">
-    <value>No. The agent loop runs on your workstation through beacon client. You can use the native harness or OpenCode. The Web/API/Worker services coordinate work but do not run your model or execute code in your workspace.</value>
+    <value>No. The agent loop runs on your workstation through beacon client. You can use the native harness or AgentProvider. The Web/API/Worker services coordinate work but do not run your model or execute code in your workspace.</value>
   </data>
 <data name="LandingFaq2Q" xml:space="preserve">
     <value>Where do my code and models run?</value>
@@ -1668,7 +1668,7 @@ No Beacon-hosted coding agent.</value>
     <value>Do I have to use the native harness?</value>
   </data>
 <data name="LandingFaq4A" xml:space="preserve">
-    <value>No. OpenCode remains a supported runtime. You can choose the runtime for a workstation; the native harness is an alternative that runs the model/tool loop locally and uses ProjectBeacon's existing MCP tools.</value>
+    <value>No. AgentProvider remains a supported runtime. You can choose the runtime for a workstation; the native harness is an alternative that runs the model/tool loop locally and uses ProjectBeacon's existing MCP tools.</value>
   </data>
 <data name="LandingFaq5Q" xml:space="preserve">
     <value>Is ProjectBeacon a hosted SaaS?</value>
@@ -2297,8 +2297,8 @@ No Beacon-hosted coding agent.</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>Agent runtime</value>
   </data>
-<data name="AgentRuntimeOpenCode" xml:space="preserve">
-    <value>OpenCode (default)</value>
+<data name="AgentRuntimeAgentProvider" xml:space="preserve">
+    <value>AgentProvider (default)</value>
   </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
     <value>Native harness (experimental)</value>
@@ -2331,7 +2331,7 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingTaskContext" xml:space="preserve"><value>Context brief · project rules</value></data>
 <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
 <data name="LandingRuntimeTitle" xml:space="preserve"><value>Agent runtime</value></data>
-<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness or OpenCode · local or cloud model</value></data>
+<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness or AgentProvider · local or cloud model</value></data>
 <data name="LandingVisualCaption" xml:space="preserve"><value>One place to operate the whole workflow</value></data>
 <data name="LandingPrinciplesTitle" xml:space="preserve"><value>Product principles</value></data>
 <data name="LandingPrincipleLocal" xml:space="preserve"><value>Runs on your workstation</value></data>
@@ -2352,13 +2352,13 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>Your workstation</value></data>
 <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · runtime selection · model connections</value></data>
 <data name="LandingArchitectureRuntime" xml:space="preserve"><value>Local agent runtime</value></data>
-<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness or OpenCode · MCP stdio · workspace</value></data>
+<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness or AgentProvider · MCP stdio · workspace</value></data>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>TAKE CONTROL OF YOUR AI WORKFLOW</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Start with your own ProjectBeacon host and connect a workstation.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
-<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation-level role defaults and OpenCode settings. Pipeline sessions use the role bindings only when the task has no model configured for its semantic phase.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation-level role defaults and AgentProvider settings. Pipeline sessions use the role bindings only when the task has no model configured for its semantic phase.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline model choices. Decision/worker defaults and phase-level overrides take precedence over workstation role bindings for the configured task phases.</value></data>
 <data name="DaemonUpdates" xml:space="preserve"><value>Daemon updates</value></data>
 <data name="DaemonUpdateDescription" xml:space="preserve"><value>Check and install the latest ProjectBeacon workstation client without manually replacing its installation folder.</value></data>
