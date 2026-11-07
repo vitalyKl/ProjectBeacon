@@ -128,6 +128,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal(created.Value.Id, updated.Value!.Id);
         Assert.Equal("new", updated.Value.Name);
         Assert.Equal(ModelBackendType.OpenAiCompatible, updated.Value.BackendType);
+        Assert.Equal(string.Empty, updated.Value.LaunchCommand);
         Assert.Equal(2048, updated.Value.ContextSize);
         Assert.False(updated.Value.Concurrent);
         Assert.Equal(1, await CountBackendsAsync());
