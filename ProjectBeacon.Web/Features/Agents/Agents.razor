@@ -112,13 +112,13 @@ else
                 }
             </MudSelect>
 
-            <MudText Typo="Typo.subtitle2" Class="mt-4">Role profile instructions</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["RoleProfileInstructions"]</MudText>
             <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">
-                These instructions are added to each role's prompt. They do not grant tools or override task and security boundaries.
+                @L["RoleProfileInstructionsDescription"]
             </MudText>
-            <MudTextField @bind-Value="_plannerInstructions" Label="Planner profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_actorInstructions" Label="Actor profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_reviewInstructions" Label="Review profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_plannerInstructions" Label="@L["PlannerProfileInstructions"]" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_actorInstructions" Label="@L["ActorProfileInstructions"]" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_reviewInstructions" Label="@L["ReviewProfileInstructions"]" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         }
         <MudStack Row="true" Spacing="2" Class="mt-3">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCurrentTemplate" Disabled="_busy || string.IsNullOrWhiteSpace(_templateName)">@L["Save"]</MudButton>
