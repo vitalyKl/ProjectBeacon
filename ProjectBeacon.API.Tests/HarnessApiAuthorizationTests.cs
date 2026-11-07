@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Tests;
 
+using Domain.Common;
 using Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
