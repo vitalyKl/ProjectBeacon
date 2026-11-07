@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
 using Application.Authorization;
+using Application.Devices;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -50,7 +51,7 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
         var access = await _authorization.CanAsync(
             db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.ProjectId, ct: ct);
         if (!access.Success)
-            return Result.Forbidden<WorkstationCommandDto>();
+            return Result.Forbidden();
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
@@ -93,7 +94,7 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
                     continue;
                 var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, backendId), command.Actor), ct);
                 if (!bound.Success)
-                    return Result.Failure<WorkstationCommandDto>(bound.Error ?? "Failed to bind role.");
+                    return Result.Failure(bound.Error ?? "Failed to bind role.");
             }
         }
 
