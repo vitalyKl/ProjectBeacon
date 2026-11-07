@@ -74,15 +74,15 @@ public sealed class WorkstationCommandPayloadsTests
     public void ChatPrompt_RequiresExternalSessionId()
     {
         var sessionId = Guid.NewGuid();
-        var json = $"""{"chatSessionId":"{{sessionId}}","externalSessionId":"ext-123"}""";
+        var json = JsonSerializer.Serialize(new { chatSessionId = sessionId, externalSessionId = "ext-123" });
 
         var parsed = WorkstationCommandPayloads.TryReadChatPrompt(json, out var payload);
 
         Assert.True(parsed);
         Assert.Equal(sessionId, payload.ChatSessionId);
         Assert.Equal("ext-123", payload.ExternalSessionId);
-        Assert.False(WorkstationCommandPayloads.TryReadChatPrompt(
-            $"""{"chatSessionId":"{{sessionId}}","externalSessionId":" "}""", out _));
+        var whitespaceExternalId = JsonSerializer.Serialize(new { chatSessionId = sessionId, externalSessionId = " " });
+        Assert.False(WorkstationCommandPayloads.TryReadChatPrompt(whitespaceExternalId, out _));
     }
 
     [Theory]
