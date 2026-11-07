@@ -2425,4 +2425,28 @@ orthstar</value>
   <data name="ProviderModelIdHint" xml:space="preserve">
     <value>请使用 provider/model 格式，例如 xai/grok-3 或 anthropic/claude-sonnet-4-5。</value>
   </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>附件</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>每个文件最大 10 MB</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>暂无附件。</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>无法加载附件：{0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}：文件超过 10 MB 限制。</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>附件已上传。</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>上传失败：{0}</value>
+  </data>
 </root>

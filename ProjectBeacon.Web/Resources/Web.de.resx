@@ -2417,4 +2417,28 @@ orthstar</value>
   <data name="ProviderModelIdHint" xml:space="preserve">
     <value>Geben Sie eine Kennung im Format provider/model an, zum Beispiel xai/grok-3 oder anthropic/claude-sonnet-4-5.</value>
   </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>Anhänge</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>Aktualisieren</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>Bis zu 10 MB pro Datei</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>Noch keine Anhänge vorhanden.</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>Anhänge konnten nicht geladen werden: {0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}: Die Datei überschreitet das Limit von 10 MB.</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>Anhänge wurden hochgeladen.</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>Upload fehlgeschlagen: {0}</value>
+  </data>
 </root>

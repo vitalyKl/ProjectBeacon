@@ -2425,4 +2425,28 @@ orthstar</value>
   <data name="ProviderModelIdHint" xml:space="preserve">
     <value>xai/grok-3 や anthropic/claude-sonnet-4-5 のように provider/model 形式で指定します。</value>
   </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>添付ファイル</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>1ファイルあたり最大10 MB</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>添付ファイルはまだありません。</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>添付ファイルを読み込めませんでした: {0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}: ファイルサイズが10 MBの上限を超えています。</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>添付ファイルをアップロードしました。</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>アップロードに失敗しました: {0}</value>
+  </data>
 </root>

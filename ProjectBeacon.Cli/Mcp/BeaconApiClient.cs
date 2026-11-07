@@ -51,4 +51,25 @@ internal sealed class BeaconApiClient
         var raw = await response.Content.ReadAsStringAsync(ct);
         return (response.IsSuccessStatusCode, (int)response.StatusCode, raw);
     }
+
+    public async Task<(bool Ok, int Status, string Body)> SendFileAsync(
+        string relativePath, byte[] bytes, string fileName, string contentType,
+        CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, relativePath);
+        var project = _env.Get("BEACON_PROJECT_ID");
+        if (!string.IsNullOrWhiteSpace(project))
+            request.Headers.TryAddWithoutValidation("X-Project-Id", project.Trim());
+
+        using var multipart = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = MediaTypeHeaderValue.Parse(
+            string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
+        multipart.Add(file, "file", Path.GetFileName(fileName));
+        request.Content = multipart;
+
+        using var response = await _http.SendAsync(request, ct);
+        var raw = await response.Content.ReadAsStringAsync(ct);
+        return (response.IsSuccessStatusCode, (int)response.StatusCode, raw);
+    }
 }

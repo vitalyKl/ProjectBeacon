@@ -36,6 +36,16 @@ public sealed class McpToolCatalogTests
     }
 
     [Fact]
+    public void TaskAttachmentTool_IsWriteScopedToTaskWrite()
+    {
+        var descriptor = McpToolCatalog.Get(McpToolNames.TaskAttachFile);
+
+        Assert.Equal(McpToolScope.Write, descriptor.Scope);
+        Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskWrite, descriptor.Capability);
+        Assert.Equal(McpToolHandler.Api, descriptor.Handler);
+    }
+
+    [Fact]
     public void RegistryAliases_ResolveToTheirCanonicalDescriptor()
     {
         foreach (var descriptor in McpToolCatalog.All)

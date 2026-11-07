@@ -35,6 +35,7 @@ public static partial class McpStdioServer
 
     internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api, McpEnvironment env)
     {
+        env.Set("BEACON_WORKSPACE_ROOT", Path.GetFullPath(root));
         const int maxConcurrentRequests = 32;
         using var requestSlots = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
         using var outputGate = new SemaphoreSlim(1, 1);

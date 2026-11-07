@@ -31,6 +31,8 @@ internal static partial class McpApiTools
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskClaim),
         new(McpToolNames.AddTaskComment, "Add a comment on a task.",
             () => Props(("taskId", "string", true), ("content", "string", true)), TaskComment),
+        new(McpToolNames.TaskAttachFile, "Publish a user-facing file from the current workspace to the active task. Provide a workspace-relative path; files are limited to 10 MB.",
+            () => Props(("path", "string", true), ("taskId", "string", false)), TaskAttachFile),
         new(McpToolNames.SetTaskDependencies, "Replace the tasks this task depends on.",
             () => Props(("taskId", "string", true), ("dependentTaskIds", "array", true)), TaskDependencies),
         new(McpToolNames.AddReviewNotes, "Save review notes required before a task can move to Done.",
@@ -261,6 +263,66 @@ internal static partial class McpApiTools
         if (done is null)
             return new McpToolText(true, "missing 'done'");
         return await SendAsync(api, HttpMethod.Patch, $"v1/steps/{stepId:D}", new JsonObject { ["done"] = done.Value }, ct);
+    }
+
+    private static async Task<McpToolText> TaskAttachFile(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryTask(env, args, out var taskId, out var taskError))
+            return new McpToolText(true, taskError);
+        if (!TryProject(env, args, out var projectId, out var projectError))
+            return new McpToolText(true, projectError);
+
+        var relative = Text(args, "path");
+        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative))
+            return new McpToolText(true, "'path' must be relative to the current workspace.");
+
+        var root = env.Get("BEACON_WORKSPACE_ROOT");
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return new McpToolText(true, "Workspace root is unavailable.");
+
+        var rootPath = Path.GetFullPath(root);
+        var fullPath = Path.GetFullPath(Path.Combine(rootPath, relative));
+        var relativeToRoot = Path.GetRelativePath(rootPath, fullPath);
+        if (Path.IsPathRooted(relativeToRoot)
+            || relativeToRoot == ".."
+            || relativeToRoot.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return new McpToolText(true, "The file path escapes the current workspace.");
+        if (!File.Exists(fullPath))
+            return new McpToolText(true, "File not found in the current workspace.");
+
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var currentPath = fullPath;
+        while (!string.Equals(currentPath, rootPath, pathComparison))
+        {
+            if ((File.GetAttributes(currentPath) & FileAttributes.ReparsePoint) != 0)
+                return new McpToolText(true, "Symbolic links and reparse points are not allowed for task attachments.");
+            currentPath = Path.GetDirectoryName(currentPath)
+                ?? throw new InvalidOperationException("Could not resolve the workspace path.");
+        }
+
+        var info = new FileInfo(fullPath);
+        if (info.Length is <= 0 or > 10 * 1024 * 1024)
+            return new McpToolText(true, "Files must be between 1 byte and 10 MB.");
+        var bytes = await File.ReadAllBytesAsync(fullPath, ct);
+        var type = Path.GetExtension(fullPath).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".pdf" => "application/pdf",
+            ".txt" or ".md" or ".log" => "text/plain",
+            ".json" => "application/json",
+            ".csv" => "text/csv",
+            ".zip" => "application/zip",
+            _ => "application/octet-stream"
+        };
+        var result = await api.SendFileAsync(
+            $"v1/projects/{projectId:D}/tasks/{taskId:D}/attachments",
+            bytes, Path.GetFileName(fullPath), type, ct);
+        return new McpToolText(!result.Ok, result.Body);
     }
 
     private static async Task<McpToolText> StepDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)

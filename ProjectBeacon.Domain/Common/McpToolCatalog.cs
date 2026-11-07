@@ -57,6 +57,7 @@ public static class McpToolNames
     public const string SetTaskSubstage = "set_task_substage";
     public const string ClaimTask = "claim_task";
     public const string AddTaskComment = "add_task_comment";
+    public const string TaskAttachFile = "task_attach_file";
     public const string SetTaskDependencies = "set_task_dependencies";
     public const string AddReviewNotes = "add_review_notes";
     public const string ListTaskSteps = "list_task_steps";
@@ -167,6 +168,7 @@ public static class McpToolCatalog
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus,
                 McpToolNames.SetTaskSubstage, McpToolNames.ClaimTask, McpToolNames.AddTaskComment,
+                McpToolNames.TaskAttachFile,
                 McpToolNames.SetTaskDependencies, McpToolNames.AddReviewNotes, McpToolNames.AddTaskStep,
                 McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork),
 

@@ -1,0 +1,107 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Infrastructure.Attachments
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject IAttachmentService Attachments
+@inject AuthenticationStateProvider Auth
+@inject ISnackbar Snackbar
+
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h6">@L["TaskAttachmentsTitle"]</MudText>
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Reload" Disabled="@_busy">@L["TaskAttachmentsRefresh"]</MudButton>
+    </MudStack>
+    <div class="d-flex flex-wrap align-center gap-2 mt-2">
+        <InputFile OnChange="Upload" multiple disabled="@_busy" />
+        <MudText Typo="Typo.caption">@L["TaskAttachmentsLimit"]</MudText>
+    </div>
+    @if (_busy) { <MudProgressLinear Indeterminate="true" Class="mt-2" /> }
+    @if (_items.Count == 0 && !_busy) { <MudText Typo="Typo.caption" Class="mt-2">@L["TaskAttachmentsEmpty"]</MudText> }
+    <div class="d-flex flex-column gap-3 mt-3">
+        @foreach (var item in _items)
+        {
+            <div class="d-flex flex-column gap-1">
+                @if (IsPreviewableImage(item.Metadata.ContentType))
+                {
+                    <a href="@item.DataUrl" target="_blank" rel="noopener noreferrer">
+                        <img src="@item.DataUrl" alt="@item.Metadata.FileName"
+                             style="max-width: min(100%, 520px); max-height: 360px; object-fit: contain;" />
+                    </a>
+                }
+                <div class="d-flex flex-wrap align-center gap-2">
+                    <a href="@item.DataUrl" download="@item.Metadata.FileName">@item.Metadata.FileName</a>
+                    <MudText Typo="Typo.caption">@FormatSize(item.Metadata.Length)</MudText>
+                    <MudText Typo="Typo.caption">· @item.Metadata.CreatedByType</MudText>
+                    <MudText Typo="Typo.caption">· <LocalTime Value="item.Metadata.CreatedAt" Format="g" /></MudText>
+                </div>
+            </div>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public TaskItemDto Task { get; set; } = null!;
+    private readonly List<AttachmentView> _items = [];
+    private bool _busy;
+    private Guid _loadedTaskId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Task is not null && _loadedTaskId != Task.Id)
+            await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (Task is null || _busy) return;
+        _busy = true;
+        try
+        {
+            _items.Clear();
+            var metadata = await Attachments.ListTaskAsync(Task.ProjectId, Task.Id);
+            foreach (var attachment in metadata)
+            {
+                var loaded = await Attachments.ReadTaskAsync(Task.ProjectId, Task.Id, attachment.Id);
+                if (loaded is null) continue;
+                var (details, bytes) = loaded.Value;
+                var type = IsPreviewableImage(details.ContentType) ? details.ContentType : "application/octet-stream";
+                _items.Add(new AttachmentView(details, $"data:{type};base64,{Convert.ToBase64String(bytes)}"));
+            }
+            _loadedTaskId = Task.Id;
+        }
+        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        if (Task is null || _busy) return;
+        _busy = true;
+        try
+        {
+            var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+            foreach (var file in args.GetMultipleFiles(20))
+            {
+                if (file.Size is <= 0 or > PhysicalAttachmentService.MaxFileLength)
+                {
+                    Snackbar.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
+                    continue;
+                }
+                await using var stream = file.OpenReadStream(PhysicalAttachmentService.MaxFileLength);
+                await Attachments.UploadTaskAsync(Task.ProjectId, Task.Id, actor, stream, file.Name, file.ContentType, file.Size);
+            }
+            Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsUploadFailed"].Value, ex.Message), Severity.Error); }
+        finally { _busy = false; }
+        await Reload();
+    }
+
+    private static bool IsPreviewableImage(string contentType) =>
+        contentType is "image/png" or "image/jpeg" or "image/gif" or "image/webp";
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 * 1024 ? $"{bytes / 1024d:0.#} KB" : $"{bytes / (1024d * 1024d):0.##} MB";
+    private sealed record AttachmentView(TaskAttachmentDto Metadata, string DataUrl);
+}

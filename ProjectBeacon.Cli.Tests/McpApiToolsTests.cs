@@ -8,7 +8,58 @@ using ProjectBeacon.Cli.Mcp;
 public sealed class McpApiToolsTests
 {
     [Fact]
-    public async Task ApiProblemDetails_ExposeStableErrorCodeAndDetail()
+    public async Task TaskAttachFile_UploadsWorkspaceFileToCurrentTask()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "artifact.md"), "verified attachment payload");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                ("BEACON_TASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var handler = new RecordingHandler();
+            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                "task_attach_file", new JsonObject { ["path"] = "artifact.md" }, api, env);
+
+            Assert.False(result.IsError);
+            Assert.Contains(handler.Calls, call =>
+                call.Method == "POST"
+                && call.Path == "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/tasks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/attachments"
+                && call.Body.Contains("verified attachment payload", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task TaskAttachFile_RejectsPathsOutsideWorkspaceBeforeHttpRequest()
+    {
+        var root = TempRoot();
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            ("BEACON_TASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            ("BEACON_WORKSPACE_ROOT", root));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            "task_attach_file", new JsonObject { ["path"] = "../outside.txt" }, api, env);
+
+        Assert.True(result.IsError);
+        Assert.Contains("escapes the current workspace", result.Text);
+        Assert.Empty(handler.Calls);
+        Directory.Delete(root, true);
+    }
+
+    [Fact]
+    public async Task ToolsList_IncludesControlPlaneTools_AndNoShell()
     {
         var env = McpEnvironment.Of(("BEACON_TASK_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         using var http = new HttpClient(new ProblemResponseHandler(
@@ -43,7 +94,7 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
-    public async Task ToolsList_IncludesControlPlaneTools_AndNoShell()
+    public async Task StdioToolsList_IncludesTaskAttachment_AndNoShell()
     {
         var root = TempRoot();
         try
@@ -58,7 +109,7 @@ public sealed class McpApiToolsTests
             foreach (var tool in new[]
             {
                 "context_compile", "claim_task", "finish_work", "list_tasks", "list_decisions",
-                "list_milestones", "generate_report", "pipeline_start", "deprecate_decision", "model_upsert"
+                "list_milestones", "generate_report", "pipeline_start", "deprecate_decision", "model_upsert", "task_attach_file"
             })
                 Assert.Contains(tool, toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("shell", toolsJson, StringComparison.OrdinalIgnoreCase);

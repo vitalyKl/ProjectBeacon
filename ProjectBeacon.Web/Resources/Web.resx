@@ -2616,4 +2616,28 @@ No Beacon-hosted coding agent.</value>
   <data name="ProviderModelIdHint" xml:space="preserve">
     <value>Enter a provider/model identifier, for example xai/grok-3 or anthropic/claude-sonnet-4-5.</value>
   </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>Attachments</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>Up to 10 MB per file</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>No attachments yet.</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>Could not load attachments: {0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}: file exceeds the 10 MB limit.</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>Attachments uploaded.</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>Upload failed: {0}</value>
+  </data>
 </root>

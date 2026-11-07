@@ -2407,4 +2407,28 @@
   <data name="ProviderModelIdHint" xml:space="preserve">
     <value>Укажите идентификатор в формате provider/model, например xai/grok-3 или anthropic/claude-sonnet-4-5.</value>
   </data>
+  <data name="TaskAttachmentsTitle" xml:space="preserve">
+    <value>Вложения</value>
+  </data>
+  <data name="TaskAttachmentsRefresh" xml:space="preserve">
+    <value>Обновить</value>
+  </data>
+  <data name="TaskAttachmentsLimit" xml:space="preserve">
+    <value>До 10 МБ на файл</value>
+  </data>
+  <data name="TaskAttachmentsEmpty" xml:space="preserve">
+    <value>Пока нет вложений.</value>
+  </data>
+  <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить вложения: {0}</value>
+  </data>
+  <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
+    <value>{0}: размер файла превышает 10 МБ.</value>
+  </data>
+  <data name="TaskAttachmentsUploaded" xml:space="preserve">
+    <value>Вложения загружены.</value>
+  </data>
+  <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
+    <value>Не удалось загрузить вложения: {0}</value>
+  </data>
 </root>

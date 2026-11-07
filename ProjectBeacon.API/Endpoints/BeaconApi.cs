@@ -17,6 +17,7 @@ public static class BeaconApi
         app.MapOrgEndpoints();
         app.MapProjectEndpoints();
         app.MapTaskEndpoints();
+        app.MapTaskAttachmentEndpoints();
         app.MapMilestoneEndpoints();
         app.MapWorkEndpoints();
         app.MapPipelineEndpoints();
