@@ -130,10 +130,10 @@
     <value>消息未指定其他模型时，应用聊天会使用它。保存后会通知正在运行的客户端刷新代理运行时。</value>
   </data>
 <data name="AgentProviderModel" xml:space="preserve">
-    <value>代理模型</value>
+    <value>提供方模型 ID</value>
   </data>
 <data name="AgentProviderModelHint" xml:space="preserve">
-    <value>AgentProvider 已知的提供方和模型，例如 xai/grok-3。已保存的连接可以提供密钥；否则请在这台机器上执行 native agent runtime auth login。</value>
+    <value>填写提供方和模型，例如 anthropic/claude-sonnet-4-5。凭据由已保存的提供方连接提供。</value>
   </data>
 <data name="AgentProviderConnections" xml:space="preserve">
     <value>模型连接</value>
@@ -1243,7 +1243,7 @@
     <value>浏览</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>在设备上初始化（.gitignore、native agent runtime.json）</value>
+    <value>在设备上初始化（.gitignore）</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>向上</value>
@@ -1370,9 +1370,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>native agent runtime</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1619,7 +1616,7 @@
     <value>现在可以跳过文件夹，以后在仪表板上再附加。</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>把 .gitignore 和 native agent runtime.json 写入工作站上的该文件夹。</value>
+    <value>在工作站上创建项目目录并写入所需的 .gitignore 规则。</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>项目文件夹</value>
@@ -2081,11 +2078,8 @@ orthstar</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>代理运行时</value>
   </data>
-<data name="AgentRuntimeAgentProvider" xml:space="preserve">
-    <value>AgentProvider（默认）</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>原生代理执行框架（实验性）</value>
+    <value>原生运行环境</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>重启工作站客户端后，运行时更改才会生效。</value>
@@ -2424,5 +2418,11 @@ orthstar</value>
   </data>
   <data name="ContextInputEstimate" xml:space="preserve">
     <value>预计输入令牌数</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>提供方模型 ID</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>请使用 provider/model 格式，例如 xai/grok-3 或 anthropic/claude-sonnet-4-5。</value>
   </data>
 </root>
