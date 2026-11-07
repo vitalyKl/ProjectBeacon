@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Application.Devices;
 
 internal interface IDaemonLoop
 {
@@ -50,7 +51,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await claimed.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, ct);
                 if (command is null)
                     continue;
-                if (command.Kind is WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
+                if (WorkstationCommandCatalog.Get(command.Kind).StartsControlLane)
                     await StartPromptWithControlLaneAsync(command, ct);
                 else
                     await ProcessCommandAsync(command, ct);
@@ -162,9 +163,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await response.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, pollingToken);
                 if (command is null)
                     continue;
-                if (command.Kind is not (WorkstationCommandKind.ChatAbort
-                    or WorkstationCommandKind.ChatSwitchAgent
-                    or WorkstationCommandKind.ChatReplyForm))
+                if (WorkstationCommandCatalog.Get(command.Kind).Lane != WorkstationCommandLane.Control)
                 {
                     await ProcessCommandAsync(command, executionToken, rejectUnexpectedControlCommand: true);
                     continue;

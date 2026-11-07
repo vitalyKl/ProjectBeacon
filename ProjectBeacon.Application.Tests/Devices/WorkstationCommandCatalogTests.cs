@@ -63,6 +63,43 @@ public sealed class WorkstationCommandCatalogTests
         Assert.Equal(OperationRetrySemantics.AtMostOnce, update.RetrySemantics);
     }
 
+
+    [Fact]
+    public void Catalog_CentralizesDeliveryLaneAndLeaseMetadata()
+    {
+        var controlLaneKinds = new[]
+        {
+            WorkstationCommandKind.ChatAbort,
+            WorkstationCommandKind.ChatSwitchAgent,
+            WorkstationCommandKind.ChatReplyForm
+        };
+        var controlPollingKinds = new[]
+        {
+            WorkstationCommandKind.ChatPrompt,
+            WorkstationCommandKind.RunPipelineSession
+        };
+
+        foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
+        {
+            var descriptor = WorkstationCommandCatalog.Get(kind);
+            Assert.Equal(
+                descriptor.RetrySemantics == OperationRetrySemantics.AtMostOnce,
+                CommandDelivery.IsAtMostOnce(kind));
+            Assert.Equal(
+                descriptor.RetrySemantics != OperationRetrySemantics.AtMostOnce,
+                CommandDelivery.IsIdempotent(kind));
+            Assert.Equal(
+                descriptor.RetrySemantics == OperationRetrySemantics.Reconciliation,
+                CommandDelivery.IsReconcileBacked(kind));
+            Assert.Equal(descriptor.LeaseDuration, CommandLease.For(kind));
+            Assert.Equal(controlLaneKinds.Contains(kind), descriptor.Lane == WorkstationCommandLane.Control);
+            Assert.Equal(controlPollingKinds.Contains(kind), descriptor.StartsControlLane);
+        }
+
+        Assert.Equal(TimeSpan.FromMinutes(CommandLease.PipelineMinutes),
+            WorkstationCommandCatalog.Get(WorkstationCommandKind.RunPipelineSession).LeaseDuration);
+    }
+
     [Fact]
     public void Catalog_RejectsUnknownCommandKinds()
     {
