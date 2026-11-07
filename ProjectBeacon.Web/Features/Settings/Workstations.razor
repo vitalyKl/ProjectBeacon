@@ -119,15 +119,6 @@
                              Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
-                        <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
-                <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
-                    <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
-                    <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
-                    <MudTextField @bind-Value="_llamaCppBin" InputId="llamacpp-bin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
-                </MudExpansionPanel>
-            </MudExpansionPanels>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
-        </div>
                 </div>
             </MudTabPanel>
             <MudTabPanel Text="@L["Probe"]">
