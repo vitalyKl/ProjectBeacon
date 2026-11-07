@@ -75,8 +75,8 @@ public sealed class AgentProviderConnectionKeyTests : IDisposable
         await SaveKey(user.Id, "xai", "sk-v2-key");
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceAgentProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
-            .HandleAsync(new DeviceAgentProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var row = result.Value!.First(c => c.ProviderId == "xai");
@@ -90,8 +90,8 @@ public sealed class AgentProviderConnectionKeyTests : IDisposable
         await AddConnection(user.Id, "openai", "gpt-x", SecretBox.Seal("sk-v1-key", TestProtectors.LegacyKey));
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceAgentProviderConnectionsHandler(_dbFactory, TestProtectors.Dev(TestProtectors.LegacyKey))
-            .HandleAsync(new DeviceAgentProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev(TestProtectors.LegacyKey))
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Equal("sk-v1-key", result.Value!.First().ApiKey);
@@ -104,8 +104,8 @@ public sealed class AgentProviderConnectionKeyTests : IDisposable
         await AddConnection(user.Id, "openai", "gpt-x", SecretBox.Seal("sk-v1-key", TestProtectors.LegacyKey));
         var device = await AddDevice(user.Id);
 
-        var result = await new DeviceAgentProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
-            .HandleAsync(new DeviceAgentProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
+        var result = await new DeviceProviderConnectionsHandler(_dbFactory, TestProtectors.Dev())
+            .HandleAsync(new DeviceProviderConnectionsCommand(device), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Null(result.Value!.First().ApiKey);
