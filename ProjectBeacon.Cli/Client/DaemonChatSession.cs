@@ -158,7 +158,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             if (chatId != Guid.Empty)
             {
                 var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{agent}:{error}")))[..16];
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "error", error, $"agent:{hash}"), projectId, ct);
+                await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "error", error, $"agent:{hash}"), projectId, ct);
             }
             return (false, null, error);
         }
@@ -269,7 +269,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         {
             var key = messageId + ":" + kind + ":" + ordinal;
             var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
-            return PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", kind, body, key, Complete: false), projectId, streamCt);
+            return PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", kind, body, key, Complete: false), projectId, streamCt);
         }
         var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
@@ -328,7 +328,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     if (publishedSnapshots.TryGetValue(key, out var previous) && previous == snapshot)
                         continue;
                     await PostChatAsync(
-                        $"/v1/chat/sessions/{chatId}/parts",
+                        ApiRoutes.ChatSessionParts(chatId),
                         new ChatPartRequest(
                             part.Role,
                             part.Kind,
@@ -421,7 +421,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                 : capabilities is not null
                     ? await capabilities.ReadContextLimitAsync(model, ct)
                     : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
-            await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new ChatUsageReportRequest(
+            await PostChatAsync(ApiRoutes.ChatSessionUsage(chatId), new ChatUsageReportRequest(
                 usage.PromptTokens,
                 usage.CompletionTokens,
                 usage.AssistantMessages,
@@ -454,7 +454,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
         }
 
-        await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
+        await PostChatAsync(ApiRoutes.ChatSessionIdle(chatId), new { }, projectId, ct);
         return (true, JsonSerializer.Serialize(new
         {
             sessionId = externalId,
@@ -470,7 +470,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         // Stable external id derived from the error text so a repeated identical error dedupes on the API.
         var body = ClipError(turn.Error!);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..16];
-        await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "error", body, $"error:{hash}"), projectId, ct);
+        await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "error", body, $"error:{hash}"), projectId, ct);
     }
 
     private async Task<bool> SurfacePendingFormsAsync(
@@ -499,7 +499,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     metadata = form.Metadata,
                     fields = JsonNode.Parse(form.FieldsJson)
                 });
-                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new ChatPartRequest("assistant", "question", body, $"form:{form.Id}", Complete: true), projectId, ct);
+                await PostChatAsync(ApiRoutes.ChatSessionParts(chatId), new ChatPartRequest("assistant", "question", body, $"form:{form.Id}", Complete: true), projectId, ct);
             }
             return forms.Count > 0;
         }

@@ -30,7 +30,7 @@ public static class ChatEndpoints
         app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/agent", SwitchAgent).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/forms/{formId}/reply", ReplyForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost(ApiRoutes.ChatSessionPartsRoute, AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.ChatSessionIdleRoute, MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.ChatSessionUsageRoute, ReportUsage).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;

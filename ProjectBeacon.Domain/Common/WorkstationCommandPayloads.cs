@@ -68,7 +68,7 @@ public static class WorkstationCommandPayloads
             || externalSessionValue.ValueKind != JsonValueKind.String)
             return false;
 
-        var externalSessionId = externalSessionValue.GetString()?.Trim();
+        var externalSessionId = externalSessionValue.GetString();
         if (string.IsNullOrWhiteSpace(externalSessionId))
             return false;
 
@@ -84,16 +84,12 @@ public static class WorkstationCommandPayloads
 
         try
         {
-            var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                document.Dispose();
                 return false;
-            }
 
             // The returned element is cloned so its backing document can be disposed safely.
             root = document.RootElement.Clone();
-            document.Dispose();
             return true;
         }
         catch (JsonException)

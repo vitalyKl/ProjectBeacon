@@ -234,7 +234,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             string? transportError = null;
             try
             {
-                response = await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new CommandCompletionRequest(ok, result, error, command.Generation), ct);
+                response = await _http.PostAsJsonAsync(ApiRoutes.CommandComplete(command.Id), new CommandCompletionRequest(ok, result, error, command.Generation), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
