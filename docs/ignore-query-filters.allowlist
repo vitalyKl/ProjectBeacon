@@ -3,7 +3,6 @@
 ProjectBeacon.API/Auth/ApiTokenAuthMiddleware.cs|9|Authenticates API tokens and resolves device, chat, task, and run ownership before tenant scope is bound; each lookup is constrained by the token or validated actor resource.
 ProjectBeacon.Application/Agents/ApplyAgentConfigHandler.cs|1|Resolves the project membership needed to authorize an agent configuration apply before project scope is available.
 ProjectBeacon.Application/Agents/ModelBackendHandlers.cs|2|Checks cross-project membership and role bindings while authorizing model backend changes.
-ProjectBeacon.Application/Agents/ModelWake.cs|1|Finds the online device runtime for a project before dispatching a model wake request.
 ProjectBeacon.Application/Agents/ProjectMcpServerHandlers.cs|2|Loads project-scoped MCP configuration after validating the project requested by the caller.
 ProjectBeacon.Application/Auth/LoginHandlers.cs|9|Accepts invite and login flows using opaque invite credentials, then validates invite, organization, and project membership relationships explicitly.
 ProjectBeacon.Application/Authorization/AuthorizationService.cs|9|Implements central authorization by resolving the actor's project and organization memberships across tenant boundaries.
