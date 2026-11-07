@@ -2,29 +2,30 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> ContextTools() =>
     [
-        new("context_compile", "Compile the project brief the same way the Context page does.",
+        new(McpToolNames.ContextCompile, "Compile the project brief the same way the Context page does.",
             () => Props(("taskId", "string", false), ("path", "string", false), ("repoId", "string", false),
                 ("budgetTokens", "integer", false), ("includeChangedScope", "boolean", false),
                 ("includeTreeCapsule", "boolean", false), ("includeHandoff", "boolean", false),
                 ("projectId", "string", false)), Compile),
-        new("list_context_nodes", "List context sections for the project.",
+        new(McpToolNames.ListContextNodes, "List context sections for the project.",
             () => Props(("projectId", "string", false)), NodesList),
-        new("get_context_node", "Get one context section.",
+        new(McpToolNames.GetContextNode, "Get one context section.",
             () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeGet),
-        new("upsert_context_node", "Create or update a context section. scopeType: Project, Repo, Path, Task. source defaults to Native.",
+        new(McpToolNames.UpsertContextNode, "Create or update a context section. scopeType: Project, Repo, Path, Task. source defaults to Native.",
             () => Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
                 ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
                 ("source", "string", false), ("sourcePath", "string", false), ("repoId", "string", false),
                 ("taskId", "string", false), ("projectId", "string", false)), NodeUpsert),
-        new("delete_context_node", "Delete a context section.",
+        new(McpToolNames.DeleteContextNode, "Delete a context section.",
             () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeDelete),
-        new("export_agents_md", "Export AGENTS.md markdown for the project.",
+        new(McpToolNames.ExportAgentsMd, "Export AGENTS.md markdown for the project.",
             () => Props(("repoId", "string", false), ("path", "string", false), ("projectId", "string", false)), ExportAgents),
     ];
 

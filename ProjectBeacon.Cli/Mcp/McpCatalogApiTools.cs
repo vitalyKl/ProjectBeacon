@@ -2,23 +2,24 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> CatalogTools() =>
     [
-        new("list_labels", "List project area labels.",
+        new(McpToolNames.ListLabels, "List project area labels.",
             () => Props(("projectId", "string", false)), LabelsList),
-        new("match_label", "Match a file path to an active label.",
+        new(McpToolNames.MatchLabel, "Match a file path to an active label.",
             () => Props(("path", "string", true), ("projectId", "string", false)), LabelMatch),
-        new("add_label_path", "Add a path prefix to a label.",
+        new(McpToolNames.AddLabelPath, "Add a path prefix to a label.",
             () => Props(("labelId", "string", true), ("path", "string", true), ("projectId", "string", false)), LabelPath),
-        new("list_reports", "List generated reports.",
+        new(McpToolNames.ListReports, "List generated reports.",
             () => Props(("projectId", "string", false)), ReportsList),
-        new("get_report", "Get one report.",
+        new(McpToolNames.GetReport, "Get one report.",
             () => Props(("reportId", "string", true), ("projectId", "string", false)), ReportGet),
-        new("generate_report", "Generate a board snapshot report.",
+        new(McpToolNames.GenerateReport, "Generate a board snapshot report.",
             () => Props(("createdByType", "string", false), ("createdById", "string", false), ("projectId", "string", false)), ReportGenerate),
     ];
 
