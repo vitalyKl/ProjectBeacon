@@ -1195,6 +1195,17 @@ body:has(.beacon-theme-dark) .mud-main-content {
     overflow-wrap: anywhere;
 }
 
+/* Long probe errors and command failure details must remain readable without expanding the whole page. */
+.beacon-diagnostic-output {
+    display: block;
+    max-height: 12rem;
+    min-width: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 .beacon-chat-fab {
     position: fixed;
     right: 24px;

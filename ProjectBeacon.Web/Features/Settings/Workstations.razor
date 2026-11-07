@@ -137,7 +137,7 @@
             }
             @if (_probeAgentRuntimeHealthy == false && !string.IsNullOrWhiteSpace(_probeAgentRuntimeError))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2"><span class="beacon-diagnostic-output">@_probeAgentRuntimeError</span></MudAlert>
             }
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @(_probeGit ?? "-")</MudText>
