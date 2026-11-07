@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
