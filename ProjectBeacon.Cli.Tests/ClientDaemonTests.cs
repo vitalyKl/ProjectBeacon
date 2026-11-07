@@ -491,7 +491,6 @@ public sealed class ClientDaemonTests : IDisposable
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
         var state = new DaemonRuntimeState("http://localhost", null);
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
         var deps = new DaemonDependencies(http, llama, () => new WorkstationSettings(),
             _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused llama-sync test runtime"));
         var sync = new DaemonLlamaSync(deps, state);
