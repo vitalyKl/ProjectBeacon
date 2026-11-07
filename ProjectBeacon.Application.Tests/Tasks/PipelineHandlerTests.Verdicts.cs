@@ -41,7 +41,7 @@ public sealed partial class PipelineHandlerTests
             var report = await _db.TaskWorkspaceSections.AsNoTracking()
                 .SingleAsync(section => section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Value.Id,
                     TestContext.Current.CancellationToken);
-            Assert.Equal("report/" + subtask.Value.Id.ToString("N"), report.Key);
+            Assert.Equal("report/" + subtask.Value.Id.ToString("N") + "/attempt-1", report.Key);
             Assert.Equal("Report", report.Kind);
             Assert.Equal("Server", report.AuthorType);
             Assert.Equal("Actor", report.AuthorRole);
@@ -156,6 +156,18 @@ public sealed partial class PipelineHandlerTests
                 .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://a2", "fixed")), TestContext.Current.CancellationToken);
             Assert.True(redone.Success, redone.Error);
             Assert.Equal(SubtaskStatus.Done, redone.Value!.Subtasks.Single(s => s.Id == done.SubtaskId).Status);
+            using (TenantScope.EnterUnscoped())
+            {
+                var reports = await _db.TaskWorkspaceSections.AsNoTracking()
+                    .Where(section => section.TaskId == done.Task.Id
+                        && section.AuthorSubtaskId == done.SubtaskId
+                        && section.Kind == "Report")
+                    .OrderBy(section => section.Key)
+                    .ToListAsync(TestContext.Current.CancellationToken);
+                Assert.Equal(2, reports.Count);
+                Assert.Contains(reports, report => report.Key.EndsWith("/attempt-1", StringComparison.Ordinal));
+                Assert.Contains(reports, report => report.Key.EndsWith("/attempt-2", StringComparison.Ordinal));
+            }
 
             var review2 = await new StartReviewHandler(factory, spawner)
                 .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
