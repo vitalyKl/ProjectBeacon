@@ -25,7 +25,7 @@ public class OrgInvite : Entity, IOrgScoped
 
     public static OrgInvite Create(Guid orgId, string email, MemberRole role, Guid invitedByUserId, string tokenHash) => Create(orgId, email, role, invitedByUserId, tokenHash, DateTime.UtcNow);
 
-    public static OrgInvite Create
+    public static OrgInvite Create(Guid orgId, string email, MemberRole role, Guid invitedByUserId, string tokenHash, DateTime now)
     {
         var invite = Entity.New<OrgInvite>();
         invite.OrgId = orgId;
