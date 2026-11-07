@@ -144,19 +144,15 @@ public sealed class RunPipelineSessionDispatchTests
                 UseOwnSwapper = false,
                 ConfigFile = Path.Combine(temp, "llamaswap.yaml")
             };
-            await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
             var settings = new WorkstationSettings
             {
-                AgentRuntime = "native",
-                OpencodeDataDir = Path.Combine(temp, "native-data"),
+                AgentDataDir = Path.Combine(temp, "native-data"),
                 LlamaSwapPort = 8080
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(
                 http,
                 llama,
-                openCode,
-                new OpenCodeAgentRuntime(openCode),
                 settingsLoader,
                 runtimeFactory: llamaSync => new NativeAgentRuntime(
                     http,
