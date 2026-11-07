@@ -4,7 +4,7 @@ using Domain.Entities.Agents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 /// <summary>
-/// EF mapping for OpenCode connections. User and provider together are unique.
+/// EF mapping for user-owned model provider connections. User and provider together are unique.
 /// </summary>
 public class AgentProviderConnectionConfiguration : IEntityTypeConfiguration<AgentProviderConnection>
 {
