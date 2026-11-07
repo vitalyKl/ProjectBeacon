@@ -28,8 +28,13 @@ public sealed class ApiTokenAuthMiddleware
         ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead;
 
     private readonly RequestDelegate _next;
+    private readonly TimeProvider _timeProvider;
 
-    public ApiTokenAuthMiddleware(RequestDelegate next) => _next = next;
+    public ApiTokenAuthMiddleware(RequestDelegate next, TimeProvider? timeProvider = null)
+    {
+        _next = next;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task InvokeAsync(HttpContext ctx, BeaconDbContext db)
     {
@@ -53,7 +58,7 @@ public sealed class ApiTokenAuthMiddleware
                     var token = await db.ApiTokens.IgnoreQueryFilters()
                         .FirstOrDefaultAsync(t => t.TokenHash == hash, ctx.RequestAborted);
 
-                    var now = DateTime.UtcNow;
+                    var now = _timeProvider.GetUtcNow().UtcDateTime;
                     var valid = token is not null && !token.IsExpired && !token.IsRevoked;
                     if (valid && token!.ClientKind == ApiTokenClientKind.Harness)
                         valid = await IsHarnessTokenActiveAsync(db, token, ctx, now, ctx.RequestAborted);
