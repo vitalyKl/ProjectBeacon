@@ -460,6 +460,7 @@ public sealed class P2AuthorizationHttpTests
         var projectId = project.GetProperty("id").GetGuid();
 
         var outsiderJwt = await RegisterAndLogin(client, "model-outsider-http", "model-outsider-http@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
         var outsiderMe = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         var outsiderId = outsiderMe.GetProperty("id").GetGuid();
 
