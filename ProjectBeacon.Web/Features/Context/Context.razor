@@ -2,6 +2,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Web.Features.Chat
 @using Microsoft.AspNetCore.Components.Web
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Context
@@ -107,7 +108,7 @@ else
                 }
                 @if (!string.IsNullOrEmpty(_preview))
                 {
-                    <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_preview</MudText>
+                    <div class="mt-4"><ChatMarkdown Text="@_preview" /></div>
                 }
                 @foreach (var revision in _revisions.Take(5))
                 {

@@ -9,6 +9,7 @@
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Application.Runtime
+@using ProjectBeacon.Web.Features.Chat
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
@@ -82,7 +83,7 @@ else
                         <a class="beacon-run-row" href="@($"/task/{task.Id}")">
                             <PbAvatar Text="@Initials(task.Title)" />
                             <span>
-                                <strong>@task.Title</strong>
+                                <strong title="@task.Title">@task.Title</strong>
                                 <span>@ChromeLabels.Status(L, task.Status)</span>
                             </span>
                             <PbProgress Value="@(task.SubStage is { } stage ? SubStageToPercent(stage) : 0)" />
@@ -210,7 +211,7 @@ else
             @foreach (var section in _pulse.BriefSections)
             {
                 <MudText Typo="Typo.caption">@ChromeLabels.Section(L, section.SectionId)</MudText>
-                <MudText Typo="Typo.body2" Class="beacon-pre">@section.BodyMarkdown</MudText>
+                <ChatMarkdown Text="@section.BodyMarkdown" />
             }
         }
         @if (_pulse.OpenMilestones == 0)

@@ -86,7 +86,7 @@ else
                     <MudProgressLinear Value="@(milestoneTasks.Count == 0 ? 0 : done * 100d / milestoneTasks.Count)" Color="Color.Default" Class="mt-1 beacon-track" />
                     @foreach (var task in milestoneTasks.Take(3))
                     {
-                        <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis">@task.Title</MudText>
+                        <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis" title="@task.Title">@task.Title</MudText>
                     }
                     @if (milestoneTasks.Count > 3)
                     {

@@ -56,7 +56,7 @@
     }
     else
     {
-        <MudTable Items="_devices" Dense="true" Hover="true">
+        <MudTable Items="_devices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["DeviceName"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
@@ -69,7 +69,7 @@
                     <StatusChip Color="@ChipPalette.ForRuntime(context.Online ? "Online" : "Offline")" Label="@(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)" />
                 </MudTd>
                 <MudTd DataLabel="@L["LastSeen"]"><LocalTime Value="context.LastHeartbeatAt" /></MudTd>
-                <MudTd>
+                <MudTd DataLabel="@L["Actions"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
                 </MudTd>
             </RowTemplate>
@@ -193,7 +193,7 @@
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["DaemonUpdateRequiresOnline"]</MudText>
         }
-        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+
         @if (_clientUpdateActive || _clientUpdateMessage is not null)
         {
             <MudProgressLinear Color="Color.Primary" Value="@(_clientUpdatePercent ?? 0d)"
@@ -205,7 +205,7 @@
     </MudPaper>
     <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudTable Items="_commands" Dense="true" Hover="true">
+        <MudTable Items="_commands" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["Kind"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
@@ -220,7 +220,9 @@
                 </MudTd>
                 <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
                 <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
-                <MudTd DataLabel="@L["Error"]">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</MudTd>
+                <MudTd DataLabel="@L["Error"]">
+                    <span class="beacon-table-cell-clamp" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
+                </MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
         </MudTable>
