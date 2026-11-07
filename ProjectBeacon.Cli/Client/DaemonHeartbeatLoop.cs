@@ -10,14 +10,14 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
     private readonly ClientLlamaSwap _llama;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly IDaemonLlamaSync _llamaSync;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
 
     public DaemonHeartbeatLoop(
         DaemonDependencies deps,
         IDaemonLlamaSync llamaSync,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonRuntimeState state,
         DaemonTiming timing)
     {
