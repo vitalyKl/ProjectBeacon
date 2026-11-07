@@ -39,7 +39,7 @@ public record ListAgentProviderConnectionsCommand(Guid UserId) : ICommand<Result
 /// <summary>
 /// Device asking for its owner's provider connections, including secrets.
 /// </summary>
-public record DeviceAgentProviderConnectionsCommand(Guid DeviceId) : ICommand<Result<IList<AgentProviderConnectionSecretDto>>>;
+public record DeviceProviderConnectionsCommand(Guid DeviceId) : ICommand<Result<IList<AgentProviderConnectionSecretDto>>>;
 /// <summary>
 /// Lists the user's provider connections without returning stored API keys.
 /// </summary>
@@ -129,19 +129,19 @@ public sealed class DeleteAgentProviderConnectionHandler : ICommandHandler<Delet
 /// <summary>
 /// Returns the device owner's provider connections, including secrets, for the enrolled device. Fails when the device is missing.
 /// </summary>
-public sealed class DeviceAgentProviderConnectionsHandler : ICommandHandler<DeviceAgentProviderConnectionsCommand, Result<IList<AgentProviderConnectionSecretDto>>>
+public sealed class DeviceProviderConnectionsHandler : ICommandHandler<DeviceProviderConnectionsCommand, Result<IList<AgentProviderConnectionSecretDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
 
     private readonly ISecretProtector _secrets;
 
-    public DeviceAgentProviderConnectionsHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
+    public DeviceProviderConnectionsHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
     }
 
-    public async Task<Result<IList<AgentProviderConnectionSecretDto>>> HandleAsync(DeviceAgentProviderConnectionsCommand command, CancellationToken ct = default)
+    public async Task<Result<IList<AgentProviderConnectionSecretDto>>> HandleAsync(DeviceProviderConnectionsCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.DeviceId && d.RevokedAt == null, ct);
