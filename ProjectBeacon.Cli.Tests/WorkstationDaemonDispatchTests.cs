@@ -37,17 +37,18 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyOpencode_WithoutLocalRoot_ReturnsRuntimeRequired()
+    public async Task RetiredLegacyAgentConfigCommand_FailsClosed()
     {
         await using var daemon = CreateDaemon(_dir);
         var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
         {
             Id = Guid.NewGuid(),
-            Kind = WorkstationCommandKind.ApplyOpencode,
+            Kind = WorkstationCommandKind.RetiredAgentConfigApply,
             PayloadJson = "{}"
         }, CancellationToken.None);
+
         Assert.False(ok);
-        Assert.Equal(CommandSandbox.RuntimeRequired, error);
+        Assert.Contains("retired", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -79,8 +80,8 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         }, CancellationToken.None);
         Assert.True(ok, error);
         Assert.True(File.Exists(Path.Combine(projectRoot, ".gitignore")));
-        Assert.True(File.Exists(Path.Combine(projectRoot, "opencode.json")));
-        Assert.True(Directory.Exists(Path.Combine(projectRoot, ".opencode", "data")));
+        Assert.False(File.Exists(Path.Combine(projectRoot, "opencode.json")));
+        Assert.False(Directory.Exists(Path.Combine(projectRoot, ".opencode")));
         using var doc = JsonDocument.Parse(result!);
         Assert.Equal(projectRoot.Replace('\\', '/'), doc.RootElement.GetProperty("path").GetString()!.Replace('\\', '/'));
     }
@@ -120,43 +121,6 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task ApplyOpencode_WithLocalRoot_WritesOpencodeJson()
-    {
-        var projectRoot = Path.Combine(_dir, "apply");
-        Directory.CreateDirectory(projectRoot);
-        await using var daemon = CreateDaemon(_dir);
-        var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
-        {
-            Id = Guid.NewGuid(),
-            Kind = WorkstationCommandKind.ApplyOpencode,
-            LocalRoot = projectRoot,
-            PayloadJson = JsonSerializer.Serialize(new { path = ".", model = "llamacpp/test-model" })
-        }, CancellationToken.None);
-        Assert.True(ok, error);
-        var opencodePath = Path.Combine(projectRoot, "opencode.json");
-        Assert.True(File.Exists(opencodePath));
-        var content = File.ReadAllText(opencodePath);
-        Assert.Contains("test-model", content);
-    }
-
-    [Fact]
-    public async Task ApplyOpencode_RejectsAbsolutePathInPayload()
-    {
-        var projectRoot = Path.Combine(_dir, "apply2");
-        Directory.CreateDirectory(projectRoot);
-        await using var daemon = CreateDaemon(_dir);
-        var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
-        {
-            Id = Guid.NewGuid(),
-            Kind = WorkstationCommandKind.ApplyOpencode,
-            LocalRoot = projectRoot,
-            PayloadJson = JsonSerializer.Serialize(new { path = Path.GetTempPath(), model = "llamacpp/test" })
-        }, CancellationToken.None);
-        Assert.False(ok);
-        Assert.Equal(WorkspacePath.RelativePathRequired, error);
-    }
-
-    [Fact]
     public async Task SwapModel_CallsLlamaEnsureSwap()
     {
         await using var llama = new ClientLlamaSwap
@@ -186,8 +150,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         };
         var settings = new WorkstationSettings
         {
-            AgentRuntime = "Native",
-            OpencodeDataDir = Path.Combine(_dir, "native-data")
+            AgentDataDir = Path.Combine(_dir, "native-data")
         };
         await using var daemon = new WorkstationDaemon(http, llama, () => settings);
 
@@ -208,12 +171,12 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task ChatEnsureSession_UsesRuntimeReloadedFromPersistedWorkstationSettings()
+    public async Task ChatEnsureSession_MigratesLegacyAgentDataDirectoryForNativeRuntime()
     {
         var settingsPath = Path.Combine(_dir, "workstation.json");
         var dataDirectory = Path.Combine(_dir, "native-data");
         WorkstationSetup.SaveWorkstation(
-            JsonSerializer.Serialize(new { agentRuntime = "native", opencodeDataDir = dataDirectory }),
+            JsonSerializer.Serialize(new { agentRuntime = "opencode", opencodeDataDir = dataDirectory }),
             settingsPath);
 
         using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
@@ -237,11 +200,11 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         var sessionId = doc.RootElement.GetProperty("sessionId").GetString();
         Assert.True(Guid.TryParseExact(sessionId, "N", out _), $"Expected a native local session id, got '{sessionId}'.");
         Assert.True(File.Exists(Path.Combine(_dir, "sessions", sessionId + ".json")));
-        Assert.Equal("native", WorkstationSettings.Load(settingsPath).AgentRuntime);
+        Assert.Equal(dataDirectory, WorkstationSettings.Load(settingsPath).AgentDataDir);
     }
 
     [Fact]
-    public async Task ChatEnsureSession_DoesNotFallBackToOpenCodeWhenWorkstationSettingsCannotBeLoaded()
+    public async Task ChatEnsureSession_FailsWhenWorkstationSettingsCannotBeLoaded()
     {
         var settingsPath = Path.Combine(_dir, "workstation-invalid.json");
         File.WriteAllText(settingsPath, "<html>invalid workstation settings</html>");
@@ -252,24 +215,18 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
             SkipRealProcess = true,
             ConfigFile = Path.Combine(_dir, "invalid-settings-config.yaml")
         };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        await using var daemon = new WorkstationDaemon(
-            http,
-            llama,
-            () => WorkstationSettings.Load(settingsPath),
-            openCode: openCode);
+        await using var daemon = new WorkstationDaemon(http, llama, () => WorkstationSettings.Load(settingsPath));
 
         var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
         {
             Id = Guid.NewGuid(),
             Kind = WorkstationCommandKind.ChatEnsureSession,
             LocalRoot = _dir,
-            PayloadJson = JsonSerializer.Serialize(new { title = "Do not silently switch runtimes" })
+            PayloadJson = JsonSerializer.Serialize(new { title = "Invalid workstation settings" })
         }, CancellationToken.None);
 
         Assert.False(ok);
         Assert.Contains("Could not load workstation settings", error);
-        Assert.Equal(0, openCode.StartCount);
     }
 
     [Fact]
@@ -283,8 +240,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         };
         var settings = new WorkstationSettings
         {
-            AgentRuntime = "native",
-            OpencodeDataDir = Path.Combine(_dir, "pipeline-data")
+            AgentDataDir = Path.Combine(_dir, "pipeline-data")
         };
         await using var daemon = new WorkstationDaemon(http, llama, () => settings);
 
@@ -312,22 +268,6 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         }, CancellationToken.None);
         Assert.False(ok);
         Assert.Contains("externalSessionId", error);
-    }
-
-    [Fact]
-    public async Task ChatAbort_WithExternalSessionId_Succeeds()
-    {
-        var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
-        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), openCode: openCode);
-        var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
-        {
-            Id = Guid.NewGuid(),
-            Kind = WorkstationCommandKind.ChatAbort,
-            PayloadJson = JsonSerializer.Serialize(new { externalSessionId = "oc-test" })
-        }, CancellationToken.None);
-        Assert.True(ok, error);
     }
 
     [Fact]
@@ -381,7 +321,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         var final = daemon.Snapshot;
         Assert.True(final.LastCommand == "InitProject" && final.LastCommandOk,
             $"command was not dispatched over the HTTP wire: lastCommand={final.LastCommand}, ok={final.LastCommandOk}, daemon log: [{string.Join(" | ", final.Log)}]");
-        Assert.True(File.Exists(Path.Combine(projectRoot, "opencode.json")));
+        Assert.False(File.Exists(Path.Combine(projectRoot, "opencode.json")));
     }
 
     [Fact]
