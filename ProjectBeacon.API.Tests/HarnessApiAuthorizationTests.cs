@@ -21,6 +21,12 @@ public sealed class HarnessApiAuthorizationTests
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/pipeline", _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace/report%2Fabc", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, resultPath, _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, failPath, _taskId, _subtaskId));
@@ -38,6 +44,10 @@ public sealed class HarnessApiAuthorizationTests
     [Fact]
     public void PlannerToken_CanOrchestrateOnlyItsPinnedTask()
     {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
@@ -111,6 +121,10 @@ public sealed class HarnessApiAuthorizationTests
     [Fact]
     public void ReviewerToken_CanReviewButCannotPlanOrExecuteActorWork()
     {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/verdict", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,

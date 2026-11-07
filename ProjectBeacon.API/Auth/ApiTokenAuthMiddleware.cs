@@ -204,6 +204,19 @@ public sealed class ApiTokenAuthMiddleware
         if (!allowed)
             return false;
 
+        if (work.Kind == WorkstationCommandKind.RunPipelineSession && scope.Role is { } pipelineRole)
+        {
+            var identity = context.User.Identities.FirstOrDefault(item =>
+                item.AuthenticationType == ActorContextFactory.ApiTokenAuthType);
+            identity?.AddClaim(new Claim("pipeline_role", pipelineRole.ToString()));
+            if (scope.TaskId is { } pipelineTaskId)
+                identity?.AddClaim(new Claim("pipeline_task_id", pipelineTaskId.ToString("D")));
+            if (scope.SubtaskId is { } pipelineSubtaskId)
+                identity?.AddClaim(new Claim("pipeline_subtask_id", pipelineSubtaskId.ToString("D")));
+            if (scope.SessionId is { } pipelineSessionId)
+                identity?.AddClaim(new Claim("pipeline_session_id", pipelineSessionId.ToString("D")));
+        }
+
         // context_compile is a POST for transport reasons, but it is still a read operation.
         // Its taskId is part of the body, so pin it explicitly to the command's task rather
         // than relying on the client-provided tool arguments.
@@ -353,6 +366,9 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[3] == "pipeline")
                 return true;
 
+            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: true))
+                return true;
+
             return method == HttpMethods.Post
                 && segments.Length == 6
                 && segments[1] == "tasks"
@@ -365,6 +381,9 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Planner)
         {
+            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: true))
+                return true;
+
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
@@ -412,6 +431,9 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Review)
         {
+            if (IsTaskWorkspaceRequest(segments, scopedTaskId, method, allowWrite: false))
+                return true;
+
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
@@ -424,6 +446,21 @@ public sealed class ApiTokenAuthMiddleware
         }
 
         return false;
+    }
+
+    private static bool IsTaskWorkspaceRequest(string[] segments, Guid taskId, string method, bool allowWrite)
+    {
+        var taskWorkspaceRoute = segments.Length >= 4
+            && segments[0] == "v1"
+            && segments[1] == "tasks"
+            && GuidSegmentEquals(segments, 2, taskId)
+            && segments[3] == "workspace";
+        if (!taskWorkspaceRoute)
+            return false;
+
+        if (method == HttpMethods.Get)
+            return segments.Length == 4 || segments.Length >= 5;
+        return allowWrite && method == HttpMethods.Post && segments.Length == 4;
     }
 
     private static bool IsReadOnlyProjectRequest(
