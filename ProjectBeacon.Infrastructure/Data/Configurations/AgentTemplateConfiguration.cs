@@ -13,6 +13,9 @@ public class AgentTemplateConfiguration : IEntityTypeConfiguration<AgentTemplate
         entity.HasKey(e => e.Id);
         entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
         entity.Property(e => e.Mode).HasConversion<string>().IsRequired();
+        entity.Property(e => e.PlannerInstructions).HasMaxLength(8000).IsRequired();
+        entity.Property(e => e.ActorInstructions).HasMaxLength(8000).IsRequired();
+        entity.Property(e => e.ReviewInstructions).HasMaxLength(8000).IsRequired();
         entity.HasIndex(e => e.UserId);
         entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.SoloBackendId).OnDelete(DeleteBehavior.SetNull);
         entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.PlannerBackendId).OnDelete(DeleteBehavior.SetNull);

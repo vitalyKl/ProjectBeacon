@@ -15,6 +15,9 @@ public class AgentTemplate : Entity
     public Guid? PlannerBackendId { get; private set; }
     public Guid? ActorBackendId { get; private set; }
     public Guid? ReviewBackendId { get; private set; }
+    public string PlannerInstructions { get; private set; } = string.Empty;
+    public string ActorInstructions { get; private set; } = string.Empty;
+    public string ReviewInstructions { get; private set; } = string.Empty;
 
     public static AgentTemplate Create(
         Guid userId,
@@ -23,7 +26,10 @@ public class AgentTemplate : Entity
         Guid? soloBackendId,
         Guid? plannerBackendId,
         Guid? actorBackendId,
-        Guid? reviewBackendId)
+        Guid? reviewBackendId,
+        string? plannerInstructions = null,
+        string? actorInstructions = null,
+        string? reviewInstructions = null)
     {
         var template = Entity.New<AgentTemplate>();
         template.UserId = userId;
@@ -33,6 +39,9 @@ public class AgentTemplate : Entity
         template.PlannerBackendId = plannerBackendId;
         template.ActorBackendId = actorBackendId;
         template.ReviewBackendId = reviewBackendId;
+        template.PlannerInstructions = plannerInstructions?.Trim() ?? string.Empty;
+        template.ActorInstructions = actorInstructions?.Trim() ?? string.Empty;
+        template.ReviewInstructions = reviewInstructions?.Trim() ?? string.Empty;
         return template;
     }
 
@@ -42,7 +51,10 @@ public class AgentTemplate : Entity
         Guid? soloBackendId,
         Guid? plannerBackendId,
         Guid? actorBackendId,
-        Guid? reviewBackendId)
+        Guid? reviewBackendId,
+        string? plannerInstructions = null,
+        string? actorInstructions = null,
+        string? reviewInstructions = null)
     {
         Name = name;
         Mode = mode;
@@ -50,5 +62,8 @@ public class AgentTemplate : Entity
         PlannerBackendId = plannerBackendId;
         ActorBackendId = actorBackendId;
         ReviewBackendId = reviewBackendId;
+        PlannerInstructions = plannerInstructions?.Trim() ?? string.Empty;
+        ActorInstructions = actorInstructions?.Trim() ?? string.Empty;
+        ReviewInstructions = reviewInstructions?.Trim() ?? string.Empty;
     }
 }
