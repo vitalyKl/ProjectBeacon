@@ -109,7 +109,7 @@ public sealed class DeleteAgentProviderConnectionHandler : ICommandHandler<Delet
 {
     private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteAgentProviderConnectionHandler(IBeaconDbFactory dbFactory, NudgeOpenCodeHandler nudge)
+    public DeleteAgentProviderConnectionHandler(IBeaconDbFactory dbFactory)
     {
         _dbFactory = dbFactory;
     }
