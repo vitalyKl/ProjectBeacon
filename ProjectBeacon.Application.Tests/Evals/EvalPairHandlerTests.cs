@@ -133,7 +133,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.Equal(0.2, controls["temperature"]!.GetValue<double>());
 
         var stored = await _db.EvalRuns.SingleAsync(r => r.Id == value.WithBriefRunId, TestContext.Current.CancellationToken);
-        Assert.Equal("provider/test, stored.Model);
+        Assert.Equal("provider/test", stored.Model);
         Assert.Equal("native", stored.Runtime);
         Assert.Equal(0.2, stored.Temperature);
         Assert.Equal("abc123", stored.RepoRevision);
@@ -155,7 +155,7 @@ public sealed class EvalPairHandlerTests : IDisposable
 
     private static EvalPairRequest Pinned(Guid projectId, Guid taskId, Guid deviceId, Guid actorId, string prompt) =>
         new(projectId, taskId, deviceId, actorId, prompt,
-            Model: "provider/test,
+            Model: "provider/test",
             Temperature: 0.2,
             ReasoningEffort: "low",
             ToolPermissions: "read",
