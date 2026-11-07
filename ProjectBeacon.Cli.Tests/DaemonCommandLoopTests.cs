@@ -19,7 +19,8 @@ public sealed class DaemonCommandLoopTests
         var http = new HttpClient(api) { BaseAddress = new Uri("http://localhost/") };
         var state = new DaemonRuntimeState("http://localhost", null, () => stopped.TrySetResult(true));
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
-        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, null!, () => new WorkstationSettings(),
+            _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused command-loop test runtime"));
         var loop = new DaemonCommandLoop(deps, new CountingExecutor(), state, timing);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
@@ -170,11 +171,11 @@ public sealed class DaemonCommandLoopTests
         var tempDir = Path.Combine(Path.GetTempPath(), "beacon-hb-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(tempDir, "config.yaml") };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
         var state = new DaemonRuntimeState("http://localhost", null);
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
-        var deps = new DaemonDependencies(http, llama, openCode, null!, () => new WorkstationSettings());
-        var loop = new DaemonHeartbeatLoop(deps, new DaemonLlamaSync(deps, state), new DaemonOpenCodeGate(deps), state, timing);
+        var runtime = new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Heartbeat probe test runtime");
+        var deps = new DaemonDependencies(http, llama, () => new WorkstationSettings(), _ => runtime);
+        var loop = new DaemonHeartbeatLoop(deps, new DaemonLlamaSync(deps, state), new DaemonAgentRuntimeGate(runtime), state, timing);
 
         var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         api.OnHeartbeat = () => done.TrySetResult(true);
