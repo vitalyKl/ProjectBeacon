@@ -5,6 +5,13 @@ namespace ProjectBeacon.Cli.Client;
 /// </summary>
 internal sealed class DaemonTiming
 {
+    public DaemonTiming(TimeProvider? timeProvider = null)
+    {
+        TimeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public TimeProvider TimeProvider { get; }
+
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(5);
     public TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
     public TimeSpan ErrorBackoffInterval { get; set; } = TimeSpan.FromSeconds(3);

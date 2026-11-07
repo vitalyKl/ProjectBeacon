@@ -140,7 +140,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             || (requestedProjectId is { } requested && token.ProjectId != requested)
                             || token.CommandId != command.Id
                             || token.Generation != command.Generation
-                            || token.ExpiresAt <= DateTime.UtcNow)
+                            || token.ExpiresAt <= _timing.TimeProvider.GetUtcNow().UtcDateTime)
                             return (false, null, "The API returned an invalid or expired harness token.");
 
                         if (subtaskId is not null && taskId is null)
@@ -314,7 +314,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 || token.ProjectId == Guid.Empty
                 || token.CommandId != command.Id
                 || token.Generation != command.Generation
-                || token.ExpiresAt <= DateTime.UtcNow)
+                || token.ExpiresAt <= _timing.TimeProvider.GetUtcNow().UtcDateTime)
                 return (false, null, "The API returned an invalid or expired eval harness token.");
 
             authorization = new AgentHarnessAuthorization(
@@ -441,7 +441,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             || token.ProjectId != projectId
             || token.CommandId != command.Id
             || token.Generation != command.Generation
-            || token.ExpiresAt <= DateTime.UtcNow)
+            || token.ExpiresAt <= _timing.TimeProvider.GetUtcNow().UtcDateTime)
             return (false, null, "The API returned an invalid or expired harness token.");
 
         var authorization = new AgentHarnessAuthorization(
@@ -463,7 +463,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
         var pipelineIdleMinutes = Math.Clamp(workstationSettings.PipelineIdleTimeoutMinutes, 1, Math.Min(30, pipelineMaxMinutes - 1));
         var pipelineIdleTimeout = TimeSpan.FromMinutes(pipelineIdleMinutes);
-        var lastProgressAt = DateTime.UtcNow;
+        var lastProgressAt = _timing.TimeProvider.GetUtcNow().UtcDateTime;
         string? lastProgressSignature = null;
         string? timeoutReason = null;
         var awaitingUser = false;
@@ -525,7 +525,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             // absolute turn timeouts while the form remains pending; resume the cap after reply.
             if (forms.Count > 0)
             {
-                lastProgressAt = DateTime.UtcNow;
+                lastProgressAt = _timing.TimeProvider.GetUtcNow().UtcDateTime;
                 if (!awaitingUser)
                 {
                     awaitingUser = true;
@@ -535,7 +535,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             else if (awaitingUser)
             {
                 awaitingUser = false;
-                lastProgressAt = DateTime.UtcNow;
+                lastProgressAt = _timing.TimeProvider.GetUtcNow().UtcDateTime;
                 turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
             }
 
@@ -564,7 +564,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             if (madeProgress)
             {
                 lastProgressSignature = progressSignature;
-                lastProgressAt = DateTime.UtcNow;
+                lastProgressAt = _timing.TimeProvider.GetUtcNow().UtcDateTime;
             }
 
             var latest = collected.LastOrDefault();
@@ -588,7 +588,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 activity,
                 finish = turnStatus?.Finish,
                 error = turnStatus?.Error,
-                updatedAt = DateTimeOffset.UtcNow,
+                updatedAt = _timing.TimeProvider.GetUtcNow(),
                 parts,
                 forms = formItems
             }, DaemonJson.Camel);
@@ -634,7 +634,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             do
             {
                 await PublishActivityAsync("running", null, turnCts.Token);
-                if (!awaitingUser && DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
+                if (!awaitingUser && _timing.TimeProvider.GetUtcNow().UtcDateTime - lastProgressAt >= pipelineIdleTimeout)
                 {
                     timeoutReason = $"The pipeline agent turn made no progress for {pipelineIdleMinutes} minutes.";
                     turnCts.Cancel();
