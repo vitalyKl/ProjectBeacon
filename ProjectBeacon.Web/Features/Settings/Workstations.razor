@@ -216,7 +216,7 @@
                 <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
                 <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
                 <MudTd DataLabel="@L["Error"]">
-                    <span class="beacon-table-cell-clamp" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
+                    <span class="beacon-diagnostic-output" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
