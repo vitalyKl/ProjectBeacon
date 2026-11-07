@@ -117,10 +117,10 @@
             }
             <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @L["AgentRuntimeNative"]</MudText>
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
-            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_agentDataDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_agentDataDir) ? L["NoFolderSelected"].Value : _agentDataDir)</MudText>
             <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
-                    <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
+                    <MudTextField @bind-Value="_agentDataDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
                     <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
                     <MudTextField @bind-Value="_llamaCppBin" InputId="llamacpp-bin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
                 </MudExpansionPanel>
