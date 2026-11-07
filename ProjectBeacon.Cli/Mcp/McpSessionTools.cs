@@ -179,7 +179,7 @@ public static partial class McpStdioServer
             return ToolError(id, "missing 'summary'");
         if (!TrySessionTask(env, out var taskId, out var error))
             return ToolError(id, error);
-        return await ApiTextAsync(id, await McpApiTools.ReportResultAsync(taskId, subtaskId.Value, diffRef, summary, api!, OptArg(args, "abstract")));
+        return await ApiTextAsync(id, await McpApiTools.ReportResultAsync(taskId, subtaskId.Value, diffRef, summary, api!, abstractText: OptArg(args, "abstract")));
     }
 
     private static async Task<JsonObject> TaskReviewVerdictAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
