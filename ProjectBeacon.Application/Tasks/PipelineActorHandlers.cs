@@ -241,8 +241,10 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
         if (reported == 0)
             return Result.Failure<PipelineStateDto>("Subtask state changed while reporting; retry.");
 
+        var reportAttempt = await db.TaskWorkspaceSections.CountAsync(section =>
+            section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Id && section.Kind == "Report", ct) + 1;
         db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-            task.Id, task.ProjectId, subtask.Id, summary, command.Request.Abstract, actorSession?.Id));
+            task.Id, task.ProjectId, subtask.Id, reportAttempt, summary, command.Request.Abstract, actorSession?.Id));
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
@@ -312,8 +314,10 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
 
             var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
             var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
+            var reportAttempt = await db.TaskWorkspaceSections.CountAsync(section =>
+                section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Id && section.Kind == "Report", ct) + 1;
             db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-                task.Id, task.ProjectId, subtask.Id, reason, command.Request.Abstract, actorSession?.Id));
+                task.Id, task.ProjectId, subtask.Id, reportAttempt, reason, command.Request.Abstract, actorSession?.Id));
             await db.SaveChangesAsync(ct);
             await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
                 db, task.ProjectId, task.Id, subtask.Id, ct);
