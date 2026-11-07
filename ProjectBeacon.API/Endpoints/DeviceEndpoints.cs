@@ -33,7 +33,7 @@ public static class DeviceEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
-        app.MapGet(ApiRoutes.DeviceOpenCodeConnections, GetOpenCodeConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet(ApiRoutes.DeviceAgentProviderConnections, GetAgentProviderConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
     /// <summary>
@@ -189,11 +189,11 @@ public static class DeviceEndpoints
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetOpenCodeConnections(
-        DeviceOpenCodeConnectionsHandler handler, HttpContext ctx, CancellationToken ct)
+    private static async Task<IResult> GetAgentProviderConnections(
+        DeviceAgentProviderConnectionsHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new DeviceOpenCodeConnectionsCommand(actor.DeviceId!.Value), ct);
+        var result = await handler.HandleAsync(new DeviceAgentProviderConnectionsCommand(actor.DeviceId!.Value), ct);
         return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
