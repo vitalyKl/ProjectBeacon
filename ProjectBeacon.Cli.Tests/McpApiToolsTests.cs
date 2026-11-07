@@ -94,7 +94,7 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
-    public async Task ToolsList_IncludesControlPlaneTools_AndNoShell()
+    public async Task StdioToolsList_IncludesTaskAttachment_AndNoShell()
     {
         var root = TempRoot();
         try
