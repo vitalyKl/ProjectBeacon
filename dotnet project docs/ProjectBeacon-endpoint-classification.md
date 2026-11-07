@@ -132,8 +132,8 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 | GET | `/v1/models/proxy/status` | Human + ApiToken | TaskRead | RequireHumanOrApiToken | device proxy | ENFORCED |
 | POST | `/v1/models` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
 | DELETE | `/v1/models/{id}` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
-| POST | `/v1/models/bind` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
-| DELETE | `/v1/models/bind/{role}` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | user | REVIEW: creator identity (H2) |
+| POST | `/v1/models/bind` | Human | — | RequireHuman + Application Project Administer | project | Direct Application invocation enforces the same policy |
+| DELETE | `/v1/models/bind/{role}` | Human | — | RequireHuman + Application Project Administer | project | Direct Application invocation enforces the same policy |
 | POST | `/v1/models/proxy/reload` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | device proxy | ENFORCED |
 | POST | `/v1/models/proxy/unload` | Human + ApiToken | TaskWrite | RequireHumanOrApiToken | device proxy | ENFORCED |
 
