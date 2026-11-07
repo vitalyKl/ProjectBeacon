@@ -16,6 +16,7 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: planner. You plan the work; you do not implement it.");
+        AppendProfileInstructions(sb, "Planner", profileInstructions);
         sb.AppendLine($"Project: {(string.IsNullOrWhiteSpace(projectName) ? "(unnamed)" : projectName)}");
         sb.AppendLine($"Task: {task.Title}");
         if (!string.IsNullOrWhiteSpace(task.Description))
@@ -36,7 +37,6 @@ public static class SessionPrompts
         sb.AppendLine("Do not add run_command or run_log to allowedMcpTools. The workstation harness exposes argv-based command execution automatically to Actor sessions when the workstation command policy permits it; Plan mode, Planner, Review, and Eval cannot execute commands.");
         sb.AppendLine($"Do not call {McpToolNames.PipelineStartActor} or {McpToolNames.PipelineLaunchSession}. The server owns the Actor queue and starts exactly one pending subtask after this Planner command finishes, then starts the next one after each Actor command completes.");
         sb.AppendLine("Finish after creating all subtasks. Do not wait for Actor execution or start Review; Review is a separate user action after every subtask is Done or Failed.");
-        AppendProfileInstructions(sb, "Planner", profileInstructions);
         return sb.ToString().TrimEnd();
     }
 
@@ -47,6 +47,7 @@ public static class SessionPrompts
         sb.AppendLine("Role: actor. Execute exactly this subtask; you are not told the surrounding task.");
         sb.AppendLine($"Assigned subtask ID: {subtask.Id:D}");
         sb.AppendLine("Use this exact ID when referring to your subtask. Beacon MCP lifecycle tools default to this assigned ID when subtaskId is omitted; an explicitly supplied different ID is rejected.");
+        AppendProfileInstructions(sb, "Actor", profileInstructions);
         sb.AppendLine();
         sb.AppendLine("Instructions:");
         sb.AppendLine(subtask.Instructions);
@@ -71,7 +72,6 @@ public static class SessionPrompts
         sb.AppendLine($"If this subtask produces a user-facing file or image, attach it to the task with {McpToolNames.TaskAttachFile} using a workspace-relative path. Do not attach temporary files, logs, or secrets.");
         sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, a truthful diffRef, and a concise summary of verified changes. Keep Summary at or below 5000 characters; include only the outcome, key files, verification, and remaining caveats. Do not paste logs or the full implementation. Do not invent a commit or branch reference.");
         sb.AppendLine($"If you cannot complete the work safely, call {McpToolNames.PipelineFailSubtask} with this subtaskId and a concrete reason. Never claim completion unless the reporting tool succeeds.");
-        AppendProfileInstructions(sb, "Actor", profileInstructions);
         return sb.ToString().TrimEnd();
     }
 
@@ -80,6 +80,7 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: reviewer. Review the artifacts below; you do not see the planning or actor transcripts.");
+        AppendProfileInstructions(sb, "Review", profileInstructions);
         sb.AppendLine($"Task: {task.Title}");
         if (!string.IsNullOrWhiteSpace(task.Description))
         {
@@ -109,7 +110,6 @@ public static class SessionPrompts
         sb.AppendLine("Inspect the relevant changes independently and compare them with the task requirements. A failed subtask is not evidence of completed work.");
         sb.AppendLine($"If the deliverables satisfy the task, call {McpToolNames.TaskReviewVerdict} with verdict 'approve' and an evidence-based note. Only after that call succeeds, call {McpToolNames.PipelineApprove} to finish the pipeline.");
         sb.AppendLine($"If a specific subtask needs more work, call {McpToolNames.TaskReviewVerdict} with verdict 'reopen_subtask', its subtaskId, and an actionable fix note. Do not call {McpToolNames.PipelineApprove} after reopening.");
-        AppendProfileInstructions(sb, "Review", profileInstructions);
         return sb.ToString().TrimEnd();
     }
 
