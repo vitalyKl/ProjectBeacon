@@ -118,7 +118,7 @@
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
             <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @RuntimeLabel(_probeAgentRuntime)</MudText>
-            @if (_probeAgentRuntime != "-" && !string.Equals(_probeAgentRuntime, _agentRuntime, StringComparison.OrdinalIgnoreCase))
+            @if (!string.IsNullOrWhiteSpace(_probeAgentRuntime) && !string.Equals(_probeAgentRuntime, _agentRuntime, StringComparison.OrdinalIgnoreCase))
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@L["AgentRuntimePendingRestart"]</MudAlert>
             }
@@ -126,9 +126,7 @@
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
             }
-            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
-            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
-            <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
+                        <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
                     <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
                     <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
@@ -139,23 +137,23 @@
             <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
         </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @_probeOpencode</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeNode"]: @_probeNode</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @_probeDocker</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @_probeLlamaSwap</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeGit"]: @(_probeGit ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @(_probeOpencode ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeNode"]: @(_probeNode ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @(_probeDocker ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @(_probeLlamaSwap ?? "-")</MudText>
         <MudStack Row="true" Spacing="2" Class="mt-2">
-            @if (_probeGit == "-")
+            @if (string.IsNullOrWhiteSpace(_probeGit))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallGit">@L["Install"] git</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallGit">@string.Format(L["InstallPackage"].Value, "git")</MudButton>
             }
-            @if (_probeNode == "-")
+            @if (string.IsNullOrWhiteSpace(_probeNode))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallNode">@L["Install"] node</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallNode">@string.Format(L["InstallPackage"].Value, "node")</MudButton>
             }
-            @if (_probeDocker == "-")
+            @if (string.IsNullOrWhiteSpace(_probeDocker))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@L["Install"] docker</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@string.Format(L["InstallPackage"].Value, "docker")</MudButton>
             }
         </MudStack>
     </MudPaper>
@@ -248,12 +246,12 @@
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
-    private string _probeGit = "-";
-    private string _probeOpencode = "-";
-    private string _probeNode = "-";
-    private string _probeDocker = "-";
-    private string _probeLlamaSwap = "-";
-    private string _probeAgentRuntime = "-";
+    private string? _probeGit;
+    private string? _probeOpencode;
+    private string? _probeNode;
+    private string? _probeDocker;
+    private string? _probeLlamaSwap;
+    private string? _probeAgentRuntime;
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
@@ -390,8 +388,8 @@
 
     private void FillProbe(string probeJson)
     {
-        _probeGit = _probeOpencode = _probeNode = _probeDocker = _probeLlamaSwap = "-";
-        _probeAgentRuntime = "-";
+        _probeGit = _probeOpencode = _probeNode = _probeDocker = _probeLlamaSwap = null;
+        _probeAgentRuntime = null;
         _probeAgentRuntimeHealthy = null;
         _probeAgentRuntimeError = null;
         try
@@ -427,12 +425,12 @@
         }
     }
 
-    private static string Tool(JsonElement root, string name)
+    private static string? Tool(JsonElement root, string name)
     {
         if (!root.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.String)
-            return "-";
+            return null;
         var value = p.GetString();
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private async Task AddDevice()
