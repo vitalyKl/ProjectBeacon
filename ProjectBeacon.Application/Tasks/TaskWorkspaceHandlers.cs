@@ -86,7 +86,7 @@ public sealed class WorkspaceReadHandler : IQueryHandler<WorkspaceReadQuery, Res
         if (section is null)
             return Result.Failure<TaskWorkspaceSectionDto>("Workspace section not found.", ErrorKind.NotFound);
 
-        return Result<TaskWorkspaceSectionDto>.Ok(ToDto(section, section.Content.Substring(
+        return Result.Ok(ToDto(section, section.Content.Substring(
             Math.Min(request.Offset, section.Content.Length),
             Math.Min(request.Limit, Math.Max(0, section.Content.Length - request.Offset)))));
     }
@@ -164,7 +164,7 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
             db.TaskWorkspaceSections.Add(section);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return Result<TaskWorkspaceSectionDto>.Ok(WorkspaceReadHandler.ToDto(section));
+            return Result.Ok(WorkspaceReadHandler.ToDto(section));
         }
 
         if (section is null)
@@ -222,7 +222,7 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
 
         await transaction.CommitAsync(ct);
         var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
-        return Result<TaskWorkspaceSectionDto>.Ok(WorkspaceReadHandler.ToDto(updated));
+        return Result.Ok(WorkspaceReadHandler.ToDto(updated));
         });
     }
 
