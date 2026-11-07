@@ -61,7 +61,9 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         if (name.Length == 0 || name.Length > 200)
             return Result.Failure<LocalModelBackendDto>("Name is required (max 200 characters).");
         var openCodeModel = request.OpenCodeModel?.Trim() ?? string.Empty;
-        var launch = request.LaunchCommand ?? string.Empty;
+        var launch = request.BackendType == ModelBackendType.LlamaCpp
+            ? request.LaunchCommand?.Trim() ?? string.Empty
+            : string.Empty;
         if (request.BackendType == ModelBackendType.LlamaCpp)
         {
             if (string.IsNullOrWhiteSpace(launch) || launch.Length > 1000)
