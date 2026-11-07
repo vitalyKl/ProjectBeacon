@@ -641,7 +641,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     turnCts.Token.ThrowIfCancellationRequested();
                 }
 
-                await Task.Delay(_timing.ChatPollInterval, turnCts.Token);
+                await _timing.DelayAsync(_timing.ChatPollInterval, turnCts.Token);
                 status = await runtime.GetTurnStatusAsync(externalSessionId, turnCts.Token);
             }
             while (status is null || !status.Ended);
