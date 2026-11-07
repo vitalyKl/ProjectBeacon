@@ -339,6 +339,7 @@ Human surface uses `RequireHuman()`. Device ingestion surface uses `RequireDevic
 | POST | `/v1/chat/sessions/{id}/abort` | ChatEndpoints.cs:18 | Human-only | — | `UserId is null → 401` (:76) | user | |
 | POST | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:19 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
 | POST | `/v1/chat/sessions/{id}/idle` | ChatEndpoints.cs:20 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
+| POST | `/v1/chat/sessions/{id}/usage` | ChatEndpoints.cs:21 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
 
 ### 4.12 Devices (`DeviceEndpoints.cs`)
 
