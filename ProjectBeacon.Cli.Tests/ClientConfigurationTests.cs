@@ -39,6 +39,28 @@ public sealed class ClientConfigurationTests
     }
 
     [Fact]
+    public void ClientOptions_PrefersCanonicalApiEnvironmentValues_AndHonorsCommandLine()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["BEACON_API_URL"] = "https://canonical.example.test",
+            ["BEACON_API_TOKEN"] = "canonical-token",
+            ["BEACON_URL"] = "http://legacy.example.test",
+            ["BEACON_CLIENT_TOKEN"] = "legacy-token"
+        };
+
+        var fromEnvironment = ClientOptions.Parse([], name => values.GetValueOrDefault(name));
+        Assert.Equal("https://canonical.example.test", fromEnvironment.Url);
+        Assert.Equal("canonical-token", fromEnvironment.Token);
+
+        var fromArguments = ClientOptions.Parse(
+            ["--url", "https://argument.example.test", "--token", "argument-token"],
+            name => values.GetValueOrDefault(name));
+        Assert.Equal("https://argument.example.test", fromArguments.Url);
+        Assert.Equal("argument-token", fromArguments.Token);
+    }
+
+    [Fact]
     public void ResolveApi_RejectsPartialCredentialsAndNonHttpUrls()
     {
         var partial = ClientConfiguration.ResolveApi(name =>

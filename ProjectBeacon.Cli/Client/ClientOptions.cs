@@ -14,27 +14,33 @@ public sealed class ClientOptions
     public bool Headless { get; init; }
 
     public static ClientOptions Parse(string[] args)
+        => Parse(args, Environment.GetEnvironmentVariable);
+
+    internal static ClientOptions Parse(string[] args, Func<string, string?> environmentLookup)
     {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(environmentLookup);
+
         return new ClientOptions
         {
             Url = ClientConfiguration.ResolveValue(
                 Arg(args, "--url"),
-                Environment.GetEnvironmentVariable("BEACON_URL"),
-                Environment.GetEnvironmentVariable("BEACON_API_URL")),
+                environmentLookup("BEACON_API_URL"),
+                environmentLookup("BEACON_URL")),
             Token = ClientConfiguration.ResolveValue(
                 Arg(args, "--token"),
-                Environment.GetEnvironmentVariable("BEACON_CLIENT_TOKEN"),
-                Environment.GetEnvironmentVariable("BEACON_API_TOKEN")),
+                environmentLookup("BEACON_API_TOKEN"),
+                environmentLookup("BEACON_CLIENT_TOKEN")),
             Login = Arg(args, "--login"),
             Password = Arg(args, "--password"),
             Name = Arg(args, "--name"),
             StorePath = ClientConfiguration.ResolveValue(
                 Arg(args, "--store"),
-                Environment.GetEnvironmentVariable("BEACON_CLIENT_STORE")),
+                environmentLookup("BEACON_CLIENT_STORE")),
             Enroll = args.Length > 1 && string.Equals(args[1], "enroll", StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(Arg(args, "--login")) && !string.IsNullOrWhiteSpace(Arg(args, "--password"))),
             Headless = Has(args, "--headless")
-                || ClientConfiguration.IsEnabled(Environment.GetEnvironmentVariable("BEACON_CLIENT_HEADLESS"))
+                || ClientConfiguration.IsEnabled(environmentLookup("BEACON_CLIENT_HEADLESS"))
         };
     }
 
