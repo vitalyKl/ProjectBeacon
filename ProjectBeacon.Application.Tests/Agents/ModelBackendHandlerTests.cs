@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Persistence;
 using Application.Common;
 using Application.Agents;
+using Application.Tasks;
 using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
@@ -275,7 +276,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        var spawner = new ManualSessionSpawner(new LlamaSwapCatalog());
+        var spawner = new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog());
         await using var scopedDb = HandlerSqlite.Factory(_connection, Scope(projectId)).CreateDbContext();
         var session = await spawner.SpawnAsync(
             scopedDb, projectId, PipelineRole.Actor, Guid.NewGuid(), TestContext.Current.CancellationToken);
