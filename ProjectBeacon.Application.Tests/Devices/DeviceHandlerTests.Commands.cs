@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Common;
 using Application.Authorization;
 using Application.Devices;
+using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
@@ -392,9 +393,21 @@ public sealed partial class DeviceHandlerTests
         var commandId = Guid.NewGuid();
         await using (var db = Factory().CreateDbContext())
         {
+            var chatSession = ChatSession.Create(project.Id, deviceId, "Chat", @"A:\\repo");
+            chatSession.SetExternalSessionId("external-session-1");
+            chatSession.SetStreaming();
             var work = Domain.Entities.Devices.WorkstationCommand.Create(
-                deviceId, WorkstationCommandKind.ChatPrompt, """{"chatSessionId":"11111111-1111-1111-1111-111111111111"}""", project.Id, owner.Id);
+                deviceId,
+                WorkstationCommandKind.ChatPrompt,
+                JsonSerializer.Serialize(new
+                {
+                    chatSessionId = chatSession.Id,
+                    externalSessionId = chatSession.ExternalSessionId
+                }),
+                project.Id,
+                owner.Id);
             work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.ChatSessions.Add(chatSession);
             db.WorkstationCommands.Add(work);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             commandId = work.Id;
