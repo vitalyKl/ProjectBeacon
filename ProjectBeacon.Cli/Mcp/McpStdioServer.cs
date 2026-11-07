@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Cli.Mcp;
 
-using Domain.Common;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Application.CodeIndex;
 using Application.Mcp;
+using Domain.Common;
 /// <summary>
 /// Stdio MCP server. File tools stay inside --root. Every control-plane tool goes through the authenticated /v1 API; no direct database path is available.
 /// </summary>

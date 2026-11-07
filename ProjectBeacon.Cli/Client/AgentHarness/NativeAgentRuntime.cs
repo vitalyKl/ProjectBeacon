@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
-using Domain.Common;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Http.Json;
@@ -8,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Domain.Common;
 using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;

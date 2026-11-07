@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using System.Text;
-using Domain.Entities.Tasks;
 using Domain.Common;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 
 /// <summary>

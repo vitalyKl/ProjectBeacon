@@ -2,8 +2,8 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Domain.Entities.Tasks;
 using Domain.Common;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 
 internal static partial class McpApiTools

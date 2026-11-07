@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Cli.Mcp;
 
-using Domain.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 
 public static partial class McpStdioServer
 {
