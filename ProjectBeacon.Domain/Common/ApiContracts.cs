@@ -26,7 +26,7 @@ public static class ApiRoutes
 }
 
 /// <summary>Empty JSON body used by compatibility device calls that require a POST.</summary>
-public sealed record EmptyRequest;
+public sealed record EmptyRequest();
 
 /// <summary>Request body used to report workstation heartbeat state.</summary>
 public sealed record WorkstationHeartbeatRequest(string? ProbeJson, string? WorkstationJson, string? InstanceId = null);
