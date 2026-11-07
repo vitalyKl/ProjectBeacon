@@ -95,7 +95,7 @@ public static partial class McpStdioServer
     private static readonly string[] PlannerTools =
     [
         ..ReadOnlyWorkspaceTools,
-        McpToolNames.GetProject,
+        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
         McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.ListLabels, McpToolNames.MatchLabel,
         McpToolNames.WorkspaceWrite,
