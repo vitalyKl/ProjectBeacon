@@ -8,6 +8,7 @@ internal interface IDaemonAgentRuntimeGate
     Task TryTickAsync(string? workingDirectory, CancellationToken ct);
     Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct);
     object RuntimeStatusWire();
+    void ReportUnavailable(string error);
     string? RuntimeWorkingDirectory { get; }
     Task RunExclusiveAsync(Func<Task> action, CancellationToken ct);
     Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct);
@@ -52,10 +53,15 @@ internal sealed class DaemonAgentRuntimeGate : IDaemonAgentRuntimeGate
 
     public string? RuntimeWorkingDirectory => _lastReadiness?.WorkingDirectory;
 
+    public void ReportUnavailable(string error)
+    {
+        _lastReadiness = new AgentRuntimeReadiness(false, error, RuntimeWorkingDirectory);
+    }
+
     public object RuntimeStatusWire() => new
     {
         runtime = "native",
-        available = true,
+        available = _lastReadiness?.Ready ?? true,
         healthy = _lastReadiness?.Ready ?? true,
         version = "native",
         error = _lastReadiness?.Error,
