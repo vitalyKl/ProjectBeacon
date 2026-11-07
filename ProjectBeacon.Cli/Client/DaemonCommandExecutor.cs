@@ -20,7 +20,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
     private readonly Func<WorkstationSettings> _loadSettings;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonChatSession _chat;
     private readonly IDaemonRuntimeState _state;
@@ -28,7 +28,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
     public DaemonCommandExecutor(
         DaemonDependencies deps,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonLlamaSync llamaSync,
         IDaemonChatSession chat,
         IDaemonRuntimeState state,
