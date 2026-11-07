@@ -19,6 +19,7 @@ public sealed class TaskWorkspaceSectionConfiguration : IEntityTypeConfiguration
         entity.Property(e => e.AuthorRole).HasMaxLength(24);
         entity.Property(e => e.AuthorProfileKey).HasMaxLength(100);
         entity.Property(e => e.Revision).IsRequired();
+        entity.HasIndex(e => e.ProjectId);
         entity.HasIndex(e => new { e.TaskId, e.Key }).IsUnique();
         entity.HasIndex(e => new { e.TaskId, e.UpdatedAt });
         entity.HasOne(e => e.Task)
