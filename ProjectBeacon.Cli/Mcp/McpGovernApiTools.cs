@@ -2,30 +2,31 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> GovernTools() =>
     [
-        new("list_constraints", "List project constraints.",
+        new(McpToolNames.ListConstraints, "List project constraints.",
             () => Props(("projectId", "string", false)), ConstraintsList),
-        new("create_constraint", "Propose a constraint. kind: Must, MustNot, Security, Compliance.",
+        new(McpToolNames.CreateConstraint, "Propose a constraint. kind: Must, MustNot, Security, Compliance.",
             () => Props(("body", "string", true), ("kind", "string", true), ("projectId", "string", false)), ConstraintCreate),
-        new("activate_constraint", "Activate a proposed constraint.",
+        new(McpToolNames.ActivateConstraint, "Activate a proposed constraint.",
             () => Props(("constraintId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => ConstraintPost(args, "activate", api, env, ct)),
-        new("reject_constraint", "Reject a proposed constraint.",
+        new(McpToolNames.RejectConstraint, "Reject a proposed constraint.",
             () => Props(("constraintId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => ConstraintPost(args, "reject", api, env, ct)),
-        new("list_decisions", "List project decisions.",
+        new(McpToolNames.ListDecisions, "List project decisions.",
             () => Props(("projectId", "string", false)), DecisionsList),
-        new("record_decision", "Record a proposed decision.",
+        new(McpToolNames.RecordDecision, "Record a proposed decision.",
             () => Props(("title", "string", true), ("body", "string", true), ("context", "string", false),
                 ("consequences", "string", false), ("projectId", "string", false)), DecisionCreate),
-        new("accept_decision", "Accept a proposed decision.",
+        new(McpToolNames.AcceptDecision, "Accept a proposed decision.",
             () => Props(("decisionId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => DecisionPost(args, "accept", api, env, ct)),
-        new("deprecate_decision", "Deprecate a decision.",
+        new(McpToolNames.DeprecateDecision, "Deprecate a decision.",
             () => Props(("decisionId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => DecisionPost(args, "deprecate", api, env, ct)),
-        new("supersede_decision", "Supersede an accepted decision with another decision.",
+        new(McpToolNames.SupersedeDecision, "Supersede an accepted decision with another decision.",
             () => Props(("decisionId", "string", true), ("replacementId", "string", true), ("projectId", "string", false)), DecisionSupersede),
     ];
 

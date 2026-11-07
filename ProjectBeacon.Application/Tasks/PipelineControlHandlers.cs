@@ -145,20 +145,30 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
             foreach (var subtask in activeSubtasks)
                 subtask.Cancel();
 
-            var updated = await db.Tasks
-                .Where(t => t.Id == task.Id
+            var transition = await GuardedTransition.TryAsync(
+                db.Tasks,
+                t => t.Id == task.Id
                     && t.PipelineStage == expectedStage
                     && t.Status == expectedStatus
-                    && t.StateRevision == expectedRevision)
-                .ExecuteUpdateAsync(update => update
+                    && t.StateRevision == expectedRevision,
+                t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Cancelled,
+                update => update
                     .SetProperty(t => t.PipelineStage, task.PipelineStage)
                     .SetProperty(t => t.Status, task.Status)
                     .SetProperty(t => t.SubStage, task.SubStage)
                     .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
                     .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                    .SetProperty(t => t.StateRevision, task.StateRevision), ct);
-            if (updated == 0)
+                    .SetProperty(t => t.StateRevision, task.StateRevision),
+                ct);
+            if (transition == GuardedTransitionResult.Lost)
                 return Result.Failure<PipelineStateDto>("Pipeline state changed while cancelling; retry.");
+            if (transition == GuardedTransitionResult.AlreadyInTarget)
+            {
+                await transaction.CommitAsync(ct);
+                db.ChangeTracker.Clear();
+                var alreadyCancelled = await db.Tasks.AsNoTracking().FirstAsync(t => t.Id == task.Id, ct);
+                return Result.Ok(await PipelineSupport.StateAsync(db, alreadyCancelled, ct));
+            }
 
             await db.SaveChangesAsync(ct);
             await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(s => s.Id).ToArray(), ct);

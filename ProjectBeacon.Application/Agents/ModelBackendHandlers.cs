@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Domain.Enums;
 using Domain.Entities.Agents;
@@ -20,6 +21,29 @@ public static class ModelProjectScope
         if (scope is null || scope == Guid.Empty)
             return false;
         projectId = scope.Value;
+        return true;
+    }
+
+    /// <summary>
+    /// Uses the resolved tenant first. A requested id is only a candidate for human actors
+    /// when middleware failed closed; callers must authorize it before accessing project data.
+    /// </summary>
+    public static bool TryGetAuthorizedCandidate(
+        IBeaconDb db,
+        Guid? requestedProjectId,
+        bool allowRequestedCandidate,
+        out Guid projectId)
+    {
+        if (TryGet(db, out projectId))
+            return true;
+
+        projectId = Guid.Empty;
+        if (!allowRequestedCandidate
+            || requestedProjectId is not { } requested
+            || requested == Guid.Empty)
+            return false;
+
+        projectId = requested;
         return true;
     }
 }
@@ -60,7 +84,9 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         if (name.Length == 0 || name.Length > 200)
             return Result.Failure<LocalModelBackendDto>("Name is required (max 200 characters).");
         var openCodeModel = request.OpenCodeModel?.Trim() ?? string.Empty;
-        var launch = request.LaunchCommand ?? string.Empty;
+        var launch = request.BackendType == ModelBackendType.LlamaCpp
+            ? request.LaunchCommand?.Trim() ?? string.Empty
+            : string.Empty;
         if (request.BackendType == ModelBackendType.LlamaCpp)
         {
             if (string.IsNullOrWhiteSpace(launch) || launch.Length > 1000)
@@ -83,7 +109,7 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         {
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id && b.UserId == request.UserId, ct);
             if (existing is null)
-                return Result.Failure<LocalModelBackendDto>("Model backend not found.");
+                return Result.Failure<LocalModelBackendDto>("Model backend not found.", ErrorKind.NotFound);
             existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
             await DesiredState.BumpUserAsync(db, request.UserId, ct);
             await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);
@@ -118,14 +144,14 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
         var backend = await db.LocalModelBackends.FirstOrDefaultAsync(
             b => b.Id == command.Request.Id && b.UserId == command.Request.UserId, ct);
         if (backend is null)
-            return Result.Failure("Model backend not found.");
+            return Result.Failure("Model backend not found.", ErrorKind.NotFound);
 
         var boundRoles = await db.RoleBindings.IgnoreQueryFilters()
             .Where(r => r.ModelBackendId == backend.Id)
             .Select(r => r.Role)
             .ToListAsync(ct);
         if (boundRoles.Count > 0)
-            return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.");
+            return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.", ErrorKind.Conflict);
 
         db.LocalModelBackends.Remove(backend);
         await DesiredState.BumpUserAsync(db, command.Request.UserId, ct);
@@ -140,21 +166,34 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
 public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingCommand, Result<RoleBindingDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public SetRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public SetRoleBindingHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<RoleBindingDto>> HandleAsync(SetRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
-            return Result.Failure<RoleBindingDto>("Project scope is not resolved.");
+            return Result.Forbidden<RoleBindingDto>();
+
+        var access = command.Actor.IsApiToken
+            ? await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Pipeline, AuthAction.Update, projectId: projectId, ct: ct)
+            : await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<RoleBindingDto>();
 
         var backendOwner = await db.LocalModelBackends
             .Where(b => b.Id == command.Request.ModelBackendId)
             .Select(b => (Guid?)b.UserId)
             .FirstOrDefaultAsync(ct);
         if (backendOwner is null)
-            return Result.Failure<RoleBindingDto>("Model backend not found.");
+            return Result.Failure<RoleBindingDto>("Model backend not found.", ErrorKind.NotFound);
         var ownerIsMember = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == projectId && m.UserId == backendOwner.Value, ct);
         if (!ownerIsMember)
@@ -182,18 +221,31 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
 public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public RemoveRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RemoveRoleBindingHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result> HandleAsync(RemoveRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
-            return Result.Failure("Project scope is not resolved.");
+            return Result.Forbidden();
+
+        var access = command.Actor.IsApiToken
+            ? await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Pipeline, AuthAction.Update, projectId: projectId, ct: ct)
+            : await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden();
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
         if (binding is null)
-            return Result.Failure("Role binding not found.");
+            return Result.Failure("Role binding not found.", ErrorKind.NotFound);
 
         db.RoleBindings.Remove(binding);
         await DesiredState.BumpProjectAsync(db, projectId, ct);

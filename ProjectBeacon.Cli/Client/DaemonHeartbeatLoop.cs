@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
+using Domain.Common;
 using System.Text.Json;
 
 internal sealed class DaemonHeartbeatLoop : IDaemonLoop
@@ -58,19 +59,17 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                 // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
                 await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
-                var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
-                {
-                    probeJson = WorkstationProbe.ProbeJson(
+                var heartbeat = await _http.PostAsJsonAsync(ApiRoutes.DeviceHeartbeat, new WorkstationHeartbeatRequest(
+                    WorkstationProbe.ProbeJson(
                         _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire()),
-                    workstationJson = settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
-                    instanceId = DaemonInstance.Id
-                }, ct);
+                    settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
+                    DaemonInstance.Id), ct);
                 var code = (int)heartbeat.StatusCode;
                 _state.Publish(s => s with
                 {
                     Connected = heartbeat.IsSuccessStatusCode,
                     HeartbeatStatus = code,
-                    LastHeartbeatAt = DateTimeOffset.Now,
+                    LastHeartbeatAt = _timing.TimeProvider.GetLocalNow(),
                     Llama = _llama.Status,
                     Host = host,
                     Error = heartbeat.IsSuccessStatusCode ? null : $"heartbeat {code}"

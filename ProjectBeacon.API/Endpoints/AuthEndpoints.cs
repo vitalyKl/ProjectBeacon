@@ -154,8 +154,7 @@ public static class AuthEndpoints
         var result = await handler.HandleAsync(new AcceptInviteRequest(token, actor));
         if (result.Success)
             return Results.Ok();
-        var status = result.Error == "Email does not match invite." ? 403 : 400;
-        return result.FromResult(status);
+        return result.FromResult(400);
     }
 
     /// <summary>JSON body for <c>POST /v1/auth/change-password</c>. The user id is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>

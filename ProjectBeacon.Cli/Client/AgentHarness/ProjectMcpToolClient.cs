@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Cli.Client;
 
 /// <summary>
 /// Starts project-configured MCP servers beside the workstation harness and merges their tools
@@ -182,14 +183,6 @@ internal static class ProjectMcpToolClient
 internal sealed class ExternalMcpStdioClient : IMcpToolClient
 {
     private const int MaxResultCharacters = 16_000;
-    private static readonly string[] SafeEnvironment =
-    [
-        "PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
-        "TEMP", "TMP", "TMPDIR", "SystemRoot", "WINDIR",
-        "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_CLI_HOME", "DOTNET_MULTILEVEL_LOOKUP",
-        "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"
-    ];
-
     private readonly Process _process;
     private readonly SemaphoreSlim _requestLock = new(1, 1);
     private int _nextId;
@@ -243,13 +236,12 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
             start.Arguments = $"/d /v:off /s /c \"{commandLine}\"";
         }
 
-        var inherited = SafeEnvironment
-            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
-            .Where(pair => pair.Value is not null)
-            .ToArray();
+        var inherited = ClientConfiguration.CaptureAllowedEnvironment(
+            ClientConfiguration.McpSubprocessEnvironmentNames,
+            Environment.GetEnvironmentVariable);
         start.Environment.Clear();
         foreach (var pair in inherited)
-            start.Environment[pair.Name] = pair.Value!;
+            start.Environment[pair.Key] = pair.Value;
         foreach (var pair in config.Environment ?? new Dictionary<string, string>())
             start.Environment[pair.Key] = pair.Value;
 

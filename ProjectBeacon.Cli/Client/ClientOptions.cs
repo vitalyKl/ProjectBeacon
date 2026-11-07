@@ -17,16 +17,24 @@ public sealed class ClientOptions
     {
         return new ClientOptions
         {
-            Url = EnvOrArg(args, "--url", "BEACON_URL"),
-            Token = EnvOrArg(args, "--token", "BEACON_CLIENT_TOKEN"),
+            Url = ClientConfiguration.ResolveValue(
+                Arg(args, "--url"),
+                Environment.GetEnvironmentVariable("BEACON_URL"),
+                Environment.GetEnvironmentVariable("BEACON_API_URL")),
+            Token = ClientConfiguration.ResolveValue(
+                Arg(args, "--token"),
+                Environment.GetEnvironmentVariable("BEACON_CLIENT_TOKEN"),
+                Environment.GetEnvironmentVariable("BEACON_API_TOKEN")),
             Login = Arg(args, "--login"),
             Password = Arg(args, "--password"),
             Name = Arg(args, "--name"),
-            StorePath = EnvOrArg(args, "--store", "BEACON_CLIENT_STORE"),
+            StorePath = ClientConfiguration.ResolveValue(
+                Arg(args, "--store"),
+                Environment.GetEnvironmentVariable("BEACON_CLIENT_STORE")),
             Enroll = args.Length > 1 && string.Equals(args[1], "enroll", StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(Arg(args, "--login")) && !string.IsNullOrWhiteSpace(Arg(args, "--password"))),
             Headless = Has(args, "--headless")
-                || string.Equals(Environment.GetEnvironmentVariable("BEACON_CLIENT_HEADLESS"), "1", StringComparison.Ordinal)
+                || ClientConfiguration.IsEnabled(Environment.GetEnvironmentVariable("BEACON_CLIENT_HEADLESS"))
         };
     }
 
@@ -44,5 +52,5 @@ public sealed class ClientOptions
         args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
     public static string? EnvOrArg(string[] args, string name, string env) =>
-        Arg(args, name) ?? Environment.GetEnvironmentVariable(env);
+        ClientConfiguration.ResolveValue(Arg(args, name), Environment.GetEnvironmentVariable(env));
 }
