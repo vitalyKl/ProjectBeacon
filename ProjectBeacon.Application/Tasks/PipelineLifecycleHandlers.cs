@@ -75,9 +75,10 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         }
 
         var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
+        var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Planner, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Planner,
-            SessionPrompts.Planner(task, projectName), null, spawned!.ModelBackendId, spawned.LaunchSpec);
+            SessionPrompts.Planner(task, projectName, profileInstructions), null, spawned!.ModelBackendId, spawned.LaunchSpec);
         db.PipelineSessions.Add(session);
         await db.SaveChangesAsync(ct);
 

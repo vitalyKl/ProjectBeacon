@@ -164,9 +164,10 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                 return Result.Failure<PipelineSessionDto>(ex.Message);
             }
 
+            var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Actor, ct);
             var session = PipelineSession.Create(
                 task.Id, task.ProjectId, PipelineRole.Actor,
-                SessionPrompts.Actor(subtask), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
+                SessionPrompts.Actor(subtask, profileInstructions), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
             db.PipelineSessions.Add(session);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
