@@ -255,7 +255,7 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 | POST | `/v1/projects/{p}/runtimes` | Human only | — | RequireHuman | project | ENFORCED |
 | DELETE | `/v1/projects/{p}/runtimes/{id}` | Human only | — | RequireHuman | project | ENFORCED |
 | GET | `/v1/devices/me/llamaswap-config` | Device only | — | RequireDevice | device (own) | ENFORCED |
-| GET | `/v1/devices/me/opencode-connections` | Device only | — | RequireDevice | device (own) | ENFORCED |
+| GET | `/v1/devices/me/provider-connections` | Device only | — | RequireDevice | device (own) | ENFORCED |
 
 ## 4. Verification
 
