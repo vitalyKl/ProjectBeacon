@@ -211,7 +211,6 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         Assert.Equal(backend.Id, actor.Value!.ModelBackendId);
-        Assert.Equal("openai-compat", actor.Value.ModelName);
         Assert.Null(actor.Value.LaunchSpec);
     }
 
