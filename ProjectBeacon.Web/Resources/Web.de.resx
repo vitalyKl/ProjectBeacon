@@ -130,10 +130,10 @@
     <value>Wird vom App-Chat genutzt, wenn eine Nachricht kein anderes Modell nennt. Speichern weist den laufenden Client an, die Agentenlaufzeit zu aktualisieren.</value>
   </data>
 <data name="AgentProviderModel" xml:space="preserve">
-    <value>Agentenmodell</value>
+    <value>Anbieter-Modell-ID</value>
   </data>
 <data name="AgentProviderModelHint" xml:space="preserve">
-    <value>Anbieter und Modell, die AgentProvider bereits kennt, zum Beispiel xai/grok-3. Eine gespeicherte Verbindung kann den Schlüssel liefern, sonst auf dem Rechner mit the native agent runtime auth login anmelden.</value>
+    <value>Geben Sie Anbieter und Modell an, zum Beispiel anthropic/claude-sonnet-4-5. Die gespeicherte Anbieterverbindung stellt die Zugangsdaten bereit.</value>
   </data>
 <data name="AgentProviderConnections" xml:space="preserve">
     <value>Modellverbindungen</value>
@@ -1243,7 +1243,7 @@
     <value>Durchsuchen</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>Auf dem Gerät initialisieren (.gitignore, opencode.json)</value>
+    <value>Auf dem Gerät initialisieren (.gitignore)</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>Nach oben</value>
@@ -1370,9 +1370,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1619,7 +1616,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Sie können den Ordner jetzt überspringen und ihn später im Dashboard anhängen.</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>Schreibt .gitignore und opencode.json in diesen Ordner auf dem Arbeitsplatz.</value>
+    <value>Erstellt den Projektordner und schreibt die erforderlichen .gitignore-Regeln auf die Workstation.</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>Projektordner</value>
@@ -2081,11 +2078,8 @@ orthstar</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>Agent-Laufzeit</value>
   </data>
-<data name="AgentRuntimeAgentProvider" xml:space="preserve">
-    <value>AgentProvider (Standard)</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>Native Harness (experimentell)</value>
+    <value>Native Laufzeit</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Änderungen werden nach einem Neustart des Workstation-Clients wirksam.</value>
@@ -2416,5 +2410,11 @@ orthstar</value>
   </data>
   <data name="ContextInputEstimate" xml:space="preserve">
     <value>Geschätzte Eingabetokens</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>Anbieter-Modell-ID</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>Geben Sie eine Kennung im Format provider/model an, zum Beispiel xai/grok-3 oder anthropic/claude-sonnet-4-5.</value>
   </data>
 </root>
