@@ -113,7 +113,7 @@ public sealed partial class ClientLlamaSwap
         return reading.FreeMb >= need;
     }
 
-    private static long Footprint(LlamaServerBackend backend, LlamaSwapModelSpec spec)
+    private static long Footprint(IModelBackend backend, LlamaSwapModelSpec spec)
     {
         if (backend.ActualVramMb > 0)
             return backend.ActualVramMb;
@@ -203,7 +203,7 @@ public sealed partial class ClientLlamaSwap
             if (!spec.Concurrent && _coordinator.IsGroupBusy("swap"))
                 continue;
 
-            if (_own.TryGetValue(name, out var backend) && backend.Port != p)
+            if (_own.TryGetValue(name, out var backend) && backend.Endpoint != p)
             {
                 await backend.StopAsync(ct);
                 backend.Dispose();
@@ -253,7 +253,7 @@ public sealed partial class ClientLlamaSwap
         var available = ready.Length > 0 || backends.Any(b => b.State == BackendState.Starting);
         var healthy = ready.Length > 0 && faulted.Length == 0;
 
-        var active = ready.FirstOrDefault(b => b.Port == _port) ?? ready.FirstOrDefault();
+        var active = ready.FirstOrDefault(b => b.Endpoint == _port) ?? ready.FirstOrDefault();
         var loadedModel = active?.Name;
         if (loadedModel != null && loadedModel != _lastLoaded)
         {
@@ -267,7 +267,7 @@ public sealed partial class ClientLlamaSwap
         var error = faulted.Length > 0 ? faulted[0].Error : null;
 
         var loadedModels = backends
-            .OrderBy(b => b.Port)
+            .OrderBy(b => b.Endpoint)
             .Select(b => new LoadedModelStatus(b.Name, b.State.ToString().ToLowerInvariant()))
             .ToList();
 
