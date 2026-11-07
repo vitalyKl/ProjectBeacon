@@ -275,9 +275,9 @@ public sealed class ModelBackendHandlerTests : IDisposable
         }
 
         var spawner = new ManualSessionSpawner(new LlamaSwapCatalog());
+        await using var scopedDb = HandlerSqlite.Factory(_connection, Scope(projectId)).CreateDbContext();
         var session = await spawner.SpawnAsync(
-            HandlerSqlite.Factory(_connection, Scope(projectId)).CreateDbContext(),
-            projectId, PipelineRole.Actor, Guid.NewGuid(), TestContext.Current.CancellationToken);
+            scopedDb, projectId, PipelineRole.Actor, Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         Assert.Equal(backend.Id, session.ModelBackendId);
         Assert.Equal("remote", session.ModelName);
@@ -308,6 +308,34 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal(created.Value.Id, repointed.Value!.Id);
         Assert.Equal(second.Id, repointed.Value.ModelBackendId);
         Assert.Equal(1, await CountBindingsAsync());
+    }
+
+    [Fact]
+    public async Task SetRoleBinding_NonAdminActor_IsForbiddenAtApplicationBoundary()
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var outsider = User.Create("model-outsider", "model-outsider@beacon.local", "hash");
+        var backend = LocalModelBackend.Create("owner-model", ModelBackendType.LlamaCpp, "cmd", 1024, 0, ownerId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(outsider);
+            _db.LocalModelBackends.Add(backend);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(
+            HandlerSqlite.Factory(_connection, Scope(projectId)), new AuthorizationService());
+
+        var result = await handler.HandleAsync(
+            new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, backend.Id), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(ErrorCodes.Forbidden, result.ErrorCode);
+        Assert.Equal(0, await CountBindingsAsync());
     }
 
     [Fact]
