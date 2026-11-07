@@ -1,0 +1,244 @@
+/* Global theme tokens, typography, app/auth/landing shell basics and breadcrumbs. */
+
+:root {
+    --beacon-mobile-appbar-height: 56px;
+    --beacon-mobile-nav-height: 56px;
+}
+
+/* Responsive tiers: 1100/1024px are content-specific tablet layouts; 960px is the app shell; 768px is compact chat/mobile layout; 600px, 480px and 390px are narrow-device refinements. */
+
+html, body, .mud-typography, .mud-button-root, .mud-input, .mud-nav-link {
+    font-family: var(--font-sans);
+}
+
+html {
+    min-height: 100%;
+    background: var(--color-bg-app);
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    font-size: var(--type-body);
+    line-height: 1.45;
+    color: var(--color-text-primary);
+    background: var(--color-bg-app);
+    -webkit-font-smoothing: antialiased;
+}
+
+.mud-layout {
+    min-height: 100vh;
+    background: var(--color-bg-app);
+}
+
+html.beacon-theme-light,
+body:not(:has(.beacon-theme-dark)) {
+    color-scheme: light;
+    --mud-palette-text-primary: var(--color-text-primary);
+    --mud-palette-text-secondary: var(--color-text-secondary);
+    --mud-palette-text-disabled: var(--color-text-disabled);
+    --mud-palette-background: var(--color-bg-app);
+    --mud-palette-background-gray: var(--color-surface-1);
+    --mud-palette-surface: var(--color-surface-2);
+    --mud-palette-lines-default: var(--color-border);
+    --mud-palette-lines-inputs: var(--color-border-strong);
+    --mud-palette-table-lines: var(--color-border);
+    --mud-palette-table-hover: var(--color-surface-1);
+    --mud-palette-divider: var(--color-border);
+    --mud-palette-divider-light: var(--color-border-subtle);
+    --mud-palette-appbar-background: var(--color-bg-header);
+    --mud-palette-appbar-text: var(--color-text-primary);
+    --mud-palette-drawer-background: var(--color-bg-sidebar);
+    --mud-palette-drawer-text: var(--color-sidebar-text);
+    --mud-palette-drawer-icon: var(--color-sidebar-text);
+    --mud-palette-action-default: var(--color-text-muted);
+    --mud-palette-action-disabled: var(--color-text-disabled);
+    --mud-palette-action-disabled-background: var(--color-surface-3);
+    --mud-palette-primary: var(--color-accent);
+    --mud-palette-primary-text: var(--color-on-accent);
+    --mud-palette-error: var(--color-danger);
+    --mud-palette-error-text: var(--color-on-danger);
+    --mud-palette-success: var(--color-success);
+    --mud-palette-warning: var(--color-warning);
+    --mud-palette-info: var(--color-info);
+    --mud-palette-gray-default: var(--color-text-muted);
+    --mud-palette-gray-light: var(--color-text-disabled);
+    --mud-palette-gray-dark: var(--color-text-secondary);
+    --mud-palette-gray-darker: var(--color-text-primary);
+}
+
+html.beacon-theme-dark,
+body:has(.beacon-theme-dark) {
+    color-scheme: dark;
+    background: var(--color-bg-app);
+    color: var(--color-text-primary);
+    --mud-palette-text-primary: var(--color-text-primary);
+    --mud-palette-text-secondary: var(--color-text-secondary);
+    --mud-palette-text-disabled: var(--color-text-disabled);
+    --mud-palette-background: var(--color-bg-app);
+    --mud-palette-background-gray: var(--color-surface-1);
+    --mud-palette-surface: var(--color-surface-2);
+    --mud-palette-lines-default: var(--color-border);
+    --mud-palette-lines-inputs: var(--color-border-strong);
+    --mud-palette-table-lines: var(--color-border);
+    --mud-palette-table-hover: var(--color-surface-1);
+    --mud-palette-divider: var(--color-border);
+    --mud-palette-divider-light: var(--color-border-subtle);
+    --mud-palette-appbar-background: var(--color-bg-header);
+    --mud-palette-appbar-text: var(--color-text-primary);
+    --mud-palette-drawer-background: var(--color-bg-sidebar);
+    --mud-palette-drawer-text: var(--color-sidebar-text);
+    --mud-palette-drawer-icon: var(--color-sidebar-text);
+    --mud-palette-action-default: var(--color-text-muted);
+    --mud-palette-action-disabled: var(--color-text-disabled);
+    --mud-palette-action-disabled-background: var(--color-surface-3);
+    --mud-palette-primary: var(--color-accent);
+    --mud-palette-primary-text: var(--color-on-accent);
+    --mud-palette-error: var(--color-danger);
+    --mud-palette-error-text: var(--color-on-danger);
+    --mud-palette-success: var(--color-success);
+    --mud-palette-warning: var(--color-warning);
+    --mud-palette-info: var(--color-info);
+    --mud-palette-gray-default: var(--color-text-muted);
+    --mud-palette-gray-light: var(--color-text-disabled);
+    --mud-palette-gray-dark: var(--color-text-secondary);
+    --mud-palette-gray-darker: var(--color-text-primary);
+}
+
+body:has(.beacon-theme-dark) .mud-layout,
+body:has(.beacon-theme-dark) .mud-main-content {
+    background: var(--color-bg-app);
+    color: var(--color-text-primary);
+}
+
+.d-flex { display: flex; }
+.justify-end { justify-content: flex-end; }
+.mb-4 { margin-bottom: var(--space-4); }
+.ml-2 { margin-left: var(--space-2); }
+.text-center { text-align: center; }
+.text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-100 { height: 100%; }
+.w-100 { width: 100%; }
+.grow { flex-grow: 1; }
+
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-app);
+}
+
+.auth-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--space-2) var(--space-4);
+}
+
+.auth-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6) var(--space-4);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+}
+
+.landing-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-app);
+}
+
+.landing-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.landing-main {
+    flex: 1;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: var(--space-12) var(--space-5) var(--space-16);
+}
+
+.landing-section {
+    margin-bottom: var(--space-16);
+}
+
+.landing-hero {
+    padding-top: var(--space-6);
+}
+
+.landing-title {
+    max-width: 18ch;
+}
+
+.landing-lead {
+    color: var(--color-text-secondary);
+    max-width: 42ch;
+    margin-top: var(--space-4);
+}
+
+.landing-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.mud-main-content {
+    padding-top: var(--mud-appbar-height, var(--layout-appbar-height));
+}
+
+.beacon-content-max {
+    max-width: 1680px;
+    margin-inline: auto;
+}
+
+.beacon-appbar.mud-appbar {
+    background-color: var(--color-bg-header) !important;
+    border-bottom: var(--border-hairline) solid var(--color-border);
+    box-shadow: none !important;
+}
+
+.beacon-appbar.mud-appbar .mud-toolbar-appbar {
+    padding: 0 var(--space-6);
+}
+
+.beacon-breadcrumbs.mud-breadcrumbs {
+    padding: 0;
+}
+
+.beacon-breadcrumbs .mud-breadcrumb-separator {
+    padding: 0 var(--space-2);
+}
+
+.beacon-breadcrumbs .mud-breadcrumb-separator > span {
+    color: var(--color-text-disabled);
+    opacity: 1;
+}
+
+.beacon-breadcrumbs .mud-breadcrumb-item > a {
+    color: var(--color-text-muted);
+}
+
+.beacon-breadcrumbs .mud-breadcrumb-item.mud-disabled > a {
+    color: var(--color-text-primary);
+}
+
+.beacon-profile {
+    color: var(--color-text-primary) !important;
+    min-width: auto;
+}
+

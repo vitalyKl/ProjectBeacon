@@ -1,5 +1,6 @@
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Web.Features.Chat
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CompileBriefHandler CompileBrief
 
@@ -27,7 +28,7 @@
     }
     @if (!string.IsNullOrEmpty(_markdown))
     {
-        <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_markdown</MudText>
+        <ChatMarkdown Text="@(_markdown ?? string.Empty)" />
     }
 </MudPaper>
 

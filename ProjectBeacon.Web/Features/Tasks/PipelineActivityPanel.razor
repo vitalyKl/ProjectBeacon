@@ -19,7 +19,7 @@
                 {
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
-                <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
+                <span class="beacon-pipeline-activity-summary" title="@ActivityLabel">@ActivityLabel</span>
                 @if (Session.LastActivityAt is not null)
                 {
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@LastActivityLabel</MudText>

@@ -1,0 +1,278 @@
+/* MudBlazor buttons, drawer navigation, interactive cards and control primitives. */
+
+.mud-button-root.mud-button {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    font-size: var(--type-body);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: none;
+    gap: var(--space-2);
+    box-shadow: none;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.mud-button-root.mud-button.mud-button-filled-size-small,
+.mud-button-root.mud-button.mud-button-outlined-size-small,
+.mud-button-root.mud-button.mud-button-text-size-small {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 var(--space-2);
+}
+
+.mud-button-root.mud-button.mud-button-filled.mud-button-filled-primary {
+    background-color: var(--color-accent) !important;
+    color: var(--color-on-accent) !important;
+    border: 1px solid transparent;
+}
+
+.mud-button-root.mud-button.mud-button-filled.mud-button-filled-primary:hover {
+    background-color: var(--color-accent-hover) !important;
+}
+
+.mud-button-root.mud-button.mud-button-filled.mud-button-filled-primary:active {
+    background-color: var(--color-accent-active) !important;
+}
+
+.mud-button-root.mud-button.mud-button-outlined:not(.mud-button-outlined-error) {
+    background-color: var(--color-surface-2) !important;
+    color: var(--color-text-primary) !important;
+    border: 1px solid var(--color-border-strong) !important;
+}
+
+.mud-button-root.mud-button.mud-button-outlined:not(.mud-button-outlined-error):hover {
+    background-color: var(--color-bg-surface-hover) !important;
+    border-color: var(--color-text-secondary) !important;
+}
+
+.mud-button-root.mud-button.mud-button-outlined:not(.mud-button-outlined-error):active {
+    background-color: var(--color-surface-3) !important;
+}
+
+.mud-button-root.mud-button.mud-button-text:not(.mud-button-text-error) {
+    background-color: transparent;
+    color: var(--color-text-secondary) !important;
+    border: 1px solid transparent;
+}
+
+.mud-button-root.mud-button.mud-button-text:not(.mud-button-text-error):hover {
+    background-color: var(--color-bg-surface-hover) !important;
+    color: var(--color-text-primary) !important;
+}
+
+.mud-button-filled.mud-button-filled-error {
+    background-color: var(--color-danger);
+    color: var(--color-on-danger);
+    border: 1px solid transparent;
+}
+
+.mud-button-filled.mud-button-filled-error:hover {
+    background-color: color-mix(in srgb, var(--color-danger) 88%, black);
+}
+
+.mud-button-outlined.mud-button-outlined-error {
+    background-color: var(--color-surface-2);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+}
+
+.mud-button-outlined.mud-button-outlined-error:hover,
+.mud-button-text.mud-button-text-error:hover {
+    background-color: var(--color-danger-background);
+    color: var(--color-danger);
+}
+
+.mud-button-text.mud-button-text-error {
+    background-color: transparent;
+    color: var(--color-danger);
+    border: 1px solid transparent;
+}
+
+.mud-button-root:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+}
+
+.mud-button-filled-error:focus-visible,
+.mud-button-outlined-error:focus-visible,
+.mud-button-text-error:focus-visible {
+    outline-color: var(--color-danger);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 24%, transparent);
+}
+
+.mud-button-root.mud-button.mud-button-filled:disabled,
+.mud-button-root.mud-button.mud-button-filled.mud-disabled,
+.mud-button-root.mud-button.mud-button-outlined:disabled,
+.mud-button-root.mud-button.mud-button-outlined.mud-disabled,
+.mud-button-root.mud-button.mud-button-text:disabled,
+.mud-button-root.mud-button.mud-button-text.mud-disabled,
+.mud-button-root.mud-icon-button:disabled,
+.mud-button-root.mud-icon-button.mud-disabled {
+    background-color: var(--color-surface-3) !important;
+    color: var(--color-text-disabled) !important;
+    border-color: var(--color-border) !important;
+    box-shadow: none !important;
+    opacity: 1;
+}
+
+.mud-button-root.mud-icon-button {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--radius-control);
+    color: var(--color-text-secondary);
+}
+
+.mud-button-root.mud-icon-button.mud-icon-button-size-small {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+}
+
+.mud-button-root.mud-icon-button:hover:not(:disabled) {
+    background-color: var(--color-bg-surface-hover);
+    color: var(--color-text-primary);
+}
+
+.mud-button-root.mud-icon-button .mud-icon-root {
+    font-size: 18px;
+}
+
+.mud-input-adornment .mud-icon-button {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+}
+
+.beacon-drawer.mud-drawer {
+    background-color: var(--color-bg-sidebar);
+    color: var(--color-sidebar-text);
+    border-right: var(--border-hairline) solid var(--color-sidebar-line);
+}
+
+.beacon-drawer-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+}
+
+.beacon-drawer-header {
+    padding: var(--space-4) var(--space-3) var(--space-3);
+}
+
+.beacon-brand {
+    color: var(--color-sidebar-text-strong);
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.beacon-nav {
+    padding: var(--space-1) var(--space-3) var(--space-3);
+}
+
+.beacon-drawer-footer {
+    margin-top: auto;
+    padding: 0;
+    border-top: var(--border-hairline) solid var(--color-sidebar-line);
+    color: var(--color-sidebar-text);
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link {
+    position: relative;
+    color: var(--color-sidebar-text);
+    background-color: transparent;
+    border-radius: var(--radius-small);
+    padding: var(--space-2) var(--space-3);
+    margin: 0;
+    font-size: var(--type-body);
+    font-weight: 500;
+    transition: color 160ms ease, background-color 160ms ease;
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-text {
+    margin-left: var(--space-3);
+    margin-inline-start: var(--space-3);
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-icon,
+.beacon-nav.mud-navmenu .mud-nav-link .mud-icon-root {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--color-sidebar-muted);
+    transition: color 160ms ease;
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link:focus-visible {
+    outline: 2px solid var(--color-sidebar-rail);
+    outline-offset: 2px;
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+    color: var(--color-sidebar-text-strong);
+    background-color: var(--color-sidebar-hover);
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-nav-link-icon,
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-icon-root {
+    color: var(--color-sidebar-text-strong);
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled),
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):hover:not(.mud-nav-link-disabled),
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):focus-visible:not(.mud-nav-link-disabled) {
+    color: var(--color-sidebar-text-strong);
+    background-color: var(--color-sidebar-active);
+    border-inline-end-width: 0;
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled)::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    width: 2px;
+    height: 18px;
+    transform: translateY(-50%);
+    background: var(--color-sidebar-rail);
+    border-radius: var(--radius-control);
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-nav-link-icon,
+.beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-icon-root {
+    color: var(--color-sidebar-text-strong);
+}
+
+.beacon-card-interactive {
+    border-color: var(--color-border) !important;
+    transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.beacon-card-interactive:hover {
+    border-color: var(--color-border-strong) !important;
+    background-color: var(--color-bg-surface-hover);
+}
+
+.beacon-card-interactive:active,
+.beacon-card-interactive:focus-within {
+    border-color: var(--color-accent) !important;
+}
+
+.beacon-card-interactive:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+}
+
+.beacon-card-interactive:focus-within {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+

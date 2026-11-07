@@ -56,7 +56,7 @@
     }
     else
     {
-        <MudTable Items="_devices" Dense="true" Hover="true">
+        <MudTable Items="_devices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["DeviceName"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
@@ -69,7 +69,7 @@
                     <StatusChip Color="@ChipPalette.ForRuntime(context.Online ? "Online" : "Offline")" Label="@(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)" />
                 </MudTd>
                 <MudTd DataLabel="@L["LastSeen"]"><LocalTime Value="context.LastHeartbeatAt" /></MudTd>
-                <MudTd>
+                <MudTd DataLabel="@L["Actions"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
                 </MudTd>
             </RowTemplate>
@@ -77,19 +77,21 @@
     }
 </MudPaper>
 
-@if (_devices.Count > 0)
+@if (_devices.Count > 0 && _wsDeviceId is not null)
 {
-    <MudText Typo="Typo.h6" Class="mb-3">@L["Workstation"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeWorkstationHint"]</MudText>
-        <div class="beacon-form">
-            <MudSelect T="Guid?" InputId="runtime-device" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true">
-                @foreach (var device in _devices)
-                {
-                    <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
-                }
-            </MudSelect>
-            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ModelsLocation"]</MudText>
+        <MudSelect T="Guid?" InputId="runtime-device" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3">
+            @foreach (var device in _devices)
+            {
+                <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+        <MudTabs Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            <MudTabPanel Text="@L["Workstation"]">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeWorkstationHint"]</MudText>
+                <div class="beacon-form">
+<MudText Typo="Typo.subtitle2" Class="mt-4">@L["ModelsLocation"]</MudText>
             <FolderPicker DeviceId="_wsDeviceId" UserId="_userId" RootKind="models" AdvancedPath="true"
                           Path="@_modelsRoot" PathChanged="OnModelsRootChanged" Label="@L["ModelsLocation"]"
                           Disabled="_busy || !WorkstationOnline" />
@@ -111,14 +113,7 @@
                              Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
-            @if (_probeAgentRuntimeHealthy == false && !string.IsNullOrWhiteSpace(_probeAgentRuntimeError))
-            {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
-            }
-            <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @L["AgentRuntimeNative"]</MudText>
-            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
-            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_agentDataDir) ? L["NoFolderSelected"].Value : _agentDataDir)</MudText>
-            <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
+                        <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
                     <MudTextField @bind-Value="_agentDataDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
                     <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
@@ -126,34 +121,35 @@
                 </MudExpansionPanel>
             </MudExpansionPanels>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
-            <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
-        </div>
+                </div>
+            </MudTabPanel>
+            <MudTabPanel Text="@L["Probe"]">
+        <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @L["AgentRuntimeNative"]</MudText>
+            @if (_probeAgentRuntimeHealthy == false && !string.IsNullOrWhiteSpace(_probeAgentRuntimeError))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2"><span class="beacon-diagnostic-output">@_probeAgentRuntimeError</span></MudAlert>
+            }
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeNode"]: @_probeNode</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @_probeDocker</MudText>
-        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @_probeLlamaSwap</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeGit"]: @(_probeGit ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeNode"]: @(_probeNode ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @(_probeDocker ?? "-")</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @(_probeLlamaSwap ?? "-")</MudText>
         <MudStack Row="true" Spacing="2" Class="mt-2">
-            @if (_probeGit == "-")
+            @if (string.IsNullOrWhiteSpace(_probeGit))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallGit">@L["Install"] git</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallGit">@string.Format(L["InstallPackage"].Value, "git")</MudButton>
             }
-            @if (_probeNode == "-")
+            @if (string.IsNullOrWhiteSpace(_probeNode))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallNode">@L["Install"] node</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallNode">@string.Format(L["InstallPackage"].Value, "node")</MudButton>
             }
-            @if (_probeDocker == "-")
+            @if (string.IsNullOrWhiteSpace(_probeDocker))
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@L["Install"] docker</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@string.Format(L["InstallPackage"].Value, "docker")</MudButton>
             }
         </MudStack>
-    </MudPaper>
-}
-
-@if (_wsDeviceId is { } cmdDeviceId)
-{
-    <MudText Typo="Typo.h6" Class="mb-3">@L["DaemonUpdates"]</MudText>
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+            </MudTabPanel>
+            <MudTabPanel Text="@L["DaemonUpdates"]">
         <MudText Typo="Typo.body2">@L["DaemonUpdateDescription"]</MudText>
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-3">
             <MudText Typo="Typo.body2">@L["DaemonInstalledVersion"]: @_clientCurrentVersion</MudText>
@@ -182,7 +178,7 @@
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["DaemonUpdateRequiresOnline"]</MudText>
         }
-        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+
         @if (_clientUpdateActive || _clientUpdateMessage is not null)
         {
             <MudProgressLinear Color="Color.Primary" Value="@(_clientUpdatePercent ?? 0d)"
@@ -191,10 +187,9 @@
                 @_clientUpdateMessage @(_clientUpdatePercent is { } percent ? $"· {percent:0}%" : string.Empty)
             </MudText>
         }
-    </MudPaper>
-    <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudTable Items="_commands" Dense="true" Hover="true">
+            </MudTabPanel>
+            <MudTabPanel Text="@L["Commands"]">
+        <MudTable Items="_commands" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["Kind"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
@@ -209,13 +204,16 @@
                 </MudTd>
                 <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
                 <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
-                <MudTd DataLabel="@L["Error"]">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</MudTd>
+                <MudTd DataLabel="@L["Error"]">
+                    <span class="beacon-diagnostic-output" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
+                </MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
         </MudTable>
+            </MudTabPanel>
+        </MudTabs>
     </MudPaper>
 }
-
 @code {
     private List<DaemonDeviceDto> _devices = [];
     private string _deviceName = string.Empty;
@@ -234,11 +232,11 @@
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
-    private string _probeGit = "-";
-    private string _probeNode = "-";
-    private string _probeDocker = "-";
-    private string _probeLlamaSwap = "-";
-    private string _probeAgentRuntime = "-";
+    private string? _probeGit;
+    private string? _probeNode;
+    private string? _probeDocker;
+    private string? _probeLlamaSwap;
+    private string? _probeAgentRuntime;
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
@@ -364,8 +362,8 @@
 
     private void FillProbe(string probeJson)
     {
-        _probeGit = _probeNode = _probeDocker = _probeLlamaSwap = "-";
-        _probeAgentRuntime = "-";
+        _probeGit = _probeNode = _probeDocker = _probeLlamaSwap = null;
+        _probeAgentRuntime = null;
         _probeAgentRuntimeHealthy = null;
         _probeAgentRuntimeError = null;
         try
@@ -382,9 +380,7 @@
                 {
                     _probeAgentRuntime = Str(runtimeStatus, "runtime");
                     if (string.IsNullOrWhiteSpace(_probeAgentRuntime))
-                    {
                         _probeAgentRuntime = "native";
-                    }
                     if (runtimeStatus.TryGetProperty("healthy", out var healthy)
                         && healthy.ValueKind is JsonValueKind.True or JsonValueKind.False)
                         _probeAgentRuntimeHealthy = healthy.GetBoolean();
@@ -397,12 +393,12 @@
         }
     }
 
-    private static string Tool(JsonElement root, string name)
+    private static string? Tool(JsonElement root, string name)
     {
         if (!root.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.String)
-            return "-";
+            return null;
         var value = p.GetString();
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private async Task AddDevice()
