@@ -517,7 +517,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "__EFMigrationsHistory", // EF migration bookkeeping
             "Users",                 // global identity
             "Sessions",             // user auth sessions
-            "OpenCodeConnections",  // user-owned agent connections
+            "AgentProviderConnections", // user-owned provider connections
             "Orgs",                 // tenant root; org scope is carried by members/invites
             "PasswordResetTokens",  // user credential recovery
             "LocalModelBackends",   // user-owned model registry
