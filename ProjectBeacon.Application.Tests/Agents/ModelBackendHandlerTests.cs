@@ -269,7 +269,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var ownerId = await SeedOwnerAsync(projectId);
         var backend = LocalModelBackend.Create(
             "remote", backendType, "must-not-run-as-process", 8192, 0, ownerId,
-            openCodeModel: "provider/model");
+            providerModelId: "provider/model");
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.Add(backend);
