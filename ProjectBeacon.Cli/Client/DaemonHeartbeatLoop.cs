@@ -56,7 +56,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                         _state.Log("llama-swap sync deferred while model generations are active");
                 }
 
-                // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
+                // Keep the last workspace where possible; native runtime readiness must not launch or switch model processes.
                 await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync(ApiRoutes.DeviceHeartbeat, new WorkstationHeartbeatRequest(
