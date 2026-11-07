@@ -627,5 +627,6 @@ public sealed class ApiTokenAuthMiddleware
         Guid? TaskId,
         Guid? SessionId,
         PipelineRole? Role,
-        Guid? SubtaskId);
+        Guid? SubtaskId,
+        IReadOnlyList<string>? AllowedMcpTools = null);
 }
