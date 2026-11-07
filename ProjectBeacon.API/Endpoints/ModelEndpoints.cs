@@ -19,8 +19,8 @@ public static class ModelEndpoints
         app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/models", UpsertModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapDelete("/v1/models/{id:guid}", DeleteModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/models/proxy/status", GetProxyStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/models/proxy/reload", ReloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/models/proxy/unload", UnloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -70,20 +70,21 @@ public static class ModelEndpoints
     /// </summary>
     public record BindRoleBody(PipelineRole Role, Guid ModelBackendId);
 
-    private static async Task<IResult> BindRole([FromBody] BindRoleBody body, SetRoleBindingHandler handler, CancellationToken ct)
+    private static async Task<IResult> BindRole(HttpContext ctx, [FromBody] BindRoleBody body, SetRoleBindingHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(body.Role, body.ModelBackendId)), ct);
+        var result = await handler.HandleAsync(new SetRoleBindingCommand(
+            new SetRoleBindingRequest(body.Role, body.ModelBackendId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> UnbindRole(string role, RemoveRoleBindingHandler handler, CancellationToken ct)
+    private static async Task<IResult> UnbindRole(HttpContext ctx, string role, RemoveRoleBindingHandler handler, CancellationToken ct)
     {
         if (!Enum.TryParse<PipelineRole>(role, ignoreCase: true, out var parsed))
             return ProblemResults.Bad($"Unknown role '{role}'.");
 
-        var result = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(parsed)), ct);
+        var result = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(parsed), ctx.GetActor()), ct);
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
