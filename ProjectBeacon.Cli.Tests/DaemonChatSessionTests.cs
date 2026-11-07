@@ -684,6 +684,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public IAgentRuntime Runtime { get; }
         public string? RuntimeWorkingDirectory => null;
         public object RuntimeStatusWire() => new { runtime = "native", available = true, healthy = true };
+        public void ReportUnavailable(string error) { }
         public Task TryTickAsync(string? workingDirectory, CancellationToken ct) => Task.CompletedTask;
         public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
             => Runtime is IAgentRuntimeCapabilities capabilities
