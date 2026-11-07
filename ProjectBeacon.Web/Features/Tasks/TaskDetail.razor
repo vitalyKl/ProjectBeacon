@@ -57,7 +57,7 @@ else
                 <StatusChip Color="@ChipPalette.ForPriority(_task.Priority)" Label="@ChromeLabels.Priority(L, _task.Priority)" />
                 <span class="beacon-ops-sub">@ChromeLabels.Type(L, _task.Type)</span>
             </div>
-            <div class="beacon-task-title">@_task.Title</div>
+            <div class="beacon-task-title" title="@_task.Title">@_task.Title</div>
             @if (!string.IsNullOrEmpty(_task.Description))
             {
                 <div class="beacon-task-goal">

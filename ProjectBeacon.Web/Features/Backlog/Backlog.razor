@@ -43,7 +43,7 @@ else if (_error)
 }
 else
 {
-    <MudTable Items="_tasks" Hover="true" Dense="true" Class="mt-4">
+    <MudTable Items="_tasks" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Class="mt-4">
         <HeaderContent>
             <MudTh>@L["Title"]</MudTh>
             <MudTh>@L["Status"]</MudTh>
@@ -55,7 +55,7 @@ else
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="@L["Title"]">
-                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => NavigateToTask(context.Id)">@context.Title</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => NavigateToTask(context.Id)" title="@context.Title">@context.Title</MudButton>
             </MudTd>
             <MudTd DataLabel="@L["Status"]">
                 <StatusChip Color="@ChipPalette.ForStatus(context.Status)" Label="@ChromeLabels.Status(L, context.Status)" />
