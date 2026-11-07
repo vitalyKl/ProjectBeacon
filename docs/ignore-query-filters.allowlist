@@ -30,3 +30,4 @@ ProjectBeacon.Application/Tasks/PipelineQueryHandlers.cs|2|Builds pipeline prefl
 ProjectBeacon.Application/Tasks/PipelineSupport.cs|10|Builds pipeline state from commands, sessions, devices, and review runs restricted by the selected task and project identifiers.
 ProjectBeacon.Application/Tasks/TaskLifecycleHandlers.cs|6|Performs task deletion and dependent cleanup across project-scoped related entities after authorizing the selected task.
 ProjectBeacon.Web/Extensions/CircuitTenantRevalidation.cs|1|Revalidates the authenticated user identity across tenant boundaries when a Blazor circuit changes its active tenant.
+ProjectBeacon.Infrastructure/Http/TenantIsolationMiddleware.cs|4|Resolves the authenticated tenant scope before tenant filters are activated; membership and project/org lookups are explicitly constrained by user, requested project, or authenticated token binding.
