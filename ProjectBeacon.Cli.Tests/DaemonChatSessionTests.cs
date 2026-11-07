@@ -678,7 +678,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-        private sealed class StubGate : IDaemonAgentRuntimeGate
+    private sealed class StubGate : IDaemonAgentRuntimeGate
     {
         public StubGate(IAgentRuntime runtime) => Runtime = runtime;
         public IAgentRuntime Runtime { get; }
