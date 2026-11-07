@@ -61,7 +61,7 @@ public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, R
     }
 }
 /// <summary>
-/// Uses the requested model string when it is set. Otherwise maps the user's chat backend to an OpenCode model id.
+/// Uses the requested model string when it is set. Otherwise resolves the user's selected provider model id.
 /// </summary>
 public static class ChatModelSelection
 {
