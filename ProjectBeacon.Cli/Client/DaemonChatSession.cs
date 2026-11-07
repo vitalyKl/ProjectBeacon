@@ -558,7 +558,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             activeTurn.Cancel();
 
         for (var attempt = 0; attempt < 200 && !_activeTurns.IsEmpty; attempt++)
-            await Task.Delay(50);
+            await _timing.DelayAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None);
 
         foreach (var externalId in _chatExternalSessions.Values.Distinct(StringComparer.Ordinal))
         {
