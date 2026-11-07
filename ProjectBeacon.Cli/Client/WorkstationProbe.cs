@@ -28,12 +28,8 @@ public static class WorkstationProbe
             probe["llamaSwapStatus"] = llamaSwapStatus;
         if (hostLoad is not null)
             probe["hostLoad"] = hostLoad;
-        if (opencodeServe is not null)
-        {
-            // New name is runtime-neutral. Keep the old key for clients that still read it.
-            probe["agentRuntime"] = opencodeServe;
-            probe["opencodeServe"] = opencodeServe;
-        }
+        if (agentRuntimeStatus is not null)
+            probe["agentRuntime"] = agentRuntimeStatus;
         return JsonSerializer.Serialize(probe);
     }
 
