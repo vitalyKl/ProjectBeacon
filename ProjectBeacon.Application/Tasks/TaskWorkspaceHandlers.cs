@@ -118,6 +118,8 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
 
         if (request.TaskId == Guid.Empty || !ValidKey(key))
             return Result.Failure<TaskWorkspaceSectionDto>("A valid taskId and lowercase workspace key are required.");
+        if (key.StartsWith("report/", StringComparison.Ordinal))
+            return Result.Failure<TaskWorkspaceSectionDto>("The report/ namespace is reserved for server-generated workspace reports.", ErrorKind.Forbidden);
         if (content.Length is 0 or > MaxWriteLength)
             return Result.Failure<TaskWorkspaceSectionDto>($"Content must contain 1 to {MaxWriteLength} characters.");
         if (mode is not ("create" or "append" or "replace"))
