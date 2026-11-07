@@ -2,7 +2,6 @@ namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
 using Application.Devices;
-using Domain.Entities.Devices;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -41,17 +40,6 @@ public sealed class NudgeModelsHandler : ICommandHandler<NudgeModelsCommand, Res
         if (online.Count == 0)
             return Result.Ok();
 
-        var backends = await db.LocalModelBackends.Where(b => b.UserId == command.UserId).ToListAsync(ct);
-        var dtos = backends.Select(ModelBackendMappers.ToDto).ToList();
-        var preferred = await db.Users.Where(u => u.Id == command.UserId).Select(u => u.ChatModelBackendId).FirstOrDefaultAsync(ct);
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters().Where(r => online.Contains(r.DeviceId)).ToListAsync(ct);
-        foreach (var runtime in runtimes)
-        {
-            var payload = OpencodePayload.BuildApply(
-                AgentRunMode.Solo, dtos, preferred, null, null, null);
-            await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-                runtime.DeviceId, command.UserId, WorkstationCommandKind.ApplyOpencode, payload, runtime.ProjectId)), ct);
-        }
         return Result.Ok();
     }
 }
