@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Identity;
 
+using Application.Admin;
 using Application.Auth;
 using Application.Audit;
 using Application.Authorization;
