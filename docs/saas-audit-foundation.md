@@ -40,8 +40,11 @@ referenced record is deleted without retaining the referenced record itself.
   bounded, deterministic pages. The reader uses an explicit unscoped scope only after that
   authorization object has been supplied.
 
-The next phase must implement `IAdminGate` and call it at the request boundary before using
-`IAuditReader`. This PR does not expose an unauthenticated audit endpoint or operator UI.
+`IAdminGate` is implemented in Application and resolves the current alpha
+`SystemAdministrator` from persisted `User.IsAdmin` state. The request boundary must call
+`IAdminGate.RequireAsync` and pass the returned `AdminActor` to `IAuditReader`.
+Requests requiring elevation fail closed until a step-up authentication provider is added.
+This foundation does not expose an unauthenticated audit endpoint or operator UI.
 
 ## Implemented / not implemented
 
