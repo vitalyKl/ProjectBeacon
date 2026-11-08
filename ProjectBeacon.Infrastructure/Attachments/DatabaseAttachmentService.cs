@@ -292,7 +292,7 @@ internal static class AttachmentContentInspector
 
     public static string DetectContentType(string fileName, byte[] content)
     {
-        var extension = Path.GetExtension(fileName);
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
         if (BlockedExtensions.Contains(extension) || IsExecutable(content) || IsArchive(content))
             throw new AttachmentRejectedException("This file type is not accepted.");
 
@@ -426,8 +426,8 @@ internal static class AttachmentContentInspector
     }
 }
 
-public sealed class AttachmentRejectedException(string message) : Exception(message);
+public sealed class AttachmentRejectedException(string message) : Exception(message) { }
 
-public sealed class AttachmentQuotaExceededException(string message) : Exception(message);
+public sealed class AttachmentQuotaExceededException(string message) : Exception(message) { }
 
-public sealed class AttachmentConcurrencyLimitException(string message) : Exception(message);
+public sealed class AttachmentConcurrencyLimitException(string message) : Exception(message) { }
