@@ -39,6 +39,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         IReadOnlyList<string>? allowedPaths = command.Request.AllowedPaths;
         var optionalTools = command.Request.OptionalMcpTools ?? [];
         var profileKey = command.Request.Profile?.Trim();
+        BuiltInAgentProfile? resolvedProfile = null;
         if (!string.IsNullOrWhiteSpace(profileKey))
         {
             var profile = BuiltInAgentProfiles.Get(profileKey);
@@ -51,6 +52,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                 customProfile = await db.AgentProfiles.FirstOrDefaultAsync(
                     profileRow => profileRow.UserId == profileOwnerId && profileRow.Key == profileKey, ct);
             profile = BuiltInAgentProfiles.ApplyOverride(profile, customProfile)!;
+            resolvedProfile = profile;
 
             var defaults = profile.Tools;
             var optionalGrants = new HashSet<string>(StringComparer.Ordinal);
@@ -111,8 +113,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         var subtask = Subtask.Create(
             instructions, task.Id, task.ProjectId,
             allowedTools, allowedPaths, profileKey, command.Request.WakePlannerAfter,
-            profileKey is null ? null : JsonSerializer.Serialize(BuiltInAgentProfiles.Resolve(profileKey,
-                profileKey is null ? null : JsonSerializer.Serialize(profile))));
+            resolvedProfile is null ? null : JsonSerializer.Serialize(resolvedProfile));
         var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
         var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
             ?? phases.FirstOrDefault(p => string.Equals(p.Key, "do", StringComparison.Ordinal));
@@ -135,272 +136,5 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
 
         await db.SaveChangesAsync(ct);
         return Result.Ok(PipelineMappers.ToDto(subtask));
-    }
-}
-/// <summary>
-/// Opens an actor session for a subtask that is not already finished, and only from an executing stage.
-/// </summary>
-public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand, Result<PipelineSessionDto>>
-{
-    private readonly IBeaconDbFactory _dbFactory;
-    private readonly ISessionSpawner _spawner;
-
-    public StartActorSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
-    {
-        _dbFactory = dbFactory;
-        _spawner = spawner;
-    }
-
-    public async Task<Result<PipelineSessionDto>> HandleAsync(StartActorSessionCommand command, CancellationToken ct = default)
-    {
-        await using var db = _dbFactory.CreateDbContext();
-        var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-
-            var task = await db.Tasks.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-            if (task is null)
-                return Result.Failure<PipelineSessionDto>("Task not found.");
-
-            var subtask = await db.Subtasks.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
-            if (subtask is null)
-                return Result.Failure<PipelineSessionDto>("Subtask not found.");
-            if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
-                return Result.Failure<PipelineSessionDto>("Subtask is already finished.");
-
-            if (subtask.Status is SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser)
-            {
-                // A retry after an ambiguous commit returns the existing Actor session.
-                // WaitingForUser is also active: never call Start() or create a second session
-                // while the first Actor is waiting for a human form response.
-                var open = (await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
-                    .FirstOrDefault(s => s.SubtaskId == subtask.Id);
-                if (open is not null)
-                    return Result.Ok(PipelineMappers.ToDto(open));
-                var status = subtask.Status == SubtaskStatus.WaitingForUser ? "waiting for user" : "in progress";
-                return Result.Failure<PipelineSessionDto>(
-                    $"Subtask is {status} without an open Actor session. Fail and reopen it to retry.");
-            }
-
-            if (task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
-                return Result.Failure<PipelineSessionDto>($"Cannot start actor session in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
-
-            // Retry the stage claim, subtask claim, and session insert as one unit. The
-            // conditional stage update also prevents a stale read from starting work after close.
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-            {
-                try
-                {
-                    task.EnterExecuting();
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Result.Failure<PipelineSessionDto>(ex.Message);
-                }
-            }
-
-            var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
-            if (entered == 0)
-                return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting session; retry.");
-
-            // The task-row update above serializes actor starts across callers.
-            // Only one Actor session may be queued or running for a task at a time.
-            var anotherActorIsOpen = await db.PipelineSessions.AnyAsync(s =>
-                s.TaskId == task.Id
-                && s.Role == PipelineRole.Actor
-                && s.SubtaskId != subtask.Id
-                && (s.Status == SessionStatus.Ready
-                    || s.Status == SessionStatus.Active
-                    || s.Status == SessionStatus.WaitingForUser), ct);
-            if (anotherActorIsOpen)
-                return Result.Failure<PipelineSessionDto>("Another Actor session is already queued or running for this task.");
-
-            subtask.Start();
-            var started = await db.Subtasks
-                .Where(s => s.Id == subtask.Id && s.Status == SubtaskStatus.Pending)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(s => s.Status, subtask.Status)
-                    .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
-            if (started == 0)
-                return Result.Failure<PipelineSessionDto>("Subtask state changed while starting session; retry.");
-
-            SpawnedSession spawned;
-            try
-            {
-                spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Actor, task.Id, ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
-            }
-
-            var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Actor, ct);
-            var session = PipelineSession.Create(
-                task.Id, task.ProjectId, PipelineRole.Actor,
-                SessionPrompts.Actor(task, subtask, profileInstructions), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
-            db.PipelineSessions.Add(session);
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-
-            return Result.Ok(PipelineMappers.ToDto(session));
-        });
-    }
-}
-/// <summary>
-/// Records a subtask diff and summary. Both are required. A finished subtask fails.
-/// </summary>
-public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCommand, Result<PipelineStateDto>>
-{
-    private readonly IBeaconDbFactory _dbFactory;
-    public ReportSubtaskResultHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<PipelineStateDto>> HandleAsync(ReportSubtaskResultCommand command, CancellationToken ct = default)
-    {
-        var diffRef = command.Request.DiffRef?.Trim() ?? string.Empty;
-        var summary = command.Request.Summary?.Trim();
-        if (string.IsNullOrWhiteSpace(summary))
-            return Result.Failure<PipelineStateDto>("Summary is required.");
-        if (summary.Length > Subtask.MaxSummaryLength)
-            return Result.Failure<PipelineStateDto>($"Summary exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the summary and retry.");
-
-        await using var db = _dbFactory.CreateDbContext();
-        var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            var task = await db.Tasks.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-            if (task is null)
-                return Result.Failure<PipelineStateDto>("Task not found.");
-
-            var subtask = await db.Subtasks.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
-            if (subtask is null)
-                return Result.Failure<PipelineStateDto>("Subtask not found.");
-            if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
-                return Result.Failure<PipelineStateDto>("Subtask is already finished.");
-
-            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-            {
-                try { task.EnterExecuting(); }
-                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
-                var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
-                if (entered == 0)
-                    return Result.Failure<PipelineStateDto>("Pipeline state changed while reporting; retry.");
-            }
-
-            var expectedStatus = subtask.Status;
-            if (subtask.Status == SubtaskStatus.Pending)
-                subtask.Start();
-            try { subtask.ReportResult(diffRef, summary); }
-            catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
-
-            var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
-            var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
-            if (actorSession is not null)
-                actorSession.Close();
-
-            var reported = await db.Subtasks
-                .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(s => s.Status, subtask.Status)
-                    .SetProperty(s => s.DiffRef, subtask.DiffRef)
-                    .SetProperty(s => s.Summary, subtask.Summary)
-                    .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
-            if (reported == 0)
-                return Result.Failure<PipelineStateDto>("Subtask state changed while reporting; retry.");
-
-            var reportAttempt = await db.TaskWorkspaceSections.CountAsync(section =>
-                section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Id && section.Kind == "Report", ct) + 1;
-            db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-                task.Id, task.ProjectId, subtask.Id, reportAttempt, summary, command.Request.Abstract, actorSession?.Id, subtask.ProfileKey));
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
-        });
-    }
-}
-
-/// <summary>Fails an in-progress subtask and publishes the failure report atomically with its status.</summary>
-public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<PipelineStateDto>>
-{
-    private readonly IBeaconDbFactory _dbFactory;
-    public FailSubtaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<PipelineStateDto>> HandleAsync(FailSubtaskCommand command, CancellationToken ct = default)
-    {
-        var reason = command.Request.Reason?.Trim();
-        if (string.IsNullOrWhiteSpace(reason))
-            return Result.Failure<PipelineStateDto>("Reason is required.");
-        if (reason.Length > Subtask.MaxSummaryLength)
-            return Result.Failure<PipelineStateDto>($"Failure reason exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten the reason and retry.");
-
-        await using var db = _dbFactory.CreateDbContext();
-        var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-            var task = await db.Tasks.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-            if (task is null)
-                return Result.Failure<PipelineStateDto>("Task not found.");
-
-            var subtask = await db.Subtasks.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
-            if (subtask is null)
-                return Result.Failure<PipelineStateDto>("Subtask not found.");
-            if (subtask.Status == SubtaskStatus.Done)
-                return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
-            if (subtask.Status == SubtaskStatus.Failed)
-            {
-                await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
-                    db, task.ProjectId, task.Id, subtask.Id, ct);
-                await transaction.CommitAsync(ct);
-                return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
-            }
-
-            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-            {
-                try { task.EnterExecuting(); }
-                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
-                var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
-                if (entered == 0)
-                    return Result.Failure<PipelineStateDto>("Pipeline state changed while failing; retry.");
-            }
-
-            var expectedStatus = subtask.Status;
-            subtask.ForceFail(reason);
-            var failed = await db.Subtasks
-                .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(s => s.Status, subtask.Status)
-                    .SetProperty(s => s.Summary, subtask.Summary)
-                    .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
-            if (failed == 0)
-                return Result.Failure<PipelineStateDto>("Subtask state changed while failing; retry.");
-
-            var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
-            var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
-            var reportAttempt = await db.TaskWorkspaceSections.CountAsync(section =>
-                section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Id && section.Kind == "Report", ct) + 1;
-            db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-                task.Id, task.ProjectId, subtask.Id, reportAttempt, reason, command.Request.Abstract, actorSession?.Id));
-            await db.SaveChangesAsync(ct);
-            await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
-                db, task.ProjectId, task.Id, subtask.Id, ct);
-            await transaction.CommitAsync(ct);
-            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
-        });
     }
 }
