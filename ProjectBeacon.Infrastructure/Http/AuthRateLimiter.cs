@@ -4,12 +4,18 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+
 /// <summary>
-/// Adds the auth and auth-read rate-limit policies. Rejection is HTTP 429 as problem+json.
+/// Adds the auth, read, and attachment-upload rate-limit policies. Rejection is HTTP 429 as problem+json.
 /// </summary>
 public static class AuthRateLimiter
 {
-    public static void Configure(RateLimiterOptions options, int permitLimit, int windowSeconds, int readPermitLimit = 60)
+    public static void Configure(
+        RateLimiterOptions options,
+        int permitLimit,
+        int windowSeconds,
+        int readPermitLimit = 60,
+        int attachmentUploadPermitLimit = 10)
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         options.OnRejected = (ctx, ct) => new ValueTask(ProblemJson.WriteAsync(
@@ -21,14 +27,15 @@ public static class AuthRateLimiter
             ct));
         options.AddPolicy("auth", context => Partition(context, permitLimit, windowSeconds));
         options.AddPolicy("auth-read", context => Partition(context, readPermitLimit, windowSeconds));
+        options.AddPolicy("attachment-upload", context => Partition(context, attachmentUploadPermitLimit, windowSeconds));
 
         static RateLimitPartition<string> Partition(HttpContext context, int permits, int seconds)
         {
             var key = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = permits,
-                Window = TimeSpan.FromSeconds(seconds),
+                PermitLimit = Math.Max(1, permits),
+                Window = TimeSpan.FromSeconds(Math.Max(1, seconds)),
                 AutoReplenishment = true,
                 QueueLimit = 0
             });
