@@ -10,7 +10,7 @@ public interface IAttachmentService
 {
     Task<TaskAttachmentDto?> UploadTaskAsync(
         Guid projectId, Guid taskId, ActorContext actor, Stream content,
-        string fileName, string? contentType, long length, CancellationToken ct = default);
+        string fileName, string? contentType, long? length, CancellationToken ct = default);
 
     Task<IReadOnlyList<TaskAttachmentDto>> ListTaskAsync(
         Guid projectId, Guid taskId, CancellationToken ct = default);
