@@ -221,7 +221,10 @@ public sealed class PipelineActorQueueDispatcher
                     return null;
                 }
 
-                var prompt = SessionPrompts.PlannerWake(task, subtasks, workspace, wakeCount + 1, wakeLimit);
+                var plannerInstructions = await PipelineSupport.RoleInstructionsAsync(
+                    db, task.ProjectId, PipelineRole.Planner, ct);
+                var prompt = SessionPrompts.PlannerWake(
+                    task, subtasks, workspace, wakeCount + 1, wakeLimit, plannerInstructions);
                 var session = PipelineSession.Create(task.Id, task.ProjectId, PipelineRole.Planner,
                     prompt, null, spawned.ModelBackendId, spawned.LaunchSpec);
                 db.PipelineSessions.Add(session);
