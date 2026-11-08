@@ -52,7 +52,8 @@ public sealed class SessionPromptsTests
             "Notes", "ApiToken", null, "Actor", "explorer", subtask.Id, Guid.NewGuid(),
             1, now, now);
 
-        var prompt = SessionPrompts.PlannerWake(task, [subtask], [section], 1, 8);
+        var prompt = SessionPrompts.PlannerWake(
+            task, [subtask], [section], 1, 8, "Keep batches independently verifiable.");
 
         Assert.Contains("Planner wake-up 1 of 8", prompt);
         Assert.Contains("findings/auth", prompt);
@@ -60,6 +61,7 @@ public sealed class SessionPromptsTests
         Assert.Contains("implementer", prompt);
         Assert.Contains("verifier", prompt);
         Assert.Contains("pipeline_start_review", prompt);
+        Assert.Contains("Keep batches independently verifiable.", prompt);
     }
 
     [Fact]
