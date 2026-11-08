@@ -88,6 +88,50 @@ public sealed class UserAuthTests
         Assert.Equal(0, user.FailedLoginAttempts);
         Assert.Null(user.LockedUntil);
         Assert.False(user.IsLockedOut);
+        Assert.Equal(1, user.SessionVersion);
+    }
+
+    [Fact]
+    public void DisableAndEnable_AreIdempotentAndRevokeSessions()
+    {
+        var user = User.Create("test", "test@test.com", "hashed");
+        var disabledAt = new DateTime(2026, 11, 8, 10, 0, 0, DateTimeKind.Utc);
+
+        user.Disable(disabledAt);
+
+        Assert.True(user.IsDisabled);
+        Assert.Equal(disabledAt, user.DisabledAt);
+        Assert.Equal(1, user.SessionVersion);
+
+        user.Disable(disabledAt.AddMinutes(1));
+        Assert.Equal(1, user.SessionVersion);
+        Assert.Equal(disabledAt, user.DisabledAt);
+
+        user.Enable();
+
+        Assert.False(user.IsDisabled);
+        Assert.Null(user.DisabledAt);
+        Assert.Equal(2, user.SessionVersion);
+
+        user.Enable();
+        Assert.Equal(2, user.SessionVersion);
+    }
+
+    [Fact]
+    public void SetAdmin_BumpsSessionVersionOnlyWhenValueChanges()
+    {
+        var user = User.Create("test", "test@test.com", "hashed");
+
+        user.SetAdmin(true);
+        Assert.True(user.IsAdmin);
+        Assert.Equal(1, user.SessionVersion);
+
+        user.SetAdmin(true);
+        Assert.Equal(1, user.SessionVersion);
+
+        user.SetAdmin(false);
+        Assert.False(user.IsAdmin);
+        Assert.Equal(2, user.SessionVersion);
     }
 }
 
