@@ -51,7 +51,8 @@ public static class SessionPrompts
         IReadOnlyList<Subtask> subtasks,
         IReadOnlyList<TaskWorkspaceSectionSummaryDto> workspaceIndex,
         int wakeCount,
-        int wakeLimit)
+        int wakeLimit,
+        string? profileInstructions = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: planner (wake-up). This is a new short planning turn; there is no live Planner process to resume.");
@@ -61,6 +62,7 @@ public static class SessionPrompts
             sb.AppendLine("Task description:");
             sb.AppendLine(task.Description);
         }
+        AppendProfileInstructions(sb, "Planner", profileInstructions);
         sb.AppendLine($"Planner wake-up {wakeCount} of {wakeLimit}.");
         sb.AppendLine("Current subtasks (oldest first):");
         foreach (var subtask in subtasks.OrderBy(s => s.CreatedAt))
