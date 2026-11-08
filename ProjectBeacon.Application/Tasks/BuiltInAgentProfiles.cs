@@ -20,7 +20,8 @@ public sealed record BuiltInAgentProfile(
     bool CommandsEnabled,
     bool ReportsDiff,
     string SizeHint,
-    string Effort);
+    string Effort,
+    IReadOnlyList<string> OptionalTools);
 
 /// <summary>
 /// Versioned code-owned actor presets. User-authored role instructions remain separate:
@@ -98,7 +99,7 @@ public static class BuiltInAgentProfiles
         IReadOnlyList<string> tools, AgentProfilePathPolicy pathPolicy, IReadOnlyList<string> defaultPaths,
         bool commands, bool reportsDiff, string sizeHint, string effort) =>
         new(key, description, instruction, mode, tools, Required, pathPolicy, defaultPaths,
-            commands, reportsDiff, sizeHint, effort);
+            commands, reportsDiff, sizeHint, effort, [McpToolNames.TaskAttachFile]);
 
     private static IReadOnlyList<string> ReadOnly() =>
         Array.AsReadOnly(Read.Concat(Context).Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
