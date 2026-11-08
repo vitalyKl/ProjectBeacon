@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests.Admin;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Identity;
