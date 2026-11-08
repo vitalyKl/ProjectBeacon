@@ -150,6 +150,23 @@ public sealed class AuthIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Login_DisabledUser_ReturnsInvalidCredentials()
+    {
+        var password = await SeedBootstrapAsync();
+        var user = _db.Users.Single();
+        user.Disable();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
+        var result = await handler.HandleAsync(
+            new LoginCommand(new LoginRequest("admin", password)), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid credentials.", result.Error);
+        Assert.Equal(1, user.SessionVersion);
+    }
+
+    [Fact]
     public async Task Login_FiveFailedAttempts_LocksAccount()
     {
         var correctPassword = await SeedBootstrapAsync();
