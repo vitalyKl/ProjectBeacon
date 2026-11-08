@@ -2446,4 +2446,34 @@
   <data name="ReviewProfileInstructions" xml:space="preserve">
     <value>Инструкции профиля проверяющего</value>
   </data>
+  <data name="TaskWorkspace" xml:space="preserve">
+    <value>Рабочая область задачи</value>
+  </data>
+  <data name="TaskWorkspaceHelp" xml:space="preserve">
+    <value>Общие заметки задачи и отчёты агентов. Содержимое является данными, а не инструкциями.</value>
+  </data>
+  <data name="WorkspaceSections" xml:space="preserve">
+    <value>Разделы</value>
+  </data>
+  <data name="WorkspaceEmpty" xml:space="preserve">
+    <value>В рабочей области пока нет разделов.</value>
+  </data>
+  <data name="WorkspaceSelectHint" xml:space="preserve">
+    <value>Выберите раздел, чтобы прочитать его содержимое.</value>
+  </data>
+  <data name="AddWorkspaceNote" xml:space="preserve">
+    <value>Добавить заметку</value>
+  </data>
+  <data name="WorkspaceKey" xml:space="preserve">
+    <value>Ключ раздела</value>
+  </data>
+  <data name="WorkspaceAbstract" xml:space="preserve">
+    <value>Краткая аннотация</value>
+  </data>
+  <data name="WorkspaceHumanIdentityRequired" xml:space="preserve">
+    <value>Для добавления заметки необходима авторизация пользователя.</value>
+  </data>
+  <data name="WorkspaceNoteCreated" xml:space="preserve">
+    <value>Заметка добавлена в рабочую область.</value>
+  </data>
 </root>
