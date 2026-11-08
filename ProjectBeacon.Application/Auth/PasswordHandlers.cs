@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Security;
+using Application.Security;
 using Domain.Entities.Identity;
 using Application.Persistence;
 using Application.Mail;
@@ -61,13 +62,17 @@ public class ForgotPasswordHandler
 public class ResetPasswordHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
-
     private readonly IPasswordHasher _passwords;
+    private readonly IUserSessionVersionCache? _sessionVersions;
 
-    public ResetPasswordHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords)
+    public ResetPasswordHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        IUserSessionVersionCache? sessionVersions = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
+        _sessionVersions = sessionVersions;
     }
 
     public async Task<Result> HandleAsync(ResetPasswordRequest request, CancellationToken ct = default)
@@ -94,6 +99,7 @@ public class ResetPasswordHandler
         foreach (var session in sessions)
             session.Deactivate();
         await db.SaveChangesAsync(ct);
+        _sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
     }
 }
@@ -103,13 +109,17 @@ public class ResetPasswordHandler
 public class ChangePasswordHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
-
     private readonly IPasswordHasher _passwords;
+    private readonly IUserSessionVersionCache? _sessionVersions;
 
-    public ChangePasswordHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords)
+    public ChangePasswordHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        IUserSessionVersionCache? sessionVersions = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
+        _sessionVersions = sessionVersions;
     }
 
     public async Task<Result> HandleAsync(ChangePasswordRequest request, CancellationToken ct = default)
@@ -124,6 +134,7 @@ public class ChangePasswordHandler
 
         user.ResetPassword(_passwords.Hash(request.NewPassword));
         await db.SaveChangesAsync(ct);
+        _sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
     }
 }
