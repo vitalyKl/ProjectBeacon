@@ -5,6 +5,7 @@ using Application.Common;
 using Application.Authorization;
 using Application.Tasks;
 using Application.Devices;
+using Application.Persistence;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
