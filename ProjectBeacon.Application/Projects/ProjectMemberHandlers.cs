@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
 using Domain.Entities.Projects;
 using Application.Persistence;
@@ -12,11 +13,16 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public AddProjectMemberHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public AddProjectMemberHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectMemberDto>> HandleAsync(AddProjectMemberCommand command, CancellationToken ct = default)
@@ -33,9 +39,22 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
         if (alreadyMember)
             return Result.Failure<ProjectMemberDto>("User is already a member of this project.");
 
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<ProjectMemberDto>("Project not found.");
+
         var member = ProjectMember.Create(command.Request.ProjectId, command.Request.UserId, command.Request.Role);
 
         db.ProjectMembers.Add(member);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.member.added",
+            "ProjectMember",
+            member.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"newState":"Member"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(member));
@@ -51,11 +70,16 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public RemoveProjectMemberHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public RemoveProjectMemberHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
@@ -72,7 +96,20 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
         if (member is null)
             return Result.Failure("Project member not found.");
 
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure("Project not found.");
+
         db.ProjectMembers.Remove(member);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.member.removed",
+            "ProjectMember",
+            member.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"previousState":"Member"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok();
