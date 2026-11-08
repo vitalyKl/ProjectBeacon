@@ -401,9 +401,6 @@ public sealed class ApiTokenAuthMiddleware
             if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
                 return true;
 
-            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
-                return true;
-
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
@@ -453,6 +450,9 @@ public sealed class ApiTokenAuthMiddleware
         {
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } reviewWorkspaceTool
                 && reviewWorkspaceTool != McpToolNames.WorkspaceWrite)
+                return true;
+
+            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
