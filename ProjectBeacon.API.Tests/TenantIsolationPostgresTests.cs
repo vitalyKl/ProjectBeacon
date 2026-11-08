@@ -1,5 +1,8 @@
 namespace ProjectBeacon.API.Tests;
 
+using Application.Devices;
+using Domain.Common;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
@@ -216,9 +219,9 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         // the FORCE-RLS-protected workspace report.
         using (TenantScope.EnterProjectScope(projectA))
         {
-            var handler = new Application.Devices.CompleteCommandHandler(_postgres.CreateFactory());
-            var result = await handler.HandleAsync(new Application.Devices.CompleteCommandCommand(
-                new Application.Devices.CompleteCommandRequest(
+            var handler = new CompleteCommandHandler(_postgres.CreateFactory());
+            var result = await handler.HandleAsync(new CompleteCommandCommand(
+                new CompleteCommandRequest(
                     commandId, deviceId, Success: false, ResultJson: null,
                     Error: "simulated actor failure", Generation: 1)),
                 TestContext.Current.CancellationToken);
