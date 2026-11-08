@@ -98,8 +98,7 @@ public sealed class PipelineActorQueueDispatcher
 
         var activeActors = await db.PipelineSessions.AsNoTracking()
             .AnyAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Actor
-                && (s.Status == SessionStatus.Ready || s.Status == SessionStatus.Active
-                    || s.Status == SessionStatus.WaitingForUser), ct);
+                && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser), ct);
         if (activeActors)
             return;
 
