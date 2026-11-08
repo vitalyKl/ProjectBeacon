@@ -1,9 +1,12 @@
 namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
+using Application.Audit;
+using Application.Authorization;
 using Application.Identity;
 using Application.Security;
 using Domain.Entities.Identity;
+using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -77,17 +80,20 @@ public class RegisterHandler
     private readonly IPasswordHasher _passwords;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditWriter? _auditWriter;
 
     public RegisterHandler(
         IBeaconDbFactory dbFactory,
         IPasswordHasher passwords,
         IConfiguration? configuration = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<RegisterResponse>> HandleAsync(RegisterCommand command, CancellationToken ct = default)
@@ -172,6 +178,25 @@ public class RegisterHandler
             if (!await writeDb.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
                 writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
+
+            var registeredActor = new ActorContext(
+                ActorType.Human, user.Id, false, null, null, null, invite.OrgId, ApiTokenCapability.None);
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                registeredActor,
+                "org.invite.accepted",
+                "OrgInvite",
+                invite.Id.ToString(),
+                invite.OrgId,
+                null,
+                detailsJson: """{"newState":"Accepted"}"""));
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                registeredActor,
+                "account.registered",
+                "User",
+                user.Id.ToString(),
+                invite.OrgId,
+                null,
+                detailsJson: """{"newState":"Active"}"""));
         }
 
         if (projectInvite is not null)
@@ -191,6 +216,26 @@ public class RegisterHandler
                     .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
                 writeDb.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(
                     projectInvite.ProjectId, user.Id, invite.Role));
+
+            var registeredActor = new ActorContext(
+                ActorType.Human, user.Id, false, null, null,
+                projectInvite.ProjectId, project.OrgId, ApiTokenCapability.None);
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                registeredActor,
+                "project.invite.accepted",
+                "ProjectInvite",
+                invite.Id.ToString(),
+                project.OrgId,
+                project.Id,
+                detailsJson: """{"newState":"Accepted"}"""));
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                registeredActor,
+                "account.registered",
+                "User",
+                user.Id.ToString(),
+                project.OrgId,
+                project.Id,
+                detailsJson: """{"newState":"Active"}"""));
         }
 
         await writeDb.SaveChangesAsync(ct);
