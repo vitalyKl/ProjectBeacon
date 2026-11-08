@@ -136,14 +136,14 @@ public static class PipelineEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
-    private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, CreateSubtaskHandler handler, CancellationToken ct)
+    private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, HttpContext context, CreateSubtaskHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths,
-            body.Profile, body.WakePlannerAfter, body.OptionalMcpTools)), ct);
+            body.Profile, body.WakePlannerAfter, body.OptionalMcpTools), context.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
