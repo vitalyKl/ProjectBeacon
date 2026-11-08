@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
                 .AddInterceptors(new TenantRlsConnectionInterceptor()));
         services.AddBeaconDbFactory();
         services.AddApplicationPorts();
-        services.AddScoped<IAttachmentService, PhysicalAttachmentService>();
+        services.AddScoped<IAttachmentService, DatabaseAttachmentService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
