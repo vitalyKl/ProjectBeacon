@@ -21,19 +21,22 @@ public class CreateOrgInviteHandler
     private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditWriter? _auditWriter;
 
     public CreateOrgInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
         IAuthorizationService auth,
         IConfiguration? configuration = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<InviteCreatedDto>> HandleAsync(CreateOrgInviteRequest request, CancellationToken ct = default)
@@ -58,7 +61,17 @@ public class CreateOrgInviteHandler
         foreach (var existing in pending)
         {
             if (existing.ExpiredAt < now)
+            {
                 existing.Expire();
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    request.Actor,
+                    "org.invite.expired",
+                    "OrgInvite",
+                    existing.Id.ToString(),
+                    org.Id,
+                    null,
+                    detailsJson: """{"previousState":"Pending","newState":"Expired"}"""));
+            }
             else
                 return Result.Failure<InviteCreatedDto>("Invite already pending.");
         }
@@ -66,6 +79,14 @@ public class CreateOrgInviteHandler
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
         var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
         db.OrgInvites.Add(invite);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            request.Actor,
+            "org.invite.created",
+            "OrgInvite",
+            invite.Id.ToString(),
+            org.Id,
+            null,
+            detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
@@ -123,7 +144,17 @@ public class CreateProjectInviteHandler
         foreach (var existing in pending)
         {
             if (existing.ExpiredAt < now)
+            {
                 existing.Expire();
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    request.Actor,
+                    "project.invite.expired",
+                    "ProjectInvite",
+                    existing.Id.ToString(),
+                    project.OrgId,
+                    project.Id,
+                    detailsJson: """{"previousState":"Pending","newState":"Expired"}"""));
+            }
             else
                 return Result.Failure<InviteCreatedDto>("Invite already pending.");
         }
@@ -191,48 +222,94 @@ public class AcceptInviteHandler
 
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
     {
+        if (request.Actor.UserId is not { } actorUserId)
+            return Result.Failure("Authentication is required.");
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        await using var db = _dbFactory.CreateDbContext();
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.Actor.UserId!.Value, ct);
+
+        // Users are global identities, so resolve the signed-in user in the caller's
+        // normal context. Only the invite/target-scope lookup below needs to cross tenants.
+        await using var userDb = _dbFactory.CreateDbContext();
+        var user = await userDb.Users
+            .AsNoTracking()
+            .Where(u => u.Id == actorUserId)
+            .Select(u => new { u.Id, u.Email })
+            .FirstOrDefaultAsync(ct);
         if (user is null)
             return Result.Failure("User not found.");
 
+        // The opaque invite token is the authorization proof for locating the target tenant.
+        // Re-read the invite in a fresh tenant-bound context before changing any state.
+        var lookupTenant = new TenantContext();
+        lookupTenant.Assign(null, null, unscoped: true);
+        await using var lookupDb = _dbFactory.CreateDbContext(lookupTenant);
+
         var hash = OpaqueToken.Hash(request.Token.Trim());
-        var orgInvite = await db.OrgInvites.IgnoreQueryFilters()
+        var orgInviteSnapshot = await lookupDb.OrgInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
-        if (orgInvite is not null)
+
+        if (orgInviteSnapshot is not null)
         {
-            if (!string.Equals(orgInvite.Email, user.Email, StringComparison.Ordinal))
+            if (!string.Equals(orgInviteSnapshot.Email, user.Email, StringComparison.Ordinal))
                 return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
-            if (!orgInvite.TryAccept(now))
+
+            var tenant = new TenantContext();
+            tenant.Assign(null, orgInviteSnapshot.OrgId, unscoped: false);
+            await using var writeDb = _dbFactory.CreateDbContext(tenant);
+            var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.Id == orgInviteSnapshot.Id, ct);
+            if (invite is null || !invite.TryAccept(now))
                 return Result.Failure("Invite is no longer valid.");
-            if (!await db.OrgMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.OrgId == orgInvite.OrgId && m.UserId == user.Id, ct))
-                db.OrgMembers.Add(OrgMember.Create(orgInvite.OrgId, user.Id, orgInvite.Role));
-            await db.SaveChangesAsync(ct);
+
+            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
+                    .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
+                writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
+
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                request.Actor,
+                "org.invite.accepted",
+                "OrgInvite",
+                invite.Id.ToString(),
+                invite.OrgId,
+                null,
+                detailsJson: """{"newState":"Accepted"}"""));
+            await writeDb.SaveChangesAsync(ct);
             return Result.Ok();
         }
 
-        var projectInvite = await db.ProjectInvites.IgnoreQueryFilters()
+        var projectInviteSnapshot = await lookupDb.ProjectInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
-        if (projectInvite is null)
+        if (projectInviteSnapshot is null)
             return Result.Failure("Invite not found.");
-        if (!string.Equals(projectInvite.Email, user.Email, StringComparison.Ordinal))
+        if (!string.Equals(projectInviteSnapshot.Email, user.Email, StringComparison.Ordinal))
             return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
-        if (!projectInvite.TryAccept(now))
+
+        var projectSnapshot = await lookupDb.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == projectInviteSnapshot.ProjectId, ct);
+        if (projectSnapshot is null)
+            return Result.Failure("Project not found.");
+
+        var projectTenant = new TenantContext();
+        projectTenant.Assign(projectSnapshot.Id, projectSnapshot.OrgId, unscoped: false);
+        await using var projectWriteDb = _dbFactory.CreateDbContext(projectTenant);
+        var projectInvite = await projectWriteDb.ProjectInvites.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.Id == projectInviteSnapshot.Id, ct);
+        if (projectInvite is null || !projectInvite.TryAccept(now))
             return Result.Failure("Invite is no longer valid.");
 
-        var project = await db.Projects.IgnoreQueryFilters()
+        var project = await projectWriteDb.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);
         if (project is null)
             return Result.Failure("Project not found.");
-        if (!await db.OrgMembers.IgnoreQueryFilters()
+
+        if (!await projectWriteDb.OrgMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.OrgId == project.OrgId && m.UserId == user.Id, ct))
-            db.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, MemberRole.Member));
-        if (!await db.ProjectMembers.IgnoreQueryFilters()
+            projectWriteDb.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, MemberRole.Member));
+        if (!await projectWriteDb.ProjectMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
-            db.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
-        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            projectWriteDb.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
+
+        _auditWriter?.Stage(projectWriteDb, AuditEventFactory.ForActor(
             request.Actor,
             "project.invite.accepted",
             "ProjectInvite",
@@ -240,7 +317,7 @@ public class AcceptInviteHandler
             project.OrgId,
             project.Id,
             detailsJson: """{"newState":"Accepted"}"""));
-        await db.SaveChangesAsync(ct);
+        await projectWriteDb.SaveChangesAsync(ct);
         return Result.Ok();
     }
 }
@@ -309,11 +386,16 @@ public class RevokeOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public RevokeOrgInviteHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public RevokeOrgInviteHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
@@ -326,6 +408,14 @@ public class RevokeOrgInviteHandler
         if (!check.Success)
             return Result.Forbidden();
         invite.Revoke();
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            request.Actor,
+            "org.invite.revoked",
+            "OrgInvite",
+            invite.Id.ToString(),
+            invite.OrgId,
+            null,
+            detailsJson: """{"previousState":"Pending","newState":"Revoked"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
