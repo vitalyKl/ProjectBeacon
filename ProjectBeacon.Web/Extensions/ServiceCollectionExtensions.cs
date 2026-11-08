@@ -60,8 +60,13 @@ public static class ServiceCollectionExtensions
             Environment.GetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW"), out var readPerWindow)
             ? readPerWindow : 60;
 
+        var attachmentUploadRateLimit = int.TryParse(
+            Environment.GetEnvironmentVariable("RATE_LIMIT_ATTACHMENT_UPLOADS_PER_WINDOW"), out var attachmentUploads)
+            ? attachmentUploads : 10;
+
         services.AddRateLimiter(options =>
-            ProjectBeacon.Infrastructure.Http.AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow));
+            ProjectBeacon.Infrastructure.Http.AuthRateLimiter.Configure(
+                options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow, attachmentUploadRateLimit));
 
         services.AddAuthentication(options =>
         {
