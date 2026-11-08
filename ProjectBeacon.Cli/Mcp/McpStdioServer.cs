@@ -321,11 +321,11 @@ public static partial class McpStdioServer
         if (rejected is not null)
             return rejected;
 
-        // For pipeline Actors, an empty AllowedMcpTools list must deny workspace tools,
-        // not inherit the generic MCP client's legacy "empty means unrestricted" behavior.
+        // Pipeline Actors may only call explicitly granted tools. This check applies
+        // to local workspace and API-backed tools alike; hiding a tool from tools/list
+        // is not an authorization boundary because clients can call names directly.
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
-            && !IsActorTerminalTool(tool)
-            && !McpApiTools.IsApiTool(tool))
+            && !IsActorTerminalTool(tool))
             return RejectActorToolGrant(tool, allowlists, explicitId);
 
         return null;
