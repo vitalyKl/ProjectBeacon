@@ -12,7 +12,9 @@ using ProjectBeacon.Web.Extensions;
 namespace ProjectBeacon.Web.Tests;
 
 using Application.Persistence;
+using Application.Security;
 using Infrastructure.Data;
+using Infrastructure.Security;
 
 /// <summary>
 /// P1.5: circuit identity/tenant isolation. Verifies the live revalidation that bounds
