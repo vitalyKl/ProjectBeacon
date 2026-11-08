@@ -91,7 +91,9 @@ public static class BuiltInAgentProfiles
             || path.IndexOf((char)92) >= 0 || path.Contains(':')
             || Path.IsPathRooted(path))
             return false;
-        return path.Split('/').All(part => part.Length > 0 && part is not ("." or ".."));
+        var relative = path.EndsWith('/') ? path[..^1] : path;
+        return relative.Length > 0
+            && relative.Split('/').All(part => part.Length > 0 && part is not ("." or ".."));
     }
 
     public static bool IsWithinDefaults(string path, IReadOnlyList<string> defaults)
