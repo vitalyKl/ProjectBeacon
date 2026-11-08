@@ -15,8 +15,11 @@ public sealed class EfAuditWriter : IAuditWriter
         if (!db.FilterUnscoped)
         {
             var orgMatch = auditEvent.OrgId.HasValue && auditEvent.OrgId == db.FilterOrgId;
-            var projectMatch = auditEvent.ProjectId.HasValue && auditEvent.ProjectId == db.FilterProjectId;
-            if (!orgMatch && !projectMatch)
+            var projectMatches = db.FilterProjectId.HasValue
+                ? auditEvent.ProjectId == db.FilterProjectId
+                : auditEvent.ProjectId is null;
+
+            if (!orgMatch || !projectMatches)
                 throw new UnauthorizedAccessException("The current tenant cannot write this audit event.");
         }
 
