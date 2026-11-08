@@ -72,4 +72,50 @@ internal sealed class BeaconApiClient
         var raw = await response.Content.ReadAsStringAsync(ct);
         return (response.IsSuccessStatusCode, (int)response.StatusCode, raw);
     }
+
+    public async Task<(bool Ok, int Status, string Body, string? ContentType, byte[]? Bytes)> DownloadFileAsync(
+        string relativePath, int maxBytes, CancellationToken ct = default)
+    {
+        if (maxBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxBytes));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, relativePath);
+        var project = _env.Get("BEACON_PROJECT_ID");
+        if (!string.IsNullOrWhiteSpace(project))
+            request.Headers.TryAddWithoutValidation("X-Project-Id", project.Trim());
+
+        using var response = await _http.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(ct);
+            return (false, (int)response.StatusCode, error, null, null);
+        }
+
+        if (response.Content.Headers.ContentLength is { } declared && declared > maxBytes)
+            return (false, 413, $"Attachment exceeds the {maxBytes}-byte read limit.", null, null);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        await using var buffer = new MemoryStream(Math.Min(maxBytes, 81920));
+        var chunk = new byte[81920];
+        var total = 0;
+        while (true)
+        {
+            var read = await stream.ReadAsync(
+                chunk.AsMemory(0, Math.Min(chunk.Length, maxBytes - total + 1)), ct);
+            if (read == 0)
+                break;
+            if (total + read > maxBytes)
+                return (false, 413, $"Attachment exceeds the {maxBytes}-byte read limit.", null, null);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), ct);
+            total += read;
+        }
+
+        return (
+            true,
+            (int)response.StatusCode,
+            string.Empty,
+            response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream",
+            buffer.ToArray());
+    }
 }

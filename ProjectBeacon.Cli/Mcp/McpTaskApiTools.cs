@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Mcp;
 
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Domain.Common;

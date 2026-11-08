@@ -150,6 +150,27 @@ public sealed class DatabaseAttachmentServiceTests : IDisposable
         Assert.Single(await _db.TaskAttachments.ToListAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ReadRejectsAttachmentAboveRequestedLimit()
+    {
+        var fixture = await CreateTaskAsync();
+        var service = new DatabaseAttachmentService(fixture.Factory);
+        var bytes = Encoding.UTF8.GetBytes("attachment payload");
+        await using var source = new MemoryStream(bytes);
+        var uploaded = await service.UploadTaskAsync(
+            fixture.Project.Id, fixture.Task.Id, fixture.Actor, source,
+            "notes.txt", "text/plain", bytes.Length, TestContext.Current.CancellationToken);
+        Assert.NotNull(uploaded);
+
+        await Assert.ThrowsAsync<AttachmentReadLimitExceededException>(() => service.ReadTaskAsync(
+            fixture.Project.Id, fixture.Task.Id, uploaded.Id, TestContext.Current.CancellationToken, 4));
+
+        var downloaded = await service.ReadTaskAsync(
+            fixture.Project.Id, fixture.Task.Id, uploaded.Id, TestContext.Current.CancellationToken, bytes.Length);
+        Assert.NotNull(downloaded);
+        Assert.Equal(bytes, downloaded.Value.Content);
+    }
+
     private async Task<AttachmentFixture> CreateTaskAsync()
     {
         var org = Org.Create("Attachments");

@@ -36,7 +36,7 @@ Task attachment metadata and file contents are stored in PostgreSQL. The metadat
 
 ## Agent handling
 
-Attachments are untrusted data, not instructions. Reading an attachment for an agent must use an authenticated, tenant-scoped read operation with an explicit size bound and an instruction boundary that tells the model to treat its contents as data, not system/developer instructions. Attachments must not be copied into a repository working tree or executed automatically. The current workstation MCP attachment tool publishes files from a workspace; a dedicated agent-facing read tool should preserve these rules when added.
+Attachments are untrusted data, not instructions. Agents can list attachment metadata with the task_list_attachments MCP tool and read an individual attachment with task_read_attachment. The read tool is bound to the active task and project, uses the authenticated /v1 API and tenant checks, and requests no more than 256 KiB by default (1 MiB hard maximum). The API checks metadata length before selecting the PostgreSQL bytea payload. UTF-8 text is returned in a structured untrusted-data envelope; verified PNG/JPEG/GIF/WebP images are returned as MCP image blocks with a separate warning. PDF and other binary types are not exposed to agents by this tool. Attachments are not copied into a repository working tree or executed automatically.
 
 ## Antivirus and lifecycle
 

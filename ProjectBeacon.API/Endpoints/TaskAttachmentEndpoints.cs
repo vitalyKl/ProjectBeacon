@@ -75,7 +75,7 @@ public static class TaskAttachmentEndpoints
             // every caller. No IFormFile buffering or client-provided length is trusted.
             var result = await attachments.UploadTaskAsync(
                 projectId, taskId, context.GetActor(), section.Body,
-                Uri.UnescapeDataString(fileName), section.ContentType, null, ct);
+                fileName, section.ContentType, null, ct);
 
             return result is null
                 ? Results.NotFound()
@@ -117,9 +117,24 @@ public static class TaskAttachmentEndpoints
 
     private static async Task<IResult> Download(
         Guid projectId, Guid taskId, Guid attachmentId, IAttachmentService attachments,
-        HttpContext context, CancellationToken ct)
+        HttpContext context, long? maxBytes, CancellationToken ct)
     {
-        var result = await attachments.ReadTaskAsync(projectId, taskId, attachmentId, ct);
+        if (maxBytes is <= 0 or > DatabaseAttachmentService.MaxFileLength)
+            return ProblemResults.Bad($"maxBytes must be between 1 and {DatabaseAttachmentService.MaxFileLength}.");
+
+        (TaskAttachmentDto Attachment, byte[] Content)? result;
+        try
+        {
+            result = await attachments.ReadTaskAsync(projectId, taskId, attachmentId, ct, maxBytes);
+        }
+        catch (AttachmentReadLimitExceededException ex)
+        {
+            return Results.Problem(
+                detail: ex.Message,
+                statusCode: StatusCodes.Status413PayloadTooLarge,
+                title: "Attachment exceeds the read limit");
+        }
+
         if (result is null)
             return Results.NotFound();
 

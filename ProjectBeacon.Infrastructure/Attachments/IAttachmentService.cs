@@ -16,5 +16,5 @@ public interface IAttachmentService
         Guid projectId, Guid taskId, CancellationToken ct = default);
 
     Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
-        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default);
+        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default, long? maxBytes = null);
 }

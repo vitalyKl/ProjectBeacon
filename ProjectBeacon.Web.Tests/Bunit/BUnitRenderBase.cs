@@ -161,6 +161,6 @@ internal sealed class FakeAttachmentService : IAttachmentService
         => Task.FromResult<IReadOnlyList<TaskAttachmentDto>>([]);
 
     public Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
-        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default)
+        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default, long? maxBytes = null)
         => Task.FromResult<(TaskAttachmentDto Attachment, byte[] Content)?>(null);
 }

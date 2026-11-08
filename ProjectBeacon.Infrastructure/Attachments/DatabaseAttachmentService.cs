@@ -148,14 +148,23 @@ public sealed class DatabaseAttachmentService : IAttachmentService
     }
 
     public async Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
-        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default)
+        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default, long? maxBytes = null)
     {
+        var readLimit = Math.Min(maxBytes ?? MaxFileLength, MaxFileLength);
+        if (readLimit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxBytes), "The attachment read limit must be positive.");
+
         await using var db = _dbFactory.CreateDbContext();
         var item = await db.TaskAttachments.AsNoTracking().SingleOrDefaultAsync(
             attachment => attachment.Id == attachmentId
                 && attachment.ProjectId == projectId && attachment.TaskId == taskId, ct);
         if (item is null)
             return null;
+
+        // Check metadata before selecting bytea. Agent reads can use a smaller cap than browser downloads.
+        if (item.Length > readLimit)
+            throw new AttachmentReadLimitExceededException(
+                $"The attachment is {item.Length} bytes; the requested read limit is {readLimit} bytes.");
 
         var bytes = await db.TaskAttachmentContents.AsNoTracking()
             .Where(payload => payload.ProjectId == projectId && payload.TaskAttachmentId == attachmentId)
@@ -170,14 +179,18 @@ public sealed class DatabaseAttachmentService : IAttachmentService
             if (File.Exists(legacyPath))
             {
                 var info = new FileInfo(legacyPath);
-                if (info.Length > MaxFileLength)
-                    throw new AttachmentRejectedException("The legacy attachment exceeds the current download limit.");
+                if (info.Length > readLimit)
+                    throw new AttachmentReadLimitExceededException(
+                        $"The legacy attachment exceeds the requested read limit of {readLimit} bytes.");
                 bytes = await File.ReadAllBytesAsync(legacyPath, ct);
             }
         }
 
         if (bytes is null)
             return null;
+        if (bytes.LongLength > readLimit)
+            throw new AttachmentReadLimitExceededException(
+                $"The attachment exceeds the requested read limit of {readLimit} bytes.");
 
         // Re-inspect legacy rows too: old metadata may contain a client-supplied MIME type.
         var detectedType = AttachmentContentInspector.DetectContentType(item.FileName, bytes);
@@ -431,3 +444,5 @@ public sealed class AttachmentRejectedException(string message) : Exception(mess
 public sealed class AttachmentQuotaExceededException(string message) : Exception(message) { }
 
 public sealed class AttachmentConcurrencyLimitException(string message) : Exception(message) { }
+
+public sealed class AttachmentReadLimitExceededException(string message) : Exception(message) { }
