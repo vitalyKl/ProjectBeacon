@@ -165,6 +165,60 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void ActorCanReadTaskAttachmentsOnlyWhenEachToolIsExplicitlyGranted()
+    {
+        var listPath = $"/v1/projects/{_projectId:D}/tasks/{_taskId:D}/attachments";
+        var readPath = $"{listPath}/{Guid.NewGuid():D}";
+
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, listPath, _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, readPath, _taskId, _subtaskId,
+            [McpToolNames.TaskListAttachments]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, listPath, _taskId, _subtaskId,
+            [McpToolNames.TaskListAttachments]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, readPath, _taskId, _subtaskId,
+            [McpToolNames.TaskReadAttachment]));
+
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{Guid.NewGuid():D}/tasks/{_taskId:D}/attachments",
+            _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/tasks/{Guid.NewGuid():D}/attachments",
+            _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, listPath, _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"{listPath}/not-a-guid", _taskId, _subtaskId,
+            [McpToolNames.TaskReadAttachment]));
+    }
+
+    [Fact]
+    public void PlannerReviewerAndEvalCanReadOnlyAttachmentsForTheirPinnedTask()
+    {
+        var listPath = $"/v1/projects/{_projectId:D}/tasks/{_taskId:D}/attachments";
+        var readPath = $"{listPath}/{Guid.NewGuid():D}";
+        var wrongProjectPath = $"/v1/projects/{Guid.NewGuid():D}/tasks/{_taskId:D}/attachments";
+        var wrongTaskPath = $"/v1/projects/{_projectId:D}/tasks/{Guid.NewGuid():D}/attachments";
+
+        foreach (var (kind, role) in new[]
+        {
+            (WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner),
+            (WorkstationCommandKind.RunPipelineSession, PipelineRole.Review),
+            (WorkstationCommandKind.RunEvalTurn, (PipelineRole?)null)
+        })
+        {
+            Assert.True(Allowed(kind, role, HttpMethods.Get, listPath, _taskId));
+            Assert.True(Allowed(kind, role, HttpMethods.Get, readPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Get, wrongProjectPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Get, wrongTaskPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Post, listPath, _taskId));
+        }
+    }
+
+    [Fact]
     public void PlannerContextCompileMustStayPinnedToItsPipelineTask()
     {
         var matchingTask = System.Text.Json.JsonSerializer.Serialize(new

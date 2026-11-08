@@ -355,7 +355,12 @@ public sealed class ApiTokenAuthMiddleware
             return true;
 
         if (commandKind == WorkstationCommandKind.RunEvalTurn)
+        {
+            if (taskId is { } evalTaskId
+                && TaskAttachmentToolForRequest(segments, projectId, evalTaskId, method) is not null)
+                return true;
             return IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: false);
+        }
 
         if (commandKind != WorkstationCommandKind.RunPipelineSession || taskId is not { } scopedTaskId || role is null)
             return false;
@@ -370,6 +375,9 @@ public sealed class ApiTokenAuthMiddleware
                 && GuidSegmentEquals(segments, 2, scopedTaskId)
                 && segments[3] == "pipeline")
                 return true;
+
+            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is { } attachmentTool)
+                return IsMcpToolGranted(allowedMcpTools, attachmentTool);
 
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
@@ -388,6 +396,12 @@ public sealed class ApiTokenAuthMiddleware
         {
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } plannerWorkspaceTool
                 && (plannerWorkspaceTool != McpToolNames.WorkspaceWrite || method == HttpMethods.Post))
+                return true;
+
+            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
+                return true;
+
+            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
@@ -453,6 +467,27 @@ public sealed class ApiTokenAuthMiddleware
         }
 
         return false;
+    }
+
+    private static string? TaskAttachmentToolForRequest(
+        string[] segments, Guid projectId, Guid taskId, string method)
+    {
+        if (method != HttpMethods.Get
+            || segments.Length < 6
+            || segments[0] != "v1"
+            || segments[1] != "projects"
+            || !GuidSegmentEquals(segments, 2, projectId)
+            || segments[3] != "tasks"
+            || !GuidSegmentEquals(segments, 4, taskId)
+            || segments[5] != "attachments")
+            return null;
+
+        if (segments.Length == 6)
+            return McpToolNames.TaskListAttachments;
+
+        return segments.Length == 7 && Guid.TryParse(segments[6], out _)
+            ? McpToolNames.TaskReadAttachment
+            : null;
     }
 
     private static string? TaskWorkspaceToolForRequest(string[] segments, Guid taskId, string method)
