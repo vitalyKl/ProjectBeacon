@@ -7,11 +7,11 @@ using Microsoft.Extensions.Configuration;
 /// </summary>
 public static class LocalAuthOptions
 {
-    public static bool InviteOnly(IConfiguration? configuration)
+    public static bool InviteOnly(IConfiguration? configuration, string? environmentName = null)
     {
         // The legacy opt-out is honored only by an explicitly marked test host.
-        // Development, staging and production deployments always remain invite-only.
-        var environment = configuration?["ASPNETCORE_ENVIRONMENT"];
+        // Runtime environment is supplied by IHostEnvironment when available.
+        var environment = environmentName ?? configuration?["ASPNETCORE_ENVIRONMENT"];
         if (!string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase))
             return true;
 
