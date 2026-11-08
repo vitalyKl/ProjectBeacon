@@ -8,7 +8,7 @@ using ProjectBeacon.Infrastructure.Attachments;
 
 public static class TaskAttachmentEndpoints
 {
-    public const long MaxRequestBytes = PhysicalAttachmentService.MaxFileLength + 1024 * 1024;
+    public const long MaxRequestBytes = DatabaseAttachmentService.MaxFileLength + 1024 * 1024;
 
     public static IEndpointRouteBuilder MapTaskAttachmentEndpoints(this IEndpointRouteBuilder app)
     {
@@ -32,8 +32,8 @@ public static class TaskAttachmentEndpoints
     {
         if (file is null)
             return ProblemResults.Bad("A file is required.");
-        if (file.Length is <= 0 or > PhysicalAttachmentService.MaxFileLength)
-            return ProblemResults.Bad($"Files must be between 1 byte and {PhysicalAttachmentService.MaxFileLength} bytes.");
+        if (file.Length is <= 0 or > DatabaseAttachmentService.MaxFileLength)
+            return ProblemResults.Bad($"Files must be between 1 byte and {DatabaseAttachmentService.MaxFileLength} bytes.");
         await using var stream = file.OpenReadStream();
         var result = await attachments.UploadTaskAsync(projectId, taskId, context.GetActor(),
             stream, file.FileName, file.ContentType, file.Length, ct);
