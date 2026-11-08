@@ -386,7 +386,7 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
 
             var expectedStage = previous.Role switch
             {
-                PipelineRole.Planner => task.PipelineStage == TaskPipelineStage.Planning,
+                PipelineRole.Planner => task.PipelineStage is TaskPipelineStage.Planning or TaskPipelineStage.Executing,
                 PipelineRole.Actor => task.PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision,
                 PipelineRole.Review => task.PipelineStage == TaskPipelineStage.Reviewing,
                 _ => false
