@@ -5,6 +5,7 @@ using Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.API.Endpoints;
+using ProjectBeacon.API.Endpoints;
 
 public sealed class HarnessApiAuthorizationTests
 {
@@ -184,6 +185,48 @@ public sealed class HarnessApiAuthorizationTests
         Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
 
         context.Request.Headers.Remove("Origin");
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_AcceptsExactSameOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+        context.Request.Headers["Origin"] = "https://beacon.example.com";
+
+        Assert.True(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Theory]
+    [InlineData("https://evil.example.com", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com.evil.test", "https", "beacon.example.com", 443)]
+    [InlineData("http://beacon.example.com", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com:8443", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com/upload", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com", "https", "beacon.example.com", 8443)]
+    public void CookieAttachmentUpload_RejectsOriginMismatch(
+        string origin, string requestScheme, string requestHost, int requestPort)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = requestScheme;
+        context.Request.Host = new HostString(requestHost, requestPort);
+        context.Request.Headers["Origin"] = origin;
+
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_RejectsMissingOrMalformedOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "null";
         Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
     }
 

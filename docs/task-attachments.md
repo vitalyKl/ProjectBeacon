@@ -24,6 +24,7 @@ Task attachment metadata and file contents are stored in PostgreSQL. The metadat
 - Unknown non-executable binary content is stored as `application/octet-stream` and downloaded only.
 - SVG, HTML, archives, and executable signatures such as PE/MZ, ELF, Mach-O, and Java class/universal-binary signatures are rejected. Archives are not unpacked.
 - File names are reduced to a safe basename, stripped of control and header/path-special characters, and emitted using the framework's RFC 5987-compatible `Content-Disposition` handling.
+- Cookie-authenticated multipart uploads require an exact same-origin `Origin` (scheme, hostname, and effective port). Missing, malformed, sibling-subdomain, cross-scheme, and port-mismatched origins are rejected before the request body is parsed. Bearer-token clients remain supported.
 
 ## Access and downloads
 
