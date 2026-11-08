@@ -134,7 +134,6 @@ else
 
     private static bool IsValid(ProfileEditor profile) =>
         !string.IsNullOrWhiteSpace(profile.Name)
-        && !string.IsNullOrWhiteSpace(profile.Instruction)
         && !string.IsNullOrWhiteSpace(profile.SizeHint)
         && !string.IsNullOrWhiteSpace(profile.Effort);
 
@@ -212,7 +211,7 @@ else
             IsCustomized = custom is not null;
             Name = custom?.Name ?? basis.Name;
             Description = custom?.Description ?? basis.Description;
-            Instruction = custom?.Instruction ?? basis.Instruction;
+            Instruction = custom?.Instruction ?? string.Empty;
             Tools = custom?.Tools.ToList() ?? basis.Tools.ToList();
             CommandsEnabled = custom?.CommandsEnabled ?? basis.CommandsEnabled;
             ReportsDiff = custom?.ReportsDiff ?? basis.ReportsDiff;

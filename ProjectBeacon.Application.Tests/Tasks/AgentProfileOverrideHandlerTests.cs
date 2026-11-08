@@ -72,6 +72,27 @@ public sealed class AgentProfileOverrideHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Save_AllowsNoAdditionalInstructionsAndRetainsBuiltInGuidance()
+    {
+        var basis = BuiltInAgentProfiles.Get("implementer")!;
+        var saved = await new SaveAgentProfileOverrideHandler(Factory()).HandleAsync(
+            new SaveAgentProfileOverrideCommand(new SaveAgentProfileOverrideRequest(
+                _userId, basis.Key, basis.Name, basis.Description, string.Empty,
+                basis.Tools, basis.CommandsEnabled, basis.ReportsDiff, basis.SizeHint, basis.Effort)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(saved.Success, saved.Error);
+        Assert.Empty(saved.Value!.Instruction);
+
+        Domain.Entities.Agents.AgentProfile stored;
+        using (TenantScope.EnterUnscoped())
+            stored = _db.AgentProfiles.Single(profile => profile.UserId == _userId && profile.Key == basis.Key);
+
+        var effective = BuiltInAgentProfiles.ApplyOverride(basis, stored)!;
+        Assert.Equal(basis.Instruction, effective.Instruction);
+    }
+
+    [Fact]
     public async Task Save_RejectsToolExpansionAndEnablingCommandsForReadOnlyProfile()
     {
         var handler = new SaveAgentProfileOverrideHandler(Factory());

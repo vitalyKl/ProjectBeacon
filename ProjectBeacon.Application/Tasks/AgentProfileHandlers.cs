@@ -66,8 +66,8 @@ public sealed class SaveAgentProfileOverrideHandler
             return Result.Failure<AgentProfileOverrideDto>("Profile name is required (max 120 characters).");
         if (description.Length > 300)
             return Result.Failure<AgentProfileOverrideDto>("Profile description cannot exceed 300 characters.");
-        if (instruction.Length is 0 or > 8000)
-            return Result.Failure<AgentProfileOverrideDto>("Profile instructions are required (max 8000 characters).");
+        if (instruction.Length > 8000)
+            return Result.Failure<AgentProfileOverrideDto>("Profile instructions cannot exceed 8000 characters.");
         if (sizeHint.Length is 0 or > 200)
             return Result.Failure<AgentProfileOverrideDto>("Profile size hint is required (max 200 characters).");
         if (effort.Length is 0 or > 24)
