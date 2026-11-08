@@ -185,7 +185,15 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        // An explicit org route must not inherit a different active project/org
+        // from the current request. Bind both the membership proof and project query
+        // to the requested organization rather than falling back to ambient scope.
+        var tenant = command.Request.OrgId is { } requestedOrgId
+            ? OrgTenant(requestedOrgId)
+            : null;
+        await using var db = tenant is null
+            ? _dbFactory.CreateDbContext()
+            : _dbFactory.CreateDbContext(tenant);
         var query = db.Projects.AsQueryable();
         if (command.Request.OrgId is { } orgId)
         {
@@ -221,6 +229,13 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
             .ToListAsync(ct);
 
         return Result.Ok((IList<ProjectDto>)projects);
+    }
+
+    private static TenantContext OrgTenant(Guid orgId)
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(null, orgId, unscoped: false);
+        return tenant;
     }
 }
 /// <summary>
