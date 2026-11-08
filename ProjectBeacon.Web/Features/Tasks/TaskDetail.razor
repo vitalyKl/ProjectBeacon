@@ -522,6 +522,22 @@ else
             await OnReadWorkspaceSection(_selectedWorkspace.Key);
         else if (_selectedWorkspace is not null)
             _selectedWorkspace = null;
+
+        if (_workspaceKey == "notes/human-input"
+            && _workspaceSections.Any(section => section.Key == _workspaceKey))
+            SetNextHumanWorkspaceKey();
+    }
+
+    private void SetNextHumanWorkspaceKey()
+    {
+        var noteNumber = 0;
+        var key = "notes/human-input";
+        while (_workspaceSections.Any(section => section.Key == key))
+        {
+            noteNumber++;
+            key = $"notes/human-input-{noteNumber}";
+        }
+        _workspaceKey = key;
     }
 
     private async Task OnReadWorkspaceSection(string key)
@@ -561,10 +577,7 @@ else
             _workspaceAbstract = string.Empty;
             _workspaceContent = string.Empty;
             await ReloadWorkspace();
-            var noteNumber = 1;
-            while (_workspaceSections.Any(section => section.Key == $"notes/human-input-{noteNumber}"))
-                noteNumber++;
-            _workspaceKey = $"notes/human-input-{noteNumber}";
+            SetNextHumanWorkspaceKey();
             await OnReadWorkspaceSection(result.Value!.Key);
             Snackbar.Add(L["WorkspaceNoteCreated"].Value, Severity.Success);
         }
