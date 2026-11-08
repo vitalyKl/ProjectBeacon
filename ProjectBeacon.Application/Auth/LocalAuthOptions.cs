@@ -9,10 +9,14 @@ public static class LocalAuthOptions
 {
     public static bool InviteOnly(IConfiguration? configuration)
     {
-        // RegistrationPolicy is the source of truth. The current runtime supports only the
-        // operator-invited alpha flow; reserved future modes are not runtime-selectable.
-        _ = configuration;
-        return RegistrationPolicy.SaaSAlpha.Mode == RegistrationMode.InviteOnly;
+        // The legacy opt-out is honored only by an explicitly marked test host.
+        // Development, staging and production deployments always remain invite-only.
+        var environment = configuration?["ASPNETCORE_ENVIRONMENT"];
+        if (!string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var raw = configuration?["AUTH_LOCAL_INVITE_ONLY"];
+        return !bool.TryParse(raw, out var inviteOnly) || inviteOnly;
     }
 
     public static string PublicUrl(IConfiguration? configuration)
