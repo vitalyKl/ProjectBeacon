@@ -335,7 +335,13 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
 public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    public FailSubtaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    private readonly PipelineActorQueueDispatcher? _pipelineQueue;
+
+    public FailSubtaskHandler(IBeaconDbFactory dbFactory, PipelineActorQueueDispatcher? pipelineQueue = null)
+    {
+        _dbFactory = dbFactory;
+        _pipelineQueue = pipelineQueue;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(FailSubtaskCommand command, CancellationToken ct = default)
     {
@@ -347,7 +353,7 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
 
         await using var db = _dbFactory.CreateDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        var result = await strategy.ExecuteAsync(async () =>
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -401,7 +407,14 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
                 db, task.ProjectId, task.Id, subtask.Id, ct);
             await transaction.CommitAsync(ct);
+            await transaction.CommitAsync(ct);
             return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
         });
+
+        if (result.Success && _pipelineQueue is not null)
+            await _pipelineQueue.DispatchAfterSubtaskFailureAsync(
+                command.Request.TaskId, command.Request.SubtaskId, ct);
+
+        return result;
     }
 }
