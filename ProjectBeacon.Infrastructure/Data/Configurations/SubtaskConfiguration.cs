@@ -15,6 +15,8 @@ public class SubtaskConfiguration : IEntityTypeConfiguration<Subtask>
         entity.Property(e => e.Status).HasConversion<string>().IsRequired();
         entity.Property(e => e.DiffRef).HasMaxLength(500);
         entity.Property(e => e.Summary).HasMaxLength(5000);
+        entity.Property(e => e.ProfileKey).HasMaxLength(100);
+        entity.Property(e => e.WakePlannerAfter).HasDefaultValue(false);
         entity.Ignore(e => e.AllowedMcpTools);
         entity.Ignore(e => e.AllowedPaths);
         entity.Property(e => e.AllowedMcpToolsJson).IsRequired();
