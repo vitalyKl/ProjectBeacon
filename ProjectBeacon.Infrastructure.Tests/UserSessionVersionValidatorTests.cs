@@ -37,6 +37,7 @@ public sealed class UserSessionVersionValidatorTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddSingleton<IBeaconDbFactory>(_factory);
         _services = services.BuildServiceProvider();
     }
