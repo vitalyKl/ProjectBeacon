@@ -2,15 +2,17 @@ namespace ProjectBeacon.Application.Auth;
 
 using Microsoft.Extensions.Configuration;
 /// <summary>
-/// Reads AUTH_LOCAL_INVITE_ONLY and BEACON_PUBLIC_URL. Invite-only is true only when the value parses as true.
+/// Applies the hosted SaaS alpha registration policy and reads BEACON_PUBLIC_URL.
+/// Public registration is not a runtime configuration option.
 /// </summary>
 public static class LocalAuthOptions
 {
     public static bool InviteOnly(IConfiguration? configuration)
     {
-        // Public registration is intentionally unavailable for the hosted SaaS alpha.
-        // Keep the legacy configuration key from accidentally opening self-service sign-up.
-        return true;
+        // RegistrationPolicy is the source of truth. The current runtime supports only the
+        // operator-invited alpha flow; reserved future modes are not runtime-selectable.
+        _ = configuration;
+        return RegistrationPolicy.SaaSAlpha.Mode == RegistrationMode.InviteOnly;
     }
 
     public static string PublicUrl(IConfiguration? configuration)
