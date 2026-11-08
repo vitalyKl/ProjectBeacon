@@ -1,16 +1,19 @@
 namespace ProjectBeacon.Infrastructure;
 
 using Application.Mail;
+using Application.Audit;
 using Application.Persistence;
 using Application.Runtime;
 using Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Memory;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.LlamaSwap;
 using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Infrastructure.Attachments;
+using ProjectBeacon.Infrastructure.Audit;
 /// <summary>
 /// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
 /// </summary>
@@ -19,12 +22,16 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddScoped<ITenantContext, TenantContext>();
+        services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null))
                 .AddInterceptors(new TenantRlsConnectionInterceptor()));
         services.AddBeaconDbFactory();
         services.AddApplicationPorts();
         services.AddScoped<IAttachmentService, DatabaseAttachmentService>();
+        services.AddSingleton<IAuditWriter, EfAuditWriter>();
+        services.AddScoped<IAuditReader, EfAuditReader>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

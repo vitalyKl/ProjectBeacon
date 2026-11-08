@@ -6,6 +6,7 @@ using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Security;
 
 namespace ProjectBeacon.Web.Extensions;
 
@@ -41,10 +42,15 @@ public static class CircuitTenantRevalidation
 
         try
         {
+            // Revalidate disable state and SessionVersion as well as membership. The shared
+            // per-process cache bounds the stale-session window to 30 seconds.
             // The circuit's captured tenant scope is stale; the membership check must run
             // unscoped so RLS does not mask memberships in other projects.
             using (TenantScope.EnterUnscoped())
             {
+                if (!await UserSessionVersionValidator.ValidateAsync(scope, user, ct))
+                    return false;
+
                 await using var db = dbFactory.CreateDbContext();
                 if (!await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == actor.UserId.Value, ct))
                     return false;

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Auth;
+using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Identity;
@@ -82,19 +83,22 @@ public class CreateProjectInviteHandler
     private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditWriter? _auditWriter;
 
     public CreateProjectInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
         IAuthorizationService auth,
         IConfiguration? configuration = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<InviteCreatedDto>> HandleAsync(CreateProjectInviteRequest request, CancellationToken ct = default)
@@ -127,6 +131,14 @@ public class CreateProjectInviteHandler
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
         var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
         db.ProjectInvites.Add(invite);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            request.Actor,
+            "project.invite.created",
+            "ProjectInvite",
+            invite.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
@@ -165,11 +177,16 @@ public class AcceptInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditWriter? _auditWriter;
 
-    public AcceptInviteHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    public AcceptInviteHandler(
+        IBeaconDbFactory dbFactory,
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
@@ -215,6 +232,14 @@ public class AcceptInviteHandler
         if (!await db.ProjectMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
             db.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            request.Actor,
+            "project.invite.accepted",
+            "ProjectInvite",
+            projectInvite.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"newState":"Accepted"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
@@ -312,11 +337,16 @@ public class RevokeProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public RevokeProjectInviteHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public RevokeProjectInviteHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
@@ -328,7 +358,20 @@ public class RevokeProjectInviteHandler
         var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: invite.ProjectId, ct: ct);
         if (!check.Success)
             return Result.Forbidden();
+        var project = await db.Projects
+            .FirstOrDefaultAsync(p => p.Id == invite.ProjectId, ct);
+        if (project is null)
+            return Result.Failure("Project not found.");
+
         invite.Revoke();
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            request.Actor,
+            "project.invite.revoked",
+            "ProjectInvite",
+            invite.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"previousState":"Pending","newState":"Revoked"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }

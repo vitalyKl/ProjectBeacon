@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application;
 
 using Application.Agents;
+using Application.Admin;
 using Application.Common;
 using Application.Auth;
 using Application.Authorization;
@@ -26,6 +27,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
+        services.AddScoped<IAdminGate, DatabaseAdminGate>();
 
         services.AddTransient<BootstrapHandler>();
         services.AddTransient<RecoverAdminHandler>();

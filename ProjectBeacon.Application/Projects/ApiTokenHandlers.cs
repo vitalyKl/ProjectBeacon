@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -16,12 +17,18 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IConfiguration _config;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public CreateApiTokenHandler(IBeaconDbFactory dbFactory, IConfiguration config, IAuthorizationService auth)
+    public CreateApiTokenHandler(
+        IBeaconDbFactory dbFactory,
+        IConfiguration config,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _config = config;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ApiTokenDto>> HandleAsync(CreateApiTokenCommand command, CancellationToken ct = default)
@@ -52,6 +59,13 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
             command.Actor.UserId);
 
         db.ApiTokens.Add(token);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.api_token.created",
+            "ApiToken",
+            token.Id.ToString(),
+            project.OrgId,
+            project.Id));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(new ApiTokenDto(
@@ -87,11 +101,16 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public RevokeApiTokenHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public RevokeApiTokenHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
@@ -119,7 +138,19 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
         if (token is null)
             return Result.Failure("API token not found.");
 
+        var project = await db.Projects
+            .FirstOrDefaultAsync(p => p.Id == projectId, ct);
+        if (project is null)
+            return Result.Failure("API token not found.");
+
         token.Revoke();
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.api_token.revoked",
+            "ApiToken",
+            token.Id.ToString(),
+            project.OrgId,
+            project.Id));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok();

@@ -14,6 +14,8 @@ public class User : Entity
     public string Email { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
     public bool IsAdmin { get; private set; }
+    public DateTime? DisabledAt { get; private set; }
+    public int SessionVersion { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
     public int FailedLoginAttempts { get; private set; }
     public DateTime? LockedUntil { get; private set; }
@@ -55,7 +57,45 @@ public class User : Entity
         PasswordHash = passwordHash;
         FailedLoginAttempts = 0;
         LockedUntil = null;
+        BumpSessionVersion();
     }
+
+    public void Disable(DateTime? disabledAtUtc = null)
+    {
+        if (DisabledAt.HasValue)
+            return;
+
+        DisabledAt = disabledAtUtc ?? DateTime.UtcNow;
+        BumpSessionVersion();
+    }
+
+    public void Enable()
+    {
+        if (!DisabledAt.HasValue)
+            return;
+
+        DisabledAt = null;
+        BumpSessionVersion();
+    }
+
+    public void SetAdmin(bool isAdmin)
+    {
+        if (IsAdmin == isAdmin)
+            return;
+
+        IsAdmin = isAdmin;
+        BumpSessionVersion();
+    }
+
+    /// <summary>
+    /// Invalidates every cookie/JWT issued before this security-sensitive account change.
+    /// </summary>
+    public void BumpSessionVersion()
+    {
+        checked { SessionVersion++; }
+    }
+
+    public bool IsDisabled => DisabledAt.HasValue;
 
     public bool IsLockedOut => LockedUntil.HasValue && LockedUntil.Value > DateTime.UtcNow;
 
