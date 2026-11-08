@@ -15,7 +15,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
     [Migration("20261108160000_AddAuditEvents")]
     partial class AddAuditEvents : Migration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
