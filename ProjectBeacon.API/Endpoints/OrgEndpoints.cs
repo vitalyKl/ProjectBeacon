@@ -5,13 +5,9 @@ using ProjectBeacon.API.Auth;
 
 using Application.Common;
 using Application.Identity;
-using Application.Projects;
-using Infrastructure.Data;
-using Domain.Entities.Identity;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Organization and org-invite HTTP endpoints.
