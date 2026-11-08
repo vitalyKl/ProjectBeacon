@@ -16,7 +16,8 @@ public static class PipelineMappers
 {
     public static SubtaskDto ToDto(Subtask s) =>
         new(s.Id, s.Instructions, s.Status, s.DiffRef, s.Summary, s.ReopenCount,
-            s.AllowedMcpTools, s.AllowedPaths, s.CreatedAt, s.UpdatedAt, s.TaskPhaseId);
+            s.AllowedMcpTools, s.AllowedPaths, s.CreatedAt, s.UpdatedAt, s.TaskPhaseId,
+            s.ProfileKey, s.WakePlannerAfter);
 
     public static PipelineSessionDto ToDto(PipelineSession s) =>
         new(s.Id, s.TaskId, s.SubtaskId, s.Role, s.Status, s.ModelBackendId,
