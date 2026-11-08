@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Cli.Mcp;
+using ProjectBeacon.Domain.Common;
 
 public sealed class McpApiToolsTests
 {
