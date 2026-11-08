@@ -387,7 +387,7 @@ public sealed class CommandRecoveryTests : IDisposable
     [Fact]
     public async Task StaleActorRecovery_AdvancesTheTaskQueueAfterPersistingFailure()
     {
-        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var (device, _) = await SeedOnlineDeviceAsync("inst-1");
         Guid projectId;
         TaskItem task;
         Subtask failedSubtask;
@@ -427,8 +427,11 @@ public sealed class CommandRecoveryTests : IDisposable
         }
 
         var queueFactory = HandlerSqlite.Factory(_connection, Scope(projectId));
-        var queue = new PipelineActorQueueDispatcher(queueFactory, new RecoverySessionSpawner(Guid.NewGuid()));
-        var now = t0.AddSeconds(46);
+        var queue = new PipelineActorQueueDispatcher(queueFactory, new RecoverySessionSpawner(null));
+        // Derive recovery time from the persisted lease so this test remains deterministic
+        // regardless of fixture setup time. The heartbeat is explicitly 46 seconds stale.
+        var now = command.LeaseExpiresAt!.Value.AddSeconds(16);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-46));
         var recovered = await CommandRecovery.RecoverAsync(
             _db, now, TestContext.Current.CancellationToken, queue);
 
