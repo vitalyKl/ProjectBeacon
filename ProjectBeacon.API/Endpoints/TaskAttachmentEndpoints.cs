@@ -34,6 +34,17 @@ public static class TaskAttachmentEndpoints
         Guid projectId, Guid taskId, IAttachmentService attachments,
         HttpContext context, CancellationToken ct)
     {
+        // Cookie-authenticated multipart requests have no automatic antiforgery
+        // validation because the body is streamed manually. Require an exact Origin
+        // match for browser cookies; bearer-token clients are not ambient credentials.
+        var authorization = context.Request.Headers["Authorization"].ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            && !IsSameOriginUpload(context.Request))
+            return Results.Problem(
+                detail: "Cookie-authenticated uploads must originate from this application origin.",
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Cross-origin upload rejected");
+
         if (!MediaTypeHeaderValue.TryParse(context.Request.ContentType, out var requestType)
             || !string.Equals(requestType.MediaType.Value, "multipart/form-data", StringComparison.OrdinalIgnoreCase))
             return ProblemResults.Bad("A multipart/form-data request is required.");
@@ -103,6 +114,24 @@ public static class TaskAttachmentEndpoints
         {
             return ProblemResults.Bad(ex.Message);
         }
+    }
+
+    internal static bool IsSameOriginUpload(HttpRequest request)
+    {
+        var originValue = request.Headers["Origin"].ToString();
+        if (!Uri.TryCreate(originValue, UriKind.Absolute, out var origin)
+            || !string.IsNullOrEmpty(origin.UserInfo)
+            || origin.AbsolutePath != "/"
+            || !string.IsNullOrEmpty(origin.Query)
+            || !string.IsNullOrEmpty(origin.Fragment)
+            || string.IsNullOrWhiteSpace(request.Host.Host))
+            return false;
+
+        var requestPort = request.Host.Port
+            ?? (string.Equals(request.Scheme, "https", StringComparison.OrdinalIgnoreCase) ? 443 : 80);
+        return string.Equals(origin.Scheme, request.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(origin.Host.TrimEnd('.'), request.Host.Host.TrimEnd('.'), StringComparison.OrdinalIgnoreCase)
+            && origin.Port == requestPort;
     }
 
     private static string GetSubmittedFileName(ContentDispositionHeaderValue disposition)

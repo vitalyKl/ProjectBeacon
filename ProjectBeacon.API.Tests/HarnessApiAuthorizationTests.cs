@@ -4,6 +4,7 @@ using Domain.Common;
 using Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
+using ProjectBeacon.API.Endpoints;
 
 public sealed class HarnessApiAuthorizationTests
 {
@@ -162,6 +163,28 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/start", _taskId));
         Assert.False(Allowed(WorkstationCommandKind.RunEvalTurn, null,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks", _taskId));
+    }
+
+    [Fact]
+    public void CookieUploadOriginMustMatchSchemeHostAndPort()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+        context.Request.Headers["Origin"] = "https://beacon.example.com";
+        Assert.True(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "https://evil.beacon.example.com";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "http://beacon.example.com";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "https://beacon.example.com:444";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers.Remove("Origin");
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
     }
 
     [Fact]
