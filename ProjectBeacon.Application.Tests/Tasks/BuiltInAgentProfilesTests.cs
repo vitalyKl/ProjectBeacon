@@ -54,6 +54,21 @@ public sealed class BuiltInAgentProfilesTests
         Assert.True(BuiltInAgentProfiles.IsWithinDefaults("README.md", docs.DefaultPaths));
         Assert.False(BuiltInAgentProfiles.IsWithinDefaults("../secrets.txt", docs.DefaultPaths));
         Assert.False(BuiltInAgentProfiles.IsWithinDefaults("/etc/passwd", docs.DefaultPaths));
+        Assert.False(BuiltInAgentProfiles.IsSafeRelativePath("../secrets.txt"));
+        Assert.False(BuiltInAgentProfiles.IsSafeRelativePath("src/../../secrets.txt"));
+        Assert.False(BuiltInAgentProfiles.IsSafeRelativePath(@"C:\\temp\\secrets.txt"));
+        Assert.False(BuiltInAgentProfiles.IsSafeRelativePath("/etc/passwd"));
+        Assert.True(BuiltInAgentProfiles.IsSafeRelativePath("src/Feature.cs"));
+    }
+
+    [Fact]
+    public void ProfilesExposeArtifactUploadOnlyAsAnOptionalGrant()
+    {
+        foreach (var profile in BuiltInAgentProfiles.All)
+        {
+            Assert.Contains(McpToolNames.TaskAttachFile, profile.OptionalTools);
+            Assert.DoesNotContain(McpToolNames.TaskAttachFile, profile.Tools);
+        }
     }
 
     [Fact]
