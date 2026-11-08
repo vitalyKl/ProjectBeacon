@@ -46,6 +46,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<DecisionTask> DecisionTasks { get; }
     DbSet<LocalModelBackend> LocalModelBackends { get; }
     DbSet<AgentTemplate> AgentTemplates { get; }
+    DbSet<AgentProfile> AgentProfiles { get; }
     DbSet<TaskKind> TaskKinds { get; }
     DbSet<TaskKindPhase> TaskKindPhases { get; }
     DbSet<TaskPhase> TaskPhases { get; }
