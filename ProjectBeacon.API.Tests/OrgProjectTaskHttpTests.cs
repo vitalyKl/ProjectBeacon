@@ -35,11 +35,8 @@ public sealed class OrgProjectTaskHttpTests
         var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/orgs/{orgId}/projects", TestContext.Current.CancellationToken);
         Assert.True(listed.GetArrayLength() >= 1);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
-        var userId = me.GetProperty("id").GetGuid();
         var members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members", TestContext.Current.CancellationToken);
-        Assert.True(members.GetArrayLength() >= 1);
-        Assert.Equal(userId, members[0].GetProperty("userId").GetGuid());
+        Assert.Empty(members.EnumerateArray());
 
         Guid extraUserId;
         await using (var seed = factory.Services.CreateAsyncScope())
@@ -59,7 +56,8 @@ public sealed class OrgProjectTaskHttpTests
         });
         Assert.Equal(extraUserId, member.GetProperty("userId").GetGuid());
         members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members", TestContext.Current.CancellationToken);
-        Assert.True(members.GetArrayLength() >= 2);
+        Assert.Single(members.EnumerateArray());
+        Assert.Equal(extraUserId, members[0].GetProperty("userId").GetGuid());
 
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {

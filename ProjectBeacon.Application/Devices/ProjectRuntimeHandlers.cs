@@ -29,7 +29,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
-        if (!member)
+        var isPlatformOperator = await db.Users.IgnoreQueryFilters()
+            .AnyAsync(user => user.Id == request.UserId && user.IsAdmin, ct);
+        if (!member && !isPlatformOperator)
             return Result.Failure<RuntimeDiagnostics>("Project not found.");
 
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == request.DeviceId, ct);
@@ -73,7 +75,9 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
-        if (!member)
+        var isPlatformOperator = await db.Users.IgnoreQueryFilters()
+            .AnyAsync(user => user.Id == command.Request.UserId && user.IsAdmin, ct);
+        if (!member && !isPlatformOperator)
             return Result.Failure<IList<RuntimeSummary>>("Project not found.");
 
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
@@ -142,7 +146,9 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId, ct);
-        if (!member)
+        var isSystemAdmin = await db.Users.IgnoreQueryFilters()
+            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
+        if (!member && !isSystemAdmin)
             return Result.Failure<RuntimeDiagnostics>("Runtime not found.");
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
@@ -154,9 +160,6 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
         var isProjectAdmin = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId
                 && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
-        var isSystemAdmin = await db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
-
         if (!isDeviceOwner && !isProjectAdmin && !isSystemAdmin)
             return Result.Forbidden<RuntimeDiagnostics>();
 
