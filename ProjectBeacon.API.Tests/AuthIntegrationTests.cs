@@ -45,6 +45,13 @@ public sealed class AuthIntegrationTests : IDisposable
             ["BOOTSTRAP_ADMIN_TOKEN"] = token
         }).Build();
 
+    private static IConfiguration OpenRegistrationTestConfig() =>
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = "Testing",
+            ["AUTH_LOCAL_INVITE_ONLY"] = "false"
+        }).Build();
+
     private async Task<string> SeedBootstrapAsync()
     {
         var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
@@ -170,7 +177,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_CreatesUser()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), OpenRegistrationTestConfig());
         var result = await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
@@ -186,7 +193,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateLogin_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), OpenRegistrationTestConfig());
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
@@ -200,7 +207,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateEmail_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), OpenRegistrationTestConfig());
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")), TestContext.Current.CancellationToken);
 
