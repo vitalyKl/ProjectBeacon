@@ -7,6 +7,7 @@ using Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
+using Application.Security;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -160,7 +161,10 @@ public static class AuthEndpoints
     /// <summary>JSON body for <c>POST /v1/auth/change-password</c>. The user id is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>
     public record ChangePasswordBody(string CurrentPassword, string NewPassword);
 
-    private static async Task<IResult> Logout(BeaconDbContext db, HttpContext ctx)
+    private static async Task<IResult> Logout(
+        BeaconDbContext db,
+        HttpContext ctx,
+        IUserSessionVersionCache sessionVersions)
     {
         var actor = ctx.GetActor();
 
@@ -176,6 +180,7 @@ public static class AuthEndpoints
             session.Deactivate();
 
         await db.SaveChangesAsync();
+        sessionVersions.Invalidate(user.Id);
         return Results.Ok();
     }
 
