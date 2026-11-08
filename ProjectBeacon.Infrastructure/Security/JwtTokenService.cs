@@ -28,7 +28,8 @@ public static class JwtTokenService
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Login),
             new(ClaimTypes.Email, user.Email),
-            new("isAdmin", user.IsAdmin.ToString())
+            new("isAdmin", user.IsAdmin.ToString()),
+            new("sv", user.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture))
         };
         if (projectId is { } pid)
             claims.Add(new Claim("project_id", pid.ToString()));

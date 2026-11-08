@@ -12,7 +12,9 @@ using ProjectBeacon.Web.Extensions;
 namespace ProjectBeacon.Web.Tests;
 
 using Application.Persistence;
+using Application.Security;
 using Infrastructure.Data;
+using Infrastructure.Security;
 
 /// <summary>
 /// P1.5: circuit identity/tenant isolation. Verifies the live revalidation that bounds
@@ -51,6 +53,8 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         tenant.Assign(boundProjectId, boundOrgId, unscoped: false);
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddScoped<ITenantContext>(_ => tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new BeaconDbFactory(_options, tenant));
         services.AddScoped<CircuitRevalidatingAuthenticationStateProvider>();
@@ -110,6 +114,34 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     }
 
     [Fact]
+    public async Task DisabledUser_ReturnsFalse()
+    {
+        var (_, user, project) = await SeedUserInProjectAsync();
+        user.Disable();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public async Task SessionVersionMismatch_ReturnsFalse()
+    {
+        var (_, user, project) = await SeedUserInProjectAsync();
+        user.BumpSessionVersion();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
     public async Task UserDeleted_ReturnsFalse()
     {
         var (_, user, project) = await SeedUserInProjectAsync();
@@ -137,12 +169,13 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     public async Task AdminWithoutMembership_BindsOldestProject()
     {
         var (org, user, _) = await SeedUserInProjectAsync();
+        user.SetAdmin(true);
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.UserId == user.Id));
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(null, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null, sessionVersion: user.SessionVersion), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(_db.Projects.IgnoreQueryFilters().OrderBy(p => p.CreatedAt).First().Id, circuit.Tenant.ProjectId);
@@ -151,13 +184,13 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     [Fact]
     public async Task AdminWithoutProjects_NeverHadProject_KeepsSession()
     {
-        var user = User.Create("admin", "admin@example.com", "hash");
+        var user = User.Create("admin", "admin@example.com", "hash", isAdmin: true);
         _db.Users.Add(user);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(null, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null, sessionVersion: user.SessionVersion), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Null(circuit.Tenant.ProjectId);
@@ -210,6 +243,8 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddScoped<ITenantContext>(_ => circuit.Tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new ThrowingDbFactory());
         var root = services.BuildServiceProvider();
@@ -314,10 +349,11 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         return (org, user, project);
     }
 
-    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectId)
+    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectId, int sessionVersion = 0)
     {
         var identity = new ClaimsIdentity("TestAuth");
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
+        identity.AddClaim(new Claim("sv", sessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (isAdmin)
             identity.AddClaim(new Claim("isAdmin", "true"));
         if (projectId is { } p)

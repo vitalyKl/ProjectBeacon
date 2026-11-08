@@ -50,6 +50,15 @@ builder.Services.AddAuthentication(options =>
     };
     options.Events = new JwtBearerEvents
     {
+        OnTokenValidated = async ctx =>
+        {
+            var valid = await UserSessionVersionValidator.ValidateAsync(
+                ctx.HttpContext.RequestServices,
+                ctx.Principal,
+                ctx.HttpContext.RequestAborted);
+            if (!valid)
+                ctx.Fail("The account session is no longer valid.");
+        },
         OnChallenge = async ctx =>
         {
             ctx.HandleResponse();

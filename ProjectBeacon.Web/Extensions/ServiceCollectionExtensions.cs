@@ -103,6 +103,15 @@ public static class ServiceCollectionExtensions
             options.LoginPath = "/login";
             options.LogoutPath = "/logout";
             options.Cookie.Name = "BeaconAuth";
+            options.Events.OnValidatePrincipal = async ctx =>
+            {
+                var valid = await UserSessionVersionValidator.ValidateAsync(
+                    ctx.HttpContext.RequestServices,
+                    ctx.Principal,
+                    ctx.HttpContext.RequestAborted);
+                if (!valid)
+                    ctx.RejectPrincipal();
+            };
             options.Events.OnRedirectToLogin = ctx =>
                 ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
                     ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status401Unauthorized, "Unauthorized",
@@ -116,6 +125,18 @@ public static class ServiceCollectionExtensions
         })
         .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
         {
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = async ctx =>
+                {
+                    var valid = await UserSessionVersionValidator.ValidateAsync(
+                        ctx.HttpContext.RequestServices,
+                        ctx.Principal,
+                        ctx.HttpContext.RequestAborted);
+                    if (!valid)
+                        ctx.Fail("The account session is no longer valid.");
+                }
+            };
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,

@@ -103,6 +103,24 @@ public sealed class AuthHttpTests
     }
 
     [Fact]
+    public async Task Logout_RevokesPreviouslyIssuedJwtImmediately()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var before = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+
+        var logout = await client.PostAsync("/v1/auth/logout", content: null, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+
+        var after = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    [Fact]
     public async Task ForgotPassword_AlwaysOk()
     {
         await using var factory = new AuthApiFactory();
