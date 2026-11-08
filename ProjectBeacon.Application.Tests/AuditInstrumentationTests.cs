@@ -27,6 +27,7 @@ public sealed class AuditInstrumentationTests : IDisposable
     private readonly User _admin;
     private readonly User _invitee;
     private readonly Org _org;
+    private readonly Org _otherOrg;
     private readonly Project _project;
 
     public AuditInstrumentationTests()
@@ -37,10 +38,11 @@ public sealed class AuditInstrumentationTests : IDisposable
         _admin = User.Create("audit-admin", "audit-admin@example.test", "hash", isAdmin: true);
         _invitee = User.Create("audit-invitee", "audit-invitee@example.test", "hash");
         _org = Org.Create("Audit Org");
+        _otherOrg = Org.Create("Other Audit Org");
         _project = Project.Create("Audit Project", null, _org.Id);
 
         _seedDb.Users.AddRange(_admin, _invitee);
-        _seedDb.Orgs.Add(_org);
+        _seedDb.Orgs.AddRange(_org, _otherOrg);
         _seedDb.Projects.Add(_project);
         _seedDb.OrgMembers.Add(OrgMember.Create(_org.Id, _admin.Id, MemberRole.Owner));
         _seedDb.ProjectMembers.Add(ProjectMember.Create(_project.Id, _admin.Id, MemberRole.Owner));
@@ -155,7 +157,10 @@ public sealed class AuditInstrumentationTests : IDisposable
                 TestContext.Current.CancellationToken);
         Assert.True(acceptInvite.Success, acceptInvite.Error);
 
-        var accepted = await new AcceptInviteHandler(_factory, auditWriter: _auditWriter)
+        var unrelatedTenant = new TenantContext();
+        unrelatedTenant.Assign(null, _otherOrg.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, unrelatedTenant);
+        var accepted = await new AcceptInviteHandler(scopedFactory, auditWriter: _auditWriter)
             .HandleAsync(new AcceptInviteRequest(acceptInvite.Value!.Token, Human(_invitee.Id)),
                 TestContext.Current.CancellationToken);
         Assert.True(accepted.Success, accepted.Error);
@@ -164,11 +169,73 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task OrgInviteCreateRevokeAndAccept_AreAuditedWithTheCorrectTenantScope()
+    {
+        var actor = AdminActor();
+        var email = new NoopEmailSender();
+        var config = new ConfigurationBuilder().Build();
+        var create = new CreateOrgInviteHandler(_factory, email, _authorization, config, auditWriter: _auditWriter);
+
+        var toRevoke = await create.HandleAsync(
+            new CreateOrgInviteRequest(_org.Id, "revoke-org@example.test", MemberRole.Member, actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(toRevoke.Success, toRevoke.Error);
+
+        var createEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.invite.created" && e.TargetId == toRevoke.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_org.Id, createEvent.OrgId);
+        Assert.Null(createEvent.ProjectId);
+        Assert.DoesNotContain(toRevoke.Value.Email, createEvent.DetailsJson ?? string.Empty);
+        Assert.DoesNotContain(toRevoke.Value.Token, createEvent.DetailsJson ?? string.Empty);
+
+        var revoked = await new RevokeOrgInviteHandler(_factory, _authorization, _auditWriter)
+            .HandleAsync(new RevokeInviteRequest(toRevoke.Value.Id, actor), TestContext.Current.CancellationToken);
+        Assert.True(revoked.Success, revoked.Error);
+        Assert.True(await _seedDb.AuditEvents.AnyAsync(
+            e => e.Action == "org.invite.revoked" && e.TargetId == toRevoke.Value.Id.ToString(),
+            TestContext.Current.CancellationToken));
+
+        var toAccept = await create.HandleAsync(
+            new CreateOrgInviteRequest(_org.Id, _invitee.Email, MemberRole.Member, actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(toAccept.Success, toAccept.Error);
+
+        // Simulate the invitee arriving from an unrelated organization context. Invite
+        // lookup must use its opaque token, while the mutation/audit write must be bound
+        // to the invitation's organization instead of the caller's stale tenant.
+        var otherTenant = new TenantContext();
+        otherTenant.Assign(null, _otherOrg.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, otherTenant);
+        var accepted = await new AcceptInviteHandler(scopedFactory, auditWriter: _auditWriter)
+            .HandleAsync(new AcceptInviteRequest(toAccept.Value!.Token, Human(_invitee.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.True(await _seedDb.OrgMembers.AnyAsync(
+            m => m.OrgId == _org.Id && m.UserId == _invitee.Id,
+            TestContext.Current.CancellationToken));
+
+        var acceptedEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.invite.accepted" && e.TargetId == toAccept.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_org.Id, acceptedEvent.OrgId);
+        Assert.Null(acceptedEvent.ProjectId);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
     private static ActorContext Human(Guid userId) =>
         new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+
+    private sealed class TenantBoundDbFactory(IBeaconDbFactory inner, ITenantContext tenant) : IBeaconDbFactory
+    {
+        public IBeaconDb CreateDbContext() => inner.CreateDbContext(tenant);
+
+        public IBeaconDb CreateDbContext(ITenantContext tenantContext) => inner.CreateDbContext(tenantContext);
+    }
 
     private sealed class NoopEmailSender : IEmailSender
     {
