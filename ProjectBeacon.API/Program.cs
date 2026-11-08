@@ -88,8 +88,17 @@ var rateLimitReadPerWindow = int.TryParse(
     Environment.GetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW"), out var readPerWindow)
     ? readPerWindow : 60;
 
+var attachmentUploadRateLimit = int.TryParse(
+    Environment.GetEnvironmentVariable("RATE_LIMIT_ATTACHMENT_UPLOADS_PER_WINDOW"), out var attachmentUploads)
+    ? attachmentUploads : 10;
+
 builder.Services.AddRateLimiter(options =>
-    AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow));
+    AuthRateLimiter.Configure(
+        options,
+        rateLimitPerWindow,
+        rateLimitWindowSeconds,
+        rateLimitReadPerWindow,
+        attachmentUploadRateLimit));
 
 var app = builder.Build();
 
