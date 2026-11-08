@@ -35,6 +35,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
 
         IReadOnlyList<string>? allowedTools = command.Request.AllowedMcpTools;
         IReadOnlyList<string>? allowedPaths = command.Request.AllowedPaths;
+        var optionalTools = command.Request.OptionalMcpTools ?? [];
         var profileKey = command.Request.Profile?.Trim();
         if (!string.IsNullOrWhiteSpace(profileKey))
         {
@@ -44,6 +45,15 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                     $"Unknown subtask profile '{profileKey}'. Available profiles: {string.Join(", ", BuiltInAgentProfiles.All.Select(p => p.Key))}.");
 
             var defaults = profile.Tools;
+            var optionalGrants = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var optionalTool in optionalTools)
+            {
+                if (!McpToolCatalog.TryResolve(optionalTool, out var optionalDescriptor)
+                    || !profile.OptionalTools.Contains(optionalDescriptor!.Name, StringComparer.Ordinal))
+                    return Result.Failure<SubtaskDto>(
+                        $"Tool '{optionalTool}' is not an optional grant for profile '{profile.Key}'.");
+                optionalGrants.Add(optionalDescriptor!.Name);
+            }
             if (allowedTools is { Count: > 0 })
             {
                 var requested = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -56,10 +66,11 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                     requested.Add(descriptor!.Name);
                 }
                 allowedTools = defaults.Where(name => requested.Contains(name)
-                    || profile.RequiredTools.Contains(name, StringComparer.Ordinal)).ToArray();
+                    || profile.RequiredTools.Contains(name, StringComparer.Ordinal))
+                    .Concat(optionalGrants).Distinct(StringComparer.Ordinal).ToArray();
             }
             else
-                allowedTools = defaults;
+                allowedTools = defaults.Concat(optionalGrants).Distinct(StringComparer.Ordinal).ToArray();
 
             switch (profile.PathPolicy)
             {
@@ -79,6 +90,10 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                     allowedPaths ??= [];
                     break;
             }
+        }
+        else if (optionalTools.Count > 0)
+        {
+            return Result.Failure<SubtaskDto>("optionalMcpTools requires a built-in profile.");
         }
 
         var subtask = Subtask.Create(
