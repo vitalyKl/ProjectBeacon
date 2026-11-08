@@ -18,6 +18,7 @@ Task attachment metadata and file contents are stored in PostgreSQL. The metadat
 - Default request rate: 10 uploads per client IP per 60 seconds. Override with `RATE_LIMIT_ATTACHMENT_UPLOADS_PER_WINDOW`; the existing `RATE_LIMIT_WINDOW_SECONDS` controls the window.
 - Default project storage quota: 1 GiB. Override with `ATTACHMENT_PROJECT_QUOTA_BYTES`.
 - Default task limit: 50 attachments. Override with `ATTACHMENT_MAX_FILES_PER_TASK`.
+- Default project file-count limit: 10,000 attachments, in addition to the byte quota. Override with `ATTACHMENT_MAX_FILES_PER_PROJECT`; this prevents tiny files from exhausting database rows and indexes while remaining under the byte quota.
 - Quota validation and insertion run in the same transaction. On PostgreSQL, all uploads for a project serialize on a transaction-scoped advisory lock. The usage sum is calculated from rows, so cascade deletion does not require maintaining a separate counter.
 - PNG, JPEG, GIF, and WebP are identified from their magic bytes; only those verified raster types may be requested inline. PDF is recognized but is always downloaded as an attachment.
 - UTF-8 text/source formats include TXT, Markdown, JSON, CSV, logs, XML, YAML, C#, TypeScript/TSX, JavaScript, Python, SQL, CSS/SCSS, project files, and common shell/config formats. They are served as plain text attachments.

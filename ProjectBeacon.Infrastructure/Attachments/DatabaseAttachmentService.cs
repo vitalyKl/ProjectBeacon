@@ -11,32 +11,44 @@ public sealed class DatabaseAttachmentService : IAttachmentService
     public const long MaxFileLength = 10 * 1024 * 1024;
     public const long DefaultProjectQuotaBytes = 1024L * 1024 * 1024;
     public const int DefaultMaxAttachmentsPerTask = 50;
+    public const int DefaultMaxAttachmentsPerProject = 10_000;
     private static readonly SemaphoreSlim UploadSlots = new(2, 2);
 
     private readonly IBeaconDbFactory _dbFactory;
     private readonly string? _legacyRoot;
     private readonly long _projectQuotaBytes;
     private readonly int _maxAttachmentsPerTask;
+    private readonly int _maxAttachmentsPerProject;
 
     public DatabaseAttachmentService(IBeaconDbFactory dbFactory)
         : this(
             dbFactory,
             ReadPositiveLong("ATTACHMENT_PROJECT_QUOTA_BYTES", DefaultProjectQuotaBytes),
-            ReadPositiveInt("ATTACHMENT_MAX_FILES_PER_TASK", DefaultMaxAttachmentsPerTask))
+            ReadPositiveInt("ATTACHMENT_MAX_FILES_PER_TASK", DefaultMaxAttachmentsPerTask),
+            ReadPositiveInt("ATTACHMENT_MAX_FILES_PER_PROJECT", DefaultMaxAttachmentsPerProject))
     {
     }
 
     public DatabaseAttachmentService(IBeaconDbFactory dbFactory, long projectQuotaBytes, int maxAttachmentsPerTask)
+        : this(dbFactory, projectQuotaBytes, maxAttachmentsPerTask, DefaultMaxAttachmentsPerProject)
+    {
+    }
+
+    public DatabaseAttachmentService(
+        IBeaconDbFactory dbFactory, long projectQuotaBytes, int maxAttachmentsPerTask, int maxAttachmentsPerProject)
     {
         ArgumentNullException.ThrowIfNull(dbFactory);
         if (projectQuotaBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(projectQuotaBytes));
         if (maxAttachmentsPerTask <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxAttachmentsPerTask));
+        if (maxAttachmentsPerProject <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxAttachmentsPerProject));
 
         _dbFactory = dbFactory;
         _projectQuotaBytes = projectQuotaBytes;
         _maxAttachmentsPerTask = maxAttachmentsPerTask;
+        _maxAttachmentsPerProject = maxAttachmentsPerProject;
 
         // Read-only compatibility path for files created by earlier versions.
         // New uploads are always stored in PostgreSQL; construction performs no filesystem I/O.
@@ -85,6 +97,12 @@ public sealed class DatabaseAttachmentService : IAttachmentService
                     .AnyAsync(item => item.Id == taskId && item.ProjectId == projectId, ct);
                 if (!taskExists)
                     return null;
+
+                var projectAttachmentCount = await db.TaskAttachments.AsNoTracking()
+                    .CountAsync(item => item.ProjectId == projectId, ct);
+                if (projectAttachmentCount >= _maxAttachmentsPerProject)
+                    throw new AttachmentQuotaExceededException(
+                        $"A project can have at most {_maxAttachmentsPerProject} attachments.");
 
                 var taskAttachmentCount = await db.TaskAttachments.AsNoTracking()
                     .CountAsync(item => item.ProjectId == projectId && item.TaskId == taskId, ct);

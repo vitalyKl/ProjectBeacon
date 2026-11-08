@@ -147,6 +147,18 @@ public sealed class DatabaseAttachmentServiceTests : IDisposable
                 "third.bin", "application/octet-stream", 1, TestContext.Current.CancellationToken));
         }
 
+        var secondTask = TaskItem.Create("Second attachment task", fixture.Project.Id);
+        _db.Tasks.Add(secondTask);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var projectCountService = new DatabaseAttachmentService(fixture.Factory, 100, 10, 1);
+        await using (var projectFileLimit = new MemoryStream([3]))
+        {
+            await Assert.ThrowsAsync<AttachmentQuotaExceededException>(() => projectCountService.UploadTaskAsync(
+                fixture.Project.Id, secondTask.Id, fixture.Actor, projectFileLimit,
+                "fourth.bin", "application/octet-stream", 1, TestContext.Current.CancellationToken));
+        }
+
         Assert.Single(await _db.TaskAttachments.ToListAsync(TestContext.Current.CancellationToken));
     }
 
