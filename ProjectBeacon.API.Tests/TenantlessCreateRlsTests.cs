@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Tests;
 
 using Application.Auth;
+using Application.Admin;
 using Application.Authorization;
 using Application.Common;
 using Application.Identity;
@@ -33,14 +34,14 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
     private static bool _initialized;
     private static string s_adminConn = string.Empty;
     private static string s_appConn = string.Empty;
-    private static Guid s_userA, s_userB, s_orgA, s_projA;
+    private static Guid s_userA, s_userB, s_operatorId, s_orgA, s_projA;
     private static string s_orgInviteToken = string.Empty;
     private static string s_projInviteToken = string.Empty;
 
     private readonly PostgresFixture _postgres;
     private string _adminConn = string.Empty;
     private string _appConn = string.Empty;
-    private Guid _userA, _userB, _orgA, _projA;
+    private Guid _userA, _userB, _operatorId, _orgA, _projA;
     private string _orgInviteToken = string.Empty;
     private string _projInviteToken = string.Empty;
 
@@ -71,8 +72,9 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
                 {
                     var userA = User.Create("tl-user-a", "tl-a@example.test", "rls-test-password-hash");
                     var userB = User.Create("tl-user-b", "tl-b@example.test", "rls-test-password-hash");
-                    seed.Users.Add(userA);
-                    seed.Users.Add(userB);
+                    var platformOperator = User.Create(
+                        "tl-platform-operator", "tl-operator@example.test", "rls-test-password-hash", isAdmin: true);
+                    seed.Users.AddRange(userA, userB, platformOperator);
                     await seed.SaveChangesAsync();
 
                     // orgA is owned by userA; userB has no membership anywhere in it.
@@ -96,6 +98,7 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
 
                     s_userA = userA.Id;
                     s_userB = userB.Id;
+                    s_operatorId = platformOperator.Id;
                     s_orgA = orgA.Id;
                     s_projA = projA.Id;
                     s_orgInviteToken = orgInviteRaw;
@@ -112,6 +115,7 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
         _appConn = s_appConn;
         _userA = s_userA;
         _userB = s_userB;
+        _operatorId = s_operatorId;
         _orgA = s_orgA;
         _projA = s_projA;
         _orgInviteToken = s_orgInviteToken;
@@ -130,20 +134,20 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
         return (factory, tenant);
     }
 
-    private static ActorContext Human(Guid userId) =>
-        new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+    private static ActorContext Human(Guid userId, bool isAdmin = false) =>
+        new(ActorType.Human, userId, isAdmin, null, null, null, null, ApiTokenCapability.None);
 
-    // userA has never held a project: org creation must succeed as beacon_app under a
-    // fail-closed RLS session, and the caller must become the org owner.
+    // Platform provisioning must succeed as beacon_app under a fail-closed RLS session.
+    // The operator does not become a customer-org member; the invited owner joins later.
     [Fact]
-    public async Task CreateOrg_Tenantless_Succeeds_UnderRls()
+    public async Task CreateOrg_PlatformOperator_Tenantless_Succeeds_UnderRls()
     {
         _postgres.RequirePostgres();
 
         var (factory, tenant) = NewTenantlessSession();
 
-        var result = await new CreateOrgHandler(factory, tenant).HandleAsync(
-            new CreateOrgCommand(new CreateOrgRequest("Tenantless New Org", null), Human(_userA)),
+        var result = await new CreateOrgHandler(factory, new DatabaseAdminGate(factory)).HandleAsync(
+            new CreateOrgCommand(new CreateOrgRequest("Tenantless New Org", null), Human(_operatorId, isAdmin: true)),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
@@ -155,9 +159,8 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
         Assert.False(tenant.Unscoped);
 
         await using var admin = new BeaconDbContext(NewAdminOptions(_adminConn));
-        Assert.True(await admin.OrgMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.OrgId == result.Value!.Id && m.UserId == _userA && m.Role == MemberRole.Owner,
-                TestContext.Current.CancellationToken));
+        Assert.False(await admin.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(m => m.OrgId == result.Value!.Id, TestContext.Current.CancellationToken));
     }
 
     // userA owns orgA (but holds no project scope): project creation inside their org must
