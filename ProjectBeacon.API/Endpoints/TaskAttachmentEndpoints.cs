@@ -65,9 +65,7 @@ public static class TaskAttachmentEndpoints
             || !string.Equals(HeaderUtilities.RemoveQuotes(disposition.Name).ToString(), "file", StringComparison.OrdinalIgnoreCase))
             return ProblemResults.Bad("The multipart request must contain a file field named 'file'.");
 
-        var fileName = HeaderUtilities.RemoveQuotes(disposition.FileNameStar).ToString();
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = HeaderUtilities.RemoveQuotes(disposition.FileName).ToString();
+        var fileName = GetSubmittedFileName(disposition);
         if (string.IsNullOrWhiteSpace(fileName))
             return ProblemResults.Bad("A file name is required.");
 
@@ -105,6 +103,16 @@ public static class TaskAttachmentEndpoints
         {
             return ProblemResults.Bad(ex.Message);
         }
+    }
+
+    private static string GetSubmittedFileName(ContentDispositionHeaderValue disposition)
+    {
+        var extended = HeaderUtilities.RemoveQuotes(disposition.FileNameStar).ToString();
+        const string utf8Prefix = "UTF-8''";
+        if (extended.StartsWith(utf8Prefix, StringComparison.OrdinalIgnoreCase))
+            return Uri.UnescapeDataString(extended[utf8Prefix.Length..]);
+
+        return HeaderUtilities.RemoveQuotes(disposition.FileName).ToString();
     }
 
     private static async Task<IResult> Download(
