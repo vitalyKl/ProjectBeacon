@@ -2494,4 +2494,100 @@ orthstar</value>
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>ワークスペースメモを作成しました。</value>
   </data>
+  <data name="ExecutionProfiles" xml:space="preserve">
+    <value>実行プロファイル</value>
+  </data>
+  <data name="ExecutionProfilesLead" xml:space="preserve">
+    <value>組み込み実行プロファイルはパイプラインのサブタスクの作業方法を定義します。ここでアカウントごとの既定値を調整できます。変更は新しいサブタスクに適用され、既存のサブタスクは保存済みスナップショットを保持します。</value>
+  </data>
+  <data name="ExecutionProfileBuiltIn" xml:space="preserve">
+    <value>組み込み</value>
+  </data>
+  <data name="ExecutionProfileCustomized" xml:space="preserve">
+    <value>カスタマイズ済み</value>
+  </data>
+  <data name="ExecutionProfileName" xml:space="preserve">
+    <value>表示名</value>
+  </data>
+  <data name="ExecutionProfileDescription" xml:space="preserve">
+    <value>説明</value>
+  </data>
+  <data name="ExecutionProfileInstructions" xml:space="preserve">
+    <value>追加の指示</value>
+  </data>
+  <data name="ExecutionProfileInstructionsHint" xml:space="preserve">
+    <value>これらの指示は組み込みのガイダンスに追加されます。システムによるツールとパスの制限は維持されます。</value>
+  </data>
+  <data name="ExecutionProfileMode" xml:space="preserve">
+    <value>実行モード</value>
+  </data>
+  <data name="ExecutionProfileCommands" xml:space="preserve">
+    <value>コマンド実行を許可</value>
+  </data>
+  <data name="ExecutionProfileCommandsLocked" xml:space="preserve">
+    <value>この組み込みプロファイルは読み取り専用です。コマンド実行は有効にできません。</value>
+  </data>
+  <data name="ExecutionProfileReportsDiff" xml:space="preserve">
+    <value>コード差分を報告</value>
+  </data>
+  <data name="ExecutionProfileSizeHint" xml:space="preserve">
+    <value>推奨タスク規模</value>
+  </data>
+  <data name="ExecutionProfileEffort" xml:space="preserve">
+    <value>推論の強さ</value>
+  </data>
+  <data name="ExecutionProfileTools" xml:space="preserve">
+    <value>許可されたツール</value>
+  </data>
+  <data name="ExecutionProfileToolHint" xml:space="preserve">
+    <value>この一覧は絞り込むことのみできます。必須ライフサイクルツールは常に付与され、削除できません。組み込みの許可範囲外のツールは追加できません。</value>
+  </data>
+  <data name="ExecutionProfileRequiredTools" xml:space="preserve">
+    <value>必須ツール</value>
+  </data>
+  <data name="ExecutionProfileOptionalTools" xml:space="preserve">
+    <value>オプションの許可（既定では無効）</value>
+  </data>
+  <data name="ExecutionProfilePaths" xml:space="preserve">
+    <value>パスアクセス方針</value>
+  </data>
+  <data name="ExecutionProfilePathsFromPlanner" xml:space="preserve">
+    <value>Planner は各サブタスクにリポジトリ相対パスを明示する必要があります。</value>
+  </data>
+  <data name="ExecutionProfilePathsDefaults" xml:space="preserve">
+    <value>組み込みの既定パスに制限されます。</value>
+  </data>
+  <data name="ExecutionProfilePathsNone" xml:space="preserve">
+    <value>リポジトリ内のファイルパスは許可されません。</value>
+  </data>
+  <data name="ExecutionProfileDefaultPaths" xml:space="preserve">
+    <value>既定のパス</value>
+  </data>
+  <data name="ExecutionProfileSnapshotHint" xml:space="preserve">
+    <value>既存のサブタスクは保存済みプロファイルのスナップショットを保持します。変更は新規サブタスクに適用されます。</value>
+  </data>
+  <data name="ExecutionProfileSave" xml:space="preserve">
+    <value>プロファイルを保存</value>
+  </data>
+  <data name="ExecutionProfileReset" xml:space="preserve">
+    <value>組み込みの既定値に戻す</value>
+  </data>
+  <data name="ExecutionProfileSaved" xml:space="preserve">
+    <value>実行プロファイルを保存しました。</value>
+  </data>
+  <data name="ExecutionProfileResetDone" xml:space="preserve">
+    <value>組み込みの既定値に戻しました。</value>
+  </data>
+  <data name="SubtaskProfile" xml:space="preserve">
+    <value>実行プロファイル</value>
+  </data>
+  <data name="NoProfile" xml:space="preserve">
+    <value>プロファイルなし（従来モード）</value>
+  </data>
+  <data name="AllowedPaths" xml:space="preserve">
+    <value>許可するパス</value>
+  </data>
+  <data name="AllowedPathsHint" xml:space="preserve">
+    <value>リポジトリ相対パスを1行に1つ入力してください。このプロファイルでは必須です。</value>
+  </data>
 </root>

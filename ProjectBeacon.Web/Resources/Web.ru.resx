@@ -2476,4 +2476,100 @@
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>Заметка добавлена в рабочую область.</value>
   </data>
+  <data name="ExecutionProfiles" xml:space="preserve">
+    <value>Профили исполнителей</value>
+  </data>
+  <data name="ExecutionProfilesLead" xml:space="preserve">
+    <value>Встроенные профили задают способ выполнения подзадач конвейера. Здесь можно настроить значения для своей учётной записи. Изменения действуют для новых подзадач; существующие сохраняют снимок профиля.</value>
+  </data>
+  <data name="ExecutionProfileBuiltIn" xml:space="preserve">
+    <value>Встроенный</value>
+  </data>
+  <data name="ExecutionProfileCustomized" xml:space="preserve">
+    <value>Настроен</value>
+  </data>
+  <data name="ExecutionProfileName" xml:space="preserve">
+    <value>Отображаемое имя</value>
+  </data>
+  <data name="ExecutionProfileDescription" xml:space="preserve">
+    <value>Описание</value>
+  </data>
+  <data name="ExecutionProfileInstructions" xml:space="preserve">
+    <value>Дополнительные инструкции</value>
+  </data>
+  <data name="ExecutionProfileInstructionsHint" xml:space="preserve">
+    <value>Эти инструкции добавляются к системным рекомендациям. Системные ограничения инструментов и доступа к путям сохраняются.</value>
+  </data>
+  <data name="ExecutionProfileMode" xml:space="preserve">
+    <value>Режим выполнения</value>
+  </data>
+  <data name="ExecutionProfileCommands" xml:space="preserve">
+    <value>Разрешить выполнение команд</value>
+  </data>
+  <data name="ExecutionProfileCommandsLocked" xml:space="preserve">
+    <value>Этот встроенный профиль предназначен только для чтения; включить выполнение команд нельзя.</value>
+  </data>
+  <data name="ExecutionProfileReportsDiff" xml:space="preserve">
+    <value>Формировать diff-отчёт</value>
+  </data>
+  <data name="ExecutionProfileSizeHint" xml:space="preserve">
+    <value>Рекомендуемый размер задачи</value>
+  </data>
+  <data name="ExecutionProfileEffort" xml:space="preserve">
+    <value>Усилие рассуждения</value>
+  </data>
+  <data name="ExecutionProfileTools" xml:space="preserve">
+    <value>Разрешённые инструменты</value>
+  </data>
+  <data name="ExecutionProfileToolHint" xml:space="preserve">
+    <value>Этот список можно только сузить. Обязательные инструменты жизненного цикла добавляются всегда; инструменты вне базового набора добавить нельзя.</value>
+  </data>
+  <data name="ExecutionProfileRequiredTools" xml:space="preserve">
+    <value>Обязательные инструменты</value>
+  </data>
+  <data name="ExecutionProfileOptionalTools" xml:space="preserve">
+    <value>Дополнительные разрешения (изначально выключены)</value>
+  </data>
+  <data name="ExecutionProfilePaths" xml:space="preserve">
+    <value>Политика доступа к путям</value>
+  </data>
+  <data name="ExecutionProfilePathsFromPlanner" xml:space="preserve">
+    <value>Планировщик должен явно указать относительные пути репозитория для каждой подзадачи.</value>
+  </data>
+  <data name="ExecutionProfilePathsDefaults" xml:space="preserve">
+    <value>Доступ ограничен встроенными путями по умолчанию.</value>
+  </data>
+  <data name="ExecutionProfilePathsNone" xml:space="preserve">
+    <value>Доступ к файлам репозитория не предоставляется.</value>
+  </data>
+  <data name="ExecutionProfileDefaultPaths" xml:space="preserve">
+    <value>Пути по умолчанию</value>
+  </data>
+  <data name="ExecutionProfileSnapshotHint" xml:space="preserve">
+    <value>Уже созданные подзадачи сохраняют свой снимок профиля; изменения применяются к новым.</value>
+  </data>
+  <data name="ExecutionProfileSave" xml:space="preserve">
+    <value>Сохранить профиль</value>
+  </data>
+  <data name="ExecutionProfileReset" xml:space="preserve">
+    <value>Восстановить встроенные настройки</value>
+  </data>
+  <data name="ExecutionProfileSaved" xml:space="preserve">
+    <value>Профиль исполнителя сохранён.</value>
+  </data>
+  <data name="ExecutionProfileResetDone" xml:space="preserve">
+    <value>Встроенные настройки восстановлены.</value>
+  </data>
+  <data name="SubtaskProfile" xml:space="preserve">
+    <value>Профиль исполнителя</value>
+  </data>
+  <data name="NoProfile" xml:space="preserve">
+    <value>Без профиля (старый режим)</value>
+  </data>
+  <data name="AllowedPaths" xml:space="preserve">
+    <value>Разрешённые пути</value>
+  </data>
+  <data name="AllowedPathsHint" xml:space="preserve">
+    <value>Укажите относительные пути репозитория, по одному на строку. Для этого профиля они обязательны.</value>
+  </data>
 </root>

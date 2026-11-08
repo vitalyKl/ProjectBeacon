@@ -129,6 +129,9 @@ else
     <MudTabPanel Text="@L["ModelRegistry"]">
         <AgentModelTable Backends="_backends" HasProject="_project is not null" HasRuntime="_runtimes.Count > 0" OnAdd="AddModel" OnEdit="EditModel" OnDelete="DeleteModel" />
     </MudTabPanel>
+    <MudTabPanel Text="@L["ExecutionProfiles"]">
+        <AgentProfiles UserId="@_userId" />
+    </MudTabPanel>
     <MudTabPanel Text="@L["TaskKinds"]">
 
     <TaskKindEditor UserId="_userId" Backends="_backends" />

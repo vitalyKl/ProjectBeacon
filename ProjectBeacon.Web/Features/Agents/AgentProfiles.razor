@@ -1,0 +1,234 @@
+@using ProjectBeacon.Application.Tasks
+@inject GetAgentProfileOverridesHandler GetOverrides
+@inject SaveAgentProfileOverrideHandler SaveOverride
+@inject ResetAgentProfileOverrideHandler ResetOverride
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+        @L["ExecutionProfilesLead"]
+    </MudAlert>
+    <MudExpansionPanels MultiExpansion="true" Elevation="0">
+        @foreach (var profile in _profiles)
+        {
+            <MudExpansionPanel Text="@($"{profile.Name} · {profile.Basis.Key}")">
+                <MudStack Spacing="2" Class="py-2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <StatusChip Color="Color.Info" Label="@L["ExecutionProfileBuiltIn"]" />
+                        @if (profile.IsCustomized)
+                        {
+                            <StatusChip Color="Color.Warning" Label="@L["ExecutionProfileCustomized"]" />
+                        }
+                    </MudStack>
+                    <MudText Typo="Typo.body2">@profile.Basis.Description</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @L["ExecutionProfileMode"]: @profile.Basis.Mode
+                    </MudText>
+                    <MudTextField @bind-Value="profile.Name" Label="@L["ExecutionProfileName"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" />
+                    <MudTextField @bind-Value="profile.Description" Label="@L["ExecutionProfileDescription"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300" />
+                    <MudTextField @bind-Value="profile.Instruction" Label="@L["ExecutionProfileInstructions"]"
+                                  HelperText="@L["ExecutionProfileInstructionsHint"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Lines="7" MaxLength="8000" />
+                    <MudTextField @bind-Value="profile.SizeHint" Label="@L["ExecutionProfileSizeHint"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                    <MudSelect T="string" @bind-Value="profile.Effort" Label="@L["ExecutionProfileEffort"]"
+                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("low")">low</MudSelectItem>
+                        <MudSelectItem Value="@("low-medium")">low-medium</MudSelectItem>
+                        <MudSelectItem Value="@("medium")">medium</MudSelectItem>
+                        <MudSelectItem Value="@("high")">high</MudSelectItem>
+                    </MudSelect>
+                    <MudCheckBox T="bool" @bind-Value="profile.CommandsEnabled"
+                                 Label="@L["ExecutionProfileCommands"]" Disabled="@(!profile.Basis.CommandsEnabled)" />
+                    @if (!profile.Basis.CommandsEnabled)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@L["ExecutionProfileCommandsLocked"]</MudText>
+                    }
+                    <MudCheckBox T="bool" @bind-Value="profile.ReportsDiff"
+                                 Label="@L["ExecutionProfileReportsDiff"]" />
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.subtitle2">@L["ExecutionProfileTools"]</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ExecutionProfileToolHint"]</MudText>
+                    <MudGrid>
+                        @foreach (var tool in profile.Basis.Tools)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCheckBox T="bool" Value="@profile.Tools.Contains(tool, StringComparer.Ordinal)"
+                                             ValueChanged="@(value => ToggleTool(profile, tool, value))"
+                                             Label="@tool" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @L["ExecutionProfileRequiredTools"]: @string.Join(", ", profile.Basis.RequiredTools)
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @L["ExecutionProfileOptionalTools"]: @string.Join(", ", profile.Basis.OptionalTools)
+                    </MudText>
+                    <MudText Typo="Typo.subtitle2" Class="mt-2">@L["ExecutionProfilePaths"]</MudText>
+                    <MudText Typo="Typo.body2">@PathPolicyLabel(profile.Basis)</MudText>
+                    @if (profile.Basis.DefaultPaths.Count > 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @L["ExecutionProfileDefaultPaths"]: @string.Join(", ", profile.Basis.DefaultPaths)
+                        </MudText>
+                    }
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ExecutionProfileSnapshotHint"]</MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   OnClick="@(() => Save(profile))" Disabled="@(_saving || !IsValid(profile))">
+                            @L["ExecutionProfileSave"]
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                                   OnClick="@(() => Reset(profile))" Disabled="@(_saving || !profile.IsCustomized)">
+                            @L["ExecutionProfileReset"]
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid UserId { get; set; }
+
+    private List<ProfileEditor> _profiles = [];
+    private bool _loading = true;
+    private bool _saving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId != Guid.Empty)
+            await Reload();
+        else
+            _profiles = [];
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        _loading = true;
+        var result = await GetOverrides.HandleAsync(new GetAgentProfileOverridesCommand(UserId));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            _profiles = [];
+        }
+        else
+        {
+            var overrides = result.Value!.ToDictionary(item => item.Key, StringComparer.OrdinalIgnoreCase);
+            _profiles = BuiltInAgentProfiles.All.Select(basis =>
+                new ProfileEditor(basis, overrides.TryGetValue(basis.Key, out var custom) ? custom : null)).ToList();
+        }
+        _loading = false;
+    }
+
+    private static bool IsValid(ProfileEditor profile) =>
+        !string.IsNullOrWhiteSpace(profile.Name)
+        && !string.IsNullOrWhiteSpace(profile.Instruction)
+        && !string.IsNullOrWhiteSpace(profile.SizeHint)
+        && !string.IsNullOrWhiteSpace(profile.Effort);
+
+    private static void ToggleTool(ProfileEditor profile, string tool, bool enabled)
+    {
+        var selected = new HashSet<string>(profile.Tools, StringComparer.Ordinal);
+        if (enabled)
+            selected.Add(tool);
+        else
+            selected.Remove(tool);
+        profile.Tools = profile.Basis.Tools.Where(selected.Contains).ToList();
+    }
+
+    private string PathPolicyLabel(BuiltInAgentProfile profile) => profile.PathPolicy switch
+    {
+        AgentProfilePathPolicy.FromPlanner => L["ExecutionProfilePathsFromPlanner"].Value,
+        AgentProfilePathPolicy.Defaults => L["ExecutionProfilePathsDefaults"].Value,
+        AgentProfilePathPolicy.None => L["ExecutionProfilePathsNone"].Value,
+        _ => profile.PathPolicy.ToString()
+    };
+
+    private async Task Save(ProfileEditor profile)
+    {
+        if (_saving || !IsValid(profile) || UserId == Guid.Empty)
+            return;
+        _saving = true;
+        try
+        {
+            var result = await SaveOverride.HandleAsync(new SaveAgentProfileOverrideCommand(
+                new SaveAgentProfileOverrideRequest(
+                    UserId, profile.Basis.Key, profile.Name, profile.Description, profile.Instruction,
+                    profile.Tools, profile.CommandsEnabled, profile.ReportsDiff, profile.SizeHint, profile.Effort)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ExecutionProfileSaved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task Reset(ProfileEditor profile)
+    {
+        if (_saving || !profile.IsCustomized || UserId == Guid.Empty)
+            return;
+        _saving = true;
+        try
+        {
+            var result = await ResetOverride.HandleAsync(new ResetAgentProfileOverrideCommand(
+                new ResetAgentProfileOverrideRequest(UserId, profile.Basis.Key)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ExecutionProfileResetDone"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ProfileEditor
+    {
+        public ProfileEditor(BuiltInAgentProfile basis, AgentProfileOverrideDto? custom)
+        {
+            Basis = basis;
+            IsCustomized = custom is not null;
+            Name = custom?.Name ?? basis.Name;
+            Description = custom?.Description ?? basis.Description;
+            Instruction = custom?.Instruction ?? basis.Instruction;
+            Tools = custom?.Tools.ToList() ?? basis.Tools.ToList();
+            CommandsEnabled = custom?.CommandsEnabled ?? basis.CommandsEnabled;
+            ReportsDiff = custom?.ReportsDiff ?? basis.ReportsDiff;
+            SizeHint = custom?.SizeHint ?? basis.SizeHint;
+            Effort = custom?.Effort ?? basis.Effort;
+        }
+
+        public BuiltInAgentProfile Basis { get; }
+        public bool IsCustomized { get; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public string Instruction { get; set; }
+        public List<string> Tools { get; set; }
+        public bool CommandsEnabled { get; set; }
+        public bool ReportsDiff { get; set; }
+        public string SizeHint { get; set; }
+        public string Effort { get; set; }
+    }
+}
