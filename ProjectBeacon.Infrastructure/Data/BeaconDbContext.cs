@@ -3,6 +3,7 @@ namespace ProjectBeacon.Infrastructure.Data;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities.Agents;
+using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
@@ -26,6 +27,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<OrgInvite> OrgInvites => Set<OrgInvite>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectInvite> ProjectInvites => Set<ProjectInvite>();
@@ -83,5 +85,13 @@ public class BeaconDbContext : DbContext, IBeaconDb
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(BeaconDbContext).Assembly);
         TenantScopedQueryFilterConvention.Apply(modelBuilder, this);
+
+        // Audit events may be organization-scoped, project-scoped, or platform-wide.
+        // Platform-wide rows are visible only through an explicit unscoped operator path.
+        modelBuilder.Entity<AuditEvent>().HasQueryFilter(e =>
+            FilterUnscoped
+            || (FilterOrgId != null
+                && e.OrgId == FilterOrgId
+                && (FilterProjectId == null || e.ProjectId == FilterProjectId)));
     }
 }

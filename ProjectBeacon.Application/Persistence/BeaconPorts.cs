@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Domain.Entities.Agents;
+using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
@@ -27,6 +28,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<OrgInvite> OrgInvites { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
     DbSet<DataProtectionKey> DataProtectionKeys { get; }
+    DbSet<AuditEvent> AuditEvents { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectMember> ProjectMembers { get; }
     DbSet<ProjectInvite> ProjectInvites { get; }
