@@ -62,7 +62,7 @@ public sealed class TenantFilterTests : IDisposable
                 scoped.Add(clr.Name);
         }
 
-        // Frozen baseline: 25 IProjectScoped + 3 IOrgScoped.
-        Assert.Equal(28, scoped.Count);
+        // Frozen baseline: 26 IProjectScoped + 3 IOrgScoped.
+        Assert.Equal(29, scoped.Count);
     }
 }
