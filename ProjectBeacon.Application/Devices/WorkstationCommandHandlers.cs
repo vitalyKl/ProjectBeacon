@@ -266,7 +266,18 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(CompleteCommandCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        // Device endpoints do not carry a project route. Resolve the command's immutable
+        // project binding first, then run completion under that exact tenant rather than
+        // whichever project happens to be the device owner's default membership.
+        await using var bootstrapDb = _dbFactory.CreateDbContext();
+        var bootstrapRow = await bootstrapDb.WorkstationCommands.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
+        if (bootstrapRow is null || bootstrapRow.DeviceId != command.Request.DeviceId)
+            return Result.Failure<WorkstationCommandDto>("Command not found.");
+
+        var commandTenant = new TenantContext();
+        commandTenant.Assign(bootstrapRow.ProjectId, null, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(commandTenant);
         var strategy = db.Database.CreateExecutionStrategy();
         Guid? dispatchTaskId = null;
         Guid? completedSessionId = null;
