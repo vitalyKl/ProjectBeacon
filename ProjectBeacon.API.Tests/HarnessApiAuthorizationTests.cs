@@ -203,12 +203,14 @@ public sealed class HarnessApiAuthorizationTests
         var wrongProjectPath = $"/v1/projects/{Guid.NewGuid():D}/tasks/{_taskId:D}/attachments";
         var wrongTaskPath = $"/v1/projects/{_projectId:D}/tasks/{Guid.NewGuid():D}/attachments";
 
-        foreach (var (kind, role) in new[]
+        var allowedRoles = new (WorkstationCommandKind Kind, PipelineRole? Role)[]
         {
             (WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner),
             (WorkstationCommandKind.RunPipelineSession, PipelineRole.Review),
-            (WorkstationCommandKind.RunEvalTurn, (PipelineRole?)null)
-        })
+            (WorkstationCommandKind.RunEvalTurn, null)
+        };
+
+        foreach (var (kind, role) in allowedRoles)
         {
             Assert.True(Allowed(kind, role, HttpMethods.Get, listPath, _taskId));
             Assert.True(Allowed(kind, role, HttpMethods.Get, readPath, _taskId));
