@@ -340,6 +340,53 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task OrganizationProvisioningCreateAndUpdate_AreAuditedWithoutOperatorMembership()
+    {
+        var actor = AdminActor();
+        var gate = new DatabaseAdminGate(_factory);
+        var create = new CreateOrgHandler(_factory, gate, _auditWriter);
+
+        var created = await create.HandleAsync(
+            new CreateOrgCommand(new CreateOrgRequest("Provisioned Alpha", "Operator-created"), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        var createdEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "org.created" && item.TargetId == created.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, createdEvent.ActorKind);
+        Assert.Equal(_admin.Id, createdEvent.ActorUserId);
+        Assert.Equal(created.Value.Id, createdEvent.OrgId);
+        Assert.Null(createdEvent.ProjectId);
+        Assert.False(await _seedDb.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == created.Value.Id,
+            TestContext.Current.CancellationToken));
+
+        var update = new UpdateOrgHandler(_factory, _authorization, gate, _auditWriter);
+        var updated = await update.HandleAsync(
+            new UpdateOrgCommand(
+                new UpdateOrgRequest(created.Value.Id, "Provisioned Alpha Updated", null),
+                actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal("Provisioned Alpha Updated", updated.Value!.Name);
+        var updatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "org.updated" && item.TargetId == created.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, updatedEvent.ActorKind);
+        Assert.Equal(_admin.Id, updatedEvent.ActorUserId);
+        Assert.Equal(created.Value.Id, updatedEvent.OrgId);
+        Assert.Null(updatedEvent.ProjectId);
+        Assert.Equal(2, await _seedDb.AuditEvents.CountAsync(
+            item => item.OrgId == created.Value.Id,
+            TestContext.Current.CancellationToken));
+        Assert.False(await _seedDb.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == created.Value.Id,
+            TestContext.Current.CancellationToken));
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
