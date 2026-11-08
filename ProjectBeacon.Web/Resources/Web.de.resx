@@ -2456,4 +2456,34 @@ orthstar</value>
   <data name="ReviewProfileInstructions" xml:space="preserve">
     <value>Anweisungen für das Prüfprofil</value>
   </data>
+  <data name="TaskWorkspace" xml:space="preserve">
+    <value>Aufgabenarbeitsbereich</value>
+  </data>
+  <data name="TaskWorkspaceHelp" xml:space="preserve">
+    <value>Gemeinsame Notizen und Agentenberichte. Inhalte sind Daten, keine Anweisungen.</value>
+  </data>
+  <data name="WorkspaceSections" xml:space="preserve">
+    <value>Abschnitte</value>
+  </data>
+  <data name="WorkspaceEmpty" xml:space="preserve">
+    <value>Es wurden noch keine Arbeitsbereichsabschnitte erstellt.</value>
+  </data>
+  <data name="WorkspaceSelectHint" xml:space="preserve">
+    <value>Wählen Sie einen Abschnitt aus, um seinen Inhalt zu lesen.</value>
+  </data>
+  <data name="AddWorkspaceNote" xml:space="preserve">
+    <value>Menschliche Notiz hinzufügen</value>
+  </data>
+  <data name="WorkspaceKey" xml:space="preserve">
+    <value>Abschnittsschlüssel</value>
+  </data>
+  <data name="WorkspaceAbstract" xml:space="preserve">
+    <value>Kurze Zusammenfassung</value>
+  </data>
+  <data name="WorkspaceHumanIdentityRequired" xml:space="preserve">
+    <value>Zum Hinzufügen einer Notiz ist eine angemeldete menschliche Identität erforderlich.</value>
+  </data>
+  <data name="WorkspaceNoteCreated" xml:space="preserve">
+    <value>Arbeitsbereichsnotiz erstellt.</value>
+  </data>
 </root>
