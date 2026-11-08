@@ -80,8 +80,23 @@ public sealed record GrantOrganizationEntitlementRequest(
     string Reason);
 
 /// <summary>
+/// An operator-triggered alpha-to-production conversion. PlanKey is product-owned; the
+/// billing reference may identify a paid invoice or an externally confirmed subscription,
+/// but must never contain a payment credential.
+/// </summary>
+public sealed record ConvertAlphaToProductionRequest(
+    Guid OrgId,
+    string PlanKey,
+    string BillingReference,
+    DateTimeOffset StartsAtUtc,
+    DateTimeOffset? EndsAtUtc,
+    string Reason,
+    string IdempotencyKey);
+
+/// <summary>
 /// Central read/write boundary for organization access. Implementations must make grant,
-/// revoke and source-transition writes auditable and transactional.
+/// revoke and source-transition writes auditable and transactional. Conversion to a paid
+/// plan is one operation so alpha access cannot be dropped before production access exists.
 /// </summary>
 public interface IEntitlementService
 {
@@ -102,6 +117,11 @@ public interface IEntitlementService
     Task<Result> RevokeAsync(
         Guid entitlementId,
         string reason,
+        AdminActor actor,
+        CancellationToken ct = default);
+
+    Task<Result<OrganizationEntitlement>> ConvertAlphaToProductionAsync(
+        ConvertAlphaToProductionRequest request,
         AdminActor actor,
         CancellationToken ct = default);
 }
