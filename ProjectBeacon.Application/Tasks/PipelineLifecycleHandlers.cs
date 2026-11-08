@@ -171,6 +171,13 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 
                     var model = ChatModelSelection.ResolveBackendModelId(
                         backend.BackendType, backend.Name, backend.ProviderModelId);
+                    var profileKey = session.Role == PipelineRole.Actor && session.SubtaskId is { } actorSubtaskId
+                        ? await db.Subtasks.Where(subtask => subtask.Id == actorSubtaskId && subtask.TaskId == task.Id)
+                            .Select(subtask => subtask.ProfileKey).FirstOrDefaultAsync(ct)
+                        : null;
+                    var profile = BuiltInAgentProfiles.Get(profileKey);
+                    var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
+                    var commandsEnabled = profile?.CommandsEnabled ?? true;
                     var payload = JsonSerializer.Serialize(new
                     {
                         projectId = session.ProjectId,
@@ -182,7 +189,9 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         prompt = session.PromptContext,
                         model,
                         contextLimit = backend.ContextSize,
-                        reasoningEffort = "medium"
+                        reasoningEffort = "medium",
+                        agentMode,
+                        commandsEnabled
                     });
                     pipelineCommand = WorkstationCommand.Create(
                         selected.Device.Id,
