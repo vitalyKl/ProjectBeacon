@@ -49,7 +49,8 @@ public static class EndpointExtensions
                 new(ClaimTypes.NameIdentifier, result.Value.UserId.ToString()),
                 new(ClaimTypes.Name, result.Value.Login),
                 new(ClaimTypes.Email, result.Value.Email),
-                new("isAdmin", result.Value.IsAdmin.ToString())
+                new("isAdmin", result.Value.IsAdmin.ToString()),
+                new("sv", result.Value.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture))
             };
             if (projectId is { } pid)
                 claims.Add(new Claim("project_id", pid.ToString()));
