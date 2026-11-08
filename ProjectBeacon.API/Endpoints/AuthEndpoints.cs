@@ -164,10 +164,18 @@ public static class AuthEndpoints
     {
         var actor = ctx.GetActor();
 
-        await db.Sessions
-            .Where(s => s.UserId == actor.UserId!.Value && s.IsActive)
-            .ExecuteDeleteAsync();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == actor.UserId!.Value);
+        if (user is null)
+            return ProblemResults.Unauthorized();
 
+        user.BumpSessionVersion();
+        var sessions = await db.Sessions
+            .Where(s => s.UserId == user.Id && s.IsActive)
+            .ToListAsync();
+        foreach (var session in sessions)
+            session.Deactivate();
+
+        await db.SaveChangesAsync();
         return Results.Ok();
     }
 
