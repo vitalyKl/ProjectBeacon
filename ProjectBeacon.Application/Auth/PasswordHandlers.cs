@@ -3,7 +3,6 @@ namespace ProjectBeacon.Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Security;
-using Application.Security;
 using Domain.Entities.Identity;
 using Application.Persistence;
 using Application.Mail;
