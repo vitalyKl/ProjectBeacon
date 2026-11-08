@@ -125,8 +125,10 @@ public sealed class PipelineActorQueueDispatcher
             return;
         }
 
+        var readyActor = await db.PipelineSessions.AnyAsync(s => s.TaskId == taskId
+            && s.Role == PipelineRole.Actor && s.Status == SessionStatus.Ready, ct);
         var pending = await db.Subtasks.AnyAsync(s => s.TaskId == taskId && s.Status == SubtaskStatus.Pending, ct);
-        if (pending)
+        if (readyActor || pending)
         {
             await DispatchActorAsync(taskId, ct);
             return;
