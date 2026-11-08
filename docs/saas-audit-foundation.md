@@ -63,13 +63,21 @@ Each event carries the verified actor kind/id and both organization and project 
 verify that the event and mutation persist together and that secret values do not enter the
 event metadata.
 
+The next slice extends coverage to organization invitation creation, expiration, acceptance and
+revocation. Invite-token acceptance performs only the opaque-token lookup in a narrow unscoped
+context, then reopens the row in a context bound to the invitation's actual organization/project.
+The membership changes and audit event are staged together in that scoped unit of work. A
+caller's previous tenant cannot redirect the event or cause the audit writer to reject a valid
+invite acceptance.
+
 ## Implemented / not implemented
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
-port, permission-checked read contract/implementation, model migration, tests, and the initial
-project credential/membership instrumentation listed above.
+port, permission-checked read contract/implementation, model migration, tests, and transactional
+instrumentation for project API tokens, project invitations, project membership, and organization
+invitations.
 
-Not implemented: instrumentation of all remaining handlers (including org invitations, org and
-project lifecycle, device lifecycle, account/password operations and denied authorization
-attempts), operator HTTP endpoints, audit UI, export, retention, or distributed audit streaming.
-These remain separate follow-up slices; this PR does not claim comprehensive audit coverage.
+Not implemented: instrumentation of all remaining handlers (including org/project lifecycle,
+device lifecycle, account/password operations and denied authorization attempts), operator HTTP
+endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
+follow-up slices; this PR does not claim comprehensive audit coverage.
