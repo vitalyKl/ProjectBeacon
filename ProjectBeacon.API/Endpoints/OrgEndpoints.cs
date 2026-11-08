@@ -44,30 +44,30 @@ public static class OrgEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> UpdateOrg(Guid orgId, [FromBody] UpdateOrgRequest request, UpdateOrgHandler handler)
+    private static async Task<IResult> UpdateOrg(Guid orgId, [FromBody] UpdateOrgRequest request, HttpContext ctx, UpdateOrgHandler handler)
     {
         if (orgId != request.OrgId)
             return ProblemResults.Bad("OrgId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateOrgCommand(request));
+        var result = await handler.HandleAsync(new UpdateOrgCommand(request, ctx.GetActor()));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler)
+    private static async Task<IResult> GetOrg(Guid orgId, HttpContext ctx, GetOrgHandler handler)
     {
-        var result = await handler.HandleAsync(new GetOrgCommand(new GetOrgRequest(orgId)));
+        var result = await handler.HandleAsync(new GetOrgCommand(new GetOrgRequest(orgId), ctx.GetActor()));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, BeaconDbContext db, HttpContext ctx)
+    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, HttpContext ctx)
     {
-        var result = await handler.HandleAsync(new ListOrgsCommand(new ListOrgsRequest()));
+        var result = await handler.HandleAsync(new ListOrgsCommand(new ListOrgsRequest(), ctx.GetActor()));
 
         return Results.Ok(result.Value?.Select(MapOrgResponse));
     }

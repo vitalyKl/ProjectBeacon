@@ -280,6 +280,68 @@ public sealed class OrgProjectTaskHttpTests
         Assert.Equal(0, tasks.GetArrayLength());
     }
 
+    [Fact]
+    public async Task OrgEndpoints_EnforceOperatorCreationAndTenantMembership()
+    {
+        await using var factory = new AuthApiFactory();
+        var adminClient = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(adminClient);
+        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var ownedByInvite = await PostJson(adminClient, "/v1/orgs", new { name = "Invited Customer" });
+        var orgId = ownedByInvite.GetProperty("id").GetGuid();
+        var invite = await PostJson(adminClient, $"/v1/orgs/{orgId}/invites", new
+        {
+            email = "org-member@beacon.local",
+            role = 0
+        });
+
+        var memberClient = factory.CreateClient();
+        var registration = await memberClient.PostAsJsonAsync("/v1/auth/register", new
+        {
+            login = "orgmember",
+            email = "org-member@beacon.local",
+            password = "Passw0rd!x",
+            inviteToken = invite.GetProperty("token").GetString()
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(registration.IsSuccessStatusCode,
+            await registration.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+
+        var login = await memberClient.PostAsJsonAsync("/v1/auth/login",
+            new { login = "orgmember", password = "Passw0rd!x" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(login.IsSuccessStatusCode,
+            await login.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var memberJwt = (await login.Content.ReadFromJsonAsync<JsonElement>(Json,
+            TestContext.Current.CancellationToken)).GetProperty("token").GetString();
+        memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberJwt);
+
+        var ownOrg = await memberClient.GetAsync($"/v1/orgs/{orgId}", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, ownOrg.StatusCode);
+        var ownOrgs = await memberClient.GetFromJsonAsync<JsonElement>("/v1/orgs", TestContext.Current.CancellationToken);
+        Assert.Single(ownOrgs.EnumerateArray());
+
+        var foreign = await PostJson(adminClient, "/v1/orgs", new { name = "Foreign Customer" });
+        var foreignId = foreign.GetProperty("id").GetGuid();
+        var getForeign = await memberClient.GetAsync($"/v1/orgs/{foreignId}", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, getForeign.StatusCode);
+
+        var updateForeign = await memberClient.PutAsJsonAsync($"/v1/orgs/{foreignId}",
+            new { orgId = foreignId, name = "Hijacked", description = (string?)null },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, updateForeign.StatusCode);
+
+        var createOrg = await memberClient.PostAsJsonAsync("/v1/orgs",
+            new { name = "Unauthorized Customer" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, createOrg.StatusCode);
+
+        var updatedOwn = await memberClient.PutAsJsonAsync($"/v1/orgs/{orgId}",
+            new { orgId, name = "Invited Customer Updated", description = (string?)null },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, updatedOwn.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
