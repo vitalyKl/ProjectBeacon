@@ -113,7 +113,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         var subtask = Subtask.Create(
             instructions, task.Id, task.ProjectId,
             allowedTools, allowedPaths, profileKey, command.Request.WakePlannerAfter,
-            resolvedProfile is null ? null : JsonSerializer.Serialize(resolvedProfile)));
+            resolvedProfile is null ? null : JsonSerializer.Serialize(resolvedProfile));
         var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
         var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
             ?? phases.FirstOrDefault(p => string.Equals(p.Key, "do", StringComparison.Ordinal));
