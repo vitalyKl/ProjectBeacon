@@ -46,12 +46,30 @@ referenced record is deleted without retaining the referenced record itself.
 Requests requiring elevation fail closed until a step-up authentication provider is added.
 This foundation does not expose an unauthenticated audit endpoint or operator UI.
 
+## Instrumented operations (A2)
+
+The first write-path integration records the following successful project operations in the
+same unit of work as their state changes:
+
+- API token creation and revocation (`project.api_token.created`,
+  `project.api_token.revoked`). Raw token values and token hashes are never written.
+- Project invitation creation, acceptance and revocation (`project.invite.*`). Invite tokens,
+  email addresses and mail bodies are never written.
+- Project membership addition and removal (`project.member.added`,
+  `project.member.removed`). The event identifies the membership row and uses only fixed state
+  codes in details.
+
+Each event carries the verified actor kind/id and both organization and project scope. Tests
+verify that the event and mutation persist together and that secret values do not enter the
+event metadata.
+
 ## Implemented / not implemented
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
-port, permission-checked read contract/implementation, model migration and tests.
+port, permission-checked read contract/implementation, model migration, tests, and the initial
+project credential/membership instrumentation listed above.
 
-Not implemented: automatic instrumentation of every existing handler, operator HTTP endpoints,
-audit UI, export, retention, or distributed audit streaming. Each sensitive mutation must be
-instrumented in its own transaction in follow-up work; this foundation does not claim existing
-operations are already comprehensively audited.
+Not implemented: instrumentation of all remaining handlers (including org invitations, org and
+project lifecycle, device lifecycle, account/password operations and denied authorization
+attempts), operator HTTP endpoints, audit UI, export, retention, or distributed audit streaming.
+These remain separate follow-up slices; this PR does not claim comprehensive audit coverage.
