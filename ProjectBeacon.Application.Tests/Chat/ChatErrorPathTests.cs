@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Chat;
+using Application.Authorization;
 using Application.Devices;
 using Application.Persistence;
 using Domain.Entities.Chat;
@@ -154,7 +155,7 @@ public sealed class ChatErrorPathTests : IDisposable
                         .HandleAsync(new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
                     Assert.True(beat.Success, beat.Error);
                     var attach = await new AttachRuntimeHandler(factory)
-                        .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, @"A:\work")), TestContext.Current.CancellationToken);
+                        .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None), @"A:\work")), TestContext.Current.CancellationToken);
                     Assert.True(attach.Success, attach.Error);
 
                     using (TenantScope.EnterUnscoped())
