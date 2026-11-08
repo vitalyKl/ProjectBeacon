@@ -98,21 +98,21 @@ public sealed partial class DeviceHandlerTests
         var created = await new CreateDeviceHandler(Factory()).HandleAsync(
             new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value!.Id, user.Id, @"A:\work\app")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value!.Id, RuntimeHumanActor(user.Id), @"A:\work\app")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         Assert.Equal(@"A:\work\app", attached.Value!.LocalRoot);
 
         var again = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, user.Id, @"A:\work\other")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, RuntimeHumanActor(user.Id), @"A:\work\other")), TestContext.Current.CancellationToken);
         Assert.Equal(attached.Value.Id, again.Value!.Id);
         Assert.Equal(@"A:\work\other", again.Value.LocalRoot);
 
         var listed = await new ListRuntimesHandler(Factory()).HandleAsync(
-            new ListRuntimesCommand(new ListRuntimesRequest(project.Id, user.Id)), TestContext.Current.CancellationToken);
+            new ListRuntimesCommand(new ListRuntimesRequest(project.Id, RuntimeHumanActor(user.Id))), TestContext.Current.CancellationToken);
         Assert.Single(listed.Value!);
 
         var detached = await new DetachRuntimeHandler(Factory()).HandleAsync(
-            new DetachRuntimeCommand(new DetachRuntimeRequest(listed.Value![0].Id, user.Id)), TestContext.Current.CancellationToken);
+            new DetachRuntimeCommand(new DetachRuntimeRequest(listed.Value![0].Id, RuntimeHumanActor(user.Id))), TestContext.Current.CancellationToken);
         Assert.True(detached.Success, detached.Error);
     }
 

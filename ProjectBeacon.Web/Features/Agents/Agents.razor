@@ -242,7 +242,7 @@ else
         if (_userId == Guid.Empty) return;
         if (_project is not null)
         {
-            var runtimes = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(_project.Id, _userId)));
+            var runtimes = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(_project.Id, _caller)));
             if (runtimes.Success)
             {
                 _runtimes = runtimes.Value!.ToList();

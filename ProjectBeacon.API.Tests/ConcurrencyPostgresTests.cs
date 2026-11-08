@@ -1609,7 +1609,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 .HandleAsync(new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")), TestContext.Current.CancellationToken);
             Assert.True(beat.Success, beat.Error);
             var attach = await new AttachRuntimeHandler(factory)
-                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Id, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
+                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Id, new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), @"A:\work")), TestContext.Current.CancellationToken);
             Assert.True(attach.Success, attach.Error);
             return (project.Id, device.Id, user.Id, session.Id);
         }

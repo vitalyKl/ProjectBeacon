@@ -159,7 +159,7 @@
             if (_deviceId is { } deviceId && !string.IsNullOrWhiteSpace(_localRoot))
             {
                 var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
-                    new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
+                    new AttachRuntimeRequest(project.Value!.Id, deviceId, actor, _localRoot)));
                 if (!attached.Success)
                 {
                     _error = attached.Error;

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Context;
+using Application.Authorization;
 using Application.Devices;
 using Application.Evals;
 using Domain.Entities.Devices;
@@ -68,7 +69,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.True(beat.Success, beat.Error);
 
         var attach = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Id, user.Id, @"A:\work\eval")));
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Id, new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), @"A:\work\eval")));
         Assert.True(attach.Success, attach.Error);
     }
 
