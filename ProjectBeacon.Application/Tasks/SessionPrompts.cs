@@ -35,8 +35,8 @@ public static class SessionPrompts
         sb.AppendLine(BuiltInAgentProfiles.PlannerCatalogText());
         sb.AppendLine("Set the profile field on task_create_subtask. Choose explorer first for non-trivial work and set wakePlannerAfter=true so you can plan the implementation using its findings. Put verifier last when independent verification is useful.");
         sb.AppendLine("A selected profile supplies the default tool grants and path policy. You may narrow its tools and paths, but the API rejects attempts to expand them.");
-        sb.AppendLine($"For each subtask, provide focused instructions plus comma-separated allowedMcpTools and repository-relative allowedPaths. Grant only the file/index tools it needs, plus {McpToolNames.SubtaskReportResult} and {McpToolNames.PipelineFailSubtask}; grant {McpToolNames.TaskAttachFile} only to subtasks that need to publish a user-facing artifact.");
-        sb.AppendLine($"When an Actor needs shared task context, explicitly grant {McpToolNames.WorkspaceIndex} and {McpToolNames.WorkspaceRead}; grant {McpToolNames.WorkspaceWrite} only when it should publish durable shared notes. These grants are enforced again by the API.");
+        sb.AppendLine($"For each subtask, provide focused instructions and the repository-relative allowedPaths required by its profile. Let the profile supply its default MCP tools unless you need to narrow them; never expand them. Profiles include the mandatory {McpToolNames.SubtaskReportResult}, {McpToolNames.PipelineFailSubtask}, and {McpToolNames.WorkspaceWrite} lifecycle tools.");
+        sb.AppendLine($"Profiles also include task workspace read tools {McpToolNames.WorkspaceIndex} and {McpToolNames.WorkspaceRead}. Grant {McpToolNames.TaskAttachFile} only to subtasks that need to publish a user-facing artifact.");
         sb.AppendLine("Never grant Actor sessions pipeline orchestration tools.");
         sb.AppendLine("Do not add run_command or run_log to allowedMcpTools. The workstation harness exposes argv-based command execution automatically to Actor sessions when the workstation command policy permits it; Plan mode, Planner, Review, and Eval cannot execute commands.");
         sb.AppendLine($"Do not call {McpToolNames.PipelineStartActor} or {McpToolNames.PipelineLaunchSession}. The server owns the Actor queue and starts exactly one pending subtask after this Planner command finishes, then starts the next one after each Actor command completes.");
@@ -134,7 +134,11 @@ public static class SessionPrompts
         sb.AppendLine("If you change package.json, a solution/project manifest, Cargo.toml, go.mod, pyproject.toml, Makefile, or a GitHub Actions workflow, call suggest_command_prefixes again before relying on the changed commands. A manifest change invalidates saved approvals; do not assume a previously approved prefix still authorizes the new script.");
         sb.AppendLine("If a command asks the user for approval, wait for the form to be answered. The subtask enters WaitingForUser and resumes automatically; do not fail or finish it while that form is pending.");
         sb.AppendLine($"If this subtask produces a user-facing file or image, attach it to the task with {McpToolNames.TaskAttachFile} using a workspace-relative path. Do not attach temporary files, logs, or secrets.");
-        sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, a truthful diffRef, and a concise summary of verified changes. Keep Summary at or below 5000 characters; include only the outcome, key files, verification, and remaining caveats. Do not paste logs or the full implementation. Do not invent a commit or branch reference.");
+        if (BuiltInAgentProfiles.Get(subtask.ProfileKey) is { ReportsDiff: false })
+            sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, an empty diffRef (this profile creates no diff), and a concise summary of verified findings.");
+        else
+            sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, a truthful diffRef, and a concise summary of verified changes. Do not invent a commit or branch reference.");
+        sb.AppendLine("Keep Summary at or below 5000 characters; include only the outcome, key files, verification, and remaining caveats. Do not paste logs or the full implementation.");
         sb.AppendLine($"If you cannot complete the work safely, call {McpToolNames.PipelineFailSubtask} with this subtaskId and a concrete reason. Never claim completion unless the reporting tool succeeds.");
         return sb.ToString().TrimEnd();
     }
