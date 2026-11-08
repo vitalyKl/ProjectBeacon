@@ -1,10 +1,11 @@
 namespace ProjectBeacon.API.Tests;
 
+using System.Security.Claims;
 using Domain.Common;
 using Domain.Enums;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
-using ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API.Endpoints;
 
 public sealed class HarnessApiAuthorizationTests
@@ -186,6 +187,23 @@ public sealed class HarnessApiAuthorizationTests
 
         context.Request.Headers.Remove("Origin");
         Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_RequiresOriginBasedOnAuthenticatedSchemeNotHeaderPresence()
+    {
+        var cookieContext = new DefaultHttpContext();
+        cookieContext.User = new ClaimsPrincipal(
+            new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme));
+        Assert.True(TaskAttachmentEndpoints.UsesCookieAuthentication(cookieContext));
+
+        var jwtContext = new DefaultHttpContext();
+        jwtContext.User = new ClaimsPrincipal(new ClaimsIdentity("Bearer"));
+        Assert.False(TaskAttachmentEndpoints.UsesCookieAuthentication(jwtContext));
+
+        var apiTokenContext = new DefaultHttpContext();
+        apiTokenContext.User = new ClaimsPrincipal(new ClaimsIdentity("ApiToken"));
+        Assert.False(TaskAttachmentEndpoints.UsesCookieAuthentication(apiTokenContext));
     }
 
     [Fact]

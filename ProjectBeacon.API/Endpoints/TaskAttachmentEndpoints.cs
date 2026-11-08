@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
@@ -36,10 +37,9 @@ public static class TaskAttachmentEndpoints
     {
         // Cookie-authenticated multipart requests have no automatic antiforgery
         // validation because the body is streamed manually. Require an exact Origin
-        // match for browser cookies; bearer-token clients are not ambient credentials.
-        var authorization = context.Request.Headers["Authorization"].ToString();
-        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            && !IsSameOriginUpload(context.Request))
+        // match for ambient cookie credentials; a merely-present Authorization header
+        // must not bypass this check when a bad bcn_ token falls back to the cookie scheme.
+        if (UsesCookieAuthentication(context) && !IsSameOriginUpload(context.Request))
             return Results.Problem(
                 detail: "Cookie-authenticated uploads must originate from this application origin.",
                 statusCode: StatusCodes.Status403Forbidden,
@@ -115,6 +115,14 @@ public static class TaskAttachmentEndpoints
             return ProblemResults.Bad(ex.Message);
         }
     }
+
+    internal static bool UsesCookieAuthentication(HttpContext context) =>
+        context.User.Identities.Any(identity =>
+            identity.IsAuthenticated
+            && string.Equals(
+                identity.AuthenticationType,
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                StringComparison.Ordinal));
 
     internal static bool IsSameOriginUpload(HttpRequest request)
     {
