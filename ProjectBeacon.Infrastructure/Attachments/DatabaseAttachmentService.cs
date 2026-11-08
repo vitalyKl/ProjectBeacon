@@ -49,8 +49,22 @@ public sealed class DatabaseAttachmentService : IAttachmentService
         // The endpoint enforces this limit before opening the stream. Keep the same
         // validation here for every other caller, including workstation/MCP uploads.
         await using var buffer = new MemoryStream(checked((int)length));
-        await content.CopyToAsync(buffer, ct);
-        if (buffer.Length != length)
+        var readBuffer = new byte[81920];
+        long totalRead = 0;
+        while (true)
+        {
+            var read = await content.ReadAsync(readBuffer.AsMemory(), ct);
+            if (read == 0)
+                break;
+
+            totalRead += read;
+            if (totalRead > length || totalRead > MaxFileLength)
+                throw new InvalidDataException("Uploaded file exceeded the declared or maximum length.");
+
+            await buffer.WriteAsync(readBuffer.AsMemory(0, read), ct);
+        }
+
+        if (totalRead != length)
             throw new InvalidDataException("Uploaded file length did not match the declared length.");
 
         var attachment = TaskAttachment.Create(
