@@ -186,11 +186,16 @@ public sealed partial class PipelineHandlerTests
         var backendId = await SeedNativeRuntimeAsync(projectId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var plannerSpawner = new FakeSpawner(backendId);
-        await new StartPipelineHandler(factory, plannerSpawner)
+        var initialPlanner = await new StartPipelineHandler(factory, plannerSpawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(initialPlanner.Success, initialPlanner.Error);
 
         using (TenantScope.EnterUnscoped())
         {
+            var plannerSession = await _db.PipelineSessions
+                .SingleAsync(row => row.Id == initialPlanner.Value!.Id, TestContext.Current.CancellationToken);
+            plannerSession.Close();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             await _db.Tasks
                 .Where(row => row.Id == task.Id)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.PipelineStage, TaskPipelineStage.Executing), TestContext.Current.CancellationToken);
@@ -199,6 +204,10 @@ public sealed partial class PipelineHandlerTests
         var created = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
+        var next = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work on the next queued item")),
+                TestContext.Current.CancellationToken);
+        Assert.True(next.Success, next.Error);
 
         var actorSpawner = new FakeSpawner(backendId);
         var actor = await new StartActorSessionHandler(factory, actorSpawner)
@@ -225,13 +234,14 @@ public sealed partial class PipelineHandlerTests
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.Status, SessionStatus.WaitingForUser), TestContext.Current.CancellationToken);
         }
 
-        var failed = await new FailSubtaskHandler(factory)
+        var pipelineQueue = new PipelineActorQueueDispatcher(factory, actorSpawner);
+        var failed = await new FailSubtaskHandler(factory, pipelineQueue)
             .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(task.Id, created.Value.Id, "cancel the waiting Actor")), TestContext.Current.CancellationToken);
         Assert.True(failed.Success, failed.Error);
         Assert.Equal(SubtaskStatus.Failed, failed.Value!.Subtasks.Single(row => row.Id == created.Value.Id).Status);
 
         // Retrying a failed state also retries best-effort cleanup; cancellation is idempotent.
-        var retried = await new FailSubtaskHandler(factory)
+        var retried = await new FailSubtaskHandler(factory, pipelineQueue)
             .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(task.Id, created.Value.Id, "retry cancellation")), TestContext.Current.CancellationToken);
         Assert.True(retried.Success, retried.Error);
 
@@ -246,6 +256,15 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal(WorkstationCommandStatus.Cancelled, command.Status);
             Assert.Null(command.LeaseExpiresAt);
             Assert.NotNull(command.CompletedAt);
+
+            var nextSubtask = await _db.Subtasks.AsNoTracking()
+                .SingleAsync(row => row.Id == next.Value!.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, nextSubtask.Status);
+            Assert.True(await _db.PipelineSessions.AsNoTracking().AnyAsync(row =>
+                row.TaskId == task.Id && row.Role == PipelineRole.Actor
+                && row.SubtaskId == next.Value.Id
+                && (row.Status == SessionStatus.Ready || row.Status == SessionStatus.Active),
+                TestContext.Current.CancellationToken));
 
             var report = await _db.TaskWorkspaceSections.AsNoTracking()
                 .SingleAsync(section => section.TaskId == task.Id
