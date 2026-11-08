@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Auth;
 using ProjectBeacon.Application.Entitlements;
+using Microsoft.Extensions.Configuration;
 
 public sealed class SaaSOperatorContractTests
 {
@@ -18,6 +19,14 @@ public sealed class SaaSOperatorContractTests
         Assert.False(policy.RequiresOperatorApproval);
         Assert.False(policy.AllowsSelfServiceOrganizationCreation);
         Assert.True(LocalAuthOptions.InviteOnly(null));
+
+        var legacyOpenConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AUTH_LOCAL_INVITE_ONLY"] = "false"
+            })
+            .Build();
+        Assert.True(LocalAuthOptions.InviteOnly(legacyOpenConfiguration));
     }
 
     [Fact]
@@ -81,6 +90,14 @@ public sealed class SaaSOperatorContractTests
         Assert.True(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditExport));
         Assert.False(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditRead | OperatorPermission.UsersManage));
         Assert.Equal(OperatorPermission.None, OperatorRolePermissionSets.For((OperatorRole)999));
+    }
+
+    [Fact]
+    public void OperatorCannotGrantSubscriptionEntitlementDirectly()
+    {
+        Assert.DoesNotContain(
+            nameof(EntitlementSource.Subscription),
+            Enum.GetNames<OperatorEntitlementSource>());
     }
 
     [Fact]
