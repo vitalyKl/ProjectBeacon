@@ -11,7 +11,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task EmptyActorQueue_WakesPlannerExactlyOnce()
     {
-        var (factory, spawner, task, actorSessionId) =
+        var (factory, spawner, task, actorSessionId, _) =
             await CreateCompletedActorAsync("Wake Planner after the last Actor", wakePlannerAfter: false);
 
         var dispatcher = new PipelineActorQueueDispatcher(factory, spawner);
@@ -44,11 +44,12 @@ public sealed partial class PipelineHandlerTests
             _db.ChangeTracker.Clear();
             var pending = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(subtask => subtask.Id == pendingSubtaskId, TestContext.Current.CancellationToken);
+            var completedSubtaskId = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .Where(session => session.Id == actorSessionId)
+                .Select(session => session.SubtaskId!.Value)
+                .SingleAsync(TestContext.Current.CancellationToken);
             var checkpoint = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
-                .SingleAsync(subtask => subtask.Id == (await _db.PipelineSessions.IgnoreQueryFilters()
-                    .Where(session => session.Id == actorSessionId)
-                    .Select(session => session.SubtaskId!.Value)
-                    .SingleAsync(TestContext.Current.CancellationToken)),
+                .SingleAsync(subtask => subtask.Id == completedSubtaskId,
                     TestContext.Current.CancellationToken);
             var actors = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
                 .CountAsync(session => session.TaskId == task.Id && session.Role == PipelineRole.Actor,
@@ -64,7 +65,7 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
-    private async Task<(BeaconDbFactory Factory, FakeSpawner Spawner, TaskItem Task, Guid ActorSessionId)>
+    private async Task<(BeaconDbFactory Factory, FakeSpawner Spawner, TaskItem Task, Guid ActorSessionId, Guid PendingSubtaskId)>
         CreateCompletedActorAsync(string title, bool wakePlannerAfter, bool createPendingSecondSubtask = false)
     {
         var (projectId, task) = await SeedTaskAsync(title);
