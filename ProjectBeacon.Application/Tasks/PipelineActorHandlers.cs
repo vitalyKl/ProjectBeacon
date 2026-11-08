@@ -407,7 +407,6 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
                 db, task.ProjectId, task.Id, subtask.Id, ct);
             await transaction.CommitAsync(ct);
-            await transaction.CommitAsync(ct);
             return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
         });
 
