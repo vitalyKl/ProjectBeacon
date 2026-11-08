@@ -59,6 +59,7 @@ public sealed class BuiltInAgentProfilesTests
         Assert.False(BuiltInAgentProfiles.IsSafeRelativePath(@"C:\\temp\\secrets.txt"));
         Assert.False(BuiltInAgentProfiles.IsSafeRelativePath("/etc/passwd"));
         Assert.True(BuiltInAgentProfiles.IsSafeRelativePath("src/Feature.cs"));
+        Assert.True(BuiltInAgentProfiles.IsSafeRelativePath("src/"));
     }
 
     [Fact]
