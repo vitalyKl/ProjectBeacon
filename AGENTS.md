@@ -11,7 +11,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 - Keep a living project brief in Context. Agents compile that brief; `AGENTS.md` is an export for hosts that only read the repo.
 - Compile scoped session briefs without requiring the code index.
 - Give agents a stable MCP + OpenAPI surface for context, tasks, decisions, and local code tools.
-- Support self-host Compose and hosted login as equal paths.
+- ProjectBeacon is a hosted multi-tenant SaaS. Customer self-hosted deployments and self-host licensing are out of scope; Docker Compose is local-development infrastructure only.
 
 ## Non-goals
 
