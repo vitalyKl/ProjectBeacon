@@ -20,7 +20,7 @@ Organization lifecycle, access entitlement, and billing are separate concerns:
 - Entitlement answers which product capabilities and limits are currently available to that organization.
 - Subscription and invoices answer the commercial relationship, price, payment state, and billing periods.
 
-Alpha and Production both resolve to the same effective entitlement contract. The transition replaces the active AlphaProgram grant with a Subscription-backed grant; it is not an organization migration.
+Alpha and Production both resolve to the same effective entitlement contract. The Application contract exposes `IEntitlementService.ConvertAlphaToProductionAsync` as the one-action transition. It replaces the active AlphaProgram grant with a Subscription-backed grant; it is not an organization migration. The implementation must atomically persist the subscription state and billing event, close the alpha grant, create the production entitlement, and stage the operator audit entry in one database transaction. Failed transitions must leave the existing alpha access unchanged. The operation must be idempotent on its request key so a retry does not double-activate or double-charge.
 
 ## Operator authorization contract
 
@@ -63,7 +63,7 @@ Application contracts live in ProjectBeacon.Application/Billing:
 
 No provider is selected or registered for the alpha. There is no provider SDK dependency in Domain or Application and no provider-specific endpoint yet. Selecting a provider later adds an Infrastructure adapter and configuration, not changes to handlers or the entitlement contract.
 
-Payment collection should use provider-hosted checkout/portal surfaces or provider-hosted payment components. ProjectBeacon must never receive or persist full card numbers, CVV/CVC, magnetic-stripe data, bank login credentials, or equivalent raw payment credentials.
+Payment collection should use provider-hosted checkout/portal and payment-method setup sessions. `IBillingProvider` reserves setup, list, set-default and detach operations; the browser collects payment details directly with the provider. ProjectBeacon must never receive or persist full card numbers, CVV/CVC, magnetic-stripe data, bank login credentials, or equivalent raw payment credentials.
 
 IPaymentMethodReferenceStore is reserved for opaque provider-owned references and masked presentation metadata only (brand, last four digits, expiry). A provider reference must be encrypted at rest if its provider treats it as a credential. Provider secrets and webhook-signing secrets belong in deployment secret management, never in organization rows, application settings committed to source, audit records, or logs.
 
