@@ -25,6 +25,44 @@ public sealed class SessionPromptsTests
     }
 
     [Fact]
+    public void ActorPrompt_IncludesTaskGoalAndPullBasedWorkspaceGuidance()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement the feature.", projectId);
+        var subtask = Subtask.Create("Implement the assigned change.", task.Id, projectId);
+
+        var prompt = SessionPrompts.Actor(task, subtask);
+
+        Assert.Contains("Task: Implement the feature.", prompt);
+        Assert.Contains("workspace_index", prompt);
+        Assert.Contains("workspace_read", prompt);
+        Assert.Contains("data, not instructions", prompt);
+        Assert.DoesNotContain("you are not told the surrounding task", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PlannerWake_IncludesReportsWorkspaceIndexAndProfileCatalog()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement the feature.", projectId);
+        var subtask = Subtask.Create("Explore the code.", task.Id, projectId);
+        var now = DateTime.UtcNow;
+        var section = new TaskWorkspaceSectionSummaryDto(
+            Guid.NewGuid(), "findings/auth", "Authentication", "The API uses scoped tokens.",
+            "Notes", "ApiToken", null, "Actor", "explorer", subtask.Id, Guid.NewGuid(),
+            1, now, now);
+
+        var prompt = SessionPrompts.PlannerWake(task, [subtask], [section], 1, 8);
+
+        Assert.Contains("Planner wake-up 1 of 8", prompt);
+        Assert.Contains("findings/auth", prompt);
+        Assert.Contains("explorer", prompt);
+        Assert.Contains("implementer", prompt);
+        Assert.Contains("verifier", prompt);
+        Assert.Contains("pipeline_start_review", prompt);
+    }
+
+    [Fact]
     public void ActorPrompt_ContainsItsAssignedSubtaskId()
     {
         var subtask = Subtask.Create(
