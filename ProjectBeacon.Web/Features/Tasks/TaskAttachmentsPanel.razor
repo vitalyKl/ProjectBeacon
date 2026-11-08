@@ -37,10 +37,6 @@
                     <MudText Typo="Typo.caption">@FormatSize(item.Metadata.Length)</MudText>
                     <MudText Typo="Typo.caption">· @item.Metadata.CreatedByType</MudText>
                     <MudText Typo="Typo.caption">· <LocalTime Value="item.Metadata.CreatedAt" Format="g" /></MudText>
-                    @if (item.DataUrl is not null)
-                    {
-                        <MudText Typo="Typo.caption">@L["TaskAttachmentsPreviewOpen"]</MudText>
-                    }
                 </div>
             </div>
         }
