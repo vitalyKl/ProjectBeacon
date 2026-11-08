@@ -9,6 +9,37 @@ using Microsoft.EntityFrameworkCore;
 public sealed partial class PipelineHandlerTests
 {
     [Fact]
+    public async Task InitialPlannerNoOp_RecordsHumanAttentionWhileTaskIsStillPlanning()
+    {
+        var (projectId, task) = await SeedTaskAsync("Initial Planner no-op");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner();
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var session = await _db.PipelineSessions
+                .SingleAsync(row => row.Id == planner.Value!.Id, TestContext.Current.CancellationToken);
+            session.Close();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await new PipelineActorQueueDispatcher(factory, spawner)
+            .DispatchNextAsync(task.Id, planner.Value!.Id, TestContext.Current.CancellationToken);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var attention = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id && section.Key == "system/planner-status",
+                    TestContext.Current.CancellationToken);
+            Assert.Contains("Human input is required", attention.Content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task EmptyActorQueue_WakesPlannerExactlyOnce()
     {
         var (factory, spawner, task, actorSessionId, _) =
