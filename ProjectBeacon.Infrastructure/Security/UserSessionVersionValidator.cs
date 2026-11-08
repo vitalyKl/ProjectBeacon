@@ -4,11 +4,8 @@ using System.Globalization;
 using System.Security.Claims;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-
-/// <summary>Current security state for a human account.</summary>
-public sealed record UserSessionVersionState(int SessionVersion, bool IsDisabled, bool IsAdmin);
+using ProjectBeacon.Application.Security;
 
 /// <summary>
 /// Validates cookie/JWT account claims against current persisted account state, with a
@@ -43,30 +40,30 @@ public static class UserSessionVersionValidator
         var adminValue = principal.FindFirstValue("isAdmin");
         var claimIsAdmin = bool.TryParse(adminValue, out var parsedAdmin) && parsedAdmin;
 
-        var cache = services.GetRequiredService<IMemoryCache>();
-        var cacheKey = $"ProjectBeacon.UserSessionVersion:{userId:D}";
-        if (!cache.TryGetValue(cacheKey, out UserSessionVersionState? state)
+        var cache = services.GetRequiredService<IUserSessionVersionCache>();
+        if (!cache.TryGet(userId, out var state)
             || state is null
             || state.SessionVersion != claimVersion
             || state.IsAdmin != claimIsAdmin)
         {
             var dbFactory = services.GetRequiredService<IBeaconDbFactory>();
             await using var db = dbFactory.CreateDbContext();
-            state = await db.Users
+            var persisted = await db.Users
                 .Where(user => user.Id == userId)
-                .Select(user => new UserSessionVersionState(
+                .Select(user => new UserSessionVersionSnapshot(
                     user.SessionVersion,
                     user.DisabledAt != null,
                     user.IsAdmin))
                 .FirstOrDefaultAsync(ct);
+            state = persisted;
 
             if (state is null)
             {
-                cache.Remove(cacheKey);
+                cache.Invalidate(userId);
                 return false;
             }
 
-            cache.Set(cacheKey, state, CacheDuration);
+            cache.Set(userId, state);
         }
 
         return !state.IsDisabled
