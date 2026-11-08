@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Devices;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Common;
 using Domain.Enums;
@@ -153,7 +154,7 @@ public record ListCommandsCommand(ListCommandsRequest Request) : ICommand<Result
 /// <summary>
 /// Project, device, user, and the local root to bind.
 /// </summary>
-public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot);
+public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, ActorContext Actor, string LocalRoot);
 /// <summary>
 /// Command for attach runtime.
 /// </summary>
@@ -161,7 +162,7 @@ public record AttachRuntimeCommand(AttachRuntimeRequest Request) : ICommand<Resu
 /// <summary>
 /// Fields for list runtimes.
 /// </summary>
-public record ListRuntimesRequest(Guid ProjectId, Guid UserId);
+public record ListRuntimesRequest(Guid ProjectId, ActorContext Actor);
 /// <summary>
 /// Command for list runtimes.
 /// </summary>
@@ -169,7 +170,7 @@ public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result
 /// <summary>
 /// User and runtime id for detach runtime.
 /// </summary>
-public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
+public record DetachRuntimeRequest(Guid RuntimeId, ActorContext Actor);
 /// <summary>
 /// Command for detach runtime.
 /// </summary>
@@ -177,7 +178,7 @@ public record DetachRuntimeCommand(DetachRuntimeRequest Request) : ICommand<Resu
 /// <summary>
 /// Runtime id and requesting user for runtime diagnostics.
 /// </summary>
-public record GetRuntimeDiagnosticsRequest(Guid RuntimeId, Guid UserId);
+public record GetRuntimeDiagnosticsRequest(Guid RuntimeId, ActorContext Actor);
 /// <summary>
 /// Command for get runtime diagnostics.
 /// </summary>

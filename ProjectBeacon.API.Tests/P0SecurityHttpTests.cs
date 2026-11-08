@@ -1,6 +1,8 @@
 namespace ProjectBeacon.API.Tests;
 
 using Application.Persistence;
+using Application.Admin;
+using Application.Authorization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -400,9 +402,13 @@ public sealed class P0SecurityHttpTests
             if (!beat.Success) throw new InvalidOperationException("Heartbeat failed: " + beat.Error);
 
             // Attach runtime
+            var adminActor = new ActorContext(
+                ActorType.Human, adminUser.Id, true, null, null, null, null, ApiTokenCapability.None);
             var runtime = new AttachRuntimeCommand(
-                new AttachRuntimeRequest(projectId, deviceId, adminUser.Id, @"A:\work\rc"));
-            var attach = await new AttachRuntimeHandler(factorySvc).HandleAsync(runtime, TestContext.Current.CancellationToken);
+                new AttachRuntimeRequest(projectId, deviceId, adminActor, @"A:\work\rc"));
+            var adminGate = new DatabaseAdminGate(factorySvc);
+            var attach = await new AttachRuntimeHandler(factorySvc, adminGate)
+                .HandleAsync(runtime, TestContext.Current.CancellationToken);
             if (!attach.Success) throw new InvalidOperationException("Runtime attach failed: " + attach.Error);
         }
 
