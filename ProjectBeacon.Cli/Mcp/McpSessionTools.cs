@@ -15,7 +15,7 @@ public static partial class McpStdioServer
         Tool(McpToolNames.ModelStatus, "Show local model backends, role bindings and llama-swap proxy status. Requires Beacon API credentials and BEACON_PROJECT_ID.",
             Props()),
         Tool(McpToolNames.TaskCreateSubtask, "Create a subtask on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
-            Props(("instructions", "string", true), ("profile", "string", false), ("allowedMcpTools", "string", false), ("allowedPaths", "string", false), ("wakePlannerAfter", "boolean", false))),
+            Props(("instructions", "string", true), ("profile", "string", false), ("allowedMcpTools", "string", false), ("allowedPaths", "string", false), ("wakePlannerAfter", "boolean", false), ("optionalMcpTools", "string", false))),
         Tool(McpToolNames.SubtaskReportResult, "Report the result of an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("subtaskId", "string", false), ("diffRef", "string", false), ("summary", "string", true), ("abstract", "string", false))),
         Tool(McpToolNames.TaskReviewVerdict, "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
@@ -171,7 +171,8 @@ public static partial class McpStdioServer
             && wake;
         return await ApiTextAsync(id, await McpApiTools.CreateSubtaskAsync(
             taskId, instructions, SplitPrefixes(OptArg(args, "allowedMcpTools")),
-            SplitPrefixes(OptArg(args, "allowedPaths")), api!, OptArg(args, "profile"), wakePlannerAfter));
+            SplitPrefixes(OptArg(args, "allowedPaths")), api!, OptArg(args, "profile"), wakePlannerAfter,
+            SplitPrefixes(OptArg(args, "optionalMcpTools"))));
     }
 
     private static async Task<JsonObject> SubtaskReportResultAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
