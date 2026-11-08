@@ -8,8 +8,9 @@ public static class LocalAuthOptions
 {
     public static bool InviteOnly(IConfiguration? configuration)
     {
-        var raw = configuration?["AUTH_LOCAL_INVITE_ONLY"];
-        return bool.TryParse(raw, out var value) && value;
+        // Public registration is intentionally unavailable for the hosted SaaS alpha.
+        // Keep the legacy configuration key from accidentally opening self-service sign-up.
+        return true;
     }
 
     public static string PublicUrl(IConfiguration? configuration)
