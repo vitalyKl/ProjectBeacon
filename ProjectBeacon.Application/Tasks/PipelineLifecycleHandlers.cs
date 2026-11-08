@@ -175,7 +175,10 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         ? await db.Subtasks.Where(subtask => subtask.Id == actorSubtaskId && subtask.TaskId == task.Id)
                             .Select(subtask => subtask.ProfileKey).FirstOrDefaultAsync(ct)
                         : null;
-                    var profile = BuiltInAgentProfiles.Get(profileKey);
+                    var profile = BuiltInAgentProfiles.Resolve(profileKey, session.SubtaskId is { } subId
+                        ? await db.Subtasks.Where(subtask => subtask.Id == subId && subtask.TaskId == task.Id)
+                            .Select(subtask => subtask.ProfileSnapshotJson).FirstOrDefaultAsync(ct)
+                        : null);
                     var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
                     var commandsEnabled = profile?.CommandsEnabled ?? true;
                     var reasoningEffort = profile?.Effort switch
