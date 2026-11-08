@@ -31,6 +31,15 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", null)
+                        .WithOne()
+                        .HasForeignKey("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", "TaskAttachmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2029,6 +2038,32 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("TaskId", "CreatedAt");
 
                     b.ToTable("TaskAttachments");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TaskAttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskAttachmentId")
+                        .IsUnique();
+
+                    b.ToTable("TaskAttachmentContents");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskStep", b =>
