@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
+using Domain.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
@@ -32,9 +33,57 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                 ? "Pipeline is not started."
                 : $"Cannot create subtask in stage {task.PipelineStage}.");
 
+        IReadOnlyList<string>? allowedTools = command.Request.AllowedMcpTools;
+        IReadOnlyList<string>? allowedPaths = command.Request.AllowedPaths;
+        var profileKey = command.Request.Profile?.Trim();
+        if (!string.IsNullOrWhiteSpace(profileKey))
+        {
+            var profile = BuiltInAgentProfiles.Get(profileKey);
+            if (profile is null)
+                return Result.Failure<SubtaskDto>(
+                    $"Unknown subtask profile '{profileKey}'. Available profiles: {string.Join(", ", BuiltInAgentProfiles.All.Select(p => p.Key))}.");
+
+            var defaults = profile.Tools;
+            if (allowedTools is { Count: > 0 })
+            {
+                var requested = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var toolName in allowedTools)
+                {
+                    if (!McpToolCatalog.TryResolve(toolName, out var descriptor)
+                        || !defaults.Contains(descriptor!.Name, StringComparer.Ordinal))
+                        return Result.Failure<SubtaskDto>(
+                            $"Tool '{toolName}' is outside profile '{profile.Key}'. A Planner may narrow, but cannot expand, its tool grants.");
+                    requested.Add(descriptor!.Name);
+                }
+                allowedTools = defaults.Where(name => requested.Contains(name)
+                    || profile.RequiredTools.Contains(name, StringComparer.Ordinal)).ToArray();
+            }
+            else
+                allowedTools = defaults;
+
+            switch (profile.PathPolicy)
+            {
+                case AgentProfilePathPolicy.FromPlanner:
+                    if (allowedPaths is not { Count: > 0 })
+                        return Result.Failure<SubtaskDto>(
+                            $"Profile '{profile.Key}' requires explicit allowedPaths from the Planner.");
+                    break;
+                case AgentProfilePathPolicy.Defaults:
+                    if (allowedPaths is not { Count: > 0 })
+                        allowedPaths = profile.DefaultPaths;
+                    else if (allowedPaths.Any(path => !BuiltInAgentProfiles.IsWithinDefaults(path, profile.DefaultPaths)))
+                        return Result.Failure<SubtaskDto>(
+                            $"Profile '{profile.Key}' allows only paths beneath: {string.Join(", ", profile.DefaultPaths)}.");
+                    break;
+                case AgentProfilePathPolicy.None:
+                    allowedPaths ??= [];
+                    break;
+            }
+        }
+
         var subtask = Subtask.Create(
             instructions, task.Id, task.ProjectId,
-            command.Request.AllowedMcpTools, command.Request.AllowedPaths);
+            allowedTools, allowedPaths, profileKey, command.Request.WakePlannerAfter);
         var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
         var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
             ?? phases.FirstOrDefault(p => string.Equals(p.Key, "do", StringComparison.Ordinal));
@@ -167,7 +216,7 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Actor, ct);
             var session = PipelineSession.Create(
                 task.Id, task.ProjectId, PipelineRole.Actor,
-                SessionPrompts.Actor(subtask, profileInstructions), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
+                SessionPrompts.Actor(task, subtask, profileInstructions), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
             db.PipelineSessions.Add(session);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
@@ -244,7 +293,7 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             var reportAttempt = await db.TaskWorkspaceSections.CountAsync(section =>
                 section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Id && section.Kind == "Report", ct) + 1;
             db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
-                task.Id, task.ProjectId, subtask.Id, reportAttempt, summary, command.Request.Abstract, actorSession?.Id));
+                task.Id, task.ProjectId, subtask.Id, reportAttempt, summary, command.Request.Abstract, actorSession?.Id, subtask.ProfileKey));
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
