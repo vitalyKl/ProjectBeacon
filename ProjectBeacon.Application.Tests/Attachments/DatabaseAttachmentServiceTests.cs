@@ -40,7 +40,7 @@ public sealed class DatabaseAttachmentServiceTests : IDisposable
 
         var uploaded = await service.UploadTaskAsync(
             fixture.Project.Id, fixture.Task.Id, fixture.Actor, source,
-            "notes.txt", "image/png", bytes.Length, TestContext.Current.CancellationToken);
+            "../notes.txt", "image/png", bytes.Length, TestContext.Current.CancellationToken);
 
         Assert.NotNull(uploaded);
         Assert.Equal(bytes.Length, uploaded.Length);
