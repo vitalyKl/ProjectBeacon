@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using System.Text.Json;
 using Domain.Common;
+using Domain.Entities.Agents;
 
 /// <summary>Execution intent declared by a built-in subtask profile.</summary>
 public enum AgentProfileMode { Plan, Act }
@@ -10,6 +12,7 @@ public enum AgentProfilePathPolicy { FromPlanner, Defaults, None }
 
 public sealed record BuiltInAgentProfile(
     string Key,
+    string Name,
     string Description,
     string Instruction,
     AgentProfileMode Mode,
@@ -82,8 +85,55 @@ public static class BuiltInAgentProfiles
     public static BuiltInAgentProfile? Get(string? key) =>
         !string.IsNullOrWhiteSpace(key) && ByKey.TryGetValue(key.Trim(), out var profile) ? profile : null;
 
-    public static string PlannerCatalogText() => string.Join(Environment.NewLine,
-        Profiles.Select(p => $"- {p.Key}: {p.Description} (mode={p.Mode}, size={p.SizeHint}, effort={p.Effort})"));
+    public static BuiltInAgentProfile? ApplyOverride(BuiltInAgentProfile? basis, AgentProfile? custom)
+    {
+        if (basis is null || custom is null)
+            return basis;
+        var mode = Enum.TryParse<AgentProfileMode>(custom.Mode, true, out var selectedMode)
+            ? selectedMode : basis.Mode;
+        var allowed = new HashSet<string>(basis.Tools, StringComparer.Ordinal);
+        var tools = custom.Tools.Where(allowed.Contains)
+            .Concat(basis.RequiredTools).Distinct(StringComparer.Ordinal).ToArray();
+        return basis with
+        {
+            Name = custom.Name,
+            Description = custom.Description,
+            Instruction = custom.Instruction,
+            Mode = basis.Mode == AgentProfileMode.Plan ? AgentProfileMode.Plan : mode,
+            Tools = Array.AsReadOnly(tools),
+            // User overrides may narrow command execution, never enable it on a read-only preset.
+            CommandsEnabled = basis.CommandsEnabled && custom.CommandsEnabled,
+            ReportsDiff = custom.ReportsDiff,
+            SizeHint = custom.SizeHint,
+            Effort = custom.Effort
+        };
+    }
+
+    public static BuiltInAgentProfile? Resolve(string? key, string? snapshotJson)
+    {
+        if (!string.IsNullOrWhiteSpace(snapshotJson))
+        {
+            try
+            {
+                var snapshot = JsonSerializer.Deserialize<BuiltInAgentProfile>(snapshotJson);
+                if (snapshot is not null && string.Equals(snapshot.Key, key, StringComparison.OrdinalIgnoreCase))
+                    return snapshot;
+            }
+            catch (JsonException)
+            {
+                // A damaged snapshot falls back to the immutable built-in definition.
+            }
+        }
+        return Get(key);
+    }
+
+    public static string PlannerCatalogText(IReadOnlyDictionary<string, BuiltInAgentProfile>? overrides = null)
+    {
+        var profiles = Profiles.Select(profile =>
+            overrides is not null && overrides.TryGetValue(profile.Key, out var custom) ? custom : profile);
+        return string.Join(Environment.NewLine, profiles.Select(profile =>
+            $"- {profile.Key}: {profile.Description} (mode={profile.Mode}, size={profile.SizeHint}, effort={profile.Effort})"));
+    }
 
     public static bool IsSafeRelativePath(string path)
     {
@@ -108,7 +158,7 @@ public static class BuiltInAgentProfiles
         string key, string description, string instruction, AgentProfileMode mode,
         IReadOnlyList<string> tools, AgentProfilePathPolicy pathPolicy, IReadOnlyList<string> defaultPaths,
         bool commands, bool reportsDiff, string sizeHint, string effort) =>
-        new(key, description, instruction, mode, tools, Required, pathPolicy, defaultPaths,
+        new(key, key, description, instruction, mode, tools, Required, pathPolicy, defaultPaths,
             commands, reportsDiff, sizeHint, effort, [McpToolNames.TaskAttachFile]);
 
     private static IReadOnlyList<string> ReadOnly() =>
