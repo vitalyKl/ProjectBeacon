@@ -92,7 +92,7 @@ public record CreateSubtaskRequest(
     IReadOnlyList<string>? OptionalMcpTools = null);
 
 /// <summary>Creates a subtask on a task.</summary>
-public record CreateSubtaskCommand(CreateSubtaskRequest Request) : ICommand<Result<SubtaskDto>>;
+public record CreateSubtaskCommand(CreateSubtaskRequest Request, ActorContext? Actor = null) : ICommand<Result<SubtaskDto>>;
 
 /// <summary>Identifies the subtask an actor session should run.</summary>
 public record StartActorSessionRequest(Guid TaskId, Guid SubtaskId);
