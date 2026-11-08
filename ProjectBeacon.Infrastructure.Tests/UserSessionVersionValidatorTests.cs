@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Security;
