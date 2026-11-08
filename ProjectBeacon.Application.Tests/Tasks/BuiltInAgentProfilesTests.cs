@@ -62,6 +62,10 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Null(BuiltInAgentProfiles.Get("unknown-profile"));
     }
 
-    private static BuiltInAgentProfile AssertProfile(string key) =>
-        Assert.NotNull(BuiltInAgentProfiles.Get(key));
+    private static BuiltInAgentProfile AssertProfile(string key)
+    {
+        var profile = BuiltInAgentProfiles.Get(key);
+        Assert.NotNull(profile);
+        return profile!;
+    }
 }
