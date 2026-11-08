@@ -37,6 +37,20 @@ public interface ISecretProtector
     bool WriteV2 { get; }
 }
 
+/// <summary>Persisted account security state used to validate issued authentication tickets.</summary>
+public sealed record UserSessionVersionSnapshot(int SessionVersion, bool IsDisabled, bool IsAdmin);
+
+/// <summary>
+/// Short-lived per-process cache of account security state. Mutations invalidate the local
+/// entry immediately; other application instances refresh no later than the cache TTL.
+/// </summary>
+public interface IUserSessionVersionCache
+{
+    bool TryGet(Guid userId, out UserSessionVersionSnapshot? snapshot);
+    void Set(Guid userId, UserSessionVersionSnapshot snapshot);
+    void Invalidate(Guid userId);
+}
+
 /// <summary>Creates a TOTP secret, its otpauth URI, and verifies a code at a UTC time.</summary>
 public interface ITotp
 {
