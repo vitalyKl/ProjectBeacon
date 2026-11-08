@@ -27,6 +27,15 @@ public sealed class SaaSOperatorContractTests
             })
             .Build();
         Assert.True(LocalAuthOptions.InviteOnly(legacyOpenConfiguration));
+
+        var testingOpenConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Testing",
+                ["AUTH_LOCAL_INVITE_ONLY"] = "false"
+            })
+            .Build();
+        Assert.False(LocalAuthOptions.InviteOnly(testingOpenConfiguration));
     }
 
     [Fact]
