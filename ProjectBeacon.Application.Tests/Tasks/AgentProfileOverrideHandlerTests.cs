@@ -16,10 +16,11 @@ public sealed class AgentProfileOverrideHandlerTests : IDisposable
     {
         (_connection, _db, var unscoped) = HandlerSqlite.Open();
         unscoped.Dispose();
-        _userId = Guid.NewGuid();
         using (TenantScope.EnterUnscoped())
         {
-            _db.Users.Add(User.Create("profile-user", $"profile-{_userId:N}@beacon.local", "hash"));
+            var user = User.Create("profile-user", $"profile-{Guid.NewGuid():N}@beacon.local", "hash");
+            _userId = user.Id;
+            _db.Users.Add(user);
             _db.SaveChanges();
         }
     }
