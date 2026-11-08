@@ -17,6 +17,8 @@ public class Subtask : Entity, IProjectScoped
     public Guid TaskId { get; private set; }
     public Guid ProjectId { get; private set; }
     public Guid? TaskPhaseId { get; private set; }
+    public string? ProfileKey { get; private set; }
+    public bool WakePlannerAfter { get; private set; }
     public string Instructions { get; private set; } = string.Empty;
     public SubtaskStatus Status { get; private set; }
     public string? DiffRef { get; private set; }
@@ -72,7 +74,9 @@ public class Subtask : Entity, IProjectScoped
         Guid taskId,
         Guid projectId,
         IReadOnlyList<string>? allowedMcpTools = null,
-        IReadOnlyList<string>? allowedPaths = null)
+        IReadOnlyList<string>? allowedPaths = null,
+        string? profileKey = null,
+        bool wakePlannerAfter = false)
     {
         var subtask = Entity.New<Subtask>();
         subtask.Instructions = instructions;
@@ -81,11 +85,22 @@ public class Subtask : Entity, IProjectScoped
         subtask.Status = SubtaskStatus.Pending;
         subtask.AllowedMcpTools = allowedMcpTools ?? [];
         subtask.AllowedPaths = allowedPaths ?? [];
+        subtask.ProfileKey = string.IsNullOrWhiteSpace(profileKey) ? null : profileKey.Trim();
+        subtask.WakePlannerAfter = wakePlannerAfter;
         subtask.CreatedAt = DateTime.UtcNow;
         return subtask;
     }
 
     public void AssignPhase(Guid phaseId) => TaskPhaseId = phaseId;
+
+    /// <summary>Consumes a one-shot checkpoint after the queue dispatcher wakes the Planner.</summary>
+    public void ConsumePlannerWakeCheckpoint()
+    {
+        if (!WakePlannerAfter)
+            return;
+        WakePlannerAfter = false;
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     /// <summary>Moves Pending to InProgress.</summary>
     public void Start()
