@@ -11,7 +11,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 - Keep a living project brief in Context. Agents compile that brief; `AGENTS.md` is an export for hosts that only read the repo.
 - Compile scoped session briefs without requiring the code index.
 - Give agents a stable MCP + OpenAPI surface for context, tasks, decisions, and local code tools.
-- Support self-host Compose and hosted login as equal paths.
+- ProjectBeacon is a hosted multi-tenant SaaS. Customer self-hosted deployments and self-host licensing are out of scope; Docker Compose is local-development infrastructure only.
 
 ## Non-goals
 
@@ -109,7 +109,7 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - All auth endpoints get rate limiting. No hardcoded credentials.
 - BCrypt only in Infrastructure. Web uses `PasswordHasher` from Infrastructure.
 - Data encryption is separate from JWT signing: `JWT:Secret` signs tokens only. `DATA_PROTECTION_KEY` (≥32 chars, required in non-safe environments, fail-closed startup without it) keys v2 AES-GCM ciphertexts (`v2:` prefix, HKDF-SHA256 derived key, AAD-bound). v1 rows read only via `DATA_PROTECTION_LEGACY_KEY` (absent legacy falls back to a temporary `JWT:Secret` bridge with a warning). `DATA_PROTECTION_WRITE_V2` (off by default) switches writes to v2. `DataKeyMigration` (Web post-migration hook; Production via the migrate Job) re-encrypts v1→v2 in place — a failed row keeps its original ciphertext and is reported, never masked. Do not log or print any of these keys.
-- `AUTH_LOCAL_INVITE_ONLY=true` requires a valid invite on `POST /v1/auth/register`. Forgot-password always returns 200 (no email enumeration). `/recover` is bootstrap-token admin break-glass, not user reset.
+- SaaS alpha registration is invite-only: `POST /v1/auth/register` requires a valid operator-issued organization or project invitation. Public registration is not a runtime configuration option. Forgot-password always returns 200 (no email enumeration). `/recover` is bootstrap-token admin break-glass, not user reset.
 
 ## Agent workflow
 
