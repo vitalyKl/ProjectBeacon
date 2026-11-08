@@ -30,9 +30,9 @@ Application contracts live in ProjectBeacon.Application/Admin:
 - AdminActor is the verified operator identity passed to privileged handlers. Its constructor is internal; callers obtain it only from IAdminGate.
 - IAdminGate is responsible for resolving a human actor against current database state and checking requested permissions and elevation.
 
-For the alpha, the existing User.IsAdmin flag maps to OperatorPermissionSets.CurrentSystemAdministrator. No Support, Billing, or Auditor role is persisted or assignable yet.
+For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.CurrentSystemAdministrator`. Stable role keys are reserved now: `SystemAdministrator`, `Support`, `Billing`, and `Auditor`. Their starter permission sets live in `OperatorRolePermissionSets`; Support has customer/account and operational support but no billing mutation, Billing has commercial/entitlement operations but no account administration, and Auditor is read-only. Only SystemAdministrator is assignable through the existing `IsAdmin` flag in the alpha; the other roles are not persisted or assignable yet.
 
-Future operator roles should be mapped to permission sets in one authorization component. Handlers must continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
+Future role assignment should be stored and changed in one authorization component. Handlers must continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
 
 Sensitive mutations require an elevated AdminActor. The future gate must validate the current user and session version in the database on each invocation; a Blazor page authorization attribute is only a UI guard.
 
@@ -114,7 +114,7 @@ The first customer-alpha acceptance criterion is operational, not architectural:
 Implemented in the foundation branch:
 
 - Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and IAdminGate port.
-- Entitlement source/status/limit/snapshot contracts and IEntitlementService port.
+- Entitlement source/status/limit/snapshot contracts, IEntitlementService port, and the atomic Alpha → Production conversion contract.
 - Provider-neutral billing request/event/response contracts, hosted payment-method setup/lifecycle, IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
