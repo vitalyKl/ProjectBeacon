@@ -622,6 +622,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<OrgInvite> OrgInvites => _inner.OrgInvites;
         public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
         public DbSet<DataProtectionKey> DataProtectionKeys => _inner.DataProtectionKeys;
+        public DbSet<AuditEvent> AuditEvents => _inner.AuditEvents;
         public DbSet<Project> Projects => _inner.Projects;
         public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
         public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
