@@ -166,12 +166,13 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     public async Task AdminWithoutMembership_BindsOldestProject()
     {
         var (org, user, _) = await SeedUserInProjectAsync();
+        user.SetAdmin(true);
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.UserId == user.Id));
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(null, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null, sessionVersion: user.SessionVersion), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(_db.Projects.IgnoreQueryFilters().OrderBy(p => p.CreatedAt).First().Id, circuit.Tenant.ProjectId);
@@ -180,13 +181,13 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     [Fact]
     public async Task AdminWithoutProjects_NeverHadProject_KeepsSession()
     {
-        var user = User.Create("admin", "admin@example.com", "hash");
+        var user = User.Create("admin", "admin@example.com", "hash", isAdmin: true);
         _db.Users.Add(user);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(null, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null, sessionVersion: user.SessionVersion), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Null(circuit.Tenant.ProjectId);
@@ -344,10 +345,11 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         return (org, user, project);
     }
 
-    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectId)
+    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectId, int sessionVersion = 0)
     {
         var identity = new ClaimsIdentity("TestAuth");
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
+        identity.AddClaim(new Claim("sv", sessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (isAdmin)
             identity.AddClaim(new Claim("isAdmin", "true"));
         if (projectId is { } p)
