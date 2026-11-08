@@ -1175,6 +1175,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("ChatModelBackendId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1200,6 +1203,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("SessionVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<bool>("TotpEnabled")
                         .HasColumnType("boolean");
@@ -1645,6 +1653,14 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Property<Guid?>("TaskPhaseId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("WakePlannerAfter")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
