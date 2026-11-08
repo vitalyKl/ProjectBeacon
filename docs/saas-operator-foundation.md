@@ -79,7 +79,7 @@ Application contracts live in ProjectBeacon.Application/Auth/RegistrationPolicy.
 - ApprovalRequired reserves a flow in which a request remains pending until an operator approves it.
 - OpenWithVerifiedEmail reserves future self-service registration and must require verified email before an account or organization is activated.
 
-Only InviteOnly is implemented in RegisterHandler today. The runtime registration guard is fail-closed and does not enable public sign-up through AUTH_LOCAL_INVITE_ONLY. The enum values for future modes are contracts only; do not expose them as configuration options until their complete handlers, email verification, rate limits, abuse controls, tenant-creation rules, audit events, and tests exist.
+Only InviteOnly is implemented in RegisterHandler today. Every deployed environment is fail-closed and ignores the legacy AUTH_LOCAL_INVITE_ONLY opt-out. A narrowly scoped opt-out is available only when ASPNETCORE_ENVIRONMENT is explicitly Testing; it exists to support isolated API integration tests and cannot be activated in Development, Staging, or Production. The enum values for future modes are contracts only; do not expose them as configuration options until their complete handlers, email verification, rate limits, abuse controls, tenant-creation rules, audit events, and tests exist.
 
 The alpha flow is operator-created organization → organization-owner invitation → invited owner registration. Creating a user without a valid invitation is not an alpha onboarding path.
 
