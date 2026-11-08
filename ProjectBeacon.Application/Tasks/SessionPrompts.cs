@@ -105,7 +105,7 @@ public static class SessionPrompts
         sb.AppendLine($"Assigned subtask ID: {subtask.Id:D}");
         sb.AppendLine("Use this exact ID when referring to your subtask. Beacon MCP lifecycle tools default to this assigned ID when subtaskId is omitted; an explicitly supplied different ID is rejected.");
         AppendProfileInstructions(sb, "Actor", profileInstructions);
-        var builtInProfile = BuiltInAgentProfiles.Get(subtask.ProfileKey);
+        var builtInProfile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
         if (builtInProfile is not null)
         {
             sb.AppendLine();
