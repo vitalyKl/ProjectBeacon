@@ -151,6 +151,101 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     }
 
     [Fact]
+    public async Task DeviceCommandCompletion_UsesCommandProjectForForcedRlsWorkspaceReport()
+    {
+        _postgres.RequirePostgres();
+
+        Guid deviceId;
+        Guid projectA;
+        Guid projectB;
+        Guid taskId;
+        Guid subtaskId;
+        Guid sessionId;
+        Guid commandId;
+
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var orgA = Org.Create("Device completion scope A");
+            var orgB = Org.Create("Device completion scope B");
+            seed.Orgs.AddRange(orgA, orgB);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var projectAEntity = Project.Create("Device project A", null, orgA.Id);
+            var projectBEntity = Project.Create("Device project B", null, orgB.Id);
+            seed.Projects.AddRange(projectAEntity, projectBEntity);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var user = User.Create("device-owner", $"device-owner-{Guid.NewGuid():N}@example.test", "hash");
+            var device = DaemonDevice.Create(
+                "multi-project workstation", user.Id, "fp-" + Guid.NewGuid().ToString("N"),
+                "hash-" + Guid.NewGuid().ToString("N"), "bcd_" + Guid.NewGuid().ToString("N"));
+            var task = TaskItem.Create("Fail actor and publish report", projectBEntity.Id);
+            var subtask = Subtask.Create("Inspect the target project failure.", task.Id, projectBEntity.Id,
+                [Domain.Common.McpToolNames.WorkspaceIndex, Domain.Common.McpToolNames.WorkspaceRead,
+                 Domain.Common.McpToolNames.WorkspaceWrite]);
+            subtask.Start();
+            var session = PipelineSession.Create(
+                task.Id, projectBEntity.Id, PipelineRole.Actor, "Actor prompt", subtask.Id);
+            session.Launch();
+            var command = Domain.Entities.Devices.WorkstationCommand.Create(
+                device.Id, WorkstationCommandKind.RunPipelineSession,
+                System.Text.Json.JsonSerializer.Serialize(new { sessionId = session.Id }),
+                projectBEntity.Id, user.Id);
+            command.Claim(TimeSpan.FromMinutes(15), "test-instance");
+
+            seed.Users.Add(user);
+            seed.DaemonDevices.Add(device);
+            seed.Tasks.Add(task);
+            seed.Subtasks.Add(subtask);
+            seed.PipelineSessions.Add(session);
+            seed.WorkstationCommands.Add(command);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            deviceId = device.Id;
+            projectA = projectAEntity.Id;
+            projectB = projectBEntity.Id;
+            taskId = task.Id;
+            subtaskId = subtask.Id;
+            sessionId = session.Id;
+            commandId = command.Id;
+        }
+
+        // The device owner's default membership resolves to project A at the API
+        // boundary. Completion must switch to the immutable project binding on the
+        // workstation command before mutating the project-B subtask or inserting
+        // the FORCE-RLS-protected workspace report.
+        using (TenantScope.EnterProjectScope(projectA))
+        {
+            var handler = new Application.Devices.CompleteCommandHandler(_postgres.CreateFactory());
+            var result = await handler.HandleAsync(new Application.Devices.CompleteCommandCommand(
+                new Application.Devices.CompleteCommandRequest(
+                    commandId, deviceId, Success: false, ResultJson: null,
+                    Error: "simulated actor failure", Generation: 1)),
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+        }
+
+        await using var verify = _postgres.CreateAdminContext();
+        var failedSubtask = await verify.Subtasks.IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(item => item.Id == subtaskId, TestContext.Current.CancellationToken);
+        Assert.Equal(SubtaskStatus.Failed, failedSubtask.Status);
+
+        var failedSession = await verify.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(item => item.Id == sessionId, TestContext.Current.CancellationToken);
+        Assert.Equal(SessionStatus.Failed, failedSession.Status);
+
+        var report = await verify.TaskWorkspaceSections.IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(section => section.TaskId == taskId
+                && section.ProjectId == projectB
+                && section.AuthorSubtaskId == subtaskId
+                && section.Kind == "Report", TestContext.Current.CancellationToken);
+        Assert.Equal("Server", report.AuthorType);
+        Assert.Equal("Actor", report.AuthorRole);
+        Assert.Contains("simulated actor failure", report.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FilterAppliesWithoutIgnoreQueryFilters()
     {
         _postgres.RequirePostgres();
