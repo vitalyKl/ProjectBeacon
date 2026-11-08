@@ -45,6 +45,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
     public DbSet<LocalModelBackend> LocalModelBackends => Set<LocalModelBackend>();
     public DbSet<AgentTemplate> AgentTemplates => Set<AgentTemplate>();
+    public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
     public DbSet<TaskKind> TaskKinds => Set<TaskKind>();
     public DbSet<TaskKindPhase> TaskKindPhases => Set<TaskKindPhase>();
     public DbSet<TaskPhase> TaskPhases => Set<TaskPhase>();
