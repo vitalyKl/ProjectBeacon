@@ -1,0 +1,107 @@
+namespace ProjectBeacon.Application.Entitlements;
+
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Common;
+
+/// <summary>The origin of an organization's effective access grant.</summary>
+public enum EntitlementSource
+{
+    AlphaProgram = 0,
+    Subscription = 1,
+    Complimentary = 2,
+    OperatorOverride = 3
+}
+
+/// <summary>Lifecycle of an access grant, independent of the organization's lifecycle.</summary>
+public enum EntitlementStatus
+{
+    Scheduled = 0,
+    Active = 1,
+    Suspended = 2,
+    Expired = 3,
+    Revoked = 4
+}
+
+/// <summary>
+/// A named, non-negative limit. Keys are stable product capabilities, not provider-specific
+/// price identifiers; the licensed units can be decided without changing the contract.
+/// </summary>
+public sealed record EntitlementLimit(string Key, long Value);
+
+/// <summary>
+/// The effective access snapshot for one organization. Alpha and paid subscriptions produce
+/// the same shape, so converting an organization does not require changing feature checks.
+/// </summary>
+public sealed record OrganizationEntitlement(
+    Guid Id,
+    Guid OrgId,
+    EntitlementSource Source,
+    EntitlementStatus Status,
+    DateTimeOffset StartsAtUtc,
+    DateTimeOffset? EndsAtUtc,
+    IReadOnlyDictionary<string, long> Limits,
+    IReadOnlySet<string> Features,
+    string? SourceReference = null,
+    Guid? GrantedByUserId = null,
+    string? Reason = null)
+{
+    public bool IsEffectiveAt(DateTimeOffset utcNow) =>
+        Status == EntitlementStatus.Active
+        && StartsAtUtc <= utcNow
+        && (EndsAtUtc is null || utcNow < EndsAtUtc.Value);
+}
+
+/// <summary>
+/// A feature or capacity check expressed in product terms. Limit keys and feature keys are
+/// owned by ProjectBeacon, never copied from a payment provider's API.
+/// </summary>
+public sealed record EntitlementRequirement(
+    string FeatureKey,
+    string? LimitKey = null,
+    long RequestedUnits = 1);
+
+public sealed record EntitlementDecision(
+    bool Allowed,
+    string? ReasonCode = null,
+    long? CurrentUsage = null,
+    long? Limit = null);
+
+/// <summary>
+/// Operator-issued access. Alpha grants use AlphaProgram; future commercial flows create
+/// Subscription grants from the same contract. End times are exclusive.
+/// </summary>
+public sealed record GrantOrganizationEntitlementRequest(
+    Guid OrgId,
+    EntitlementSource Source,
+    DateTimeOffset StartsAtUtc,
+    DateTimeOffset? EndsAtUtc,
+    IReadOnlyDictionary<string, long> Limits,
+    IReadOnlySet<string> Features,
+    string Reason);
+
+/// <summary>
+/// Central read/write boundary for organization access. Implementations must make grant,
+/// revoke and source-transition writes auditable and transactional.
+/// </summary>
+public interface IEntitlementService
+{
+    Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(
+        Guid orgId,
+        CancellationToken ct = default);
+
+    Task<Result<EntitlementDecision>> EvaluateAsync(
+        Guid orgId,
+        EntitlementRequirement requirement,
+        CancellationToken ct = default);
+
+    Task<Result<OrganizationEntitlement>> GrantAsync(
+        GrantOrganizationEntitlementRequest request,
+        AdminActor actor,
+        CancellationToken ct = default);
+
+    Task<Result> RevokeAsync(
+        Guid entitlementId,
+        string reason,
+        AdminActor actor,
+        CancellationToken ct = default);
+}
