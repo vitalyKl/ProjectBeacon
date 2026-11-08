@@ -180,6 +180,57 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task FailSubtask_PendingWithoutActorSession_AdvancesToNextQueuedSubtask()
+    {
+        var (projectId, task) = await SeedTaskAsync("Fail a pending subtask");
+        var spawner = new FakeSpawner();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+
+        var failedSubtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "This work is no longer needed.")),
+                TestContext.Current.CancellationToken);
+        var nextSubtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Continue with the next item.")),
+                TestContext.Current.CancellationToken);
+        Assert.True(failedSubtask.Success, failedSubtask.Error);
+        Assert.True(nextSubtask.Success, nextSubtask.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var plannerRow = await _db.PipelineSessions
+                .SingleAsync(row => row.Id == planner.Value!.Id, TestContext.Current.CancellationToken);
+            plannerRow.Close();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var queue = new PipelineActorQueueDispatcher(factory, spawner);
+        var failed = await new FailSubtaskHandler(factory, queue)
+            .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(
+                task.Id, failedSubtask.Value!.Id, "The pending work was superseded.")),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(failed.Success, failed.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var first = await _db.Subtasks.AsNoTracking()
+                .SingleAsync(row => row.Id == failedSubtask.Value.Id, TestContext.Current.CancellationToken);
+            var next = await _db.Subtasks.AsNoTracking()
+                .SingleAsync(row => row.Id == nextSubtask.Value!.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.Failed, first.Status);
+            Assert.Equal(SubtaskStatus.InProgress, next.Status);
+
+            var actor = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(row => row.TaskId == task.Id && row.Role == PipelineRole.Actor,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(nextSubtask.Value.Id, actor.SubtaskId);
+            Assert.Equal(SessionStatus.Ready, actor.Status);
+        }
+    }
+
+    [Fact]
     public async Task FailSubtask_WhileWaitingForUser_ClosesActorAndCancelsWorkstationCommand()
     {
         var (projectId, task) = await SeedTaskAsync("Cancel waiting Actor");
