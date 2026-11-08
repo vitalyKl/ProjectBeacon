@@ -94,6 +94,39 @@ public sealed class AuditPersistenceTests : IDisposable
     }
 
     [Fact]
+    public async Task Writer_RequiresBothOrganizationAndProjectToMatch()
+    {
+        var orgId = Guid.NewGuid();
+        var otherOrgId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, orgId, unscoped: false);
+        await using var db = new BeaconDbContext(_options, tenant);
+        var writer = new EfAuditWriter();
+
+        var wrongOrgEvent = CreateEvent(
+            "project.wrong-org", Guid.NewGuid(), orgId: otherOrgId, projectId: projectId);
+
+        Assert.Throws<UnauthorizedAccessException>(() => writer.Stage(db, wrongOrgEvent));
+    }
+
+    [Fact]
+    public async Task OrganizationScopeCannotWriteProjectScopedEvents()
+    {
+        var orgId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var tenant = new TenantContext();
+        tenant.Assign(null, orgId, unscoped: false);
+        await using var db = new BeaconDbContext(_options, tenant);
+        var writer = new EfAuditWriter();
+
+        var projectEvent = CreateEvent(
+            "project.wrong-scope", Guid.NewGuid(), orgId: orgId, projectId: projectId);
+
+        Assert.Throws<UnauthorizedAccessException>(() => writer.Stage(db, projectEvent));
+    }
+
+    [Fact]
     public async Task GlobalEvents_RequireExplicitUnscopedContext()
     {
         var global = CreateEvent("operator.login", Guid.NewGuid());
