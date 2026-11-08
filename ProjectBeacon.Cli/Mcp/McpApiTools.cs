@@ -118,6 +118,7 @@ internal static partial class McpApiTools
         BeaconApiClient api,
         string? profile = null,
         bool wakePlannerAfter = false,
+        IReadOnlyList<string>? optionalMcpTools = null,
         CancellationToken ct = default)
     {
         var body = new JsonObject
@@ -127,7 +128,8 @@ internal static partial class McpApiTools
             ["allowedMcpTools"] = StringArray(allowedMcpTools),
             ["allowedPaths"] = StringArray(allowedPaths),
             ["profile"] = profile,
-            ["wakePlannerAfter"] = wakePlannerAfter
+            ["wakePlannerAfter"] = wakePlannerAfter,
+            ["optionalMcpTools"] = StringArray(optionalMcpTools ?? [])
         };
         return SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/subtasks", body, ct);
     }
