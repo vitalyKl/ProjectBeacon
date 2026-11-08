@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Auth;
 /// <summary>
 /// Signed-in user. Token is the session token when one was issued.
 /// </summary>
-public record LoginResponse(Guid UserId, string Login, string Email, bool IsAdmin, string? Token = null);
+public record LoginResponse(Guid UserId, string Login, string Email, bool IsAdmin, string? Token = null, int SessionVersion = 0);
 /// <summary>
 /// The created user. No session token.
 /// </summary>
