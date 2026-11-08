@@ -557,6 +557,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
         public DbSet<TaskWorkspaceSection> TaskWorkspaceSections => _inner.TaskWorkspaceSections;
+        public DbSet<TaskAttachmentContent> TaskAttachmentContents => _inner.TaskAttachmentContents;
         public DbSet<Constraint> Constraints => _inner.Constraints;
         public DbSet<Decision> Decisions => _inner.Decisions;
         public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
@@ -632,6 +633,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
         public DbSet<TaskWorkspaceSection> TaskWorkspaceSections => _inner.TaskWorkspaceSections;
+        public DbSet<TaskAttachmentContent> TaskAttachmentContents => _inner.TaskAttachmentContents;
         public DbSet<Constraint> Constraints => _inner.Constraints;
         public DbSet<Decision> Decisions => _inner.Decisions;
         public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
