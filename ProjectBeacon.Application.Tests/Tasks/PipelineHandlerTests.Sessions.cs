@@ -139,7 +139,8 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains("Do the thing", actorPrompt);
         Assert.Contains("beacon_search_code", actorPrompt);
         Assert.Contains("src/", actorPrompt);
-        Assert.DoesNotContain("Secret task title", actorPrompt);
+        Assert.Contains("Secret task title", actorPrompt);
+        Assert.Contains("Secret task description", actorPrompt);
         Assert.DoesNotContain("PipelineProject", actorPrompt);
 
         var reported = await new ReportSubtaskResultHandler(factory)
