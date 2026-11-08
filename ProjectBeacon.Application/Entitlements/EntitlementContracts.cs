@@ -22,6 +22,14 @@ public enum EntitlementStatus
     Revoked = 4
 }
 
+/// <summary>Sources an operator may grant directly. Subscription access is created only by the production conversion/billing flow.</summary>
+public enum OperatorEntitlementSource
+{
+    AlphaProgram = 0,
+    Complimentary = 1,
+    OperatorOverride = 2
+}
+
 /// <summary>
 /// A named, non-negative limit. Keys are stable product capabilities, not provider-specific
 /// price identifiers; the licensed units can be decided without changing the contract.
@@ -72,7 +80,7 @@ public sealed record EntitlementDecision(
 /// </summary>
 public sealed record GrantOrganizationEntitlementRequest(
     Guid OrgId,
-    EntitlementSource Source,
+    OperatorEntitlementSource Source,
     DateTimeOffset StartsAtUtc,
     DateTimeOffset? EndsAtUtc,
     IReadOnlyDictionary<string, long> Limits,
