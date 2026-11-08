@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Domain.Common;
+using Domain.Entities.Audit;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
@@ -56,13 +57,16 @@ public sealed class TenantFilterTests : IDisposable
             var clr = entityType.ClrType;
             var isScoped = typeof(IProjectScoped).IsAssignableFrom(clr)
                 || typeof(IOrgScoped).IsAssignableFrom(clr);
+            var isSpecialTenantFiltered = clr == typeof(AuditEvent);
             var hasFilter = entityType.GetQueryFilter() is not null;
-            Assert.True(isScoped == hasFilter, $"{clr.FullName}: expected scoped={isScoped} but hasFilter={hasFilter}");
-            if (isScoped)
+            var expectsFilter = isScoped || isSpecialTenantFiltered;
+            Assert.True(expectsFilter == hasFilter,
+                $"{clr.FullName}: expected query filter={expectsFilter} but hasFilter={hasFilter}");
+            if (isScoped || isSpecialTenantFiltered)
                 scoped.Add(clr.Name);
         }
 
-        // Frozen baseline: 26 IProjectScoped + 3 IOrgScoped.
-        Assert.Equal(29, scoped.Count);
+        // Frozen baseline: 26 IProjectScoped + 3 IOrgScoped + the special audit scope.
+        Assert.Equal(30, scoped.Count);
     }
 }
