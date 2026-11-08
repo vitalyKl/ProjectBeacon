@@ -99,7 +99,7 @@
         (session.Status is SessionStatus.Failed or SessionStatus.Closed)
         && (session.Role switch
         {
-            PipelineRole.Planner => Pipeline?.Stage == TaskPipelineStage.Planning,
+            PipelineRole.Planner => Pipeline?.Stage is TaskPipelineStage.Planning or TaskPipelineStage.Executing,
             PipelineRole.Review => Pipeline?.Stage == TaskPipelineStage.Reviewing,
             _ => false
         });
