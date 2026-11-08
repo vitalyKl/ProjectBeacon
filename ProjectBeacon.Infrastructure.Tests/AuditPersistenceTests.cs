@@ -57,6 +57,7 @@ public sealed class AuditPersistenceTests : IDisposable
         {
             CreateEvent("org.visible", Guid.NewGuid(), orgId: orgId),
             CreateEvent("project.visible", Guid.NewGuid(), orgId: orgId, projectId: projectId),
+            CreateEvent("mismatched-org.hidden", Guid.NewGuid(), orgId: otherOrgId, projectId: projectId),
             CreateEvent("other-org.hidden", Guid.NewGuid(), orgId: otherOrgId),
             CreateEvent("platform.hidden", Guid.NewGuid())
         };
@@ -74,6 +75,7 @@ public sealed class AuditPersistenceTests : IDisposable
             var actions = await orgDb.AuditEvents.Select(x => x.Action).ToListAsync(TestContext.Current.CancellationToken);
             Assert.Contains("org.visible", actions);
             Assert.Contains("project.visible", actions);
+            Assert.DoesNotContain("mismatched-org.hidden", actions);
             Assert.DoesNotContain("other-org.hidden", actions);
             Assert.DoesNotContain("platform.hidden", actions);
         }
@@ -83,8 +85,9 @@ public sealed class AuditPersistenceTests : IDisposable
         await using (var projectDb = new BeaconDbContext(_options, projectTenant))
         {
             var actions = await projectDb.AuditEvents.Select(x => x.Action).ToListAsync(TestContext.Current.CancellationToken);
-            Assert.Contains("org.visible", actions);
+            Assert.DoesNotContain("org.visible", actions);
             Assert.Contains("project.visible", actions);
+            Assert.DoesNotContain("mismatched-org.hidden", actions);
             Assert.DoesNotContain("other-org.hidden", actions);
             Assert.DoesNotContain("platform.hidden", actions);
         }
