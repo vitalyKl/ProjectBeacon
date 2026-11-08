@@ -51,6 +51,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         tenant.Assign(boundProjectId, boundOrgId, unscoped: false);
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddMemoryCache();
         services.AddScoped<ITenantContext>(_ => tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new BeaconDbFactory(_options, tenant));
         services.AddScoped<CircuitRevalidatingAuthenticationStateProvider>();
@@ -100,6 +101,34 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     {
         var (_, user, project) = await SeedUserInProjectAsync();
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.UserId == user.Id));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public async Task DisabledUser_ReturnsFalse()
+    {
+        var (_, user, project) = await SeedUserInProjectAsync();
+        user.Disable();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public async Task SessionVersionMismatch_ReturnsFalse()
+    {
+        var (_, user, project) = await SeedUserInProjectAsync();
+        user.BumpSessionVersion();
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(project.Id, null);
@@ -210,6 +239,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddMemoryCache();
         services.AddScoped<ITenantContext>(_ => circuit.Tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new ThrowingDbFactory());
         var root = services.BuildServiceProvider();
