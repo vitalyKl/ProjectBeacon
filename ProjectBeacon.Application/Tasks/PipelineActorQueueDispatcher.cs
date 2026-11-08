@@ -196,7 +196,8 @@ public sealed class PipelineActorQueueDispatcher
                 var wakeLimit = MaxPlannerWakeups();
                 if (wakeCount >= wakeLimit)
                 {
-                    await RecordPlannerAttentionAsync(db, task, 
+                    await RecordPlannerAttentionAsync(
+                        db, task,
                         $"Planner wake-up limit ({wakeLimit}) reached. The pipeline remains in Executing and requires a human decision.", ct);
                     await db.SaveChangesAsync(ct);
                     await transaction.CommitAsync(ct);
