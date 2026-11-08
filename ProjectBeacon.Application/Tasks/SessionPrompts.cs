@@ -137,7 +137,10 @@ public static class SessionPrompts
         else
             sb.AppendLine("In Act mode, use run_command with an argv array to build, test, and run the project when useful. Never use a shell or shell operators. Work in the isolated session worktree; workstation policy handles approval for unfamiliar commands.");
         sb.AppendLine("If a command asks the user for approval, wait for the form to be answered. The subtask enters WaitingForUser and resumes automatically; do not fail or finish it while that form is pending.");
-        sb.AppendLine($"If this subtask produces a user-facing file or image, attach it to the task with {McpToolNames.TaskAttachFile} using a workspace-relative path. Do not attach temporary files, logs, or secrets.");
+        if (tools.Contains(McpToolNames.TaskAttachFile, StringComparer.Ordinal))
+            sb.AppendLine($"If this subtask produces a user-facing file or image, attach it to the task with {McpToolNames.TaskAttachFile} using a workspace-relative path. Do not attach temporary files, logs, or secrets.");
+        else
+            sb.AppendLine($"Do not call {McpToolNames.TaskAttachFile}; artifact upload was not granted for this subtask.");
         if (builtInProfile is { ReportsDiff: false })
             sb.AppendLine($"On success, call {McpToolNames.SubtaskReportResult} with this subtaskId, an empty diffRef (this profile creates no diff), and a concise summary of verified findings.");
         else
