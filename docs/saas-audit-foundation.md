@@ -63,7 +63,7 @@ Each event carries the verified actor kind/id and both organization and project 
 verify that the event and mutation persist together and that secret values do not enter the
 event metadata.
 
-The next slice extends coverage to organization invitation creation, expiration, acceptance and
+This slice extends coverage to organization invitation creation, expiration, acceptance and
 revocation. Invite-token acceptance performs only the opaque-token lookup in a narrow unscoped
 context, then reopens the row in a context bound to the invitation's actual organization/project.
 The membership changes and audit event are staged together in that scoped unit of work. A
