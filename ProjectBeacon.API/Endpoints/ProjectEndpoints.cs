@@ -87,18 +87,26 @@ public static class ProjectEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler)
+    private static async Task<IResult> ListProjects(
+        Guid orgId, ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(orgId)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(orgId), ctx.GetActor()), ct);
 
-        return Results.Ok(result.Value?.Select(MapProjectResponse));
+        return result.Success
+            ? Results.Ok(result.Value?.Select(MapProjectResponse))
+            : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListAllProjects(ListProjectsHandler handler)
+    private static async Task<IResult> ListAllProjects(
+        ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(null)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(null), ctx.GetActor()), ct);
 
-        return Results.Ok(result.Value?.Select(MapProjectResponse));
+        return result.Success
+            ? Results.Ok(result.Value?.Select(MapProjectResponse))
+            : result.FromResult();
     }
 
     private static ProjectDto MapProjectResponse(ProjectDto dto) =>

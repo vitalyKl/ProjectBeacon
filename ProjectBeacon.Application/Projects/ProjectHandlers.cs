@@ -170,15 +170,42 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate _adminGate;
 
-    public ListProjectsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListProjectsHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var query = db.Projects.AsQueryable();
         if (command.Request.OrgId is { } orgId)
-            query = query.Where(p => p.OrgId == orgId);
+        {
+            var actor = command.Actor;
+            if (actor is null)
+                return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+
+            if (actor.IsAdmin)
+            {
+                var access = await _adminGate.RequireAsync(
+                    actor, OperatorPermission.OrganizationsRead, ct: ct);
+                if (!access.Success)
+                    return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            }
+            else if (actor.UserId is not { } userId
+                || !await db.OrgMembers.AnyAsync(
+                    member => member.OrgId == orgId && member.UserId == userId, ct))
+            {
+                // Org ids are caller-controlled route values. Return the same result for a
+                // missing org and an org that belongs to another customer.
+                return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            }
+
+            query = query.Where(project => project.OrgId == orgId);
+        }
 
         var projects = await query
             .OrderByDescending(p => p.CreatedAt)

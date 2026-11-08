@@ -319,8 +319,26 @@ public sealed class OrgProjectTaskHttpTests
         var ownOrgs = await memberClient.GetFromJsonAsync<JsonElement>("/v1/orgs", TestContext.Current.CancellationToken);
         Assert.Single(ownOrgs.EnumerateArray());
 
+        var ownProject = await PostJson(adminClient, "/v1/projects", new { name = "Own Org Project", orgId });
+        var ownProjectId = ownProject.GetProperty("id").GetGuid();
+        var ownProjects = await memberClient.GetFromJsonAsync<JsonElement>(
+            $"/v1/orgs/{orgId}/projects", TestContext.Current.CancellationToken);
+        Assert.Single(ownProjects.EnumerateArray());
+        Assert.Equal(ownProjectId, ownProjects[0].GetProperty("id").GetGuid());
+
         var foreign = await PostJson(adminClient, "/v1/orgs", new { name = "Foreign Customer" });
         var foreignId = foreign.GetProperty("id").GetGuid();
+        var foreignProject = await PostJson(adminClient, "/v1/projects",
+            new { name = "Foreign Org Project", orgId = foreignId });
+        var getForeignProjects = await memberClient.GetAsync(
+            $"/v1/orgs/{foreignId}/projects", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, getForeignProjects.StatusCode);
+
+        var operatorProjects = await adminClient.GetFromJsonAsync<JsonElement>(
+            $"/v1/orgs/{foreignId}/projects", TestContext.Current.CancellationToken);
+        Assert.Single(operatorProjects.EnumerateArray());
+        Assert.Equal(foreignProject.GetProperty("id").GetGuid(), operatorProjects[0].GetProperty("id").GetGuid());
+
         var getForeign = await memberClient.GetAsync($"/v1/orgs/{foreignId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, getForeign.StatusCode);
 
