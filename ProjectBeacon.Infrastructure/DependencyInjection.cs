@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null))
                 .AddInterceptors(new TenantRlsConnectionInterceptor()));
