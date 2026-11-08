@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Admin;
 using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
@@ -170,7 +171,11 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAdminGate _adminGate;
+    private readonly IAdminGate? _adminGate;
+
+    // Retain the single-argument constructor for scoped/internal callers. Explicit
+    // organization-wide operator reads fail closed unless DI supplied the admin gate.
+    public ListProjectsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public ListProjectsHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
     {
@@ -190,6 +195,8 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
 
             if (actor.IsAdmin)
             {
+                if (_adminGate is null)
+                    return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
                 var access = await _adminGate.RequireAsync(
                     actor, OperatorPermission.OrganizationsRead, ct: ct);
                 if (!access.Success)
