@@ -49,6 +49,26 @@ public sealed class PipelineActorQueueDispatcher
             return;
         }
 
+        if (completed.Role == PipelineRole.Review && task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
+        {
+            var pendingAfterReview = await db.Subtasks.AnyAsync(
+                s => s.TaskId == taskId && s.Status == SubtaskStatus.Pending, ct);
+            if (pendingAfterReview)
+            {
+                await DispatchActorAsync(taskId, ct);
+                return;
+            }
+
+            // A reopen can exceed MaxReopenCycles and leave no Pending subtask. Move back
+            // into Executing so the Planner can inspect the final reports and decide whether
+            // to finish or create a new piece of work.
+            await using var reopenDb = _dbFactory.CreateDbContext();
+            var entered = await PipelineSupport.EnterExecutingClaimAsync(reopenDb, taskId, ct);
+            if (entered == 1)
+                await WakePlannerAsync(taskId, "queue-empty", ct);
+            return;
+        }
+
         if (completed.Role != PipelineRole.Actor)
             return;
 
