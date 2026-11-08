@@ -142,7 +142,8 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-            body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths, body.Profile, body.WakePlannerAfter)), ct);
+            body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths,
+            body.Profile, body.WakePlannerAfter, body.OptionalMcpTools)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -294,7 +295,8 @@ public static class PipelineEndpoints
         IReadOnlyList<string>? AllowedMcpTools = null,
         IReadOnlyList<string>? AllowedPaths = null,
         string? Profile = null,
-        bool WakePlannerAfter = false);
+        bool WakePlannerAfter = false,
+        IReadOnlyList<string>? OptionalMcpTools = null);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>.</summary>
     public record ActorSessionBody(Guid TaskId, Guid SubtaskId);
