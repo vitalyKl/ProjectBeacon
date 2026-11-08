@@ -6,6 +6,7 @@ using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Security;
 
 namespace ProjectBeacon.Web.Extensions;
 
