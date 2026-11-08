@@ -2,6 +2,8 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
+using Application.Tasks;
 using Application.Devices;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
@@ -379,6 +381,86 @@ public sealed class CommandRecoveryTests : IDisposable
         var row = await SnapshotAsync(command.Id);
         Assert.Equal(WorkstationCommandStatus.Running, row.Status);
         Assert.Equal("inst-1", row.ClaimInstanceId);
+    }
+
+    [Fact]
+    public async Task StaleActorRecovery_AdvancesTheTaskQueueAfterPersistingFailure()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        Guid projectId;
+        TaskItem task;
+        Subtask failedSubtask;
+        Subtask pendingSubtask;
+        PipelineSession actorSession;
+        WorkstationCommand command;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var org = Org.Create("pipeline-recovery-" + Guid.NewGuid().ToString("N"));
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var project = Project.Create("Actor queue recovery", null, org.Id);
+            _db.Projects.Add(project);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            projectId = project.Id;
+            task = TaskItem.Create("Recover and advance Actor queue", project.Id);
+            task.StartPipeline();
+            task.EnterExecuting();
+            failedSubtask = Subtask.Create("The stale Actor item.", task.Id, project.Id);
+            failedSubtask.Start();
+            pendingSubtask = Subtask.Create("The next queued Actor item.", task.Id, project.Id);
+            actorSession = PipelineSession.Create(task.Id, project.Id, PipelineRole.Actor,
+                "Resume the assigned Actor work.", failedSubtask.Id);
+            actorSession.Launch();
+            var payload = JsonSerializer.Serialize(new { sessionId = actorSession.Id });
+            command = WorkstationCommand.Create(device.Id, WorkstationCommandKind.RunPipelineSession,
+                payload, project.Id, device.UserId);
+            command.Claim(Lease, "inst-1");
+
+            _db.Tasks.Add(task);
+            _db.Subtasks.AddRange(failedSubtask, pendingSubtask);
+            _db.PipelineSessions.Add(actorSession);
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var queueFactory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var queue = new PipelineActorQueueDispatcher(queueFactory, new RecoverySessionSpawner(Guid.NewGuid()));
+        var now = t0.AddSeconds(46);
+        var recovered = await CommandRecovery.RecoverAsync(
+            _db, now, TestContext.Current.CancellationToken, queue);
+
+        Assert.Equal(1, recovered);
+        Assert.Equal(WorkstationCommandStatus.Failed, (await SnapshotAsync(command.Id)).Status);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var failed = await _db.Subtasks.AsNoTracking()
+                .SingleAsync(row => row.Id == failedSubtask.Id, TestContext.Current.CancellationToken);
+            var next = await _db.Subtasks.AsNoTracking()
+                .SingleAsync(row => row.Id == pendingSubtask.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.Failed, failed.Status);
+            Assert.Equal(SubtaskStatus.InProgress, next.Status);
+            Assert.True(await _db.PipelineSessions.AsNoTracking().AnyAsync(row =>
+                row.TaskId == task.Id && row.Role == PipelineRole.Actor
+                && row.SubtaskId == pendingSubtask.Id && row.Status == SessionStatus.Ready,
+                TestContext.Current.CancellationToken));
+        }
+    }
+
+    private static TenantContext Scope(Guid projectId)
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, unscoped: false);
+        return tenant;
+    }
+
+    private sealed class RecoverySessionSpawner(Guid? modelBackendId) : ISessionSpawner
+    {
+        public Task<SpawnedSession> SpawnAsync(
+            Application.Persistence.IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct) =>
+            Task.FromResult(new SpawnedSession(modelBackendId, "recovery-test-model", null));
     }
 
     // Long-stale tier: the lease has been expired longer than CommandRecovery.LongStaleGraceMinutes
