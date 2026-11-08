@@ -178,6 +178,12 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     var profile = BuiltInAgentProfiles.Get(profileKey);
                     var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
                     var commandsEnabled = profile?.CommandsEnabled ?? true;
+                    var reasoningEffort = profile?.Effort switch
+                    {
+                        "high" => "high",
+                        "low" or "low-medium" => "low",
+                        _ => "medium"
+                    };
                     var payload = JsonSerializer.Serialize(new
                     {
                         projectId = session.ProjectId,
@@ -189,7 +195,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         prompt = session.PromptContext,
                         model,
                         contextLimit = backend.ContextSize,
-                        reasoningEffort = "medium",
+                        reasoningEffort,
                         agentMode,
                         commandsEnabled
                     });
