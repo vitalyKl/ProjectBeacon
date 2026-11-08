@@ -379,6 +379,9 @@ public sealed class ApiTokenAuthMiddleware
             if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is { } attachmentTool)
                 return IsMcpToolGranted(allowedMcpTools, attachmentTool);
 
+            if (ActorReadToolForRequest(segments, projectId, scopedTaskId, method) is { } actorReadTool)
+                return IsMcpToolGranted(allowedMcpTools, actorReadTool);
+
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
 
@@ -472,8 +475,7 @@ public sealed class ApiTokenAuthMiddleware
     private static string? TaskAttachmentToolForRequest(
         string[] segments, Guid projectId, Guid taskId, string method)
     {
-        if (method != HttpMethods.Get
-            || segments.Length < 6
+        if (segments.Length < 6
             || segments[0] != "v1"
             || segments[1] != "projects"
             || !GuidSegmentEquals(segments, 2, projectId)
@@ -482,12 +484,34 @@ public sealed class ApiTokenAuthMiddleware
             || segments[5] != "attachments")
             return null;
 
+        if (method == HttpMethods.Post && segments.Length == 6)
+            return McpToolNames.TaskAttachFile;
+        if (method != HttpMethods.Get)
+            return null;
         if (segments.Length == 6)
             return McpToolNames.TaskListAttachments;
 
         return segments.Length == 7 && Guid.TryParse(segments[6], out _)
             ? McpToolNames.TaskReadAttachment
             : null;
+    }
+
+    private static string? ActorReadToolForRequest(
+        string[] segments, Guid projectId, Guid taskId, string method)
+    {
+        if (method != HttpMethods.Get || segments.Length < 4
+            || segments[0] != "v1" || segments[1] != "projects"
+            || !GuidSegmentEquals(segments, 2, projectId))
+            return null;
+
+        if (segments.Length == 5 && segments[3] == "tasks"
+            && GuidSegmentEquals(segments, 4, taskId))
+            return McpToolNames.GetTask;
+        if (segments.Length == 4 && segments[3] == "constraints")
+            return McpToolNames.ListConstraints;
+        if (segments.Length == 4 && segments[3] == "decisions")
+            return McpToolNames.ListDecisions;
+        return null;
     }
 
     private static string? TaskWorkspaceToolForRequest(string[] segments, Guid taskId, string method)
