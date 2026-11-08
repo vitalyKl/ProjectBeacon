@@ -204,6 +204,12 @@ public sealed partial class PipelineHandlerTests
                 .SingleAsync(s => s.Id == second.Value!.Id, TestContext.Current.CancellationToken);
             Assert.Equal(SubtaskStatus.Failed, firstSubtask.Status);
             Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", firstSubtask.Summary);
+            var failureReport = await _db.TaskWorkspaceSections.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id
+                    && section.AuthorSubtaskId == first.Value!.Id
+                    && section.Kind == "Report", TestContext.Current.CancellationToken);
+            Assert.Contains("workstation chat timeout", failureReport.Content, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Server", failureReport.AuthorType);
             Assert.Equal(SubtaskStatus.InProgress, secondSubtask.Status);
 
             var actors = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()

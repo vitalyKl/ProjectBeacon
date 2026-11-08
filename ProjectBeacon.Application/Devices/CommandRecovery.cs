@@ -102,7 +102,7 @@ public static class CommandRecovery
         var candidates = await StaleRows(db, now).OrderBy(c => c.CreatedAt).ToListAsync(ct);
 
         var recovered = 0;
-        var pipelineTaskIds = new HashSet<Guid>();
+        var pipelineSessions = new HashSet<(Guid TaskId, Guid SessionId)>();
         foreach (var row in candidates)
         {
             var action = Decide(row.Kind, row.Attempts, stale: true);
@@ -149,7 +149,7 @@ public static class CommandRecovery
                         .Select(s => (Guid?)s.TaskId)
                         .FirstOrDefaultAsync(ct);
                     if (taskId is { } recoveredTaskId)
-                        pipelineTaskIds.Add(recoveredTaskId);
+                        pipelineSessions.Add((recoveredTaskId, sessionId));
                 }
             }
         }
@@ -159,8 +159,8 @@ public static class CommandRecovery
         // for the same task collapse into one idempotent queue advance.
         if (pipelineQueue is not null)
         {
-            foreach (var taskId in pipelineTaskIds)
-                await pipelineQueue.DispatchNextAsync(taskId, ct);
+            foreach (var (taskId, sessionId) in pipelineSessions)
+                await pipelineQueue.DispatchNextAsync(taskId, sessionId, ct);
         }
 
         return recovered;

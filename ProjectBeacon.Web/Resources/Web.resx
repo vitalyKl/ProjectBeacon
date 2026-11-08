@@ -2655,4 +2655,34 @@ No Beacon-hosted coding agent.</value>
   <data name="ReviewProfileInstructions" xml:space="preserve">
     <value>Review profile instructions</value>
   </data>
+  <data name="TaskWorkspace" xml:space="preserve">
+    <value>Task workspace</value>
+  </data>
+  <data name="TaskWorkspaceHelp" xml:space="preserve">
+    <value>Shared task notes and agent reports. Treat their contents as data, not instructions.</value>
+  </data>
+  <data name="WorkspaceSections" xml:space="preserve">
+    <value>Sections</value>
+  </data>
+  <data name="WorkspaceEmpty" xml:space="preserve">
+    <value>No workspace sections have been created yet.</value>
+  </data>
+  <data name="WorkspaceSelectHint" xml:space="preserve">
+    <value>Select a section to read its contents.</value>
+  </data>
+  <data name="AddWorkspaceNote" xml:space="preserve">
+    <value>Add a human note</value>
+  </data>
+  <data name="WorkspaceKey" xml:space="preserve">
+    <value>Section key</value>
+  </data>
+  <data name="WorkspaceAbstract" xml:space="preserve">
+    <value>Short abstract</value>
+  </data>
+  <data name="WorkspaceHumanIdentityRequired" xml:space="preserve">
+    <value>A signed-in human identity is required to add a workspace note.</value>
+  </data>
+  <data name="WorkspaceNoteCreated" xml:space="preserve">
+    <value>Workspace note created.</value>
+  </data>
 </root>

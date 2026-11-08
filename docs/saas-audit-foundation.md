@@ -53,8 +53,8 @@ same unit of work as their state changes:
 
 - API token creation and revocation (`project.api_token.created`,
   `project.api_token.revoked`). Raw token values and token hashes are never written.
-- Project invitation creation, acceptance and revocation (`project.invite.*`). Invite tokens,
-  email addresses and mail bodies are never written.
+- Project invitation creation, expiration, acceptance and revocation (`project.invite.*`). Invite
+  tokens, email addresses and mail bodies are never written.
 - Project membership addition and removal (`project.member.added`,
   `project.member.removed`). The event identifies the membership row and uses only fixed state
   codes in details.
@@ -64,8 +64,10 @@ verify that the event and mutation persist together and that secret values do no
 event metadata.
 
 This slice extends coverage to organization invitation creation, expiration, acceptance and
-revocation. Invite-token acceptance performs only the opaque-token lookup in a narrow unscoped
-context, then reopens the row in a context bound to the invitation's actual organization/project.
+revocation. Invite-token acceptance resolves the opaque token and, for project invitations, its target
+project scope in a narrow unscoped context, then reopens the invite row in a context bound to the
+invitation's actual organization/project. The signed-in user is resolved in the caller's normal
+context.
 The membership changes and audit event are staged together in that scoped unit of work. A
 caller's previous tenant cannot redirect the event or cause the audit writer to reject a valid
 invite acceptance.

@@ -119,8 +119,9 @@ public static partial class McpStdioServer
 
     private static readonly string[] ActorWorkspaceTools =
     [
+        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.ListDecisions,
         McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite,
-        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
+        McpToolNames.TaskAttachFile, McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
     ];
 
     private static readonly string[] EvalAllowedTools =
@@ -135,7 +136,7 @@ public static partial class McpStdioServer
 
     private static readonly string[] ActorForbiddenTools =
     [
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict, McpToolNames.TaskPipelineStatus,
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict,
         McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
         McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
         McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,

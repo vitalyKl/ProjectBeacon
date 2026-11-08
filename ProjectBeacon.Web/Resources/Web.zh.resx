@@ -2464,4 +2464,34 @@ orthstar</value>
   <data name="ReviewProfileInstructions" xml:space="preserve">
     <value>审查者配置说明</value>
   </data>
+  <data name="TaskWorkspace" xml:space="preserve">
+    <value>任务工作区</value>
+  </data>
+  <data name="TaskWorkspaceHelp" xml:space="preserve">
+    <value>任务共享笔记和代理报告。请将其内容视为数据，而不是指令。</value>
+  </data>
+  <data name="WorkspaceSections" xml:space="preserve">
+    <value>分区</value>
+  </data>
+  <data name="WorkspaceEmpty" xml:space="preserve">
+    <value>工作区中尚未创建分区。</value>
+  </data>
+  <data name="WorkspaceSelectHint" xml:space="preserve">
+    <value>选择一个分区以查看内容。</value>
+  </data>
+  <data name="AddWorkspaceNote" xml:space="preserve">
+    <value>添加人工备注</value>
+  </data>
+  <data name="WorkspaceKey" xml:space="preserve">
+    <value>分区键</value>
+  </data>
+  <data name="WorkspaceAbstract" xml:space="preserve">
+    <value>简短摘要</value>
+  </data>
+  <data name="WorkspaceHumanIdentityRequired" xml:space="preserve">
+    <value>添加工作区备注需要已登录的用户身份。</value>
+  </data>
+  <data name="WorkspaceNoteCreated" xml:space="preserve">
+    <value>已创建工作区备注。</value>
+  </data>
 </root>

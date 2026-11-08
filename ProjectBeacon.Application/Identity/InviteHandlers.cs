@@ -227,17 +227,22 @@ public class AcceptInviteHandler
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // The invite token is the authorization proof for this transition. Resolve it in a
-        // narrow unscoped lookup, then perform the mutation and audit write in a fresh
-        // context bound to the invite's actual tenant. A caller's current project/org
-        // must not decide where an otherwise valid invitation can be accepted.
+        // Users are global identities, so resolve the signed-in user in the caller's
+        // normal context. Only the invite/target-scope lookup below needs to cross tenants.
+        await using var userDb = _dbFactory.CreateDbContext();
+        var user = await userDb.Users
+            .AsNoTracking()
+            .Where(u => u.Id == actorUserId)
+            .Select(u => new { u.Id, u.Email })
+            .FirstOrDefaultAsync(ct);
+        if (user is null)
+            return Result.Failure("User not found.");
+
+        // The opaque invite token is the authorization proof for locating the target tenant.
+        // Re-read the invite in a fresh tenant-bound context before changing any state.
         var lookupTenant = new TenantContext();
         lookupTenant.Assign(null, null, unscoped: true);
         await using var lookupDb = _dbFactory.CreateDbContext(lookupTenant);
-
-        var user = await lookupDb.Users.FirstOrDefaultAsync(u => u.Id == actorUserId, ct);
-        if (user is null)
-            return Result.Failure("User not found.");
 
         var hash = OpaqueToken.Hash(request.Token.Trim());
         var orgInviteSnapshot = await lookupDb.OrgInvites.IgnoreQueryFilters()

@@ -136,13 +136,14 @@ public static class PipelineEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
-    private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, CreateSubtaskHandler handler, CancellationToken ct)
+    private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, HttpContext context, CreateSubtaskHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-            body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths)), ct);
+            body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths,
+            body.Profile, body.WakePlannerAfter, body.OptionalMcpTools), context.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -201,12 +202,13 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> StartReview(Guid taskId, [FromBody] PipelineStartBody body, StartReviewHandler handler, CancellationToken ct)
+    private static async Task<IResult> StartReview(Guid taskId, [FromBody] PipelineStartBody body, HttpContext context, StartReviewHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new StartReviewCommand(new StartReviewRequest(body.TaskId)), ct);
+        var result = await handler.HandleAsync(new StartReviewCommand(new StartReviewRequest(body.TaskId,
+                AutoLaunch: string.Equals(context.User.FindFirst("pipeline_role")?.Value, PipelineRole.Planner.ToString(), StringComparison.Ordinal))), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -291,7 +293,10 @@ public static class PipelineEndpoints
         Guid TaskId,
         string Instructions,
         IReadOnlyList<string>? AllowedMcpTools = null,
-        IReadOnlyList<string>? AllowedPaths = null);
+        IReadOnlyList<string>? AllowedPaths = null,
+        string? Profile = null,
+        bool WakePlannerAfter = false,
+        IReadOnlyList<string>? OptionalMcpTools = null);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>.</summary>
     public record ActorSessionBody(Guid TaskId, Guid SubtaskId);

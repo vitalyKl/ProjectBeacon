@@ -266,82 +266,105 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(CompleteCommandCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var row = await db.WorkstationCommands.AsNoTracking()
+        // Device endpoints do not carry a project route. Resolve the command's immutable
+        // project binding first, then run completion under that exact tenant rather than
+        // whichever project happens to be the device owner's default membership.
+        await using var bootstrapDb = _dbFactory.CreateDbContext();
+        var bootstrapRow = await bootstrapDb.WorkstationCommands.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
-        if (row is null || row.DeviceId != command.Request.DeviceId)
+        if (bootstrapRow is null || bootstrapRow.DeviceId != command.Request.DeviceId)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        // A late completion from an older attempt must not finish the attempt the row is on now.
-        if (!CommandCompletions.AcceptsGeneration(row, command.Request.Generation))
-            return Result.Failure<WorkstationCommandDto>("Command generation mismatch.");
 
-        var expectedStatus = row.Status;
-        var error = command.Request.Success
-            ? null
-            : string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error;
-        try
-        {
-            if (command.Request.Success)
-                row.Succeed(command.Request.ResultJson);
-            else
-                row.Fail(error!);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<WorkstationCommandDto>(ex.Message);
-        }
+        var commandTenant = new TenantContext();
+        commandTenant.Assign(bootstrapRow.ProjectId, null, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(commandTenant);
+        var strategy = db.Database.CreateExecutionStrategy();
+        Guid? dispatchTaskId = null;
+        Guid? completedSessionId = null;
 
-        var finished = await db.WorkstationCommands
-            .Where(c => c.Id == row.Id && c.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(c => c.Status, row.Status)
-                .SetProperty(c => c.ResultJson, row.ResultJson)
-                .SetProperty(c => c.Error, row.Error)
-                .SetProperty(c => c.StartedAt, row.StartedAt)
-                .SetProperty(c => c.CompletedAt, row.CompletedAt)
-                .SetProperty(c => c.LeaseExpiresAt, row.LeaseExpiresAt), ct);
-        if (finished == 0)
-            return Result.Failure<WorkstationCommandDto>("Command state changed while completing; retry.");
-
-        // Revoke command-bound API credentials on every terminal transition. The API
-        // middleware also checks command state/lease on every request as a fail-closed backstop.
-        var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
-            .Where(t => t.ClientKind == ApiTokenClientKind.Harness && t.CommandId == row.Id && t.RevokedAt == null)
-            .ToListAsync(ct);
-        foreach (var token in harnessTokens)
-            token.Revoke();
-
-        // Completion effects run only for the winning transition.
-        try
+        var result = await strategy.ExecuteAsync(async () =>
         {
-            await CommandCompletions.ApplyAsync(db, row, command.Request.Success, command.Request.ResultJson, error, ct);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<WorkstationCommandDto>(ex.Message);
-        }
-        await db.SaveChangesAsync(ct);
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        // Completion is the queue-advance signal. The dispatcher is idempotent and
-        // launches at most one Actor for the task; Review remains a separate user action.
-        if (row.Kind == WorkstationCommandKind.RunPipelineSession && _pipelineQueue is not null)
-        {
-            var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
-            if (sessionId is { } completedSessionId)
+            var row = await db.WorkstationCommands.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
+            if (row is null || row.DeviceId != command.Request.DeviceId)
+                return Result.Failure<WorkstationCommandDto>("Command not found.");
+            if (!CommandCompletions.AcceptsGeneration(row, command.Request.Generation))
+                return Result.Failure<WorkstationCommandDto>("Command generation mismatch.");
+
+            var expectedStatus = row.Status;
+            var error = command.Request.Success
+                ? null
+                : string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error;
+            try
             {
-                var taskId = await db.PipelineSessions.IgnoreQueryFilters()
-                    .Where(s => s.Id == completedSessionId && s.ProjectId == row.ProjectId)
-                    .Select(s => (Guid?)s.TaskId)
-                    .FirstOrDefaultAsync(ct);
-                if (taskId is { } id)
-                    await _pipelineQueue.DispatchNextAsync(id, ct);
+                if (command.Request.Success)
+                    row.Succeed(command.Request.ResultJson);
+                else
+                    row.Fail(error!);
             }
-        }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<WorkstationCommandDto>(ex.Message);
+            }
 
-        var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, row, ct);
-        return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
+            var finished = await db.WorkstationCommands
+                .Where(c => c.Id == row.Id && c.Status == expectedStatus)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(c => c.Status, row.Status)
+                    .SetProperty(c => c.ResultJson, row.ResultJson)
+                    .SetProperty(c => c.Error, row.Error)
+                    .SetProperty(c => c.StartedAt, row.StartedAt)
+                    .SetProperty(c => c.CompletedAt, row.CompletedAt)
+                    .SetProperty(c => c.LeaseExpiresAt, row.LeaseExpiresAt), ct);
+            if (finished == 0)
+                return Result.Failure<WorkstationCommandDto>("Command state changed while completing; retry.");
+
+            var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
+                .Where(t => t.ClientKind == ApiTokenClientKind.Harness && t.CommandId == row.Id && t.RevokedAt == null)
+                .ToListAsync(ct);
+            foreach (var token in harnessTokens)
+                token.Revoke();
+
+            if (row.Kind == WorkstationCommandKind.RunPipelineSession)
+            {
+                completedSessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
+                if (completedSessionId is { } sessionId)
+                {
+                    dispatchTaskId = await db.PipelineSessions.IgnoreQueryFilters()
+                        .Where(s => s.Id == sessionId && s.ProjectId == row.ProjectId)
+                        .Select(s => (Guid?)s.TaskId)
+                        .FirstOrDefaultAsync(ct);
+                }
+            }
+
+            try
+            {
+                await CommandCompletions.ApplyAsync(
+                    db, row, command.Request.Success, command.Request.ResultJson, error, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<WorkstationCommandDto>(ex.Message);
+            }
+
+            // The command terminal state, revoked harness token, pipeline transition and
+            // mandatory workspace failure report are one durable completion.
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, row, ct);
+            return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
+        });
+
+        if (result.Success && dispatchTaskId is { } taskId && completedSessionId is { } sessionId
+            && _pipelineQueue is not null)
+            await _pipelineQueue.DispatchNextAsync(taskId, sessionId, ct);
+
+        return result;
     }
-
 }
 /// <summary>
 /// Loads one command the user owns.

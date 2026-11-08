@@ -15,6 +15,9 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
+@inject WorkspaceIndexHandler WorkspaceIndex
+@inject WorkspaceReadHandler WorkspaceRead
+@inject WorkspaceWriteHandler WorkspaceWrite
 @inject StartPipelineHandler StartPipeline
 @inject StartActorSessionHandler StartActorSession
 @inject LaunchSessionHandler LaunchSession
@@ -227,6 +230,66 @@ else
     <MudTabPanel Text="@L["Context"]">
         <TaskContextPanel Task="_task" />
     </MudTabPanel>
+    <MudTabPanel Text="@L["TaskWorkspace"]">
+        <MudStack Spacing="3" Class="pa-2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.body2">@L["TaskWorkspaceHelp"]</MudText>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="ReloadWorkspace" Disabled="_busy">@L["Refresh"]</MudButton>
+            </MudStack>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.subtitle2">@L["WorkspaceSections"] (@_workspaceSections.Count)</MudText>
+                    @if (_workspaceSections.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">@L["WorkspaceEmpty"]</MudText>
+                    }
+                    @foreach (var section in _workspaceSections)
+                    {
+                        <MudButton FullWidth="true" Variant="@(_selectedWorkspace?.Key == section.Key ? Variant.Filled : Variant.Text)"
+                                   Color="@(_selectedWorkspace?.Key == section.Key ? Color.Primary : Color.Default)"
+                                   Class="justify-start mt-1" OnClick="@(() => OnReadWorkspaceSection(section.Key))">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Start" Class="text-left">
+                                <MudText Typo="Typo.body2">@section.Title</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@section.Key · @section.Kind · r@section.Revision</MudText>
+                                <MudText Typo="Typo.caption">@section.Abstract</MudText>
+                            </MudStack>
+                        </MudButton>
+                    }
+                </MudItem>
+                <MudItem xs="12" md="8">
+                    @if (_selectedWorkspace is not null)
+                    {
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.subtitle1">@_selectedWorkspace.Title</MudText>
+                            <MudText Typo="Typo.caption">@_selectedWorkspace.Key · @_selectedWorkspace.Kind · @_selectedWorkspace.AuthorRole · <LocalTime Value="_selectedWorkspace.UpdatedAt" Format="g" /></MudText>
+                            <MudText Typo="Typo.body2">@_selectedWorkspace.Abstract</MudText>
+                            <MudTextField T="string" Value="_selectedWorkspace.Content" ReadOnly="true" Lines="12"
+                                          Variant="Variant.Outlined" FullWidth="true" />
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">@L["WorkspaceSelectHint"]</MudText>
+                    }
+                </MudItem>
+            </MudGrid>
+            <MudExpansionPanels>
+                <MudExpansionPanel Text="@L["AddWorkspaceNote"]">
+                    <MudStack Spacing="2">
+                        <MudTextField T="string" @bind-Value="_workspaceKey" Label="@L["WorkspaceKey"]" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_workspaceTitle" Label="@L["Title"]" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_workspaceAbstract" Label="@L["WorkspaceAbstract"]" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_workspaceContent" Label="@L["Content"]" Variant="Variant.Outlined" Lines="5" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnCreateWorkspaceNote"
+                                   Disabled="_busy || string.IsNullOrWhiteSpace(_workspaceKey) || string.IsNullOrWhiteSpace(_workspaceTitle) || string.IsNullOrWhiteSpace(_workspaceAbstract) || string.IsNullOrWhiteSpace(_workspaceContent)">
+                            @L["Create"]
+                        </MudButton>
+                    </MudStack>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudStack>
+    </MudTabPanel>
     </MudTabs>
 }
 
@@ -241,6 +304,13 @@ else
     private PipelineStateDto? _pipeline;
     private bool _busy;
     private bool _isAdmin;
+    private ActorContext _actorContext = ActorContext.Anonymous;
+    private List<TaskWorkspaceSectionSummaryDto> _workspaceSections = [];
+    private TaskWorkspaceSectionDto? _selectedWorkspace;
+    private string _workspaceKey = "notes/human-input";
+    private string _workspaceTitle = string.Empty;
+    private string _workspaceAbstract = string.Empty;
+    private string _workspaceContent = string.Empty;
     private bool CanStartPlanner => _pipeline?.CanStart == true;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
     private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
@@ -325,6 +395,7 @@ else
     {
         var auth = await Auth.GetAuthenticationStateAsync();
         _userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _actorContext = ActorContextFactory.FromPrincipal(auth.User);
         _isAdmin = bool.TryParse(auth.User.FindFirst("isAdmin")?.Value, out var adminFlag) && adminFlag;
         await Reload();
         _loading = false;
@@ -332,6 +403,7 @@ else
         {
             await ReloadPipeline();
             await ReloadSteps();
+            await ReloadWorkspace();
         }
         _pipelinePoll = new CancellationTokenSource();
         _ = PollPipelineAsync(_pipelinePoll.Token);
@@ -436,6 +508,83 @@ else
     {
         var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)));
         _pipeline = result.Success ? result.Value : null;
+    }
+
+    private async Task ReloadWorkspace()
+    {
+        if (_task is null)
+            return;
+        var result = await WorkspaceIndex.HandleAsync(new WorkspaceIndexQuery(
+            new WorkspaceIndexRequest(TaskId, Limit: 100)));
+        _workspaceSections = result.Success ? result.Value!.ToList() : [];
+        if (_selectedWorkspace is not null
+            && _workspaceSections.Any(section => section.Key == _selectedWorkspace.Key))
+            await OnReadWorkspaceSection(_selectedWorkspace.Key);
+        else if (_selectedWorkspace is not null)
+            _selectedWorkspace = null;
+
+        if (_workspaceKey == "notes/human-input"
+            && _workspaceSections.Any(section => section.Key == _workspaceKey))
+            SetNextHumanWorkspaceKey();
+    }
+
+    private void SetNextHumanWorkspaceKey()
+    {
+        var noteNumber = 0;
+        var key = "notes/human-input";
+        while (_workspaceSections.Any(section => section.Key == key))
+        {
+            noteNumber++;
+            key = $"notes/human-input-{noteNumber}";
+        }
+        _workspaceKey = key;
+    }
+
+    private async Task OnReadWorkspaceSection(string key)
+    {
+        var result = await WorkspaceRead.HandleAsync(new WorkspaceReadQuery(
+            new WorkspaceReadRequest(TaskId, key, Offset: 0, Limit: 8000)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _selectedWorkspace = result.Value;
+    }
+
+    private async Task OnCreateWorkspaceNote()
+    {
+        if (_busy || _task is null)
+            return;
+        if (_actorContext.UserId is null || !_actorContext.IsHuman)
+        {
+            Snackbar.Add(L["WorkspaceHumanIdentityRequired"].Value, Severity.Error);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await WorkspaceWrite.HandleAsync(new WorkspaceWriteCommand(
+                new WorkspaceWriteRequest(TaskId, _workspaceKey, _workspaceTitle,
+                    _workspaceAbstract, _workspaceContent, "create"), _actorContext));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _workspaceTitle = string.Empty;
+            _workspaceAbstract = string.Empty;
+            _workspaceContent = string.Empty;
+            await ReloadWorkspace();
+            SetNextHumanWorkspaceKey();
+            await OnReadWorkspaceSection(result.Value!.Key);
+            Snackbar.Add(L["WorkspaceNoteCreated"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task ReloadSteps()

@@ -7,7 +7,7 @@ ProjectBeacon.Application/Agents/ProjectMcpServerHandlers.cs|2|Loads project-sco
 ProjectBeacon.Application/Auth/LoginHandlers.cs|9|Accepts invite and login flows using opaque invite credentials, then validates invite, organization, and project membership relationships explicitly.
 ProjectBeacon.Application/Authorization/AuthorizationService.cs|9|Implements central authorization by resolving the actor's project and organization memberships across tenant boundaries.
 ProjectBeacon.Application/Chat/ChatHandlers.cs|8|Resolves chat sessions, parts, and project membership by explicit session and actor identifiers for authenticated chat operations.
-ProjectBeacon.Application/Devices/CommandCompletions.cs|9|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers.
+ProjectBeacon.Application/Devices/CommandCompletions.cs|11|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers; Actor failure completion also resolves its pinned subtask/session and writes the server-owned task workspace report within the command's project scope.
 ProjectBeacon.Application/Devices/CommandRecovery.cs|1|Recovers stale pipeline work by its persisted command/session identifiers across the request tenant boundary.
 ProjectBeacon.Application/Devices/DesiredState.cs|2|Updates desired device and project-runtime revisions for the explicitly selected device or project.
 ProjectBeacon.Application/Devices/DeviceLifecycleHandlers.cs|2|Creates and maintains device identity and runtime links after validating the owning user and project references.
@@ -18,7 +18,7 @@ ProjectBeacon.Application/Devices/ProjectRuntimeResolver.cs|2|Resolves runtime a
 ProjectBeacon.Application/Devices/WorkstationCommandHandlers.cs|7|Claims and completes commands for an authenticated device and validates the associated task, session, subtask, project, and command generation.
 ProjectBeacon.Application/Evals/EvalPairHandler.cs|3|Loads and authorizes eval task, project membership, and pinned run state for the explicitly selected eval.
 ProjectBeacon.Application/Identity/CurrentProjectLookup.cs|4|Finds the current actor's project and organization memberships before a tenant context has been selected.
-ProjectBeacon.Application/Identity/InviteHandlers.cs|16|Resolves invite tokens and validates organization, project, inviter, invitee, and membership relationships during invite management.
+ProjectBeacon.Application/Identity/InviteHandlers.cs|19|Resolves and manages organization/project invitations; acceptance uses a narrow token-and-target lookup, then re-reads and mutates only in the invitation's bound tenant.
 ProjectBeacon.Application/Projects/ApiTokenHandlers.cs|2|Lists and revokes API tokens by explicit token and owner identifiers, including tokens outside the default project filter.
 ProjectBeacon.Application/Projects/ProjectHandlers.cs|11|Authorizes project administration and performs project-scoped dependent cleanup after loading the explicitly requested project.
 ProjectBeacon.Application/Projects/ProjectQueries.cs|13|Lists projects and associated task, milestone, session, and section summaries visible to the current actor across their memberships.

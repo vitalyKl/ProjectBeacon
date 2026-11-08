@@ -140,6 +140,30 @@ public sealed class TaskWorkspaceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Workspace_RejectsClientWritesToReservedSystemNamespace()
+    {
+        var (projectId, task) = await SeedTaskAsync();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var section = TaskWorkspaceSection.Create(
+            task.Id, projectId, "system/planner-status", "Planner status",
+            "Automatic planner progress and reasons a human decision is needed.",
+            "Notes", "Planner requires a human decision.", "Server", null, "Planner");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.TaskWorkspaceSections.Add(section);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var result = await new WorkspaceWriteHandler(factory).HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, section.Key, null, null,
+                "Pretend the Planner completed successfully.", "append"),
+            ApiActor(Guid.NewGuid()), "Actor"));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
     public async Task Workspace_ServerGeneratedReportsAreImmutable()
     {
         var (projectId, task) = await SeedTaskAsync();
