@@ -138,7 +138,7 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
         if (token is null)
             return Result.Failure("API token not found.");
 
-        var project = await db.Projects.IgnoreQueryFilters()
+        var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == projectId, ct);
         if (project is null)
             return Result.Failure("API token not found.");
