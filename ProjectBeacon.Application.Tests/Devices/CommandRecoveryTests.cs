@@ -385,6 +385,64 @@ public sealed class CommandRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task StalePlannerRecovery_RecordsHumanAttentionWhileTaskIsPlanning()
+    {
+        var (device, _) = await SeedOnlineDeviceAsync("inst-1");
+        Guid projectId;
+        TaskItem task;
+        PipelineSession plannerSession;
+        WorkstationCommand command;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var org = Org.Create("planner-recovery-" + Guid.NewGuid().ToString("N"));
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var project = Project.Create("Planner recovery", null, org.Id);
+            _db.Projects.Add(project);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            projectId = project.Id;
+            task = TaskItem.Create("Recover a failed initial Planner", project.Id);
+            task.StartPipeline();
+            plannerSession = PipelineSession.Create(task.Id, project.Id, PipelineRole.Planner,
+                "Plan the task and create subtasks.");
+            plannerSession.Launch();
+            var payload = JsonSerializer.Serialize(new { sessionId = plannerSession.Id });
+            command = WorkstationCommand.Create(device.Id, WorkstationCommandKind.RunPipelineSession,
+                payload, project.Id, device.UserId);
+            command.Claim(Lease, "inst-1");
+
+            _db.Tasks.Add(task);
+            _db.PipelineSessions.Add(plannerSession);
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var queueFactory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var queue = new PipelineActorQueueDispatcher(queueFactory, new RecoverySessionSpawner(null));
+        var now = command.LeaseExpiresAt!.Value.AddSeconds(16);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-46));
+        var recovered = await CommandRecovery.RecoverAsync(
+            _db, now, TestContext.Current.CancellationToken, queue);
+
+        Assert.Equal(1, recovered);
+        Assert.Equal(WorkstationCommandStatus.Failed, (await SnapshotAsync(command.Id)).Status);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var session = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(row => row.Id == plannerSession.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Failed, session.Status);
+
+            var attention = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(row => row.TaskId == task.Id && row.Key == "system/planner-status",
+                    TestContext.Current.CancellationToken);
+            Assert.Contains("Human input is required", attention.Content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task StaleActorRecovery_AdvancesTheTaskQueueAfterPersistingFailure()
     {
         var (device, _) = await SeedOnlineDeviceAsync("inst-1");
