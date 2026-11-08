@@ -19,6 +19,7 @@ public class CreateOrgInviteHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditWriter? _auditWriter;
@@ -29,11 +30,13 @@ public class CreateOrgInviteHandler
         IAuthorizationService auth,
         IConfiguration? configuration = null,
         TimeProvider? timeProvider = null,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
+        _adminGate = adminGate;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _auditWriter = auditWriter;
@@ -44,18 +47,26 @@ public class CreateOrgInviteHandler
         var email = OrgInvite.NormalizeEmail(request.Email);
         if (email.Length == 0)
             return Result.Failure<InviteCreatedDto>("Email is required.");
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: request.OrgId, ct: ct);
-        if (!check.Success)
+        if (!request.Actor.IsHuman || request.Actor.UserId is not { } creatorId)
             return Result.Forbidden<InviteCreatedDto>();
 
-        var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        await using var db = _dbFactory.CreateDbContext(InviteTenantScopes.Organization(request.OrgId));
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.OrganizationsManage, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Org, AuthAction.Administer,
+                orgId: request.OrgId, ct: ct)).Success;
+        if (!authorized)
+            return Result.Forbidden<InviteCreatedDto>();
+
+        var org = await db.Orgs.FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
         if (org is null)
             return Result.Failure<InviteCreatedDto>("Org not found.");
 
-        var pending = await db.OrgInvites.IgnoreQueryFilters()
+        var pending = await db.OrgInvites
             .Where(i => i.OrgId == request.OrgId && i.Email == email && i.Status == InviteStatus.Pending)
             .ToListAsync(ct);
         foreach (var existing in pending)
@@ -77,7 +88,7 @@ public class CreateOrgInviteHandler
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
+        var invite = OrgInvite.Create(request.OrgId, email, request.Role, creatorId, OpaqueToken.Hash(raw), now);
         db.OrgInvites.Add(invite);
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
             request.Actor,
@@ -102,6 +113,7 @@ public class CreateProjectInviteHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditWriter? _auditWriter;
@@ -112,11 +124,13 @@ public class CreateProjectInviteHandler
         IAuthorizationService auth,
         IConfiguration? configuration = null,
         TimeProvider? timeProvider = null,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
+        _adminGate = adminGate;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _auditWriter = auditWriter;
@@ -127,18 +141,31 @@ public class CreateProjectInviteHandler
         var email = ProjectInvite.NormalizeEmail(request.Email);
         if (email.Length == 0)
             return Result.Failure<InviteCreatedDto>("Email is required.");
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.ProjectId, ct: ct);
-        if (!check.Success)
+        if (!request.Actor.IsHuman || request.Actor.UserId is not { } creatorId)
             return Result.Forbidden<InviteCreatedDto>();
 
-        var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
+        var projectTarget = await InviteTenantScopes.FindProjectAsync(_dbFactory, request.ProjectId, ct);
+        if (projectTarget is null)
+            return Result.Failure<InviteCreatedDto>("Project not found.");
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        await using var db = _dbFactory.CreateDbContext(
+            InviteTenantScopes.Project(projectTarget.ProjectId, projectTarget.OrgId));
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.ProjectsManage, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Project, AuthAction.Administer,
+                projectId: projectTarget.ProjectId, ct: ct)).Success;
+        if (!authorized)
+            return Result.Forbidden<InviteCreatedDto>();
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
         if (project is null)
             return Result.Failure<InviteCreatedDto>("Project not found.");
 
-        var pending = await db.ProjectInvites.IgnoreQueryFilters()
+        var pending = await db.ProjectInvites
             .Where(i => i.ProjectId == request.ProjectId && i.Email == email && i.Status == InviteStatus.Pending)
             .ToListAsync(ct);
         foreach (var existing in pending)
@@ -160,7 +187,7 @@ public class CreateProjectInviteHandler
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
+        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, creatorId, OpaqueToken.Hash(raw), now);
         db.ProjectInvites.Add(invite);
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
             request.Actor,
@@ -328,21 +355,34 @@ public class ListOrgInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
 
-    public ListOrgInvitesHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public ListOrgInvitesHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _adminGate = adminGate;
     }
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: request.TargetId, ct: ct);
-        if (!check.Success)
+        if (!request.Actor.IsHuman)
+            return Result.Forbidden<IList<InviteListDto>>();
+        await using var db = _dbFactory.CreateDbContext(InviteTenantScopes.Organization(request.TargetId));
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.OrganizationsRead, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Org, AuthAction.Administer,
+                orgId: request.TargetId, ct: ct)).Success;
+        if (!authorized)
             return Result.Forbidden<IList<InviteListDto>>();
 
-        var items = await db.OrgInvites.IgnoreQueryFilters()
+        var items = await db.OrgInvites
             .Where(i => i.OrgId == request.TargetId)
             .OrderByDescending(i => i.CreatedAt)
             .Select(i => new InviteListDto(i.Id, i.Email, i.Role, i.Status.ToString(), i.ExpiredAt, i.CreatedAt))
@@ -357,21 +397,39 @@ public class ListProjectInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
 
-    public ListProjectInvitesHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public ListProjectInvitesHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _adminGate = adminGate;
     }
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.TargetId, ct: ct);
-        if (!check.Success)
+        if (!request.Actor.IsHuman)
+            return Result.Forbidden<IList<InviteListDto>>();
+        var target = await InviteTenantScopes.FindProjectAsync(_dbFactory, request.TargetId, ct);
+        if (target is null)
+            return Result.Failure<IList<InviteListDto>>("Project not found.");
+
+        await using var db = _dbFactory.CreateDbContext(
+            InviteTenantScopes.Project(target.ProjectId, target.OrgId));
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.ProjectsManage, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Project, AuthAction.Administer,
+                projectId: target.ProjectId, ct: ct)).Success;
+        if (!authorized)
             return Result.Forbidden<IList<InviteListDto>>();
 
-        var items = await db.ProjectInvites.IgnoreQueryFilters()
+        var items = await db.ProjectInvites
             .Where(i => i.ProjectId == request.TargetId)
             .OrderByDescending(i => i.CreatedAt)
             .Select(i => new InviteListDto(i.Id, i.Email, i.Role, i.Status.ToString(), i.ExpiredAt, i.CreatedAt))
@@ -386,27 +444,45 @@ public class RevokeOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
     private readonly IAuditWriter? _auditWriter;
 
     public RevokeOrgInviteHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService auth,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _adminGate = adminGate;
         _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
+        if (!request.Actor.IsHuman)
+            return Result.Forbidden();
+        var snapshot = await InviteTenantScopes.FindOrgInviteAsync(_dbFactory, request.InviteId, ct);
+        if (snapshot is null
+            || (request.ExpectedTargetId is { } expectedOrgId && expectedOrgId != snapshot.OrgId))
+            return Result.Failure("Invite not found.");
+
+        await using var db = _dbFactory.CreateDbContext(InviteTenantScopes.Organization(snapshot.OrgId));
+        var invite = await db.OrgInvites.FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: invite.OrgId, ct: ct);
-        if (!check.Success)
-            return Result.Forbidden();
+
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.OrganizationsManage, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Org, AuthAction.Administer,
+                orgId: snapshot.OrgId, ct: ct)).Success;
+        if (!authorized)
+            return Result.Failure("Invite not found.");
+
         invite.Revoke();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
             request.Actor,
@@ -427,29 +503,47 @@ public class RevokeProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAdminGate? _adminGate;
     private readonly IAuditWriter? _auditWriter;
 
     public RevokeProjectInviteHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService auth,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _adminGate = adminGate;
         _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
+        if (!request.Actor.IsHuman)
+            return Result.Forbidden();
+        var snapshot = await InviteTenantScopes.FindProjectInviteAsync(_dbFactory, request.InviteId, ct);
+        if (snapshot is null
+            || (request.ExpectedTargetId is { } expectedProjectId && expectedProjectId != snapshot.ProjectId))
+            return Result.Failure("Invite not found.");
+
+        await using var db = _dbFactory.CreateDbContext(
+            InviteTenantScopes.Project(snapshot.ProjectId, snapshot.OrgId));
+        var invite = await db.ProjectInvites.FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: invite.ProjectId, ct: ct);
-        if (!check.Success)
-            return Result.Forbidden();
-        var project = await db.Projects
-            .FirstOrDefaultAsync(p => p.Id == invite.ProjectId, ct);
+
+        var authorized = request.Actor.IsAdmin
+            ? _adminGate is not null
+                && (await _adminGate.RequireAsync(
+                    request.Actor, OperatorPermission.ProjectsManage, ct: ct)).Success
+            : (await _auth.CanAsync(
+                db, request.Actor, ResourceType.Project, AuthAction.Administer,
+                projectId: snapshot.ProjectId, ct: ct)).Success;
+        if (!authorized)
+            return Result.Failure("Invite not found.");
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == snapshot.ProjectId, ct);
         if (project is null)
             return Result.Failure("Project not found.");
 
@@ -466,6 +560,65 @@ public class RevokeProjectInviteHandler
         return Result.Ok();
     }
 }
+internal static class InviteTenantScopes
+{
+    public static TenantContext Unscoped()
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: true);
+        return tenant;
+    }
+
+    public static TenantContext Organization(Guid orgId)
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(null, orgId, unscoped: false);
+        return tenant;
+    }
+
+    public static TenantContext Project(Guid projectId, Guid orgId)
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, orgId, unscoped: false);
+        return tenant;
+    }
+
+    public static async Task<InviteProjectTarget?> FindProjectAsync(
+        IBeaconDbFactory dbFactory, Guid projectId, CancellationToken ct)
+    {
+        await using var db = dbFactory.CreateDbContext(Unscoped());
+        return await db.Projects
+            .Where(project => project.Id == projectId)
+            .Select(project => new InviteProjectTarget(project.Id, project.OrgId, project.Name))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public static async Task<InviteOrgInviteTarget?> FindOrgInviteAsync(
+        IBeaconDbFactory dbFactory, Guid inviteId, CancellationToken ct)
+    {
+        await using var db = dbFactory.CreateDbContext(Unscoped());
+        return await db.OrgInvites
+            .Where(invite => invite.Id == inviteId)
+            .Select(invite => new InviteOrgInviteTarget(invite.Id, invite.OrgId))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public static async Task<InviteProjectInviteTarget?> FindProjectInviteAsync(
+        IBeaconDbFactory dbFactory, Guid inviteId, CancellationToken ct)
+    {
+        await using var db = dbFactory.CreateDbContext(Unscoped());
+        return await (
+            from invite in db.ProjectInvites
+            join project in db.Projects on invite.ProjectId equals project.Id
+            where invite.Id == inviteId
+            select new InviteProjectInviteTarget(invite.Id, project.Id, project.OrgId))
+            .FirstOrDefaultAsync(ct);
+    }
+}
+
+internal sealed record InviteProjectTarget(Guid ProjectId, Guid OrgId, string Name);
+internal sealed record InviteOrgInviteTarget(Guid InviteId, Guid OrgId);
+internal sealed record InviteProjectInviteTarget(Guid InviteId, Guid ProjectId, Guid OrgId);
 
 internal static class InviteLookup
 {

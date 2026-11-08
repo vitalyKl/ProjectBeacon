@@ -221,7 +221,7 @@ public static class ProjectEndpoints
         Guid projectId, Guid inviteId, RevokeProjectInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
+        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor, projectId));
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);

@@ -96,7 +96,7 @@ public static class OrgEndpoints
     private static async Task<IResult> RevokeInvite(Guid orgId, Guid inviteId, RevokeOrgInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
+        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor, orgId));
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
