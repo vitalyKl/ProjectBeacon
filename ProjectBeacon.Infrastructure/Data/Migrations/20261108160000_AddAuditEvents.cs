@@ -62,13 +62,31 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     FOR ALL
                     USING (
                         current_setting('app.tenant_unscoped', true) = 'true'
-                        OR ("OrgId" IS NOT NULL AND "OrgId"::text = current_setting('app.tenant_org_id', true))
-                        OR ("ProjectId" IS NOT NULL AND "ProjectId"::text = current_setting('app.tenant_project_id', true))
+                        OR (
+                            "OrgId" IS NOT NULL
+                            AND "OrgId"::text = NULLIF(current_setting('app.tenant_org_id', true), '')
+                            AND (
+                                NULLIF(current_setting('app.tenant_project_id', true), '') IS NULL
+                                OR "ProjectId"::text = NULLIF(current_setting('app.tenant_project_id', true), '')
+                            )
+                        )
                     )
                     WITH CHECK (
                         current_setting('app.tenant_unscoped', true) = 'true'
-                        OR ("OrgId" IS NOT NULL AND "OrgId"::text = current_setting('app.tenant_org_id', true))
-                        OR ("ProjectId" IS NOT NULL AND "ProjectId"::text = current_setting('app.tenant_project_id', true))
+                        OR (
+                            "OrgId" IS NOT NULL
+                            AND "OrgId"::text = NULLIF(current_setting('app.tenant_org_id', true), '')
+                            AND (
+                                (
+                                    NULLIF(current_setting('app.tenant_project_id', true), '') IS NULL
+                                    AND "ProjectId" IS NULL
+                                )
+                                OR (
+                                    NULLIF(current_setting('app.tenant_project_id', true), '') IS NOT NULL
+                                    AND "ProjectId"::text = NULLIF(current_setting('app.tenant_project_id', true), '')
+                                )
+                            )
+                        )
                     );
                 """);
 
