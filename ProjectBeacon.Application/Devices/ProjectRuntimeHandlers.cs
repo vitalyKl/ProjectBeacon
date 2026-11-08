@@ -19,9 +19,9 @@ using System.Text.Json;
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<RuntimeDiagnostics>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAdminGate _adminGate;
+    private readonly IAdminGate? _adminGate;
 
-    public AttachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    public AttachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _adminGate = adminGate;
@@ -40,6 +40,8 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
             .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == userId, ct);
         if (!member)
         {
+            if (_adminGate is null)
+                return Result.Failure<RuntimeDiagnostics>("Project not found.");
             var operatorAccess = await _adminGate.RequireAsync(
                 request.Actor, OperatorPermission.ProjectsManage, ct: ct);
             if (!operatorAccess.Success)
@@ -81,7 +83,7 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAdminGate _adminGate;
 
-    public ListRuntimesHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    public ListRuntimesHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _adminGate = adminGate;
@@ -97,6 +99,8 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
             .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == userId, ct);
         if (!member)
         {
+            if (_adminGate is null)
+                return Result.Failure<IList<RuntimeSummary>>("Project not found.");
             var operatorAccess = await _adminGate.RequireAsync(
                 command.Request.Actor, OperatorPermission.OperationsRead, ct: ct);
             if (!operatorAccess.Success)
@@ -129,7 +133,7 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAdminGate _adminGate;
 
-    public DetachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    public DetachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _adminGate = adminGate;
@@ -149,6 +153,8 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId, ct);
         if (!member)
         {
+            if (_adminGate is null)
+                return Result.Failure("Runtime not found.");
             var operatorAccess = await _adminGate.RequireAsync(
                 command.Request.Actor, OperatorPermission.ProjectsManage, ct: ct);
             if (!operatorAccess.Success)
@@ -168,7 +174,7 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAdminGate _adminGate;
 
-    public GetRuntimeDiagnosticsHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    public GetRuntimeDiagnosticsHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _adminGate = adminGate;
@@ -189,9 +195,13 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId, ct);
-        var operatorAccess = await _adminGate.RequireAsync(
-            actor, OperatorPermission.OperationsRead, ct: ct);
-        var isSystemAdmin = operatorAccess.Success;
+        var isSystemAdmin = false;
+        if (_adminGate is not null)
+        {
+            var operatorAccess = await _adminGate.RequireAsync(
+                actor, OperatorPermission.OperationsRead, ct: ct);
+            isSystemAdmin = operatorAccess.Success;
+        }
         if (!member && !isSystemAdmin)
             return Result.Failure<RuntimeDiagnostics>("Runtime not found.");
 
