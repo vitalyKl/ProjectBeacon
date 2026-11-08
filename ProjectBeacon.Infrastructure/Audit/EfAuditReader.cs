@@ -24,9 +24,10 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
             throw new ArgumentOutOfRangeException(nameof(query.Page));
         if (query.PageSize is < 1 or > 200)
             throw new ArgumentOutOfRangeException(nameof(query.PageSize));
-        if (query.FromUtc is { Kind: not DateTimeKind.Utc } || query.ToUtc is { Kind: not DateTimeKind.Utc })
+        if ((query.FromUtc.HasValue && query.FromUtc.Value.Kind != DateTimeKind.Utc)
+            || (query.ToUtc.HasValue && query.ToUtc.Value.Kind != DateTimeKind.Utc))
             throw new ArgumentException("Audit query timestamps must be UTC.", nameof(query));
-        if (query.FromUtc.HasValue && query.ToUtc.HasValue && query.FromUtc > query.ToUtc)
+        if (query.FromUtc.HasValue && query.ToUtc.HasValue && query.FromUtc.Value > query.ToUtc.Value)
             throw new ArgumentException("The audit query start must not be after its end.", nameof(query));
         if (query.Action?.Length > 160)
             throw new ArgumentException("Audit action filter is too long.", nameof(query));
