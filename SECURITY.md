@@ -43,7 +43,7 @@ Token types (all shown once at creation, never persisted raw):
 |---|---|---|---|
 | Project/org API token | `bcn_` | Machine API access with capability scopes | SHA-256 hash only |
 | Device token | `bcd_` | Workstation client enrollment + command polling | SHA-256 hash only |
-| Invite token | `bci_` | Registration invitation (required when `AUTH_LOCAL_INVITE_ONLY=true`) | SHA-256 hash only |
+| Invite token | `bci_` | Registration invitation (required for all SaaS alpha account creation) | SHA-256 hash only |
 | Password-reset token | `bcr_` | One-shot password reset link | SHA-256 hash only |
 | JWT session | — | Human session cookie; signed with `JWT:Secret` **only** | signed, not encrypted |
 | Bootstrap admin token | — | `BOOTSTRAP_ADMIN_TOKEN`; `/recover` break-glass, not a user reset | env/config only |

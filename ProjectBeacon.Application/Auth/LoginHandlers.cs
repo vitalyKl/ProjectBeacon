@@ -75,7 +75,11 @@ public class RegisterHandler
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
 
-    public RegisterHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration = null, TimeProvider? timeProvider = null)
+    public RegisterHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        IConfiguration? configuration = null,
+        TimeProvider? timeProvider = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;

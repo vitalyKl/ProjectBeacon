@@ -2,14 +2,21 @@ namespace ProjectBeacon.Application.Auth;
 
 using Microsoft.Extensions.Configuration;
 /// <summary>
-/// Reads AUTH_LOCAL_INVITE_ONLY and BEACON_PUBLIC_URL. Invite-only is true only when the value parses as true.
+/// Applies the hosted SaaS alpha registration policy and reads BEACON_PUBLIC_URL.
+/// Public registration is not a runtime configuration option.
 /// </summary>
 public static class LocalAuthOptions
 {
-    public static bool InviteOnly(IConfiguration? configuration)
+    public static bool InviteOnly(IConfiguration? configuration, string? environmentName = null)
     {
+        // The legacy opt-out is honored only by an explicitly marked test host.
+        // Runtime environment is supplied by IHostEnvironment when available.
+        var environment = environmentName ?? configuration?["ASPNETCORE_ENVIRONMENT"];
+        if (!string.Equals(environment, "Testing", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         var raw = configuration?["AUTH_LOCAL_INVITE_ONLY"];
-        return bool.TryParse(raw, out var value) && value;
+        return !bool.TryParse(raw, out var inviteOnly) || inviteOnly;
     }
 
     public static string PublicUrl(IConfiguration? configuration)
