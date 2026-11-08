@@ -10,9 +10,12 @@ Each event records UTC time, actor kind and optional actor principal id, an acti
 type/id, optional organization/project scope, outcome, request IP/user-agent/trace id, and a
 small allowlisted details object.
 
-Project-scoped events must also carry their organization id. Platform-wide events have neither
-tenant id and are visible only in an explicit unscoped operator path. EF query filters and
-PostgreSQL RLS enforce the same rule. RLS is forced even for the table owner.
+Project-scoped events must also carry their organization id. A project tenant sees and writes
+only events whose organization and project both match its bound scope. An organization-level
+tenant can read its entire organization's history but can write only organization-level events
+(without a project id). Platform-wide events have neither tenant id and are visible only in an
+explicit unscoped operator path. EF query filters and PostgreSQL RLS enforce these boundaries;
+RLS is forced even for the table owner.
 
 ## Integrity and privacy
 
