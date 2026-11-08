@@ -99,7 +99,7 @@ public sealed partial class PipelineHandlerTests : IDisposable
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")));
         Assert.True(beat.Success, beat.Error);
         var attach = await new AttachRuntimeHandler(factory).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, user.Id, @"A:\work\review")));
+            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, HumanActor(user.Id), @"A:\work\review")));
         Assert.True(attach.Success, attach.Error);
 
         var check = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))

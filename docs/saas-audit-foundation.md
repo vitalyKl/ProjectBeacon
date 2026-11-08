@@ -63,6 +63,10 @@ Each event carries the verified actor kind/id and both organization and project 
 verify that the event and mutation persist together and that secret values do not enter the
 event metadata.
 
+Organization provisioning now records `org.created` and `org.updated` in the same org-bound
+unit of work as the organization mutation. The operator is not added to customer membership as
+a side effect; the customer owner joins through the invitation workflow.
+
 This slice extends coverage to organization invitation creation, expiration, acceptance and
 revocation. First-time registration through an organization or project invitation also stages
 both the invite-accepted and account-registered events in the same tenant-bound transaction as
@@ -78,10 +82,11 @@ invite acceptance.
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
 port, permission-checked read contract/implementation, model migration, tests, and transactional
-instrumentation for project API tokens, project invitations, project membership, organization
-invitations, and first-time account registration through an invitation.
+instrumentation for organization creation/update, project API tokens, project invitations,
+project membership, organization invitations, and first-time account registration through an
+invitation.
 
-Not implemented: instrumentation of all remaining handlers (including org/project lifecycle,
-device lifecycle, other account/password operations and denied authorization attempts), operator HTTP
-endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
+Not implemented: instrumentation of remaining org/project lifecycle operations (such as
+deletion), device lifecycle, other account/password operations and denied authorization attempts,
+operator HTTP endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
 follow-up slices; this PR does not claim comprehensive audit coverage.

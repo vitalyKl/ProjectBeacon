@@ -17,6 +17,9 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed partial class DeviceHandlerTests
 {
+    private static ActorContext RuntimeHumanActor(Guid userId) =>
+        new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+
     [Fact]
     public async Task ForeignUser_CannotSeeCommand()
     {
@@ -202,7 +205,7 @@ public sealed partial class DeviceHandlerTests
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(owner.Id), @"A:\secret\repo")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         Assert.Equal(@"A:\secret\repo", attached.Value!.LocalRoot);
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
@@ -256,7 +259,7 @@ public sealed partial class DeviceHandlerTests
     {
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();
         await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work\app")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(user.Id), @"A:\work\app")), TestContext.Current.CancellationToken);
 
         var evalAbsolute = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
@@ -297,10 +300,10 @@ public sealed partial class DeviceHandlerTests
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(owner.Id), @"A:\secret\repo")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
-            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, member.Id)), TestContext.Current.CancellationToken);
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, RuntimeHumanActor(member.Id))), TestContext.Current.CancellationToken);
         Assert.False(got.Success);
         Assert.Equal(ErrorKind.Forbidden, got.Kind);
     }
@@ -315,10 +318,10 @@ public sealed partial class DeviceHandlerTests
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(owner.Id), @"A:\secret\repo")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
-            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, owner.Id)), TestContext.Current.CancellationToken);
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, RuntimeHumanActor(owner.Id))), TestContext.Current.CancellationToken);
         Assert.True(got.Success, got.Error);
         Assert.Equal(@"A:\secret\repo", got.Value!.LocalRoot);
     }
@@ -333,10 +336,10 @@ public sealed partial class DeviceHandlerTests
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, member.Id, @"B:\member\repo")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(member.Id), @"B:\member\repo")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
-            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, member.Id)), TestContext.Current.CancellationToken);
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, RuntimeHumanActor(member.Id))), TestContext.Current.CancellationToken);
         Assert.True(got.Success, got.Error);
         Assert.Equal(@"B:\member\repo", got.Value!.LocalRoot);
     }
@@ -352,10 +355,10 @@ public sealed partial class DeviceHandlerTests
         await new HeartbeatDeviceHandler(Factory()).HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(owner.Id), @"A:\secret\repo")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
-            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, outsider.Id)), TestContext.Current.CancellationToken);
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, RuntimeHumanActor(outsider.Id))), TestContext.Current.CancellationToken);
         Assert.False(got.Success);
         Assert.Equal("Runtime not found.", got.Error);
     }

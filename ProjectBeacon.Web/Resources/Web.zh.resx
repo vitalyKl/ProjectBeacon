@@ -1589,7 +1589,7 @@
     <value>项目</value>
   </data>
 <data name="CreateProjectStepNames" xml:space="preserve">
-    <value>为项目命名</value>
+    <value>命名项目并选择所属组织。</value>
   </data>
 <data name="CreateProjectStepDevice" xml:space="preserve">
     <value>选择正在运行 beacon client 的工作站</value>
@@ -2589,5 +2589,11 @@ orthstar</value>
   </data>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
+  </data>
+<data name="SelectOrganization" xml:space="preserve">
+    <value>组织</value>
+  </data>
+<data name="NoOrganizationAccess" xml:space="preserve">
+    <value>您尚未加入任何组织。请接受组织邀请或联系服务运营方。</value>
   </data>
 </root>

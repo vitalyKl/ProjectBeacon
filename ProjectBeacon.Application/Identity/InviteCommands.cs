@@ -51,4 +51,4 @@ public record InviteListDto(
 /// <summary>
 /// Invite to revoke and the caller. The caller must be allowed to administer the target.
 /// </summary>
-public record RevokeInviteRequest(Guid InviteId, ActorContext Actor);
+public record RevokeInviteRequest(Guid InviteId, ActorContext Actor, Guid? ExpectedTargetId = null);

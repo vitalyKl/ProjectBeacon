@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
@@ -58,7 +59,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             var result = await new AttachRuntimeHandler(Factory())
-                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, localRoot)));
+                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None), localRoot)));
             return result.Value!.Id;
         }
     }

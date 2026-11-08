@@ -1,6 +1,8 @@
 namespace ProjectBeacon.API.Tests;
 
 using Application.Persistence;
+using Application.Admin;
+using Application.Authorization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -207,7 +209,7 @@ public sealed class P0SecurityHttpTests
     }
 
     [Fact]
-    public async Task CreateOrg_SpoofedCreatedByUserId_Ignored()
+    public async Task CreateOrg_SpoofedCreatedByUserId_DoesNotCreateMembership()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -225,15 +227,16 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.OrgMembers.FirstOrDefaultAsync(m => m.OrgId == orgId, TestContext.Current.CancellationToken);
-            Assert.NotNull(member);
-            Assert.Equal(realUserId, member.UserId);
-            Assert.NotEqual(spoofedId, member.UserId);
+            Assert.True(await db.Orgs.AnyAsync(o => o.Id == orgId, TestContext.Current.CancellationToken));
+            Assert.False(await db.OrgMembers.AnyAsync(
+                member => member.OrgId == orgId
+                    && (member.UserId == realUserId || member.UserId == spoofedId),
+                TestContext.Current.CancellationToken));
         }
     }
 
     [Fact]
-    public async Task CreateProject_SpoofedCreatedByUserId_Ignored()
+    public async Task CreateProject_SpoofedCreatedByUserId_DoesNotCreateOperatorMembership()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -254,10 +257,11 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.ProjectMembers.FirstOrDefaultAsync(m => m.ProjectId == projectId, TestContext.Current.CancellationToken);
-            Assert.NotNull(member);
-            Assert.Equal(realUserId, member.UserId);
-            Assert.NotEqual(spoofedId, member.UserId);
+            Assert.True(await db.Projects.AnyAsync(p => p.Id == projectId, TestContext.Current.CancellationToken));
+            Assert.False(await db.ProjectMembers.AnyAsync(
+                member => member.ProjectId == projectId
+                    && (member.UserId == realUserId || member.UserId == spoofedId),
+                TestContext.Current.CancellationToken));
         }
     }
 
@@ -398,9 +402,13 @@ public sealed class P0SecurityHttpTests
             if (!beat.Success) throw new InvalidOperationException("Heartbeat failed: " + beat.Error);
 
             // Attach runtime
+            var adminActor = new ActorContext(
+                ActorType.Human, adminUser.Id, true, null, null, null, null, ApiTokenCapability.None);
             var runtime = new AttachRuntimeCommand(
-                new AttachRuntimeRequest(projectId, deviceId, adminUser.Id, @"A:\work\rc"));
-            var attach = await new AttachRuntimeHandler(factorySvc).HandleAsync(runtime, TestContext.Current.CancellationToken);
+                new AttachRuntimeRequest(projectId, deviceId, adminActor, @"A:\work\rc"));
+            var adminGate = new DatabaseAdminGate(factorySvc);
+            var attach = await new AttachRuntimeHandler(factorySvc, adminGate)
+                .HandleAsync(runtime, TestContext.Current.CancellationToken);
             if (!attach.Success) throw new InvalidOperationException("Runtime attach failed: " + attach.Error);
         }
 

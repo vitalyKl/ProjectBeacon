@@ -42,7 +42,12 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         {
             var member = await db.ProjectMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.ProjectId == projectId && m.UserId == command.Request.UserId, ct);
-            if (!member)
+            // User is a global identity and has no tenant query filter; do not
+            // widen the reviewed IgnoreQueryFilters allowlist for this lookup.
+            var isPlatformOperator = await db.Users
+                .AnyAsync(user => user.Id == command.Request.UserId
+                    && user.IsAdmin && user.DisabledAt == null, ct);
+            if (!member && !isPlatformOperator)
                 return Result.Failure<WorkstationCommandDto>("Project not found.");
         }
 

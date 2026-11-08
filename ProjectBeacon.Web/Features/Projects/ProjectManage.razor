@@ -241,7 +241,7 @@ else
         _runtimes = [];
         if (_projectId is not { } projectId || _userId == Guid.Empty)
             return;
-        var listed = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, _userId)));
+        var listed = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, _actor)));
         if (!listed.Success)
             return;
         _runtimes = listed.Value!.ToList();
@@ -250,7 +250,7 @@ else
         if (current is not null)
         {
             _folderDeviceId ??= current.DeviceId;
-            var diag = await GetDiagnostics.HandleAsync(new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(current.Id, _userId)));
+            var diag = await GetDiagnostics.HandleAsync(new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(current.Id, _actor)));
             if (diag.Success)
             {
                 _primaryLocalRoot = diag.Value!.LocalRoot;
@@ -269,7 +269,7 @@ else
         try
         {
             var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
-                new AttachRuntimeRequest(projectId, deviceId, _userId, _folderPath)));
+                new AttachRuntimeRequest(projectId, deviceId, _actor, _folderPath)));
             if (!attached.Success)
             {
                 Snackbar.Add(attached.Error ?? L["Error"].Value, Severity.Error);

@@ -41,7 +41,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")));
         Assert.True(beat.Success, beat.Error);
         var attach = await new AttachRuntimeHandler(factory)
-            .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, user.Id, @"A:\work\rc")));
+            .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, HumanActor(user.Id), @"A:\work\rc")));
         Assert.True(attach.Success, attach.Error);
         return (user, device);
     }

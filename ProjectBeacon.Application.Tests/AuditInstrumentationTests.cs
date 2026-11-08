@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
@@ -132,7 +133,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         var config = new ConfigurationBuilder().Build();
 
         var created = await new CreateProjectInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateProjectInviteRequest(
                 _project.Id, "revoke-me@example.test", MemberRole.Member, actor),
                 TestContext.Current.CancellationToken);
@@ -145,7 +146,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal(_project.Id, createdEvent.ProjectId);
         Assert.DoesNotContain(created.Value.Token, createdEvent.DetailsJson ?? string.Empty);
 
-        var revoked = await new RevokeProjectInviteHandler(_factory, _authorization, _auditWriter)
+        var revoked = await new RevokeProjectInviteHandler(_factory, _authorization, _auditWriter, new DatabaseAdminGate(_factory))
             .HandleAsync(new RevokeInviteRequest(created.Value.Id, actor), TestContext.Current.CancellationToken);
         Assert.True(revoked.Success, revoked.Error);
         Assert.True(await _seedDb.AuditEvents.AnyAsync(
@@ -153,7 +154,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
 
         var acceptInvite = await new CreateProjectInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateProjectInviteRequest(
                 _project.Id, _invitee.Email, MemberRole.Member, actor),
                 TestContext.Current.CancellationToken);
@@ -177,7 +178,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         var actor = AdminActor();
         var email = new NoopEmailSender();
         var config = new ConfigurationBuilder().Build();
-        var create = new CreateOrgInviteHandler(_factory, email, _authorization, config, auditWriter: _auditWriter);
+        var create = new CreateOrgInviteHandler(_factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory));
 
         var toRevoke = await create.HandleAsync(
             new CreateOrgInviteRequest(_org.Id, "revoke-org@example.test", MemberRole.Member, actor),
@@ -192,7 +193,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.DoesNotContain(toRevoke.Value.Email, createEvent.DetailsJson ?? string.Empty);
         Assert.DoesNotContain(toRevoke.Value.Token, createEvent.DetailsJson ?? string.Empty);
 
-        var revoked = await new RevokeOrgInviteHandler(_factory, _authorization, _auditWriter)
+        var revoked = await new RevokeOrgInviteHandler(_factory, _authorization, _auditWriter, new DatabaseAdminGate(_factory))
             .HandleAsync(new RevokeInviteRequest(toRevoke.Value.Id, actor), TestContext.Current.CancellationToken);
         Assert.True(revoked.Success, revoked.Error);
         Assert.True(await _seedDb.AuditEvents.AnyAsync(
@@ -227,6 +228,48 @@ public sealed class AuditInstrumentationTests : IDisposable
     }
 
     [Fact]
+    public async Task OperatorOrgInviteLifecycle_UsesExplicitTargetTenantAndVerifiedPermission()
+    {
+        var ambient = new TenantContext();
+        ambient.Assign(null, _org.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, ambient);
+        var adminGate = new DatabaseAdminGate(scopedFactory);
+        var email = new NoopEmailSender();
+        var config = new ConfigurationBuilder().Build();
+        var actor = AdminActor();
+
+        Assert.False(await _seedDb.OrgMembers.AnyAsync(
+            member => member.OrgId == _otherOrg.Id && member.UserId == _admin.Id,
+            TestContext.Current.CancellationToken));
+
+        var create = await new CreateOrgInviteHandler(
+            scopedFactory, email, _authorization, config, auditWriter: _auditWriter, adminGate: adminGate)
+            .HandleAsync(new CreateOrgInviteRequest(
+                _otherOrg.Id, "external-owner@example.test", MemberRole.Owner, actor),
+                TestContext.Current.CancellationToken);
+        Assert.True(create.Success, create.Error);
+
+        var list = await new ListOrgInvitesHandler(scopedFactory, _authorization, adminGate)
+            .HandleAsync(new ListInvitesRequest(_otherOrg.Id, actor), TestContext.Current.CancellationToken);
+        Assert.True(list.Success, list.Error);
+        Assert.Single(list.Value!);
+        Assert.Equal(create.Value!.Id, list.Value![0].Id);
+
+        var revoked = await new RevokeOrgInviteHandler(
+            scopedFactory, _authorization, _auditWriter, adminGate)
+            .HandleAsync(new RevokeInviteRequest(create.Value.Id, actor, _otherOrg.Id),
+                TestContext.Current.CancellationToken);
+        Assert.True(revoked.Success, revoked.Error);
+
+        var eventRow = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.invite.created" && e.TargetId == create.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_otherOrg.Id, eventRow.OrgId);
+        Assert.Null(eventRow.ProjectId);
+        Assert.DoesNotContain(create.Value.Token, eventRow.DetailsJson ?? string.Empty);
+    }
+
+    [Fact]
     public async Task RegistrationByOrgAndProjectInvite_AuditsAccountAndAcceptanceAtomically()
     {
         var config = new ConfigurationBuilder().Build();
@@ -235,7 +278,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             _factory, new BcryptPasswordHasher(), config, auditWriter: _auditWriter);
 
         var orgInvite = await new CreateOrgInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateOrgInviteRequest(
                 _org.Id, "new-org-owner@example.test", MemberRole.Owner, AdminActor()),
                 TestContext.Current.CancellationToken);
@@ -266,7 +309,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
 
         var projectInvite = await new CreateProjectInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateProjectInviteRequest(
                 _project.Id, "new-project-member@example.test", MemberRole.Member, AdminActor()),
                 TestContext.Current.CancellationToken);
@@ -294,6 +337,53 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.DoesNotContain("new-project-member@example.test", projectAccount.DetailsJson ?? string.Empty);
         Assert.True(await _seedDb.ProjectMembers.AnyAsync(
             m => m.ProjectId == _project.Id && m.UserId == projectRegistration.Value.UserId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task OrganizationProvisioningCreateAndUpdate_AreAuditedWithoutOperatorMembership()
+    {
+        var actor = AdminActor();
+        var gate = new DatabaseAdminGate(_factory);
+        var create = new CreateOrgHandler(_factory, gate, _auditWriter);
+
+        var created = await create.HandleAsync(
+            new CreateOrgCommand(new CreateOrgRequest("Provisioned Alpha", "Operator-created"), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        var createdEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "org.created" && item.TargetId == created.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, createdEvent.ActorKind);
+        Assert.Equal(_admin.Id, createdEvent.ActorUserId);
+        Assert.Equal(created.Value.Id, createdEvent.OrgId);
+        Assert.Null(createdEvent.ProjectId);
+        Assert.False(await _seedDb.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == created.Value.Id,
+            TestContext.Current.CancellationToken));
+
+        var update = new UpdateOrgHandler(_factory, _authorization, gate, _auditWriter);
+        var updated = await update.HandleAsync(
+            new UpdateOrgCommand(
+                new UpdateOrgRequest(created.Value.Id, "Provisioned Alpha Updated", null),
+                actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal("Provisioned Alpha Updated", updated.Value!.Name);
+        var updatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "org.updated" && item.TargetId == created.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, updatedEvent.ActorKind);
+        Assert.Equal(_admin.Id, updatedEvent.ActorUserId);
+        Assert.Equal(created.Value.Id, updatedEvent.OrgId);
+        Assert.Null(updatedEvent.ProjectId);
+        Assert.Equal(2, await _seedDb.AuditEvents.CountAsync(
+            item => item.OrgId == created.Value.Id,
+            TestContext.Current.CancellationToken));
+        Assert.False(await _seedDb.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == created.Value.Id,
             TestContext.Current.CancellationToken));
     }
 

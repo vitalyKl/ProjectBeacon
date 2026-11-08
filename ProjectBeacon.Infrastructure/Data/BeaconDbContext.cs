@@ -78,8 +78,11 @@ public class BeaconDbContext : DbContext, IBeaconDb
         _tenant = tenant;
     }
 
-    public Guid? FilterProjectId => _tenant?.ProjectId ?? TenantScope.CurrentProjectId;
-    public Guid? FilterOrgId => _tenant?.OrgId ?? TenantScope.CurrentOrgId;
+    // An explicitly supplied tenant context owns all three scope values, including null.
+    // Falling back to AsyncLocal here could make EF filters disagree with the RLS settings
+    // that BeaconDbFactory applies for an explicit tenant-bound unit of work.
+    public Guid? FilterProjectId => _tenant is not null ? _tenant.ProjectId : TenantScope.CurrentProjectId;
+    public Guid? FilterOrgId => _tenant is not null ? _tenant.OrgId : TenantScope.CurrentOrgId;
     public bool FilterUnscoped => (_tenant?.Unscoped ?? false) || TenantScope.IsUnscoped;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

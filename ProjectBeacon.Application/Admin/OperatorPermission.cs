@@ -21,4 +21,5 @@ public enum OperatorPermission : ulong
     AuditRead = 1UL << 10,
     AuditExport = 1UL << 11,
     SystemMaintenance = 1UL << 12,
+    ProjectsManage = 1UL << 13,
 }

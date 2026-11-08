@@ -1589,7 +1589,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>プロジェクト</value>
   </data>
 <data name="CreateProjectStepNames" xml:space="preserve">
-    <value>プロジェクトに名前を付ける</value>
+    <value>プロジェクト名と組織を選択します。</value>
   </data>
 <data name="CreateProjectStepDevice" xml:space="preserve">
     <value>beacon client が動いているワークステーションを選ぶ</value>
@@ -2589,5 +2589,11 @@ orthstar</value>
   </data>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>リポジトリ相対パスを1行に1つ入力してください。このプロファイルでは必須です。</value>
+  </data>
+<data name="SelectOrganization" xml:space="preserve">
+    <value>組織</value>
+  </data>
+<data name="NoOrganizationAccess" xml:space="preserve">
+    <value>まだ組織に所属していません。招待を受け入れるか、サービス運営者にお問い合わせください。</value>
   </data>
 </root>

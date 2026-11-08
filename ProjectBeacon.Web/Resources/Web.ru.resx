@@ -1586,7 +1586,7 @@
     <value>Проект</value>
   </data>
 <data name="CreateProjectStepNames" xml:space="preserve">
-    <value>Назовите проект</value>
+    <value>Укажите название проекта и выберите организацию.</value>
   </data>
 <data name="CreateProjectStepDevice" xml:space="preserve">
     <value>Выберите станцию с beacon client</value>
@@ -2571,5 +2571,11 @@
   </data>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Укажите относительные пути репозитория, по одному на строку. Для этого профиля они обязательны.</value>
+  </data>
+<data name="SelectOrganization" xml:space="preserve">
+    <value>Организация</value>
+  </data>
+<data name="NoOrganizationAccess" xml:space="preserve">
+    <value>Вы ещё не состоите в организации. Примите приглашение или обратитесь к оператору сервиса.</value>
   </data>
 </root>

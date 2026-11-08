@@ -66,7 +66,7 @@ public sealed partial class DeviceHandlerTests
     {
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work\app")), TestContext.Current.CancellationToken);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, RuntimeHumanActor(user.Id), @"A:\work\app")), TestContext.Current.CancellationToken);
         Assert.True(attached.Success, attached.Error);
         using (TenantScope.EnterUnscoped())
         {

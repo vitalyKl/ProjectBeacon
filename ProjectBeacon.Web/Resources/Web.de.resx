@@ -1589,7 +1589,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Projekt</value>
   </data>
 <data name="CreateProjectStepNames" xml:space="preserve">
-    <value>Projekt benennen</value>
+    <value>Projekt benennen und Organisation auswählen.</value>
   </data>
 <data name="CreateProjectStepDevice" xml:space="preserve">
     <value>Arbeitsplatz mit beacon client wählen</value>
@@ -2581,5 +2581,11 @@ orthstar</value>
   </data>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Relative Repository-Pfade eingeben, einen pro Zeile. Für dieses Profil erforderlich.</value>
+  </data>
+<data name="SelectOrganization" xml:space="preserve">
+    <value>Organisation</value>
+  </data>
+<data name="NoOrganizationAccess" xml:space="preserve">
+    <value>Sie gehören noch keiner Organisation an. Nehmen Sie eine Einladung an oder wenden Sie sich an den Servicebetreiber.</value>
   </data>
 </root>

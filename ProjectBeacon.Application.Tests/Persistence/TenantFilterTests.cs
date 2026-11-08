@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Domain.Common;
+using Application.Persistence;
 using Domain.Entities.Audit;
+using Domain.Enums;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
@@ -46,6 +48,53 @@ public sealed class TenantFilterTests : IDisposable
             Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken));
         using (TenantScope.EnterUnscoped())
             Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ExplicitOrgTenant_OverridesAmbientProjectScope()
+    {
+        var org = Org.Create("Org");
+        var project = Project.Create("P", null, org.Id);
+        var user = User.Create("owner", "owner@example.test", "hash");
+        var task = TaskItem.Create("project task", project.Id);
+        var audit = AuditEvent.Create(
+            DateTime.UtcNow,
+            AuditActorKind.Human,
+            user.Id,
+            null,
+            null,
+            "org.updated",
+            "Org",
+            org.Id.ToString(),
+            org.Id,
+            null,
+            AuditOutcome.Success);
+
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.Users.Add(user);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        _db.Tasks.Add(task);
+        _db.AuditEvents.Add(audit);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        using (TenantScope.EnterProjectScope(project.Id))
+        {
+            var tenant = new TenantContext();
+            tenant.Assign(null, org.Id, unscoped: false);
+            var options = new DbContextOptionsBuilder<BeaconDbContext>()
+                .UseSqlite(_connection)
+                .Options;
+            await using var orgDb = new BeaconDbContext(options, tenant);
+
+            Assert.Null(orgDb.FilterProjectId);
+            Assert.Equal(org.Id, orgDb.FilterOrgId);
+            Assert.True(await orgDb.OrgMembers.AnyAsync(
+                member => member.OrgId == org.Id && member.UserId == user.Id,
+                TestContext.Current.CancellationToken));
+            Assert.Single(await orgDb.AuditEvents.ToListAsync(TestContext.Current.CancellationToken));
+            Assert.Empty(await orgDb.Tasks.ToListAsync(TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]

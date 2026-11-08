@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Admin;
 using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
@@ -7,7 +8,8 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Creates a project in an org and seeds the starter labels. The caller becomes owner.
+/// Creates a project in an org and seeds the starter labels. A customer creator becomes owner;
+/// a platform operator is never added to customer membership as a provisioning side effect.
 /// The caller must be an org Owner/Admin or a system admin. The rights check and the
 /// inserts run on a separate tenant instance keyed by the target org and the new project
 /// id, so the flow works for callers that hold no tenant without ever mutating the
@@ -50,7 +52,9 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         window.Assign(project.Id, orgId, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
         writeDb.Projects.Add(project);
-        if (command.Actor.UserId is { } ownerId)
+        // Platform operators may provision/support a project, but must never become a
+        // customer-project member as a side effect. Customer creators become project owners.
+        if (command.Actor.UserId is { } ownerId && !command.Actor.IsAdmin)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
         await writeDb.SaveChangesAsync(ct);
@@ -167,15 +171,56 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate? _adminGate;
 
+    // Retain the single-argument constructor for scoped/internal callers. Explicit
+    // organization-wide operator reads fail closed unless DI supplied the admin gate.
     public ListProjectsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public ListProjectsHandler(IBeaconDbFactory dbFactory, IAdminGate adminGate)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        // An explicit org route must not inherit a different active project/org
+        // from the current request. Bind both the membership proof and project query
+        // to the requested organization rather than falling back to ambient scope.
+        var tenant = command.Request.OrgId is { } requestedOrgId
+            ? OrgTenant(requestedOrgId)
+            : null;
+        await using var db = tenant is null
+            ? _dbFactory.CreateDbContext()
+            : _dbFactory.CreateDbContext(tenant);
         var query = db.Projects.AsQueryable();
         if (command.Request.OrgId is { } orgId)
-            query = query.Where(p => p.OrgId == orgId);
+        {
+            if (!command.Actor.HasValue)
+                return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            var actor = command.Actor.Value;
+
+            if (actor.IsAdmin)
+            {
+                if (_adminGate is null)
+                    return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+                var access = await _adminGate.RequireAsync(
+                    actor, OperatorPermission.OrganizationsRead, ct: ct);
+                if (!access.Success)
+                    return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            }
+            else if (actor.UserId is not { } userId
+                || !await db.OrgMembers.AnyAsync(
+                    member => member.OrgId == orgId && member.UserId == userId, ct))
+            {
+                // Org ids are caller-controlled route values. Return the same result for a
+                // missing org and an org that belongs to another customer.
+                return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            }
+
+            query = query.Where(project => project.OrgId == orgId);
+        }
 
         var projects = await query
             .OrderByDescending(p => p.CreatedAt)
@@ -184,6 +229,13 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
             .ToListAsync(ct);
 
         return Result.Ok((IList<ProjectDto>)projects);
+    }
+
+    private static TenantContext OrgTenant(Guid orgId)
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(null, orgId, unscoped: false);
+        return tenant;
     }
 }
 /// <summary>

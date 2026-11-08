@@ -100,7 +100,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
             if (attachRuntime)
             {
                 await new AttachRuntimeHandler(HandlerSqlite.Factory(_connection))
-                    .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, user.Id, @"A:\work\app")));
+                    .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), @"A:\work\app")));
             }
             return (user, project, created.Value.Id, backend.Id);
         }

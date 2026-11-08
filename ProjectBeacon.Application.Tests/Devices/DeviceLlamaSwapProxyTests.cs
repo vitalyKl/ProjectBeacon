@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Identity;
@@ -94,7 +95,7 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
                 new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(created.Value!.Id,
                     """{"llamaSwapStatus":{"available":true,"healthy":true,"loadedModel":"qwen"}}""", "{}")), TestContext.Current.CancellationToken);
             await new AttachRuntimeHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
+                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), @"A:\work")), TestContext.Current.CancellationToken);
         }
 
         var tenant = new TenantContext();
@@ -170,7 +171,7 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
                 .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)), TestContext.Current.CancellationToken);
             deviceId = created.Value!.Id;
             await new AttachRuntimeHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
+                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), @"A:\work")), TestContext.Current.CancellationToken);
         }
 
         var result = await new GetLlamaSwapConfigHandler(HandlerSqlite.Factory(_connection), new LlamaSwapCatalog())

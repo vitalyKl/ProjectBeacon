@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Agents;
+using Application.Admin;
+using Application.Authorization;
 using Application.Auth;
 using Application.Common;
 using Application.Security;
@@ -17,23 +19,37 @@ using System.Text.Json;
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<RuntimeDiagnostics>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate? _adminGate;
 
-    public AttachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AttachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result<RuntimeDiagnostics>> HandleAsync(AttachRuntimeCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
         if (string.IsNullOrWhiteSpace(request.LocalRoot) || request.LocalRoot.Trim().Length > 1000)
             return Result.Failure<RuntimeDiagnostics>("LocalRoot is required (max 1000 characters).");
+        if (!request.Actor.IsHuman || request.Actor.UserId is not { } userId)
+            return Result.Failure<RuntimeDiagnostics>("Project not found.");
 
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
+            .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == userId, ct);
         if (!member)
-            return Result.Failure<RuntimeDiagnostics>("Project not found.");
+        {
+            if (_adminGate is null)
+                return Result.Failure<RuntimeDiagnostics>("Project not found.");
+            var operatorAccess = await _adminGate.RequireAsync(
+                request.Actor, OperatorPermission.ProjectsManage, ct: ct);
+            if (!operatorAccess.Success)
+                return Result.Failure<RuntimeDiagnostics>("Project not found.");
+        }
 
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == request.DeviceId, ct);
-        if (device is null || device.IsRevoked || device.UserId != request.UserId)
+        if (device is null || device.IsRevoked || device.UserId != userId)
             return Result.Failure<RuntimeDiagnostics>("Device not found.");
 
         var existing = await db.ProjectRuntimes.IgnoreQueryFilters()
@@ -65,16 +81,31 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<IList<RuntimeSummary>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate _adminGate;
 
-    public ListRuntimesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListRuntimesHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result<IList<RuntimeSummary>>> HandleAsync(ListRuntimesCommand command, CancellationToken ct = default)
     {
+        if (!command.Request.Actor.IsHuman || command.Request.Actor.UserId is not { } userId)
+            return Result.Failure<IList<RuntimeSummary>>("Project not found.");
+
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
+            .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == userId, ct);
         if (!member)
-            return Result.Failure<IList<RuntimeSummary>>("Project not found.");
+        {
+            if (_adminGate is null)
+                return Result.Failure<IList<RuntimeSummary>>("Project not found.");
+            var operatorAccess = await _adminGate.RequireAsync(
+                command.Request.Actor, OperatorPermission.OperationsRead, ct: ct);
+            if (!operatorAccess.Success)
+                return Result.Failure<IList<RuntimeSummary>>("Project not found.");
+        }
 
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(r => r.ProjectId == command.Request.ProjectId)
@@ -100,20 +131,35 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
 public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate _adminGate;
 
-    public DetachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DetachRuntimeHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
+        if (!command.Request.Actor.IsHuman || command.Request.Actor.UserId is not { } userId)
+            return Result.Failure("Runtime not found.");
+
         await using var db = _dbFactory.CreateDbContext();
         var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
         if (runtime is null)
             return Result.Failure("Runtime not found.");
         var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
+            .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId, ct);
         if (!member)
-            return Result.Failure("Runtime not found.");
+        {
+            if (_adminGate is null)
+                return Result.Failure("Runtime not found.");
+            var operatorAccess = await _adminGate.RequireAsync(
+                command.Request.Actor, OperatorPermission.ProjectsManage, ct: ct);
+            if (!operatorAccess.Success)
+                return Result.Failure("Runtime not found.");
+        }
         db.ProjectRuntimes.Remove(runtime);
         await db.SaveChangesAsync(ct);
         return Result.Ok();
@@ -126,13 +172,20 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
 public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnosticsCommand, Result<RuntimeDiagnostics>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAdminGate _adminGate;
 
-    public GetRuntimeDiagnosticsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetRuntimeDiagnosticsHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
+    {
+        _dbFactory = dbFactory;
+        _adminGate = adminGate;
+    }
 
     public async Task<Result<RuntimeDiagnostics>> HandleAsync(GetRuntimeDiagnosticsCommand command, CancellationToken ct = default)
     {
         var runtimeId = command.Request.RuntimeId;
-        var userId = command.Request.UserId;
+        var actor = command.Request.Actor;
+        if (!actor.IsHuman || actor.UserId is not { } userId)
+            return Result.Failure<RuntimeDiagnostics>("Runtime not found.");
 
         await using var db = _dbFactory.CreateDbContext();
         var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
@@ -142,7 +195,14 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId, ct);
-        if (!member)
+        var isSystemAdmin = false;
+        if (_adminGate is not null)
+        {
+            var operatorAccess = await _adminGate.RequireAsync(
+                actor, OperatorPermission.OperationsRead, ct: ct);
+            isSystemAdmin = operatorAccess.Success;
+        }
+        if (!member && !isSystemAdmin)
             return Result.Failure<RuntimeDiagnostics>("Runtime not found.");
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
@@ -154,9 +214,6 @@ public class GetRuntimeDiagnosticsHandler : ICommandHandler<GetRuntimeDiagnostic
         var isProjectAdmin = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == userId
                 && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
-        var isSystemAdmin = await db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
-
         if (!isDeviceOwner && !isProjectAdmin && !isSystemAdmin)
             return Result.Forbidden<RuntimeDiagnostics>();
 

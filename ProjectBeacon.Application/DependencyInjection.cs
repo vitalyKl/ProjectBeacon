@@ -181,9 +181,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetRoleBindingHandler>();
         services.AddTransient<RemoveRoleBindingHandler>();
         services.AddTransient<GetModelRegistryHandler>();
-        services.AddTransient<GetAgentProfileOverridesHandler>();
-        services.AddTransient<SaveAgentProfileOverrideHandler>();
-        services.AddTransient<ResetAgentProfileOverrideHandler>();
         // The Blazor MCP settings component injects these handlers by concrete type.
         services.AddTransient<ListProjectMcpServersHandler>();
         services.AddTransient<SaveProjectMcpServersHandler>();

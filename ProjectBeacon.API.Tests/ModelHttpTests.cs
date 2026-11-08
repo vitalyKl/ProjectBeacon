@@ -66,8 +66,11 @@ public sealed class ModelHttpTests
         var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal("m1-upd", updatedBody.GetProperty("name").GetString());
 
-        // Role bindings require a human project administrator.
+        // Role bindings require a human project administrator. The active project is
+        // supplied explicitly; platform operators have no synthetic project membership.
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString());
         var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "planner", modelBackendId = modelId }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, bind.StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);

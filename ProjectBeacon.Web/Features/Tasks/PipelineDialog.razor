@@ -1,9 +1,7 @@
-@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CreateSubtaskHandler CreateSubtask
-@inject GetAgentProfileOverridesHandler GetAgentProfileOverrides
 @inject ReportSubtaskResultHandler ReportResult
 @inject FailSubtaskHandler FailSubtask
 @inject RecordReviewVerdictHandler RecordVerdict
@@ -14,28 +12,7 @@
 @switch (Params.Mode)
 {
     case PipelineDialogMode.CreateSubtask:
-        <MudSelect T="string" @bind-Value="_profileKey" Label="@L["SubtaskProfile"]"
-                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
-            <MudSelectItem Value="@string.Empty">@L["NoProfile"]</MudSelectItem>
-            @foreach (var profile in BuiltInAgentProfiles.All)
-            {
-                <MudSelectItem Value="@profile.Key">@ProfileName(profile) (@profile.Key)</MudSelectItem>
-            }
-        </MudSelect>
-        @if (SelectedProfile is { } selectedProfile)
-        {
-            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@ProfileDescription(selectedProfile)</MudAlert>
-            @if (selectedProfile.PathPolicy == AgentProfilePathPolicy.FromPlanner)
-            {
-                <MudTextField @bind-Value="_allowedPaths" Label="@L["AllowedPaths"]" HelperText="@L["AllowedPathsHint"]"
-                              Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            }
-            else if (selectedProfile.PathPolicy == AgentProfilePathPolicy.Defaults)
-            {
-                <MudText Typo="Typo.caption" Class="mt-2">@L["ExecutionProfileDefaultPaths"]: @string.Join(", ", selectedProfile.DefaultPaths)</MudText>
-            }
-        }
-        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
         break;
     case PipelineDialogMode.ReportResult:
         <MudTextField @bind-Value="_diffRef" Label="@L["DiffRef"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -77,45 +54,14 @@
     [Parameter] public PipelineDialogParams Params { get; set; } = default!;
 
     private string _instructions = string.Empty;
-    private string _profileKey = string.Empty;
-    private string _allowedPaths = string.Empty;
     private string _diffRef = string.Empty;
     private string _summary = string.Empty;
     private string _reason = string.Empty;
     private string _note = string.Empty;
     private SubtaskDto? _reopenTarget;
     private bool _saving;
-    private IReadOnlyDictionary<string, AgentProfileOverrideDto> _profileOverrides =
-        new Dictionary<string, AgentProfileOverrideDto>(StringComparer.OrdinalIgnoreCase);
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!Guid.TryParse(Params.ActorId, out var userId) || userId == Guid.Empty)
-            return;
-
-        var result = await GetAgentProfileOverrides.HandleAsync(new GetAgentProfileOverridesCommand(userId));
-        if (result.Success)
-            _profileOverrides = result.Value!.ToDictionary(profile => profile.Key, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private string ProfileName(BuiltInAgentProfile profile) =>
-        _profileOverrides.TryGetValue(profile.Key, out var custom) ? custom.Name : profile.Name;
-
-    private string ProfileDescription(BuiltInAgentProfile profile) =>
-        _profileOverrides.TryGetValue(profile.Key, out var custom) ? custom.Description : profile.Description;
 
     private string ConfirmLabel => Params.Mode == PipelineDialogMode.CreateSubtask ? L["Create"].Value : L["Confirm"].Value;
-
-    private BuiltInAgentProfile? SelectedProfile => BuiltInAgentProfiles.Get(_profileKey);
-
-    private IReadOnlyList<string>? ParsedAllowedPaths => string.IsNullOrWhiteSpace(_allowedPaths)
-        ? null
-        : _allowedPaths.Split(new[] { '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-    private ActorContext ProfileActor => Guid.TryParse(Params.ActorId, out var userId)
-        ? new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None)
-        : ActorContext.Anonymous;
 
     private IReadOnlyList<SubtaskDto> Reopenable =>
         Params.Subtasks?.Where(s => s.Status is SubtaskStatus.Done or SubtaskStatus.Failed).ToList()
@@ -128,8 +74,7 @@
 
     private bool IsValid => Params.Mode switch
     {
-        PipelineDialogMode.CreateSubtask => !string.IsNullOrWhiteSpace(_instructions)
-            && (SelectedProfile?.PathPolicy != AgentProfilePathPolicy.FromPlanner || ParsedAllowedPaths is { Count: > 0 }),
+        PipelineDialogMode.CreateSubtask => !string.IsNullOrWhiteSpace(_instructions),
         PipelineDialogMode.ReportResult => !string.IsNullOrWhiteSpace(_diffRef) && !string.IsNullOrWhiteSpace(_summary),
         PipelineDialogMode.FailSubtask => !string.IsNullOrWhiteSpace(_reason),
         PipelineDialogMode.ReviewApprove => !string.IsNullOrWhiteSpace(_note),
@@ -150,12 +95,7 @@
             {
                 case PipelineDialogMode.CreateSubtask:
                 {
-                    var result = await CreateSubtask.HandleAsync(new CreateSubtaskCommand(
-                        new CreateSubtaskRequest(
-                            Params.TaskId, _instructions.Trim(),
-                            AllowedPaths: ParsedAllowedPaths,
-                            Profile: string.IsNullOrWhiteSpace(_profileKey) ? null : _profileKey),
-                        ProfileActor));
+                    var result = await CreateSubtask.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(Params.TaskId, _instructions.Trim())));
                     outcome = (result.Success, result.Error, L["SubtaskCreated"].Value);
                     break;
                 }

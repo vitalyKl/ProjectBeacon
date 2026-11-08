@@ -125,7 +125,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- AdminGate implementation, access revocation, audit storage, elevation/TOTP flow, Admin UI, organization creation or alpha-grant persistence.
+- Access revocation, elevation/TOTP flow, Admin UI, alpha-grant persistence and the complete owner-invitation/grant workflow. Organization creation is exposed only through a database-verified operator permission gate; it does not automatically add the operator as a customer organization member.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
 - Production deployment of an ops-agent or external log stack.

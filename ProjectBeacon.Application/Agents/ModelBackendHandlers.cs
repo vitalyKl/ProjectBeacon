@@ -200,7 +200,8 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
             return Result.Failure<RoleBindingDto>("Model backend not found.", ErrorKind.NotFound);
         var ownerIsMember = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == projectId && m.UserId == backendOwner.Value, ct);
-        if (!ownerIsMember)
+        var operatorOwnsBackend = command.Actor.IsAdmin && command.Actor.UserId == backendOwner.Value;
+        if (!ownerIsMember && !operatorOwnsBackend)
             return Result.Failure<RoleBindingDto>("Model backend not found.");
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);

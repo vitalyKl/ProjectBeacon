@@ -56,17 +56,27 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.False(await _db.Projects.IgnoreQueryFilters().AnyAsync(p => p.Id == projectId, TestContext.Current.CancellationToken));
     }
 
+    private async Task<Org> SeedOwnedOrgAsync(Guid userId, string name)
+    {
+        var org = Org.Create(name);
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, userId, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return org;
+    }
+
     private async Task<(ActorContext Actor, Guid ProjectId)> CreateOwnedProject()
     {
         var user = User.Create("owner", "owner@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var actor = new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var org = await SeedOwnedOrgAsync(user.Id, "Acme");
         var tenant = new TenantContext();
-        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection), tenant).HandleAsync(
-            new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor));
         var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), _auth, tenant).HandleAsync(
-            new CreateProjectCommand(new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor));
+            new CreateProjectCommand(new CreateProjectRequest("Beacon", "desc", org.Id), actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(project.Success, project.Error);
         return (actor, project.Value!.Id);
     }
 }
