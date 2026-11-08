@@ -522,6 +522,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "PasswordResetTokens",  // user credential recovery
             "LocalModelBackends",   // user-owned model registry
             "AgentTemplates",       // user-owned agent templates
+            "AgentProfiles",         // user-owned overrides of built-in agent profiles
             "TaskKinds",            // global catalog
             "TaskKindPhases",       // catalog child of TaskKinds
             "DaemonDevices",        // user-owned devices, not tenant-filtered

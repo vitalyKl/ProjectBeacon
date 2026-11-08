@@ -1930,6 +1930,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     internal static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {
+        if (!authorization.CommandsEnabled)
+            return false;
+
         // Command execution is never advertised outside an isolated worktree. Interactive
         // sessions are governed by workstation policy; only Actor pipeline sessions may execute.
         if (!authorization.IsolatedWorkspace)

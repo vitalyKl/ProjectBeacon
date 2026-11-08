@@ -565,6 +565,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
         public DbSet<LocalModelBackend> LocalModelBackends => _inner.LocalModelBackends;
         public DbSet<AgentTemplate> AgentTemplates => _inner.AgentTemplates;
+        public DbSet<AgentProfile> AgentProfiles => _inner.AgentProfiles;
         public DbSet<TaskKind> TaskKinds => _inner.TaskKinds;
         public DbSet<TaskKindPhase> TaskKindPhases => _inner.TaskKindPhases;
         public DbSet<TaskPhase> TaskPhases => _inner.TaskPhases;
@@ -642,6 +643,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
         public DbSet<LocalModelBackend> LocalModelBackends => _inner.LocalModelBackends;
         public DbSet<AgentTemplate> AgentTemplates => _inner.AgentTemplates;
+        public DbSet<AgentProfile> AgentProfiles => _inner.AgentProfiles;
         public DbSet<TaskKind> TaskKinds => _inner.TaskKinds;
         public DbSet<TaskKindPhase> TaskKindPhases => _inner.TaskKindPhases;
         public DbSet<TaskPhase> TaskPhases => _inner.TaskPhases;

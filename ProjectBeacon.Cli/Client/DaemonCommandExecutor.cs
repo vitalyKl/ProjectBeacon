@@ -341,6 +341,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() : null;
         var title = root.TryGetProperty("title", out var titleValue) ? titleValue.GetString() : "ProjectBeacon pipeline";
         var reasoningEffort = root.TryGetProperty("reasoningEffort", out var effortValue) ? effortValue.GetString() : null;
+        var agentMode = root.TryGetProperty("agentMode", out var modeValue)
+            && modeValue.ValueKind == JsonValueKind.String
+            && string.Equals(modeValue.GetString(), "plan", StringComparison.OrdinalIgnoreCase)
+                ? "plan" : "build";
+        var commandsEnabled = !root.TryGetProperty("commandsEnabled", out var commandsValue)
+            || commandsValue.ValueKind != JsonValueKind.False;
         var contextLimit = root.TryGetProperty("contextLimit", out var limitValue)
             && limitValue.ValueKind == JsonValueKind.Number
             && limitValue.TryGetInt32(out var parsedLimit)
@@ -401,8 +407,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             pipelineRole,
             token.AllowedMcpTools, token.McpServers,
             sessionWorktree.ProjectRoot,
-            IsolatedWorkspace: true);
+            IsolatedWorkspace: true,
+            CommandsEnabled: commandsEnabled);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
+        await runtime.SwitchAgentAsync(externalSessionId, agentMode, ct);
         var workstationSettings = _loadSettings();
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
         var pipelineIdleMinutes = Math.Clamp(workstationSettings.PipelineIdleTimeoutMinutes, 1, Math.Min(30, pipelineMaxMinutes - 1));

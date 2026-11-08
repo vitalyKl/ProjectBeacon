@@ -10,6 +10,19 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeAgentRuntimeTests
 {
+    [Fact]
+    public void RunCommandAuthorization_RespectsProfileCommandFlag()
+    {
+        var authorization = new AgentHarnessAuthorization(
+            "https://beacon.test", "token", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, Path.GetTempPath(), DateTime.UtcNow.AddMinutes(2), Guid.NewGuid(), "Actor",
+            IsolatedWorkspace: true, CommandsEnabled: false);
+
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(authorization));
+        Assert.True(NativeAgentRuntime.IsRunCommandAuthorized(
+            authorization with { CommandsEnabled = true }));
+    }
+
     [Theory]
     [InlineData("once")]
     [InlineData("always")]

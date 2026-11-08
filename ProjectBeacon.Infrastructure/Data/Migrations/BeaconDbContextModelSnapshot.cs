@@ -116,6 +116,85 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("AuditEvents");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CommandsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultPathsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Effort")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("Instruction")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("PathPolicy")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<bool>("ReportsDiff")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SizeHint")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ToolsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("AgentProfiles");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1730,6 +1809,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("TaskPhaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("WakePlannerAfter")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ProfileSnapshotJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2181,6 +2271,15 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("TaskId", "SortOrder");
 
                     b.ToTable("TaskSteps");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProfile", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentTemplate", b =>

@@ -6,6 +6,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 internal interface ICommandCompletion
@@ -72,7 +73,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
         Guid? sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
         var sessionInfo = await db.PipelineSessions.IgnoreQueryFilters()
             .Where(s => s.Id == (sessionId ?? Guid.Empty) && s.ProjectId == projectId)
-            .Select(s => new { s.Role, s.SubtaskId })
+            .Select(s => new { s.Role, s.SubtaskId, s.Id, s.TaskId })
             .FirstOrDefaultAsync(ct);
         string? externalSessionId = null;
         if (success && !string.IsNullOrWhiteSpace(resultJson))
@@ -110,8 +111,8 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             if (closed == 1 && sessionInfo?.Role == PipelineRole.Actor)
             {
                 // A clean turn that skipped subtask_report_result must not strand InProgress.
-                await FailActorSubtaskAsync(db, projectId, sessionInfo.SubtaskId, completedAt,
-                    "Actor session ended without reporting a subtask result.", ct);
+                await FailActorSubtaskAsync(db, projectId, sessionInfo.TaskId, sessionInfo.SubtaskId,
+                    sessionInfo.Id, completedAt, "Actor session ended without reporting a subtask result.", ct);
             }
             return;
         }
@@ -132,23 +133,41 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                     .SetProperty(x => x.LastActivityAt, now)
                     .SetProperty(x => x.FailureReason, reason), ct);
             if (failed == 1 && sessionInfo?.Role == PipelineRole.Actor)
-                await FailActorSubtaskAsync(db, projectId, sessionInfo.SubtaskId, now, reason, ct);
+                await FailActorSubtaskAsync(db, projectId, sessionInfo.TaskId, sessionInfo.SubtaskId, sessionInfo.Id, now, reason, ct);
         }
     }
 
-    private static Task<int> FailActorSubtaskAsync(
-        IBeaconDb db, Guid projectId, Guid? subtaskId, DateTime now, string reason, CancellationToken ct)
+    private static async Task<int> FailActorSubtaskAsync(
+        IBeaconDb db, Guid projectId, Guid taskId, Guid? subtaskId, Guid sessionId,
+        DateTime now, string reason, CancellationToken ct)
     {
         if (subtaskId is not { } id)
-            return Task.FromResult(0);
+            return 0;
 
-        return db.Subtasks.IgnoreQueryFilters()
+        var subtask = await db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.Id == id && s.TaskId == taskId && s.ProjectId == projectId
+                && (s.Status == SubtaskStatus.InProgress || s.Status == SubtaskStatus.WaitingForUser))
+            .Select(s => new { s.ProfileKey, s.Status })
+            .FirstOrDefaultAsync(ct);
+        if (subtask is null)
+            return 0;
+
+        var failed = await db.Subtasks.IgnoreQueryFilters()
             .Where(s => s.Id == id && s.ProjectId == projectId
                 && (s.Status == SubtaskStatus.InProgress || s.Status == SubtaskStatus.WaitingForUser))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(x => x.Status, SubtaskStatus.Failed)
                 .SetProperty(x => x.Summary, reason)
                 .SetProperty(x => x.UpdatedAt, now), ct);
+        if (failed == 0)
+            return 0;
+
+        var attempt = await db.TaskWorkspaceSections.IgnoreQueryFilters().CountAsync(section =>
+            section.TaskId == taskId && section.ProjectId == projectId
+            && section.AuthorSubtaskId == id && section.Kind == "Report", ct) + 1;
+        db.TaskWorkspaceSections.Add(TaskWorkspaceReports.Create(
+            taskId, projectId, id, attempt, reason, reason, sessionId, subtask.ProfileKey));
+        return failed;
     }
 }
 

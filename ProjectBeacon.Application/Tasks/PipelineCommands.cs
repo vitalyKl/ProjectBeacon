@@ -16,7 +16,9 @@ public record SubtaskDto(
     IReadOnlyList<string> AllowedPaths,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    Guid? TaskPhaseId = null);
+    Guid? TaskPhaseId = null,
+    string? ProfileKey = null,
+    bool WakePlannerAfter = false);
 
 /// <summary>One pipeline session, including role, status, and prompt context.</summary>
 public record PipelineSessionDto(
@@ -84,10 +86,13 @@ public record CreateSubtaskRequest(
     Guid TaskId,
     string Instructions,
     IReadOnlyList<string>? AllowedMcpTools = null,
-    IReadOnlyList<string>? AllowedPaths = null);
+    IReadOnlyList<string>? AllowedPaths = null,
+    string? Profile = null,
+    bool WakePlannerAfter = false,
+    IReadOnlyList<string>? OptionalMcpTools = null);
 
 /// <summary>Creates a subtask on a task.</summary>
-public record CreateSubtaskCommand(CreateSubtaskRequest Request) : ICommand<Result<SubtaskDto>>;
+public record CreateSubtaskCommand(CreateSubtaskRequest Request, ActorContext? Actor = null) : ICommand<Result<SubtaskDto>>;
 
 /// <summary>Identifies the subtask an actor session should run.</summary>
 public record StartActorSessionRequest(Guid TaskId, Guid SubtaskId);
@@ -120,7 +125,7 @@ public record FailSubtaskRequest(Guid TaskId, Guid SubtaskId, string Reason, str
 public record FailSubtaskCommand(FailSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Identifies the task whose review stage should start.</summary>
-public record StartReviewRequest(Guid TaskId);
+public record StartReviewRequest(Guid TaskId, bool AutoLaunch = false);
 
 /// <summary>Starts the review session for a task.</summary>
 public record StartReviewCommand(StartReviewRequest Request) : ICommand<Result<PipelineSessionDto>>;

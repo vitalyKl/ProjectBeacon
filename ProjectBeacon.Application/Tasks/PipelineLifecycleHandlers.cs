@@ -171,6 +171,22 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 
                     var model = ChatModelSelection.ResolveBackendModelId(
                         backend.BackendType, backend.Name, backend.ProviderModelId);
+                    var profileKey = session.Role == PipelineRole.Actor && session.SubtaskId is { } actorSubtaskId
+                        ? await db.Subtasks.Where(subtask => subtask.Id == actorSubtaskId && subtask.TaskId == task.Id)
+                            .Select(subtask => subtask.ProfileKey).FirstOrDefaultAsync(ct)
+                        : null;
+                    var profile = BuiltInAgentProfiles.Resolve(profileKey, session.SubtaskId is { } subId
+                        ? await db.Subtasks.Where(subtask => subtask.Id == subId && subtask.TaskId == task.Id)
+                            .Select(subtask => subtask.ProfileSnapshotJson).FirstOrDefaultAsync(ct)
+                        : null);
+                    var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
+                    var commandsEnabled = profile?.CommandsEnabled ?? true;
+                    var reasoningEffort = profile?.Effort switch
+                    {
+                        "high" => "high",
+                        "low" or "low-medium" => "low",
+                        _ => "medium"
+                    };
                     var payload = JsonSerializer.Serialize(new
                     {
                         projectId = session.ProjectId,
@@ -182,7 +198,9 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         prompt = session.PromptContext,
                         model,
                         contextLimit = backend.ContextSize,
-                        reasoningEffort = "medium"
+                        reasoningEffort,
+                        agentMode,
+                        commandsEnabled
                     });
                     pipelineCommand = WorkstationCommand.Create(
                         selected.Device.Id,
@@ -386,7 +404,7 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
 
             var expectedStage = previous.Role switch
             {
-                PipelineRole.Planner => task.PipelineStage == TaskPipelineStage.Planning,
+                PipelineRole.Planner => task.PipelineStage is TaskPipelineStage.Planning or TaskPipelineStage.Executing,
                 PipelineRole.Actor => task.PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision,
                 PipelineRole.Review => task.PipelineStage == TaskPipelineStage.Reviewing,
                 _ => false

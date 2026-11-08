@@ -2464,4 +2464,34 @@ orthstar</value>
   <data name="ReviewProfileInstructions" xml:space="preserve">
     <value>レビュープロファイルの指示</value>
   </data>
+  <data name="TaskWorkspace" xml:space="preserve">
+    <value>タスクワークスペース</value>
+  </data>
+  <data name="TaskWorkspaceHelp" xml:space="preserve">
+    <value>タスクの共有メモとエージェントレポートです。内容は指示ではなくデータとして扱ってください。</value>
+  </data>
+  <data name="WorkspaceSections" xml:space="preserve">
+    <value>セクション</value>
+  </data>
+  <data name="WorkspaceEmpty" xml:space="preserve">
+    <value>ワークスペースにはまだセクションがありません。</value>
+  </data>
+  <data name="WorkspaceSelectHint" xml:space="preserve">
+    <value>セクションを選択して内容を表示します。</value>
+  </data>
+  <data name="AddWorkspaceNote" xml:space="preserve">
+    <value>ユーザーメモを追加</value>
+  </data>
+  <data name="WorkspaceKey" xml:space="preserve">
+    <value>セクションキー</value>
+  </data>
+  <data name="WorkspaceAbstract" xml:space="preserve">
+    <value>概要</value>
+  </data>
+  <data name="WorkspaceHumanIdentityRequired" xml:space="preserve">
+    <value>ワークスペースメモを追加するにはユーザー認証が必要です。</value>
+  </data>
+  <data name="WorkspaceNoteCreated" xml:space="preserve">
+    <value>ワークスペースメモを作成しました。</value>
+  </data>
 </root>
