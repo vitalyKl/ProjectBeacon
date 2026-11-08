@@ -84,12 +84,12 @@
             var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
             foreach (var file in args.GetMultipleFiles(20))
             {
-                if (file.Size is <= 0 or > PhysicalAttachmentService.MaxFileLength)
+                if (file.Size is <= 0 or > DatabaseAttachmentService.MaxFileLength)
                 {
                     Snackbar.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
                     continue;
                 }
-                await using var stream = file.OpenReadStream(PhysicalAttachmentService.MaxFileLength);
+                await using var stream = file.OpenReadStream(DatabaseAttachmentService.MaxFileLength);
                 await Attachments.UploadTaskAsync(Task.ProjectId, Task.Id, actor, stream, file.Name, file.ContentType, file.Size);
             }
             Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
