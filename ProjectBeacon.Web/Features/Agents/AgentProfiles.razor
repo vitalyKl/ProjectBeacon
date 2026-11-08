@@ -58,7 +58,7 @@ else
                     <MudText Typo="Typo.subtitle2">@L["ExecutionProfileTools"]</MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ExecutionProfileToolHint"]</MudText>
                     <MudGrid>
-                        @foreach (var tool in profile.Basis.Tools)
+                        @foreach (var tool in profile.Basis.Tools.Where(tool => !profile.Basis.RequiredTools.Contains(tool, StringComparer.Ordinal)))
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudCheckBox T="bool" Value="@profile.Tools.Contains(tool, StringComparer.Ordinal)"

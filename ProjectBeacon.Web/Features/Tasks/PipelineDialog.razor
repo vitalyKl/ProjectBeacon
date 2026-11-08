@@ -3,6 +3,7 @@
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CreateSubtaskHandler CreateSubtask
+@inject GetAgentProfileOverridesHandler GetAgentProfileOverrides
 @inject ReportSubtaskResultHandler ReportResult
 @inject FailSubtaskHandler FailSubtask
 @inject RecordReviewVerdictHandler RecordVerdict
@@ -18,12 +19,12 @@
             <MudSelectItem Value="@string.Empty">@L["NoProfile"]</MudSelectItem>
             @foreach (var profile in BuiltInAgentProfiles.All)
             {
-                <MudSelectItem Value="@profile.Key">@profile.Key</MudSelectItem>
+                <MudSelectItem Value="@profile.Key">@ProfileName(profile) (@profile.Key)</MudSelectItem>
             }
         </MudSelect>
         @if (SelectedProfile is { } selectedProfile)
         {
-            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@selectedProfile.Description</MudAlert>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@ProfileDescription(selectedProfile)</MudAlert>
             @if (selectedProfile.PathPolicy == AgentProfilePathPolicy.FromPlanner)
             {
                 <MudTextField @bind-Value="_allowedPaths" Label="@L["AllowedPaths"]" HelperText="@L["AllowedPathsHint"]"
@@ -84,6 +85,24 @@
     private string _note = string.Empty;
     private SubtaskDto? _reopenTarget;
     private bool _saving;
+    private IReadOnlyDictionary<string, AgentProfileOverrideDto> _profileOverrides =
+        new Dictionary<string, AgentProfileOverrideDto>(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Guid.TryParse(Params.ActorId, out var userId) || userId == Guid.Empty)
+            return;
+
+        var result = await GetAgentProfileOverrides.HandleAsync(new GetAgentProfileOverridesCommand(userId));
+        if (result.Success)
+            _profileOverrides = result.Value!.ToDictionary(profile => profile.Key, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private string ProfileName(BuiltInAgentProfile profile) =>
+        _profileOverrides.TryGetValue(profile.Key, out var custom) ? custom.Name : profile.Name;
+
+    private string ProfileDescription(BuiltInAgentProfile profile) =>
+        _profileOverrides.TryGetValue(profile.Key, out var custom) ? custom.Description : profile.Description;
 
     private string ConfirmLabel => Params.Mode == PipelineDialogMode.CreateSubtask ? L["Create"].Value : L["Confirm"].Value;
 
