@@ -44,6 +44,9 @@ public class LoginHandler
             return Result.Failure<LoginResponse>("Invalid credentials.");
         }
 
+        if (user.IsDisabled)
+            return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
+
         user.RecordLogin();
         if (!string.IsNullOrEmpty(command.Request.IpAddress))
         {
@@ -58,7 +61,7 @@ public class LoginHandler
             ? null
             : _tokens.GenerateToken(user, secret, projectId: projectId, orgId: orgId);
 
-        return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, user.IsAdmin, token));
+        return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, user.IsAdmin, token, user.SessionVersion));
     }
 }
 /// <summary>
