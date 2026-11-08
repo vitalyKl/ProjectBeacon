@@ -4,7 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
 using Domain.Common;
+using Domain.Entities.Agents;
 using Domain.Entities.Tasks;
+using System.Text.Json;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +45,12 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
             if (profile is null)
                 return Result.Failure<SubtaskDto>(
                     $"Unknown subtask profile '{profileKey}'. Available profiles: {string.Join(", ", BuiltInAgentProfiles.All.Select(p => p.Key))}.");
+
+            AgentProfile? customProfile = null;
+            if (command.Actor?.UserId is { } profileOwnerId)
+                customProfile = await db.AgentProfiles.FirstOrDefaultAsync(
+                    profileRow => profileRow.UserId == profileOwnerId && profileRow.Key == profileKey, ct);
+            profile = BuiltInAgentProfiles.ApplyOverride(profile, customProfile)!;
 
             var defaults = profile.Tools;
             var optionalGrants = new HashSet<string>(StringComparer.Ordinal);
@@ -102,7 +110,9 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
 
         var subtask = Subtask.Create(
             instructions, task.Id, task.ProjectId,
-            allowedTools, allowedPaths, profileKey, command.Request.WakePlannerAfter);
+            allowedTools, allowedPaths, profileKey, command.Request.WakePlannerAfter,
+            profileKey is null ? null : JsonSerializer.Serialize(BuiltInAgentProfiles.Resolve(profileKey,
+                profileKey is null ? null : JsonSerializer.Serialize(profile))));
         var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
         var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
             ?? phases.FirstOrDefault(p => string.Equals(p.Key, "do", StringComparison.Ordinal));
