@@ -88,7 +88,8 @@ public record CreateSubtaskRequest(
     IReadOnlyList<string>? AllowedMcpTools = null,
     IReadOnlyList<string>? AllowedPaths = null,
     string? Profile = null,
-    bool WakePlannerAfter = false);
+    bool WakePlannerAfter = false,
+    IReadOnlyList<string>? OptionalMcpTools = null);
 
 /// <summary>Creates a subtask on a task.</summary>
 public record CreateSubtaskCommand(CreateSubtaskRequest Request) : ICommand<Result<SubtaskDto>>;
