@@ -39,7 +39,7 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
         if (alreadyMember)
             return Result.Failure<ProjectMemberDto>("User is already a member of this project.");
 
-        var project = await db.Projects.IgnoreQueryFilters()
+        var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
         if (project is null)
             return Result.Failure<ProjectMemberDto>("Project not found.");
