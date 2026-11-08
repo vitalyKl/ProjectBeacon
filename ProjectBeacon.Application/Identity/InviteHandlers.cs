@@ -358,7 +358,7 @@ public class RevokeProjectInviteHandler
         var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: invite.ProjectId, ct: ct);
         if (!check.Success)
             return Result.Forbidden();
-        var project = await db.Projects.IgnoreQueryFilters()
+        var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == invite.ProjectId, ct);
         if (project is null)
             return Result.Failure("Project not found.");
