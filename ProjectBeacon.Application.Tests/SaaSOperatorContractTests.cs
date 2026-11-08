@@ -68,6 +68,22 @@ public sealed class SaaSOperatorContractTests
     }
 
     [Fact]
+    public void ReservedOperatorRolesHaveSeparatedPermissionSets()
+    {
+        var support = OperatorRolePermissionSets.For(OperatorRole.Support);
+        var billing = OperatorRolePermissionSets.For(OperatorRole.Billing);
+        var auditor = OperatorRolePermissionSets.For(OperatorRole.Auditor);
+
+        Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.UsersManage));
+        Assert.False(OperatorPermissionSets.Includes(support, OperatorPermission.BillingManage));
+        Assert.True(OperatorPermissionSets.Includes(billing, OperatorPermission.BillingManage));
+        Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.UsersManage));
+        Assert.True(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditExport));
+        Assert.False(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditRead | OperatorPermission.UsersManage));
+        Assert.Equal(OperatorPermission.None, OperatorRolePermissionSets.For((OperatorRole)999));
+    }
+
+    [Fact]
     public void EntitlementIsEffectiveOnlyInsideItsActiveTimeWindow()
     {
         var start = DateTimeOffset.Parse("2026-11-01T00:00:00Z");
