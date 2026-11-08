@@ -46,8 +46,8 @@ public sealed class DatabaseAttachmentService : IAttachmentService
         if (!taskExists)
             return null;
 
-        // The HTTP endpoint enforces the same maximum before opening the stream. Keep
-        // this check here as well because task attachments can also be uploaded by MCP.
+        // The endpoint enforces this limit before opening the stream. Keep the same
+        // validation here for every other caller, including workstation/MCP uploads.
         await using var buffer = new MemoryStream(checked((int)length));
         await content.CopyToAsync(buffer, ct);
         if (buffer.Length != length)
@@ -59,13 +59,12 @@ public sealed class DatabaseAttachmentService : IAttachmentService
             safeName,
             normalizedType,
             length,
-            legacyStorageKey: null,
+            Guid.NewGuid().ToString("N"),
             actor.Type.ToString(),
             actor.UserId ?? actor.TokenId ?? actor.DeviceId);
         var payload = TaskAttachmentContent.Create(projectId, attachment.Id, buffer.ToArray());
 
-        // EF Core wraps this single SaveChanges call in a transaction, so metadata
-        // and bytes cannot be committed independently.
+        // One SaveChanges call persists metadata and bytes in the same database transaction.
         db.TaskAttachments.Add(attachment);
         db.TaskAttachmentContents.Add(payload);
         await db.SaveChangesAsync(ct);
@@ -81,8 +80,7 @@ public sealed class DatabaseAttachmentService : IAttachmentService
         if (!taskExists)
             return [];
 
-        // Project only metadata. Do not materialize the bytea payload while rendering
-        // task lists or attachment panels.
+        // Project only metadata. The bytea column is not selected for task lists.
         return await db.TaskAttachments.AsNoTracking()
             .Where(item => item.ProjectId == projectId && item.TaskId == taskId)
             .OrderBy(item => item.CreatedAt)
@@ -112,11 +110,11 @@ public sealed class DatabaseAttachmentService : IAttachmentService
             .Select(payload => payload.Content)
             .SingleOrDefaultAsync(ct);
 
-        // Existing files from the old filesystem implementation remain readable when
-        // an operator explicitly mounts their legacy directory. There is no write path.
-        if (bytes is null && _legacyRoot is not null && item.LegacyStorageKey is not null)
+        // Existing filesystem-backed attachments remain downloadable when their old
+        // persistent directory is explicitly mounted. This path is read-only.
+        if (bytes is null && _legacyRoot is not null)
         {
-            var legacyPath = ResolveLegacyPath(item.LegacyStorageKey);
+            var legacyPath = ResolveLegacyPath(item.StorageKey);
             if (File.Exists(legacyPath))
                 bytes = await File.ReadAllBytesAsync(legacyPath, ct);
         }
