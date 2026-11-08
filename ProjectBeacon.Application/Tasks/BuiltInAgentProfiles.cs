@@ -85,10 +85,18 @@ public static class BuiltInAgentProfiles
     public static string PlannerCatalogText() => string.Join(Environment.NewLine,
         Profiles.Select(p => $"- {p.Key}: {p.Description} (mode={p.Mode}, size={p.SizeHint}, effort={p.Effort})"));
 
+    public static bool IsSafeRelativePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.StartsWith('/')
+            || path.IndexOf((char)92) >= 0 || path.Contains(':')
+            || Path.IsPathRooted(path))
+            return false;
+        return path.Split('/').All(part => part.Length > 0 && part is not ("." or ".."));
+    }
+
     public static bool IsWithinDefaults(string path, IReadOnlyList<string> defaults)
     {
-        if (string.IsNullOrWhiteSpace(path) || path.StartsWith('/') || path.Contains('\\')
-            || Path.IsPathRooted(path) || path.Split('/').Any(part => part is "" or "." or ".."))
+        if (!IsSafeRelativePath(path))
             return false;
         return defaults.Any(prefix => string.Equals(path, prefix, StringComparison.OrdinalIgnoreCase)
             || path.StartsWith(prefix.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase));
