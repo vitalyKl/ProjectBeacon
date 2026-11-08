@@ -189,9 +189,9 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
         var query = db.Projects.AsQueryable();
         if (command.Request.OrgId is { } orgId)
         {
-            var actor = command.Actor;
-            if (actor is null)
+            if (!command.Actor.HasValue)
                 return Result.Failure<IList<ProjectDto>>("Org not found.", ErrorKind.NotFound);
+            var actor = command.Actor.Value;
 
             if (actor.IsAdmin)
             {
