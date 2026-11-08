@@ -356,7 +356,8 @@ public sealed class ApiTokenAuthMiddleware
 
         if (commandKind == WorkstationCommandKind.RunEvalTurn)
         {
-            if (taskId is { } evalTaskId
+            if (method == HttpMethods.Get
+                && taskId is { } evalTaskId
                 && TaskAttachmentToolForRequest(segments, projectId, evalTaskId, method) is not null)
                 return true;
             return IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: false);
@@ -401,7 +402,8 @@ public sealed class ApiTokenAuthMiddleware
                 && (plannerWorkspaceTool != McpToolNames.WorkspaceWrite || method == HttpMethods.Post))
                 return true;
 
-            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
+            if (method == HttpMethods.Get
+                && TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
@@ -455,7 +457,8 @@ public sealed class ApiTokenAuthMiddleware
                 && reviewWorkspaceTool != McpToolNames.WorkspaceWrite)
                 return true;
 
-            if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
+            if (method == HttpMethods.Get
+                && TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is not null)
                 return true;
 
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
