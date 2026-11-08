@@ -72,6 +72,10 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
             else
                 allowedTools = defaults.Concat(optionalGrants).Distinct(StringComparer.Ordinal).ToArray();
 
+            if (allowedPaths?.Any(path => !BuiltInAgentProfiles.IsSafeRelativePath(path)) == true)
+                return Result.Failure<SubtaskDto>(
+                    "allowedPaths must contain safe repository-relative paths without absolute roots or traversal segments.");
+
             switch (profile.PathPolicy)
             {
                 case AgentProfilePathPolicy.FromPlanner:
