@@ -118,7 +118,11 @@ public static partial class McpStdioServer
     }
 
     private static Task<JsonObject> ApiTextAsync(JsonNode id, McpToolText text) =>
-        Task.FromResult(text.IsError ? ToolError(id, text.Text) : Result(id, Content(text.Text)));
+        Task.FromResult(text.IsError
+            ? ToolError(id, text.Text)
+            : Result(id, text.ContentBlocks is { } blocks
+                ? new JsonObject { ["content"] = blocks.DeepClone() }
+                : Content(text.Text)));
 
     private static async Task<JsonObject> ContextCompileAsync(JsonNode id, FileWorkspace workspace, CodeIndex index, BeaconApiClient api, McpEnvironment env)
     {

@@ -89,6 +89,96 @@ public sealed class McpStdioServerTests
         }
     }
 
+    [Theory]
+    [InlineData("task_list_attachments")]
+    [InlineData("task_read_attachment")]
+    public async Task ActorCannotCallAttachmentToolsWithoutExplicitSubtaskGrant(string toolName)
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var subtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var attachmentId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var requestPaths = new ConcurrentQueue<string>();
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"));
+        using var http = new HttpClient(new StubApiHandler(request =>
+        {
+            var path = request.RequestUri!.PathAndQuery;
+            requestPaths.Enqueue(path);
+            if (request.Method == HttpMethod.Get && path == $"/v1/tasks/{taskId:D}/pipeline")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new
+                        {
+                            subtasks = new[]
+                            {
+                                new
+                                {
+                                    id = subtaskId.ToString("D"),
+                                    status = "InProgress",
+                                    allowedMcpTools = Array.Empty<string>(),
+                                    allowedPaths = Array.Empty<string>()
+                                }
+                            }
+                        }),
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-actor-attachments-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var arguments = toolName == "task_read_attachment"
+                ? new JsonObject { ["attachmentId"] = attachmentId.ToString("D") }
+                : new JsonObject();
+            var request = new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = 1,
+                ["method"] = "tools/call",
+                ["params"] = new JsonObject
+                {
+                    ["name"] = toolName,
+                    ["arguments"] = arguments
+                }
+            };
+            using var input = new MemoryStream();
+            WriteFrame(input, request.ToJsonString());
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Contains("not allowed for this subtask", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Equal(new[] { $"/v1/tasks/{taskId:D}/pipeline" }, requestPaths.ToArray());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Fact]
     public async Task ToolsList_EvalRoleKeepsWorkspaceToolsButHidesPipelineLifecycleTools()
     {

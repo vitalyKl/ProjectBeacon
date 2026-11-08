@@ -6,7 +6,7 @@ using Domain.Common;
 using Domain.Enums;
 using Domain.Entities.Tasks;
 
-internal readonly record struct McpToolText(bool IsError, string Text);
+internal readonly record struct McpToolText(bool IsError, string Text, JsonArray? ContentBlocks = null);
 
 internal static partial class McpApiTools
 {

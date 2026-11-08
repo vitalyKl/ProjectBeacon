@@ -1,9 +1,12 @@
 namespace ProjectBeacon.API.Tests;
 
+using System.Security.Claims;
 using Domain.Common;
 using Domain.Enums;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
+using ProjectBeacon.API.Endpoints;
 
 public sealed class HarnessApiAuthorizationTests
 {
@@ -162,6 +165,143 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/start", _taskId));
         Assert.False(Allowed(WorkstationCommandKind.RunEvalTurn, null,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks", _taskId));
+    }
+
+    [Fact]
+    public void CookieUploadOriginMustMatchSchemeHostAndPort()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+        context.Request.Headers["Origin"] = "https://beacon.example.com";
+        Assert.True(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "https://evil.beacon.example.com";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "http://beacon.example.com";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "https://beacon.example.com:444";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers.Remove("Origin");
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_RequiresOriginBasedOnAuthenticatedSchemeNotHeaderPresence()
+    {
+        var cookieContext = new DefaultHttpContext();
+        cookieContext.User = new ClaimsPrincipal(
+            new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme));
+        Assert.True(TaskAttachmentEndpoints.UsesCookieAuthentication(cookieContext));
+
+        var jwtContext = new DefaultHttpContext();
+        jwtContext.User = new ClaimsPrincipal(new ClaimsIdentity("Bearer"));
+        Assert.False(TaskAttachmentEndpoints.UsesCookieAuthentication(jwtContext));
+
+        var apiTokenContext = new DefaultHttpContext();
+        apiTokenContext.User = new ClaimsPrincipal(new ClaimsIdentity("ApiToken"));
+        Assert.False(TaskAttachmentEndpoints.UsesCookieAuthentication(apiTokenContext));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_AcceptsExactSameOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+        context.Request.Headers["Origin"] = "https://beacon.example.com";
+
+        Assert.True(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Theory]
+    [InlineData("https://evil.example.com", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com.evil.test", "https", "beacon.example.com", 443)]
+    [InlineData("http://beacon.example.com", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com:8443", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com/upload", "https", "beacon.example.com", 443)]
+    [InlineData("https://beacon.example.com", "https", "beacon.example.com", 8443)]
+    public void CookieAttachmentUpload_RejectsOriginMismatch(
+        string origin, string requestScheme, string requestHost, int requestPort)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = requestScheme;
+        context.Request.Host = new HostString(requestHost, requestPort);
+        context.Request.Headers["Origin"] = origin;
+
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void CookieAttachmentUpload_RejectsMissingOrMalformedOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("beacon.example.com");
+
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+
+        context.Request.Headers["Origin"] = "null";
+        Assert.False(TaskAttachmentEndpoints.IsSameOriginUpload(context.Request));
+    }
+
+    [Fact]
+    public void ActorCanReadTaskAttachmentsOnlyWhenEachToolIsExplicitlyGranted()
+    {
+        var listPath = $"/v1/projects/{_projectId:D}/tasks/{_taskId:D}/attachments";
+        var readPath = $"{listPath}/{Guid.NewGuid():D}";
+
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, listPath, _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, readPath, _taskId, _subtaskId,
+            [McpToolNames.TaskListAttachments]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, listPath, _taskId, _subtaskId,
+            [McpToolNames.TaskListAttachments]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, readPath, _taskId, _subtaskId,
+            [McpToolNames.TaskReadAttachment]));
+
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{Guid.NewGuid():D}/tasks/{_taskId:D}/attachments",
+            _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/tasks/{Guid.NewGuid():D}/attachments",
+            _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, listPath, _taskId, _subtaskId, [McpToolNames.TaskListAttachments]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"{listPath}/not-a-guid", _taskId, _subtaskId,
+            [McpToolNames.TaskReadAttachment]));
+    }
+
+    [Fact]
+    public void PlannerReviewerAndEvalCanReadOnlyAttachmentsForTheirPinnedTask()
+    {
+        var listPath = $"/v1/projects/{_projectId:D}/tasks/{_taskId:D}/attachments";
+        var readPath = $"{listPath}/{Guid.NewGuid():D}";
+        var wrongProjectPath = $"/v1/projects/{Guid.NewGuid():D}/tasks/{_taskId:D}/attachments";
+        var wrongTaskPath = $"/v1/projects/{_projectId:D}/tasks/{Guid.NewGuid():D}/attachments";
+
+        var allowedRoles = new (WorkstationCommandKind Kind, PipelineRole? Role)[]
+        {
+            (WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner),
+            (WorkstationCommandKind.RunPipelineSession, PipelineRole.Review),
+            (WorkstationCommandKind.RunEvalTurn, null)
+        };
+
+        foreach (var (kind, role) in allowedRoles)
+        {
+            Assert.True(Allowed(kind, role, HttpMethods.Get, listPath, _taskId));
+            Assert.True(Allowed(kind, role, HttpMethods.Get, readPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Get, wrongProjectPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Get, wrongTaskPath, _taskId));
+            Assert.False(Allowed(kind, role, HttpMethods.Post, listPath, _taskId));
+        }
     }
 
     [Fact]

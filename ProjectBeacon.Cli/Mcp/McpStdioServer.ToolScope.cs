@@ -77,7 +77,8 @@ public static partial class McpStdioServer
     private static readonly string[] ReadOnlyWorkspaceTools =
     [
         McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,
-        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange
+        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
+        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
     ];
 
     private static readonly string[] PlannerSupervisorTools =
@@ -118,7 +119,8 @@ public static partial class McpStdioServer
 
     private static readonly string[] ActorWorkspaceTools =
     [
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite
+        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite,
+        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
     ];
 
     private static readonly string[] EvalAllowedTools =

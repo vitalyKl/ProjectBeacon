@@ -46,6 +46,18 @@ public sealed class McpToolCatalogTests
     }
 
     [Fact]
+    public void TaskAttachmentReadTools_AreReadScopedToTaskRead()
+    {
+        foreach (var name in new[] { McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment })
+        {
+            var descriptor = McpToolCatalog.Get(name);
+            Assert.Equal(McpToolScope.Read, descriptor.Scope);
+            Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskRead, descriptor.Capability);
+            Assert.Equal(McpToolHandler.Api, descriptor.Handler);
+        }
+    }
+
+    [Fact]
     public void RegistryAliases_ResolveToTheirCanonicalDescriptor()
     {
         foreach (var descriptor in McpToolCatalog.All)

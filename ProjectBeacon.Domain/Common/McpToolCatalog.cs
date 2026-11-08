@@ -58,6 +58,8 @@ public static class McpToolNames
     public const string ClaimTask = "claim_task";
     public const string AddTaskComment = "add_task_comment";
     public const string TaskAttachFile = "task_attach_file";
+    public const string TaskListAttachments = "task_list_attachments";
+    public const string TaskReadAttachment = "task_read_attachment";
     public const string SetTaskDependencies = "set_task_dependencies";
     public const string AddReviewNotes = "add_review_notes";
     public const string ListTaskSteps = "list_task_steps";
@@ -167,7 +169,8 @@ public static class McpToolCatalog
         [
             // Task and project API tools.
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
-                McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps),
+                McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
+                McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment),
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
                 McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,

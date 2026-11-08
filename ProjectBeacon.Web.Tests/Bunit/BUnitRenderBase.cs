@@ -153,7 +153,7 @@ internal sealed class FakeAttachmentService : IAttachmentService
 {
     public Task<TaskAttachmentDto?> UploadTaskAsync(
         Guid projectId, Guid taskId, ProjectBeacon.Application.Authorization.ActorContext actor,
-        Stream content, string fileName, string? contentType, long length, CancellationToken ct = default)
+        Stream content, string fileName, string? contentType, long? length, CancellationToken ct = default)
         => Task.FromResult<TaskAttachmentDto?>(null);
 
     public Task<IReadOnlyList<TaskAttachmentDto>> ListTaskAsync(
@@ -161,6 +161,6 @@ internal sealed class FakeAttachmentService : IAttachmentService
         => Task.FromResult<IReadOnlyList<TaskAttachmentDto>>([]);
 
     public Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
-        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default)
+        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default, long? maxBytes = null)
         => Task.FromResult<(TaskAttachmentDto Attachment, byte[] Content)?>(null);
 }
