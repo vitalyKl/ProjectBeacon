@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Domain.Entities.Agents;
+using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
@@ -47,6 +48,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<LocalModelBackend> LocalModelBackends { get; }
     DbSet<AgentTemplate> AgentTemplates { get; }
     DbSet<AgentProfile> AgentProfiles { get; }
+    DbSet<AuditEvent> AuditEvents { get; }
     DbSet<TaskKind> TaskKinds { get; }
     DbSet<TaskKindPhase> TaskKindPhases { get; }
     DbSet<TaskPhase> TaskPhases { get; }
