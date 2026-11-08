@@ -154,7 +154,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
 
         var acceptInvite = await new CreateProjectInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateProjectInviteRequest(
                 _project.Id, _invitee.Email, MemberRole.Member, actor),
                 TestContext.Current.CancellationToken);
@@ -178,7 +178,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         var actor = AdminActor();
         var email = new NoopEmailSender();
         var config = new ConfigurationBuilder().Build();
-        var create = new CreateOrgInviteHandler(_factory, email, _authorization, config, auditWriter: _auditWriter);
+        var create = new CreateOrgInviteHandler(_factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory));
 
         var toRevoke = await create.HandleAsync(
             new CreateOrgInviteRequest(_org.Id, "revoke-org@example.test", MemberRole.Member, actor),
@@ -278,7 +278,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             _factory, new BcryptPasswordHasher(), config, auditWriter: _auditWriter);
 
         var orgInvite = await new CreateOrgInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateOrgInviteRequest(
                 _org.Id, "new-org-owner@example.test", MemberRole.Owner, AdminActor()),
                 TestContext.Current.CancellationToken);
@@ -309,7 +309,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
 
         var projectInvite = await new CreateProjectInviteHandler(
-            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            _factory, email, _authorization, config, auditWriter: _auditWriter, adminGate: new DatabaseAdminGate(_factory))
             .HandleAsync(new CreateProjectInviteRequest(
                 _project.Id, "new-project-member@example.test", MemberRole.Member, AdminActor()),
                 TestContext.Current.CancellationToken);
