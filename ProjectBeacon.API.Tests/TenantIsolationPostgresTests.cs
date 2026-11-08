@@ -181,7 +181,7 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
             var user = User.Create("device-owner", $"device-owner-{Guid.NewGuid():N}@example.test", "hash");
             var device = DaemonDevice.Create(
                 "multi-project workstation", user.Id, "fp-" + Guid.NewGuid().ToString("N"),
-                "hash-" + Guid.NewGuid().ToString("N"), "bcd_" + Guid.NewGuid().ToString("N"));
+                "hash-" + Guid.NewGuid().ToString("N"), "bcd_test_prefix");
             var task = TaskItem.Create("Fail actor and publish report", projectBEntity.Id);
             var subtask = Subtask.Create("Inspect the target project failure.", task.Id, projectBEntity.Id,
                 [Domain.Common.McpToolNames.WorkspaceIndex, Domain.Common.McpToolNames.WorkspaceRead,
