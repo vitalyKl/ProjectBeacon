@@ -22,12 +22,22 @@ public sealed class PipelineActorQueueDispatcher
     }
 
     public Task DispatchNextAsync(Guid taskId, CancellationToken ct = default) =>
-        DispatchNextAsync(taskId, null, ct);
+        DispatchAfterActorTerminalAsync(taskId, null, ct);
+
+    /// <summary>
+    /// Advances the Actor queue after a subtask is explicitly failed, including a Pending
+    /// subtask that never had an Actor session.
+    /// </summary>
+    public Task DispatchAfterSubtaskFailureAsync(Guid taskId, Guid subtaskId, CancellationToken ct = default) =>
+        DispatchAfterActorTerminalAsync(taskId, subtaskId, ct);
 
     public async Task DispatchNextAsync(Guid taskId, Guid? completedSessionId, CancellationToken ct = default)
     {
         if (completedSessionId is null)
+        {
+            await DispatchAfterActorTerminalAsync(taskId, null, ct);
             return;
+        }
 
         await using var db = _dbFactory.CreateDbContext();
         var completed = await db.PipelineSessions.AsNoTracking()
@@ -38,16 +48,22 @@ public sealed class PipelineActorQueueDispatcher
             return;
 
         var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId, ct);
-        if (task is null || task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
+        if (task is null)
             return;
 
-        // A completed Planner turn must not wake itself. It only hands the queue to Actors.
+        // A completed initial Planner may still be in Planning when it produced no subtasks.
+        // Subtask creation moves the task to Executing before any Actor can be queued.
         if (completed.Role == PipelineRole.Planner)
         {
+            if (task.PipelineStage is not (TaskPipelineStage.Planning or TaskPipelineStage.Executing))
+                return;
             await DispatchActorAsync(taskId, ct);
             await AddPlannerNoOpAttentionIfNeededAsync(taskId, completedSessionId.Value, ct);
             return;
         }
+
+        if (task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
+            return;
 
         if (completed.Role == PipelineRole.Review && task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
@@ -69,7 +85,15 @@ public sealed class PipelineActorQueueDispatcher
             return;
         }
 
-        if (completed.Role != PipelineRole.Actor)
+        if (completed.Role == PipelineRole.Actor)
+            await DispatchAfterActorTerminalAsync(taskId, completed.SubtaskId, ct);
+    }
+
+    private async Task DispatchAfterActorTerminalAsync(Guid taskId, Guid? completedSubtaskId, CancellationToken ct)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId, ct);
+        if (task is null || task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
             return;
 
         var activeActors = await db.PipelineSessions.AsNoTracking()
@@ -78,9 +102,18 @@ public sealed class PipelineActorQueueDispatcher
         if (activeActors)
             return;
 
-        // Consume a checkpoint exactly once. The guarded update prevents two completion
-        // notifications from both waking the Planner for the same explorer subtask.
-        var checkpoint = completed.SubtaskId is { } checkpointSubtaskId
+        // Do not start an Actor while a Planner turn is still open. This matters when
+        // a human fails a queued subtask while the Planner is preparing another batch.
+        var openPlanner = await db.PipelineSessions.AsNoTracking()
+            .AnyAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Planner
+                && (s.Status == SessionStatus.Ready || s.Status == SessionStatus.Active
+                    || s.Status == SessionStatus.WaitingForUser), ct);
+        if (openPlanner)
+            return;
+
+        // Consume a checkpoint exactly once. The same path handles successful and failed
+        // Actor subtasks, so a failed explorer still returns control to the Planner.
+        var checkpoint = completedSubtaskId is { } checkpointSubtaskId
             && await db.Subtasks
                 .Where(s => s.Id == checkpointSubtaskId && s.TaskId == taskId && s.WakePlannerAfter)
                 .ExecuteUpdateAsync(update => update
@@ -92,8 +125,10 @@ public sealed class PipelineActorQueueDispatcher
             return;
         }
 
+        var readyActor = await db.PipelineSessions.AnyAsync(s => s.TaskId == taskId
+            && s.Role == PipelineRole.Actor && s.Status == SessionStatus.Ready, ct);
         var pending = await db.Subtasks.AnyAsync(s => s.TaskId == taskId && s.Status == SubtaskStatus.Pending, ct);
-        if (pending)
+        if (readyActor || pending)
         {
             await DispatchActorAsync(taskId, ct);
             return;
@@ -264,7 +299,7 @@ public sealed class PipelineActorQueueDispatcher
     {
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId, ct);
-        if (task?.PipelineStage != TaskPipelineStage.Executing)
+        if (task?.PipelineStage is not (TaskPipelineStage.Planning or TaskPipelineStage.Executing))
             return;
 
         var session = await db.PipelineSessions.AsNoTracking()
