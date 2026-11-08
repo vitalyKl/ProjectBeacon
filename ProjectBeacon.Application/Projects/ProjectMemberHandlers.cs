@@ -96,7 +96,7 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
         if (member is null)
             return Result.Failure("Project member not found.");
 
-        var project = await db.Projects.IgnoreQueryFilters()
+        var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
         if (project is null)
             return Result.Failure("Project not found.");
