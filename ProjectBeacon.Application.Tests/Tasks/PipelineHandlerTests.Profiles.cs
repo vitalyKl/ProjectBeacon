@@ -2,6 +2,9 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
 using Domain.Common;
+using Domain.Enums;
+using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
 {
