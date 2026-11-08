@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Attachments;
 
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Persistence;
@@ -8,13 +9,34 @@ using ProjectBeacon.Domain.Entities.Tasks;
 public sealed class DatabaseAttachmentService : IAttachmentService
 {
     public const long MaxFileLength = 10 * 1024 * 1024;
+    public const long DefaultProjectQuotaBytes = 1024L * 1024 * 1024;
+    public const int DefaultMaxAttachmentsPerTask = 50;
+    private static readonly SemaphoreSlim UploadSlots = new(2, 2);
 
     private readonly IBeaconDbFactory _dbFactory;
     private readonly string? _legacyRoot;
+    private readonly long _projectQuotaBytes;
+    private readonly int _maxAttachmentsPerTask;
 
     public DatabaseAttachmentService(IBeaconDbFactory dbFactory)
+        : this(
+            dbFactory,
+            ReadPositiveLong("ATTACHMENT_PROJECT_QUOTA_BYTES", DefaultProjectQuotaBytes),
+            ReadPositiveInt("ATTACHMENT_MAX_FILES_PER_TASK", DefaultMaxAttachmentsPerTask))
     {
+    }
+
+    public DatabaseAttachmentService(IBeaconDbFactory dbFactory, long projectQuotaBytes, int maxAttachmentsPerTask)
+    {
+        ArgumentNullException.ThrowIfNull(dbFactory);
+        if (projectQuotaBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(projectQuotaBytes));
+        if (maxAttachmentsPerTask <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxAttachmentsPerTask));
+
         _dbFactory = dbFactory;
+        _projectQuotaBytes = projectQuotaBytes;
+        _maxAttachmentsPerTask = maxAttachmentsPerTask;
 
         // Read-only compatibility path for files created by earlier versions.
         // New uploads are always stored in PostgreSQL; construction performs no filesystem I/O.
@@ -24,65 +46,81 @@ public sealed class DatabaseAttachmentService : IAttachmentService
 
     public async Task<TaskAttachmentDto?> UploadTaskAsync(
         Guid projectId, Guid taskId, ActorContext actor, Stream content,
-        string fileName, string? contentType, long length, CancellationToken ct = default)
+        string fileName, string? contentType, long? length, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(content);
         if (length is <= 0 or > MaxFileLength)
-            throw new ArgumentOutOfRangeException(nameof(length), $"Files must be between 1 byte and {MaxFileLength} bytes.");
+            throw new AttachmentRejectedException($"Files must be between 1 byte and {MaxFileLength} bytes.");
 
-        var safeName = Path.GetFileName(fileName.Replace('\\', '/')).Trim();
-        safeName = new string(safeName.Where(ch => !char.IsControl(ch)).Take(255).ToArray());
-        if (string.IsNullOrWhiteSpace(safeName) || safeName is "." or "..")
-            throw new ArgumentException("A valid file name is required.", nameof(fileName));
+        if (!await UploadSlots.WaitAsync(0, ct))
+            throw new AttachmentConcurrencyLimitException("The server is processing the maximum number of simultaneous uploads.");
 
-        var normalizedType = string.IsNullOrWhiteSpace(contentType)
-            ? "application/octet-stream"
-            : contentType.Trim().Split(';', 2)[0].ToLowerInvariant();
-        if (normalizedType.Length > 160)
-            normalizedType = "application/octet-stream";
-
-        await using var db = _dbFactory.CreateDbContext();
-        var taskExists = await db.Tasks.AsNoTracking()
-            .AnyAsync(item => item.Id == taskId && item.ProjectId == projectId, ct);
-        if (!taskExists)
-            return null;
-
-        // The endpoint enforces this limit before opening the stream. Keep the same
-        // validation here for every other caller, including workstation/MCP uploads.
-        await using var buffer = new MemoryStream(checked((int)length));
-        var readBuffer = new byte[81920];
-        long totalRead = 0;
-        while (true)
+        try
         {
-            var read = await content.ReadAsync(readBuffer.AsMemory(), ct);
-            if (read == 0)
-                break;
+            var safeName = SanitizeFileName(fileName);
+            var bytes = await ReadBoundedAsync(content, length, ct);
+            // The request's Content-Type is untrusted. Persist only the type derived from the payload.
+            var detectedType = AttachmentContentInspector.DetectContentType(safeName, bytes);
+            _ = contentType;
 
-            totalRead += read;
-            if (totalRead > length || totalRead > MaxFileLength)
-                throw new InvalidDataException("Uploaded file exceeded the declared or maximum length.");
+            await using var strategyContext = _dbFactory.CreateDbContext();
+            var strategy = strategyContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                // Each retry gets a fresh context because a failed transaction may have
+                // changed EF's tracked entity states.
+                await using var db = _dbFactory.CreateDbContext();
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            await buffer.WriteAsync(readBuffer.AsMemory(0, read), ct);
+                if (db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+                {
+                    // All attachment uploads for this project serialize on this transaction-
+                    // scoped lock. Quotas are computed from rows, so cascaded deletes free
+                    // space automatically and there is no denormalized counter to maintain.
+                    await db.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT pg_advisory_xact_lock(hashtextextended({projectId.ToString("D")}, 0))", ct);
+                }
+
+                var taskExists = await db.Tasks.AsNoTracking()
+                    .AnyAsync(item => item.Id == taskId && item.ProjectId == projectId, ct);
+                if (!taskExists)
+                    return null;
+
+                var taskAttachmentCount = await db.TaskAttachments.AsNoTracking()
+                    .CountAsync(item => item.ProjectId == projectId && item.TaskId == taskId, ct);
+                if (taskAttachmentCount >= _maxAttachmentsPerTask)
+                    throw new AttachmentQuotaExceededException(
+                        $"A task can have at most {_maxAttachmentsPerTask} attachments.");
+
+                var projectBytes = await db.TaskAttachments.AsNoTracking()
+                    .Where(item => item.ProjectId == projectId)
+                    .SumAsync(item => (long?)item.Length, ct) ?? 0;
+                if (projectBytes > _projectQuotaBytes - bytes.LongLength)
+                    throw new AttachmentQuotaExceededException(
+                        $"The project attachment quota of {_projectQuotaBytes} bytes would be exceeded.");
+
+                var attachment = TaskAttachment.Create(
+                    projectId,
+                    taskId,
+                    safeName,
+                    detectedType,
+                    bytes.LongLength,
+                    Guid.NewGuid().ToString("N"),
+                    actor.Type.ToString(),
+                    actor.UserId ?? actor.TokenId ?? actor.DeviceId);
+                var payload = TaskAttachmentContent.Create(projectId, attachment.Id, bytes);
+
+                db.TaskAttachments.Add(attachment);
+                db.TaskAttachmentContents.Add(payload);
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return Map(attachment);
+            });
         }
-
-        if (totalRead != length)
-            throw new InvalidDataException("Uploaded file length did not match the declared length.");
-
-        var attachment = TaskAttachment.Create(
-            projectId,
-            taskId,
-            safeName,
-            normalizedType,
-            length,
-            Guid.NewGuid().ToString("N"),
-            actor.Type.ToString(),
-            actor.UserId ?? actor.TokenId ?? actor.DeviceId);
-        var payload = TaskAttachmentContent.Create(projectId, attachment.Id, buffer.ToArray());
-
-        // One SaveChanges call persists metadata and bytes in the same database transaction.
-        db.TaskAttachments.Add(attachment);
-        db.TaskAttachmentContents.Add(payload);
-        await db.SaveChangesAsync(ct);
-        return Map(attachment);
+        finally
+        {
+            UploadSlots.Release();
+        }
     }
 
     public async Task<IReadOnlyList<TaskAttachmentDto>> ListTaskAsync(
@@ -130,10 +168,81 @@ public sealed class DatabaseAttachmentService : IAttachmentService
         {
             var legacyPath = ResolveLegacyPath(item.StorageKey);
             if (File.Exists(legacyPath))
+            {
+                var info = new FileInfo(legacyPath);
+                if (info.Length > MaxFileLength)
+                    throw new AttachmentRejectedException("The legacy attachment exceeds the current download limit.");
                 bytes = await File.ReadAllBytesAsync(legacyPath, ct);
+            }
         }
 
-        return bytes is null ? null : (Map(item), bytes);
+        if (bytes is null)
+            return null;
+
+        // Re-inspect legacy rows too: old metadata may contain a client-supplied MIME type.
+        var detectedType = AttachmentContentInspector.DetectContentType(item.FileName, bytes);
+        return (Map(item, detectedType), bytes);
+    }
+
+    private static async Task<byte[]> ReadBoundedAsync(Stream content, long? declaredLength, CancellationToken ct)
+    {
+        // Read directly into the final byte[] needed by PostgreSQL bytea. This avoids
+        // the MemoryStream + ToArray double allocation and never trusts Content-Length.
+        var capacity = declaredLength.HasValue
+            ? checked((int)declaredLength.Value)
+            : checked((int)MaxFileLength + 1);
+        var bytes = new byte[capacity];
+        var totalRead = 0;
+
+        while (totalRead < capacity)
+        {
+            var read = await content.ReadAsync(bytes.AsMemory(totalRead, capacity - totalRead), ct);
+            if (read == 0)
+                break;
+            totalRead += read;
+        }
+
+        if (declaredLength is null)
+        {
+            if (totalRead > MaxFileLength)
+                throw new AttachmentRejectedException($"Files cannot exceed {MaxFileLength} bytes.");
+        }
+        else
+        {
+            if (totalRead != declaredLength.Value)
+                throw new AttachmentRejectedException("Uploaded file length did not match the declared length.");
+
+            var overflow = new byte[1];
+            if (await content.ReadAsync(overflow.AsMemory(), ct) != 0)
+                throw new AttachmentRejectedException("Uploaded file exceeded the declared length.");
+        }
+
+        if (totalRead == 0)
+            throw new AttachmentRejectedException("Empty files are not accepted.");
+
+        if (totalRead != bytes.Length)
+            Array.Resize(ref bytes, totalRead);
+
+        return bytes;
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new AttachmentRejectedException("A valid file name is required.");
+
+        var candidate = Path.GetFileName(fileName.Replace('\\', '/')).Normalize(NormalizationForm.FormC);
+        var safe = new string(candidate
+            .Select(ch => char.IsControl(ch) || "<>:\"/\\|?*".Contains(ch) ? '_' : ch)
+            .Take(255)
+            .ToArray())
+            .Trim()
+            .TrimEnd('.', ' ');
+
+        if (string.IsNullOrWhiteSpace(safe) || safe is "." or "..")
+            throw new AttachmentRejectedException("A valid file name is required.");
+
+        return safe;
     }
 
     private string ResolveLegacyPath(string key)
@@ -150,6 +259,175 @@ public sealed class DatabaseAttachmentService : IAttachmentService
         return path;
     }
 
+    private static long ReadPositiveLong(string name, long fallback) =>
+        long.TryParse(Environment.GetEnvironmentVariable(name), out var value) && value > 0 ? value : fallback;
+
+    private static int ReadPositiveInt(string name, int fallback) =>
+        int.TryParse(Environment.GetEnvironmentVariable(name), out var value) && value > 0 ? value : fallback;
+
     private static TaskAttachmentDto Map(TaskAttachment item) =>
-        new(item.Id, item.TaskId, item.FileName, item.ContentType, item.Length, item.CreatedAt, item.CreatedByType);
+        Map(item, item.ContentType);
+
+    private static TaskAttachmentDto Map(TaskAttachment item, string contentType) =>
+        new(item.Id, item.TaskId, item.FileName, contentType, item.Length, item.CreatedAt, item.CreatedByType);
 }
+
+internal static class AttachmentContentInspector
+{
+    private static readonly HashSet<string> BlockedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".svg", ".svgz", ".html", ".htm", ".xhtml", ".mhtml",
+        ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".tgz",
+        ".exe", ".dll", ".so", ".dylib", ".msi", ".com", ".scr", ".apk", ".dmg", ".pkg",
+        ".jar", ".class"
+    };
+
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt", ".md", ".json", ".csv", ".log", ".xml", ".yaml", ".yml",
+        ".cs", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".sql",
+        ".css", ".scss", ".csproj", ".sln", ".props", ".targets", ".razor",
+        ".sh", ".ps1", ".bat", ".cmd", ".ini", ".toml"
+    };
+
+    public static string DetectContentType(string fileName, byte[] content)
+    {
+        var extension = Path.GetExtension(fileName);
+        if (BlockedExtensions.Contains(extension) || IsExecutable(content) || IsArchive(content))
+            throw new AttachmentRejectedException("This file type is not accepted.");
+
+        var imageType = DetectImageType(content);
+        if (imageType is not null)
+        {
+            var matchingExtension = imageType switch
+            {
+                "image/png" => extension is "" or ".png",
+                "image/jpeg" => extension is "" or ".jpg" or ".jpeg",
+                "image/gif" => extension is "" or ".gif",
+                "image/webp" => extension is "" or ".webp",
+                _ => false
+            };
+            if (!matchingExtension)
+                throw new AttachmentRejectedException("The file extension does not match its image content.");
+            return imageType;
+        }
+
+        if (extension is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp")
+            throw new AttachmentRejectedException("The image signature does not match the file extension.");
+
+        if (content.AsSpan().StartsWith("%PDF-"u8))
+        {
+            if (extension is not ("" or ".pdf"))
+                throw new AttachmentRejectedException("The file extension does not match its PDF content.");
+            return "application/pdf";
+        }
+
+        if (extension == ".pdf")
+            throw new AttachmentRejectedException("The PDF signature is missing.");
+
+        if (TextExtensions.Contains(extension))
+        {
+            try
+            {
+                _ = new UTF8Encoding(false, true).GetCharCount(content);
+            }
+            catch (DecoderFallbackException)
+            {
+                throw new AttachmentRejectedException("Text and source attachments must use valid UTF-8 encoding.");
+            }
+
+            if (content.AsSpan().Contains((byte)0))
+                throw new AttachmentRejectedException("Text and source attachments cannot contain NUL bytes.");
+
+            return "text/plain; charset=utf-8";
+        }
+
+        return "application/octet-stream";
+    }
+
+    private static string? DetectImageType(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length >= 8
+            && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
+            && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A)
+            return "image/png";
+
+        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+            return "image/jpeg";
+
+        if (bytes.Length >= 6
+            && (Encoding.ASCII.GetString(bytes[..6]) is "GIF87a" or "GIF89a"))
+            return "image/gif";
+
+        if (bytes.Length >= 12
+            && bytes[..4].SequenceEqual("RIFF"u8)
+            && bytes.Slice(8, 4).SequenceEqual("WEBP"u8))
+            return "image/webp";
+
+        return null;
+    }
+
+    private static bool IsExecutable(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < 2)
+            return false;
+
+        if (bytes[0] == 0x4D && bytes[1] == 0x5A) // DOS/PE
+            return true;
+
+        if (bytes.Length >= 4)
+        {
+            if (bytes[0] == 0x7F && bytes[1] == 0x45 && bytes[2] == 0x4C && bytes[3] == 0x46) // ELF
+                return true;
+
+            if ((bytes[0] == 0xFE && bytes[1] == 0xED && bytes[2] == 0xFA && bytes[3] is 0xCE or 0xCF)
+                || (bytes[0] == 0xCE && bytes[1] == 0xFA && bytes[2] == 0xED && bytes[3] is 0xFE or 0xCF)
+                || (bytes[0] == 0xCF && bytes[1] == 0xFA && bytes[2] == 0xED && bytes[3] == 0xFE))
+                return true;
+
+            if (bytes[0] == 0xCA && bytes[1] == 0xFE && bytes[2] == 0xBA && bytes[3] == 0xBE)
+                return true; // Java class / universal binary
+        }
+
+        return false;
+    }
+
+    private static bool IsArchive(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length >= 4
+            && bytes[0] == 0x50 && bytes[1] == 0x4B
+            && (bytes[2] == 0x03 && bytes[3] == 0x04
+                || bytes[2] == 0x05 && bytes[3] == 0x06
+                || bytes[2] == 0x07 && bytes[3] == 0x08))
+            return true;
+
+        if (bytes.Length >= 7
+            && bytes[0] == 0x52 && bytes[1] == 0x61 && bytes[2] == 0x72 && bytes[3] == 0x21
+            && bytes[4] == 0x1A && bytes[5] == 0x07)
+            return true;
+
+        if (bytes.Length >= 6
+            && bytes[0] == 0x37 && bytes[1] == 0x7A && bytes[2] == 0xBC
+            && bytes[3] == 0xAF && bytes[4] == 0x27 && bytes[5] == 0x1C)
+            return true;
+
+        if (bytes.Length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B)
+            return true;
+
+        if (bytes.Length >= 3 && bytes[0] == 0x42 && bytes[1] == 0x5A && bytes[2] == 0x68)
+            return true;
+
+        if (bytes.Length >= 6
+            && bytes[0] == 0xFD && bytes[1] == 0x37 && bytes[2] == 0x7A
+            && bytes[3] == 0x58 && bytes[4] == 0x5A && bytes[5] == 0x00)
+            return true;
+
+        return bytes.Length >= 262 && bytes.Slice(257, 5).SequenceEqual("ustar"u8);
+    }
+}
+
+public sealed class AttachmentRejectedException(string message) : Exception(message);
+
+public sealed class AttachmentQuotaExceededException(string message) : Exception(message);
+
+public sealed class AttachmentConcurrencyLimitException(string message) : Exception(message);
