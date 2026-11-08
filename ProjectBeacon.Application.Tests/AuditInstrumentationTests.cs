@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Application.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
@@ -14,6 +15,7 @@ using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Infrastructure.Data;
 
 public sealed class AuditInstrumentationTests : IDisposable
@@ -222,6 +224,77 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken);
         Assert.Equal(_org.Id, acceptedEvent.OrgId);
         Assert.Null(acceptedEvent.ProjectId);
+    }
+
+    [Fact]
+    public async Task RegistrationByOrgAndProjectInvite_AuditsAccountAndAcceptanceAtomically()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var email = new NoopEmailSender();
+        var registration = new RegisterHandler(
+            _factory, new BcryptPasswordHasher(), config, auditWriter: _auditWriter);
+
+        var orgInvite = await new CreateOrgInviteHandler(
+            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            .HandleAsync(new CreateOrgInviteRequest(
+                _org.Id, "new-org-owner@example.test", MemberRole.Owner, AdminActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(orgInvite.Success, orgInvite.Error);
+
+        var orgRegistration = await registration.HandleAsync(
+            new RegisterCommand(new RegisterRequest(
+                "new-org-owner", "new-org-owner@example.test", "password123", orgInvite.Value!.Token)),
+            TestContext.Current.CancellationToken);
+        Assert.True(orgRegistration.Success, orgRegistration.Error);
+
+        var orgAccepted = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.invite.accepted" && e.TargetId == orgInvite.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        var orgAccount = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "account.registered" && e.TargetId == orgRegistration.Value!.UserId.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, orgAccepted.ActorKind);
+        Assert.Equal(orgRegistration.Value.UserId, orgAccepted.ActorUserId);
+        Assert.Equal(_org.Id, orgAccepted.OrgId);
+        Assert.Null(orgAccepted.ProjectId);
+        Assert.Equal(_org.Id, orgAccount.OrgId);
+        Assert.Null(orgAccount.ProjectId);
+        Assert.DoesNotContain(orgInvite.Value.Token, orgAccepted.DetailsJson ?? string.Empty);
+        Assert.DoesNotContain("new-org-owner@example.test", orgAccount.DetailsJson ?? string.Empty);
+        Assert.True(await _seedDb.OrgMembers.AnyAsync(
+            m => m.OrgId == _org.Id && m.UserId == orgRegistration.Value.UserId,
+            TestContext.Current.CancellationToken));
+
+        var projectInvite = await new CreateProjectInviteHandler(
+            _factory, email, _authorization, config, auditWriter: _auditWriter)
+            .HandleAsync(new CreateProjectInviteRequest(
+                _project.Id, "new-project-member@example.test", MemberRole.Member, AdminActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(projectInvite.Success, projectInvite.Error);
+
+        var projectRegistration = await registration.HandleAsync(
+            new RegisterCommand(new RegisterRequest(
+                "new-project-member", "new-project-member@example.test", "password123", projectInvite.Value!.Token)),
+            TestContext.Current.CancellationToken);
+        Assert.True(projectRegistration.Success, projectRegistration.Error);
+
+        var projectAccepted = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "project.invite.accepted" && e.TargetId == projectInvite.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        var projectAccount = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "account.registered" && e.TargetId == projectRegistration.Value!.UserId.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, projectAccepted.ActorKind);
+        Assert.Equal(projectRegistration.Value.UserId, projectAccepted.ActorUserId);
+        Assert.Equal(_org.Id, projectAccepted.OrgId);
+        Assert.Equal(_project.Id, projectAccepted.ProjectId);
+        Assert.Equal(_org.Id, projectAccount.OrgId);
+        Assert.Equal(_project.Id, projectAccount.ProjectId);
+        Assert.DoesNotContain(projectInvite.Value.Token, projectAccepted.DetailsJson ?? string.Empty);
+        Assert.DoesNotContain("new-project-member@example.test", projectAccount.DetailsJson ?? string.Empty);
+        Assert.True(await _seedDb.ProjectMembers.AnyAsync(
+            m => m.ProjectId == _project.Id && m.UserId == projectRegistration.Value.UserId,
+            TestContext.Current.CancellationToken));
     }
 
     private ActorContext AdminActor() =>

@@ -64,7 +64,9 @@ verify that the event and mutation persist together and that secret values do no
 event metadata.
 
 This slice extends coverage to organization invitation creation, expiration, acceptance and
-revocation. Invite-token acceptance resolves the opaque token and, for project invitations, its target
+revocation. First-time registration through an organization or project invitation also stages
+both the invite-accepted and account-registered events in the same tenant-bound transaction as
+user creation and membership changes. Invite-token acceptance resolves the opaque token and, for project invitations, its target
 project scope in a narrow unscoped context, then reopens the invite row in a context bound to the
 invitation's actual organization/project. The signed-in user is resolved in the caller's normal
 context.
@@ -76,10 +78,10 @@ invite acceptance.
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
 port, permission-checked read contract/implementation, model migration, tests, and transactional
-instrumentation for project API tokens, project invitations, project membership, and organization
-invitations.
+instrumentation for project API tokens, project invitations, project membership, organization
+invitations, and first-time account registration through an invitation.
 
 Not implemented: instrumentation of all remaining handlers (including org/project lifecycle,
-device lifecycle, account/password operations and denied authorization attempts), operator HTTP
+device lifecycle, other account/password operations and denied authorization attempts), operator HTTP
 endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
 follow-up slices; this PR does not claim comprehensive audit coverage.
