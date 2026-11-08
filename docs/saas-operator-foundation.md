@@ -56,10 +56,12 @@ When paid subscriptions arrive, the billing event handler creates or updates the
 
 Application contracts live in ProjectBeacon.Application/Billing:
 
-- IBillingProvider defines checkout, customer portal, subscription retrieval/change/cancellation, and verified webhook normalization.
+- PlanDefinition, OrganizationSubscription, BillingInvoice and BillingLedgerEntry are provider-neutral product/commercial snapshots. Subscription status and billing cadence are ProjectBeacon-owned; provider statuses must be mapped at the adapter boundary.
+- IBillingProvider defines checkout, customer portal, hosted payment-method setup/list/default/detach, subscription retrieval/change/cancellation, and verified webhook normalization.
 - IBillingProviderResolver selects an adapter by an application-owned provider key.
 - BillingProviderEvent is a normalized event with an external event ID for idempotency. Provider SDK objects and raw webhook payloads do not cross the adapter boundary.
 - BillingCheckoutRequest refers to a stable PlanKey, not a provider-specific price ID.
+- Amounts are integer minor units and currencies are ISO 4217. A plan can exist without a configured price during alpha; no price, cadence or licensing unit is assumed by the contract.
 
 No provider is selected or registered for the alpha. There is no provider SDK dependency in Domain or Application and no provider-specific endpoint yet. Selecting a provider later adds an Infrastructure adapter and configuration, not changes to handlers or the entitlement contract.
 
@@ -88,10 +90,11 @@ The following persistence models are not created by this contract-only change. W
 | Future model | Responsibility | Required invariant |
 |---|---|---|
 | OrganizationEntitlements | Versioned access grants for an organization | Source, status and effective period are explicit; no implicit access from Org existence |
-| Plan | Product-owned plan key, public name and product limits | Prices and provider price IDs are external/configurable |
-| Subscription | Commercial state and billing period | At most one effective subscription per organization |
+| Plan | Product-owned plan key, public name, cadence and limits | Price may be unset in alpha; provider price IDs are never the plan identity |
+| Subscription | Commercial state, source and billing period | At most one effective subscription per organization |
 | BillingEvent | Verified payment/subscription facts | Append-only and provider-event idempotency |
 | Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
+| PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 | PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 
 RLS must scope all organization-owned billing and entitlement rows by OrgId. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
@@ -115,7 +118,7 @@ Implemented in the foundation branch:
 
 - Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and IAdminGate port.
 - Entitlement source/status/limit/snapshot contracts, IEntitlementService port, and the atomic Alpha → Production conversion contract.
-- Provider-neutral billing request/event/response contracts, hosted payment-method setup/lifecycle, IBillingProvider, resolver and payment-reference store port.
+- Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
 - SaaS-only product boundary documented in README and AGENTS.
