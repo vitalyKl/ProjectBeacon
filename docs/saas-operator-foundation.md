@@ -113,9 +113,9 @@ The first customer-alpha acceptance criterion is operational, not architectural:
 
 Implemented in the foundation branch:
 
-- Operator permission flags, an immutable AdminActor contract, and IAdminGate port.
+- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and IAdminGate port.
 - Entitlement source/status/limit/snapshot contracts and IEntitlementService port.
-- Provider-neutral billing request/event/response contracts, IBillingProvider, resolver and payment-reference store port.
+- Provider-neutral billing request/event/response contracts, hosted payment-method setup/lifecycle, IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
 - SaaS-only product boundary documented in README and AGENTS.
