@@ -90,7 +90,8 @@ public class BeaconDbContext : DbContext, IBeaconDb
         // Platform-wide rows are visible only through an explicit unscoped operator path.
         modelBuilder.Entity<AuditEvent>().HasQueryFilter(e =>
             FilterUnscoped
-            || (FilterOrgId != null && e.OrgId == FilterOrgId)
-            || (FilterProjectId != null && e.ProjectId == FilterProjectId));
+            || (FilterOrgId != null
+                && e.OrgId == FilterOrgId
+                && (FilterProjectId == null || e.ProjectId == FilterProjectId)));
     }
 }
