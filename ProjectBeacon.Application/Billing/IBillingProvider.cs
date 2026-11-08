@@ -14,6 +14,24 @@ public interface IBillingProvider
         BillingCheckoutRequest request,
         CancellationToken ct = default);
 
+    Task<Result<BillingPaymentMethodSetupSession>> CreatePaymentMethodSetupSessionAsync(
+        BillingPaymentMethodSetupRequest request,
+        CancellationToken ct = default);
+
+    Task<Result<IReadOnlyList<BillingPaymentMethodReference>>> ListPaymentMethodsAsync(
+        string externalCustomerReference,
+        CancellationToken ct = default);
+
+    Task<Result<BillingPaymentMethodReference>> SetDefaultPaymentMethodAsync(
+        string externalCustomerReference,
+        string externalPaymentMethodReference,
+        CancellationToken ct = default);
+
+    Task<Result> DetachPaymentMethodAsync(
+        string externalCustomerReference,
+        string externalPaymentMethodReference,
+        CancellationToken ct = default);
+
     Task<Result<BillingPortalSession>> CreateCustomerPortalSessionAsync(
         BillingPortalRequest request,
         CancellationToken ct = default);
