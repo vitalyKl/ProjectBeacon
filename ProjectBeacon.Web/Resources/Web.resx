@@ -1680,7 +1680,7 @@ No Beacon-hosted coding agent.</value>
     <value>Project</value>
   </data>
 <data name="CreateProjectStepNames" xml:space="preserve">
-    <value>Name the project</value>
+    <value>Name the project and choose its organization.</value>
   </data>
 <data name="CreateProjectStepDevice" xml:space="preserve">
     <value>Pick the workstation running beacon client</value>
@@ -2684,5 +2684,11 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>Workspace note created.</value>
+  </data>
+<data name="SelectOrganization" xml:space="preserve">
+    <value>Organization</value>
+  </data>
+<data name="NoOrganizationAccess" xml:space="preserve">
+    <value>You are not a member of an organization yet. Accept an organization invitation or contact the service operator.</value>
   </data>
 </root>

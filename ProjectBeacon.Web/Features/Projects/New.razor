@@ -10,8 +10,8 @@
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
-@inject CreateOrgHandler CreateOrg
 @inject CreateProjectHandler CreateProject
+@inject ListOrgsHandler ListOrgs
 @inject AuthenticationStateProvider Auth
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -25,7 +25,19 @@
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-form">
     <MudText Typo="Typo.subtitle2">1. @L["CreateProjectStepNames"]</MudText>
     <MudTextField @bind-Value="_projectName" Label="@L["ProjectName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-    <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OrgNameHint"]" />
+    @if (_orgs.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2">@L["NoOrganizationAccess"]</MudAlert>
+    }
+    else
+    {
+        <MudSelect T="Guid?" @bind-Value="_orgId" Label="@L["SelectOrganization"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+            @foreach (var org in _orgs)
+            {
+                <MudSelectItem Value="@((Guid?)org.Id)">@org.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
     <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
 
     <MudText Typo="Typo.subtitle2" Class="mt-6">2. @L["CreateProjectStepDevice"]</MudText>
@@ -61,7 +73,7 @@
     <MudCheckBox @bind-Value="_initOnDevice" Label="@L["InitializeOnDevice"]" Class="mt-2" />
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["InitializeOnDeviceHint"]</MudText>
 
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="Create" Disabled="_saving">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="Create" Disabled="_saving || _orgId is null || string.IsNullOrWhiteSpace(_projectName)">
         @L["Create"]
     </MudButton>
     @if (!string.IsNullOrEmpty(_error))
@@ -71,12 +83,14 @@
 </MudPaper>
 
 @code {
-    private string _orgName = string.Empty;
     private string _projectName = string.Empty;
     private string? _description;
     private string? _error;
     private bool _saving;
     private Guid _userId;
+    private ActorContext _actor = ActorContext.Anonymous;
+    private Guid? _orgId;
+    private List<OrgDto> _orgs = [];
     private Guid? _deviceId;
     private string _localRoot = string.Empty;
     private bool _initOnDevice;
@@ -87,9 +101,18 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await Auth.GetAuthenticationStateAsync()).User;
-        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
-            _userId = id;
-        if (_userId == Guid.Empty) return;
+        _actor = ActorContextFactory.FromPrincipal(user);
+        if (_actor.UserId is not { } userId)
+            return;
+        _userId = userId;
+
+        var organizations = await ListOrgs.HandleAsync(
+            new ListOrgsCommand(new ListOrgsRequest(), _actor));
+        _orgs = organizations.Success ? organizations.Value!.ToList() : [];
+        _orgId = _actor.OrgId is { } preferredOrg && _orgs.Any(org => org.Id == preferredOrg)
+            ? preferredOrg
+            : _orgs.FirstOrDefault()?.Id;
+
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
         _devices = listed.Success ? listed.Value!.ToList() : [];
         var online = _devices.FirstOrDefault(d => d.Online);
@@ -139,17 +162,14 @@
         _saving = true;
         try
         {
-            var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
-            var orgName = string.IsNullOrWhiteSpace(_orgName) ? _projectName : _orgName;
-            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
-            if (!org.Success)
+            if (_orgId is not { } orgId)
             {
-                _error = org.Error;
+                _error = L["NoOrganizationAccess"].Value;
                 return;
             }
 
             var project = await CreateProject.HandleAsync(new CreateProjectCommand(new CreateProjectRequest(
-                _projectName, _description, org.Value!.Id), actor));
+                _projectName.Trim(), _description, orgId), _actor));
             if (!project.Success)
             {
                 _error = project.Error;
@@ -159,7 +179,7 @@
             if (_deviceId is { } deviceId && !string.IsNullOrWhiteSpace(_localRoot))
             {
                 var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
-                    new AttachRuntimeRequest(project.Value!.Id, deviceId, actor, _localRoot)));
+                    new AttachRuntimeRequest(project.Value!.Id, deviceId, _actor, _localRoot)));
                 if (!attached.Success)
                 {
                     _error = attached.Error;
