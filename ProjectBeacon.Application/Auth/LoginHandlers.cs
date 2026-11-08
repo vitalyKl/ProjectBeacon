@@ -7,6 +7,7 @@ using Domain.Entities.Identity;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 /// <summary>
 /// Checks the password and lockout. Unknown user and bad password both return invalid credentials. Success issues a session token.
 /// </summary>
@@ -74,13 +75,20 @@ public class RegisterHandler
     private readonly IPasswordHasher _passwords;
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
+    private readonly IHostEnvironment? _environment;
 
-    public RegisterHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration = null, TimeProvider? timeProvider = null)
+    public RegisterHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        IConfiguration? configuration = null,
+        TimeProvider? timeProvider = null,
+        IHostEnvironment? environment = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _environment = environment;
     }
 
     public async Task<Result<RegisterResponse>> HandleAsync(RegisterCommand command, CancellationToken ct = default)
@@ -95,7 +103,7 @@ public class RegisterHandler
         if (password.Length < 8)
             return Result.Failure<RegisterResponse>("Password must be at least 8 characters.");
 
-        var inviteOnly = LocalAuthOptions.InviteOnly(_configuration);
+        var inviteOnly = LocalAuthOptions.InviteOnly(_configuration, _environment?.EnvironmentName);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (inviteOnly && string.IsNullOrEmpty(inviteToken))
             return Result.Failure<RegisterResponse>("Invite required.", ErrorKind.Forbidden);
