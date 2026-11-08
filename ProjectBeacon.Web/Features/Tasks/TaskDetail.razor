@@ -557,11 +557,14 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            _workspaceKey = "notes/human-input";
             _workspaceTitle = string.Empty;
             _workspaceAbstract = string.Empty;
             _workspaceContent = string.Empty;
             await ReloadWorkspace();
+            var noteNumber = 1;
+            while (_workspaceSections.Any(section => section.Key == $"notes/human-input-{noteNumber}"))
+                noteNumber++;
+            _workspaceKey = $"notes/human-input-{noteNumber}";
             await OnReadWorkspaceSection(result.Value!.Key);
             Snackbar.Add(L["WorkspaceNoteCreated"].Value, Severity.Success);
         }
