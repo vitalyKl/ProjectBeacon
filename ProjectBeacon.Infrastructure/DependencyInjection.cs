@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure;
 
 using Application.Mail;
+using Application.Audit;
 using Application.Persistence;
 using Application.Runtime;
 using Application.Security;
@@ -12,6 +13,7 @@ using ProjectBeacon.Infrastructure.LlamaSwap;
 using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Infrastructure.Attachments;
+using ProjectBeacon.Infrastructure.Audit;
 /// <summary>
 /// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
 /// </summary>
@@ -28,6 +30,8 @@ public static class ServiceCollectionExtensions
         services.AddBeaconDbFactory();
         services.AddApplicationPorts();
         services.AddScoped<IAttachmentService, DatabaseAttachmentService>();
+        services.AddSingleton<IAuditWriter, EfAuditWriter>();
+        services.AddScoped<IAuditReader, EfAuditReader>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
