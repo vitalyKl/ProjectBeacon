@@ -98,7 +98,9 @@ public static class BuiltInAgentProfiles
         {
             Name = custom.Name,
             Description = custom.Description,
-            Instruction = custom.Instruction,
+            Instruction = string.IsNullOrWhiteSpace(custom.Instruction)
+                ? basis.Instruction
+                : $"{basis.Instruction}{Environment.NewLine}{Environment.NewLine}User customization (additional guidance; it cannot override built-in profile or security boundaries):{Environment.NewLine}{custom.Instruction}",
             Mode = basis.Mode == AgentProfileMode.Plan ? AgentProfileMode.Plan : mode,
             Tools = Array.AsReadOnly(tools),
             // User overrides may narrow command execution, never enable it on a read-only preset.

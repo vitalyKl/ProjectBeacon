@@ -2494,4 +2494,100 @@ orthstar</value>
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>已创建工作区备注。</value>
   </data>
+  <data name="ExecutionProfiles" xml:space="preserve">
+    <value>执行配置</value>
+  </data>
+  <data name="ExecutionProfilesLead" xml:space="preserve">
+    <value>内置执行配置定义了流水线子任务的工作方式。可在此自定义当前账户的默认值。更改仅对新建子任务生效；已有子任务保留已保存的配置快照。</value>
+  </data>
+  <data name="ExecutionProfileBuiltIn" xml:space="preserve">
+    <value>内置</value>
+  </data>
+  <data name="ExecutionProfileCustomized" xml:space="preserve">
+    <value>已自定义</value>
+  </data>
+  <data name="ExecutionProfileName" xml:space="preserve">
+    <value>显示名称</value>
+  </data>
+  <data name="ExecutionProfileDescription" xml:space="preserve">
+    <value>说明</value>
+  </data>
+  <data name="ExecutionProfileInstructions" xml:space="preserve">
+    <value>附加指令</value>
+  </data>
+  <data name="ExecutionProfileInstructionsHint" xml:space="preserve">
+    <value>这些指令会附加到内置指导之后。系统强制执行的工具授权和路径限制仍然有效。</value>
+  </data>
+  <data name="ExecutionProfileMode" xml:space="preserve">
+    <value>执行模式</value>
+  </data>
+  <data name="ExecutionProfileCommands" xml:space="preserve">
+    <value>允许执行命令</value>
+  </data>
+  <data name="ExecutionProfileCommandsLocked" xml:space="preserve">
+    <value>此内置配置为只读，无法启用命令执行。</value>
+  </data>
+  <data name="ExecutionProfileReportsDiff" xml:space="preserve">
+    <value>报告代码差异</value>
+  </data>
+  <data name="ExecutionProfileSizeHint" xml:space="preserve">
+    <value>建议任务规模</value>
+  </data>
+  <data name="ExecutionProfileEffort" xml:space="preserve">
+    <value>推理强度</value>
+  </data>
+  <data name="ExecutionProfileTools" xml:space="preserve">
+    <value>允许使用的工具</value>
+  </data>
+  <data name="ExecutionProfileToolHint" xml:space="preserve">
+    <value>只能缩小此列表。必需的生命周期工具始终授予且不可移除；不能添加内置授权范围之外的工具。</value>
+  </data>
+  <data name="ExecutionProfileRequiredTools" xml:space="preserve">
+    <value>必需工具</value>
+  </data>
+  <data name="ExecutionProfileOptionalTools" xml:space="preserve">
+    <value>可选授权（默认不启用）</value>
+  </data>
+  <data name="ExecutionProfilePaths" xml:space="preserve">
+    <value>路径访问策略</value>
+  </data>
+  <data name="ExecutionProfilePathsFromPlanner" xml:space="preserve">
+    <value>规划器必须为每个子任务指定相对于仓库的路径。</value>
+  </data>
+  <data name="ExecutionProfilePathsDefaults" xml:space="preserve">
+    <value>仅允许访问内置默认路径。</value>
+  </data>
+  <data name="ExecutionProfilePathsNone" xml:space="preserve">
+    <value>不授予仓库文件路径访问权限。</value>
+  </data>
+  <data name="ExecutionProfileDefaultPaths" xml:space="preserve">
+    <value>默认路径</value>
+  </data>
+  <data name="ExecutionProfileSnapshotHint" xml:space="preserve">
+    <value>已有子任务保留其已保存的配置快照；这些更改仅适用于新建子任务。</value>
+  </data>
+  <data name="ExecutionProfileSave" xml:space="preserve">
+    <value>保存配置</value>
+  </data>
+  <data name="ExecutionProfileReset" xml:space="preserve">
+    <value>恢复内置默认值</value>
+  </data>
+  <data name="ExecutionProfileSaved" xml:space="preserve">
+    <value>已保存执行配置。</value>
+  </data>
+  <data name="ExecutionProfileResetDone" xml:space="preserve">
+    <value>已恢复内置默认值。</value>
+  </data>
+  <data name="SubtaskProfile" xml:space="preserve">
+    <value>执行配置</value>
+  </data>
+  <data name="NoProfile" xml:space="preserve">
+    <value>不使用配置（旧模式）</value>
+  </data>
+  <data name="AllowedPaths" xml:space="preserve">
+    <value>允许的路径</value>
+  </data>
+  <data name="AllowedPathsHint" xml:space="preserve">
+    <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
+  </data>
 </root>

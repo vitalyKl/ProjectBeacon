@@ -2685,4 +2685,100 @@ No Beacon-hosted coding agent.</value>
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>Workspace note created.</value>
   </data>
+  <data name="ExecutionProfiles" xml:space="preserve">
+    <value>Execution profiles</value>
+  </data>
+  <data name="ExecutionProfilesLead" xml:space="preserve">
+    <value>Built-in execution profiles define how pipeline subtasks work. Customize your account defaults here. Changes affect new subtasks; existing subtasks keep their saved profile snapshot.</value>
+  </data>
+  <data name="ExecutionProfileBuiltIn" xml:space="preserve">
+    <value>Built-in</value>
+  </data>
+  <data name="ExecutionProfileCustomized" xml:space="preserve">
+    <value>Customized</value>
+  </data>
+  <data name="ExecutionProfileName" xml:space="preserve">
+    <value>Display name</value>
+  </data>
+  <data name="ExecutionProfileDescription" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="ExecutionProfileInstructions" xml:space="preserve">
+    <value>Additional instructions</value>
+  </data>
+  <data name="ExecutionProfileInstructionsHint" xml:space="preserve">
+    <value>These instructions are appended to the built-in guidance. System-enforced tool grants and path limits remain in force.</value>
+  </data>
+  <data name="ExecutionProfileMode" xml:space="preserve">
+    <value>Execution mode</value>
+  </data>
+  <data name="ExecutionProfileCommands" xml:space="preserve">
+    <value>Allow command execution</value>
+  </data>
+  <data name="ExecutionProfileCommandsLocked" xml:space="preserve">
+    <value>This built-in profile is read-only; command execution cannot be enabled.</value>
+  </data>
+  <data name="ExecutionProfileReportsDiff" xml:space="preserve">
+    <value>Report a code diff</value>
+  </data>
+  <data name="ExecutionProfileSizeHint" xml:space="preserve">
+    <value>Suggested task size</value>
+  </data>
+  <data name="ExecutionProfileEffort" xml:space="preserve">
+    <value>Reasoning effort</value>
+  </data>
+  <data name="ExecutionProfileTools" xml:space="preserve">
+    <value>Allowed tools</value>
+  </data>
+  <data name="ExecutionProfileToolHint" xml:space="preserve">
+    <value>You can narrow this list. Required lifecycle tools are always granted and cannot be removed; tools outside the built-in grant cannot be added.</value>
+  </data>
+  <data name="ExecutionProfileRequiredTools" xml:space="preserve">
+    <value>Required tools</value>
+  </data>
+  <data name="ExecutionProfileOptionalTools" xml:space="preserve">
+    <value>Optional grants (not enabled by default)</value>
+  </data>
+  <data name="ExecutionProfilePaths" xml:space="preserve">
+    <value>Path access policy</value>
+  </data>
+  <data name="ExecutionProfilePathsFromPlanner" xml:space="preserve">
+    <value>The Planner must specify repository-relative paths for each subtask.</value>
+  </data>
+  <data name="ExecutionProfilePathsDefaults" xml:space="preserve">
+    <value>Restricted to the built-in default paths.</value>
+  </data>
+  <data name="ExecutionProfilePathsNone" xml:space="preserve">
+    <value>No repository file paths are granted.</value>
+  </data>
+  <data name="ExecutionProfileDefaultPaths" xml:space="preserve">
+    <value>Default paths</value>
+  </data>
+  <data name="ExecutionProfileSnapshotHint" xml:space="preserve">
+    <value>Existing subtasks keep their saved profile snapshot; these changes affect newly created subtasks.</value>
+  </data>
+  <data name="ExecutionProfileSave" xml:space="preserve">
+    <value>Save profile</value>
+  </data>
+  <data name="ExecutionProfileReset" xml:space="preserve">
+    <value>Restore built-in defaults</value>
+  </data>
+  <data name="ExecutionProfileSaved" xml:space="preserve">
+    <value>Execution profile saved.</value>
+  </data>
+  <data name="ExecutionProfileResetDone" xml:space="preserve">
+    <value>Built-in defaults restored.</value>
+  </data>
+  <data name="SubtaskProfile" xml:space="preserve">
+    <value>Execution profile</value>
+  </data>
+  <data name="NoProfile" xml:space="preserve">
+    <value>No profile (legacy)</value>
+  </data>
+  <data name="AllowedPaths" xml:space="preserve">
+    <value>Allowed paths</value>
+  </data>
+  <data name="AllowedPathsHint" xml:space="preserve">
+    <value>Enter repository-relative paths, one per line. Required by this profile.</value>
+  </data>
 </root>

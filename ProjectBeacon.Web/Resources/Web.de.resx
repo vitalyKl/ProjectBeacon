@@ -2486,4 +2486,100 @@ orthstar</value>
   <data name="WorkspaceNoteCreated" xml:space="preserve">
     <value>Arbeitsbereichsnotiz erstellt.</value>
   </data>
+  <data name="ExecutionProfiles" xml:space="preserve">
+    <value>Ausführungsprofile</value>
+  </data>
+  <data name="ExecutionProfilesLead" xml:space="preserve">
+    <value>Integrierte Ausführungsprofile legen fest, wie Pipeline-Unteraufgaben bearbeitet werden. Hier können Sie die Standardwerte Ihres Kontos anpassen. Änderungen gelten für neue Unteraufgaben; bestehende behalten ihren gespeicherten Profil-Snapshot.</value>
+  </data>
+  <data name="ExecutionProfileBuiltIn" xml:space="preserve">
+    <value>Integriert</value>
+  </data>
+  <data name="ExecutionProfileCustomized" xml:space="preserve">
+    <value>Angepasst</value>
+  </data>
+  <data name="ExecutionProfileName" xml:space="preserve">
+    <value>Anzeigename</value>
+  </data>
+  <data name="ExecutionProfileDescription" xml:space="preserve">
+    <value>Beschreibung</value>
+  </data>
+  <data name="ExecutionProfileInstructions" xml:space="preserve">
+    <value>Zusätzliche Anweisungen</value>
+  </data>
+  <data name="ExecutionProfileInstructionsHint" xml:space="preserve">
+    <value>Diese Hinweise werden an die integrierten Anweisungen angehängt. Systemseitige Werkzeug- und Pfadbeschränkungen bleiben bestehen.</value>
+  </data>
+  <data name="ExecutionProfileMode" xml:space="preserve">
+    <value>Ausführungsmodus</value>
+  </data>
+  <data name="ExecutionProfileCommands" xml:space="preserve">
+    <value>Befehlsausführung erlauben</value>
+  </data>
+  <data name="ExecutionProfileCommandsLocked" xml:space="preserve">
+    <value>Dieses integrierte Profil ist schreibgeschützt; die Befehlsausführung kann nicht aktiviert werden.</value>
+  </data>
+  <data name="ExecutionProfileReportsDiff" xml:space="preserve">
+    <value>Code-Diff melden</value>
+  </data>
+  <data name="ExecutionProfileSizeHint" xml:space="preserve">
+    <value>Empfohlener Aufgabenumfang</value>
+  </data>
+  <data name="ExecutionProfileEffort" xml:space="preserve">
+    <value>Reasoning-Aufwand</value>
+  </data>
+  <data name="ExecutionProfileTools" xml:space="preserve">
+    <value>Erlaubte Werkzeuge</value>
+  </data>
+  <data name="ExecutionProfileToolHint" xml:space="preserve">
+    <value>Diese Liste kann nur eingeschränkt werden. Erforderliche Lifecycle-Werkzeuge bleiben immer aktiv; zusätzliche Werkzeuge außerhalb der integrierten Freigabe können nicht hinzugefügt werden.</value>
+  </data>
+  <data name="ExecutionProfileRequiredTools" xml:space="preserve">
+    <value>Erforderliche Werkzeuge</value>
+  </data>
+  <data name="ExecutionProfileOptionalTools" xml:space="preserve">
+    <value>Optionale Freigaben (standardmäßig deaktiviert)</value>
+  </data>
+  <data name="ExecutionProfilePaths" xml:space="preserve">
+    <value>Pfadzugriffsrichtlinie</value>
+  </data>
+  <data name="ExecutionProfilePathsFromPlanner" xml:space="preserve">
+    <value>Der Planner muss für jede Unteraufgabe relative Repository-Pfade angeben.</value>
+  </data>
+  <data name="ExecutionProfilePathsDefaults" xml:space="preserve">
+    <value>Auf die integrierten Standardpfade beschränkt.</value>
+  </data>
+  <data name="ExecutionProfilePathsNone" xml:space="preserve">
+    <value>Es werden keine Repository-Dateipfade freigegeben.</value>
+  </data>
+  <data name="ExecutionProfileDefaultPaths" xml:space="preserve">
+    <value>Standardpfade</value>
+  </data>
+  <data name="ExecutionProfileSnapshotHint" xml:space="preserve">
+    <value>Bestehende Unteraufgaben behalten ihren gespeicherten Profil-Snapshot; Änderungen gelten für neu erstellte Unteraufgaben.</value>
+  </data>
+  <data name="ExecutionProfileSave" xml:space="preserve">
+    <value>Profil speichern</value>
+  </data>
+  <data name="ExecutionProfileReset" xml:space="preserve">
+    <value>Integrierte Standardwerte wiederherstellen</value>
+  </data>
+  <data name="ExecutionProfileSaved" xml:space="preserve">
+    <value>Ausführungsprofil gespeichert.</value>
+  </data>
+  <data name="ExecutionProfileResetDone" xml:space="preserve">
+    <value>Integrierte Standardwerte wiederhergestellt.</value>
+  </data>
+  <data name="SubtaskProfile" xml:space="preserve">
+    <value>Ausführungsprofil</value>
+  </data>
+  <data name="NoProfile" xml:space="preserve">
+    <value>Kein Profil (Legacy)</value>
+  </data>
+  <data name="AllowedPaths" xml:space="preserve">
+    <value>Erlaubte Pfade</value>
+  </data>
+  <data name="AllowedPathsHint" xml:space="preserve">
+    <value>Relative Repository-Pfade eingeben, einen pro Zeile. Für dieses Profil erforderlich.</value>
+  </data>
 </root>
