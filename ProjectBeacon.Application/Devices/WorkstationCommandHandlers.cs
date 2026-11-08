@@ -42,7 +42,10 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         {
             var member = await db.ProjectMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.ProjectId == projectId && m.UserId == command.Request.UserId, ct);
-            if (!member)
+            var isPlatformOperator = await db.Users.IgnoreQueryFilters()
+                .AnyAsync(user => user.Id == command.Request.UserId
+                    && user.IsAdmin && user.DisabledAt == null, ct);
+            if (!member && !isPlatformOperator)
                 return Result.Failure<WorkstationCommandDto>("Project not found.");
         }
 
