@@ -52,6 +52,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddScoped<ITenantContext>(_ => tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new BeaconDbFactory(_options, tenant));
         services.AddScoped<CircuitRevalidatingAuthenticationStateProvider>();
@@ -241,6 +242,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMemoryCache();
+        services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddScoped<ITenantContext>(_ => circuit.Tenant);
         services.AddScoped<IBeaconDbFactory>(_ => new ThrowingDbFactory());
         var root = services.BuildServiceProvider();
