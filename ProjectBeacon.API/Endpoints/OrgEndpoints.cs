@@ -65,7 +65,9 @@ public static class OrgEndpoints
     {
         var result = await handler.HandleAsync(new ListOrgsCommand(new ListOrgsRequest(), ctx.GetActor()));
 
-        return Results.Ok(result.Value?.Select(MapOrgResponse));
+        return result.Success
+            ? Results.Ok(result.Value?.Select(MapOrgResponse))
+            : result.FromResult();
     }
 
     private static OrgDto MapOrgResponse(OrgDto dto) =>

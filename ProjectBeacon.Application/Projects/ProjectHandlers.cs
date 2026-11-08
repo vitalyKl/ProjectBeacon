@@ -7,7 +7,8 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Creates a project in an org and seeds the starter labels. The caller becomes owner.
+/// Creates a project in an org and seeds the starter labels. A customer creator becomes owner;
+/// a platform operator is never added to customer membership as a provisioning side effect.
 /// The caller must be an org Owner/Admin or a system admin. The rights check and the
 /// inserts run on a separate tenant instance keyed by the target org and the new project
 /// id, so the flow works for callers that hold no tenant without ever mutating the
@@ -50,7 +51,9 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         window.Assign(project.Id, orgId, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
         writeDb.Projects.Add(project);
-        if (command.Actor.UserId is { } ownerId)
+        // Platform operators may provision/support a project, but must never become a
+        // customer-project member as a side effect. Customer creators become project owners.
+        if (command.Actor.UserId is { } ownerId && !command.Actor.IsAdmin)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
         await writeDb.SaveChangesAsync(ct);

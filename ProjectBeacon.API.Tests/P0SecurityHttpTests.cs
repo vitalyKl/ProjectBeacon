@@ -207,7 +207,7 @@ public sealed class P0SecurityHttpTests
     }
 
     [Fact]
-    public async Task CreateOrg_SpoofedCreatedByUserId_Ignored()
+    public async Task CreateOrg_SpoofedCreatedByUserId_DoesNotCreateMembership()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -225,15 +225,16 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.OrgMembers.FirstOrDefaultAsync(m => m.OrgId == orgId, TestContext.Current.CancellationToken);
-            Assert.NotNull(member);
-            Assert.Equal(realUserId, member.UserId);
-            Assert.NotEqual(spoofedId, member.UserId);
+            Assert.True(await db.Orgs.AnyAsync(o => o.Id == orgId, TestContext.Current.CancellationToken));
+            Assert.False(await db.OrgMembers.AnyAsync(
+                member => member.OrgId == orgId
+                    && (member.UserId == realUserId || member.UserId == spoofedId),
+                TestContext.Current.CancellationToken));
         }
     }
 
     [Fact]
-    public async Task CreateProject_SpoofedCreatedByUserId_Ignored()
+    public async Task CreateProject_SpoofedCreatedByUserId_DoesNotCreateOperatorMembership()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -254,10 +255,11 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.ProjectMembers.FirstOrDefaultAsync(m => m.ProjectId == projectId, TestContext.Current.CancellationToken);
-            Assert.NotNull(member);
-            Assert.Equal(realUserId, member.UserId);
-            Assert.NotEqual(spoofedId, member.UserId);
+            Assert.True(await db.Projects.AnyAsync(p => p.Id == projectId, TestContext.Current.CancellationToken));
+            Assert.False(await db.ProjectMembers.AnyAsync(
+                member => member.ProjectId == projectId
+                    && (member.UserId == realUserId || member.UserId == spoofedId),
+                TestContext.Current.CancellationToken));
         }
     }
 
