@@ -134,7 +134,7 @@ public class ResetPasswordHandler
             null,
             null,
             AuditOutcome.Success,
-            detailsJson: """{"authMethod":"email_reset_token"}"""));
+            detailsJson: """{"authMethod":"email-reset-token"}"""));
         await db.SaveChangesAsync(ct);
         _sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
@@ -187,7 +187,7 @@ public class ChangePasswordHandler
             null,
             null,
             AuditOutcome.Success,
-            detailsJson: """{"authMethod":"current_password"}"""));
+            detailsJson: """{"authMethod":"current-password"}"""));
         await db.SaveChangesAsync(ct);
         _sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
