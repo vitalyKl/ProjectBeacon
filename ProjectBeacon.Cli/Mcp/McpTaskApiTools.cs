@@ -245,7 +245,7 @@ internal static partial class McpApiTools
         Put(body, "title", Text(args, "title"));
         var description = Text(args, "description");
         var expectedContentRevision = IntArg(args, "expectedContentRevision");
-        if (description is not null && expectedContentRevision is null or < 1)
+        if (description is not null && (expectedContentRevision is null or < 1))
             return new McpToolText(true, "missing or invalid 'expectedContentRevision' (read it from get_task first)");
         Put(body, "description", description);
         Put(body, "priority", Text(args, "priority"));
