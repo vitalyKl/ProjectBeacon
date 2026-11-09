@@ -5,7 +5,7 @@
         <MudTextField T="string" Value="@Value" ValueChanged="OnValueChanged"
                       Label="@Label" Lines="@Lines" MaxLength="@InputMaxLength"
                       Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true"
-                      Counter="@HasLimit" />
+                      Counter="@CounterValue" />
         <MudText Typo="Typo.caption" Class="mt-1">
             @Value.Length @L["Characters"]
             @if (HasLimit)
@@ -28,6 +28,7 @@
     [Parameter] public string? Class { get; set; }
 
     private bool HasLimit => MaxLength is > 0;
+    private int? CounterValue => HasLimit ? MaxLength : null;
     private int InputMaxLength => HasLimit ? MaxLength!.Value : int.MaxValue;
     private string EditorClass => string.Join(" ", new[] { "beacon-markdown-editor", Class }
         .Where(value => !string.IsNullOrWhiteSpace(value)));
