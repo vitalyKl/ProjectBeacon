@@ -2590,4 +2590,79 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>リポジトリ相対パスを1行に1つ入力してください。このプロファイルでは必須です。</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>プラットフォーム管理</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>監査ログ</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>セキュリティと運用者の操作を記録する変更不可のログです。プラットフォーム運用者のみアクセスできます。</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>アクションコード</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>実行者の種類</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>ユーザー ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>結果</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>対象</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>範囲</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>日時</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>組織 ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>プロジェクト ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>開始 (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>終了 (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>フィルターを適用</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>フィルターをクリア</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>CSV をエクスポート</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>前へ</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>次へ</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>ページ {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>イベント数: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>条件に一致する監査イベントはありません。</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>プラットフォーム監査ログを読む権限がありません。</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>ID の GUID 形式が正しくありません。</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>実行者、結果、UTC 日付のフィルターを確認してください。</value>
+  </data>
 </root>
