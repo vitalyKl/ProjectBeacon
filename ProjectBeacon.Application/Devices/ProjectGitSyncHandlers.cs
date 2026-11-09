@@ -40,7 +40,7 @@ public sealed class EnqueueProjectGitSyncHandler
 
         await using var db = _dbFactory.CreateDbContext();
         var permission = await _authorization.CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+            db, actor, ResourceType.Project, AuthAction.Update, projectId: projectId, ct: ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
                 permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);

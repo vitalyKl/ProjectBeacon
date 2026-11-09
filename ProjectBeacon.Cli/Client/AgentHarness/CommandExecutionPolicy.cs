@@ -652,20 +652,6 @@ internal static class CommandExecutionPolicy
     private static bool TryValidateGitArguments(IReadOnlyList<string> args, out string error)
     {
         error = string.Empty;
-        foreach (var argument in args)
-        {
-            if (BlockedGitGlobalOptions.Contains(argument)
-                || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
-                    && argument.StartsWith(option + "=", StringComparison.Ordinal))
-                || BlockedGitOptions.Any(option => argument == option
-                    || (option.StartsWith("--", StringComparison.Ordinal)
-                        && argument.StartsWith(option + "=", StringComparison.Ordinal))))
-            {
-                error = "Git configuration, executable override, and external program options are blocked in agent sessions. Use the structured repo_status tool for repository status.";
-                return false;
-            }
-        }
-
         var subcommand = GetGitSubcommand(args);
         if (subcommand is not null && BlockedGitSubcommands.Contains(subcommand))
         {
@@ -673,6 +659,21 @@ internal static class CommandExecutionPolicy
                 ? "git push is blocked on the workstation command interface."
                 : "This git subcommand is blocked in agent sessions. Use the structured repo_status tool for repository status; repository synchronization is a human action in the ProjectBeacon interface.";
             return false;
+        }
+        foreach (var argument in args)
+        {
+            if (BlockedGitGlobalOptions.Contains(argument)
+                || (argument.StartsWith("-c", StringComparison.Ordinal) && argument.Length > 2)
+                || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
+                    && argument.StartsWith(option + "=", StringComparison.Ordinal))
+                || BlockedGitOptions.Any(option => argument == option
+                    || (option.StartsWith("--", StringComparison.Ordinal)
+                        && argument.StartsWith(option + "=", StringComparison.Ordinal))
+                    || (option == "-o" && argument.StartsWith("-o", StringComparison.Ordinal) && argument.Length > 2)))
+            {
+                error = "Git configuration, executable override, and external program options are blocked in agent sessions. Use the structured repo_status tool for repository status.";
+                return false;
+            }
         }
 
         return true;
