@@ -185,7 +185,7 @@
                 }
                 case PipelineDialogMode.ConfirmClose:
                 {
-                    var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim())));
+                    var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim(), Params.ActorId)));
                     outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
                     break;
                 }
