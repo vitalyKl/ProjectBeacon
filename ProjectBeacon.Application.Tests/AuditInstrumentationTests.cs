@@ -594,7 +594,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken);
         Assert.Equal(AuditActorKind.Human, resetEvent.ActorKind);
         Assert.Equal(user.Id, resetEvent.ActorUserId);
-        Assert.Equal("""{"authMethod":"email_reset_token"}""", resetEvent.DetailsJson);
+        Assert.Equal("""{"authMethod":"email-reset-token"}""", resetEvent.DetailsJson);
 
         var change = new ChangePasswordHandler(_factory, passwords, auditWriter: _auditWriter);
         var changeResult = await change.HandleAsync(
@@ -607,7 +607,7 @@ public sealed class AuditInstrumentationTests : IDisposable
                 && item.TargetId == user.Id.ToString(),
             TestContext.Current.CancellationToken);
         Assert.Equal(user.Id, changedEvent.ActorUserId);
-        Assert.Equal("""{"authMethod":"current_password"}""", changedEvent.DetailsJson);
+        Assert.Equal("""{"authMethod":"current-password"}""", changedEvent.DetailsJson);
     }
 
     [Fact]
@@ -641,7 +641,7 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken);
         Assert.Equal(AuditActorKind.System, failedEvent.ActorKind);
         Assert.Equal(AuditOutcome.Failed, failedEvent.Outcome);
-        Assert.Equal("""{"reasonCode":"invalid_credentials"}""", failedEvent.DetailsJson);
+        Assert.Equal("""{"reasonCode":"invalid-credentials"}""", failedEvent.DetailsJson);
 
         var success = await login.HandleAsync(
             new LoginCommand(new LoginRequest("login-audit-user", "correct-password")),
