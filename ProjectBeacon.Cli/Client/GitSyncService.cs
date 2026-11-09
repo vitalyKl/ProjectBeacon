@@ -351,6 +351,16 @@ internal sealed class GitSyncService
         info.ArgumentList.Add("core.pager=cat");
         info.ArgumentList.Add("-c");
         info.ArgumentList.Add("diff.external=");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("protocol.allow=never");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("protocol.https.allow=always");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("protocol.http.allow=always");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("protocol.ssh.allow=always");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("protocol.file.allow=always");
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         info.Environment["GIT_TERMINAL_PROMPT"] = "0";

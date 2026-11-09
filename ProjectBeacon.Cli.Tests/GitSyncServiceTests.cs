@@ -146,6 +146,22 @@ public sealed class GitSyncServiceTests
         Assert.Contains("invalid", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task Execute_RejectsExternalRemoteHelpers()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        var marker = Path.Combine(repo.Parent, "remote-helper-executed");
+        await Git(repo.Root, "remote", "set-url", "origin",
+            "ext::touch " + marker.Replace(" ", "\\ ", StringComparison.Ordinal));
+        
+        var result = await ExecuteAsync(repo, GitSyncMode.Status);
+
+        Assert.Equal(GitSyncOutcome.Failed, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.FetchFailed, result.ReasonCode);
+        Assert.False(File.Exists(marker));
+    }
+
     private async Task<GitSyncResultDto> ExecuteAsync(RepositoryFixture repo, GitSyncMode mode)
     {
         var payload = JsonSerializer.Serialize(new { projectId = repo.ProjectId, mode = mode.ToString() });
