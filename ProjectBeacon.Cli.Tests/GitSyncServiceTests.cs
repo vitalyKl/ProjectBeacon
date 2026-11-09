@@ -163,6 +163,20 @@ public sealed class GitSyncServiceTests
         Assert.False(File.Exists(marker));
     }
 
+
+    [Fact]
+    public async Task Execute_RejectsOptionLikeConfiguredRemoteNameBeforeFetch()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await Git(repo.Root, "config", "branch.main.remote", "--upload-pack");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.Status);
+
+        Assert.Equal(GitSyncOutcome.Failed, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.FetchFailed, result.ReasonCode);
+        Assert.Equal(await Git(repo.Root, "rev-parse", "HEAD"), result.HeadAfter);
+    }
+
     private async Task<GitSyncResultDto> ExecuteAsync(RepositoryFixture repo, GitSyncMode mode)
     {
         var payload = JsonSerializer.Serialize(new { projectId = repo.ProjectId, mode = mode.ToString() });
