@@ -21,6 +21,7 @@ public sealed class MarkdownViewTests : BUnitRenderBase
 
         var cut = Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, markdown));
 
+        Assert.Contains("beacon-markdown", cut.Markup);
         Assert.Contains("<table>", cut.Markup);
         Assert.Contains("<del>old</del>", cut.Markup);
         Assert.Contains("type=\"checkbox\"", cut.Markup);
@@ -32,12 +33,14 @@ public sealed class MarkdownViewTests : BUnitRenderBase
     [Fact]
     public void MarkdownView_StripsRawHtmlAndDangerousLinkSchemes()
     {
-        var markdown = "Safe text <script>alert(1)</script> [bad](javascript:alert(1)) [good](https://safe.example)";
+        var markdown = "Safe text <script>alert(1)</script><img src=x onerror=alert(1)> [bad](javascript:alert(1)) [good](https://safe.example)";
 
         var cut = Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, markdown));
 
         Assert.Contains("Safe text", cut.Markup);
         Assert.DoesNotContain("<script", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<img", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("javascript:", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("https://safe.example", cut.Markup);
     }
@@ -77,6 +80,18 @@ public sealed class MarkdownViewTests : BUnitRenderBase
 
         Assert.Equal(before + 1, MarkdownView.CacheMissCount);
     }
+
+    [Fact]
+    public void MarkdownView_ShiftsHeadingsBelowPageHierarchy()
+    {
+        var markdown = "# Page title\n\n## Section\n\n### Detail";
+        var cut = Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, markdown));
+
+        Assert.Contains("<h4>Page title</h4>", cut.Markup);
+        Assert.Contains("<h5>Section</h5>", cut.Markup);
+        Assert.Contains("<h6>Detail</h6>", cut.Markup);
+    }
+
     [Fact]
     public void MarkdownEditor_RendersEditTabAndCharacterCounter()
     {

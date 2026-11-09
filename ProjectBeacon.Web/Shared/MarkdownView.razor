@@ -43,6 +43,7 @@
     private static readonly Regex AnchorTag = new("<a\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex LinkTargetAttributes = new("""\s+(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*')""", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex ParagraphTags = new("</?p>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex HeadingTags = new("(?<prefix></?h)(?<level>[1-6])(?=[\\s>])", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly object SanitizerLock = new();
     private static HtmlSanitizer? _sanitizer;
     private static int _cacheMissCount;
@@ -89,7 +90,7 @@
                 renderer.ObjectRenderers.Insert(0, new ChatCodeBlockRenderer(collapse, expand, copy));
 
             renderer.Render(Markdown.Parse(Text, Pipeline));
-            var html = Sanitize(writer.ToString());
+            var html = ShiftHeadings(Sanitize(writer.ToString()));
             if (Inline)
                 html = ParagraphTags.Replace(html, string.Empty);
 
@@ -135,6 +136,14 @@
             return cleanTag[..^1] + " target=\"_blank\" rel=\"noopener noreferrer\">";
         });
     }
+
+    private static string ShiftHeadings(string html) =>
+        HeadingTags.Replace(html, match =>
+        {
+            var level = int.Parse(match.Groups["level"].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var shifted = Math.Min(6, level + 3).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return match.Groups["prefix"].Value + shifted;
+        });
 
     private static HtmlSanitizer CreateSanitizer()
     {

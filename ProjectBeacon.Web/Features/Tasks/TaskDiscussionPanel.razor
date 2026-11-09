@@ -22,7 +22,7 @@
             </div>
         }
     }
-    <MudTextField @bind-Value="_draft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+    <MarkdownEditor @bind-Value="_draft" Label="@L["WriteAComment"]" Lines="3" Class="mt-2" />
     <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="Save">@L["AddComment"]</MudButton>
 </MudPaper>
 
