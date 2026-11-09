@@ -8,6 +8,7 @@ public class Constraint : Entity, IProjectScoped
 {
     public Constraint() { }
 
+    public int Revision { get; private set; } = 1;
     public string Body { get; private set; } = string.Empty;
     public string ScopePath { get; private set; } = string.Empty;
     public ConstraintKind Kind { get; private set; }
@@ -25,6 +26,14 @@ public class Constraint : Entity, IProjectScoped
         constraint.Status = ConstraintStatus.Proposed;
         constraint.CreatedAt = DateTime.UtcNow;
         return constraint;
+    }
+
+    public void UpdateBody(string body)
+    {
+        if (string.Equals(Body, body, StringComparison.Ordinal))
+            return;
+        Body = body;
+        Revision++;
     }
 
     public void Activate()

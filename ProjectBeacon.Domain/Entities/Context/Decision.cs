@@ -11,6 +11,7 @@ public class Decision : Entity, IProjectScoped
 {
     public Decision() { }
 
+    public int Revision { get; private set; } = 1;
     public string Title { get; private set; } = string.Empty;
     public string Context { get; private set; } = string.Empty;
     public string DecisionBody { get; private set; } = string.Empty;
@@ -34,6 +35,21 @@ public class Decision : Entity, IProjectScoped
         d.ProjectId = projectId;
         d.CreatedAt = DateTime.UtcNow;
         return d;
+    }
+
+    public void UpdateContent(string title, string context, string decisionBody, string? consequences)
+    {
+        if (string.Equals(Title, title, StringComparison.Ordinal)
+            && string.Equals(Context, context, StringComparison.Ordinal)
+            && string.Equals(DecisionBody, decisionBody, StringComparison.Ordinal)
+            && string.Equals(Consequences, consequences, StringComparison.Ordinal))
+            return;
+
+        Title = title;
+        Context = context;
+        DecisionBody = decisionBody;
+        Consequences = consequences;
+        Revision++;
     }
 
     public void Accept()

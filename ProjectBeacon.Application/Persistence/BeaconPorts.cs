@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Domain.Entities.Agents;
 using Domain.Entities.Audit;
 using Domain.Entities.Chat;
+using Domain.Entities.Content;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
@@ -67,6 +68,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<ReviewRun> ReviewRuns { get; }
     DbSet<ContextSection> ContextSections { get; }
     DbSet<ContextRevision> ContextRevisions { get; }
+    DbSet<ContentVersion> ContentVersions { get; }
 
     Guid? FilterProjectId { get; }
     Guid? FilterOrgId { get; }

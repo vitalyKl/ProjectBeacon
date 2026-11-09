@@ -14,6 +14,7 @@ public class MilestoneConfiguration : IEntityTypeConfiguration<Milestone>
         entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
         entity.Property(e => e.Description).HasMaxLength(5000);
         entity.Property(e => e.CreatedAt).IsRequired();
+        entity.Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken().IsRequired();
         entity.Property(e => e.UpdatedAt);
 
         entity.HasOne(e => e.Project)

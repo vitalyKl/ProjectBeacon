@@ -16,6 +16,7 @@ public class DecisionConfiguration : IEntityTypeConfiguration<Decision>
         entity.Property(e => e.DecisionBody).IsRequired().HasMaxLength(5000);
         entity.Property(e => e.Consequences).HasMaxLength(5000);
         entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+        entity.Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken().IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.Status });
         entity.HasOne(e => e.SupersededBy)

@@ -127,6 +127,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetProjectPulseHandler>();
         services.AddTransient<ListLabelsHandler>();
         services.AddScoped<TenantContextBinder>();
+        services.AddTransient<ContentWriter>();
 
         services.AddTransient<UpsertContextNodeHandler>();
         services.AddTransient<ListContextNodesHandler>();

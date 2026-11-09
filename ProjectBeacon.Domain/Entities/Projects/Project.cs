@@ -10,6 +10,7 @@ public class Project : Entity, IOrgScoped
 {
     public Project() { }
 
+    public int Revision { get; private set; } = 1;
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public string? ReviewCheckCommand { get; private set; }
@@ -47,7 +48,12 @@ public class Project : Entity, IOrgScoped
     public void Update(string? name = null, string? description = null, string? reviewCheckCommand = null)
     {
         if (name is not null) Name = name;
-        if (description is not null) Description = description;
+        if (description is not null)
+        {
+            if (!string.Equals(Description, description, StringComparison.Ordinal))
+                Revision++;
+            Description = description;
+        }
         if (reviewCheckCommand is not null)
             ReviewCheckCommand = string.IsNullOrWhiteSpace(reviewCheckCommand) ? null : reviewCheckCommand.Trim();
         UpdatedAt = DateTime.UtcNow;

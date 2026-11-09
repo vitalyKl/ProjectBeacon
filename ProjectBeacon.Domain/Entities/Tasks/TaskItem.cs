@@ -14,6 +14,7 @@ public class TaskItem : Entity, IProjectScoped
 {
     public TaskItem() { }
 
+    public int ContentRevision { get; private set; } = 1;
     public string Title { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public TaskItemStatus Status { get; private set; }
@@ -57,7 +58,12 @@ public class TaskItem : Entity, IProjectScoped
     public void Update(string? title = null, string? description = null, TaskPriority? priority = null, TaskType? type = null)
     {
         if (title is not null) Title = title;
-        if (description is not null) Description = description;
+        if (description is not null)
+        {
+            if (!string.Equals(Description, description, StringComparison.Ordinal))
+                ContentRevision++;
+            Description = description;
+        }
         if (priority is not null) Priority = priority.Value;
         if (type is not null) Type = type.Value;
     }
@@ -125,6 +131,8 @@ public class TaskItem : Entity, IProjectScoped
         if (string.IsNullOrWhiteSpace(notes))
             throw new ArgumentException("Review notes cannot be empty when moving to review.", nameof(notes));
 
+        if (!string.Equals(ReviewNotes, notes, StringComparison.Ordinal))
+            ContentRevision++;
         ReviewNotes = notes;
     }
 

@@ -12,6 +12,7 @@ public class ContextSection : Entity, IProjectScoped
 {
     public ContextSection() { }
 
+    public int Revision { get; private set; } = 1;
     public string SectionId { get; private set; } = string.Empty;
     public string Key { get; private set; } = string.Empty;
     public string Title { get; private set; } = string.Empty;
@@ -72,10 +73,16 @@ public class ContextSection : Entity, IProjectScoped
 
     public void Update(string? title = null, string? bodyMarkdown = null, string? updatedByType = null, string? updatedById = null)
     {
+        var contentChanged =
+            (title is not null && !string.Equals(Title, title, StringComparison.Ordinal))
+            || (bodyMarkdown is not null && !string.Equals(BodyMarkdown, bodyMarkdown, StringComparison.Ordinal));
         if (title is not null) Title = title;
         if (bodyMarkdown is not null) BodyMarkdown = bodyMarkdown;
-        if (title is not null || bodyMarkdown is not null)
+        if (contentChanged)
+        {
+            Revision++;
             SectionsText = $"{Title} {BodyMarkdown}";
+        }
         if (updatedByType is not null) UpdatedByType = updatedByType;
         if (updatedById is not null) UpdatedById = updatedById;
         UpdatedAt = DateTime.UtcNow;
