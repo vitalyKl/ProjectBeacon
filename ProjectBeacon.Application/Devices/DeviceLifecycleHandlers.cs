@@ -73,7 +73,7 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
                     existing.Id.ToString(),
                     null,
                     null,
-                    detailsJson: """{"changed":"credentials"}"""));
+                    detailsJson: """{"reasonCode":"token-rotated"}"""));
             }
             await db.SaveChangesAsync(ct);
             return Result.Ok(MapDevice(existing, token, DateTime.UtcNow));
