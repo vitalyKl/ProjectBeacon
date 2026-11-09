@@ -235,24 +235,62 @@ internal sealed class GitSyncService
 
         var branchName = detached ? null : branch.StdOut.Trim();
         string? upstream = null, upstreamRef = null, remote = null, mergeRef = null;
+        string? upstreamError = null;
         if (!detached && !string.IsNullOrWhiteSpace(branchName))
         {
-            var upstreamResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
-            if (upstreamResult.ExitCode == 0 && !upstreamResult.TimedOut)
+            // Inspect the configured upstream before resolving @{upstream}. Git may reject
+            // malformed remote names during that resolution, which must not be mistaken for
+            // an ordinary branch with no upstream.
+            var remoteResult = await RunGitAsync(root, hooks, filters ?? [], ct,
+                "config", "--get", "branch." + branchName + ".remote");
+            var mergeResult = await RunGitAsync(root, hooks, filters ?? [], ct,
+                "config", "--get", "branch." + branchName + ".merge");
+            if (remoteResult.TimedOut || mergeResult.TimedOut)
             {
-                upstream = upstreamResult.StdOut.Trim();
-                var upstreamRefResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                    "rev-parse", "--symbolic-full-name", "@{upstream}");
-                var remoteResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                    "config", "--get", "branch." + branchName + ".remote");
-                var mergeResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                    "config", "--get", "branch." + branchName + ".merge");
-                if (upstreamRefResult.ExitCode == 0 && remoteResult.ExitCode == 0 && mergeResult.ExitCode == 0)
+                upstreamError = "Git upstream inspection timed out.";
+            }
+            else if (remoteResult.ExitCode == 0 && mergeResult.ExitCode == 0)
+            {
+                remote = remoteResult.StdOut.Trim();
+                mergeRef = mergeResult.StdOut.Trim();
+                if ((!string.Equals(remote, ".", StringComparison.Ordinal) && !RemoteNamePattern.IsMatch(remote))
+                    || !BranchRefPattern.IsMatch(mergeRef))
+                    upstreamError = "The configured upstream ref is not a supported branch ref.";
+            }
+            else if (remoteResult.ExitCode == 0 || mergeResult.ExitCode == 0)
+            {
+                upstreamError = "The configured upstream is incomplete.";
+            }
+            else if (remoteResult.ExitCode != 1 || mergeResult.ExitCode != 1)
+            {
+                upstreamError = SanitizeStderr(remoteResult.ExitCode != 1 ? remoteResult.StdErr : mergeResult.StdErr)
+                    ?? "Git could not inspect the configured upstream.";
+            }
+
+            if (upstreamError is null && remote is not null && mergeRef is not null)
+            {
+                var upstreamResult = await RunGitAsync(root, hooks, filters ?? [], ct,
+                    "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
+                if (upstreamResult.TimedOut)
                 {
-                    upstreamRef = upstreamRefResult.StdOut.Trim();
-                    remote = remoteResult.StdOut.Trim();
-                    mergeRef = mergeResult.StdOut.Trim();
+                    upstreamError = "Git upstream inspection timed out.";
+                }
+                else if (upstreamResult.ExitCode == 0)
+                {
+                    upstream = upstreamResult.StdOut.Trim();
+                    var upstreamRefResult = await RunGitAsync(root, hooks, filters ?? [], ct,
+                        "rev-parse", "--symbolic-full-name", "@{upstream}");
+                    if (upstreamRefResult.TimedOut)
+                    {
+                        upstreamError = "Git upstream inspection timed out.";
+                    }
+                    else if (upstreamRefResult.ExitCode == 0)
+                    {
+                        upstreamRef = upstreamRefResult.StdOut.Trim();
+                        if (!string.Equals(remote, ".", StringComparison.Ordinal)
+                            && !RemoteTrackingRefPattern.IsMatch(upstreamRef))
+                            upstreamError = "The configured upstream ref is not a supported remote-tracking ref.";
+                    }
                 }
             }
         }
@@ -291,7 +329,7 @@ internal sealed class GitSyncService
             detached,
             upstream is not null && upstreamRef is not null,
             ahead > 0 && behind > 0,
-            null);
+            upstreamError);
     }
 
     private static RepositoryState EmptyState(bool detached) =>
