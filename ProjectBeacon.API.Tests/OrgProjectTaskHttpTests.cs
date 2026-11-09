@@ -288,6 +288,29 @@ public sealed class OrgProjectTaskHttpTests
 
         var ownedByInvite = await PostJson(adminClient, "/v1/orgs", new { name = "Invited Customer" });
         var orgId = ownedByInvite.GetProperty("id").GetGuid();
+
+        // Operators provision customer projects without acquiring project membership.
+        var operatorProject = await PostJson(adminClient, "/v1/projects", new
+        {
+            name = "Operator Provisioned Project",
+            orgId
+        });
+        var operatorProjectId = operatorProject.GetProperty("id").GetGuid();
+
+        await using (var operatorRead = factory.Services.CreateAsyncScope())
+        {
+            var db = operatorRead.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                Assert.True(await db.Projects.AnyAsync(
+                    project => project.Id == operatorProjectId && project.OrgId == orgId,
+                    TestContext.Current.CancellationToken));
+                Assert.False(await db.ProjectMembers.AnyAsync(
+                    member => member.ProjectId == operatorProjectId,
+                    TestContext.Current.CancellationToken));
+            }
+        }
+
         var invite = await PostJson(adminClient, $"/v1/orgs/{orgId}/invites", new
         {
             email = "org-member@beacon.local",

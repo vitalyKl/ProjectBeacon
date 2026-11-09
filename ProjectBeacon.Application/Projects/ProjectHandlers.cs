@@ -20,12 +20,18 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService? _auth;
     private readonly ITenantContext _tenant;
+    private readonly IAdminGate? _adminGate;
 
-    public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant)
+    public CreateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService? auth,
+        ITenantContext tenant,
+        IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _tenant = tenant;
+        _adminGate = adminGate;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -42,14 +48,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
             return Result.Failure<ProjectDto>("User not found.");
 
         var window = new TenantContext();
-        window.Assign(_tenant.ProjectId, orgId, _tenant.Unscoped);
+        window.Assign(null, orgId, unscoped: false);
         await using var authDb = _dbFactory.CreateDbContext(window);
         if (!await CanCreateInOrgAsync(authDb, command.Actor, orgId, ct))
             return Result.Forbidden<ProjectDto>("You need Owner or Admin rights in this org to create a project.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, orgId);
 
-        window.Assign(project.Id, orgId, _tenant.Unscoped);
+        window.Assign(project.Id, orgId, unscoped: false);
         await using var writeDb = _dbFactory.CreateDbContext(window);
         writeDb.Projects.Add(project);
         // Platform operators may provision/support a project, but must never become a
@@ -71,15 +77,23 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (actor.UserId is not { } userId)
             return false;
 
-        if (_auth is not null)
-            return (await _auth.CanAsync(db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct)).Success;
+        if (actor.IsAdmin)
+        {
+            if (_adminGate is null)
+                return false;
 
-        if (await db.OrgMembers.IgnoreQueryFilters()
-                .AnyAsync(m => m.OrgId == orgId && m.UserId == userId
-                    && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct))
-            return true;
-        return await db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
+            var operatorAccess = await _adminGate.RequireAsync(
+                actor, OperatorPermission.ProjectsManage, ct: ct);
+            return operatorAccess.Success;
+        }
+
+        if (_auth is not null)
+            return (await _auth.CanAsync(
+                db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct)).Success;
+
+        return await db.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(m => m.OrgId == orgId && m.UserId == userId
+                && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
