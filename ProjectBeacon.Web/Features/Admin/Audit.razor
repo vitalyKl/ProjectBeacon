@@ -10,6 +10,7 @@
 @inject IAdminGate AdminGate
 @inject IAuditReader AuditReader
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>@L["AuditHistory"]</PageTitle>
 
@@ -50,6 +51,10 @@ else
             </MudSelect>
         </div>
         <div class="d-flex justify-end gap-2 mt-3">
+            @if (_canExport)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ExportCsv" Disabled="_loading">@L["AuditExportCsv"]</MudButton>
+            }
             <MudButton Variant="Variant.Text" OnClick="ClearFilters" Disabled="_loading">@L["ClearFilters"]</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFilters" Disabled="_loading">@L["ApplyFilters"]</MudButton>
         </div>
@@ -149,6 +154,7 @@ else
     private AuditOutcome? _outcome;
     private bool _loading = true;
     private bool _forbidden;
+    private bool _canExport;
     private int _pageNumber = 1;
 
     protected override async Task OnInitializedAsync() => await LoadPage();
@@ -231,6 +237,86 @@ else
                 Page: _pageNumber,
                 PageSize: 50);
             _page = await AuditReader.ListAsync(gate.Value, query);
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(exception.Message) ? L["Error"].Value : exception.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool TryBuildQuery(int page, int pageSize, out AuditQuery query)
+    {
+        if (!TryGuid(_orgId, out var orgId)
+            || !TryGuid(_projectId, out var projectId)
+            || !TryGuid(_actorUserId, out var actorUserId))
+        {
+            Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
+            query = new AuditQuery();
+            return false;
+        }
+
+        var fromUtc = _fromDate.HasValue
+            ? DateTime.SpecifyKind(_fromDate.Value.Date, DateTimeKind.Utc)
+            : null;
+        var toUtc = _toDate.HasValue
+            ? DateTime.SpecifyKind(_toDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc)
+            : null;
+        query = new AuditQuery(
+            OrgId: orgId,
+            ProjectId: projectId,
+            FromUtc: fromUtc,
+            ToUtc: toUtc,
+            Action: string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
+            ActorKind: _actorKind,
+            ActorUserId: actorUserId,
+            Outcome: _outcome,
+            Page: page,
+            PageSize: pageSize);
+        return true;
+    }
+
+    private async Task ExportCsv()
+    {
+        if (!TryBuildQuery(1, 200, out var query))
+            return;
+
+        _loading = true;
+        try
+        {
+            var state = await Auth.GetAuthenticationStateAsync();
+            var actor = ActorContextFactory.FromPrincipal(state.User);
+            var gate = await AdminGate.RequireAsync(actor, OperatorPermission.AuditExport);
+            if (!gate.Success || gate.Value is null)
+            {
+                _canExport = false;
+                Snackbar.Add(L["AuditAccessDenied"].Value, Severity.Error);
+                return;
+            }
+
+            var rows = new List<AuditEntry>();
+            await foreach (var entry in AuditReader.StreamAsync(
+                gate.Value, query, AuditCsvWriter.MaxRows))
+            {
+                rows.Add(entry);
+                if (rows.Count > AuditCsvWriter.MaxRows)
+                {
+                    Snackbar.Add(string.Format(L["AuditExportTooLarge"].Value, AuditCsvWriter.MaxRows), Severity.Warning);
+                    return;
+                }
+            }
+
+            var bytes = AuditCsvWriter.Encode(rows);
+            var fileName = $"projectbeacon-audit-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+            await JS.InvokeVoidAsync(
+                "beaconAttachments.download",
+                fileName,
+                "text/csv; charset=utf-8",
+                Convert.ToBase64String(bytes));
+            Snackbar.Add(string.Format(L["AuditExported"].Value, rows.Count), Severity.Success);
         }
         catch (Exception exception)
         {
