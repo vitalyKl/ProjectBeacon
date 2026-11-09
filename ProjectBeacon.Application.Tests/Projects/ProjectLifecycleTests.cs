@@ -40,10 +40,14 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.False(blank.Success);
 
         var renamed = await handler.HandleAsync(new UpdateProjectCommand(
-            new UpdateProjectRequest(projectId, " North ", "notes"), actor), TestContext.Current.CancellationToken);
+            new UpdateProjectRequest(projectId, " North ", "notes", ExpectedRevision: 1), actor), TestContext.Current.CancellationToken);
         Assert.True(renamed.Success, renamed.Error);
         Assert.Equal("North", renamed.Value!.Name);
         Assert.Equal("notes", renamed.Value.Description);
+        Assert.Equal(2, renamed.Value.Revision);
+        Assert.Equal(2, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.ProjectDescription && v.TargetId == projectId,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

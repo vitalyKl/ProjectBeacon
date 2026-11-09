@@ -49,6 +49,9 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         Assert.Equal(first.Value!.Id, retry.Value!.Id);
         Assert.Equal(DecisionStatus.Proposed, retry.Value.Status);
         Assert.Equal(1, await _db.Decisions.CountAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.Decision && v.TargetId == retry.Value.Id,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

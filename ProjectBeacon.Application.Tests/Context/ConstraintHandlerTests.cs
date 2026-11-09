@@ -48,6 +48,9 @@ public sealed class ConstraintHandlerTests : IDisposable
         Assert.Equal(first.Value!.Id, retry.Value!.Id);
         Assert.Equal(ConstraintStatus.Proposed, retry.Value.Status);
         Assert.Equal(1, await _db.Constraints.CountAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.Constraint && v.TargetId == retry.Value.Id,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

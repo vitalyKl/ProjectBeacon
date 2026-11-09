@@ -187,9 +187,9 @@ public sealed class CompileBriefTests : IDisposable
     public async Task UpsertContextDraft_IsIdempotentForItsAuthorAndProtectsOtherAuthors()
     {
         var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
-        UpsertContextNodeCommand Command(string body) => new(new UpsertContextNodeRequest(
+        UpsertContextNodeCommand Command(string body, int? expectedRevision = null) => new(new UpsertContextNodeRequest(
             _projectId, "Goals", body, "goals", ContextScopeType.Project,
-            null, null, null, null, ContextSource.Native, "task/123"));
+            null, null, null, null, ContextSource.Native, "task/123", expectedRevision));
 
         var created = await handler.HandleDraftAsync(Command("Initial draft"), "subtask-one",
             TestContext.Current.CancellationToken);
@@ -198,7 +198,7 @@ public sealed class CompileBriefTests : IDisposable
         Assert.Equal("agent", created.Value.UpdatedByType);
         Assert.Equal("subtask-one", created.Value.UpdatedById);
 
-        var retry = await handler.HandleDraftAsync(Command("Updated draft"), "subtask-one",
+        var retry = await handler.HandleDraftAsync(Command("Updated draft", created.Value!.Revision), "subtask-one",
             TestContext.Current.CancellationToken);
         Assert.True(retry.Success, retry.Error);
         Assert.Equal(created.Value.Id, retry.Value!.Id);
@@ -218,7 +218,7 @@ public sealed class CompileBriefTests : IDisposable
     {
         var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
-        await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+        var created = await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId,
             "Goals",
             "Original text",
@@ -242,12 +242,41 @@ public sealed class CompileBriefTests : IDisposable
             null,
             null,
             ContextSource.Native,
-            null));
+            null,
+            created.Value!.Revision));
 
         var updateResult = await upsertHandler.HandleAsync(updateCommand, TestContext.Current.CancellationToken);
 
         Assert.True(updateResult.Success);
         Assert.Equal("Updated text", updateResult.Value!.BodyMarkdown);
+        Assert.Equal(2, updateResult.Value.Revision);
+    }
+
+    [Fact]
+    public async Task UpsertContextNode_RejectsStaleExpectedRevision()
+    {
+        var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
+        var created = await handler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+            _projectId, "Goals", "Initial", "goals", ContextScopeType.Project,
+            null, null, null, null, ContextSource.Native, null)), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var updated = await handler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+            _projectId, "Goals", "First update", "goals", ContextScopeType.Project,
+            null, null, null, null, ContextSource.Native, null, created.Value!.Revision)), TestContext.Current.CancellationToken);
+        Assert.True(updated.Success, updated.Error);
+
+        var stale = await handler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+            _projectId, "Goals", "Stale update", "goals", ContextScopeType.Project,
+            null, null, null, null, ContextSource.Native, null, created.Value.Revision)), TestContext.Current.CancellationToken);
+
+        Assert.False(stale.Success);
+        Assert.Equal(ErrorKind.Conflict, stale.Kind);
+        Assert.Equal("First update", (await _db.ContextSections.SingleAsync(
+            s => s.Id == created.Value.Id, TestContext.Current.CancellationToken)).BodyMarkdown);
+        Assert.Equal(2, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.ContextSection && v.TargetId == created.Value.Id,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -287,6 +316,12 @@ public sealed class CompileBriefTests : IDisposable
 
         var deleted = await _db.ContextSections.FirstOrDefaultAsync(s => s.Id == createResult.Value.Id, TestContext.Current.CancellationToken);
         Assert.Null(deleted);
+        var history = await _db.ContentVersions
+            .Where(v => v.TargetKind == ContentTargetKind.ContextSection && v.TargetId == createResult.Value.Id)
+            .OrderBy(v => v.Revision)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2 }, history.Select(v => v.Revision).ToArray());
+        Assert.Contains("\"deleted\":true", history[^1].ContentJson);
     }
 
     [Fact]
@@ -434,6 +469,9 @@ public sealed class CompileBriefTests : IDisposable
         var section = Assert.Single(_db.ContextSections);
         Assert.Equal(_projectId, section.ProjectId);
         Assert.NotEqual(Guid.Empty, section.ProjectId);
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.ContextSection && v.TargetId == section.Id,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
