@@ -17,7 +17,7 @@ public record UpdateOrgRequest(Guid OrgId, string? Name, string? Description);
 /// <summary>
 /// Command for update org.
 /// </summary>
-public record UpdateOrgCommand(UpdateOrgRequest Request) : ICommand<Result<OrgDto>>;
+public record UpdateOrgCommand(UpdateOrgRequest Request, ActorContext Actor) : ICommand<Result<OrgDto>>;
 /// <summary>
 /// Fields for get org.
 /// </summary>
