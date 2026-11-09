@@ -6,6 +6,7 @@ using Application.Tasks;
 using Domain.Entities.Agents;
 using Domain.Entities.Audit;
 using Domain.Entities.Chat;
+using Domain.Entities.Content;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
@@ -584,6 +585,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
+        public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
 
         public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
             => _inner.Entry(entity);
@@ -662,6 +664,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
+        public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
 
         public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
             => _inner.Entry(entity);
