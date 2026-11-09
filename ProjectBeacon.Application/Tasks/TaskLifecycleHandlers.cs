@@ -96,7 +96,7 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             task.ContentRevision);
 }
 /// <summary>
-/// Updates a task title, description, priority, type, label, or milestone. Description updates are last-writer-wins against finish_work atomic note appends; status transitions never depend on the description value.
+/// Updates a task title, description, priority, type, label, or milestone. Description edits require the caller's expected content revision; state transitions use the separate StateRevision.
 /// </summary>
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
