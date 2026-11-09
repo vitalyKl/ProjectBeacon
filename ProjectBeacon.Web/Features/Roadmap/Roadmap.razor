@@ -153,6 +153,7 @@ else
     private List<MilestoneDto> _milestones = [];
     private List<TaskItemDto> _tasks = [];
     private ProjectDto? _project;
+    private ActorContext _actor = ActorContext.Anonymous;
     private bool _loading = true;
     private bool _showCreateForm;
     private Guid? _editingId;
@@ -167,7 +168,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -210,7 +212,7 @@ else
             string.IsNullOrWhiteSpace(_editName) ? L["Milestone"].Value : _editName,
             _editDescription,
             _project.Id,
-            _newOrder)));
+            _newOrder), _actor));
         if (!created.Success)
         {
             Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
@@ -237,7 +239,7 @@ else
     {
         if (_editingId is null) return;
         var updated = await UpdateMilestoneHandler.HandleAsync(new UpdateMilestoneCommand(new UpdateMilestoneRequest(
-            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision)));
+            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision), _actor));
         if (!updated.Success)
         {
             Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
@@ -292,7 +294,7 @@ else
             yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true)
             return;
-        var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id)));
+        var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
