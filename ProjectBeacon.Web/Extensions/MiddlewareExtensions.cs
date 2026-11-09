@@ -71,10 +71,11 @@ public static class MiddlewareExtensions
         app.UseRouting();
         app.UseRateLimiter();
         app.UseAuthentication();
+        // Wrap token/device boundaries, tenant isolation and endpoint authorization so every
+        // explicit HTTP 403 on a versioned API route is observed.
+        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
-        // Wrap tenant and authorization middleware so all 403 responses are observed.
-        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
         app.UseAntiforgery();
