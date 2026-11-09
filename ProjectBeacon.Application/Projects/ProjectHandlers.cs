@@ -296,59 +296,90 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
 
     public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.ProjectId, ct: ct);
+        await using var authorizationDb = _dbFactory.CreateDbContext();
+        var check = await _auth.CanAsync(
+            authorizationDb, command.Actor, ResourceType.Project,
+            AuthAction.Administer, projectId: command.ProjectId, ct: ct);
         if (!check.Success)
             return Result.Forbidden<bool>();
 
-        var project = await db.Projects.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
+        var project = await authorizationDb.Projects.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(item => item.Id == command.ProjectId)
+            .Select(item => new { item.Id, item.OrgId })
+            .FirstOrDefaultAsync(ct);
         if (project is null)
             return Result.Failure<bool>("Project not found.");
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
-        await db.TaskDependencies.IgnoreQueryFilters()
-            .Where(d => taskIds.Contains(d.TaskId) || taskIds.Contains(d.DependentTaskId))
-            .ExecuteDeleteAsync(ct);
-
-        await db.Decisions.IgnoreQueryFilters()
-            .Where(d => d.ProjectId == command.ProjectId)
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.SupersededById, (Guid?)null), ct);
-        await db.Decisions.IgnoreQueryFilters()
-            .Where(d => d.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
-
-        await db.ContextSections.IgnoreQueryFilters()
-            .Where(s => s.RepoId == command.ProjectId && s.ProjectId != command.ProjectId)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RepoId, (Guid?)null), ct);
-        await db.ContextSections.IgnoreQueryFilters()
-            .Where(s => s.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
-        await db.Constraints.IgnoreQueryFilters()
-            .Where(c => c.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
-
-        db.Projects.Remove(project);
-        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            command.Actor,
-            "project.deleted",
-            "Project",
-            project.Id.ToString(),
-            project.OrgId,
-            project.Id,
-            detailsJson: """{"previousState":"Active","newState":"Deleted"}"""));
+        // ExecuteDelete issues SQL immediately, so the entire cleanup and audit insert
+        // must share one transaction. Use the provider execution strategy and a fresh
+        // tenant-bound context per attempt so a transient retry cannot reuse tracked
+        // deleted entities or stage duplicate audit rows.
+        var tenant = new TenantContext();
+        tenant.Assign(project.Id, project.OrgId, unscoped: false);
+        var deleted = false;
         try
         {
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
+            var strategy = authorizationDb.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var db = _dbFactory.CreateDbContext(tenant);
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+                var currentProject = await db.Projects.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(item => item.Id == project.Id, ct);
+                if (currentProject is null)
+                    return;
+
+                var taskIds = db.Tasks.IgnoreQueryFilters()
+                    .Where(task => task.ProjectId == project.Id)
+                    .Select(task => task.Id);
+                await db.TaskDependencies.IgnoreQueryFilters()
+                    .Where(dependency => taskIds.Contains(dependency.TaskId)
+                        || taskIds.Contains(dependency.DependentTaskId))
+                    .ExecuteDeleteAsync(ct);
+
+                await db.Decisions.IgnoreQueryFilters()
+                    .Where(decision => decision.ProjectId == project.Id)
+                    .ExecuteUpdateAsync(update => update.SetProperty(
+                        decision => decision.SupersededById, (Guid?)null), ct);
+                await db.Decisions.IgnoreQueryFilters()
+                    .Where(decision => decision.ProjectId == project.Id)
+                    .ExecuteDeleteAsync(ct);
+
+                await db.ContextSections.IgnoreQueryFilters()
+                    .Where(section => section.RepoId == project.Id && section.ProjectId != project.Id)
+                    .ExecuteUpdateAsync(update => update.SetProperty(
+                        section => section.RepoId, (Guid?)null), ct);
+                await db.ContextSections.IgnoreQueryFilters()
+                    .Where(section => section.ProjectId == project.Id)
+                    .ExecuteDeleteAsync(ct);
+                await db.Constraints.IgnoreQueryFilters()
+                    .Where(constraint => constraint.ProjectId == project.Id)
+                    .ExecuteDeleteAsync(ct);
+
+                db.Projects.Remove(currentProject);
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    command.Actor,
+                    "project.deleted",
+                    "Project",
+                    project.Id.ToString(),
+                    project.OrgId,
+                    project.Id,
+                    detailsJson: """{"previousState":"Active","newState":"Deleted"}"""));
+
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                deleted = true;
+            });
         }
         catch (DbUpdateException)
         {
             return Result.Failure<bool>("Project could not be deleted.");
         }
 
-        return Result.Ok(true);
+        return deleted
+            ? Result.Ok(true)
+            : Result.Failure<bool>("Project not found.");
     }
 }
