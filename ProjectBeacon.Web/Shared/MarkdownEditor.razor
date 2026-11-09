@@ -3,16 +3,9 @@
 <MudTabs Class="@EditorClass">
     <MudTabPanel Text="@L["MarkdownEdit"]">
         <MudTextField T="string" Value="@Value" ValueChanged="OnValueChanged"
-                      Label="@Label" Lines="@Lines" MaxLength="@InputMaxLength"
+                      Label="@Label" Lines="@Lines" MaxLength="@MaxLength"
                       Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true"
                       Counter="@CounterValue" />
-        <MudText Typo="Typo.caption" Class="mt-1">
-            @Value.Length @L["Characters"]
-            @if (HasLimit)
-            {
-                <span> / @MaxLength</span>
-            }
-        </MudText>
     </MudTabPanel>
     <MudTabPanel Text="@L["MarkdownPreview"]">
         <MarkdownView Text="@Value" />
@@ -27,9 +20,7 @@
     [Parameter] public int? MaxLength { get; set; }
     [Parameter] public string? Class { get; set; }
 
-    private bool HasLimit => MaxLength is > 0;
-    private int? CounterValue => HasLimit ? MaxLength : null;
-    private int InputMaxLength => HasLimit ? MaxLength!.Value : int.MaxValue;
+    private int CounterValue => MaxLength ?? 0;
     private string EditorClass => string.Join(" ", new[] { "beacon-markdown-editor", Class }
         .Where(value => !string.IsNullOrWhiteSpace(value)));
 
