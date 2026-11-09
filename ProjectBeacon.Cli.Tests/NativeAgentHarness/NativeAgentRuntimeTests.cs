@@ -1999,7 +1999,7 @@ public sealed class NativeAgentRuntimeTests
             SawWasNotAdvertised |= request.Messages.Any(message =>
                 message?["content"]?.GetValue<string>()?.Contains("was not advertised", StringComparison.OrdinalIgnoreCase) == true);
             var requestNumber = Interlocked.Increment(ref _regularCalls);
-            if (requestNumber <= 2)
+            if (requestNumber <= 4)
             {
                 yield return new ChatProviderEvent(ChatProviderEventKind.Usage,
                     PromptTokens: requestNumber == 1 ? 18_000 : 19_000,
@@ -2015,7 +2015,7 @@ public sealed class NativeAgentRuntimeTests
                 yield break;
             }
 
-            if (requestNumber == 3)
+            if (requestNumber == 5)
             {
                 OverflowCount++;
                 throw new ChatProviderException(
