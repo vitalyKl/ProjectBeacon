@@ -2584,7 +2584,7 @@
   <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
-  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>К проекту не подключена рабочая станция в сети.</value></data>
+  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>К проекту не подключена онлайн-станция с поддержкой GitSync.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
   <data name="GitSyncAhead" xml:space="preserve"><value>Впереди</value></data>

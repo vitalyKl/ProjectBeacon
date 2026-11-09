@@ -2594,7 +2594,7 @@ orthstar</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Aktualisieren Sie die Seite und prüfen Sie den Repository-Status erneut.</value></data>
-  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation zugeordnet.</value></data>
+  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
   <data name="GitSyncAhead" xml:space="preserve"><value>Voraus</value></data>
