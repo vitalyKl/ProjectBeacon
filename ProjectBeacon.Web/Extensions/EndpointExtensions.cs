@@ -68,9 +68,8 @@ public static class EndpointExtensions
             var form = await ctx.Request.ReadFormAsync();
             var login = form["login"].ToString();
             var password = form["password"].ToString();
-            var result = await handler.HandleAsync(
-                new LoginCommand(new LoginRequest(login, password, ctx.Connection.RemoteIpAddress?.ToString())),
-                requireOperator: true);
+            var result = await handler.HandleOperatorAsync(
+                new LoginCommand(new LoginRequest(login, password, ctx.Connection.RemoteIpAddress?.ToString())));
             if (!result.Success || result.Value is not { IsAdmin: true } operatorLogin)
                 return Results.Redirect("/control/login?error=1");
 
