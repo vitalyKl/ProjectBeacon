@@ -37,12 +37,15 @@ public class LoginHandler
     }
 
     public Task<Result<LoginResponse>> HandleAsync(LoginCommand command, CancellationToken ct = default) =>
-        HandleAsync(command, requireOperator: false, ct);
+        HandleCoreAsync(command, requireOperator: false, ct);
 
-    public async Task<Result<LoginResponse>> HandleAsync(
+    public Task<Result<LoginResponse>> HandleOperatorAsync(LoginCommand command, CancellationToken ct = default) =>
+        HandleCoreAsync(command, requireOperator: true, ct);
+
+    private async Task<Result<LoginResponse>> HandleCoreAsync(
         LoginCommand command,
         bool requireOperator,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         // User accounts and login sessions are platform-global. Keep this explicit rather
         // than inheriting a stale project/org scope from a previous web circuit.
