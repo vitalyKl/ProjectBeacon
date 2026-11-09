@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -691,6 +692,35 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Null(deviceEvent.ActorUserId);
         Assert.Null(deviceEvent.ActorTokenId);
         Assert.Equal(deviceId, deviceEvent.ActorDeviceId);
+    }
+
+    [Fact]
+    public void AuditCsvWriter_EscapesSpreadsheetFormulasAndPreservesUtf8()
+    {
+        var entry = new AuditEntry(
+            Guid.NewGuid(),
+            DateTime.UtcNow,
+            AuditActorKind.Human,
+            _admin.Id,
+            null,
+            null,
+            "account.login.succeeded",
+            "User",
+            _admin.Id.ToString(),
+            null,
+            null,
+            AuditOutcome.Success,
+            null,
+            "=SUM(1,1)",
+            null,
+            """{"authMethod":"password"}""");
+
+        var csv = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)
+            .GetString(AuditCsvWriter.Encode([entry]));
+
+        Assert.StartsWith("\uFEFF", csv);
+        Assert.Contains("\"'=SUM(1,1)\"", csv);
+        Assert.Contains("account.login.succeeded", csv);
     }
 
     private ActorContext AdminActor() =>
