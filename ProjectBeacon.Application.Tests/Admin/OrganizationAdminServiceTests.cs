@@ -8,6 +8,7 @@ using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
@@ -238,34 +239,46 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
         var customerOwner = User.Create("customer-owner", "owner@customer.example", "hash");
         var org = Org.Create("Account access customer");
+        var secondOrg = Org.Create("Second customer organization");
         _seedDb.Users.AddRange(_admin, customerOwner);
-        _seedDb.Orgs.Add(org);
-        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, customerOwner.Id, MemberRole.Owner));
+        _seedDb.Orgs.AddRange(org, secondOrg);
+        _seedDb.OrgMembers.AddRange(
+            OrgMember.Create(org.Id, customerOwner.Id, MemberRole.Owner),
+            OrgMember.Create(secondOrg.Id, customerOwner.Id, MemberRole.Owner));
         await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
-        var service = CreateService();
+        var cache = new CapturingSessionVersionCache();
+        var service = CreateService(cache);
 
         var blocked = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: true);
         Assert.False(blocked.Success);
         Assert.Equal(ErrorKind.Conflict, blocked.Kind);
         Assert.Null(customerOwner.DisabledAt);
         Assert.Equal(0, customerOwner.SessionVersion);
+        Assert.Empty(cache.Invalidated);
 
-        var backupOwner = User.Create("backup-owner", "backup@customer.example", "hash");
-        _seedDb.Users.Add(backupOwner);
-        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, backupOwner.Id, MemberRole.Owner));
+        var firstBackupOwner = User.Create("backup-owner", "backup@customer.example", "hash");
+        var secondBackupOwner = User.Create("second-backup", "second-backup@customer.example", "hash");
+        _seedDb.Users.AddRange(firstBackupOwner, secondBackupOwner);
+        _seedDb.OrgMembers.AddRange(
+            OrgMember.Create(org.Id, firstBackupOwner.Id, MemberRole.Owner),
+            OrgMember.Create(secondOrg.Id, secondBackupOwner.Id, MemberRole.Owner));
         await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var disabled = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: true);
         Assert.True(disabled.Success, disabled.Error);
+        await _seedDb.Entry(customerOwner).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(customerOwner.DisabledAt);
         Assert.Equal(1, customerOwner.SessionVersion);
+        Assert.Equal([customerOwner.Id], cache.Invalidated);
 
         var enabled = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: false);
         Assert.True(enabled.Success, enabled.Error);
+        await _seedDb.Entry(customerOwner).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Null(customerOwner.DisabledAt);
         Assert.Equal(2, customerOwner.SessionVersion);
+        Assert.Equal([customerOwner.Id, customerOwner.Id], cache.Invalidated);
 
         Assert.Equal(2, await _seedDb.AuditEvents.IgnoreQueryFilters()
             .CountAsync(x => x.TargetType == "User" && x.TargetId == customerOwner.Id.ToString()
@@ -273,8 +286,23 @@ public sealed class OrganizationAdminServiceTests : IDisposable
                 TestContext.Current.CancellationToken));
     }
 
-    private EfOrganizationAdminService CreateService() =>
-        new(_factory, _email, _configuration, new EfAuditWriter(), TimeProvider.System);
+    private EfOrganizationAdminService CreateService(IUserSessionVersionCache? sessionVersions = null) =>
+        new(_factory, _email, _configuration, new EfAuditWriter(), TimeProvider.System, sessionVersions);
+
+    private sealed class CapturingSessionVersionCache : IUserSessionVersionCache
+    {
+        public List<Guid> Invalidated { get; } = [];
+
+        public bool TryGet(Guid userId, out UserSessionVersionSnapshot? snapshot)
+        {
+            snapshot = null;
+            return false;
+        }
+
+        public void Set(Guid userId, UserSessionVersionSnapshot snapshot) { }
+
+        public void Invalidate(Guid userId) => Invalidated.Add(userId);
+    }
 
     private async Task<AdminActor> AdminActorAsync(OperatorPermission permission)
     {
