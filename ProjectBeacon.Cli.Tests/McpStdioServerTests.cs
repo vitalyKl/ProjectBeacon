@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
+using Domain.Common;
 using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpStdioServerTests
@@ -574,6 +575,93 @@ public sealed class McpStdioServerTests
                     .Select(item => item!.GetValue<string>());
                 Assert.DoesNotContain("subtaskId", required);
             }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ToolsList_ActorReceivesGrantedWorkspaceAttachmentAndContextToolsAlongsideLifecycleTools()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var subtaskId = Guid.NewGuid();
+        var grants = new[]
+        {
+            McpToolNames.ReadFile,
+            McpToolNames.GetTree,
+            McpToolNames.SearchCode,
+            McpToolNames.TaskListAttachments,
+            McpToolNames.TaskReadAttachment,
+            McpToolNames.GetContextNode,
+            McpToolNames.ListContextNodes,
+            McpToolNames.WorkspaceIndex,
+            McpToolNames.WorkspaceRead
+        };
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"));
+        var pipelineBody = JsonSerializer.Serialize(new
+        {
+            subtasks = new[]
+            {
+                new
+                {
+                    id = subtaskId,
+                    status = "InProgress",
+                    allowedMcpTools = grants,
+                    allowedPaths = Array.Empty<string>()
+                }
+            }
+        });
+        var requestedPath = string.Empty;
+        using var http = new HttpClient(new StubApiHandler(request =>
+        {
+            requestedPath = request.RequestUri?.AbsolutePath ?? string.Empty;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(pipelineBody, Encoding.UTF8, "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-actor-tools-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Equal($"/v1/tasks/{taskId:D}/pipeline", requestedPath);
+            var tools = frames[0]["result"]!["tools"]!.AsArray();
+            var names = tools.Select(tool => tool?["name"]?.GetValue<string>())
+                .Where(name => name is not null)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var expected in grants)
+                Assert.Contains(expected, names);
+            Assert.Contains(McpToolNames.SubtaskReportResult, names);
+            Assert.Contains(McpToolNames.PipelineFailSubtask, names);
+            Assert.Contains(McpToolNames.TaskPipelineStatus, names);
+            Assert.DoesNotContain(McpToolNames.WriteFile, names);
+            Assert.DoesNotContain(McpToolNames.ApplyPatch, names);
+            Assert.DoesNotContain(McpToolNames.TaskReviewVerdict, names);
+            Assert.DoesNotContain(McpToolNames.PipelineApprove, names);
         }
         finally
         {
