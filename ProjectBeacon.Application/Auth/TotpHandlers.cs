@@ -104,7 +104,7 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
         var secret = _totp.GenerateSecret();
         user.BeginTotp(_secrets.Seal(secret));
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            HumanActor(user.Id), "account.mfa.setup_started", "User", user.Id.ToString(), null, null,
+            new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), "account.mfa.setup_started", "User", user.Id.ToString(), null, null,
             detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok(_totp.OtpAuthUri(secret, user.Email) + "\n" + secret);
@@ -143,7 +143,7 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
             return Result.Failure("Code is not valid.");
         user.ConfirmTotp();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            HumanActor(user.Id), "account.mfa.enabled", "User", user.Id.ToString(), null, null,
+            new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), "account.mfa.enabled", "User", user.Id.ToString(), null, null,
             detailsJson: """{"newState":"Enabled"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
@@ -180,17 +180,11 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
             return Result.Failure("Code is not valid.");
         user.ClearTotp();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            HumanActor(user.Id), "account.mfa.disabled", "User", user.Id.ToString(), null, null,
+            new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None), "account.mfa.disabled", "User", user.Id.ToString(), null, null,
             detailsJson: """{"newState":"Disabled"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
-}
-/// <summary>
-/// Allows the call when TOTP is off or the code matches. Fails when TOTP is required and not configured.
-/// </summary>
-    private static ActorContext HumanActor(Guid userId) =>
-        new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
 }
 /// <summary>
 /// Allows the call when TOTP is off or the code matches. Fails when TOTP is required and not configured.
