@@ -131,6 +131,7 @@ else
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
     private string _projectDescription = string.Empty;
+    private int _projectRevision;
     private Guid? _folderDeviceId;
     private string _folderPath = string.Empty;
 
@@ -155,6 +156,7 @@ else
         _projectId = current.Value.Id;
         _projectName = current.Value.Name;
         _projectDescription = current.Value.Description ?? string.Empty;
+        _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
     }
 
@@ -184,7 +186,7 @@ else
         try
         {
             var saved = await UpdateProject.HandleAsync(new UpdateProjectCommand(
-                new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription), _actor));
+                new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription, null, _projectRevision), _actor));
             if (!saved.Success)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
@@ -192,6 +194,7 @@ else
             }
             _projectName = saved.Value!.Name;
             _projectDescription = saved.Value.Description ?? string.Empty;
+            _projectRevision = saved.Value.Revision;
             Snackbar.Add(L["ProjectRenamed"].Value, Severity.Success);
             await ReloadProjects();
         }

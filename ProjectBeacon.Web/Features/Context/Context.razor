@@ -162,6 +162,7 @@ else
     private string _title = string.Empty;
     private string _sectionId = "goals";
     private string _body = string.Empty;
+    private int? _sectionRevision;
     private string? _preview;
     private int _tokens;
     private string? _revisionId;
@@ -213,13 +214,14 @@ else
         _busy = true;
         var result = await Upsert.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _project.Id, _title, _body, _sectionId, ContextScopeType.Project,
-            null, null, null, null, ContextSource.Native, null)));
+            null, null, null, null, ContextSource.Native, null, _sectionRevision)));
         _busy = false;
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
+        _sectionRevision = result.Value!.Revision;
         Snackbar.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
@@ -229,6 +231,7 @@ else
         _title = node.Title;
         _sectionId = node.SectionId;
         _body = node.BodyMarkdown;
+        _sectionRevision = node.Revision;
     }
 
     private async Task Compile()

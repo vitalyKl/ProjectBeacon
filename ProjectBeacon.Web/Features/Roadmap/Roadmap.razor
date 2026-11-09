@@ -163,6 +163,7 @@ else
     private string? _editDescription;
     private int _editOrder;
     private int _newOrder;
+    private int? _editRevision;
 
     protected override async Task OnInitializedAsync()
     {
@@ -192,6 +193,7 @@ else
         _newOrder = _milestones.Count + 1;
         _showCreateForm = true;
         _editingId = null;
+        _editRevision = null;
     }
 
     private void HideCreateForm() => _showCreateForm = false;
@@ -227,6 +229,7 @@ else
         _editName = milestone.Name;
         _editDescription = milestone.Description;
         _editOrder = milestone.Order;
+        _editRevision = milestone.Revision;
         _showCreateForm = false;
     }
 
@@ -234,18 +237,23 @@ else
     {
         if (_editingId is null) return;
         var updated = await UpdateMilestoneHandler.HandleAsync(new UpdateMilestoneCommand(new UpdateMilestoneRequest(
-            _editingId.Value, _editName, _editDescription, _editOrder)));
+            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision)));
         if (!updated.Success)
         {
             Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
         _editingId = null;
+        _editRevision = null;
         Snackbar.Add(L["MilestoneUpdated"].Value, Severity.Success);
         await Reload();
     }
 
-    private void CancelEdit() => _editingId = null;
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editRevision = null;
+    }
 
     private void OpenMilestone(MilestoneDto milestone)
     {
