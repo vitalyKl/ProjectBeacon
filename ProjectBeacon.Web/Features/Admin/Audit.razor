@@ -16,6 +16,9 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["AuditLog"]</PageTitle>
+
+@if (!_blocked)
+{
 <PageHeader Title="@L["AuditLog"]" />
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["AuditLead"]</MudText>
 
@@ -157,8 +160,10 @@ else
         }
     }
 }
+}
 
 @code {
+    private bool _blocked;
     private AdminActor? _admin;
     private AuditPage? _page;
     private bool _authorized;
@@ -186,6 +191,7 @@ else
         // request, so enforce the Control Plane origin and session claim here as well.
         if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
         {
+            _blocked = true;
             Navigation.NavigateTo("/", forceLoad: true);
             return;
         }
@@ -194,6 +200,7 @@ else
         if (principal.Identity?.IsAuthenticated != true
             || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
         {
+            _blocked = true;
             Navigation.NavigateTo("/control/login", forceLoad: true);
             return;
         }
