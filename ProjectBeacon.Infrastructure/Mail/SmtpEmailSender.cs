@@ -73,6 +73,9 @@ public sealed class SmtpEmailSender : IEmailSender
             return;
         }
 
+        if (!settings.UseStartTls && !string.IsNullOrEmpty(settings.Username))
+            throw new InvalidOperationException("SMTP authentication requires STARTTLS. Disable SMTP authentication or enable STARTTLS.");
+
         try
         {
             using var client = new SmtpClient(settings.Host, settings.Port)
@@ -203,7 +206,7 @@ public sealed class SmtpEmailSender : IEmailSender
 
         public SmtpSession(Stream stream)
         {
-            _reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+            _reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
             _writer = new StreamWriter(stream, Encoding.ASCII, bufferSize: 1024, leaveOpen: true)
             {
                 NewLine = "\r\n",
