@@ -57,7 +57,7 @@ public sealed class AuditDeniedRequestMiddleware(
                 targetId,
                 orgId: null,
                 projectId: null,
-                AuditOutcome.Denied,
+                outcome: AuditOutcome.Denied,
                 ip: Limit(context.Connection.RemoteIpAddress?.ToString(), 64),
                 userAgent: Limit(context.Request.Headers.UserAgent.ToString(), 512),
                 traceId: Limit(context.TraceIdentifier, 128),
