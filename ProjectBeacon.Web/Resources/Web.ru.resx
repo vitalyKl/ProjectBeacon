@@ -2689,4 +2689,10 @@
 <data name="AuditExported" xml:space="preserve">
     <value>Выгружено событий аудита: {0}.</value>
   </data>
+<data name="AuditFilterActorToken" xml:space="preserve">
+    <value>ID API-токена актора</value>
+  </data>
+<data name="AuditFilterActorDevice" xml:space="preserve">
+    <value>ID устройства актора</value>
+  </data>
 </root>
