@@ -89,6 +89,8 @@ public sealed class CommandRecoveryTests : IDisposable
         Assert.Equal(CommandRecovery.RecoveryAction.Fail, CommandRecovery.Decide(WorkstationCommandKind.ChatPrompt, 3, stale: true));
         Assert.Equal(CommandRecovery.RecoveryAction.Requeue, CommandRecovery.Decide(WorkstationCommandKind.ListDir, 0, stale: true));
         Assert.Equal(CommandRecovery.RecoveryAction.Fail, CommandRecovery.Decide(WorkstationCommandKind.ListDir, 1, stale: true));
+        Assert.Equal(CommandRecovery.RecoveryAction.Requeue, CommandRecovery.Decide(WorkstationCommandKind.GitSync, 0, stale: true));
+        Assert.Equal(CommandRecovery.RecoveryAction.Fail, CommandRecovery.Decide(WorkstationCommandKind.GitSync, 1, stale: true));
     }
 
     [Fact]
