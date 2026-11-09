@@ -93,6 +93,30 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EnvironmentFallback_AuthenticatedPort25StillRequiresStartTls()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MAIL:Host"] = "smtp.example.test",
+                ["MAIL:Port"] = "25",
+                ["MAIL:User"] = "beacon",
+                ["MAIL:Password"] = "secret",
+                ["MAIL:From"] = "beacon@example.test"
+            })
+            .Build();
+        var service = new PlatformEmailAdminService(
+            _dbFactory, _protector, _email, configuration);
+
+        var settings = await service.GetAsync();
+
+        Assert.Equal("environment", settings.Source);
+        Assert.True(settings.Enabled);
+        Assert.True(settings.UseStartTls);
+        Assert.True(settings.HasPassword);
+    }
+
+    [Fact]
     public async Task ConnectionCheckAndTestMessageUseSeparateActions()
     {
         var service = CreateService();

@@ -68,7 +68,7 @@
                 </MudItem>
                 <MudItem xs="12">
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                        Configuration source: @_source. Port 587 with STARTTLS is recommended. Port 25 can be used without TLS with a trusted relay. Implicit TLS on port 465 is not supported by the current SMTP transport.
+                        Configuration source: @_source. Port 587 with STARTTLS is recommended. Port 25 without STARTTLS is supported only for a trusted relay without SMTP authentication. Authenticated SMTP requires STARTTLS. Implicit TLS on port 465 is not supported by the current SMTP transport.
                     </MudText>
                     @if (_updatedAt is not null)
                     {
