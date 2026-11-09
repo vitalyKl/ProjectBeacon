@@ -2600,7 +2600,7 @@ orthstar</value>
     <value>監査履歴</value>
   </data>
 <data name="AuditHistoryLead" xml:space="preserve">
-    <value>組織とプロジェクト全体のセキュリティおよび運用者の操作です。時刻は UTC で表示されます。</value>
+    <value>組織とプロジェクト全体のセキュリティおよび運用者の操作です。時刻は現地のタイムゾーンで表示され、フィルターと CSV の時刻は UTC を使用します。</value>
   </data>
 <data name="AuditAccessDenied" xml:space="preserve">
     <value>監査履歴を表示する権限がありません。</value>
@@ -2657,7 +2657,7 @@ orthstar</value>
     <value>条件に一致する監査イベントはありません。</value>
   </data>
 <data name="AuditTimestamp" xml:space="preserve">
-    <value>時刻 (UTC)</value>
+    <value>時刻 (現地)</value>
   </data>
 <data name="AuditActor" xml:space="preserve">
     <value>アクター</value>
