@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+@using MudBlazor
+@using ProjectBeacon.Web.Theme
+
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout Class="beacon-theme-dark">
+    <MudAppBar Elevation="0" Class="beacon-appbar">
+        <img class="beacon-app-mark" src="brand/beacon-mark.svg" alt="" aria-hidden="true" />
+        <MudText Typo="Typo.h6" Class="ml-2">ProjectBeacon Control</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mr-4">Platform operator console</MudText>
+        <form method="post" action="/control/logout">
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Inherit">
+                Sign out
+            </MudButton>
+        </form>
+    </MudAppBar>
+    <MudMainContent>
+        <div class="beacon-main">
+            <div class="beacon-content-max">
+                @Body
+            </div>
+        </div>
+    </MudMainContent>
+</MudLayout>
