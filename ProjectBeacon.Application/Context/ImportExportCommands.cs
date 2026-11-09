@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -15,7 +16,7 @@ public record ImportFileRequest(
 /// <summary>
 /// Imports markdown files into a project as context sections. The result is how many were created.
 /// </summary>
-public record ImportFilesCommand(Guid ProjectId, IList<ImportFileRequest> Files) : ICommand<Result<int>>;
+public record ImportFilesCommand(Guid ProjectId, IList<ImportFileRequest> Files, ActorContext? Actor = null) : ICommand<Result<int>>;
 /// <summary>
 /// Project, optional repo, and optional path for an AGENTS.md export.
 /// </summary>
