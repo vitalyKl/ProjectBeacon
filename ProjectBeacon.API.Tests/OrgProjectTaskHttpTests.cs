@@ -243,6 +243,59 @@ public sealed class OrgProjectTaskHttpTests
     }
 
     [Fact]
+    public async Task ContextUpsert_RequiresAndChecksExpectedRevision()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Context Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Context Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var url = $"/v1/projects/{projectId}/context/nodes";
+
+        var created = await PostJson(client, url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Initial",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0
+        });
+        Assert.Equal(1, created.GetProperty("revision").GetInt32());
+
+        var update = await client.PostAsJsonAsync(url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Updated",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0,
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updated.GetProperty("revision").GetInt32());
+
+        var stale = await client.PostAsJsonAsync(url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Stale overwrite",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0,
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var current = await client.GetFromJsonAsync<JsonElement>(url, TestContext.Current.CancellationToken);
+        Assert.Equal("Updated", current[0].GetProperty("bodyMarkdown").GetString());
+        Assert.Equal(2, current[0].GetProperty("revision").GetInt32());
+    }
+
+    [Fact]
     public async Task NonMember_CannotListForeignProjectTasks()
     {
         await using var factory = new AuthApiFactory();
