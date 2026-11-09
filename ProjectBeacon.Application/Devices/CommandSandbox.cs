@@ -32,6 +32,19 @@ public static class CommandSandbox
         if (node is not JsonObject obj)
             return Result.Failure<string>("payload must be a JSON object.");
 
+        if (kind == WorkstationCommandKind.GitSync)
+        {
+            if (obj.Count != 2
+                || obj["projectId"] is not JsonValue projectIdValue
+                || !projectIdValue.TryGetValue<string>(out var projectIdText)
+                || !Guid.TryParse(projectIdText, out _)
+                || obj["mode"] is not JsonValue modeValue
+                || !modeValue.TryGetValue<string>(out var mode)
+                || mode is not ("Status" or "PullFastForward"))
+                return Result.Failure<string>("GitSync payload must contain only projectId and mode (Status or PullFastForward).");
+            return Result.Ok(obj.ToJsonString());
+        }
+
         obj.Remove("root");
         if (kind == WorkstationCommandKind.RunReviewCheck)
             obj.Remove("checkCommand");

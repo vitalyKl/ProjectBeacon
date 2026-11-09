@@ -117,6 +117,16 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             if (!sanitized.Success)
                 return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
             payloadJson = sanitized.Value;
+            if (command.Request.Kind == WorkstationCommandKind.GitSync)
+            {
+                using var gitSyncPayload = JsonDocument.Parse(payloadJson);
+                if (!gitSyncPayload.RootElement.TryGetProperty("projectId", out var payloadProjectId)
+                    || payloadProjectId.ValueKind != JsonValueKind.String
+                    || !Guid.TryParse(payloadProjectId.GetString(), out var parsedProjectId)
+                    || parsedProjectId != rootedProjectId)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "GitSync payload projectId must match the bound project.", ErrorKind.Validation);
+            }
             localRoot = runtime.LocalRoot;
             if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck)
             {
