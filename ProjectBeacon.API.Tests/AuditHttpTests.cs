@@ -32,6 +32,14 @@ public sealed class AuditHttpTests
         var invalidPage = await client.GetAsync("/v1/admin/audit?pageSize=201", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, invalidPage.StatusCode);
 
+        var orgResponse = await client.PostAsJsonAsync(
+            "/v1/orgs",
+            new { name = "Audit Denial Target" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        orgResponse.EnsureSuccessStatusCode();
+        var org = await orgResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var targetOrgId = org.GetProperty("id").GetGuid();
+
         client.DefaultRequestHeaders.Authorization = null;
         var registered = await client.PostAsJsonAsync("/v1/auth/register", new
         {
@@ -43,8 +51,26 @@ public sealed class AuditHttpTests
 
         var regularToken = await Login(client, "regular-user", "password123");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", regularToken);
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var regularUserId = me.GetProperty("id").GetGuid();
+
         var forbidden = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        var deniedCreate = await client.PostAsJsonAsync(
+            "/v1/projects",
+            new { name = "Unauthorized Project", orgId = targetOrgId },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedCreate.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+        var deniedEventsResponse = await client.GetAsync(
+            $"/v1/admin/audit?actorUserId={regularUserId}&action=authorization.denied&pageSize=100",
+            TestContext.Current.CancellationToken);
+        deniedEventsResponse.EnsureSuccessStatusCode();
+        var deniedEvents = await deniedEventsResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Contains(deniedEvents.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("targetId").GetString() == "POST /v1/projects");
     }
 
     private static async Task<string> Bootstrap(HttpClient client)
