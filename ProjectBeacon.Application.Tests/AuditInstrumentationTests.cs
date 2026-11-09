@@ -297,6 +297,29 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ProjectCreation_IsAuditedWithTheProjectMutation()
+    {
+        var actor = AdminActor();
+        var handler = new CreateProjectHandler(_factory, _authorization, new TenantContext(), _auditWriter);
+
+        var created = await handler.HandleAsync(
+            new CreateProjectCommand(
+                new CreateProjectRequest("Audited Project", null, _org.Id),
+                actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        var auditEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "project.created" && e.TargetId == created.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, auditEvent.ActorKind);
+        Assert.Equal(_admin.Id, auditEvent.ActorUserId);
+        Assert.Equal(_org.Id, auditEvent.OrgId);
+        Assert.Equal(created.Value.Id, auditEvent.ProjectId);
+        Assert.Equal("""{"newState":"Active"}""", auditEvent.DetailsJson);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
