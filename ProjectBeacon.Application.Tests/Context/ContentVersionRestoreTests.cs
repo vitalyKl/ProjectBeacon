@@ -126,7 +126,9 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 _projectId,
                 original.Id,
                 ExpectedRevision: 3,
-                Actor: HumanActor()), TestContext.Current.CancellationToken);
+                Actor: HumanActor(),
+                ExpectedTargetKind: ContentTargetKind.TaskDescription,
+                ExpectedTargetId: task.Id), TestContext.Current.CancellationToken);
 
         Assert.True(restored.Success, restored.Error);
         Assert.Equal(4, restored.Value!.Revision);
