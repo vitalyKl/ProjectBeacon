@@ -169,6 +169,12 @@ public sealed class CapabilityAndWorkHttpTests
         var updated = await update.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal(2, updated.GetProperty("contentRevision").GetInt32());
 
+        var genericRestore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, genericRestore.StatusCode);
+
         var restore = await client.PostAsJsonAsync(
             $"/v1/projects/{projectId}/tasks/{taskId}/content-versions/{originalVersionId}/restore",
             new { expectedRevision = 2 },
