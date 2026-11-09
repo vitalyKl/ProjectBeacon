@@ -115,7 +115,7 @@ public sealed class TotpHandlerKeyTests : IDisposable
         var handler = new DisableTotpHandler(_dbFactory, protector, new RfcTotp());
 
         var code = CurrentCode(await PendingSecret(user.Id, protector));
-        var result = await handler.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(user.Id, code)),
+        var result = await handler.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(user.Id, CurrentCode(secret))),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
