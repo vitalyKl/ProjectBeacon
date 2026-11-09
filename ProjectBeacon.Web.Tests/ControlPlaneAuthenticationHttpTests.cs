@@ -38,6 +38,21 @@ public sealed class ControlPlaneAuthenticationHttpTests
         var customerCookieResponse = await client.SendAsync(customerCookieAudit, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, customerCookieResponse.StatusCode);
 
+        // A customer JWT must not be promoted to an operator session either.
+        using var jwtLogin = Request(HttpMethod.Post, "/v1/auth/login", "app.projectbeacon.tech");
+        jwtLogin.Content = JsonContent.Create(new { Login = "admin", Password = password });
+        var jwtLoginResponse = await client.SendAsync(jwtLogin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, jwtLoginResponse.StatusCode);
+        var loginJson = await jwtLoginResponse.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var customerJwt = loginJson.GetProperty("token").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(customerJwt));
+
+        using var customerJwtAudit = Request(HttpMethod.Get, "/v1/admin/audit", "control.localhost");
+        customerJwtAudit.Headers.Authorization = new AuthenticationHeaderValue("Bearer", customerJwt);
+        var customerJwtResponse = await client.SendAsync(customerJwtAudit, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, customerJwtResponse.StatusCode);
+
         // A separate Control Plane login issues BeaconControlAuth.
         using var controlLogin = Request(HttpMethod.Post, "/v1/auth/control-cookie-login", "control.localhost");
         controlLogin.Headers.TryAddWithoutValidation("Origin", "http://control.localhost");
