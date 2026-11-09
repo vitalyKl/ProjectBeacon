@@ -347,10 +347,18 @@ internal sealed class GitSyncService
         info.ArgumentList.Add("core.hooksPath=" + hooks);
         info.ArgumentList.Add("-c");
         info.ArgumentList.Add("core.fsmonitor=false");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("core.pager=cat");
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("diff.external=");
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         info.Environment["GIT_TERMINAL_PROMPT"] = "0";
         info.Environment["GCM_INTERACTIVE"] = "never";
+        info.Environment["GIT_PAGER"] = "cat";
+        info.Environment["PAGER"] = "cat";
+        info.Environment.Remove("GIT_EXTERNAL_DIFF");
+        info.Environment.Remove("GIT_CONFIG_PARAMETERS");
         var index = 0;
         foreach (var driver in filters)
         {
@@ -363,8 +371,7 @@ internal sealed class GitSyncService
             info.Environment["GIT_CONFIG_KEY_" + index] = "filter." + driver + ".required";
             info.Environment["GIT_CONFIG_VALUE_" + index++] = "false";
         }
-        if (index > 0)
-            info.Environment["GIT_CONFIG_COUNT"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        info.Environment["GIT_CONFIG_COUNT"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
         process.StartInfo = info;
 
         try

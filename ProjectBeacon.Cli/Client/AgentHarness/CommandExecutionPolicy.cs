@@ -648,7 +648,7 @@ internal static class CommandExecutionPolicy
     private static readonly string[] BlockedGitOptions =
     [
         "--upload-pack", "--receive-pack", "--exec", "--ext-diff", "--textconv", "--output", "-o",
-        "--pager", "--paginate", "--open-files-in-pager"
+        "--pager", "--paginate", "--open-files-in-pager", "-p"
     ];
 
     private static bool TryValidateGitArguments(IReadOnlyList<string> args, out string error)

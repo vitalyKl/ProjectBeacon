@@ -5,6 +5,8 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Entities.Devices;
+using Domain.Entities.Projects;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -132,7 +134,7 @@ public sealed class GetProjectGitSyncCommandHandler
         if (command is null)
             return Result.Failure<WorkstationCommandDto>("GitSync command not found.", ErrorKind.NotFound);
 
-        // Project members can inspect the command result, but the workstation's local
+        // Only project/org administrators can inspect this operation. The workstation's local
         // filesystem path is never disclosed through a human-facing endpoint.
         return Result.Ok(EnqueueCommandHandler.MapCommand(command));
     }
