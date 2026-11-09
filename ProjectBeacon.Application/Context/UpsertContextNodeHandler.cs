@@ -84,12 +84,15 @@ public class UpsertContextNodeHandler
 
             if (contentChanged)
             {
+                var attribution = isDraft
+                    ? ("Agent", authorId)
+                    : command.Actor is not null
+                        ? ContentAttribution.FromActor(command.Actor)
+                        : command.Request.Source == ContextSource.Native
+                            ? ("Human", command.Request.SourcePath)
+                            : ("System", command.Request.SourcePath);
                 var saved = await _contentWriter.SaveAsync(
-                    db,
-                    existing,
-                    isDraft ? "Agent" : command.Request.Source == ContextSource.Native ? "Human" : "System",
-                    isDraft ? authorId : command.Request.SourcePath,
-                    ct);
+                    db, existing, attribution.Item1, attribution.Item2, ct);
                 if (!saved.Success)
                     return Result.Failure<ContextSectionDto>(saved.Error ?? "Content revision conflict.", ErrorKind.Conflict);
             }
@@ -116,15 +119,18 @@ public class UpsertContextNodeHandler
                 source: isDraft ? ContextSource.Native : command.Request.Source,
                 sourcePath: command.Request.SourcePath,
                 updatedByType: isDraft ? "agent" : command.Request.Source == ContextSource.Native ? "user" : "system",
-                updatedById: isDraft ? authorId : command.Request.SourcePath);
+                updatedById: isDraft ? authorId : command.Actor?.UserId?.ToString("D") ?? command.Request.SourcePath);
 
             db.ContextSections.Add(section);
+            var attribution = isDraft
+                ? ("Agent", authorId)
+                : command.Actor is not null
+                    ? ContentAttribution.FromActor(command.Actor)
+                    : command.Request.Source == ContextSource.Native
+                        ? ("Human", command.Request.SourcePath)
+                        : ("System", command.Request.SourcePath);
             var saved = await _contentWriter.SaveAsync(
-                db,
-                section,
-                isDraft ? "Agent" : command.Request.Source == ContextSource.Native ? "Human" : "System",
-                isDraft ? authorId : command.Request.SourcePath,
-                ct);
+                db, section, attribution.Item1, attribution.Item2, ct);
             if (!saved.Success)
                 return Result.Failure<ContextSectionDto>(saved.Error ?? "Content version could not be saved.");
             savedId = section.Id;
