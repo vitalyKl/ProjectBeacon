@@ -510,7 +510,7 @@ internal static class InviteMail
         try
         {
             await email.SendAsync(to, $"Invitation to {targetName}",
-                $"You were invited to {targetName} on ProjectBeacon.\nOpen this link to accept:\n{url}\n", ct);
+                $"You were invited to {targetName} on ProjectBeacon.\nOpen this link to accept:\n{url}\n", purpose, ct);
         }
         catch
         {

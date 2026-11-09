@@ -63,7 +63,7 @@ public class ForgotPasswordHandler
         try
         {
             await _email.SendAsync(user.Email, "Reset your ProjectBeacon password",
-                $"Use this link to set a new password (expires in 1 hour):\n{link}\n", ct);
+                $"Use this link to set a new password (expires in 1 hour):\n{link}\n", "password_reset", ct);
         }
         catch
         {

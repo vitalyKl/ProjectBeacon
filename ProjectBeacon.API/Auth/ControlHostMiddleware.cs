@@ -82,6 +82,7 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
             || string.Equals(path.Value, "/control/recover", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/control/logout", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/admin/audit", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/admin/email", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/auth/control-cookie-login", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/auth/bootstrap", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/auth/recover-admin", StringComparison.OrdinalIgnoreCase)
