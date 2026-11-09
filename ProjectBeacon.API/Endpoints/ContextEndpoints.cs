@@ -94,9 +94,10 @@ public static class ContextEndpoints
     private static async Task<IResult> ImportFiles(
         Guid projectId,
         [FromBody] IList<ImportFileRequest> files,
+        HttpContext context,
         ImportFilesHandler handler)
     {
-        var command = new ImportFilesCommand(projectId, files);
+        var command = new ImportFilesCommand(projectId, files, context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
