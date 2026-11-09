@@ -91,6 +91,10 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
             events = events.Where(e => e.ActorTokenId == query.ActorTokenId);
         if (query.ActorDeviceId.HasValue)
             events = events.Where(e => e.ActorDeviceId == query.ActorDeviceId);
+        if (!string.IsNullOrWhiteSpace(query.TargetType))
+            events = events.Where(e => e.TargetType == query.TargetType);
+        if (!string.IsNullOrWhiteSpace(query.TargetId))
+            events = events.Where(e => e.TargetId == query.TargetId);
         if (query.Outcome.HasValue)
             events = events.Where(e => e.Outcome == query.Outcome.Value);
 
@@ -115,5 +119,9 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
             throw new ArgumentException("The audit query start must not be after its end.", nameof(query));
         if (query.Action?.Length > 160)
             throw new ArgumentException("Audit action filter is too long.", nameof(query));
+        if (query.TargetType?.Length > 80)
+            throw new ArgumentException("Audit target type filter is too long.", nameof(query));
+        if (query.TargetId?.Length > 128)
+            throw new ArgumentException("Audit target id filter is too long.", nameof(query));
     }
 }
