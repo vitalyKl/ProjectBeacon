@@ -143,6 +143,12 @@ public static class AuditEndpoints
     private static string EscapeCsv(string? value)
     {
         value ??= string.Empty;
+
+        // User-Agent and some target metadata may be supplied by clients. Prefix cells
+        // that spreadsheets could interpret as formulas before applying CSV quoting.
+        if (value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\\t' or '\\r' or '\\n')
+            value = "'" + value;
+
         return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 }
