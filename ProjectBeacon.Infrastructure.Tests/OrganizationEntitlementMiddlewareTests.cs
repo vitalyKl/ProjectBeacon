@@ -2,6 +2,7 @@ namespace ProjectBeacon.Infrastructure.Tests;
 
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Entitlements;

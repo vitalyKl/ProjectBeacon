@@ -41,7 +41,7 @@ public sealed class OrganizationEntitlementMiddleware(RequestDelegate next)
             return;
         }
 
-        if (evaluation.Value is not { Allowed: true } decision)
+        if (evaluation.Value is not { Allowed: true })
         {
             await WriteProblemAsync(
                 context,

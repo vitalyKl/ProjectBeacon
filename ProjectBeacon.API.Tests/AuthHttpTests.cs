@@ -7,6 +7,8 @@ using System.Text.Json;
 using Application.Auth;
 using Infrastructure.Data;
 using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
