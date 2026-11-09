@@ -83,6 +83,8 @@ public static class AuditEndpoints
         Guid? actorUserId,
         Guid? actorTokenId,
         Guid? actorDeviceId,
+        string? targetType,
+        string? targetId,
         AuditOutcome? outcome,
         CancellationToken ct)
     {
@@ -94,7 +96,7 @@ public static class AuditEndpoints
             return admin.FromResult();
 
         var query = BuildQuery(
-            orgId, projectId, fromUtc, toUtc, action, actorKind, actorUserId, actorTokenId, actorDeviceId, outcome,
+            orgId, projectId, fromUtc, toUtc, action, actorKind, actorUserId, actorTokenId, actorDeviceId, targetType, targetId, outcome,
             page: 1, pageSize: 200);
         var rows = new List<AuditEntry>();
         try
