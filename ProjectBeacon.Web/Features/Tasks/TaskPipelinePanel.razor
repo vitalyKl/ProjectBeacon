@@ -27,6 +27,11 @@
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
                 <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
+                <StatusChip Color="Color.Info" Label="@AgentModeLabel(session.AgentMode)" />
+                @if (!string.IsNullOrWhiteSpace(session.ModelName))
+                {
+                    <MudText Typo="Typo.caption">@L["ExecutionProfileModel"]: @session.ModelName</MudText>
+                }
                 @if (session.LaunchedAt is not null)
                 {
                     <MudText Typo="Typo.caption">@L["Launched"]: <LocalTime Value="session.LaunchedAt" Format="d" /></MudText>
@@ -138,6 +143,9 @@
     };
 
     private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
+
+    private string AgentModeLabel(string? mode) =>
+        L[string.Equals(mode, "Plan", StringComparison.OrdinalIgnoreCase) ? "ExecutionProfilePlan" : "ExecutionProfileAct"].Value;
 
     private Color SessionStatusColor(SessionStatus status) => status switch
     {

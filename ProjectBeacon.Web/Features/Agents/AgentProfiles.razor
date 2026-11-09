@@ -28,7 +28,7 @@ else
                     </MudStack>
                     <MudText Typo="Typo.body2">@profile.Basis.Description</MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                        @L["ExecutionProfileMode"]: @profile.Basis.Mode
+                        @L["ExecutionProfileMode"]: @AgentModeLabel(profile.Basis.Mode)
                     </MudText>
                     <MudTextField @bind-Value="profile.Name" Label="@L["ExecutionProfileName"]"
                                   Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" />
@@ -146,6 +146,9 @@ else
             selected.Remove(tool);
         profile.Tools = profile.Basis.Tools.Where(selected.Contains).ToList();
     }
+
+    private string AgentModeLabel(AgentProfileMode mode) =>
+        L[mode == AgentProfileMode.Plan ? "ExecutionProfilePlan" : "ExecutionProfileAct"].Value;
 
     private string PathPolicyLabel(BuiltInAgentProfile profile) => profile.PathPolicy switch
     {
