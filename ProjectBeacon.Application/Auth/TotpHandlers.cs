@@ -1,6 +1,9 @@
 namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
+using Application.Audit;
+using Application.Authorization;
+using Domain.Enums;
 using Application.Security;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -50,7 +53,9 @@ public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand,
 
     public async Task<Result<TotpStatusDto>> HandleAsync(GetTotpStatusCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        var globalTenant = new TenantContext();
+        globalTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(globalTenant);
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.UserId, ct);
         if (user is null)
             return Result.Failure<TotpStatusDto>("Account is not resolved.");
@@ -80,12 +85,14 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISecretProtector _secrets;
     private readonly ITotp _totp;
+    private readonly IAuditWriter? _auditWriter;
 
-    public BeginTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    public BeginTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
         _totp = totp;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<string>> HandleAsync(BeginTotpCommand command, CancellationToken ct = default)
@@ -96,6 +103,14 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
             return Result.Failure<string>("Account is not resolved.");
         var secret = _totp.GenerateSecret();
         user.BeginTotp(_secrets.Seal(secret));
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            TotpAuditActor.Create(user.Id),
+            "account.mfa.setup_started",
+            "User",
+            user.Id.ToString(),
+            null,
+            null,
+            detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok(_totp.OtpAuthUri(secret, user.Email) + "\n" + secret);
     }
@@ -108,12 +123,14 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISecretProtector _secrets;
     private readonly ITotp _totp;
+    private readonly IAuditWriter? _auditWriter;
 
-    public ConfirmTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    public ConfirmTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
         _totp = totp;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(ConfirmTotpCommand command, CancellationToken ct = default)
@@ -128,6 +145,14 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
         if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
         user.ConfirmTotp();
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            TotpActor(user.Id),
+            "account.mfa.enabled",
+            "User",
+            user.Id.ToString(),
+            null,
+            null,
+            detailsJson: """{"newState":"Enabled"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
@@ -140,12 +165,14 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISecretProtector _secrets;
     private readonly ITotp _totp;
+    private readonly IAuditWriter? _auditWriter;
 
-    public DisableTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    public DisableTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
         _totp = totp;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(DisableTotpCommand command, CancellationToken ct = default)
@@ -158,10 +185,24 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
         if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
         user.ClearTotp();
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            TotpActor(user.Id),
+            "account.mfa.disabled",
+            "User",
+            user.Id.ToString(),
+            null,
+            null,
+            detailsJson: """{"newState":"Disabled"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
 }
+internal static class TotpAuditActor
+{
+    public static ActorContext Create(Guid userId) =>
+        new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+}
+
 /// <summary>
 /// Allows the call when TOTP is off or the code matches. Fails when TOTP is required and not configured.
 /// </summary>
