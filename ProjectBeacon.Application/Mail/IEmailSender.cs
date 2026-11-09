@@ -7,6 +7,8 @@ public interface IEmailSender
 
     Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default);
 
+    Task TestConnectionAsync(CancellationToken ct = default) => Task.CompletedTask;
+
     /// <summary>
     /// Sends mail with a short purpose code. The default implementation preserves compatibility
     /// with fake senders that implement only the original method.

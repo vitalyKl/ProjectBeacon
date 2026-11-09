@@ -201,6 +201,26 @@ public sealed class PlatformEmailAdminService
         return await GetAsync(ct);
     }
 
+    public async Task TestConnectionAsync(ActorContext actor, CancellationToken ct = default)
+    {
+        var settings = await GetAsync(ct);
+        if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Host))
+            throw new InvalidOperationException("Configure and enable SMTP before testing the connection.");
+
+        try
+        {
+            await _email.TestConnectionAsync(ct);
+            await WriteTestAuditAsync(
+                actor, "platform.email_connection_test.succeeded", "connection_ok", AuditOutcome.Success, ct);
+        }
+        catch
+        {
+            await WriteTestAuditAsync(
+                actor, "platform.email_connection_test.failed", "connection_failed", AuditOutcome.Failed, ct);
+            throw new InvalidOperationException("SMTP connection test failed. Check the host, port, TLS and credentials.");
+        }
+    }
+
     public async Task SendTestAsync(string recipient, ActorContext actor, CancellationToken ct = default)
     {
         var address = recipient?.Trim() ?? string.Empty;

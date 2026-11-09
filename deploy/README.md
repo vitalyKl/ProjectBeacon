@@ -122,6 +122,19 @@ invalidated once; no application data is touched.
    advisory lock serializes parallel first starts) and all users are logged
    out once.
 
+## Platform email settings
+
+The optional `MAIL__Host`, `MAIL__Port`, `MAIL__User`, `MAIL__Password`, and `MAIL__From`
+environment variables remain a bootstrap/fallback path. Once an operator saves SMTP settings in
+the Control Plane, the database configuration takes precedence on every Web replica and applies
+without a container restart. The SMTP password is encrypted with `DATA_PROTECTION_KEY`; all Web
+replicas must share the same data-protection key configuration. A saved disabled configuration
+intentionally overrides and disables the environment fallback.
+
+Use the Control Plane's connection check to validate DNS, TCP, STARTTLS, and SMTP authentication
+without sending a message. Use the separate test-email action to verify that the relay accepts an
+actual message.
+
 ## TLS termination and forwarded headers
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app

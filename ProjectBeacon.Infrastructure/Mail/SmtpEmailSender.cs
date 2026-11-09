@@ -2,6 +2,9 @@ namespace ProjectBeacon.Infrastructure.Mail;
 
 using System.Net;
 using System.Net.Mail;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Text;
 using System.Security.Cryptography;
 using Application.Mail;
 using Application.Persistence;
@@ -106,6 +109,158 @@ public sealed class SmtpEmailSender : IEmailSender
             throw;
         }
     }
+
+    public async Task TestConnectionAsync(CancellationToken ct = default)
+    {
+        var settings = await ResolveAsync(ct);
+        if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Host))
+            throw new InvalidOperationException("SMTP is not configured or is disabled.");
+        if (!settings.UseStartTls && !string.IsNullOrEmpty(settings.Username))
+            throw new InvalidOperationException("SMTP authentication requires STARTTLS.");
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(settings.Host, settings.Port, timeout.Token);
+        Stream stream = client.GetStream();
+        var session = new SmtpSession(stream);
+
+        try
+        {
+            await session.ExpectAsync(220, timeout.Token);
+            var hello = await session.CommandAsync("EHLO projectbeacon", timeout.Token);
+            RequireCode(hello, 250);
+
+            if (settings.UseStartTls)
+            {
+                if (!hello.Text.Contains("STARTTLS", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The SMTP server does not advertise STARTTLS.");
+
+                await session.CommandAsync("STARTTLS", timeout.Token, 220);
+                await session.DisposeAsync();
+
+                var tls = new SslStream(stream, leaveInnerStreamOpen: false);
+                await tls.AuthenticateAsClientAsync(
+                    new SslClientAuthenticationOptions { TargetHost = settings.Host },
+                    timeout.Token);
+                stream = tls;
+                session = new SmtpSession(stream);
+
+                var secureHello = await session.CommandAsync("EHLO projectbeacon", timeout.Token);
+                RequireCode(secureHello, 250);
+                hello = secureHello;
+            }
+
+            if (!string.IsNullOrEmpty(settings.Username))
+            {
+                if (!hello.Text.Contains("AUTH", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The SMTP server does not advertise an authentication mechanism.");
+
+                var authPlain = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                    "\\0" + settings.Username + "\\0" + settings.Password));
+                var auth = await session.CommandAsync("AUTH PLAIN " + authPlain, timeout.Token);
+                if (auth.Code == 334)
+                    auth = await session.CommandAsync(authPlain, timeout.Token);
+                if (auth.Code != 235)
+                {
+                    // Some relays advertise LOGIN but not PLAIN. Fall back only on an unsupported-mechanism response.
+                    if (auth.Code is not (500 or 501 or 502 or 504)
+                        || !hello.Text.Contains("LOGIN", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("SMTP authentication failed.");
+
+                    auth = await session.CommandAsync("AUTH LOGIN", timeout.Token);
+                    RequireCode(auth, 334);
+                    auth = await session.CommandAsync(
+                        Convert.ToBase64String(Encoding.UTF8.GetBytes(settings.Username)), timeout.Token);
+                    RequireCode(auth, 334);
+                    auth = await session.CommandAsync(
+                        Convert.ToBase64String(Encoding.UTF8.GetBytes(settings.Password)), timeout.Token);
+                    RequireCode(auth, 235);
+                }
+            }
+
+            await session.CommandAsync("QUIT", timeout.Token, 221);
+        }
+        finally
+        {
+            await session.DisposeAsync();
+            if (!ReferenceEquals(stream, client.GetStream()))
+                await stream.DisposeAsync();
+        }
+    }
+
+    private static void RequireCode(SmtpResponse response, int expected)
+    {
+        if (response.Code != expected)
+            throw new InvalidOperationException("SMTP connection test failed during protocol negotiation.");
+    }
+
+    private sealed class SmtpSession : IAsyncDisposable
+    {
+        private readonly StreamReader _reader;
+        private readonly StreamWriter _writer;
+
+        public SmtpSession(Stream stream)
+        {
+            _reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+            _writer = new StreamWriter(stream, Encoding.ASCII, bufferSize: 1024, leaveOpen: true)
+            {
+                NewLine = "\\r\\n",
+                AutoFlush = true
+            };
+        }
+
+        public async Task ExpectAsync(int expectedCode, CancellationToken ct)
+        {
+            var response = await ReadResponseAsync(ct);
+            RequireCode(response, expectedCode);
+        }
+
+        public async Task<SmtpResponse> CommandAsync(
+            string command,
+            CancellationToken ct,
+            int? expectedCode = null)
+        {
+            await _writer.WriteLineAsync(command.AsMemory(), ct);
+            await _writer.FlushAsync(ct);
+            var response = await ReadResponseAsync(ct);
+            if (expectedCode is { } expected)
+                RequireCode(response, expected);
+            return response;
+        }
+
+        private async Task<SmtpResponse> ReadResponseAsync(CancellationToken ct)
+        {
+            var first = await _reader.ReadLineAsync(ct);
+            if (string.IsNullOrEmpty(first)
+                || first.Length < 3
+                || !int.TryParse(first.AsSpan(0, 3), out var code))
+                throw new InvalidOperationException("SMTP server returned an invalid response.");
+
+            var lines = new StringBuilder(first);
+            var line = first;
+            var lineCount = 0;
+            while (line.Length > 3 && line[3] == '-')
+            {
+                if (++lineCount > 40)
+                    throw new InvalidOperationException("SMTP server returned too many response lines.");
+                line = await _reader.ReadLineAsync(ct)
+                    ?? throw new InvalidOperationException("SMTP server closed the connection unexpectedly.");
+                lines.Append('\\n').Append(line);
+            }
+
+            return new SmtpResponse(code, lines.ToString());
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _writer.DisposeAsync();
+            _reader.Dispose();
+        }
+    }
+
+    private sealed record SmtpResponse(int Code, string Text);
 
     private async Task<MailConfiguration> ResolveAsync(CancellationToken ct)
     {
