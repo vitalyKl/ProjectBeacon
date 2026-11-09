@@ -2579,7 +2579,7 @@
     <value>Журнал аудита</value>
   </data>
   <data name="AuditLead" xml:space="preserve">
-    <value>Неизменяемый журнал действий безопасности и операторов. Доступен только операторам платформы.</value>
+    <value>События безопасности и действия операторов по организациям и проектам. Время отображается в часовом поясе браузера; фильтры дат и CSV используют UTC.</value>
   </data>
   <data name="AuditAction" xml:space="preserve">
     <value>Код действия</value>
@@ -2600,7 +2600,7 @@
     <value>Область</value>
   </data>
   <data name="AuditWhen" xml:space="preserve">
-    <value>Время</value>
+    <value>Время (местное)</value>
   </data>
   <data name="AuditOrgId" xml:space="preserve">
     <value>ID организации</value>
@@ -2646,5 +2646,17 @@
   </data>
   <data name="AuditInvalidFilter" xml:space="preserve">
     <value>Проверьте тип субъекта, результат и даты UTC.</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>ID API-токена актора</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>ID устройства актора</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>Тип объекта</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>ID объекта</value>
   </data>
 </root>
