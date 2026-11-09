@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests.Context;
 
 using System.Text.Json;
 using Application.Authorization;
+using Application.Common;
 using Application.Context;
 using Application.Persistence;
 using Domain.Entities.Identity;
@@ -93,7 +94,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 ExpectedRevision: 2,
                 Actor: HumanActor()), TestContext.Current.CancellationToken);
         Assert.False(stale.Success);
-        Assert.Equal(ErrorKind.Conflict, stale.ErrorKind);
+        Assert.Equal(ErrorKind.Conflict, stale.Kind);
         Assert.Equal(3, await _db.ContentVersions.CountAsync(
             v => v.TargetKind == ContentTargetKind.ProjectDescription && v.TargetId == _projectId,
             TestContext.Current.CancellationToken));
