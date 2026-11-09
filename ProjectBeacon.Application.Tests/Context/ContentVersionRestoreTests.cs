@@ -166,8 +166,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
 
         section.Update(title: "Changed title", bodyMarkdown: "Changed context");
         decision.UpdateContent("Changed decision", "Changed context", "Changed body", "Changed consequences");
-        constraint.UpdateBody("Changed constraint");
-        constraint.SetScopePath("tests/");
+        constraint.UpdateContent("Changed constraint", "tests/");
         milestone.Update("Changed milestone", "Changed milestone description", 2);
         writer.AddVersion(_db, section, "Human", _actorId.ToString("D"));
         writer.AddVersion(_db, decision, "Human", _actorId.ToString("D"));
