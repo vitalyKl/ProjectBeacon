@@ -158,7 +158,7 @@ public sealed class SmtpEmailSender : IEmailSender
                     throw new InvalidOperationException("The SMTP server does not advertise an authentication mechanism.");
 
                 var authPlain = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                    "\\0" + settings.Username + "\\0" + settings.Password));
+                    "\0" + settings.Username + "\0" + settings.Password));
                 var auth = await session.CommandAsync("AUTH PLAIN " + authPlain, timeout.Token);
                 if (auth.Code == 334)
                     auth = await session.CommandAsync(authPlain, timeout.Token);
@@ -206,7 +206,7 @@ public sealed class SmtpEmailSender : IEmailSender
             _reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
             _writer = new StreamWriter(stream, Encoding.ASCII, bufferSize: 1024, leaveOpen: true)
             {
-                NewLine = "\\r\\n",
+                NewLine = "\r\n",
                 AutoFlush = true
             };
         }
@@ -247,7 +247,7 @@ public sealed class SmtpEmailSender : IEmailSender
                     throw new InvalidOperationException("SMTP server returned too many response lines.");
                 line = await _reader.ReadLineAsync(ct)
                     ?? throw new InvalidOperationException("SMTP server closed the connection unexpectedly.");
-                lines.Append('\\n').Append(line);
+                lines.Append('\n').Append(line);
             }
 
             return new SmtpResponse(code, lines.ToString());
