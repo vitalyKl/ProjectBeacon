@@ -146,7 +146,7 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
             return Result.Failure("Code is not valid.");
         user.ConfirmTotp();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            TotpActor(user.Id),
+            TotpAuditActor.Create(user.Id),
             "account.mfa.enabled",
             "User",
             user.Id.ToString(),
@@ -186,7 +186,7 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
             return Result.Failure("Code is not valid.");
         user.ClearTotp();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            TotpActor(user.Id),
+            TotpAuditActor.Create(user.Id),
             "account.mfa.disabled",
             "User",
             user.Id.ToString(),
