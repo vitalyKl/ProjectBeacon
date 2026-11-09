@@ -41,7 +41,10 @@ public static class AuditCsvWriter
                 row.DetailsJson);
         }
 
-        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetBytes(csv.ToString());
+        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        return encoding.GetPreamble()
+            .Concat(encoding.GetBytes(csv.ToString()))
+            .ToArray();
     }
 
     private static void AppendRow(StringBuilder csv, params string?[] values)
