@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
 using Application.Audit;
+using Domain.Entities.Audit;
 using Application.Authorization;
 using Application.Identity;
 using Application.Security;
