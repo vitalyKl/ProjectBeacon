@@ -76,6 +76,29 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
+    public async Task TaskUpdate_RequiresExpectedContentRevisionWhenDescriptionChanges()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.UpdateTask,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["description"] = "Changed without a base revision"
+            }, api, env);
+
+        Assert.True(result.IsError);
+        Assert.Contains("expectedContentRevision", result.Text, StringComparison.Ordinal);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
     public async Task TaskAttachFile_UploadsWorkspaceFileToCurrentTask()
     {
         var root = TempRoot();
