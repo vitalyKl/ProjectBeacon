@@ -248,10 +248,10 @@ else
             return false;
         }
 
-        var fromUtc = _fromDate.HasValue
+        DateTime? fromUtc = _fromDate.HasValue
             ? DateTime.SpecifyKind(_fromDate.Value.Date, DateTimeKind.Utc)
             : null;
-        var toUtc = _toDate.HasValue
+        DateTime? toUtc = _toDate.HasValue
             ? DateTime.SpecifyKind(_toDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc)
             : null;
         query = new AuditQuery(
