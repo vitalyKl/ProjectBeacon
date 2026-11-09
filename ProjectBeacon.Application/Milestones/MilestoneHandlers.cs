@@ -38,7 +38,8 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
             command.Request.Order);
 
         db.Milestones.Add(milestone);
-        var saved = await _contentWriter.SaveAsync(db, milestone, null, null, ct);
+        var attribution = ContentAttribution.FromActor(command.Actor);
+        var saved = await _contentWriter.SaveAsync(db, milestone, attribution.Type, attribution.Id, ct);
         if (!saved.Success)
             return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone version could not be saved.", ErrorKind.Conflict);
 
@@ -86,7 +87,9 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
         milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
         if (contentChanged)
         {
-            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            var attribution = ContentAttribution.FromActor(command.Actor);
+            var saved = await _contentWriter.SaveAsync(
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone content conflict.", ErrorKind.Conflict);
         }
@@ -129,7 +132,9 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
 
         milestone.Delete();
         db.Milestones.Remove(milestone);
-        var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct, deleted: true);
+        var attribution = ContentAttribution.FromActor(command.Actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, milestone, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
         return saved.Success
             ? Result.Ok()
             : Result.Failure(saved.Error ?? "Milestone delete conflict.", ErrorKind.Conflict);
