@@ -32,6 +32,8 @@ public static class ContextEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/content-versions", ListContentVersions)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapPost("/v1/projects/{projectId:guid}/content-versions/{versionId:guid}/restore", RestoreContentVersion)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -235,6 +237,19 @@ public static class ContextEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
+    private static async Task<IResult> RestoreContentVersion(
+        Guid projectId,
+        Guid versionId,
+        [FromBody] RestoreContentVersionRequest request,
+        HttpContext context,
+        RestoreContentVersionHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestoreContentVersionCommand(
+            projectId, versionId, request.ExpectedRevision, context.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
     private static async Task<IResult> CreateConstraint(
         Guid projectId,
         [FromBody] CreateConstraintBody body,
@@ -266,6 +281,9 @@ public static class ContextEndpoints
     /// Body for proposing a constraint: text and kind.
     /// </summary>
     public record CreateConstraintBody(string Body, ConstraintKind Kind);
+
+    /// <summary>Expected current revision when restoring a historical content snapshot.</summary>
+    public record RestoreContentVersionRequest(int ExpectedRevision);
     /// <summary>
     /// Body for creating or updating a context section. Title, body, and scope are required by the handler.
     /// </summary>
