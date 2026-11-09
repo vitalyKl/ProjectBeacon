@@ -25,7 +25,8 @@ public readonly record struct ActorContext(
     Guid? DeviceId,
     Guid? ProjectId,
     Guid? OrgId,
-    ApiTokenCapability Capabilities)
+    ApiTokenCapability Capabilities,
+    DateTimeOffset? OperatorElevatedUntilUtc = null)
 {
     public static readonly ActorContext Anonymous =
         new(ActorType.Human, null, false, null, null, null, null, ApiTokenCapability.None);

@@ -1,0 +1,236 @@
+@page "/control/security"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Auth
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Web.Authentication
+@using ProjectBeacon.Web.Features.Settings
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject GetTotpStatusHandler TotpStatus
+@inject BeginTotpHandler BeginTotp
+@inject ConfirmTotpHandler ConfirmTotp
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Control — Security</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Operator security" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Configure an authenticator for this operator account. Sensitive Control Plane changes require a fresh TOTP verification and are unlocked for ten minutes.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">You do not have permission to manage operator security.</MudAlert>
+    }
+    else if (_enabled)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <MudChip T="string" Color="Color.Success" Size="Size.Small">Authenticator enabled</MudChip>
+            <MudText Typo="Typo.body2" Class="mt-3">
+                The authenticator is active. Enter its current six-digit code in the Control Plane top bar to unlock sensitive operations for ten minutes.
+            </MudText>
+        </MudPaper>
+    }
+    else if (_pending)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Finish authenticator setup</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Add this account to an authenticator app, then enter the six-digit code to confirm setup.
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_otpUri))
+            {
+                <img src="@TotpQr.DataUrl(_otpUri)" alt="Authenticator QR code" width="192" height="192" />
+            }
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3">Manual setup key</MudText>
+            <MudText Class="font-monospace user-select-all">@_secret</MudText>
+            <MudTextField T="string" @bind-Value="_code" Label="Authenticator code"
+                          InputMode="InputMode.numeric" MaxLength="6" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" />
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Confirm" Disabled="_busy">
+                    Confirm authenticator
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="StartSetup" Disabled="_busy">
+                    Generate a new setup key
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Protect operator actions</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                TOTP is not enabled for this account. Set it up before creating organizations, sending invitations, changing Alpha access, or modifying SMTP settings.
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartSetup" Disabled="_busy">
+                Set up authenticator
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _enabled;
+    private bool _pending;
+    private bool _busy;
+    private Guid? _userId;
+    private string _otpUri = string.Empty;
+    private string _secret = string.Empty;
+    private string _code = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return;
+        }
+
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var access = await AdminGate.RequireAsync(actor, OperatorPermission.OrganizationsRead);
+        if (!access.Success || actor.UserId is not { } userId)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _authorized = true;
+        _userId = userId;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (_userId is not { } userId)
+            return;
+
+        try
+        {
+            var result = await TotpStatus.HandleAsync(new GetTotpStatusCommand(userId));
+            if (!result.Success || result.Value is null)
+                throw new InvalidOperationException(result.Error ?? "Could not load authenticator status.");
+
+            _enabled = result.Value.Enabled;
+            _pending = result.Value.Pending;
+            _otpUri = result.Value.OtpAuthUri ?? string.Empty;
+            _secret = result.Value.Secret ?? string.Empty;
+            if (_enabled)
+            {
+                _otpUri = string.Empty;
+                _secret = string.Empty;
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Could not load operator security settings.", Severity.Error);
+        }
+    }
+
+    private async Task StartSetup()
+    {
+        if (_userId is not { } userId || !await RecheckOperatorAsync())
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await BeginTotp.HandleAsync(new BeginTotpCommand(userId));
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Value))
+                throw new InvalidOperationException(result.Error ?? "Could not start authenticator setup.");
+
+            var parts = result.Value.Split('\n', 2, StringSplitOptions.None);
+            if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+                throw new InvalidOperationException("Authenticator setup returned an invalid provisioning payload.");
+
+            _otpUri = parts[0];
+            _secret = parts[1];
+            _pending = true;
+            _enabled = false;
+            _code = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Confirm()
+    {
+        if (_userId is not { } userId || !await RecheckOperatorAsync())
+            return;
+
+        if (_code.Length != 6 || _code.Any(c => !char.IsAsciiDigit(c)))
+        {
+            Snackbar.Add("Enter the six-digit authenticator code.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(userId, _code)));
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error ?? "Authenticator code was not accepted.");
+
+            _code = string.Empty;
+            Snackbar.Add("Operator authenticator enabled.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<bool> RecheckOperatorAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var result = await AdminGate.RequireAsync(actor, OperatorPermission.OrganizationsRead);
+        if (principal.Identity?.IsAuthenticated == true
+            && string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal)
+            && result.Success && actor.UserId == _userId)
+            return true;
+
+        _authorized = false;
+        Snackbar.Add("Operator access is no longer available. Sign in again.", Severity.Error);
+        return false;
+    }
+}

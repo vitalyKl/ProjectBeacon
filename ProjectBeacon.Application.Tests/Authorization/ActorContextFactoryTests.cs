@@ -78,6 +78,23 @@ public sealed class ActorContextFactoryTests
     }
 
     [Fact]
+    public void FromPrincipal_ParsesElevationOnlyFromControlCookie()
+    {
+        var until = DateTimeOffset.UtcNow.AddMinutes(5);
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim("isAdmin", "true"),
+            new Claim("control_elevated_until", until.ToString("O", System.Globalization.CultureInfo.InvariantCulture))
+        };
+        var control = ActorContextFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "ControlCookie")));
+        var customer = ActorContextFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies")));
+
+        Assert.Equal(until, control.OperatorElevatedUntilUtc);
+        Assert.Null(customer.OperatorElevatedUntilUtc);
+    }
+
+    [Fact]
     public void FromPrincipal_ApiToken_ReturnsApiToken()
     {
         var tokenGuidId = Guid.NewGuid();

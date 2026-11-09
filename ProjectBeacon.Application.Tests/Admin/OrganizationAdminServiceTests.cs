@@ -203,10 +203,19 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
     private async Task<AdminActor> AdminActorAsync(OperatorPermission permission)
     {
+        if (!_admin.TotpEnabled)
+        {
+            _admin.BeginTotp("test-secret-cipher");
+            _admin.ConfirmTotp();
+            await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+        var elevatedUntil = DateTimeOffset.UtcNow.AddMinutes(5);
         var gate = new DatabaseAdminGate(_factory);
         var result = await gate.RequireAsync(
-            new ActorContext(ActorType.Human, _admin.Id, true, null, null, null, null, ApiTokenCapability.None),
+            new ActorContext(ActorType.Human, _admin.Id, true, null, null, null, null,
+                ApiTokenCapability.None, elevatedUntil),
             permission,
+            requireElevation: true,
             ct: TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Error);
         return result.Value!;

@@ -233,7 +233,7 @@
 
     private async Task Save()
     {
-        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
             return;
 
         _saving = true;
@@ -263,7 +263,7 @@
 
     private async Task TestConnection()
     {
-        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
             return;
 
         _testingConnection = true;
@@ -289,7 +289,7 @@
 
     private async Task SendTest()
     {
-        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
             return;
 
         _testingEmail = true;
@@ -314,7 +314,7 @@
         }
     }
 
-    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission)
+    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission, bool requireElevation = false)
     {
         if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
         {
@@ -334,17 +334,19 @@
 
         var access = await AdminGate.RequireAsync(
             ActorContextFactory.FromPrincipal(principal),
-            permission);
+            permission, requireElevation);
 
         if (access.Success)
             return true;
 
         if (permission == OperatorPermission.EmailSettingsRead)
             _authorized = false;
-        if (permission == OperatorPermission.EmailSettingsManage)
+        if (permission == OperatorPermission.EmailSettingsManage && !requireElevation)
             _canManage = false;
 
-        Snackbar.Add("Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
+        Snackbar.Add(requireElevation
+            ? "SMTP changes and test messages require an active TOTP unlock. Enter a current authenticator code in the top bar."
+            : "Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
         return false;
     }
 

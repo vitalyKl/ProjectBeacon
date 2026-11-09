@@ -16,6 +16,13 @@
         <MudButton Href="/admin/organizations" Variant="Variant.Text" Color="Color.Inherit">Organizations</MudButton>
         <MudButton Href="/admin/audit" Variant="Variant.Text" Color="Color.Inherit">Audit</MudButton>
         <MudButton Href="/admin/email" Variant="Variant.Text" Color="Color.Inherit">Email</MudButton>
+        <MudButton Href="/control/security" Variant="Variant.Text" Color="Color.Inherit">Security</MudButton>
+        <form method="post" action="/control/elevate" class="d-flex align-center gap-2">
+            <input name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   autocomplete="one-time-code" required aria-label="Authenticator code"
+                   placeholder="TOTP" style="width:84px;min-width:84px;padding:6px 8px;border-radius:6px;" />
+            <button type="submit" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-inherit">Unlock 10 min</button>
+        </form>
         <form method="post" action="/control/logout">
             <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Inherit">
                 Sign out

@@ -32,7 +32,7 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         var account = await db.Users
             .AsNoTracking()
             .Where(user => user.Id == userId)
-            .Select(user => new OperatorAccountState(user.IsAdmin, user.DisabledAt != null))
+            .Select(user => new OperatorAccountState(user.IsAdmin, user.DisabledAt != null, user.TotpEnabled))
             .FirstOrDefaultAsync(ct);
 
         if (account is null || account.IsDisabled)
@@ -47,13 +47,19 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         if (!OperatorPermissionSets.Includes(permissions, required))
             return Result.Failure<AdminActor>("The operator does not have the required permission.", ErrorKind.Forbidden);
 
-        // Step-up authentication is deliberately fail-closed until an elevation provider
-        // is implemented. No endpoint may silently treat a normal login as elevated.
-        if (requireElevation)
-            return Result.Failure<AdminActor>("Operator step-up authentication is not configured.", ErrorKind.Forbidden);
+        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset? elevatedUntil = account.TotpEnabled
+            && actor.OperatorElevatedUntilUtc is { } claimExpiry
+            && claimExpiry > now
+                ? claimExpiry
+                : null;
+        if (requireElevation && elevatedUntil is null)
+            return Result.Failure<AdminActor>(
+                "Recent Control Plane authenticator verification is required for this operation.",
+                ErrorKind.Forbidden);
 
-        return Result.Ok(new AdminActor(userId, permissions, elevatedUntilUtc: null));
+        return Result.Ok(new AdminActor(userId, permissions, elevatedUntil));
     }
 
-    private sealed record OperatorAccountState(bool IsAdmin, bool IsDisabled);
+    private sealed record OperatorAccountState(bool IsAdmin, bool IsDisabled, bool TotpEnabled);
 }

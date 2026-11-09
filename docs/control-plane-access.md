@@ -126,9 +126,16 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
 
 - Operator identities and assignable SystemAdministrator/Support/Billing/Auditor role membership
   are not separate persisted records yet; current admission uses `User.IsAdmin`.
-- TOTP/elevation must be completed before sensitive actions are enabled. The operator gate remains
-  fail-closed for actions that request elevation.
+- Operator TOTP enrollment is available at `/control/security`. A successful `/control/elevate`
+  verification places a signed ten-minute elevation claim in the Control Plane cookie. Organization
+  creation, owner invitations, invitation revocation, Alpha entitlement changes, and SMTP mutations
+  require this elevation and recheck it in the server-side service/gate path. Operators without TOTP
+  enabled cannot perform these sensitive changes. Lost-authenticator recovery is not yet exposed.
+- Organization/customer onboarding and Alpha entitlement management are available under
+  `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
+  member/invitation visibility, owner invitation creation/revocation, and Alpha grant/renew/revoke.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
-- The first UI page on the Control Plane is the audit console. Organization/customer management,
-  subscriptions, entitlements, licensing, and operational controls are separate implementation work.
+- Billing persistence/provider integration, full operator-role administration, customer member
+  disable/role changes, organization suspension/closure, production operations telemetry/log access,
+  data export/deletion, and end-to-end entitlement enforcement remain future work.

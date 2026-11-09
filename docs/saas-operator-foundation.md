@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, and the initial B1 organization/owner-invitation/Alpha-entitlement workflow are implemented in the current development stack. Billing persistence/provider adapters, assignable operator roles, mandatory MFA/elevation, and the broader operations console remain incomplete.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, assignable operator roles, MFA recovery, end-to-end entitlement enforcement, and the broader operations console remain incomplete.
 
 ## Product boundary
 
@@ -34,7 +34,7 @@ For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.
 
 Future role assignment should be stored and changed in one authorization component. Handlers must continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
 
-Sensitive mutations require an elevated AdminActor. The future gate must validate the current user and session version in the database on each invocation; a Blazor page authorization attribute is only a UI guard.
+Sensitive mutations require an elevated AdminActor. The database-backed gate validates the current operator account, its persisted TOTP-enabled state, and the signed Control Plane elevation expiry on each invocation; a Blazor page authorization attribute is only a UI guard.
 
 ## Organization entitlements
 
@@ -110,13 +110,13 @@ RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing 
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
 8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
 
-The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The current B1 slice provides the organization list/search, customer detail, organization creation with owner invitation, additional owner invitations, invitation revocation, member/invitation visibility, and Alpha grant/renew/revoke with limits, features, effective dates and audit history. Owner/member identity details are withheld unless the actor has `UsersRead`; counts remain visible without exposing personal data. Expired invitations are not counted as pending. Full account operations, mandatory elevation, and end-to-end entitlement enforcement remain subsequent work. Privileged operations are authorized and audited; high-risk step-up operations remain unavailable until elevation is implemented.
+The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The current B1 slice provides the organization list/search, customer detail, organization creation with owner invitation, additional owner invitations, invitation revocation, member/invitation visibility, and Alpha grant/renew/revoke with limits, features, effective dates and audit history. Owner/member identity details are withheld unless the actor has `UsersRead`; counts remain visible without exposing personal data. Expired invitations are not counted as pending. Full account operations and end-to-end entitlement enforcement remain subsequent work. High-risk operator mutations now require signed ten-minute TOTP step-up elevation and are checked again in the server-side services.
 
 ## Current implementation status of this foundation
 
 Implemented in the foundation branch:
 
-- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and database-backed IAdminGate authorization.
+- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, database-backed IAdminGate authorization, TOTP enrollment at `/control/security`, and signed ten-minute step-up elevation for high-risk mutations.
 - An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
 - PostgreSQL-backed Alpha entitlements with tenant/operator RLS, atomic replace/grant/revoke operations, and transactional audit records; Alpha → Production remains a contract until billing persistence exists.
 - Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
@@ -126,7 +126,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity store and assignable operator-role administration, mandatory MFA/elevation flow, and full customer account operations (including member disable/role changes and organization suspension/closure).
+- A separate operator identity store and assignable operator-role administration; the alpha still maps `User.IsAdmin` to SystemAdministrator. Lost-authenticator recovery, member disable/role changes, and organization suspension/closure are not exposed.
 - Entitlement grants can be managed and evaluated, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.

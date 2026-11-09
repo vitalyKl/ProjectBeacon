@@ -11,7 +11,9 @@ using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Web.Authentication;
 
 namespace ProjectBeacon.Web.Extensions;
@@ -104,6 +106,87 @@ public static class EndpointExtensions
 
             return Results.Redirect("/admin/audit");
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
+
+        app.MapPost("/control/elevate", async (
+            HttpContext ctx,
+            IBeaconDbFactory dbFactory,
+            ISecretProtector secrets,
+            ITotp totp,
+            IAuditWriter auditWriter,
+            TimeProvider timeProvider) =>
+        {
+            if (!ControlFormOriginGuard.IsAllowed(ctx))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            var authentication = await ctx.AuthenticateAsync(ControlAuthenticationDefaults.Scheme);
+            var principal = authentication.Principal;
+            if (!authentication.Succeeded
+                || principal?.Identity?.IsAuthenticated != true
+                || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+                return Results.Redirect("/control/login");
+
+            var actor = ActorContextFactory.FromPrincipal(principal);
+            if (actor.UserId is not { } userId || !actor.IsHuman)
+                return Results.Redirect("/control/login");
+
+            var now = timeProvider.GetUtcNow();
+            var tenant = new TenantContext();
+            tenant.Assign(null, null, unscoped: true);
+            await using var db = dbFactory.CreateDbContext(tenant);
+            var user = await db.Users.FirstOrDefaultAsync(item => item.Id == userId, ctx.RequestAborted);
+            if (user is null || !user.IsAdmin || user.IsDisabled || !user.TotpEnabled
+                || string.IsNullOrWhiteSpace(user.TotpSecretCipher))
+            {
+                auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    actor, "platform.control_elevation.denied", "User", userId.ToString(), null, null,
+                    outcome: AuditOutcome.Denied,
+                    detailsJson: """{"reasonCode":"mfa_not_enabled"}"""));
+                await db.SaveChangesAsync(ctx.RequestAborted);
+                return Results.Redirect("/control/security?mfa=required");
+            }
+
+            if (actor.OperatorElevatedUntilUtc is { } existing && existing > now)
+                return Results.Redirect("/admin/organizations");
+
+            var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
+            var code = form["code"].ToString();
+            if (!secrets.TryOpen(user.TotpSecretCipher, out var secret)
+                || !totp.Verify(secret, code, now.UtcDateTime))
+            {
+                auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    actor, "platform.control_elevation.denied", "User", userId.ToString(), null, null,
+                    outcome: AuditOutcome.Denied,
+                    detailsJson: """{"reasonCode":"invalid_authenticator_code"}"""));
+                await db.SaveChangesAsync(ctx.RequestAborted);
+                return Results.Redirect("/control/security?error=1");
+            }
+
+            var elevatedUntil = now.AddMinutes(10);
+            auditWriter.Stage(db, AuditEventFactory.ForActor(
+                actor, "platform.control_elevation.succeeded", "User", userId.ToString(), null, null,
+                outcome: AuditOutcome.Success,
+                detailsJson: """{"resultCode":"elevated","durationSeconds":600}"""));
+            await db.SaveChangesAsync(ctx.RequestAborted);
+
+            var claims = principal.Claims
+                .Where(claim => claim.Type != "control_elevated_until")
+                .ToList();
+            claims.Add(new Claim("control_elevated_until",
+                elevatedUntil.ToString("O", System.Globalization.CultureInfo.InvariantCulture)));
+            var identity = new ClaimsIdentity(claims, ControlAuthenticationDefaults.Scheme);
+            await ctx.SignInAsync(
+                ControlAuthenticationDefaults.Scheme,
+                new ClaimsPrincipal(identity),
+                authentication.Properties ?? new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = now.AddHours(8),
+                    AllowRefresh = false
+                });
+
+            ctx.Response.Headers.CacheControl = "no-store";
+            return Results.Redirect("/admin/organizations");
+        }).RequireAuthorization().RequireRateLimiting("auth").DisableAntiforgery();
 
         app.MapPost("/control/logout", async (
             HttpContext ctx,

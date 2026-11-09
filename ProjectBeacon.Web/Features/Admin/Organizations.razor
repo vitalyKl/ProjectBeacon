@@ -408,11 +408,11 @@
 
     private async Task CreateOrganization()
     {
-        if (!await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
+        if (!await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true)) return;
         _saving = true;
         try
         {
-            var result = await Organizations.CreateAsync(await CurrentAdminActor(),
+            var result = await Organizations.CreateAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true),
                 new CreateOrganizationWithOwnerRequest(_newName, _newDescription, _ownerEmail));
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not create organization.");
             _createdInvite = result.Value;
@@ -427,11 +427,11 @@
     private async Task InviteOwner()
     {
         if (OrganizationId is not { } orgId
-            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
+            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true)) return;
         _saving = true;
         try
         {
-            var result = await Organizations.InviteOwnerAsync(await CurrentAdminActor(), orgId, _inviteEmail);
+            var result = await Organizations.InviteOwnerAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, _inviteEmail);
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not invite owner.");
             _createdInvite = result.Value;
             _inviteEmail = string.Empty;
@@ -445,8 +445,8 @@
     private async Task RevokeInvite(Guid inviteId)
     {
         if (OrganizationId is not { } orgId
-            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
-        var result = await Organizations.RevokeInviteAsync(await CurrentAdminActor(), orgId, inviteId);
+            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true)) return;
+        var result = await Organizations.RevokeInviteAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, inviteId);
         if (!result.Success) Snackbar.Add(result.Error ?? "Could not revoke invitation.", Severity.Error);
         else { Snackbar.Add("Invitation revoked.", Severity.Success); await ReloadDetail(); }
     }
@@ -454,7 +454,7 @@
     private async Task LoadEntitlements(Guid orgId)
     {
         if (!await EnsurePermissionAsync(OperatorPermission.EntitlementsRead)) return;
-        var result = await Entitlements.ListForOperatorAsync(await CurrentAdminActor(), orgId);
+        var result = await Entitlements.ListForOperatorAsync(await CurrentAdminActor(OperatorPermission.EntitlementsRead), orgId);
         if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not load Alpha access.");
         _entitlements = result.Value!.ToList();
     }
@@ -462,7 +462,7 @@
     private async Task GrantAlpha()
     {
         if (OrganizationId is not { } orgId
-            || !await EnsurePermissionAsync(OperatorPermission.EntitlementsManage)) return;
+            || !await EnsurePermissionAsync(OperatorPermission.EntitlementsManage, requireElevation: true)) return;
         _saving = true;
         try
         {
@@ -483,7 +483,7 @@
             var request = new GrantOrganizationEntitlementRequest(
                 orgId, OperatorEntitlementSource.AlphaProgram, DateTimeOffset.UtcNow,
                 ends, limits, features, _reason);
-            var result = await Entitlements.GrantAsync(request, await CurrentAdminActor());
+            var result = await Entitlements.GrantAsync(request, await CurrentAdminActor(OperatorPermission.EntitlementsManage, requireElevation: true));
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not grant Alpha access.");
             Snackbar.Add("Alpha access granted.", Severity.Success);
             _reason = "alpha_access";
@@ -496,8 +496,8 @@
 
     private async Task RevokeEntitlement(Guid entitlementId)
     {
-        if (!await EnsurePermissionAsync(OperatorPermission.EntitlementsManage)) return;
-        var result = await Entitlements.RevokeAsync(entitlementId, "operator_revoked", await CurrentAdminActor());
+        if (!await EnsurePermissionAsync(OperatorPermission.EntitlementsManage, requireElevation: true)) return;
+        var result = await Entitlements.RevokeAsync(entitlementId, "operator_revoked", await CurrentAdminActor(OperatorPermission.EntitlementsManage, requireElevation: true));
         if (!result.Success) Snackbar.Add(result.Error ?? "Could not revoke Alpha access.", Severity.Error);
         else { Snackbar.Add("Alpha access revoked.", Severity.Success); await LoadEntitlements(OrganizationId!.Value); }
     }
@@ -510,12 +510,13 @@
         await LoadEntitlements(orgId);
     }
 
-    private async Task<AdminActor> CurrentAdminActor()
+    private async Task<AdminActor> CurrentAdminActor(
+        OperatorPermission permission = OperatorPermission.OrganizationsRead, bool requireElevation = false)
     {
         var principal = (await Auth.GetAuthenticationStateAsync()).User;
         var result = await AdminGate.RequireAsync(
-            ActorContextFactory.FromPrincipal(principal), OperatorPermission.OrganizationsRead);
-        return result.Value ?? throw new UnauthorizedAccessException("Operator access is no longer available.");
+            ActorContextFactory.FromPrincipal(principal), permission, requireElevation);
+        return result.Value ?? throw new UnauthorizedAccessException(result.Error ?? "Operator access is no longer available.");
     }
 
     private async Task<bool> HasPermissionAsync(OperatorPermission permission)
@@ -524,7 +525,7 @@
         return (await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission)).Success;
     }
 
-    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission)
+    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission, bool requireElevation = false)
     {
         if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
         {
@@ -540,8 +541,13 @@
             Navigation.NavigateTo("/control/login", forceLoad: true);
             return false;
         }
-        var result = await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission);
+        var result = await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission, requireElevation);
         if (result.Success) return true;
+        if (requireElevation)
+        {
+            Snackbar.Add("Sensitive changes require an active TOTP unlock. Enter a current authenticator code in the top bar.", Severity.Warning);
+            return false;
+        }
         if (permission == OperatorPermission.OrganizationsRead)
             _authorized = false;
         if (permission == OperatorPermission.UsersRead)

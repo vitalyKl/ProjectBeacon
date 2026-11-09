@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Mail;
 
 using System.Net.Mail;
 using Application.Audit;
+using Application.Admin;
 using Application.Authorization;
 using Application.Persistence;
 using Application.Security;
@@ -112,6 +113,7 @@ public sealed class PlatformEmailAdminService
         ActorContext actor,
         CancellationToken ct = default)
     {
+        await EnsureElevatedAsync(actor, ct);
         ArgumentNullException.ThrowIfNull(request);
         var host = request.Host?.Trim() ?? string.Empty;
         var username = request.Username?.Trim() ?? string.Empty;
@@ -203,6 +205,7 @@ public sealed class PlatformEmailAdminService
 
     public async Task TestConnectionAsync(ActorContext actor, CancellationToken ct = default)
     {
+        await EnsureElevatedAsync(actor, ct);
         var settings = await GetAsync(ct);
         if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Host))
             throw new InvalidOperationException("Configure and enable SMTP before testing the connection.");
@@ -223,6 +226,7 @@ public sealed class PlatformEmailAdminService
 
     public async Task SendTestAsync(string recipient, ActorContext actor, CancellationToken ct = default)
     {
+        await EnsureElevatedAsync(actor, ct);
         var address = recipient?.Trim() ?? string.Empty;
         if (address.Length is 0 or > 320)
             throw new ArgumentException("A valid recipient address is required.");
@@ -291,6 +295,14 @@ public sealed class PlatformEmailAdminService
             outcome: outcome,
             detailsJson: $$"""{"resultCode":"{{resultCode}}"}"""));
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task EnsureElevatedAsync(ActorContext actor, CancellationToken ct)
+    {
+        var access = await new DatabaseAdminGate(_dbFactory).RequireAsync(
+            actor, OperatorPermission.EmailSettingsManage, requireElevation: true, ct);
+        if (!access.Success)
+            throw new UnauthorizedAccessException(access.Error ?? "Recent Control Plane authenticator verification is required.");
     }
 
     private string Config(string key) =>

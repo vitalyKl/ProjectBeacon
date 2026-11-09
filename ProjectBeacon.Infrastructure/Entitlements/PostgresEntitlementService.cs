@@ -119,6 +119,8 @@ public sealed class PostgresEntitlementService(
     {
         if (!actor.HasPermission(OperatorPermission.EntitlementsManage))
             return Result.Failure<OrganizationEntitlement>("EntitlementsManage permission is required.", ErrorKind.Forbidden);
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Failure<OrganizationEntitlement>("Recent Control Plane authenticator verification is required.", ErrorKind.Forbidden);
         var now = timeProvider.GetUtcNow();
         var invalid = Validate(request, now);
         if (invalid is not null)
@@ -214,6 +216,8 @@ public sealed class PostgresEntitlementService(
     {
         if (!actor.HasPermission(OperatorPermission.EntitlementsManage))
             return Result.Forbidden("EntitlementsManage permission is required.");
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Forbidden("Recent Control Plane authenticator verification is required.");
         if (entitlementId == Guid.Empty)
             return Result.Failure("Entitlement id is required.");
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 80

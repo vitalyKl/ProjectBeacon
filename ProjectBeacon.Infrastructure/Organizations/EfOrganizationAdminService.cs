@@ -214,6 +214,8 @@ public sealed class EfOrganizationAdminService(
     {
         if (!CanManage(actor))
             return Result.Failure<OperatorInviteCreated>("Organization and user management permissions are required.", ErrorKind.Forbidden);
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Failure<OperatorInviteCreated>("Recent Control Plane authenticator verification is required.", ErrorKind.Forbidden);
         if (actor.UserId == Guid.Empty)
             return Result.Failure<OperatorInviteCreated>("A verified operator identity is required.", ErrorKind.Forbidden);
 
@@ -253,6 +255,8 @@ public sealed class EfOrganizationAdminService(
     {
         if (!CanManage(actor))
             return Result.Failure<OperatorInviteCreated>("Organization and user management permissions are required.", ErrorKind.Forbidden);
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Failure<OperatorInviteCreated>("Recent Control Plane authenticator verification is required.", ErrorKind.Forbidden);
         if (orgId == Guid.Empty)
             return Result.Failure<OperatorInviteCreated>("Organization id is required.");
         email = NormalizeEmail(email);
@@ -313,6 +317,8 @@ public sealed class EfOrganizationAdminService(
     {
         if (!CanManage(actor))
             return Result.Forbidden("Organization and user management permissions are required.");
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Forbidden("Recent Control Plane authenticator verification is required.");
         if (orgId == Guid.Empty || inviteId == Guid.Empty)
             return Result.Failure("Organization and invitation ids are required.");
 

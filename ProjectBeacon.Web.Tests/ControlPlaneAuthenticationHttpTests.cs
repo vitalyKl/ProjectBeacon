@@ -84,6 +84,19 @@ public sealed class ControlPlaneAuthenticationHttpTests
         var page = await controlCookieResponse.Content.ReadFromJsonAsync<JsonElement>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(page.GetProperty("items").ValueKind == JsonValueKind.Array);
+
+        // A valid operator cookie without enrolled TOTP cannot unlock sensitive actions.
+        using var elevation = Request(HttpMethod.Post, "/control/elevate", "control.localhost");
+        elevation.Headers.TryAddWithoutValidation("Origin", "http://control.localhost");
+        elevation.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+        elevation.Headers.TryAddWithoutValidation("Cookie", controlCookie);
+        elevation.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["code"] = "123456"
+        });
+        var elevationResponse = await client.SendAsync(elevation, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, elevationResponse.StatusCode);
+        Assert.Equal("/control/security?mfa=required", elevationResponse.Headers.Location?.ToString());
     }
 
     [Fact]

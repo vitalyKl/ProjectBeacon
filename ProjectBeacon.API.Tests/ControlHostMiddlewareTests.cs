@@ -19,6 +19,8 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/control/bootstrap")]
     [InlineData("/control/recover")]
     [InlineData("/control/logout")]
+    [InlineData("/control/security")]
+    [InlineData("/control/elevate")]
     [InlineData("/bootstrap")]
     [InlineData("/recover")]
     [InlineData("/v1/admin/audit")]
@@ -62,6 +64,8 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/control/bootstrap")]
     [InlineData("/control/recover")]
     [InlineData("/control/logout")]
+    [InlineData("/control/security")]
+    [InlineData("/control/elevate")]
     public async Task ControlHost_AllowsAuditApiShellAssetsAndControlPages(string path)
     {
         var context = Context(ControlHost, path);

@@ -143,6 +143,22 @@ public sealed class DatabaseAdminGateTests : IDisposable
     }
 
     [Fact]
+    public async Task RequireAsync_AllowsRecentStepUpOnlyWhenTotpIsPersistentlyEnabled()
+    {
+        _admin.BeginTotp("test-secret-cipher");
+        _admin.ConfirmTotp();
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var until = DateTimeOffset.UtcNow.AddMinutes(5);
+        var actor = Human(_admin.Id, isAdmin: true) with { OperatorElevatedUntilUtc = until };
+
+        var result = await _gate.RequireAsync(actor, OperatorPermission.SystemMaintenance,
+            requireElevation: true, ct: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(until, result.Value!.ElevatedUntilUtc);
+    }
+
+    [Fact]
     public async Task RequireAsync_FailsClosedWhenElevationIsRequired()
     {
         var result = await _gate.RequireAsync(

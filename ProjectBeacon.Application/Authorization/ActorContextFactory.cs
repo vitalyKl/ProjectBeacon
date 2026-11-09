@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Authorization;
 
+using System.Globalization;
 using System.Security.Claims;
 using Domain.Enums;
 
@@ -18,6 +19,8 @@ public static class ActorContextFactory
     private const string CapabilitiesClaim = "capabilities";
     private const string IsAdminClaim = "isAdmin";
     private const string DeviceOwnerClaim = "device_owner_id";
+    private const string ControlElevatedUntilClaim = "control_elevated_until";
+    private const string ControlCookieAuthType = "ControlCookie";
 
     /// <summary>
     /// Maps authentication type and claims onto an actor. <see cref="ApiTokenAuthType"/> and <see cref="DeviceTokenAuthType"/> select those kinds; any other identity is a human.
@@ -48,6 +51,18 @@ public static class ActorContextFactory
         if (type == ActorType.Human && userId is null)
             return ActorContext.Anonymous;
 
+        DateTimeOffset? operatorElevatedUntilUtc = null;
+        if (type == ActorType.Human
+            && string.Equals(identity.AuthenticationType, ControlCookieAuthType, StringComparison.Ordinal)
+            && DateTimeOffset.TryParse(
+                principal.FindFirst(ControlElevatedUntilClaim)?.Value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var elevatedUntil))
+        {
+            operatorElevatedUntilUtc = elevatedUntil;
+        }
+
         return type switch
         {
             ActorType.ApiToken => new ActorContext(
@@ -76,7 +91,8 @@ public static class ActorContextFactory
                 DeviceId: null,
                 ProjectId: ToGuid(principal.FindFirst(ProjectIdClaim)?.Value),
                 OrgId: ToGuid(principal.FindFirst(OrgIdClaim)?.Value),
-                Capabilities: ApiTokenCapability.None),
+                Capabilities: ApiTokenCapability.None,
+                OperatorElevatedUntilUtc: operatorElevatedUntilUtc),
         };
     }
 

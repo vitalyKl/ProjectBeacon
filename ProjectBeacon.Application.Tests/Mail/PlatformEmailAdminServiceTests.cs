@@ -5,6 +5,7 @@ using Application.Mail;
 using Application.Persistence;
 using Application.Security;
 using Domain.Entities.Email;
+using Domain.Entities.Identity;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -19,11 +20,17 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISecretProtector _protector = TestProtectors.Dev();
     private readonly CapturingEmailSender _email = new();
+    private readonly User _admin;
 
     public PlatformEmailAdminServiceTests()
     {
         (_connection, _seedDb, _unscoped) = HandlerSqlite.Open();
         _dbFactory = HandlerSqlite.Factory(_connection);
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        _admin.BeginTotp("test-secret-cipher");
+        _admin.ConfirmTotp();
+        _seedDb.Users.Add(_admin);
+        _seedDb.SaveChanges();
     }
 
     public void Dispose()
@@ -134,6 +141,16 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Save_RejectsOperatorWithoutRecentStepUp()
+    {
+        var actor = AdminActor() with { OperatorElevatedUntilUtc = null };
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => CreateService().SaveAsync(
+            new SavePlatformEmailSettingsRequest(
+                true, "smtp.example.test", 587, "beacon", "beacon@example.test", true, "secret", false),
+            actor));
+    }
+
+    [Fact]
     public async Task RecentDeliveryHistoryContainsOnlyMetadata()
     {
         var service = CreateService();
@@ -156,16 +173,17 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
         return new PlatformEmailAdminService(_dbFactory, _protector, _email, configuration);
     }
 
-    private static ActorContext AdminActor() =>
+    private ActorContext AdminActor() =>
         new(
             ActorType.Human,
-            Guid.Parse("11111111-1111-4111-8111-111111111111"),
+            _admin.Id,
             true,
             null,
             null,
             null,
             null,
-            ApiTokenCapability.None);
+            ApiTokenCapability.None,
+            DateTimeOffset.UtcNow.AddMinutes(5));
 
     private static TenantContext GlobalTenant()
     {
