@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Auth;
+using Application.Audit;
 using Application.Common;
 using Application.Security;
 using Domain.Entities.Devices;
@@ -16,12 +17,18 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISecretProtector? _secrets;
     private readonly ITotp? _totp;
+    private readonly IAuditWriter? _auditWriter;
 
-    public CreateDeviceHandler(IBeaconDbFactory dbFactory, ISecretProtector? secrets = null, ITotp? totp = null)
+    public CreateDeviceHandler(
+        IBeaconDbFactory dbFactory,
+        ISecretProtector? secrets = null,
+        ITotp? totp = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
         _totp = totp;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<DaemonDeviceDto>> HandleAsync(CreateDeviceCommand command, CancellationToken ct = default)
@@ -34,7 +41,9 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
         if (request.UserId == Guid.Empty)
             return Result.Failure<DaemonDeviceDto>("User is required.");
 
-        await using var db = _dbFactory.CreateDbContext();
+        var unscopedTenant = new TenantContext();
+        unscopedTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(unscopedTenant);
         var userExists = await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == request.UserId, ct);
         if (!userExists)
             return Result.Failure<DaemonDeviceDto>("User not found.");
@@ -53,12 +62,34 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
         {
             existing.RotateToken(hash, prefix);
             existing.Rename(request.Name);
+            if (command.Actor is { } rotatingActor)
+            {
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    rotatingActor,
+                    "device.token.rotated",
+                    "Device",
+                    existing.Id.ToString(),
+                    null,
+                    null,
+                    detailsJson: """{"changed":"credentials"}"""));
+            }
             await db.SaveChangesAsync(ct);
             return Result.Ok(MapDevice(existing, token, DateTime.UtcNow));
         }
 
         var device = DaemonDevice.Create(request.Name, request.UserId, request.Fingerprint, hash, prefix);
         db.DaemonDevices.Add(device);
+        if (command.Actor is { } creatingActor)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                creatingActor,
+                "device.created",
+                "Device",
+                device.Id.ToString(),
+                null,
+                null,
+                detailsJson: """{"newState":"Active"}"""));
+        }
         await db.SaveChangesAsync(ct);
         return Result.Ok(MapDevice(device, token, DateTime.UtcNow));
     }
@@ -95,21 +126,42 @@ public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<ILi
 public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter? _auditWriter;
 
-    public RevokeDeviceHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RevokeDeviceHandler(IBeaconDbFactory dbFactory, IAuditWriter? auditWriter = null)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result> HandleAsync(RevokeDeviceCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        var unscopedTenant = new TenantContext();
+        unscopedTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(unscopedTenant);
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.UserId != command.Request.UserId)
             return Result.Failure("Device not found.");
+        if (command.Actor is { UserId: { } actorUserId } && actorUserId != command.Request.UserId)
+            return Result.Forbidden("The actor does not own this device.");
+
         device.Revoke();
         var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
             .Where(t => t.ClientKind == ApiTokenClientKind.Harness && t.DeviceId == device.Id && t.RevokedAt == null)
             .ToListAsync(ct);
         foreach (var token in harnessTokens)
             token.Revoke();
+        if (command.Actor is { } actor)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                actor,
+                "device.revoked",
+                "Device",
+                device.Id.ToString(),
+                null,
+                null,
+                detailsJson: """{"newState":"Revoked"}"""));
+        }
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
