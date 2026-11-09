@@ -109,7 +109,7 @@ public static class EndpointExtensions
             HttpContext ctx,
             IBeaconDbFactory dbFactory,
             IAuditWriter auditWriter,
-            ILogger<EndpointExtensions> logger) =>
+            ILoggerFactory loggerFactory) =>
         {
             if (!ControlFormOriginGuard.IsAllowed(ctx))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -133,7 +133,7 @@ public static class EndpointExtensions
             catch (Exception ex)
             {
                 // A logging outage must not leave a user signed in to the Control Plane.
-                logger.LogWarning(ex, "Could not persist the Control Plane logout audit event.");
+                loggerFactory.CreateLogger("ProjectBeacon.ControlPlane").LogWarning(ex, "Could not persist the Control Plane logout audit event.");
             }
 
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
