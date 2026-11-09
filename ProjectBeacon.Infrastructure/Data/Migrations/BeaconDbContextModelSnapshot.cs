@@ -22,54 +22,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.EmailDeliveryLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("At")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorCode")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("Purpose")
-                        .IsRequired()
-                        .HasMaxLength(48)
-                        .HasColumnType("character varying(48)");
-
-                    b.Property<string>("Recipient")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.HasKey("Id");
-                    b.HasIndex("At");
-                    b.ToTable("EmailDeliveryLogs");
-                });
-
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.PlatformEmailSettings", b =>
-                {
-                    b.Property<bool>("Enabled").HasColumnType("boolean");
-                    b.Property<string>("FromAddress").IsRequired().HasMaxLength(320).HasColumnType("character varying(320)");
-                    b.Property<string>("Host").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
-                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid");
-                    b.Property<string>("PasswordCipher").IsRequired().HasMaxLength(4096).HasColumnType("character varying(4096)");
-                    b.Property<int>("Port").HasColumnType("integer");
-                    b.Property<string>("Username").IsRequired().HasMaxLength(320).HasColumnType("character varying(320)");
-                    b.Property<DateTime>("UpdatedAt").HasColumnType("timestamp with time zone");
-                    b.Property<bool>("UseStartTls").HasColumnType("boolean");
-                    b.HasKey("Id");
-                    b.ToTable("PlatformEmailSettings");
-                });
-
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -147,6 +99,46 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("AgentProfiles");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProviderConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApiKeyCipher")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ProviderId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ProviderId")
+                        .IsUnique();
+
+                    b.ToTable("AgentProviderConnections");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentTemplate", b =>
@@ -265,46 +257,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("LocalModelBackends");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProviderConnection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ApiKeyCipher")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("BaseUrl")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<string>("ModelId")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("ProviderId")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "ProviderId")
-                        .IsUnique();
-
-                    b.ToTable("AgentProviderConnections");
-                });
-
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.RoleBinding", b =>
                 {
                     b.Property<Guid>("Id")
@@ -314,13 +266,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("ModelBackendId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ProfileInstructions")
                         .IsRequired()
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -334,6 +286,82 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("RoleBindings");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Audit.AuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("ActorDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid?>("ActorTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Ip")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Action", "At");
+
+                    b.HasIndex("OrgId", "At");
+
+                    b.HasIndex("ProjectId", "At");
+
+                    b.HasIndex("TargetType", "TargetId");
+
+                    b.ToTable("AuditEvents");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Chat.ChatPart", b =>
@@ -916,17 +944,88 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("WorkstationCommands");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Evals.EvalRun", b =>
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.EmailDeliveryLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Runtime")
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Purpose")
                         .IsRequired()
-                        .HasMaxLength(32)
-                        .HasDefaultValue("native")
-                        .HasColumnType("character varying(32)");
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.ToTable("EmailDeliveryLogs");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.PlatformEmailSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FromAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("PasswordCipher")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("UseStartTls")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlatformEmailSettings");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Evals.EvalRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CheckCommand")
                         .HasMaxLength(500)
@@ -973,6 +1072,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("RepoRevision")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Runtime")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("native");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1440,14 +1546,14 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("McpServersCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
-
-                    b.Property<string>("McpServersCipher")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
@@ -1623,14 +1729,15 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
-                    b.Property<string>("ActivityJson")
-                        .IsRequired()
-                        .HasDefaultValue("{}")
-                        .HasColumnType("text");
-
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ActivityJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
 
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1639,16 +1746,16 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("LaunchSpec")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<DateTime?>("LastActivityAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                    b.Property<string>("LaunchSpec")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime?>("LaunchedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1743,6 +1850,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(5000)
                         .HasColumnType("character varying(5000)");
 
+                    b.Property<string>("ProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProfileSnapshotJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -1763,19 +1877,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("TaskPhaseId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ProfileKey")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<bool>("WakePlannerAfter")
-                        .HasDefaultValue(false)
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ProfileSnapshotJson")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("WakePlannerAfter")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.HasKey("Id");
 
@@ -1784,84 +1892,83 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("Subtasks");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Abstract")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("AuthorId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("AuthorProfileKey")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid?>("AuthorSessionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AuthorRole")
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<Guid?>("AuthorSubtaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AuthorType")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Key")
+                    b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Revision")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Kind")
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedByType")
                         .IsRequired()
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("TaskId", "Key")
+                    b.HasIndex("StorageKey")
                         .IsUnique();
 
-                    b.HasIndex("TaskId", "UpdatedAt");
+                    b.HasIndex("TaskId", "CreatedAt");
 
-                    b.ToTable("TaskWorkspaceSections");
+                    b.ToTable("TaskAttachments");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TaskAttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskAttachmentId")
+                        .IsUnique();
+
+                    b.ToTable("TaskAttachmentContents");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskComment", b =>
@@ -2115,85 +2222,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("TaskPhases");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedById")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CreatedByType")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<long>("Length")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("StorageKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("StorageKey")
-                        .IsUnique();
-
-                    b.HasIndex("TaskId", "CreatedAt");
-
-                    b.ToTable("TaskAttachments");
-                });
-
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<byte[]>("Content")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TaskAttachmentId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("TaskAttachmentId")
-                        .IsUnique();
-
-                    b.ToTable("TaskAttachmentContents");
-                });
-
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskStep", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2225,6 +2253,86 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("TaskId", "SortOrder");
 
                     b.ToTable("TaskSteps");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Abstract")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AuthorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("AuthorProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AuthorRole")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid?>("AuthorSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AuthorSubtaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskId", "Key")
+                        .IsUnique();
+
+                    b.HasIndex("TaskId", "UpdatedAt");
+
+                    b.ToTable("TaskWorkspaceSections");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentProfile", b =>
@@ -2581,15 +2689,22 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Navigation("Task");
                 });
 
-            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
                 {
-                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", "Task")
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
                         .WithMany()
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
 
-                    b.Navigation("Task");
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", null)
+                        .WithOne()
+                        .HasForeignKey("ProjectBeacon.Domain.Entities.Tasks.TaskAttachmentContent", "TaskAttachmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskComment", b =>
@@ -2697,6 +2812,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Chat.ChatSession", b =>
