@@ -63,7 +63,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 _projectId,
                 original.Id,
                 ExpectedRevision: 2,
-                HumanActor()), TestContext.Current.CancellationToken);
+                Actor: HumanActor()), TestContext.Current.CancellationToken);
 
         Assert.True(restored.Success, restored.Error);
         Assert.True(restored.Value!.Changed);
@@ -89,7 +89,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 _projectId,
                 original.Id,
                 ExpectedRevision: 2,
-                HumanActor()), TestContext.Current.CancellationToken);
+                Actor: HumanActor()), TestContext.Current.CancellationToken);
         Assert.False(stale.Success);
         Assert.Equal(ErrorKind.Conflict, stale.ErrorKind);
         Assert.Equal(3, await _db.ContentVersions.CountAsync(
@@ -123,7 +123,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 _projectId,
                 original.Id,
                 ExpectedRevision: 3,
-                HumanActor()), TestContext.Current.CancellationToken);
+                Actor: HumanActor()), TestContext.Current.CancellationToken);
 
         Assert.True(restored.Success, restored.Error);
         Assert.Equal(4, restored.Value!.Revision);
