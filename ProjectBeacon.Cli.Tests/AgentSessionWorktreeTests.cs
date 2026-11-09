@@ -69,6 +69,58 @@ public sealed class AgentSessionWorktreeTests
 
 
     [Fact]
+    public async Task CreateAndApply_IncludesConfiguredIgnoredPathsAndBuildsSafeDiffArtifact()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-include-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await Git(root, "init", "-b", "main");
+            await Git(root, "config", "core.autocrlf", "false");
+            await Git(root, "config", "user.name", "ProjectBeacon Tests");
+            await Git(root, "config", "user.email", "tests@projectbeacon.local");
+            await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "local-only/\\n.env\\n");
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base\\n");
+            await Git(root, "add", ".gitignore", "README.md");
+            await Git(root, "commit", "-m", "initial");
+
+            var ignoredDirectory = Path.Combine(root, "local-only");
+            Directory.CreateDirectory(ignoredDirectory);
+            await File.WriteAllTextAsync(Path.Combine(ignoredDirectory, "settings.json"), "{\\"local\\":true}");
+            await File.WriteAllTextAsync(Path.Combine(root, ".env"), "SECRET=DO-NOT-LEAK");
+            var beaconDirectory = Path.Combine(root, ".beacon");
+            Directory.CreateDirectory(beaconDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(beaconDirectory, "worktree-include"),
+                "# Literal local-only files to copy into isolated worktrees\\nlocal-only/settings.json\\n");
+
+            var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
+            Assert.NotNull(created.Workspace);
+            Assert.Null(created.Error);
+            await using var workspace = created.Workspace!;
+
+            Assert.Equal("{\\"local\\":true}", await File.ReadAllTextAsync(
+                Path.Combine(workspace.WorkingDirectory, "local-only", "settings.json")));
+            Assert.Contains("local-only/settings.json", workspace.IncludedPaths);
+            Assert.Contains(workspace.MissingIgnoredPaths,
+                path => path.StartsWith("local-only", StringComparison.Ordinal));
+            Assert.Contains("Isolated worktree environment", workspace.BuildEnvironmentContract());
+            Assert.Contains("local-only/settings.json", workspace.BuildEnvironmentContract());
+
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.cs"), "class AgentChange {}\\n");
+            var artifact = await workspace.BuildDiffArtifactAsync(CancellationToken.None);
+            Assert.Contains("agent-change.cs", artifact);
+            Assert.Contains("git diff --stat", artifact);
+            Assert.DoesNotContain("DO-NOT-LEAK", artifact);
+            Assert.DoesNotContain("SECRET=", artifact);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task CreateAndApply_DisablesExternalGitFiltersAndAllowsWorkingTreeEncoding()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-filter-" + Guid.NewGuid().ToString("N"));

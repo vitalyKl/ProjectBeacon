@@ -522,8 +522,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             }
 
             var latest = collected.LastOrDefault();
-            var activity = forms.Count > 0
-                ? "Waiting for your answer"
+            var activity = state == "conflict"
+                ? "Patch conflict: agent changes could not be applied to the current project. The isolated worktree was preserved for recovery."
+                : forms.Count > 0
+                    ? "Waiting for your answer"
                 : latest?.Kind == "reasoning" && !string.IsNullOrWhiteSpace(latest.Body)
                     ? $"Thinking: {ClipActivityText(latest.Body, 280)}"
                     : latest?.Kind == "tool"
