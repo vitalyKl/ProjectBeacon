@@ -75,6 +75,10 @@ public static class AuditEndpoints
         [FromQuery] string? action,
         [FromQuery] AuditActorKind? actorKind,
         [FromQuery] Guid? actorUserId,
+        [FromQuery] Guid? actorTokenId,
+        [FromQuery] Guid? actorDeviceId,
+        [FromQuery] string? targetType,
+        [FromQuery] string? targetId,
         [FromQuery] AuditOutcome? outcome,
         CancellationToken ct)
     {
@@ -98,12 +102,12 @@ public static class AuditEndpoints
             total = first.TotalCount;
             rows.AddRange(first.Items.Take(AuditCsvWriter.MaxRows));
 
-            var pages = (int)Math.Ceiling(
-                (double)Math.Min(total, MaximumExportRows) / ExportPageSize);
-            for (var currentPage = 2; currentPage <= pages; currentPage++)
+            var cappedTotal = Math.Min(total, AuditCsvWriter.MaxRows);
+            var pages = (int)Math.Ceiling((double)cappedTotal / ExportPageSize);
+            for (var currentPage = 2; currentPage <= pages && rows.Count < AuditCsvWriter.MaxRows; currentPage++)
             {
                 var next = await reader.ListAsync(access.Value!, filter with { Page = currentPage }, ct);
-                rows.AddRange(next.Items);
+                rows.AddRange(next.Items.Take(AuditCsvWriter.MaxRows - rows.Count));
             }
         }
         catch (ArgumentException ex)
