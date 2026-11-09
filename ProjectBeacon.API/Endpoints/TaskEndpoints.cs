@@ -197,9 +197,12 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
+    public record ReviewNotesBody(string ReviewNotes, int ExpectedContentRevision);
+
+    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] ReviewNotesBody body, AddReviewNotesHandler handler)
     {
-        var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
+        var result = await handler.HandleAsync(new AddReviewNotesCommand(
+            new AddReviewNotesRequest(taskId, body.ReviewNotes, body.ExpectedContentRevision)));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -209,7 +212,7 @@ public static class TaskEndpoints
     private static TaskItemDto MapTaskResponse(TaskItemDto dto) =>
         new(dto.Id, dto.Title, dto.Description, dto.Status, dto.Priority, dto.Type, dto.SubStage,
             dto.ProjectId, dto.LabelId, dto.MilestoneId, dto.ReviewNotes, dto.CreatedAt, dto.CompletedAt,
-            dto.Comments, dto.Dependencies);
+            dto.Comments, dto.Dependencies, dto.ContentRevision);
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
