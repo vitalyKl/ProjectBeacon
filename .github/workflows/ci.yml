@@ -67,6 +67,14 @@ jobs:
           dotnet build-server shutdown
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      - name: Diagnose pending EF model delta (temporary)
+        if: always() && github.event.pull_request.head.ref == 'feat/saas-audit-completion'
+        run: |
+          dotnet ef migrations add DiagnoseEmailModelDelta --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+          echo "===== GENERATED MIGRATION ====="
+          find ProjectBeacon.Infrastructure/Data/Migrations -maxdepth 1 -name '*DiagnoseEmailModelDelta.cs' -print -exec sed -n '1,260p' {} \;
+          echo "===== SNAPSHOT DELTA ====="
+          git diff -- ProjectBeacon.Infrastructure/Data/Migrations/BeaconDbContextModelSnapshot.cs
       - name: Test — API
         if: always()
         timeout-minutes: 8
