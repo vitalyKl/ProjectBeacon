@@ -1,0 +1,308 @@
+@page "/admin/audit"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Globalization
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Audit
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Domain.Entities.Audit
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject IAuditReader AuditReader
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["AuditLog"]</PageTitle>
+<PageHeader Title="@L["AuditLog"]" />
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["AuditLead"]</MudText>
+
+@if (!_authorized)
+{
+    <MudAlert Severity="Severity.Error">@(_error ?? L["AuditAccessDenied"].Value)</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_action" Label="@L["AuditAction"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_orgId" Label="@L["AuditOrgId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_projectId" Label="@L["AuditProjectId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_actorUserId" Label="@L["AuditActorUser"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_actorKind" Label="@L["AuditActorKind"]" Placeholder="Human / ApiToken / Device / Worker / System" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_outcome" Label="@L["AuditOutcome"]" Placeholder="Success / Denied / Failed" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_fromUtc" Label="@L["AuditFromUtc"]" Placeholder="2026-11-01T00:00:00Z" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_toUtc" Label="@L["AuditToUtc"]" Placeholder="2026-11-09T23:59:59Z" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" Class="d-flex align-center flex-wrap gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFilters" Disabled="_busy">@L["AuditApplyFilters"]</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="ClearFilters" Disabled="_busy">@L["AuditClearFilters"]</MudButton>
+                @if (_canExport)
+                {
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportCsv">@L["AuditExport"]</MudButton>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_busy && _page is null)
+    {
+        <LoadingState />
+    }
+    else if (_page is not null)
+    {
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @string.Format(L["AuditTotal"].Value, _page.TotalCount)
+            </MudText>
+            <div class="d-flex align-center gap-2">
+                <MudButton Variant="Variant.Text" Disabled="_busy || _pageNumber <= 1" OnClick="PreviousPage">@L["AuditPreviousPage"]</MudButton>
+                <MudText Typo="Typo.caption">@string.Format(L["AuditPage"].Value, _page.Page)</MudText>
+                <MudButton Variant="Variant.Text" Disabled="_busy || _pageNumber * _page.PageSize >= _page.TotalCount" OnClick="NextPage">@L["AuditNextPage"]</MudButton>
+            </div>
+        </div>
+
+        @if (_page.Items.Count == 0)
+        {
+            <EmptyState>@L["AuditNoEvents"]</EmptyState>
+        }
+        else
+        {
+            <MudTable Items="_page.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>@L["AuditWhen"]</MudTh>
+                    <MudTh>@L["AuditAction"]</MudTh>
+                    <MudTh>@L["AuditActorKind"]</MudTh>
+                    <MudTh>@L["AuditTarget"]</MudTh>
+                    <MudTh>@L["AuditScope"]</MudTh>
+                    <MudTh>@L["AuditOutcome"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="@L["AuditWhen"]">@context.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</MudTd>
+                    <MudTd DataLabel="@L["AuditAction"]"><MudText Typo="Typo.body2" Class="font-weight-medium">@context.Action</MudText></MudTd>
+                    <MudTd DataLabel="@L["AuditActorKind"]">
+                        @context.ActorKind
+                        @if (context.ActorUserId is { } userId)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@userId</MudText>
+                        }
+                        else if (context.ActorTokenId is { } tokenId)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@tokenId</MudText>
+                        }
+                        else if (context.ActorDeviceId is { } deviceId)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@deviceId</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="@L["AuditTarget"]">
+                        @context.TargetType
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.TargetId</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="@L["AuditScope"]">
+                        @if (context.ProjectId is not null)
+                        {
+                            <MudText Typo="Typo.caption">@L["Project"]</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.ProjectId</MudText>
+                        }
+                        else if (context.OrgId is not null)
+                        {
+                            <MudText Typo="Typo.caption">@L["Organization"]</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OrgId</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption">@L["PlatformAdmin"]</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="@L["AuditOutcome"]">
+                        <MudChip T="string" Size="Size.Small" Color="@(context.Outcome switch { AuditOutcome.Success => Color.Success, AuditOutcome.Denied => Color.Warning, _ => Color.Error })">@context.Outcome</MudChip>
+                        @if (!string.IsNullOrEmpty(context.DetailsJson))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.DetailsJson</MudText>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    }
+}
+
+@code {
+    private AdminActor? _admin;
+    private AuditPage? _page;
+    private bool _authorized;
+    private bool _canExport;
+    private bool _busy;
+    private string? _error;
+    private string _action = string.Empty;
+    private string _orgId = string.Empty;
+    private string _projectId = string.Empty;
+    private string _actorUserId = string.Empty;
+    private string _actorKind = string.Empty;
+    private string _outcome = string.Empty;
+    private string _fromUtc = string.Empty;
+    private string _toUtc = string.Empty;
+    private int _pageNumber = 1;
+    private const int PageSize = 50;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var access = await AdminGate.RequireAsync(actor, OperatorPermission.AuditRead);
+        if (!access.Success)
+        {
+            _error = L["AuditAccessDenied"].Value;
+            return;
+        }
+
+        _admin = access.Value;
+        _authorized = true;
+        var export = await AdminGate.RequireAsync(actor, OperatorPermission.AuditExport);
+        _canExport = export.Success;
+        await LoadPage();
+    }
+
+    private async Task ApplyFilters()
+    {
+        _pageNumber = 1;
+        await LoadPage();
+    }
+
+    private async Task ClearFilters()
+    {
+        _action = _orgId = _projectId = _actorUserId = _actorKind = _outcome = _fromUtc = _toUtc = string.Empty;
+        _pageNumber = 1;
+        await LoadPage();
+    }
+
+    private Task PreviousPage()
+    {
+        if (_pageNumber > 1)
+            _pageNumber--;
+        return LoadPage();
+    }
+
+    private Task NextPage()
+    {
+        if (_page is not null && _pageNumber * PageSize < _page.TotalCount)
+            _pageNumber++;
+        return LoadPage();
+    }
+
+    private async Task LoadPage()
+    {
+        if (_admin is null)
+            return;
+
+        if (!TryGuid(_orgId, out var orgId)
+            || !TryGuid(_projectId, out var projectId)
+            || !TryGuid(_actorUserId, out var actorUserId))
+        {
+            Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
+            return;
+        }
+
+        if (!TryEnum<AuditActorKind>(_actorKind, out var actorKind)
+            || !TryEnum<AuditOutcome>(_outcome, out var outcome)
+            || !TryUtc(_fromUtc, out var fromUtc)
+            || !TryUtc(_toUtc, out var toUtc))
+        {
+            Snackbar.Add(L["AuditInvalidFilter"].Value, Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _page = await AuditReader.ListAsync(_admin, new AuditQuery(
+                orgId, projectId, fromUtc, toUtc,
+                string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
+                actorKind, actorUserId, outcome, _pageNumber, PageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add(L["AnErrorOccurred"].Value, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ExportCsv()
+    {
+        var query = new List<string>();
+        AddQuery(query, "action", _action);
+        AddQuery(query, "orgId", _orgId);
+        AddQuery(query, "projectId", _projectId);
+        AddQuery(query, "actorUserId", _actorUserId);
+        AddQuery(query, "actorKind", _actorKind);
+        AddQuery(query, "outcome", _outcome);
+        AddQuery(query, "fromUtc", _fromUtc);
+        AddQuery(query, "toUtc", _toUtc);
+        Navigation.NavigateTo("/v1/admin/audit/export.csv" +
+            (query.Count == 0 ? string.Empty : "?" + string.Join("&", query)), forceLoad: true);
+    }
+
+    private static void AddQuery(List<string> query, string key, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            query.Add(Uri.EscapeDataString(key) + "=" + Uri.EscapeDataString(value.Trim()));
+    }
+
+    private static bool TryGuid(string value, out Guid? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (!Guid.TryParse(value.Trim(), out var parsed))
+            return false;
+        result = parsed;
+        return true;
+    }
+
+    private static bool TryEnum<T>(string value, out T? result) where T : struct, Enum
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (!Enum.TryParse<T>(value.Trim(), true, out var parsed) || !Enum.IsDefined(parsed))
+            return false;
+        result = parsed;
+        return true;
+    }
+
+    private static bool TryUtc(string value, out DateTime? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (!DateTimeOffset.TryParse(value.Trim(), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+            return false;
+        result = parsed.UtcDateTime;
+        return true;
+    }
+}
