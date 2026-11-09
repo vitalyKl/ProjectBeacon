@@ -136,19 +136,4 @@ public static class AuditEndpoints
             Page: page,
             PageSize: pageSize);
 
-    private static void AppendCsvRow(StringBuilder csv, params string?[] values)
-    {
-        csv.AppendJoin(',', values.Select(EscapeCsv));
-        csv.Append("\r\n");
-    }
-
-    private static string EscapeCsv(string? value)
-    {
-        value ??= string.Empty;
-        var firstMeaningful = value.FirstOrDefault(character => !char.IsWhiteSpace(character));
-        if (firstMeaningful is '=' or '+' or '-' or '@')
-            value = "'" + value;
-
-        return $"\"{value.Replace("\"", "\"\"")}\"";
-    }
 }
