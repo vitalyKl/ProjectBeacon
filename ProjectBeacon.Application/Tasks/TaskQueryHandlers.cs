@@ -44,7 +44,8 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
             task.CreatedAt,
             task.CompletedAt,
             task.Comments.Select(c => new TaskCommentDto(c.Id, c.Content, c.UserId, c.CreatedAt, c.UpdatedAt)).ToList(),
-            task.Dependencies.Select(d => d.DependentTaskId).ToList()));
+            task.Dependencies.Select(d => d.DependentTaskId).ToList(),
+            task.ContentRevision));
     }
 }
 /// <summary>
@@ -70,7 +71,7 @@ public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, 
             t.Priority, t.Type,
             t.Status == TaskItemStatus.InProgress ? t.SubStage : null,
             t.ProjectId, t.LabelId, t.MilestoneId, t.ReviewNotes,
-            t.CreatedAt, t.CompletedAt, [], []));
+            t.CreatedAt, t.CompletedAt, [], [], t.ContentRevision));
 
         return Result.Ok((IList<TaskItemDto>)result.ToList());
     }
