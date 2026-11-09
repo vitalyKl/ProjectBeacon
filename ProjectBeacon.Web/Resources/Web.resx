@@ -2904,4 +2904,10 @@ No Beacon-hosted coding agent.</value>
 <data name="AuditFilterActorDevice" xml:space="preserve">
     <value>Actor device ID</value>
   </data>
+<data name="AuditFilterTargetType" xml:space="preserve">
+    <value>Target type</value>
+  </data>
+<data name="AuditFilterTargetId" xml:space="preserve">
+    <value>Target ID</value>
+  </data>
 </root>
