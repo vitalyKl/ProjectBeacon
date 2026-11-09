@@ -58,133 +58,133 @@ public sealed class RestoreContentVersionHandler
             switch (source.TargetKind)
             {
                 case ContentTargetKind.ContextSection:
-                {
-                    var snapshot = Deserialize<ContextSectionSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<ContextSectionSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var section = await db.ContextSections.FirstOrDefaultAsync(
-                        s => s.Id == source.TargetId && s.ProjectId == command.ProjectId, ct);
-                    if (section is null)
-                        return MissingTargetFailure();
-                    if (section.Revision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
+                        var section = await db.ContextSections.FirstOrDefaultAsync(
+                            s => s.Id == source.TargetId && s.ProjectId == command.ProjectId, ct);
+                        if (section is null)
+                            return MissingTargetFailure();
+                        if (section.Revision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
 
-                    if (section.SectionId != snapshot.SectionId
-                        || section.Key != snapshot.Key
-                        || section.Ordinal != snapshot.Ordinal
-                        || section.ScopeType != snapshot.ScopeType
-                        || section.RepoId != snapshot.RepoId
-                        || section.TaskId != snapshot.TaskId
-                        || section.Path != snapshot.Path)
-                        return UnsupportedStructureFailure();
+                        if (section.SectionId != snapshot.SectionId
+                            || section.Key != snapshot.Key
+                            || section.Ordinal != snapshot.Ordinal
+                            || section.ScopeType != snapshot.ScopeType
+                            || section.RepoId != snapshot.RepoId
+                            || section.TaskId != snapshot.TaskId
+                            || section.Path != snapshot.Path)
+                            return UnsupportedStructureFailure();
 
-                    currentRevision = section.Revision;
-                    section.Update(
-                        snapshot.Title,
-                        snapshot.BodyMarkdown,
-                        updatedByType: command.Actor.IsHuman ? "user" : "system",
-                        updatedById: attribution.Id);
-                    target = section;
-                    changed = section.Revision != currentRevision;
-                    break;
+                        currentRevision = section.Revision;
+                        section.Update(
+                            snapshot.Title,
+                            snapshot.BodyMarkdown,
+                            updatedByType: command.Actor.IsHuman ? "user" : "system",
+                            updatedById: attribution.Id);
+                        target = section;
+                        changed = section.Revision != currentRevision;
+                        break;
                 }
                 case ContentTargetKind.Decision:
-                {
-                    var snapshot = Deserialize<DecisionSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<DecisionSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var decision = await db.Decisions.FirstOrDefaultAsync(
-                        d => d.Id == source.TargetId && d.ProjectId == command.ProjectId, ct);
-                    if (decision is null)
-                        return MissingTargetFailure();
-                    if (decision.Revision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
+                        var decision = await db.Decisions.FirstOrDefaultAsync(
+                            d => d.Id == source.TargetId && d.ProjectId == command.ProjectId, ct);
+                        if (decision is null)
+                            return MissingTargetFailure();
+                        if (decision.Revision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
 
-                    currentRevision = decision.Revision;
-                    decision.UpdateContent(snapshot.Title, snapshot.Context, snapshot.DecisionBody, snapshot.Consequences);
-                    target = decision;
-                    changed = decision.Revision != currentRevision;
-                    break;
+                        currentRevision = decision.Revision;
+                        decision.UpdateContent(snapshot.Title, snapshot.Context, snapshot.DecisionBody, snapshot.Consequences);
+                        target = decision;
+                        changed = decision.Revision != currentRevision;
+                        break;
                 }
                 case ContentTargetKind.Constraint:
-                {
-                    var snapshot = Deserialize<ConstraintSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<ConstraintSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var constraint = await db.Constraints.FirstOrDefaultAsync(
-                        c => c.Id == source.TargetId && c.ProjectId == command.ProjectId, ct);
-                    if (constraint is null)
-                        return MissingTargetFailure();
-                    if (constraint.Revision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
-                    if (constraint.Kind != snapshot.Kind)
-                        return UnsupportedStructureFailure();
+                        var constraint = await db.Constraints.FirstOrDefaultAsync(
+                            c => c.Id == source.TargetId && c.ProjectId == command.ProjectId, ct);
+                        if (constraint is null)
+                            return MissingTargetFailure();
+                        if (constraint.Revision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
+                        if (constraint.Kind != snapshot.Kind)
+                            return UnsupportedStructureFailure();
 
-                    currentRevision = constraint.Revision;
-                    constraint.RestoreContentFromHistory(snapshot.Body, snapshot.ScopePath);
-                    target = constraint;
-                    changed = constraint.Revision != currentRevision;
-                    break;
+                        currentRevision = constraint.Revision;
+                        constraint.RestoreContentFromHistory(snapshot.Body, snapshot.ScopePath);
+                        target = constraint;
+                        changed = constraint.Revision != currentRevision;
+                        break;
                 }
                 case ContentTargetKind.Milestone:
-                {
-                    var snapshot = Deserialize<MilestoneSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<MilestoneSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var milestone = await db.Milestones.FirstOrDefaultAsync(
-                        m => m.Id == source.TargetId && m.ProjectId == command.ProjectId, ct);
-                    if (milestone is null)
-                        return MissingTargetFailure();
-                    if (milestone.Revision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
+                        var milestone = await db.Milestones.FirstOrDefaultAsync(
+                            m => m.Id == source.TargetId && m.ProjectId == command.ProjectId, ct);
+                        if (milestone is null)
+                            return MissingTargetFailure();
+                        if (milestone.Revision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
 
-                    currentRevision = milestone.Revision;
-                    milestone.RestoreContentFromHistory(snapshot.Name, snapshot.Description, snapshot.Order);
-                    target = milestone;
-                    changed = milestone.Revision != currentRevision;
-                    break;
+                        currentRevision = milestone.Revision;
+                        milestone.RestoreContentFromHistory(snapshot.Name, snapshot.Description, snapshot.Order);
+                        target = milestone;
+                        changed = milestone.Revision != currentRevision;
+                        break;
                 }
                 case ContentTargetKind.ProjectDescription:
-                {
-                    var snapshot = Deserialize<ProjectDescriptionSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<ProjectDescriptionSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var project = await db.Projects.FirstOrDefaultAsync(
-                        p => p.Id == command.ProjectId, ct);
-                    if (project is null)
-                        return MissingTargetFailure();
-                    if (project.Revision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
+                        var project = await db.Projects.FirstOrDefaultAsync(
+                            p => p.Id == command.ProjectId, ct);
+                        if (project is null)
+                            return MissingTargetFailure();
+                        if (project.Revision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
 
-                    currentRevision = project.Revision;
-                    project.RestoreDescriptionFromHistory(snapshot.Description);
-                    target = project;
-                    changed = project.Revision != currentRevision;
-                    break;
+                        currentRevision = project.Revision;
+                        project.RestoreDescriptionFromHistory(snapshot.Description);
+                        target = project;
+                        changed = project.Revision != currentRevision;
+                        break;
                 }
                 case ContentTargetKind.TaskDescription:
-                {
-                    var snapshot = Deserialize<TaskDescriptionSnapshot>(source.ContentJson);
-                    if (snapshot.Deleted)
-                        return DeletedSnapshotFailure();
+                    {
+                        var snapshot = Deserialize<TaskDescriptionSnapshot>(source.ContentJson);
+                        if (snapshot.Deleted)
+                            return DeletedSnapshotFailure();
 
-                    var task = await db.Tasks.FirstOrDefaultAsync(
-                        t => t.Id == source.TargetId && t.ProjectId == command.ProjectId, ct);
-                    if (task is null)
-                        return MissingTargetFailure();
-                    if (task.ContentRevision != command.ExpectedRevision)
-                        return RevisionConflictFailure();
+                        var task = await db.Tasks.FirstOrDefaultAsync(
+                            t => t.Id == source.TargetId && t.ProjectId == command.ProjectId, ct);
+                        if (task is null)
+                            return MissingTargetFailure();
+                        if (task.ContentRevision != command.ExpectedRevision)
+                            return RevisionConflictFailure();
 
-                    currentRevision = task.ContentRevision;
-                    task.RestoreContentFromHistory(snapshot.Description, snapshot.ReviewNotes);
-                    target = task;
-                    changed = task.ContentRevision != currentRevision;
-                    break;
+                        currentRevision = task.ContentRevision;
+                        task.RestoreContentFromHistory(snapshot.Description, snapshot.ReviewNotes);
+                        target = task;
+                        changed = task.ContentRevision != currentRevision;
+                        break;
                 }
                 default:
                     return Result.Failure<RestoreContentVersionDto>("Unsupported content target kind.");
