@@ -293,6 +293,54 @@ public sealed class CommandExecutionPolicyTests
         }
     }
 
+
+    [Fact]
+    public void TryValidate_AllowsOnlyBuiltInReadOnlyGitCommands()
+    {
+        var root = CreateProject();
+        try
+        {
+            foreach (var argv in new[]
+            {
+                new[] { "git", "status", "--short" },
+                new[] { "git", "--no-pager", "diff", "--stat" },
+                new[] { "git", "log", "-5", "--oneline" },
+                new[] { "git", "show", "--stat", "HEAD" },
+                new[] { "git", "rev-parse", "--show-toplevel" },
+                new[] { "git", "ls-files" },
+                new[] { "git", "grep", "TODO" },
+                new[] { "git", "blame", "README.md" }
+            })
+            {
+                Assert.True(CommandExecutionPolicy.TryValidate(argv, root, out var allowedError),
+                    $"{string.Join(' ', argv)}: {allowedError}");
+            }
+
+            foreach (var argv in new[]
+            {
+                new[] { "git", "custom-alias" },
+                new[] { "git", "difftool" },
+                new[] { "git", "mergetool" },
+                new[] { "git", "credential", "fill" },
+                new[] { "git", "grep", "--open-files-in-pager", "TODO" },
+                new[] { "git", "--paginate", "status" },
+                new[] { "git", "--pager=cmd.exe", "status" },
+                new[] { "git", "-C", root, "status" },
+                new[] { "git", "-C" + root, "status" },
+                new[] { "git", "--config-env", "alias.x=BEACON_UNSAFE", "status" },
+                new[] { "git", "--exec-path", root, "status" }
+            })
+            {
+                Assert.False(CommandExecutionPolicy.TryValidate(argv, root, out _),
+                    string.Join(' ', argv));
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateProject()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-policy-" + Guid.NewGuid().ToString("N"));

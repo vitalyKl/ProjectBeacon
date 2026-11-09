@@ -5,8 +5,6 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
-using Domain.Entities.Devices;
-using Domain.Entities.Audit;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,8 +40,8 @@ public sealed class EnqueueProjectGitSyncHandler
             return Result.Failure<WorkstationCommandDto>("Unsupported GitSync mode.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await ProjectGitSyncAuthorization.CanWriteAsync(
-            db, actor, userId, _authorization, projectId, ct);
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
                 permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
@@ -121,8 +119,8 @@ public sealed class GetProjectGitSyncCommandHandler
             return Result.Forbidden<WorkstationCommandDto>();
 
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await ProjectGitSyncAuthorization.CanWriteAsync(
-            db, actor, userId, _authorization, projectId, ct);
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
                 permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
@@ -140,22 +138,3 @@ public sealed class GetProjectGitSyncCommandHandler
     }
 }
 
-internal static class ProjectGitSyncAuthorization
-{
-    public static async Task<Result> CanWriteAsync(
-        IBeaconDb db,
-        ActorContext actor,
-        Guid userId,
-        IAuthorizationService authorization,
-        Guid projectId,
-        CancellationToken ct)
-    {
-        var isMember = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(member => member.ProjectId == projectId && member.UserId == userId, ct);
-        if (isMember)
-            return Result.Ok();
-
-        return await authorization.CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
-    }
-}
