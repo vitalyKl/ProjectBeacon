@@ -36,7 +36,7 @@
     {
         if (Task is null || string.IsNullOrWhiteSpace(_draft))
             return;
-        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(Task.Id, _draft.Trim(), Task.ContentRevision)));
+        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(Task.Id, _draft.Trim())));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

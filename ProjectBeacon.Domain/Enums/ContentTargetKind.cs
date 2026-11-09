@@ -6,6 +6,5 @@ public enum ContentTargetKind
     Decision,
     Constraint,
     Milestone,
-    ProjectDescription,
-    TaskContent
+    ProjectDescription
 }

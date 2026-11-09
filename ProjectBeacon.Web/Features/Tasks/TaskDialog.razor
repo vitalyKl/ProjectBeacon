@@ -114,7 +114,7 @@
                 ? await CreateTask.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
                     _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId, null, _kindId), actor))
                 : await UpdateTask.HandleAsync(new UpdateTaskCommand(new UpdateTaskRequest(
-                    Task.Id, _title.Trim(), _description, _priority, _type, _labelId, _milestoneId, Task.ContentRevision)));
+                    Task.Id, _title.Trim(), _description, _priority, _type, _labelId, _milestoneId)));
 
             if (!result.Success)
             {

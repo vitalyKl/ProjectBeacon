@@ -5,7 +5,6 @@ using Domain.Entities.Context;
 using Domain.Entities.Content;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
-using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Application.Common;
@@ -67,10 +66,6 @@ public sealed class ContentWriter
             {
                 project.Description, Deleted = deleted
             },
-            TaskItem task => new
-            {
-                task.Description, task.ReviewNotes, Deleted = deleted
-            },
             _ => throw new ArgumentException(
                 $"'{target.GetType().Name}' is not a revisioned content target.",
                 nameof(target))
@@ -83,7 +78,6 @@ public sealed class ContentWriter
             Constraint constraint => (constraint.ProjectId, constraint.Id, ContentTargetKind.Constraint, constraint.Revision),
             Milestone milestone => (milestone.ProjectId, milestone.Id, ContentTargetKind.Milestone, milestone.Revision),
             Project project => (project.Id, project.Id, ContentTargetKind.ProjectDescription, project.Revision),
-            TaskItem task => (task.ProjectId, task.Id, ContentTargetKind.TaskContent, task.ContentRevision),
             _ => throw new ArgumentException(
                 $"'{target.GetType().Name}' is not a revisioned content target.",
                 nameof(target))
@@ -99,26 +93,6 @@ public sealed class ContentWriter
             changedById));
     }
 
-    public void AddTaskContentVersion(
-        IBeaconDb db,
-        Guid projectId,
-        Guid taskId,
-        int revision,
-        string? description,
-        string? reviewNotes,
-        string? changedByType,
-        string? changedById)
-    {
-        db.ContentVersions.Add(ContentVersion.Create(
-            projectId,
-            ContentTargetKind.TaskContent,
-            taskId,
-            revision,
-            JsonSerializer.Serialize(new { Description = description, ReviewNotes = reviewNotes }, JsonOptions),
-            changedByType,
-            changedById));
-    }
-
     private static int GetRevision(object target) => target switch
     {
         ContextSection section => section.Revision,
@@ -126,7 +100,6 @@ public sealed class ContentWriter
         Constraint constraint => constraint.Revision,
         Milestone milestone => milestone.Revision,
         Project project => project.Revision,
-        TaskItem task => task.ContentRevision,
         _ => throw new ArgumentException($"'{target.GetType().Name}' is not a revisioned content target.", nameof(target))
     };
 }
