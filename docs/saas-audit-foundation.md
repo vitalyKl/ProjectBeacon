@@ -101,10 +101,17 @@ instrumentation for organization creation/update, project lifecycle operations, 
 project invitations, project membership, organization invitations, and first-time account
 registration through an invitation.
 
-A human-operator-only `GET /v1/admin/audit` endpoint now exposes the bounded `IAuditReader`
+A human-operator-only `GET /v1/admin/audit` endpoint exposes the bounded `IAuditReader`
 query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted account state,
 and supports organization, project, time, action, actor and outcome filters. API tokens, devices
-and workers cannot use this endpoint.
+and workers cannot use this endpoint. `GET /v1/admin/audit/export` uses the separate `AuditExport`
+permission and streams a stable, bounded result set into a spreadsheet-safe UTF-8 CSV (10,000-row
+cap, formula-injection escaping, no request-controlled filenames).
 
-Not implemented: audit UI, export, retention, or distributed audit streaming. This branch does not claim
+The operator web UI at `/admin/audit` provides the same filters, UTC date boundaries, paging and
+CSV download. Both UI and API revalidate the operator permission for each read/export operation.
+
+Not implemented: a defined retention policy and distributed audit streaming. Retention remains
+unconfigured rather than silently deleting audit history; a concrete duration requires a product
+policy decision. This branch does not claim
 comprehensive audit coverage.
