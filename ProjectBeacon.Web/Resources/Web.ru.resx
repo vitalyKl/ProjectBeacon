@@ -2578,4 +2578,28 @@
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Для выбранной модели размер контекста должен быть больше нуля. Укажите размер контекстного окна перед запуском сессии.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Резерв токенов для ответа (0 — автоматически)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
+  <data name="GitSyncTitle" xml:space="preserve"><value>Git-репозиторий</value></data>
+  <data name="GitSyncHelp" xml:space="preserve"><value>Проверьте состояние репозитория или выполните fast-forward текущей ветки. Операция выполняется на подключённой станции и не перезаписывает локальные изменения.</value></data>
+  <data name="GitSyncCheck" xml:space="preserve"><value>Проверить состояние</value></data>
+  <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
+  <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
+  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>К проекту не подключена рабочая станция в сети.</value></data>
+  <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
+  <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+  <data name="GitSyncAhead" xml:space="preserve"><value>Впереди</value></data>
+  <data name="GitSyncBehind" xml:space="preserve"><value>Позади</value></data>
+  <data name="GitSyncClean" xml:space="preserve"><value>Рабочее дерево чистое</value></data>
+  <data name="GitSyncDirty" xml:space="preserve"><value>В рабочем дереве есть локальные изменения</value></data>
+  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Состояние репозитория проверено.</value></data>
+  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Репозиторий успешно обновлён fast-forward.</value></data>
+  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Синхронизация отклонена; рабочее дерево не изменено.</value></data>
+  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Ошибка синхронизации Git.</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Перед синхронизацией закоммитьте или уберите локальные изменения в stash.</value></data>
+  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Активна нативная сессия агента. Дождитесь её завершения.</value></data>
+  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>Локальная и upstream-ветки разошлись. Fast-forward невозможен.</value></data>
+  <data name="GitSyncReasonDetached" xml:space="preserve"><value>Репозиторий находится в состоянии detached HEAD.</value></data>
+  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Для текущей ветки не настроен upstream.</value></data>
+  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Не удалось получить данные upstream. Проверьте remote и учётные данные на рабочей станции.</value></data>
+  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Время выполнения Git-операции истекло.</value></data>
 </root>
