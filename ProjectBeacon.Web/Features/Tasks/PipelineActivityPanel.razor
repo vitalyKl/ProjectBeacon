@@ -27,6 +27,12 @@
             </div>
         </TitleContent>
         <ChildContent>
+            @if (_state == "conflict")
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">
+                    Patch conflict: the agent's changes could not be applied to the current project files. The isolated worktree was preserved; inspect the command result for its recovery path.
+                </MudAlert>
+            }
             @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Session.FailureReason</MudAlert>

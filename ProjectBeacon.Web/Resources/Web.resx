@@ -2781,4 +2781,10 @@ No Beacon-hosted coding agent.</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Enter repository-relative paths, one per line. Required by this profile.</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>Plan</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>Act</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>Model</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>The selected model must have a context size greater than zero. Configure its context window before launching this session.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Response token reserve (0 = automatic)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Compaction starts when prompt usage exceeds the lower of 82% of the context window and the window minus this reserve. Zero reserves 25% automatically.</value></data>
 </root>

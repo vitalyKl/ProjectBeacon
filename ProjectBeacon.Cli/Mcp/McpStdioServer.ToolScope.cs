@@ -27,9 +27,9 @@ public static partial class McpStdioServer
 
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);
         if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
-            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PlannerTools) });
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PipelineToolPolicy.ToolsForRole("Planner")) });
         if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
-            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, ReviewerTools) });
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PipelineToolPolicy.ToolsForRole("Review")) });
 
         if (allowlists.Count == 0)
         {
@@ -56,15 +56,16 @@ public static partial class McpStdioServer
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
             filtered = FilterActorTools(filtered, allowlists, explicitSubtaskId);
 
-        // Actors must always be able to report success or failure for their own subtask,
-        // even when the caller omitted these mandatory lifecycle tools from the allowlist.
+        // Lifecycle calls and task status are always available to an Actor.
+        // The status tool is read-only; it does not grant queue or pipeline control.
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
         {
             foreach (var tool in tools)
             {
                 var name = tool?["name"]?.GetValue<string>();
                 if (name is not null
-                    && ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && (ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                        || PipelineToolPolicy.ActorReadOnlyAlwaysTools.Contains(name, StringComparer.OrdinalIgnoreCase))
                     && !filtered.Any(existing => string.Equals(
                         existing?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)))
                     filtered.Add(tool!.DeepClone());
@@ -74,55 +75,14 @@ public static partial class McpStdioServer
         return Result(id, new JsonObject { ["tools"] = filtered });
     }
 
-    private static readonly string[] ReadOnlyWorkspaceTools =
-    [
-        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,
-        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
-        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
-    ];
-
-    private static readonly string[] PlannerSupervisorTools =
-    [
-        McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.TaskCreateSubtask, McpToolNames.PipelineStartActor,
-        McpToolNames.PipelineLaunchSession, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
-    ];
-
-    private static readonly string[] ReviewerSupervisorTools =
-    [
-        McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict, McpToolNames.PipelineApprove
-    ];
-
-    private static readonly string[] PlannerTools =
-    [
-        ..ReadOnlyWorkspaceTools,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject,
-        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.ListLabels, McpToolNames.MatchLabel,
-        McpToolNames.WorkspaceWrite,
-        ..PlannerSupervisorTools
-    ];
-
-    private static readonly string[] ReviewerTools =
-    [
-        ..ReadOnlyWorkspaceTools,
-        McpToolNames.GetProject,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
-        ..ReviewerSupervisorTools
-    ];
-
-    private static readonly string[] ActorTerminalTools =
-    [
-        McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask
-    ];
-
-    private static readonly string[] ActorWorkspaceTools =
-    [
-        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.ListDecisions,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite,
-        McpToolNames.TaskAttachFile, McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
-    ];
+    private static readonly IReadOnlyList<string> ReadOnlyWorkspaceTools = PipelineToolPolicy.ReadOnlyWorkspaceTools;
+    private static readonly IReadOnlyList<string> PlannerSupervisorTools = PipelineToolPolicy.PlannerSupervisorTools;
+    private static readonly IReadOnlyList<string> ReviewerSupervisorTools = PipelineToolPolicy.ReviewerSupervisorTools;
+    private static readonly IReadOnlyList<string> PlannerTools = PipelineToolPolicy.PlannerTools;
+    private static readonly IReadOnlyList<string> ReviewerTools = PipelineToolPolicy.ReviewerTools;
+    private static readonly IReadOnlyList<string> ActorTerminalTools = PipelineToolPolicy.ActorTerminalTools;
+    private static readonly IReadOnlyList<string> ActorWorkspaceTools = PipelineToolPolicy.ActorWorkspaceTools;
+    private static readonly IReadOnlyList<string> ActorForbiddenTools = PipelineToolPolicy.ActorForbiddenTools;
 
     private static readonly string[] EvalAllowedTools =
     [
@@ -130,25 +90,10 @@ public static partial class McpStdioServer
         McpToolNames.WriteFile, McpToolNames.ApplyPatch,
         McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        McpToolNames.ListDecisions, McpToolNames.GetDecision,
+        McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport
-    ];
-
-    private static readonly string[] ActorForbiddenTools =
-    [
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict,
-        McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
-        McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
-        McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,
-        McpToolNames.ProxyReload, McpToolNames.ProxyUnload,
-        McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus, McpToolNames.SetTaskSubstage,
-        McpToolNames.ClaimTask, McpToolNames.AddTaskComment, McpToolNames.SetTaskDependencies, McpToolNames.AddReviewNotes,
-        McpToolNames.ListTaskSteps, McpToolNames.AddTaskStep, McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork,
-        McpToolNames.UpsertContextNode, McpToolNames.DeleteContextNode,
-        McpToolNames.CreateConstraint, McpToolNames.ActivateConstraint, McpToolNames.RejectConstraint,
-        McpToolNames.RecordDecision, McpToolNames.AcceptDecision, McpToolNames.DeprecateDecision, McpToolNames.SupersedeDecision,
-        McpToolNames.CreateMilestone, McpToolNames.UpdateMilestone, McpToolNames.DeleteMilestone, McpToolNames.CloseMilestone, McpToolNames.ReopenMilestone,
-        McpToolNames.AddLabelPath, McpToolNames.GenerateReport
     ];
 
     private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)
@@ -224,13 +169,12 @@ public static partial class McpStdioServer
 
     private static bool IsActorToolAllowed(string tool)
     {
-        if (ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
-            || ActorWorkspaceTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
-            return true;
         if (ActorForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
             return false;
-        // Actors can use workspace tools from their subtask allowlist, but only the
-        // mandatory result/failure calls may invoke the general Beacon control plane.
+        if (PipelineToolPolicy.ToolsForRole("Actor").Contains(tool, StringComparer.OrdinalIgnoreCase))
+            return true;
+        // Non-API workstation tools (for example argv execution) are governed by their
+        // own isolated-workspace and approval checks; they are not MCP control-plane grants.
         return !McpApiTools.IsApiTool(tool);
     }
 
@@ -243,11 +187,11 @@ public static partial class McpStdioServer
     {
         var role = env.Get("BEACON_PIPELINE_ROLE");
         if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
-            return PlannerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+            return PipelineToolPolicy.ToolsForRole("Planner").Contains(tool, StringComparer.OrdinalIgnoreCase)
                 ? null
                 : $"Tool '{tool}' is not allowed for the Planner pipeline role.";
         if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
-            return ReviewerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+            return PipelineToolPolicy.ToolsForRole("Review").Contains(tool, StringComparer.OrdinalIgnoreCase)
                 ? null
                 : $"Tool '{tool}' is not allowed for the Reviewer pipeline role.";
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))

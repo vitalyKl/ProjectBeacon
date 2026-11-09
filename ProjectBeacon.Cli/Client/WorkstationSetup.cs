@@ -59,6 +59,8 @@ public static class WorkstationSetup
             settings.PipelineTurnTimeoutMinutes = Math.Clamp(maxMinutes, 15, 60);
         if (root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle) && pipelineIdle.TryGetInt32(out var idleMinutes))
             settings.PipelineIdleTimeoutMinutes = Math.Clamp(idleMinutes, 1, 30);
+        if (root.TryGetProperty("contextResponseReserveTokens", out var responseReserve) && responseReserve.TryGetInt32(out var reserveTokens))
+            settings.ContextResponseReserveTokens = Math.Clamp(reserveTokens, 0, 1_000_000);
         if (root.TryGetProperty("agentDataDir", out var data) && data.ValueKind == JsonValueKind.String)
             settings.AgentDataDir = data.GetString();
         else if (root.TryGetProperty("opencodeDataDir", out var legacyData) && legacyData.ValueKind == JsonValueKind.String)

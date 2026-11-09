@@ -2582,4 +2582,10 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Relative Repository-Pfade eingeben, einen pro Zeile. Für dieses Profil erforderlich.</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>Planung</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>Ausführung</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>Modell</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Die Kontextgröße des ausgewählten Modells muss größer als null sein. Konfigurieren Sie das Kontextfenster vor dem Start.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Tokenreserve für die Antwort (0 = automatisch)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Die Komprimierung beginnt beim kleineren Wert aus 82 % des Kontextfensters und Fenstergröße minus Reserve. Bei 0 werden automatisch 25 % reserviert.</value></data>
 </root>

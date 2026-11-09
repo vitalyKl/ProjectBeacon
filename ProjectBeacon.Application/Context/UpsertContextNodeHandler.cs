@@ -14,8 +14,19 @@ public class UpsertContextNodeHandler
 
     public UpsertContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
+    public Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
+        => HandleCoreAsync(command, isDraft: false, authorId: null, ct);
+
+    public Task<Result<ContextSectionDto>> HandleDraftAsync(
+        UpsertContextNodeCommand command, string? authorId, CancellationToken ct = default)
+        => HandleCoreAsync(command, isDraft: true, authorId, ct);
+
+    private async Task<Result<ContextSectionDto>> HandleCoreAsync(
+        UpsertContextNodeCommand command, bool isDraft, string? authorId, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(command.Request.Title) || string.IsNullOrWhiteSpace(command.Request.BodyMarkdown))
+            return Result.Failure<ContextSectionDto>("Title and bodyMarkdown are required.");
+
         await using var db = _dbFactory.CreateDbContext();
         var path = command.Request.Path ?? string.Empty;
         var sectionId = command.Request.SectionId
@@ -34,11 +45,23 @@ public class UpsertContextNodeHandler
 
         if (existing is not null)
         {
-            existing.Update(
-                title: command.Request.Title,
-                bodyMarkdown: command.Request.BodyMarkdown,
-                updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
-                updatedById: command.Request.SourcePath);
+            if (isDraft
+                && (existing.ReviewState != ContextReviewState.NeedsReview
+                    || !string.Equals(existing.UpdatedByType, "agent", StringComparison.Ordinal)
+                    || !string.Equals(existing.UpdatedById, authorId, StringComparison.Ordinal)))
+                return Result.Failure<ContextSectionDto>(
+                    "An agent draft may only update its own NeedsReview section; reviewed or other-author sections are protected.",
+                    ErrorKind.Forbidden);
+
+            if (isDraft)
+                existing.UpdateDraft(command.Request.Title, command.Request.BodyMarkdown,
+                    command.Request.SourcePath, authorId);
+            else
+                existing.Update(
+                    title: command.Request.Title,
+                    bodyMarkdown: command.Request.BodyMarkdown,
+                    updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
+                    updatedById: command.Request.SourcePath);
 
             savedId = existing.Id;
         }
@@ -55,10 +78,10 @@ public class UpsertContextNodeHandler
                 repoId: command.Request.RepoId,
                 taskId: command.Request.TaskId,
                 path: command.Request.Path,
-                source: command.Request.Source,
+                source: isDraft ? ContextSource.Native : command.Request.Source,
                 sourcePath: command.Request.SourcePath,
-                updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
-                updatedById: command.Request.SourcePath);
+                updatedByType: isDraft ? "agent" : command.Request.Source == ContextSource.Native ? "user" : "system",
+                updatedById: isDraft ? authorId : command.Request.SourcePath);
 
             db.ContextSections.Add(section);
             savedId = section.Id;

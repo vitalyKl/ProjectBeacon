@@ -137,12 +137,14 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ExportAgentsMdHandler>();
         services.AddTransient<CreateConstraintHandler>();
         services.AddTransient<ListConstraintsHandler>();
+        services.AddTransient<GetConstraintHandler>();
         services.AddTransient<ActivateConstraintHandler>();
         services.AddTransient<RejectConstraintHandler>();
         services.AddTransient<ListContextRevisionsHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
+        services.AddTransient<GetDecisionHandler>();
         services.AddTransient<AcceptDecisionHandler>();
         services.AddTransient<DeprecateDecisionHandler>();
         services.AddTransient<SupersedeDecisionHandler>();

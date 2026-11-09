@@ -65,7 +65,7 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks", _taskId));
-        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks/{_subtaskId:D}/session", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/review/start", _taskId));
@@ -79,12 +79,12 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
-    public void PlannerCanLaunchOnlyReadyActorSessionFromItsOwnTask()
+    public void PlannerCannotLaunchActorSession()
     {
         var sessionId = Guid.NewGuid();
         var path = $"/v1/sessions/{sessionId:D}/launch";
 
-        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession,
             PipelineRole.Planner,
             _projectId,

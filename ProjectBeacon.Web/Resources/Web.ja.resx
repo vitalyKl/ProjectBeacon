@@ -2590,4 +2590,10 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>リポジトリ相対パスを1行に1つ入力してください。このプロファイルでは必須です。</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>計画</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>実行</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>モデル</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>選択したモデルのコンテキストサイズは 0 より大きくする必要があります。起動前にコンテキストウィンドウを設定してください。</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回答用トークン予約数（0 = 自動）</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>コンテキスト圧縮は、ウィンドウの82%と「ウィンドウサイズ−予約数」の小さい方をプロンプトが超えたときに開始します。0の場合は25%を自動予約します。</value></data>
 </root>

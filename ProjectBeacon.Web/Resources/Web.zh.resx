@@ -2590,4 +2590,10 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>规划</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>执行</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>模型</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>所选模型的上下文大小必须大于零。请在启动会话前配置上下文窗口。</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回复 Token 预留量（0 = 自动）</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>当提示词用量超过上下文窗口的 82% 与“窗口大小减去预留量”两者中的较小值时开始压缩。设置为 0 时自动预留 25%。</value></data>
 </root>
