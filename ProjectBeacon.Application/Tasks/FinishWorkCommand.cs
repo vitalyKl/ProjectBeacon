@@ -19,8 +19,18 @@ using System.Text;
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public FinishWorkHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public FinishWorkHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public FinishWorkHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     /// <summary>
     /// <c>done</c> requires a review run id for a run of this task that is not failed and is check proof, plus review notes or output. Unfixed regressions block done.
@@ -44,6 +54,7 @@ public class FinishWorkHandler
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
         var expectedRevision = task.StateRevision;
+        var expectedContentRevision = task.ContentRevision;
         var guardedTransition = resultType is "done" or "failed" or "error";
         var failedNote = resultType is "failed" or "error"
             ? "Failed: " + (command.Request.Output ?? "No output provided")
@@ -142,7 +153,21 @@ public class FinishWorkHandler
                             .Where(t => t.Id == taskId)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(t => t.Description,
-                                    t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note), ct);
+                                    t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note)
+                                .SetProperty(t => t.ContentRevision, t => t.ContentRevision + 1), ct);
+                        var updatedTask = await db.Tasks.AsNoTracking()
+                            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+                        if (updatedTask is null)
+                            return Result.Failure("Task not found.");
+                        _contentWriter.AddTaskContentVersion(
+                            db,
+                            updatedTask.ProjectId,
+                            updatedTask.Id,
+                            updatedTask.ContentRevision,
+                            updatedTask.Description,
+                            updatedTask.ReviewNotes,
+                            Guid.TryParse(command.Request.ActorId, out var reportUserId) ? "Human" : "Worker",
+                            Guid.TryParse(command.Request.ActorId, out reportUserId) ? reportUserId.ToString() : null);
                         break;
                     }
 
@@ -159,20 +184,24 @@ public class FinishWorkHandler
                 // its stale revision is what rejects it at the database.
                 var updated = failedNote is null
                     ? await db.Tasks
-                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .Where(t => t.Id == taskId && t.Status == expectedStatus
+                            && t.StateRevision == expectedRevision && t.ContentRevision == expectedContentRevision)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(t => t.Status, task.Status)
                             .SetProperty(t => t.CompletedAt, task.CompletedAt)
                             .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                            .SetProperty(t => t.ContentRevision, task.ContentRevision)
                             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
                     : await db.Tasks
-                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .Where(t => t.Id == taskId && t.Status == expectedStatus
+                            && t.StateRevision == expectedRevision && t.ContentRevision == expectedContentRevision)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(t => t.Status, task.Status)
                             .SetProperty(t => t.CompletedAt, task.CompletedAt)
                             .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
                             .SetProperty(t => t.Description,
                                 t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote)
+                            .SetProperty(t => t.ContentRevision, t => t.ContentRevision + 1)
                             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct);
                 if (updated == 0)
                 {
@@ -197,6 +226,31 @@ public class FinishWorkHandler
                     }
                     await tx.RollbackAsync(ct);
                     return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
+                }
+
+                if (failedNote is null)
+                {
+                    if (task.ContentRevision != expectedContentRevision)
+                    {
+                        var humanActor = Guid.TryParse(command.Request.ActorId, out var contentUserId);
+                        _contentWriter.AddTaskContentVersion(
+                            db, task.ProjectId, task.Id, task.ContentRevision,
+                            task.Description, task.ReviewNotes,
+                            humanActor ? "Human" : "Worker",
+                            humanActor ? contentUserId.ToString() : null);
+                    }
+                }
+                else
+                {
+                    var appendedDescription = string.IsNullOrEmpty(task.Description)
+                        ? failedNote
+                        : task.Description + "\n\n" + failedNote;
+                    var humanActor = Guid.TryParse(command.Request.ActorId, out var contentUserId);
+                    _contentWriter.AddTaskContentVersion(
+                        db, task.ProjectId, task.Id, expectedContentRevision + 1,
+                        appendedDescription, task.ReviewNotes,
+                        humanActor ? "Human" : "Worker",
+                        humanActor ? contentUserId.ToString() : null);
                 }
             }
 
