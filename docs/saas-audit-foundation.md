@@ -48,8 +48,11 @@ This foundation does not expose an unauthenticated audit endpoint or operator UI
 
 ## Instrumented operations (A2)
 
-The first write-path integration records the following successful project operations in the
+The write-path integration records the following successful project operations in the
 same unit of work as their state changes:
+
+- Project creation (`project.created`), committed together with the project, owner membership and
+  starter labels.
 
 - API token creation and revocation (`project.api_token.created`,
   `project.api_token.revoked`). Raw token values and token hashes are never written.
@@ -78,8 +81,8 @@ invite acceptance.
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
 port, permission-checked read contract/implementation, model migration, tests, and transactional
-instrumentation for project API tokens, project invitations, project membership, organization
-invitations, and first-time account registration through an invitation.
+instrumentation for project creation, project API tokens, project invitations, project membership,
+organization invitations, and first-time account registration through an invitation.
 
 Implemented after the initial foundation: a human-operator-only `GET /v1/admin/audit` endpoint.
 It obtains `AdminActor` through `IAdminGate` (which rechecks persisted account state), then
