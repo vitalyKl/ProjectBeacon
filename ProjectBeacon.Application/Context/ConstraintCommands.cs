@@ -35,6 +35,25 @@ public class CreateConstraintHandler
         return Result.Ok(Map(constraint));
     }
 
+    public async Task<Result<ConstraintDto>> HandleProposalAsync(CreateConstraintRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Body))
+            return Result.Failure<ConstraintDto>("Constraint body is required.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var body = request.Body.Trim();
+        var existing = await db.Constraints.FirstOrDefaultAsync(c =>
+            c.ProjectId == request.ProjectId && c.Body == body && c.Kind == request.Kind
+            && c.Status == ConstraintStatus.Proposed, ct);
+        if (existing is not null)
+            return Result.Ok(Map(existing));
+
+        var constraint = Constraint.Create(body, request.Kind, request.ProjectId);
+        db.Constraints.Add(constraint);
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(Map(constraint));
+    }
+
     private static ConstraintDto Map(Constraint c) =>
         new(c.Id, c.Body, c.Kind, c.Status, c.ProjectId);
 }

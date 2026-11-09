@@ -62,6 +62,7 @@ public class ContextSection : Entity, IProjectScoped
         section.Path = path ?? string.Empty;
         section.Source = source;
         section.SourcePath = sourcePath;
+        section.ReviewState = ContextReviewState.NeedsReview;
         section.UpdatedByType = updatedByType;
         section.UpdatedById = updatedById;
         section.UpdatedAt = DateTime.UtcNow;
@@ -78,5 +79,13 @@ public class ContextSection : Entity, IProjectScoped
         if (updatedByType is not null) UpdatedByType = updatedByType;
         if (updatedById is not null) UpdatedById = updatedById;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Updates only a NeedsReview draft; agent-authored content remains unreviewed.</summary>
+    public void UpdateDraft(string title, string bodyMarkdown, string? sourcePath, string? updatedById)
+    {
+        Update(title, bodyMarkdown, "agent", updatedById);
+        SourcePath = sourcePath;
+        ReviewState = ContextReviewState.NeedsReview;
     }
 }

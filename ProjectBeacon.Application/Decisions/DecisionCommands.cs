@@ -48,6 +48,29 @@ public class CreateDecisionHandler
         return Result.Ok(Map(decision));
     }
 
+    public async Task<Result<DecisionDto>> HandleProposalAsync(CreateDecisionRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
+            return Result.Failure<DecisionDto>("Title and body are required.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var title = request.Title.Trim();
+        var context = request.Context?.Trim() ?? string.Empty;
+        var body = request.Body.Trim();
+        var consequences = string.IsNullOrWhiteSpace(request.Consequences) ? null : request.Consequences.Trim();
+        var existing = await db.Decisions.FirstOrDefaultAsync(d =>
+            d.ProjectId == request.ProjectId && d.Title == title && d.Context == context
+            && d.DecisionBody == body && d.Consequences == consequences
+            && d.Status == DecisionStatus.Proposed, ct);
+        if (existing is not null)
+            return Result.Ok(Map(existing));
+
+        var decision = Decision.Create(title, context, body, request.ProjectId, consequences);
+        db.Decisions.Add(decision);
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(Map(decision));
+    }
+
     private static DecisionDto Map(Decision d) =>
         new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
 }
