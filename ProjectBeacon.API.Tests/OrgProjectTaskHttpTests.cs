@@ -220,6 +220,11 @@ public sealed class OrgProjectTaskHttpTests
 
         var deleteDependent = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{taskId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, deleteDependent.StatusCode);
+        var retainedHistory = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(4, retainedHistory.GetArrayLength());
+        Assert.Contains("deleted", retainedHistory[0].GetProperty("contentJson").GetString());
         var delete = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{otherId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }
