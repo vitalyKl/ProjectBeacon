@@ -85,11 +85,11 @@ public static partial class McpStdioServer
     private static string FormatFileReadPage(string path, FileReadPage page)
     {
         var end = page.Offset + page.Content.Length;
-        var header = $"# File: {path}\\n# Character range: [{page.Offset}, {end}) of {page.TotalCharacters}";
+        var header = $"# File: {path}\n# Character range: [{page.Offset}, {end}) of {page.TotalCharacters}";
         var continuation = page.HasMore
-            ? $"\\n\\n[TRUNCATED — this is only one page, not the complete file. Continue with read_file(path=\\"{path}\\", offset={page.NextOffset}, limit={page.Limit}).]"
-            : "\\n\\n[END OF FILE]";
-        return header + "\\n\\n" + page.Content + continuation;
+            ? $"\n\n[TRUNCATED — this is only one page, not the complete file. Continue with read_file(path=\"{path}\", offset={page.NextOffset}, limit={page.Limit}).]"
+            : "\n\n[END OF FILE]";
+        return header + "\n\n" + page.Content + continuation;
     }
 
     private static string FormatSignatures(SignatureResult result)

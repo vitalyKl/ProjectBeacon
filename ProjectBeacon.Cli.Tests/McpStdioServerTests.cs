@@ -1113,6 +1113,59 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
+    public async Task ReadFile_PaginatesLargeFilesAndExplainsExactContinuation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-read-page-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "large.md");
+        var firstPageSize = Application.Mcp.FileWorkspace.DefaultReadPageSize;
+        var content = new string('x', firstPageSize) + "TAIL-CONTENT";
+        await File.WriteAllTextAsync(path, content);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"large.md"}}}""");
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 3,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "read_file",
+                    arguments = new { path = "large.md", offset = firstPageSize, limit = firstPageSize }
+                }
+            }));
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(3, frames.Count);
+
+            var definition = frames[0].ToJsonString();
+            Assert.Contains("offset", definition, StringComparison.Ordinal);
+            Assert.Contains("limit", definition, StringComparison.Ordinal);
+
+            var firstPage = ContentText(frames[1])!;
+            Assert.Contains($"Character range: [0, {firstPageSize}) of {content.Length}", firstPage, StringComparison.Ordinal);
+            Assert.Contains("[TRUNCATED", firstPage, StringComparison.Ordinal);
+            Assert.Contains($"offset={firstPageSize}, limit={firstPageSize}", firstPage, StringComparison.Ordinal);
+            Assert.DoesNotContain("TAIL-CONTENT", firstPage, StringComparison.Ordinal);
+
+            var secondPage = ContentText(frames[2])!;
+            Assert.Contains("[END OF FILE]", secondPage, StringComparison.Ordinal);
+            Assert.Contains("TAIL-CONTENT", secondPage, StringComparison.Ordinal);
+            Assert.DoesNotContain("[TRUNCATED", secondPage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task WriteFile_ThenParentEscape_IsError()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
