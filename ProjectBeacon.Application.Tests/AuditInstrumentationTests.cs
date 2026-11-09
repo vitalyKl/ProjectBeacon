@@ -11,6 +11,7 @@ using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Projects;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
@@ -548,6 +549,116 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.DoesNotContain("open-registration@example.test", auditEvent.DetailsJson ?? string.Empty);
     }
 
+    [Fact]
+    public async Task PasswordFlows_AuditOnlyAccountIdentifiersAndMethodCodes()
+    {
+        var passwords = new BcryptPasswordHasher();
+        var user = User.Create(
+            "password-audit-user",
+            "password-audit-user@example.test",
+            passwords.Hash("initial-password"));
+        _seedDb.Users.Add(user);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var mail = new RecordingEmailSender();
+        var forgot = new ForgotPasswordHandler(
+            _factory, mail, new ConfigurationBuilder().Build(), _auditWriter);
+        var requested = await forgot.HandleAsync(
+            new ForgotPasswordRequest(user.Email),
+            TestContext.Current.CancellationToken);
+        Assert.True(requested.Success);
+
+        var requestedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.password_reset_requested"
+                && item.TargetId == user.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.System, requestedEvent.ActorKind);
+        Assert.Null(requestedEvent.ActorUserId);
+        Assert.DoesNotContain(user.Email, requestedEvent.DetailsJson ?? string.Empty);
+
+        var tokenMarker = "token=";
+        var tokenStart = mail.Body.IndexOf(tokenMarker, StringComparison.Ordinal);
+        Assert.True(tokenStart >= 0);
+        var rawToken = mail.Body[(tokenStart + tokenMarker.Length)..]
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)[0];
+
+        var reset = new ResetPasswordHandler(_factory, passwords, auditWriter: _auditWriter);
+        var resetResult = await reset.HandleAsync(
+            new ResetPasswordRequest(rawToken, "reset-password-1"),
+            TestContext.Current.CancellationToken);
+        Assert.True(resetResult.Success, resetResult.Error);
+
+        var resetEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.password_reset"
+                && item.TargetId == user.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, resetEvent.ActorKind);
+        Assert.Equal(user.Id, resetEvent.ActorUserId);
+        Assert.Equal("""{"authMethod":"email_reset_token"}""", resetEvent.DetailsJson);
+
+        var change = new ChangePasswordHandler(_factory, passwords, auditWriter: _auditWriter);
+        var changeResult = await change.HandleAsync(
+            new ChangePasswordRequest(user.Id, "reset-password-1", "changed-password-2"),
+            TestContext.Current.CancellationToken);
+        Assert.True(changeResult.Success, changeResult.Error);
+
+        var changedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.password_changed"
+                && item.TargetId == user.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(user.Id, changedEvent.ActorUserId);
+        Assert.Equal("""{"authMethod":"current_password"}""", changedEvent.DetailsJson);
+    }
+
+    [Fact]
+    public async Task LoginSuccessAndFailures_AreAuditedWithSafeReasonCodes()
+    {
+        var passwords = new BcryptPasswordHasher();
+        var user = User.Create(
+            "login-audit-user",
+            "login-audit-user@example.test",
+            passwords.Hash("correct-password"));
+        _seedDb.Users.Add(user);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["JWT:Secret"] = "test-jwt-secret-that-is-long-enough-for-testing"
+            })
+            .Build();
+        var login = new LoginHandler(
+            _factory, passwords, new TestTokenIssuer(), configuration, _auditWriter);
+
+        var failed = await login.HandleAsync(
+            new LoginCommand(new LoginRequest("login-audit-user", "wrong-password")),
+            TestContext.Current.CancellationToken);
+        Assert.False(failed.Success);
+
+        var failedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.login.failed"
+                && item.TargetId == user.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.System, failedEvent.ActorKind);
+        Assert.Equal(AuditOutcome.Failed, failedEvent.Outcome);
+        Assert.Equal("""{"reasonCode":"invalid_credentials"}""", failedEvent.DetailsJson);
+
+        var success = await login.HandleAsync(
+            new LoginCommand(new LoginRequest("login-audit-user", "correct-password")),
+            TestContext.Current.CancellationToken);
+        Assert.True(success.Success, success.Error);
+        Assert.Equal("test-token", success.Value!.Token);
+
+        var successEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.login.succeeded"
+                && item.TargetId == user.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, successEvent.ActorKind);
+        Assert.Equal(user.Id, successEvent.ActorUserId);
+        Assert.Equal(AuditOutcome.Success, successEvent.Outcome);
+        Assert.Equal("""{"authMethod":"password"}""", successEvent.DetailsJson);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
@@ -559,6 +670,28 @@ public sealed class AuditInstrumentationTests : IDisposable
         public IBeaconDb CreateDbContext() => inner.CreateDbContext(tenant);
 
         public IBeaconDb CreateDbContext(ITenantContext tenantContext) => inner.CreateDbContext(tenantContext);
+    }
+
+    private sealed class RecordingEmailSender : IEmailSender
+    {
+        public bool IsConfigured => true;
+        public string Body { get; private set; } = string.Empty;
+
+        public Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default)
+        {
+            Body = textBody;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestTokenIssuer : ITokenIssuer
+    {
+        public string GenerateToken(
+            User user,
+            string secretKey,
+            TimeSpan expiration = default,
+            Guid? projectId = null,
+            Guid? orgId = null) => "test-token";
     }
 
     private sealed class NoopEmailSender : IEmailSender
