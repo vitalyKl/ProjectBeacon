@@ -48,6 +48,13 @@ public sealed class RestoreContentVersionHandler
         if (source is null)
             return Result.Failure<RestoreContentVersionDto>("Content version not found.");
 
+        if (source.TargetKind == ContentTargetKind.TaskDescription
+            && (command.ExpectedTargetKind != ContentTargetKind.TaskDescription
+                || command.ExpectedTargetId is null))
+            return Result.Failure<RestoreContentVersionDto>(
+                "Task content history must be restored through a task-scoped operation.",
+                ErrorKind.Forbidden);
+
         if (command.ExpectedTargetKind is { } expectedKind && source.TargetKind != expectedKind)
             return Result.Failure<RestoreContentVersionDto>("Content version does not belong to the requested target.");
         if (command.ExpectedTargetId is { } expectedTargetId && source.TargetId != expectedTargetId)
