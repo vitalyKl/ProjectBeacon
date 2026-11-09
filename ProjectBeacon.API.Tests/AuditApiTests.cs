@@ -26,6 +26,11 @@ public sealed class AuditApiTests
         var adminId = bootJson.GetProperty("userId").GetGuid();
         var adminPassword = bootJson.GetProperty("password").GetString()!;
 
+        var deniedRecovery = await client.SendAsync(
+            RecoveryRequest("invalid-recovery-token"),
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, deniedRecovery.StatusCode);
+
         var adminLogin = await client.PostAsJsonAsync("/v1/auth/login",
             new { Login = "admin", Password = adminPassword },
             cancellationToken: TestContext.Current.CancellationToken);
@@ -42,7 +47,7 @@ public sealed class AuditApiTests
         var page = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         var pageJson = await page.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        Assert.True(pageJson.GetProperty("totalCount").GetInt64() >= 1);
+        Assert.True(pageJson.GetProperty("totalCount").GetInt64() >= 2);
 
         using (TenantScope.EnterUnscoped())
         {
@@ -94,10 +99,12 @@ public sealed class AuditApiTests
         Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
         var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("platform.bootstrap.completed", csv);
+        Assert.Contains("platform.admin_recovery.denied", csv);
         Assert.Contains("account.login.succeeded", csv);
         Assert.Contains("account.login.denied", csv);
         Assert.Contains("'  =HYPERLINK(", csv);
         Assert.DoesNotContain(adminPassword, csv);
+        Assert.DoesNotContain(AuthApiFactory.BootstrapToken, csv);
 
         var tokenFilter = await client.GetFromJsonAsync<JsonElement>(
             "/v1/admin/audit?actorTokenId=11111111-1111-1111-1111-111111111111",
@@ -165,6 +172,44 @@ public sealed class AuditApiTests
             Assert.Equal(AuditActorKind.Human, logoutEvent.ActorKind);
             Assert.Equal(adminId.ToString(), logoutEvent.TargetId);
         }
+
+        var recovered = await client.SendAsync(
+            RecoveryRequest(AuthApiFactory.BootstrapToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        recovered.EnsureSuccessStatusCode();
+        var recoveredJson = await recovered.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(adminId, recoveredJson.GetProperty("userId").GetGuid());
+        var recoveredPassword = recoveredJson.GetProperty("password").GetString()!;
+        Assert.NotEqual(adminPassword, recoveredPassword);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            using var auditScope = factory.Services.CreateScope();
+            var auditDb = auditScope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            var deniedRecoveryEvent = await auditDb.AuditEvents.SingleAsync(
+                item => item.Action == "platform.admin_recovery.denied",
+                TestContext.Current.CancellationToken);
+            Assert.Equal(AuditOutcome.Denied, deniedRecoveryEvent.Outcome);
+            Assert.Equal(AuditActorKind.System, deniedRecoveryEvent.ActorKind);
+            Assert.Contains("bootstrap_token_invalid", deniedRecoveryEvent.DetailsJson);
+
+            var recoveryEvent = await auditDb.AuditEvents.SingleAsync(
+                item => item.Action == "platform.admin_recovery.completed",
+                TestContext.Current.CancellationToken);
+            Assert.Equal(AuditOutcome.Success, recoveryEvent.Outcome);
+            Assert.Equal("User", recoveryEvent.TargetType);
+            Assert.Equal(adminId.ToString(), recoveryEvent.TargetId);
+            Assert.Contains("password_reset", recoveryEvent.DetailsJson);
+            Assert.DoesNotContain(recoveredPassword, recoveryEvent.DetailsJson ?? string.Empty);
+            Assert.DoesNotContain(AuthApiFactory.BootstrapToken, recoveryEvent.DetailsJson ?? string.Empty);
+            Assert.DoesNotContain("password_reset", deniedRecoveryEvent.DetailsJson);
+            Assert.DoesNotContain(AuthApiFactory.BootstrapToken, deniedRecoveryEvent.DetailsJson ?? string.Empty);
+        }
+
+        var recoveredLogin = await client.PostAsJsonAsync("/v1/auth/login",
+            new { Login = "admin", Password = recoveredPassword },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, recoveredLogin.StatusCode);
     }
 
     private static HttpRequestMessage BootstrapRequest(string token)
@@ -173,6 +218,13 @@ public sealed class AuditApiTests
         {
             Content = JsonContent.Create(new { })
         };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static HttpRequestMessage RecoveryRequest(string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/recover-admin");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
