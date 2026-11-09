@@ -44,7 +44,7 @@ public sealed class ControlPlaneHostGuardTests
             })
             .Build();
 
-    private sealed class TestNavigationManager(string baseUri, string uri) : NavigationManager
+    private sealed class TestNavigationManager : NavigationManager
     {
         public TestNavigationManager(string baseUri, string uri) => Initialize(baseUri, uri);
 
