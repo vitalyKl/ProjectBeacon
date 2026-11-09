@@ -14,6 +14,9 @@ public sealed class PipelineToolPolicyTests
         Assert.Same(PipelineToolPolicy.ReviewerTools, PipelineToolPolicy.ToolsForRole("REVIEW"));
 
         var actor = PipelineToolPolicy.ToolsForRole("Actor");
+        Assert.Contains(McpToolNames.ReadFile, actor);
+        Assert.Contains(McpToolNames.GetTree, actor);
+        Assert.Contains(McpToolNames.SearchCode, actor);
         Assert.Contains(McpToolNames.SubtaskReportResult, actor);
         Assert.Contains(McpToolNames.PipelineFailSubtask, actor);
         Assert.Contains(McpToolNames.TaskPipelineStatus, actor);

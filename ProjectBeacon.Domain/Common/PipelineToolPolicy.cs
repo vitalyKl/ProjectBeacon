@@ -115,8 +115,9 @@ public static class PipelineToolPolicy
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Planner"] = PlannerTools,
-                ["Actor"] = Array.AsReadOnly(ActorWorkspaceTools.Concat(ActorTerminalTools)
-                    .Concat(ActorReadOnlyAlwaysTools).Distinct(StringComparer.Ordinal).ToArray()),
+                ["Actor"] = Array.AsReadOnly(ReadOnlyWorkspaceTools.Concat(ActorWorkspaceTools)
+                    .Concat(ActorTerminalTools).Concat(ActorReadOnlyAlwaysTools)
+                    .Distinct(StringComparer.Ordinal).ToArray()),
                 ["Review"] = ReviewerTools
             });
 

@@ -76,7 +76,8 @@ public sealed class SessionPromptsTests
     {
         var task = TaskItem.Create("Implement the feature.", Guid.NewGuid());
         var subtask = Subtask.Create("Change the API contract.", task.Id, task.ProjectId);
-        subtask.DiffRef = $"diff/{subtask.Id:N}";
+        subtask.Start();
+        subtask.ReportResult($"diff/{subtask.Id:N}", "The API contract was updated.");
 
         var prompt = SessionPrompts.Review(task, [subtask]);
 
