@@ -46,6 +46,7 @@ public static class AuditEndpoints
         [FromQuery] int? pageSize,
         CancellationToken ct)
     {
+        ctx.Response.Headers.CacheControl = "no-store";
         var access = await adminGate.RequireAsync(ctx.GetActor(), OperatorPermission.AuditRead, ct: ct);
         if (!access.Success)
             return access.FromResult();
@@ -76,6 +77,8 @@ public static class AuditEndpoints
         [FromQuery] AuditOutcome? outcome,
         CancellationToken ct)
     {
+        ctx.Response.Headers.CacheControl = "no-store";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
         var access = await adminGate.RequireAsync(ctx.GetActor(), OperatorPermission.AuditExport, ct: ct);
         if (!access.Success)
             return access.FromResult();
