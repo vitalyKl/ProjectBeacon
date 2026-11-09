@@ -770,7 +770,7 @@ else
         try
         {
             var result = await DeleteTask.HandleAsync(
-                new DeleteTaskCommand(new DeleteTaskRequest(TaskId)));
+                new DeleteTaskCommand(new DeleteTaskRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
