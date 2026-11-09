@@ -145,6 +145,10 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - Invite and password-reset lookup uses `IgnoreQueryFilters` (the actor is not in the tenant yet). Hash tokens with SHA256 like `bcn_`/`bcd_`; never persist the raw value.
 - `GET /v1/version` is `{ version, gitSha }`. Version comes from the assembly (`Directory.Build.props`); `gitSha` from `BEACON_GIT_SHA`. MCP `serverInfo.version` and heartbeat `clientVersion` use the same assembly version.
 
+## Git and isolated agent sessions
+
+- Pipeline agents operate in detached Git snapshots. They must not try to `checkout`, `pull`, `fetch`, or `git -C` against the real project; use `repo_status` for Actor/Planner status and ask a human to run GitSync from the UI when the base branch is stale. The real-repository GitSync operation is client-executed, typed, fast-forward-only, and serialized with snapshot creation.
+
 ## Test Environment Rules
 
 Before running an application or tests, read the repository's test-environment documentation and the README/configuration for the relevant test suite.

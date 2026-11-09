@@ -180,6 +180,14 @@ In a pipeline Actor turn, a pending command approval keeps the session and subta
 `WaitingForUser`; the normal idle and absolute turn timeouts are suspended while the
 form remains pending. This is an intentional pause, not a failed subtask.
 
+## Structured repository synchronization
+
+The human-only `POST /v1/projects/{projectId}/git-sync` endpoint queues a typed `GitSync` command to an online workstation attached to that project. The server checks project membership/write access; API tokens, device actors, and workers cannot invoke it. The payload carries only the project id and a fixed mode. The workstation resolves the configured project root locally and never accepts a path or Git argv from the caller.
+
+The client runs Git without a shell, with hooks redirected to an empty temporary directory, `core.fsmonitor=false`, configured clean/smudge/process filters disabled, bounded output, a timeout, and interactive terminal prompts disabled. It inherits the workstation user's normal credential environment so private remotes continue to use the user's configured Git authentication; environment variables and credentials are not logged or copied into agent context. It fetches only the current branch's configured upstream with tags disabled. The only worktree-changing operation is `git merge --ff-only` after the client verifies a clean tree, attached branch, configured upstream, no divergence, and no active native session. A repository operation gate serializes this against creation and removal of agent snapshots.
+
+Native agents do not receive Git credentials or a raw repository-management tool. `repo_status` is a bounded, read-only status tool for Planner and Actor sessions; `run_command` blocks Git configuration overrides, external execution options, repository-changing subcommands, and `git push`. Repository output is untrusted data.
+
 ## Known limitations (open)
 
 - **Rate limiting behind a proxy.** The IP key for a proxied client relies on forwarded

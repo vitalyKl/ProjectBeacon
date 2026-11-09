@@ -109,6 +109,12 @@ combination of the following. **All of these must be preserved.**
 > an idempotent lost command, never to re-execute an at-most-once one.
 > `CommandRecovery.Decide` is the executable form of this invariant.
 
+### GitSync
+
+`GitSync` is a project-runtime, idempotent command. Its payload is restricted to `projectId` and `mode` (`Status` or `PullFastForward`). Re-delivery is safe: fetching the same tracked upstream converges on the same remote-tracking ref, and a repeated fast-forward after success returns `UpToDate`. The normal command lease applies; recovery may requeue a stale GitSync once under the existing idempotent recovery rule. This does not make arbitrary Git operations idempotent or permitted.
+
+`Status` refreshes the current branch's tracked upstream and reports ahead/behind counts and worktree state. `PullFastForward` additionally refuses dirty, detached, unconfigured, diverged, or actively used repositories without applying a merge.
+
 ## Cross-references
 
 - `command-recovery.md` — the stale-command recovery rule, lease contract,

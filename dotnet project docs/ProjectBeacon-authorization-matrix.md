@@ -423,6 +423,10 @@ These are places where the three enforcement layers disagree or are applied unev
 
 ---
 
+### GitSync route
+
+`POST /v1/projects/{projectId}/git-sync` — `RequireHuman`; the application handler requires a human actor and project `Update` access (project membership), then queues the command to an attached online workstation. API tokens, devices, workers, and non-members are rejected. The route appears in the generated route-policy inventory.
+
 ## 6. Route inventory cross-check
 
 The route inventory is generated from the mapped `EndpointDataSource`, rather than maintained as an independent route count. This catches routes added after the manual resource-level review above and reports each HTTP method, route template, and route actor policy. The generated inventory is exercised by `EndpointAuthorizationInventoryTests`; any `/v1` route without explicit anonymous, authenticated, or typed actor metadata fails the test.
