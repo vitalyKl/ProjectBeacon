@@ -84,6 +84,9 @@ internal sealed class GitSyncService
             if (state.Error is not null)
                 return Complete(Failed(state, state.Error.Contains("timed out", StringComparison.OrdinalIgnoreCase)
                     ? GitSyncRefusalCode.Timeout : GitSyncRefusalCode.FetchFailed, state.Error));
+            if (mode == GitSyncMode.Status && (state.Detached || !state.HasUpstream))
+                return Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head));
+
             if (state.Detached)
                 return Complete(Refused(state, GitSyncRefusalCode.Detached, null, state.Head));
             if (!state.HasUpstream || state.Remote is null || state.MergeRef is null || state.UpstreamRef is null)
