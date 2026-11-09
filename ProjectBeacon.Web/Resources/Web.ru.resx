@@ -2572,4 +2572,79 @@
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Укажите относительные пути репозитория, по одному на строку. Для этого профиля они обязательны.</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>Администрирование платформы</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>Журнал аудита</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>Неизменяемый журнал действий безопасности и операторов. Доступен только операторам платформы.</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>Код действия</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>Тип субъекта</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>ID пользователя</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>Результат</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>Цель</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>Область</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>Время</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>ID организации</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>ID проекта</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>С (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>По (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>Применить фильтры</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>Сбросить фильтры</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>Экспорт CSV</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>Назад</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>Далее</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>Страница {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>Событий: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>По заданным фильтрам событий нет.</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>Недостаточно прав для просмотра журнала аудита платформы.</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Один из идентификаторов имеет неверный формат GUID.</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>Проверьте тип субъекта, результат и даты UTC.</value>
+  </data>
 </root>
