@@ -51,6 +51,33 @@ public sealed class TaskItemTests
     }
 
     [Fact]
+    public void ContentRevision_ChangesOnlyWhenDescriptionOrReviewNotesChange()
+    {
+        var task = TaskItem.Create("Task", Guid.NewGuid());
+
+        Assert.Equal(1, task.ContentRevision);
+
+        task.Update(title: "Renamed", description: null);
+        Assert.Equal(1, task.ContentRevision);
+
+        task.Update(description: "Initial description");
+        Assert.Equal(2, task.ContentRevision);
+
+        task.Update(description: "Initial description");
+        Assert.Equal(2, task.ContentRevision);
+
+        task.SetReviewNotes("Approved");
+        Assert.Equal(3, task.ContentRevision);
+
+        task.SetReviewNotes("Approved");
+        Assert.Equal(3, task.ContentRevision);
+
+        task.AppendDescription("Failure details");
+        Assert.Equal(4, task.ContentRevision);
+        Assert.Contains("Failure details", task.Description);
+    }
+
+    [Fact]
     public void MoveToNextStatus_TodoToInProgress()
     {
         var task = TaskItem.Create("Test", Guid.NewGuid());
