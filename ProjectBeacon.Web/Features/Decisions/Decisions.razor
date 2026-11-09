@@ -142,6 +142,7 @@ else
 
 @code {
     private ProjectDto? _project;
+    private ActorContext _actor = ActorContext.Anonymous;
     private List<DecisionDto> _decisions = [];
     private string _title = string.Empty;
     private string _context = string.Empty;
@@ -156,7 +157,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -179,7 +181,7 @@ else
     {
         if (_project is null) return;
         var result = await CreateDecision.HandleAsync(new CreateDecisionRequest(
-            _project.Id, _title, _context, _body, _consequences));
+            _project.Id, _title, _context, _body, _consequences, _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
