@@ -40,6 +40,8 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
             return Result.Failure<DaemonDeviceDto>("Fingerprint is required (max 200 characters).");
         if (request.UserId == Guid.Empty)
             return Result.Failure<DaemonDeviceDto>("User is required.");
+        if (command.Actor is { } actor && actor.UserId != request.UserId)
+            return Result.Failure<DaemonDeviceDto>("The actor does not own this device.", ErrorKind.Forbidden);
 
         var unscopedTenant = new TenantContext();
         unscopedTenant.Assign(null, null, unscoped: true);
@@ -143,7 +145,7 @@ public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
         if (device is null || device.UserId != command.Request.UserId)
             return Result.Failure("Device not found.");
         if (command.Actor is { UserId: { } actorUserId } && actorUserId != command.Request.UserId)
-            return Result.Forbidden("The actor does not own this device.");
+            return Result.Failure("The actor does not own this device.", ErrorKind.Forbidden);
 
         device.Revoke();
         var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
