@@ -63,6 +63,12 @@ public sealed class ContentRevisionTests
         constraint.Activate();
         constraint.Reject();
         Assert.Equal(2, constraint.Revision);
+
+        constraint.SetScopePath("src/");
+        Assert.Equal(3, constraint.Revision);
+
+        constraint.SetScopePath("src/");
+        Assert.Equal(3, constraint.Revision);
     }
 
     [Fact]
