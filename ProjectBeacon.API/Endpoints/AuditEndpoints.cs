@@ -100,14 +100,18 @@ public static class AuditEndpoints
         {
             var first = await reader.ListAsync(access.Value!, filter, ct);
             total = first.TotalCount;
-            rows.AddRange(first.Items.Take(AuditCsvWriter.MaxRows));
+            if (total > AuditCsvWriter.MaxRows)
+                return Results.Problem(
+                    statusCode: StatusCodes.Status413PayloadTooLarge,
+                    title: "Audit export is too large",
+                    detail: $"Narrow the filters to export no more than {AuditCsvWriter.MaxRows} events.");
 
-            var cappedTotal = Math.Min(total, AuditCsvWriter.MaxRows);
-            var pages = (int)Math.Ceiling((double)cappedTotal / ExportPageSize);
-            for (var currentPage = 2; currentPage <= pages && rows.Count < AuditCsvWriter.MaxRows; currentPage++)
+            rows.AddRange(first.Items);
+            var pages = (int)Math.Ceiling((double)total / ExportPageSize);
+            for (var currentPage = 2; currentPage <= pages; currentPage++)
             {
                 var next = await reader.ListAsync(access.Value!, filter with { Page = currentPage }, ct);
-                rows.AddRange(next.Items.Take(AuditCsvWriter.MaxRows - rows.Count));
+                rows.AddRange(next.Items);
             }
         }
         catch (ArgumentException ex)
@@ -115,7 +119,6 @@ public static class AuditEndpoints
             return ProblemResults.Bad(ex.Message);
         }
 
-        ctx.Response.Headers["X-Audit-Export-Truncated"] = total > rows.Count ? "true" : "false";
         var bytes = AuditCsvWriter.Encode(rows);
         var fileName = $"projectbeacon-audit-{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}.csv";
         return Results.File(bytes, "text/csv; charset=utf-8", fileName);
