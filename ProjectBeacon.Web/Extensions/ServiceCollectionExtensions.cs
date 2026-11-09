@@ -145,7 +145,7 @@ public static class ServiceCollectionExtensions
                     ? CookieSecurePolicy.Always
                     : CookieSecurePolicy.SameAsRequest;
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
-            options.SlidingExpiration = true;
+            options.SlidingExpiration = false;
             options.LoginPath = "/control/login";
             options.LogoutPath = "/control/logout";
             options.Events.OnValidatePrincipal = async ctx =>
