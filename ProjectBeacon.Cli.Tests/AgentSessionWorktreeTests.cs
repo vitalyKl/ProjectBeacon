@@ -104,8 +104,13 @@ public sealed class AgentSessionWorktreeTests
             Assert.Contains("local-only/settings.json", workspace.IncludedPaths);
             Assert.Contains(workspace.MissingIgnoredPaths,
                 path => path.StartsWith("local-only", StringComparison.Ordinal));
-            Assert.Contains("Isolated worktree environment", workspace.BuildEnvironmentContract());
-            Assert.Contains("local-only/settings.json", workspace.BuildEnvironmentContract());
+            var environmentContract = workspace.BuildEnvironmentContract();
+            Assert.Contains("Isolated worktree environment", environmentContract);
+            Assert.Contains("local-only/settings.json", environmentContract);
+            Assert.Contains("node_modules", environmentContract);
+            Assert.Contains(".env.example", environmentContract);
+            Assert.Contains("lockfiles", environmentContract);
+            Assert.Contains("Sensitive local files", environmentContract);
 
             await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.cs"), "class AgentChange {}\n");
             var artifact = await workspace.BuildDiffArtifactAsync(CancellationToken.None);

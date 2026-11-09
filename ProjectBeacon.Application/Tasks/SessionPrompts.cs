@@ -197,7 +197,10 @@ public static class SessionPrompts
             sb.AppendLine($"{state} subtask {sub.Id}");
             AppendIndented(sb, "  Instructions:", sub.Instructions);
             if (sub.DiffRef is not null)
+            {
                 sb.AppendLine($"  DiffRef: {sub.DiffRef}");
+                sb.AppendLine($"  Before judging this subtask, call {McpToolNames.WorkspaceRead} with key \"{sub.DiffRef}\" and inspect the returned patch; use {McpToolNames.WorkspaceIndex} only if you need to locate related workspace evidence.");
+            }
             if (sub.Summary is not null)
                 sb.AppendLine($"  Summary: {sub.Summary}");
         }

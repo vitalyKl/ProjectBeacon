@@ -69,6 +69,32 @@ public sealed class PipelineRoleAuthorizationTests
     }
 
     [Fact]
+    public void ActorCanReadTaskAttachmentsOnlyWithMatchingToolGrants()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
+        var listPath = $"/v1/projects/{projectId:D}/tasks/{taskId:D}/attachments";
+        var readPath = listPath + $"/{attachmentId:D}";
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, Guid.NewGuid(),
+            HttpMethods.Get, listPath, allowedMcpTools: [McpToolNames.TaskListAttachments]));
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, Guid.NewGuid(),
+            HttpMethods.Get, readPath, allowedMcpTools: [McpToolNames.TaskReadAttachment]));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, Guid.NewGuid(),
+            HttpMethods.Get, listPath, allowedMcpTools: [McpToolNames.TaskReadAttachment]));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, Guid.NewGuid(),
+            HttpMethods.Get, readPath, allowedMcpTools: [McpToolNames.TaskListAttachments]));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, Guid.NewGuid(),
+            HttpMethods.Get, readPath));
+    }
+
+    [Fact]
     public void ActorKnowledgeWritesAreProposalsOnlyAndRequireExplicitGrants()
     {
         var projectId = Guid.NewGuid();

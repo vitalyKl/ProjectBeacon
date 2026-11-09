@@ -61,7 +61,9 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             builder.AppendLine("Explicitly included ignored paths: " + string.Join(", ", IncludedPaths));
         if (MissingIncludePaths.Count > 0)
             builder.AppendLine("Configured include paths currently missing: " + string.Join(", ", MissingIncludePaths));
-        builder.AppendLine("Do not treat absent ignored folders as a blocker. Use the repository's manifests and lockfiles to restore dependencies, and report a missing local-only configuration only when the task genuinely requires it.");
+        builder.AppendLine("Common ignored dependency and build directories such as node_modules, bin/obj, .venv, target, and dist may therefore be absent. Do not treat their absence as a blocker: restore dependencies from package manifests and lockfiles (for example npm ci, dotnet restore, or the repository's documented equivalent).");
+        builder.AppendLine("Ignored .env and .env.* files are not copied by default. Use a checked-in .env.example or documented variable names with safe test values; do not request, copy, or print real secrets. Sensitive local files cannot be added through .beacon/worktree-include.");
+        builder.AppendLine("Do not treat absent ignored folders as a blocker. Report missing local-only configuration only when the task genuinely requires it and no safe example or test configuration exists.");
         builder.AppendLine("The isolated HOME and configuration directories do not contain the user's shell profiles, package-manager credentials, or provider secrets. Never ask to copy or print secrets into the worktree.");
         return builder.ToString().TrimEnd();
     }
@@ -400,10 +402,27 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
                     || string.Equals(segment, ".git", StringComparison.OrdinalIgnoreCase))
                 || value.IndexOfAny(['*', '?']) >= 0)
                 throw new InvalidDataException($"'{raw}' must be a literal repository-relative file or directory path without traversal, wildcards, or .git.");
+            if (IsSensitiveWorktreePath(value))
+                throw new InvalidDataException($"'{raw}' refers to sensitive local configuration or credentials and cannot be included in an agent worktree.");
             if (!paths.Contains(value, StringComparer.Ordinal))
                 paths.Add(value);
         }
         return paths;
+    }
+
+    private static bool IsSensitiveWorktreePath(string relativePath)
+    {
+        foreach (var segment in relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment.Equals(".env", StringComparison.OrdinalIgnoreCase)
+                || segment.StartsWith(".env.", StringComparison.OrdinalIgnoreCase)
+                || segment.Contains("secret", StringComparison.OrdinalIgnoreCase)
+                || segment.Contains("credential", StringComparison.OrdinalIgnoreCase)
+                || segment.EndsWith(".pem", StringComparison.OrdinalIgnoreCase)
+                || segment.EndsWith(".key", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsInsideRoot(string root, string fullPath)

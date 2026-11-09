@@ -72,6 +72,19 @@ public sealed class SessionPromptsTests
     }
 
     [Fact]
+    public void ReviewPromptRequiresReadingEachSubtaskDiffArtifact()
+    {
+        var task = TaskItem.Create("Implement the feature.", Guid.NewGuid());
+        var subtask = Subtask.Create("Change the API contract.", task.Id, task.ProjectId);
+        subtask.DiffRef = $"diff/{subtask.Id:N}";
+
+        var prompt = SessionPrompts.Review(task, [subtask]);
+
+        Assert.Contains($"DiffRef: diff/{subtask.Id:N}", prompt);
+        Assert.Contains($"{McpToolNames.WorkspaceRead} with key \"diff/{subtask.Id:N}\"", prompt);
+    }
+
+    [Fact]
     public void PlannerWake_IncludesReportsWorkspaceIndexAndProfileCatalog()
     {
         var projectId = Guid.NewGuid();

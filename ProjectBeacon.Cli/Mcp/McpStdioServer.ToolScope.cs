@@ -27,9 +27,9 @@ public static partial class McpStdioServer
 
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);
         if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
-            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PlannerTools) });
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PipelineToolPolicy.ToolsForRole("Planner")) });
         if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
-            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, ReviewerTools) });
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PipelineToolPolicy.ToolsForRole("Review")) });
 
         if (allowlists.Count == 0)
         {
@@ -169,13 +169,12 @@ public static partial class McpStdioServer
 
     private static bool IsActorToolAllowed(string tool)
     {
-        if (ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
-            || ActorWorkspaceTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
-            return true;
         if (ActorForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
             return false;
-        // Actors can use workspace tools from their subtask allowlist, but only the
-        // mandatory result/failure calls may invoke the general Beacon control plane.
+        if (PipelineToolPolicy.ToolsForRole("Actor").Contains(tool, StringComparer.OrdinalIgnoreCase))
+            return true;
+        // Non-API workstation tools (for example argv execution) are governed by their
+        // own isolated-workspace and approval checks; they are not MCP control-plane grants.
         return !McpApiTools.IsApiTool(tool);
     }
 
@@ -188,11 +187,11 @@ public static partial class McpStdioServer
     {
         var role = env.Get("BEACON_PIPELINE_ROLE");
         if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
-            return PlannerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+            return PipelineToolPolicy.ToolsForRole("Planner").Contains(tool, StringComparer.OrdinalIgnoreCase)
                 ? null
                 : $"Tool '{tool}' is not allowed for the Planner pipeline role.";
         if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
-            return ReviewerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+            return PipelineToolPolicy.ToolsForRole("Review").Contains(tool, StringComparer.OrdinalIgnoreCase)
                 ? null
                 : $"Tool '{tool}' is not allowed for the Reviewer pipeline role.";
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))

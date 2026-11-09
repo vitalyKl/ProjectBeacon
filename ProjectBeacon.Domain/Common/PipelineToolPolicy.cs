@@ -108,4 +108,20 @@ public static class PipelineToolPolicy
     {
         McpToolNames.WriteFile, McpToolNames.ApplyPatch, "run_command", "service_start"
     });
+
+    /// <summary>Single role-to-tool ceiling used by MCP advertisement and invocation guards.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> PipelineRoleTools { get; } =
+        new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Planner"] = PlannerTools,
+                ["Actor"] = Array.AsReadOnly(ActorWorkspaceTools.Concat(ActorTerminalTools)
+                    .Concat(ActorReadOnlyAlwaysTools).Distinct(StringComparer.Ordinal).ToArray()),
+                ["Review"] = ReviewerTools
+            });
+
+    public static IReadOnlyList<string> ToolsForRole(string? role) =>
+        role is not null && PipelineRoleTools.TryGetValue(role, out var tools)
+            ? tools
+            : Array.Empty<string>();
 }
