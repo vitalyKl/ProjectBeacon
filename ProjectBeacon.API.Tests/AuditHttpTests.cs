@@ -74,12 +74,12 @@ public sealed class AuditHttpTests
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
         var deniedEventsResponse = await client.GetAsync(
-            $"/v1/admin/audit?actorUserId={regularUserId}&action=authorization.denied&pageSize=100",
+            $"/v1/admin/audit?actorUserId={regularUserId}&action=authorization.denied&targetType=Endpoint&targetId={Uri.EscapeDataString("POST /v1/projects")}&pageSize=100",
             TestContext.Current.CancellationToken);
         deniedEventsResponse.EnsureSuccessStatusCode();
         var deniedEvents = await deniedEventsResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        Assert.Contains(deniedEvents.GetProperty("items").EnumerateArray(),
-            item => item.GetProperty("targetId").GetString() == "POST /v1/projects");
+        Assert.Equal(1, deniedEvents.GetProperty("items").GetArrayLength());
+        Assert.Equal("POST /v1/projects", deniedEvents.GetProperty("items")[0].GetProperty("targetId").GetString());
     }
 
     private static async Task<string> Bootstrap(HttpClient client)
