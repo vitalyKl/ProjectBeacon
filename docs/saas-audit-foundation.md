@@ -81,7 +81,12 @@ port, permission-checked read contract/implementation, model migration, tests, a
 instrumentation for project API tokens, project invitations, project membership, organization
 invitations, and first-time account registration through an invitation.
 
+Implemented after the initial foundation: a human-operator-only `GET /v1/admin/audit` endpoint.
+It obtains `AdminActor` through `IAdminGate` (which rechecks persisted account state), then
+uses the bounded `IAuditReader` query with organization, project, time, action, actor and outcome
+filters. The endpoint does not expose raw database access or permit API-token/device/worker actors.
+
 Not implemented: instrumentation of all remaining handlers (including org/project lifecycle,
-device lifecycle, other account/password operations and denied authorization attempts), operator HTTP
-endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
-follow-up slices; this PR does not claim comprehensive audit coverage.
+device lifecycle, other account/password operations and denied authorization attempts), audit UI,
+export, retention, or distributed audit streaming. This API slice does not claim comprehensive
+audit coverage.
