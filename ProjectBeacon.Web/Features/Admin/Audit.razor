@@ -97,7 +97,7 @@ else
                     </HeaderContent>
                     <RowTemplate Context="entry">
                         <MudTd DataLabel="@L["AuditTimestamp"]">
-                            <MudText Typo="Typo.body2" Class="text-nowrap">@entry.At.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</MudText>
+                            <LocalTime Value="entry.At" Format="g" Class="text-nowrap" />
                         </MudTd>
                         <MudTd DataLabel="@L["AuditActor"]">
                             <MudText Typo="Typo.body2">@ActorLabel(entry)</MudText>
