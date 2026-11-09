@@ -54,6 +54,10 @@ same unit of work as their state changes:
 - Project creation, metadata updates and deletion (`project.created`, `project.updated`,
   `project.deleted`). Project deletion and dependent cleanup run in one explicit transaction
   with the audit event.
+- Device enrollment, token rotation and revocation (`device.created`, `device.token.rotated`,
+  `device.revoked`). These user-owned, non-tenant devices are written through an explicit
+  unscoped context; the event records only the actor/device ids and fixed state codes, never
+  the raw device token or token hash.
 
 - API token creation and revocation (`project.api_token.created`,
   `project.api_token.revoked`). Raw token values and token hashes are never written.
@@ -95,6 +99,6 @@ query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted ac
 and supports organization, project, time, action, actor and outcome filters. API tokens, devices
 and workers cannot use this endpoint.
 
-Not implemented: device lifecycle, other account/password operations and denied authorization
-attempts, audit UI, export, retention, or distributed audit streaming. This branch does not claim
+Not implemented: other account/password operations and denied authorization attempts, audit UI,
+export, retention, or distributed audit streaming. This branch does not claim
 comprehensive audit coverage.
