@@ -112,7 +112,10 @@
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
                                 }
                             </MudTd>
-                            <MudTd DataLabel="Owner">@(!string.IsNullOrWhiteSpace(context.OwnerEmail) ? context.OwnerEmail : "Not assigned")</MudTd>
+                            <MudTd DataLabel="Owner">
+                                @(!_canReadUsers ? "Restricted"
+                                    : !string.IsNullOrWhiteSpace(context.OwnerEmail) ? context.OwnerEmail : "Not assigned")
+                            </MudTd>
                             <MudTd DataLabel="Members">@context.MemberCount</MudTd>
                             <MudTd DataLabel="Projects">@context.ProjectCount</MudTd>
                             <MudTd DataLabel="Pending invites">@context.PendingInviteCount</MudTd>

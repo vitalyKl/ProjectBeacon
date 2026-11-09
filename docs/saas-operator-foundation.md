@@ -109,7 +109,7 @@ RLS must scope all organization-owned billing and entitlement rows by OrgId. Ope
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
 8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
 
-The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The initial B1 slice now provides create/invite, member and invitation visibility, and alpha grant/revoke. Full account operations, mandatory elevation, and end-to-end entitlement enforcement remain subsequent work. Privileged operations are authorized and audited; high-risk step-up operations remain unavailable until elevation is implemented.
+The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The current B1 slice provides the organization list/search, customer detail, organization creation with owner invitation, additional owner invitations, invitation revocation, member/invitation visibility, and Alpha grant/renew/revoke with limits, features, effective dates and audit history. Owner/member identity details are withheld unless the actor has `UsersRead`; counts remain visible without exposing personal data. Expired invitations are not counted as pending. Full account operations, mandatory elevation, and end-to-end entitlement enforcement remain subsequent work. Privileged operations are authorized and audited; high-risk step-up operations remain unavailable until elevation is implemented.
 
 ## Current implementation status of this foundation
 
@@ -117,7 +117,7 @@ Implemented in the foundation branch:
 
 - Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and database-backed IAdminGate authorization.
 - An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
-- Entitlement source/status/limit/snapshot contracts, IEntitlementService port, and the atomic Alpha → Production conversion contract.
+- PostgreSQL-backed Alpha entitlements with tenant/operator RLS, atomic replace/grant/revoke operations, and transactional audit records; Alpha → Production remains a contract until billing persistence exists.
 - Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
@@ -126,7 +126,7 @@ Implemented in the foundation branch:
 Not implemented by this foundation:
 
 - A separate operator identity store and assignable operator-role administration, mandatory MFA/elevation flow, and full customer account operations (including member disable/role changes and organization suspension/closure).
-- Entitlement grants are persisted and can be evaluated through the service contract, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
+- Entitlement grants can be managed and evaluated, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
 - Production deployment of an ops-agent or external log stack.

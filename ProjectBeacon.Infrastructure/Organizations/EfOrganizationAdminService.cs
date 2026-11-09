@@ -121,12 +121,12 @@ public sealed class EfOrganizationAdminService(
                         && invite.Role == MemberRole.Owner
                         && invite.Status == InviteStatus.Pending
                         && invite.ExpiredAt >= now)
-                .GroupBy(invite => invite.OrgId)
-                .Select(groupRows => new OwnerEmailAggregate(
-                    groupRows.Key,
-                    groupRows.OrderBy(invite => invite.CreatedAt)
-                        .Select(invite => invite.Email)
-                        .FirstOrDefault()))
+                    .GroupBy(invite => invite.OrgId)
+                    .Select(groupRows => new OwnerEmailAggregate(
+                        groupRows.Key,
+                        groupRows.OrderBy(invite => invite.CreatedAt)
+                            .Select(invite => invite.Email)
+                            .FirstOrDefault()))
                     .ToListAsync(ct);
             }
         }
