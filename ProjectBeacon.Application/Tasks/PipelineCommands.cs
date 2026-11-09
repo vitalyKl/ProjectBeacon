@@ -150,13 +150,13 @@ public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorCo
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null, string? ActorId = null);
 
 /// <summary>Approves a pipeline and returns its state.</summary>
-public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ApprovePipelineCommand(ApprovePipelineRequest Request, ActorContext? Actor = null) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Task to force-close, the actor id, and an optional reason.</summary>
 public record ForceClosePipelineRequest(Guid TaskId, string ActorId, string? Reason = null);
 
 /// <summary>Force-closes a pipeline and returns its state.</summary>
-public record ForceClosePipelineCommand(ForceClosePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ForceClosePipelineCommand(ForceClosePipelineRequest Request, ActorContext? Actor = null) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops one planner or review session (Actor work is cancelled by subtask).</summary>
 public record CancelPipelineSessionRequest(Guid TaskId, Guid SessionId);
