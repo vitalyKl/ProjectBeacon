@@ -36,7 +36,13 @@ public class LoginHandler
         _auditWriter = auditWriter;
     }
 
-    public async Task<Result<LoginResponse>> HandleAsync(LoginCommand command, CancellationToken ct = default)
+    public Task<Result<LoginResponse>> HandleAsync(LoginCommand command, CancellationToken ct = default) =>
+        HandleAsync(command, requireOperator: false, ct);
+
+    public async Task<Result<LoginResponse>> HandleAsync(
+        LoginCommand command,
+        bool requireOperator,
+        CancellationToken ct = default)
     {
         // User accounts and login sessions are platform-global. Keep this explicit rather
         // than inheriting a stale project/org scope from a previous web circuit.
@@ -79,6 +85,21 @@ public class LoginHandler
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
                 "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
                 detailsJson: """{"reasonCode":"account_disabled","authMethod":"password"}"""));
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
+        }
+
+        if (requireOperator && !user.IsAdmin)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None),
+                "platform.control_login.denied",
+                "User",
+                user.Id.ToString(),
+                null,
+                null,
+                outcome: AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"not_operator","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
         }
