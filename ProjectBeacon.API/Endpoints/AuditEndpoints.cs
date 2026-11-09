@@ -1,7 +1,5 @@
 namespace ProjectBeacon.API.Endpoints;
 
-using System.Globalization;
-using System.Text;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Admin;
@@ -11,8 +9,6 @@ using ProjectBeacon.Domain.Entities.Audit;
 /// <summary>Platform-operator audit history endpoints.</summary>
 public static class AuditEndpoints
 {
-    private const int MaxExportRows = 10_000;
-
     /// <summary>
     /// Maps the operator-only, bounded audit history query and CSV export.
     /// Each handler revalidates the persisted operator account and permission before an unscoped read.
@@ -97,14 +93,14 @@ public static class AuditEndpoints
         var rows = new List<AuditEntry>();
         try
         {
-            await foreach (var entry in auditReader.StreamAsync(admin.Value!, query, MaxExportRows, ct))
+            await foreach (var entry in auditReader.StreamAsync(admin.Value!, query, AuditCsvWriter.MaxRows, ct))
             {
                 rows.Add(entry);
-                if (rows.Count > MaxExportRows)
+                if (rows.Count > AuditCsvWriter.MaxRows)
                     return Results.Problem(
                         statusCode: StatusCodes.Status413PayloadTooLarge,
                         title: "Audit export is too large",
-                        detail: $"Narrow the filters to export no more than {MaxExportRows} events.");
+                        detail: $"Narrow the filters to export no more than {AuditCsvWriter.MaxRows} events.");
             }
         }
         catch (ArgumentException exception)
@@ -112,32 +108,7 @@ public static class AuditEndpoints
             return ProblemResults.Bad(exception.Message);
         }
 
-        var csv = new StringBuilder();
-        AppendCsvRow(csv,
-            "AtUtc", "ActorKind", "ActorUserId", "ActorTokenId", "ActorDeviceId",
-            "Action", "TargetType", "TargetId", "OrgId", "ProjectId", "Outcome",
-            "Ip", "UserAgent", "TraceId", "DetailsJson");
-        foreach (var entry in rows)
-        {
-            AppendCsvRow(csv,
-                DateTime.SpecifyKind(entry.At, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture),
-                entry.ActorKind.ToString(),
-                entry.ActorUserId?.ToString(),
-                entry.ActorTokenId?.ToString(),
-                entry.ActorDeviceId?.ToString(),
-                entry.Action,
-                entry.TargetType,
-                entry.TargetId,
-                entry.OrgId?.ToString(),
-                entry.ProjectId?.ToString(),
-                entry.Outcome.ToString(),
-                entry.Ip,
-                entry.UserAgent,
-                entry.TraceId,
-                entry.DetailsJson);
-        }
-
-        var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetBytes(csv.ToString());
+        var bytes = AuditCsvWriter.Encode(rows);
         var fileName = $"projectbeacon-audit-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
         return Results.File(bytes, "text/csv; charset=utf-8", fileName);
     }
