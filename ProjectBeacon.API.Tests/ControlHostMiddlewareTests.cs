@@ -32,7 +32,7 @@ public sealed class ControlHostMiddlewareTests
 
         Assert.False(nextCalled);
         Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
-        Assert.Equal("no-store", context.Response.Headers.CacheControl);
+        Assert.Equal("no-store", context.Response.Headers.CacheControl.ToString());
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class ControlHostMiddlewareTests
         await middleware.InvokeAsync(context);
 
         Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
-        Assert.Equal("/admin/audit", context.Response.Headers.Location);
+        Assert.Equal("/admin/audit", context.Response.Headers.Location.ToString());
     }
 
     [Theory]
