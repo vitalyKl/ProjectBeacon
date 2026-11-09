@@ -2596,4 +2596,127 @@ orthstar</value>
 <data name="NoOrganizationAccess" xml:space="preserve">
     <value>まだ組織に所属していません。招待を受け入れるか、サービス運営者にお問い合わせください。</value>
   </data>
+<data name="AuditHistory" xml:space="preserve">
+    <value>監査履歴</value>
+  </data>
+<data name="AuditHistoryLead" xml:space="preserve">
+    <value>組織とプロジェクト全体のセキュリティおよび運用者の操作です。時刻は UTC で表示されます。</value>
+  </data>
+<data name="AuditAccessDenied" xml:space="preserve">
+    <value>監査履歴を表示する権限がありません。</value>
+  </data>
+<data name="AuditFilterOrg" xml:space="preserve">
+    <value>組織 ID</value>
+  </data>
+<data name="AuditFilterProject" xml:space="preserve">
+    <value>プロジェクト ID</value>
+  </data>
+<data name="AuditFilterActor" xml:space="preserve">
+    <value>アクターユーザー ID</value>
+  </data>
+<data name="AuditFilterActorToken" xml:space="preserve">
+    <value>アクター API トークン ID</value>
+  </data>
+<data name="AuditFilterActorDevice" xml:space="preserve">
+    <value>アクターデバイス ID</value>
+  </data>
+<data name="AuditFilterAction" xml:space="preserve">
+    <value>アクションコード</value>
+  </data>
+<data name="AuditFilterTargetType" xml:space="preserve">
+    <value>対象タイプ</value>
+  </data>
+<data name="AuditFilterTargetId" xml:space="preserve">
+    <value>対象 ID</value>
+  </data>
+<data name="AuditFilterFromUtc" xml:space="preserve">
+    <value>開始 (UTC)</value>
+  </data>
+<data name="AuditFilterToUtc" xml:space="preserve">
+    <value>終了 (UTC)</value>
+  </data>
+<data name="AuditActorKind" xml:space="preserve">
+    <value>アクター種別</value>
+  </data>
+<data name="AuditOutcome" xml:space="preserve">
+    <value>結果</value>
+  </data>
+<data name="All" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+<data name="ApplyFilters" xml:space="preserve">
+    <value>フィルターを適用</value>
+  </data>
+<data name="ClearFilters" xml:space="preserve">
+    <value>フィルターをクリア</value>
+  </data>
+<data name="AuditPageSummary" xml:space="preserve">
+    <value>イベント {0} 件 · {1}/{2} ページ</value>
+  </data>
+<data name="AuditNoEvents" xml:space="preserve">
+    <value>条件に一致する監査イベントはありません。</value>
+  </data>
+<data name="AuditTimestamp" xml:space="preserve">
+    <value>時刻 (UTC)</value>
+  </data>
+<data name="AuditActor" xml:space="preserve">
+    <value>アクター</value>
+  </data>
+<data name="AuditAction" xml:space="preserve">
+    <value>アクション</value>
+  </data>
+<data name="AuditTarget" xml:space="preserve">
+    <value>対象</value>
+  </data>
+<data name="AuditScope" xml:space="preserve">
+    <value>範囲</value>
+  </data>
+<data name="AuditDetails" xml:space="preserve">
+    <value>詳細</value>
+  </data>
+<data name="AuditActorHuman" xml:space="preserve">
+    <value>ユーザー</value>
+  </data>
+<data name="AuditActorApiToken" xml:space="preserve">
+    <value>API トークン</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>デバイス</value>
+  </data>
+<data name="AuditActorWorker" xml:space="preserve">
+    <value>ワーカー</value>
+  </data>
+<data name="AuditActorSystem" xml:space="preserve">
+    <value>システム</value>
+  </data>
+<data name="AuditOutcomeSuccess" xml:space="preserve">
+    <value>成功</value>
+  </data>
+<data name="AuditOutcomeDenied" xml:space="preserve">
+    <value>拒否</value>
+  </data>
+<data name="AuditOutcomeFailed" xml:space="preserve">
+    <value>失敗</value>
+  </data>
+<data name="AuditProjectScope" xml:space="preserve">
+    <value>プロジェクト {0}</value>
+  </data>
+<data name="AuditOrgScope" xml:space="preserve">
+    <value>組織 {0}</value>
+  </data>
+<data name="AuditPlatformScope" xml:space="preserve">
+    <value>プラットフォーム全体</value>
+  </data>
+<data name="AuditInvalidGuid" xml:space="preserve">
+    <value>組織、プロジェクト、アクターの各フィルターには有効な GUID が必要です。</value>
+  </data>
+<data name="AuditExportCsv" xml:space="preserve">
+    <value>CSV をエクスポート</value>
+  </data>
+<data name="AuditExportTooLarge" xml:space="preserve">
+    <value>エクスポートが {0} 件を超えています。フィルターを絞り込んで再試行してください。</value>
+  </data>
+<data name="AuditExported" xml:space="preserve">
+    <value>監査イベントを {0} 件エクスポートしました。</value>
+  </data>
 </root>
