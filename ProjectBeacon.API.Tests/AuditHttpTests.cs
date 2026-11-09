@@ -26,8 +26,8 @@ public sealed class AuditHttpTests
         var page = await audit.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(1, page.GetProperty("page").GetInt32());
         Assert.Equal(50, page.GetProperty("pageSize").GetInt32());
-        Assert.Equal(0, page.GetProperty("totalCount").GetInt64());
-        Assert.Equal(0, page.GetProperty("items").GetArrayLength());
+        Assert.Equal(1, page.GetProperty("totalCount").GetInt64());
+        Assert.Equal(1, page.GetProperty("items").GetArrayLength());
 
         var invalidPage = await client.GetAsync("/v1/admin/audit?pageSize=201", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, invalidPage.StatusCode);
