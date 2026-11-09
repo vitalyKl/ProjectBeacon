@@ -49,29 +49,49 @@ public sealed class ContentWriter
         {
             ContextSection section => JsonSerializer.Serialize(new
             {
-                section.SectionId, section.Key, section.Title, section.BodyMarkdown, section.Ordinal,
-                section.ScopeType, section.RepoId, section.TaskId, section.Path, Deleted = deleted
+                section.SectionId,
+                section.Key,
+                section.Title,
+                section.BodyMarkdown,
+                section.Ordinal,
+                section.ScopeType,
+                section.RepoId,
+                section.TaskId,
+                section.Path,
+                Deleted = deleted
             }, JsonOptions),
             Decision decision => JsonSerializer.Serialize(new
             {
-                decision.Title, decision.Context, decision.DecisionBody, decision.Consequences,
+                decision.Title,
+                decision.Context,
+                decision.DecisionBody,
+                decision.Consequences,
                 Deleted = deleted
             }, JsonOptions),
             Constraint constraint => JsonSerializer.Serialize(new
             {
-                constraint.Body, constraint.ScopePath, constraint.Kind, Deleted = deleted
+                constraint.Body,
+                constraint.ScopePath,
+                constraint.Kind,
+                Deleted = deleted
             }, JsonOptions),
             Milestone milestone => JsonSerializer.Serialize(new
             {
-                milestone.Name, milestone.Description, milestone.Order, Deleted = deleted
+                milestone.Name,
+                milestone.Description,
+                milestone.Order,
+                Deleted = deleted
             }, JsonOptions),
             Project project => JsonSerializer.Serialize(new
             {
-                project.Description, Deleted = deleted
+                project.Description,
+                Deleted = deleted
             }, JsonOptions),
             TaskItem task => JsonSerializer.Serialize(new
             {
-                task.Description, task.ReviewNotes, Deleted = deleted
+                task.Description,
+                task.ReviewNotes,
+                Deleted = deleted
             }, JsonOptions),
             _ => throw new ArgumentException(
                 $"'{target.GetType().Name}' is not a revisioned content target.",
