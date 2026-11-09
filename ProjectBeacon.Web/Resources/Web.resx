@@ -2889,4 +2889,13 @@ No Beacon-hosted coding agent.</value>
 <data name="AuditInvalidGuid" xml:space="preserve">
     <value>Organization, project and actor filters must be valid GUIDs.</value>
   </data>
+<data name="AuditExportCsv" xml:space="preserve">
+    <value>Export CSV</value>
+  </data>
+<data name="AuditExportTooLarge" xml:space="preserve">
+    <value>The export exceeds {0} events. Narrow the filters and try again.</value>
+  </data>
+<data name="AuditExported" xml:space="preserve">
+    <value>Exported {0} audit events.</value>
+  </data>
 </root>
