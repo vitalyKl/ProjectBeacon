@@ -46,6 +46,21 @@ public class Milestone : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Restores milestone content, including a nullable description, from history.</summary>
+    public void RestoreContentFromHistory(string name, string? description, int order)
+    {
+        if (string.Equals(Name, name, StringComparison.Ordinal)
+            && string.Equals(Description, description, StringComparison.Ordinal)
+            && Order == order)
+            return;
+
+        Name = name;
+        Description = description;
+        Order = order;
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Delete()
     {
         Revision++;
