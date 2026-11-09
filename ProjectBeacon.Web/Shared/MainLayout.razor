@@ -115,6 +115,12 @@
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
+                @if (_isAdmin)
+                {
+                    <MudNavLink Href="/admin/audit" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
+                        @L["AuditHistory"]
+                    </MudNavLink>
+                }
             </MudNavMenu>
             <div class="beacon-drawer-footer">
                 <a class="beacon-fleet" href="/settings/workstations">
@@ -167,6 +173,7 @@
     private string _pipelineHref = "/board";
     private bool _drawerOpen = true;
     private bool _bodyReady;
+    private bool _isAdmin;
     private bool _commandOpen;
     private bool _hooked;
     private bool _watchingSystem;
@@ -209,6 +216,8 @@
             commands.Add(Cmd(L["Reports"], L["NavGovern"], "/reports", Icons.Material.Filled.Assessment));
             commands.Add(Cmd(L["ProjectSettings"], L["NavGovern"], "/project/settings", Icons.Material.Filled.Folder));
             commands.Add(Cmd(L["Settings"], L["NavGovern"], "/settings", Icons.Material.Filled.Settings));
+            if (_isAdmin)
+                commands.Add(Cmd(L["AuditHistory"], L["NavGovern"], "/admin/audit", Icons.Material.Filled.History));
             commands.Add(Cmd(L["Connections"], L["NavGovern"], "/settings/connections", Icons.Material.Filled.Link));
             commands.Add(Cmd(L["CreateProject"], L["NavOperate"], "/projects/new", Icons.Material.Filled.CreateNewFolder));
             return commands;
@@ -338,6 +347,7 @@
             return;
         var state = await AuthState;
         var actor = ActorContextFactory.FromPrincipal(state.User);
+        _isAdmin = actor.IsAdmin;
         await TenantBinder.BindUserAsync(actor);
         await LoadProfile(state);
         if (actor.UserId is not Guid userId)
@@ -397,6 +407,7 @@
             "settings" => (L["Settings"].Value, L["ShellHintSettings"].Value),
             "task" => (L["TaskDetail"].Value, L["ShellHintTask"].Value),
             "projects" => (L["CreateProject"].Value, L["ShellHintNewProject"].Value),
+            "admin" => (L["AuditHistory"].Value, L["AuditHistoryLead"].Value),
             _ => (L["ProjectBeacon"].Value, string.Empty)
         };
 
