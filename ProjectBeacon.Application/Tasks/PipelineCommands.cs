@@ -147,7 +147,7 @@ public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId,
 public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Task to approve, with an optional note.</summary>
-public record ApprovePipelineRequest(Guid TaskId, string? Note = null);
+public record ApprovePipelineRequest(Guid TaskId, string? Note = null, string? ActorId = null);
 
 /// <summary>Approves a pipeline and returns its state.</summary>
 public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
