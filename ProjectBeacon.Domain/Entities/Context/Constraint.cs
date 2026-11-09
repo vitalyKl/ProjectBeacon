@@ -36,6 +36,19 @@ public class Constraint : Entity, IProjectScoped
         Revision++;
     }
 
+    /// <summary>Restores the editable body and scope path from a historical content snapshot.</summary>
+    public void RestoreContentFromHistory(string body, string scopePath)
+    {
+        var normalizedPath = scopePath ?? string.Empty;
+        if (string.Equals(Body, body, StringComparison.Ordinal)
+            && string.Equals(ScopePath, normalizedPath, StringComparison.Ordinal))
+            return;
+
+        Body = body;
+        ScopePath = normalizedPath;
+        Revision++;
+    }
+
     public void Activate()
     {
         if (Status == ConstraintStatus.Active)
