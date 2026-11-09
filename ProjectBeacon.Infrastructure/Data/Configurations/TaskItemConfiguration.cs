@@ -24,6 +24,7 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.Property(e => e.CompletedAt);
         entity.Property(e => e.PipelineStage).HasConversion<string>();
         entity.Property(e => e.StateRevision).HasDefaultValue(0).IsRequired();
+        entity.Property(e => e.ContentRevision).HasDefaultValue(1).IsRequired().IsConcurrencyToken();
 
         entity.HasOne(e => e.Project)
             .WithMany(e => e.Tasks)
