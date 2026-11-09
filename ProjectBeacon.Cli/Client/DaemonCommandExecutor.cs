@@ -593,8 +593,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             {
                 applied = await sessionWorktree.ApplyChangesAsync(applyCt);
             }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException
-                or System.ComponentModel.Win32Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 sessionWorktree.Preserve();
                 var error = $"Could not apply the isolated worktree patch ({ex.GetType().Name}): {ex.Message}";
@@ -622,13 +621,19 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             if (subtaskId is not null && reportsDiff && !string.IsNullOrWhiteSpace(diffArtifact)
                 && !diffArtifact.Contains("(No text changes.)", StringComparison.Ordinal))
             {
-                var stored = await StoreSubtaskDiffArtifactAsync(
-                    taskId, subtaskId.Value, diffArtifact, token.Token, applyCt);
-                if (!stored.Success)
+                try
                 {
-                    diffArtifactError = stored.Error;
-                    _state.Log("pipeline diff artifact was not stored: " + stored.Error);
+                    var stored = await StoreSubtaskDiffArtifactAsync(
+                        taskId, subtaskId.Value, diffArtifact, token.Token, applyCt);
+                    if (!stored.Success)
+                        diffArtifactError = stored.Error;
                 }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
+                {
+                    diffArtifactError = $"workspace write failed ({ex.GetType().Name})";
+                }
+                if (diffArtifactError is not null)
+                    _state.Log("pipeline diff artifact was not stored: " + diffArtifactError);
             }
 
             return (true, null, diffArtifactError);
@@ -646,8 +651,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 var apply = await ApplyWorktreeChangesAsync(CancellationToken.None);
                 return (true, apply.Success, apply.Error, apply.DiffArtifactError);
             }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException
-                or HttpRequestException or System.ComponentModel.Win32Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 sessionWorktree.Preserve();
                 return (true, false, $"The Actor reported Done, but worktree recovery failed ({ex.GetType().Name}): {ex.Message}", null);
