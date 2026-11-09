@@ -18,7 +18,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
         var tenant = Tenant(orgId);
         var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(true)));
         var (context, next) = NewContext("/v1/tasks");
-        var middleware = new OrganizationEntitlementMiddleware(next);
+        var middleware = new OrganizationEntitlementMiddleware(next.Delegate);
 
         await middleware.InvokeAsync(context, tenant, service);
 
@@ -74,7 +74,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
             Result.Failure<EntitlementDecision>("database unavailable", ErrorKind.Unavailable));
         var (context, next) = NewContext("/v1/chat/sessions");
 
-        await new OrganizationEntitlementMiddleware(next).InvokeAsync(context, tenant, service);
+        await new OrganizationEntitlementMiddleware(next.Delegate).InvokeAsync(context, tenant, service);
 
         Assert.False(next.Called);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
@@ -128,8 +128,6 @@ public sealed class OrganizationEntitlementMiddlewareTests
             Called = true;
             return Task.CompletedTask;
         };
-
-        public static implicit operator RequestDelegate(NextHandler handler) => handler.Delegate;
     }
 
     private sealed class StubEntitlementService(Result<EntitlementDecision> decision) : IEntitlementService
