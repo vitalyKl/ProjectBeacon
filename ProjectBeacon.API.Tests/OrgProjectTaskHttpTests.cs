@@ -347,8 +347,12 @@ public sealed class OrgProjectTaskHttpTests
         var ownProjectId = ownProject.GetProperty("id").GetGuid();
         var ownProjects = await memberClient.GetFromJsonAsync<JsonElement>(
             $"/v1/orgs/{orgId}/projects", TestContext.Current.CancellationToken);
-        Assert.Single(ownProjects.EnumerateArray());
-        Assert.Equal(ownProjectId, ownProjects[0].GetProperty("id").GetGuid());
+        Assert.Equal(2, ownProjects.GetArrayLength());
+        var visibleProjectIds = ownProjects.EnumerateArray()
+            .Select(project => project.GetProperty("id").GetGuid())
+            .ToHashSet();
+        Assert.Contains(operatorProjectId, visibleProjectIds);
+        Assert.Contains(ownProjectId, visibleProjectIds);
 
         var foreign = await PostJson(adminClient, "/v1/orgs", new { name = "Foreign Customer" });
         var foreignId = foreign.GetProperty("id").GetGuid();
