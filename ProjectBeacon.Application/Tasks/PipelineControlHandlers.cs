@@ -100,8 +100,18 @@ public sealed class CancelSubtaskHandler : ICommandHandler<CancelSubtaskCommand,
 public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CancelPipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CancelPipelineHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public CancelPipelineHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(CancelPipelineCommand command, CancellationToken ct = default)
     {
@@ -129,6 +139,7 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
             var expectedStage = task.PipelineStage;
             var expectedStatus = task.Status;
             var expectedRevision = task.StateRevision;
+            var expectedContentRevision = task.ContentRevision;
             task.CancelPipeline();
 
             var sessions = await db.PipelineSessions
@@ -150,7 +161,8 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
                 t => t.Id == task.Id
                     && t.PipelineStage == expectedStage
                     && t.Status == expectedStatus
-                    && t.StateRevision == expectedRevision,
+                    && t.StateRevision == expectedRevision
+                    && t.ContentRevision == expectedContentRevision,
                 t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Cancelled,
                 update => update
                     .SetProperty(t => t.PipelineStage, task.PipelineStage)
@@ -158,7 +170,8 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
                     .SetProperty(t => t.SubStage, task.SubStage)
                     .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
                     .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                    .SetProperty(t => t.StateRevision, task.StateRevision),
+                    .SetProperty(t => t.StateRevision, task.StateRevision)
+                    .SetProperty(t => t.ContentRevision, task.ContentRevision),
                 ct);
             if (transition == GuardedTransitionResult.Lost)
                 return Result.Failure<PipelineStateDto>("Pipeline state changed while cancelling; retry.");
@@ -170,6 +183,8 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
                 return Result.Ok(await PipelineSupport.StateAsync(db, alreadyCancelled, ct));
             }
 
+            if (task.ContentRevision != expectedContentRevision)
+                _contentWriter.AddVersion(db, task, "System", "pipeline-cancel");
             await db.SaveChangesAsync(ct);
             await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(s => s.Id).ToArray(), ct);
             await PipelineSupport.CancelReviewCheckCommandsAsync(db, task.ProjectId, task.Id, ct);
@@ -185,8 +200,18 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
 public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public RestartPipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RestartPipelineHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public RestartPipelineHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RestartPipelineCommand command, CancellationToken ct = default)
     {
@@ -207,6 +232,7 @@ public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineComm
             var expectedStage = task.PipelineStage;
             var expectedStatus = task.Status;
             var expectedRevision = task.StateRevision;
+            var expectedContentRevision = task.ContentRevision;
             task.ResetPipeline();
 
             var sessions = await db.PipelineSessions
@@ -228,17 +254,21 @@ public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineComm
                 .Where(t => t.Id == task.Id
                     && t.PipelineStage == expectedStage
                     && t.Status == expectedStatus
-                    && t.StateRevision == expectedRevision)
+                    && t.StateRevision == expectedRevision
+                    && t.ContentRevision == expectedContentRevision)
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(t => t.PipelineStage, task.PipelineStage)
                     .SetProperty(t => t.Status, task.Status)
                     .SetProperty(t => t.SubStage, task.SubStage)
                     .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
                     .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                    .SetProperty(t => t.StateRevision, task.StateRevision), ct);
+                    .SetProperty(t => t.StateRevision, task.StateRevision)
+                    .SetProperty(t => t.ContentRevision, task.ContentRevision), ct);
             if (updated == 0)
                 return Result.Failure<PipelineStateDto>("Pipeline state changed while restarting; retry.");
 
+            if (task.ContentRevision != expectedContentRevision)
+                _contentWriter.AddVersion(db, task, "System", "pipeline-restart");
             await db.SaveChangesAsync(ct);
             await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(s => s.Id).ToArray(), ct);
             await PipelineSupport.CancelReviewCheckCommandsAsync(db, task.ProjectId, task.Id, ct);
