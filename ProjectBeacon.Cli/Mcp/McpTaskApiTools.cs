@@ -25,7 +25,7 @@ internal static partial class McpApiTools
             () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
                 ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
                 ("path", "string", false), ("projectId", "string", false)), TaskCreate),
-        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone.",
+        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone. When changing description, pass expectedContentRevision from get_task; stale or missing revisions are rejected.",
             () => Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
                 ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
                 ("milestoneId", "string", false), ("projectId", "string", false),
@@ -243,12 +243,15 @@ internal static partial class McpApiTools
             return new McpToolText(true, "missing or invalid 'taskId'");
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "title", Text(args, "title"));
-        Put(body, "description", Text(args, "description"));
+        var description = Text(args, "description");
+        var expectedContentRevision = IntArg(args, "expectedContentRevision");
+        if (description is not null && expectedContentRevision is null or < 1)
+            return new McpToolText(true, "missing or invalid 'expectedContentRevision' (read it from get_task first)");
+        Put(body, "description", description);
         Put(body, "priority", Text(args, "priority"));
         Put(body, "type", Text(args, "type"));
         Put(body, "labelId", Text(args, "labelId"));
         Put(body, "milestoneId", Text(args, "milestoneId"));
-        var expectedContentRevision = IntArg(args, "expectedContentRevision");
         if (expectedContentRevision is not null)
             body["expectedContentRevision"] = expectedContentRevision.Value;
         if (!TryProject(env, args, out var projectId, out _))
