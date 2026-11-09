@@ -3,6 +3,7 @@ namespace ProjectBeacon.Infrastructure.Http;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,20 +37,25 @@ public static class BeaconExceptionHandler
                 }
 
                 var badRequest = exception as BadHttpRequestException;
+                var concurrencyConflict = exception is DbUpdateConcurrencyException;
                 if (badRequest is not null)
                     logger.LogWarning("Bad request ({Status}) for {Method} {Path}", badRequest.StatusCode, context.Request.Method, context.Request.Path.Value);
+                else if (concurrencyConflict)
+                    logger.LogWarning("Concurrency conflict for {Method} {Path}", context.Request.Method, context.Request.Path.Value);
                 else if (exception is not null)
                     logger.LogError(exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path.Value);
 
                 if (context.Response.HasStarted)
                     return;
 
-                var status = badRequest?.StatusCode ?? StatusCodes.Status500InternalServerError;
+                var status = badRequest?.StatusCode
+                    ?? (concurrencyConflict ? StatusCodes.Status409Conflict : StatusCodes.Status500InternalServerError);
                 var problem = new Dictionary<string, object?>
                 {
                     ["type"] = status switch
                     {
                         StatusCodes.Status400BadRequest => "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                        StatusCodes.Status409Conflict => "https://tools.ietf.org/html/rfc9110#section-15.5.10",
                         StatusCodes.Status413PayloadTooLarge => "https://tools.ietf.org/html/rfc9110#section-15.5.14",
                         StatusCodes.Status415UnsupportedMediaType => "https://tools.ietf.org/html/rfc9110#section-15.5.16",
                         _ => "https://tools.ietf.org/html/rfc9110#section-15.6.1"
@@ -57,6 +63,7 @@ public static class BeaconExceptionHandler
                     ["title"] = status switch
                     {
                         StatusCodes.Status400BadRequest => "Bad Request",
+                        StatusCodes.Status409Conflict => "Conflict",
                         StatusCodes.Status413PayloadTooLarge => "Payload Too Large",
                         StatusCodes.Status415UnsupportedMediaType => "Unsupported Media Type",
                         _ => "Internal Server Error"
@@ -65,7 +72,11 @@ public static class BeaconExceptionHandler
                     ["traceId"] = ProblemJson.TraceId(context)
                 };
 
-                if (exception is not null && isDevelopment)
+                if (concurrencyConflict)
+                {
+                    problem["detail"] = "The resource changed since it was loaded. Refresh and retry.";
+                }
+                else if (exception is not null && isDevelopment)
                 {
                     problem["detail"] = exception.Message;
                     problem["exceptionType"] = exception.GetType().Name;
