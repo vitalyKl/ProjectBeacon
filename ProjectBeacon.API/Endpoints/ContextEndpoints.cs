@@ -28,6 +28,8 @@ public static class ContextEndpoints
         app.MapGet("/v1/projects/{projectId}/context/export/agents-md", ExportAgentsMd).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId}/context/compile", CompileBrief).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/constraints", ListConstraints).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapGet("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}", GetConstraint)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -202,6 +204,13 @@ public static class ContextEndpoints
     {
         var result = await handler.HandleAsync(projectId);
         return Results.Ok(result.Value);
+    }
+
+    private static async Task<IResult> GetConstraint(
+        Guid projectId, Guid constraintId, GetConstraintHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, constraintId, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)
