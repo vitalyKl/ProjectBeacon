@@ -12,6 +12,7 @@ public sealed class ControlHostMiddlewareTests
 
     [Theory]
     [InlineData("/admin/audit")]
+    [InlineData("/admin/email")]
     [InlineData("/control/login")]
     [InlineData("/control/bootstrap")]
     [InlineData("/control/recover")]
@@ -40,6 +41,7 @@ public sealed class ControlHostMiddlewareTests
 
     [Theory]
     [InlineData("/v1/admin/audit")]
+    [InlineData("/admin/email")]
     [InlineData("/app.css")]
     [InlineData("/app-base.css")]
     [InlineData("/app-controls.css")]
