@@ -44,6 +44,8 @@ public sealed record AgentPromptControls(double? Temperature, string? ReasoningE
     public int? ContextLimit { get; init; }
     public int? MaxTokens { get; init; }
     public AgentHarnessAuthorization? HarnessAuthorization { get; init; }
+    /// <summary>Additional system-level execution context, such as the isolated worktree environment contract.</summary>
+    public string? SystemPromptAddition { get; init; }
 }
 
 /// <summary>Readiness reported by a workstation-local agent runtime.</summary>

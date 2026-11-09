@@ -174,11 +174,25 @@ public sealed class NativeCommandRunnerTests
             Assert.False(start.Environment.ContainsKey("BEACON_TEST_SECRET"));
             Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "home"), start.Environment["HOME"]);
             Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "tmp"), start.Environment["TMP"]);
+
+            var projectCache = NativeCommandRunner.ProjectCachePath("project-123");
+            var projectStart = NativeCommandRunner.CreateStartInfo(
+                root, sessionId, ["dotnet", "test"], cacheScope: "project-123");
+            Assert.Equal(Path.Combine(projectCache, "nuget", "packages"), projectStart.Environment["NUGET_PACKAGES"]);
+            Assert.Equal(Path.Combine(projectCache, "npm"), projectStart.Environment["npm_config_cache"]);
+            Assert.Equal(Path.Combine(projectCache, "pip"), projectStart.Environment["PIP_CACHE_DIR"]);
+            Assert.Equal(Path.Combine(projectCache, "go-mod"), projectStart.Environment["GOMODCACHE"]);
+            Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "home", ".cargo"),
+                projectStart.Environment["CARGO_HOME"]);
+            Assert.NotEqual(projectCache, projectStart.Environment["HOME"]);
         }
         finally
         {
             Environment.SetEnvironmentVariable("BEACON_TEST_SECRET", oldSecret);
             NativeCommandRunner.CleanupSession(sessionId);
+            var cache = NativeCommandRunner.ProjectCachePath("project-123");
+            if (Directory.Exists(cache))
+                Directory.Delete(cache, recursive: true);
             Directory.Delete(root, recursive: true);
         }
     }

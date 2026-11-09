@@ -140,6 +140,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             session.ContextLimit = controls?.ContextLimit is > 0 ? controls.ContextLimit : session.ContextLimit;
             turnNumber = ++session.TurnNumber;
             session.TurnStatus = new AgentTurnStatus(false, null, null, session.TurnStatus?.MessageId);
+            if (!string.IsNullOrWhiteSpace(controls?.SystemPromptAddition))
+            {
+                var systemMessage = session.Messages.FirstOrDefault(message =>
+                    string.Equals(message["role"]?.GetValue<string>(), "system", StringComparison.OrdinalIgnoreCase));
+                if (systemMessage is not null)
+                {
+                    var currentSystemPrompt = systemMessage["content"]?.GetValue<string>() ?? string.Empty;
+                    if (!currentSystemPrompt.Contains(controls.SystemPromptAddition, StringComparison.Ordinal))
+                        systemMessage["content"] = currentSystemPrompt + Environment.NewLine + Environment.NewLine
+                            + controls.SystemPromptAddition.Trim();
+                }
+            }
             userMessage = new JsonObject { ["role"] = "user", ["content"] = text };
             session.Messages.Add(userMessage);
         }
@@ -785,7 +797,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 commandAuthorization.WorkingDirectory,
                                                 session.Id,
                                                 parsedArguments!,
-                                                ct);
+                                                ct,
+                                                commandAuthorization.ProjectId.ToString("N"));
                                             isError = result.IsError;
                                             toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                                         }
