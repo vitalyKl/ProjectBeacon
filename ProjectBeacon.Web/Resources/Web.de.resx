@@ -2592,7 +2592,7 @@ orthstar</value>
     <value>Auditverlauf</value>
   </data>
 <data name="AuditHistoryLead" xml:space="preserve">
-    <value>Sicherheits- und Operatoraktivitäten über Organisationen und Projekte hinweg. Zeiten werden in UTC angezeigt.</value>
+    <value>Sicherheits- und Operatoraktivitäten über Organisationen und Projekte hinweg. Zeiten werden in Ihrer lokalen Zeitzone angezeigt; Filter und CSV-Zeitstempel verwenden UTC.</value>
   </data>
 <data name="AuditAccessDenied" xml:space="preserve">
     <value>Sie haben keine Berechtigung, den Auditverlauf anzuzeigen.</value>
@@ -2649,7 +2649,7 @@ orthstar</value>
     <value>Keine Auditereignisse entsprechen diesen Filtern.</value>
   </data>
 <data name="AuditTimestamp" xml:space="preserve">
-    <value>Zeit (UTC)</value>
+    <value>Zeit (lokal)</value>
   </data>
 <data name="AuditActor" xml:space="preserve">
     <value>Akteur</value>
