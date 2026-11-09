@@ -61,7 +61,8 @@ The audit writer stages these events in the same database unit of work as the re
 | Organizations | `org.created`, `org.updated` |
 | Projects | `project.created`, `project.updated`, `project.deleted` |
 | Devices | `device.enrolled`, `device.token.rotated`, `device.revoked` |
-| Account credentials | `account.login.succeeded`, `account.login.denied`, `account.password_reset.requested`, `account.password_reset.completed`, `account.password_changed` |
+| Project runtimes | `project.runtime.attached`, `project.runtime.updated`, `project.runtime.detached` |
+| Account credentials | `account.registered` (open and invited registration), `account.login.succeeded`, `account.login.denied`, `account.logout`, `account.password_reset.requested`, `account.password_reset.completed`, `account.password_changed` |
 | Multi-factor authentication | `account.mfa.setup_started`, `account.mfa.enabled`, `account.mfa.disabled` |
 | Platform bootstrap | `platform.bootstrap.completed` |
 | Authorization | `security.authorization.denied` for explicit HTTP 403 responses on `/v1` routes |
@@ -82,10 +83,11 @@ operations use explicit global scopes rather than relying on an ambient tenant s
 The platform-operator HTTP API exposes:
 
 - `GET /v1/admin/audit` — filtered, bounded pages (up to 200 rows) with organization, project,
-  UTC time range, action, actor kind/user id, and outcome filters.
+  UTC time range, action, actor kind/user/token/device id, target type/id, and outcome filters.
 - `GET /v1/admin/audit/export.csv` — CSV using the same filters, separately gated by
   `AuditExport`. Export is capped at 10,000 events; `X-Audit-Export-Truncated` reports whether
-  the result was capped.
+  the result was capped. CSV fields are quoted, formula-prefixed values are neutralized, and
+  the response is marked `no-store`/ `nosniff`.
 
 Both endpoints require an authenticated human and an `AdminActor` returned by `IAdminGate`.
 The Blazor operator console at `/admin/audit` provides the same filters, paging, event details,
@@ -96,8 +98,10 @@ identifies them as system administrators; the page still revalidates the account
 ## Verification
 
 Tests cover permission-denied reads, operator reads and export, denial-event persistence,
-organization/project lifecycle, device enrollment/token rotation/revocation, registration and
-invitation flows, and the absence of credentials or invite secrets from event details. The
+CSV formula-injection and row-limit protections, organization/project/runtime lifecycle,
+device enrollment/token rotation/revocation, logout/session invalidation, open and invited
+registration, invitation flows, machine-actor mapping, and the absence of credentials,
+invite secrets or local paths from event details. The
 PostgreSQL RLS and append-only trigger tests remain the database-level enforcement layer.
 
 ## Remaining scope
@@ -113,4 +117,7 @@ are implemented. Deliberately not included in this slice:
 - Full event capture for every task, chat, context, pipeline and read operation. High-volume
   content events are not audit records; any new action must be explicitly selected and use the
   fixed metadata allowlist.
+- Break-glass `recover-admin` attempts are not yet explicitly recorded as platform audit events.
+  The endpoint remains rate-limited and token-protected; add dedicated denied/success events before
+  treating recovery activity as fully covered.
 - Step-up authentication for sensitive operator actions. Elevated actions remain fail-closed.
