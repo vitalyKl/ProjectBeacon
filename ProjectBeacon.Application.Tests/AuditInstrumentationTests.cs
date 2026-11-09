@@ -528,7 +528,11 @@ public sealed class AuditInstrumentationTests : IDisposable
     {
         var registration = new RegisterHandler(
             _factory, new BcryptPasswordHasher(),
-            new ConfigurationBuilder().Build(),
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Testing",
+                ["AUTH_LOCAL_INVITE_ONLY"] = "false"
+            }).Build(),
             auditWriter: _auditWriter);
 
         var result = await registration.HandleAsync(
