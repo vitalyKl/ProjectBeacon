@@ -11,8 +11,13 @@ using Microsoft.EntityFrameworkCore;
 public class UpsertContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
         => HandleCoreAsync(command, isDraft: false, authorId: null, ct);
@@ -53,6 +58,15 @@ public class UpsertContextNodeHandler
                     "An agent draft may only update its own NeedsReview section; reviewed or other-author sections are protected.",
                     ErrorKind.Forbidden);
 
+            var contentChanged =
+                !string.Equals(existing.Title, command.Request.Title, StringComparison.Ordinal)
+                || !string.Equals(existing.BodyMarkdown, command.Request.BodyMarkdown, StringComparison.Ordinal);
+            if (contentChanged
+                && command.Request.ExpectedRevision != existing.Revision)
+                return Result.Failure<ContextSectionDto>(
+                    "Context section changed since it was loaded. Refresh the section and retry.",
+                    ErrorKind.Conflict);
+
             if (isDraft)
                 existing.UpdateDraft(command.Request.Title, command.Request.BodyMarkdown,
                     command.Request.SourcePath, authorId);
@@ -62,6 +76,22 @@ public class UpsertContextNodeHandler
                     bodyMarkdown: command.Request.BodyMarkdown,
                     updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
                     updatedById: command.Request.SourcePath);
+
+            if (contentChanged)
+            {
+                var saved = await _contentWriter.SaveAsync(
+                    db,
+                    existing,
+                    isDraft ? "Agent" : command.Request.Source == ContextSource.Native ? "Human" : "System",
+                    isDraft ? authorId : command.Request.SourcePath,
+                    ct);
+                if (!saved.Success)
+                    return Result.Failure<ContextSectionDto>(saved.Error ?? "Content revision conflict.", ErrorKind.Conflict);
+            }
+            else
+            {
+                await db.SaveChangesAsync(ct);
+            }
 
             savedId = existing.Id;
         }
@@ -84,6 +114,14 @@ public class UpsertContextNodeHandler
                 updatedById: isDraft ? authorId : command.Request.SourcePath);
 
             db.ContextSections.Add(section);
+            var saved = await _contentWriter.SaveAsync(
+                db,
+                section,
+                isDraft ? "Agent" : command.Request.Source == ContextSource.Native ? "Human" : "System",
+                isDraft ? authorId : command.Request.SourcePath,
+                ct);
+            if (!saved.Success)
+                return Result.Failure<ContextSectionDto>(saved.Error ?? "Content version could not be saved.");
             savedId = section.Id;
         }
 
@@ -117,6 +155,7 @@ public class UpsertContextNodeHandler
             section.ReviewState,
             section.UpdatedByType,
             section.UpdatedById,
-            section.UpdatedAt);
+            section.UpdatedAt,
+            section.Revision);
     }
 }

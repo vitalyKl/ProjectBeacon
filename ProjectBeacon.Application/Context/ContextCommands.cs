@@ -23,7 +23,8 @@ public record ContextSectionDto(
     ContextReviewState ReviewState,
     string? UpdatedByType,
     string? UpdatedById,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    int Revision);
 /// <summary>
 /// Fields for creating or replacing a context section. Source defaults to Native in the handler when omitted on the wire.
 /// </summary>
@@ -38,7 +39,8 @@ public record UpsertContextNodeRequest(
     Guid? TaskId,
     string? Path,
     ContextSource Source,
-    string? SourcePath);
+    string? SourcePath,
+    int? ExpectedRevision = null);
 /// <summary>
 /// Command for upsert context node.
 /// </summary>
