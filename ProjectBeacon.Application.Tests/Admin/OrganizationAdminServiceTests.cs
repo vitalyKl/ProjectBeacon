@@ -94,7 +94,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         Assert.True(created.Success, created.Error);
         Assert.Equal("owner@acme.example", created.Value!.Email);
-        Assert.Contains("/invite?token=", created.Value.InviteUrl);
+        Assert.StartsWith("https://app.example.test/invite?token=", created.Value.InviteUrl);
         Assert.Single(_email.Sent);
 
         var invite = await _seedDb.OrgInvites.IgnoreQueryFilters()
@@ -162,6 +162,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         Assert.True(invited.Success, invited.Error);
         Assert.Equal("owner@existing.example", invited.Value!.Email);
+        Assert.StartsWith("https://app.example.test/invite?token=", invited.Value.InviteUrl);
         Assert.Single(_email.Sent);
 
         var persisted = await _seedDb.OrgInvites.IgnoreQueryFilters()

@@ -91,6 +91,7 @@ The following commercial persistence models are still future work. Add them with
 
 | Future model | Responsibility | Required invariant |
 |---|---|
+| Plan | Product-owned plan key, public name, cadence and limits | Price may be unset during alpha; provider price identifiers are never plan identity |
 | Subscription | Commercial state, source and billing period | At most one effective subscription per organization |
 | BillingEvent | Verified payment/subscription facts | Append-only and provider-event idempotency |
 | Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
