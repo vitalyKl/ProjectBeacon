@@ -62,6 +62,9 @@ same unit of work as their state changes:
   success/failure/denial (`account.registered`, `account.password_*`, `account.login.*`). Events
   use global unscoped account storage, never include email addresses or password/token material,
   and use fixed reason/authentication method codes.
+- Authenticated HTTP 403 responses (`authorization.denied`) are recorded by API middleware in
+  a separate explicit unscoped write. The event stores the route template and actor identity, not
+  request bodies, query strings, or tenant data.
 
 - API token creation and revocation (`project.api_token.created`,
   `project.api_token.revoked`). Raw token values and token hashes are never written.
@@ -103,6 +106,5 @@ query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted ac
 and supports organization, project, time, action, actor and outcome filters. API tokens, devices
 and workers cannot use this endpoint.
 
-Not implemented: denied authorization attempts, audit UI, export, retention, or distributed
-audit streaming. This branch does not claim
+Not implemented: audit UI, export, retention, or distributed audit streaming. This branch does not claim
 comprehensive audit coverage.
