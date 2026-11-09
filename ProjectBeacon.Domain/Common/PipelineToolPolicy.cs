@@ -49,7 +49,8 @@ public static class PipelineToolPolicy
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
-        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
+        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
+        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose
     });
     public static IReadOnlyList<string> ActorForbiddenTools { get; } = Array.AsReadOnly(new[]
     {

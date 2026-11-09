@@ -25,6 +25,11 @@ internal static partial class McpApiTools
                 ("taskId", "string", false), ("projectId", "string", false)), NodeUpsert),
         new(McpToolNames.DeleteContextNode, "Delete a context section.",
             () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeDelete),
+        new(McpToolNames.ContextCreateDraft, "Create or retry a NeedsReview context draft. A reviewed section cannot be overwritten by an agent.",
+            () => Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
+                ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
+                ("sourcePath", "string", false), ("repoId", "string", false), ("taskId", "string", false),
+                ("projectId", "string", false)), NodeDraft),
         new(McpToolNames.ExportAgentsMd, "Export AGENTS.md markdown for the project.",
             () => Props(("repoId", "string", false), ("path", "string", false), ("projectId", "string", false)), ExportAgents),
     ];
@@ -88,6 +93,32 @@ internal static partial class McpApiTools
         Put(body, "repoId", Text(args, "repoId"));
         Put(body, "taskId", Text(args, "taskId"));
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/nodes", body, ct);
+    }
+
+    private static async Task<McpToolText> NodeDraft(
+        JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryProject(env, args, out var projectId, out var error))
+            return new McpToolText(true, error);
+        var title = Text(args, "title");
+        var bodyMarkdown = Text(args, "bodyMarkdown");
+        var scopeType = Text(args, "scopeType");
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(bodyMarkdown)
+            || string.IsNullOrWhiteSpace(scopeType))
+            return new McpToolText(true, "title, bodyMarkdown, and scopeType are required");
+        var body = new JsonObject
+        {
+            ["title"] = title,
+            ["bodyMarkdown"] = bodyMarkdown,
+            ["scopeType"] = scopeType
+        };
+        Put(body, "sectionId", Text(args, "sectionId"));
+        Put(body, "key", Text(args, "key"));
+        Put(body, "path", Text(args, "path"));
+        Put(body, "sourcePath", Text(args, "sourcePath"));
+        Put(body, "repoId", Text(args, "repoId"));
+        Put(body, "taskId", Text(args, "taskId"));
+        return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/drafts", body, ct);
     }
 
     private static async Task<McpToolText> NodeDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
