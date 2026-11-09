@@ -291,6 +291,101 @@
         </MudPaper>
 
         }
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between mb-3">
+                <MudText Typo="Typo.h6">Projects</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    @_detail.Projects.Count of @_detail.ProjectCount shown
+                </MudText>
+            </div>
+            @if (_detail.Projects.Count == 0)
+            {
+                <EmptyState>No projects have been created for this organization.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="_detail.Projects" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Project</MudTh>
+                        <MudTh>Description</MudTh>
+                        <MudTh>Created</MudTh>
+                        <MudTh>Updated</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Project">
+                            <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Name</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Id</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Description">@(!string.IsNullOrWhiteSpace(context.Description) ? context.Description : "—")</MudTd>
+                        <MudTd DataLabel="Created"><LocalTime Value="context.CreatedAt" Format="g" /></MudTd>
+                        <MudTd DataLabel="Updated">
+                            @if (context.UpdatedAt is { } updatedAt)
+                            {
+                                <LocalTime Value="updatedAt" Format="g" />
+                            }
+                            else
+                            {
+                                <text>—</text>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        @if (_canReadUsers)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+                <div class="d-flex align-center justify-space-between mb-3">
+                    <MudText Typo="Typo.h6">Workstations</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @_detail.Devices.Count of @_detail.DeviceCount shown
+                    </MudText>
+                </div>
+                @if (_detail.Devices.Count == 0)
+                {
+                    <EmptyState>No workstation daemons are registered for this organization's members.</EmptyState>
+                }
+                else
+                {
+                    <MudTable Items="_detail.Devices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Device</MudTh>
+                            <MudTh>Account</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Last heartbeat</MudTh>
+                            <MudTh>Registered</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Device">@context.Name</MudTd>
+                            <MudTd DataLabel="Account">
+                                @context.OwnerLogin
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerEmail</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Status">
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(context.Status == "Online" ? Color.Success : context.Status == "Revoked" ? Color.Error : Color.Default)">
+                                    @context.Status
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Last heartbeat">
+                                @if (context.LastHeartbeatAt is { } heartbeat)
+                                {
+                                    <LocalTime Value="heartbeat" Format="g" />
+                                }
+                                else
+                                {
+                                    <text>Never</text>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Registered"><LocalTime Value="context.CreatedAt" Format="g" /></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        }
+
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             @if (!_canReadEntitlements)
             {

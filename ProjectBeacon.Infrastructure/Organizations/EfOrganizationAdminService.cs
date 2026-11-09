@@ -199,8 +199,60 @@ public sealed class EfOrganizationAdminService(
                 .ToListAsync(ct);
         }
 
+        var projectRows = await db.Projects.IgnoreQueryFilters()
+            .Where(project => project.OrgId == orgId)
+            .OrderByDescending(project => project.UpdatedAt ?? project.CreatedAt)
+            .ThenBy(project => project.Id)
+            .Take(100)
+            .Select(project => new OrganizationAdminProject(
+                project.Id, project.Name, project.Description, project.CreatedAt, project.UpdatedAt))
+            .ToListAsync(ct);
         var projectCount = await db.Projects.IgnoreQueryFilters()
             .CountAsync(project => project.OrgId == orgId, ct);
+
+        // Workstation daemons are user-owned, not organization-owned. Show only devices
+        // belonging to this organization's members, and only to operators with UsersRead.
+        var devices = new List<OrganizationAdminDevice>();
+        var deviceCount = 0;
+        if (canReadUsers && members.Count > 0)
+        {
+            var memberUserIds = members.Select(member => member.UserId).Distinct().ToArray();
+            deviceCount = await db.DaemonDevices
+                .CountAsync(device => memberUserIds.Contains(device.UserId), ct);
+
+            var deviceRows = await (
+                from device in db.DaemonDevices
+                join user in db.Users on device.UserId equals user.Id
+                where memberUserIds.Contains(device.UserId)
+                orderby device.LastHeartbeatAt descending, device.CreatedAt descending
+                select new
+                {
+                    device.Id,
+                    device.Name,
+                    device.CreatedAt,
+                    device.LastHeartbeatAt,
+                    device.RevokedAt,
+                    user.Login,
+                    user.Email
+                })
+                .Take(100)
+                .ToListAsync(ct);
+
+            devices = deviceRows.Select(device => new OrganizationAdminDevice(
+                device.Id,
+                device.Name,
+                device.Login,
+                device.Email,
+                device.CreatedAt,
+                device.LastHeartbeatAt,
+                device.RevokedAt is not null
+                    ? "Revoked"
+                    : device.LastHeartbeatAt is { } heartbeat
+                        && now - heartbeat <= TimeSpan.FromSeconds(ProjectBeacon.Domain.Entities.Devices.DaemonDevice.OnlineWindowSeconds)
+                        ? "Online"
+                        : "Offline")).ToList();
+        }
+
         var ownerEmail = members.FirstOrDefault(x => x.Role == nameof(MemberRole.Owner))?.Email
             ?? invites.Where(x => x.Role == nameof(MemberRole.Owner) && x.Status == nameof(InviteStatus.Pending))
                 .OrderBy(x => x.CreatedAt).Select(x => x.Email).FirstOrDefault();
@@ -208,7 +260,8 @@ public sealed class EfOrganizationAdminService(
             org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt,
             ownerEmail, memberCount, projectCount, pendingInviteCount);
 
-        return Result.Ok(new OrganizationAdminDetails(summary, members, invites, projectCount));
+        return Result.Ok(new OrganizationAdminDetails(
+            summary, members, invites, projectCount, projectRows, deviceCount, devices));
     }
 
     public async Task<Result<OperatorInviteCreated>> CreateAsync(

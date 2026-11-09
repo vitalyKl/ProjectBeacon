@@ -10,6 +10,8 @@ using ProjectBeacon.Application.Organizations;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Domain.Entities.Devices;
+using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
@@ -283,6 +285,52 @@ public sealed class OrganizationAdminServiceTests : IDisposable
             .CountAsync(x => x.TargetType == "User" && x.TargetId == customerOwner.Id.ToString()
                 && (x.Action == "platform.user.account_disabled" || x.Action == "platform.user.account_enabled"),
                 TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task OrganizationDetails_ExposeProjectAndSafeMemberDeviceInventory_RespectingUsersRead()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var owner = User.Create("customer-owner", "owner@inventory.example", "hash");
+        var org = Org.Create("Inventory customer", "Customer with projects and a workstation");
+        var project = Project.Create("Customer portal", "Production application", org.Id);
+        var device = DaemonDevice.Create(
+            "Owner workstation", owner.Id, "private-fingerprint", "private-token-hash", "private-prefix");
+        device.Heartbeat(instanceId: "private-instance-id");
+
+        _seedDb.Users.AddRange(_admin, owner);
+        _seedDb.Orgs.Add(org);
+        _seedDb.Projects.Add(project);
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        _seedDb.DaemonDevices.Add(device);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var service = CreateService();
+        var reader = await AdminActorAsync(OperatorPermission.OrganizationsRead | OperatorPermission.UsersRead);
+        var details = await service.GetAsync(reader, org.Id);
+
+        Assert.True(details.Success, details.Error);
+        Assert.Single(details.Value!.Projects);
+        Assert.Equal(project.Id, details.Value.Projects[0].Id);
+        Assert.Equal("Customer portal", details.Value.Projects[0].Name);
+        Assert.Equal(1, details.Value.DeviceCount);
+        var visibleDevice = Assert.Single(details.Value.Devices);
+        Assert.Equal(device.Id, visibleDevice.Id);
+        Assert.Equal("Owner workstation", visibleDevice.Name);
+        Assert.Equal("customer-owner", visibleDevice.OwnerLogin);
+        Assert.Equal("owner@inventory.example", visibleDevice.OwnerEmail);
+        Assert.Equal("Online", visibleDevice.Status);
+        Assert.NotNull(visibleDevice.LastHeartbeatAt);
+
+        // The project inventory is operational metadata; personal workstation metadata is
+        // limited to operators who also have UsersRead.
+        var limitedReader = await AdminActorAsync(OperatorPermission.OrganizationsRead);
+        var limitedDetails = await service.GetAsync(limitedReader, org.Id);
+        Assert.True(limitedDetails.Success, limitedDetails.Error);
+        Assert.Single(limitedDetails.Value!.Projects);
+        Assert.Empty(limitedDetails.Value.Members);
+        Assert.Empty(limitedDetails.Value.Devices);
+        Assert.Equal(0, limitedDetails.Value.DeviceCount);
     }
 
     private EfOrganizationAdminService CreateService(IUserSessionVersionCache? sessionVersions = null) =>

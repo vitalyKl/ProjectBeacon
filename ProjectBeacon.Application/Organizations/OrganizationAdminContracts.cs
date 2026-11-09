@@ -17,11 +17,24 @@ public sealed record OrganizationAdminMember(
 public sealed record OrganizationAdminInvite(
     Guid Id, string Email, string Role, string Status, DateTime CreatedAt, DateTime ExpiresAt);
 
+public sealed record OrganizationAdminProject(
+    Guid Id, string Name, string? Description, DateTime CreatedAt, DateTime? UpdatedAt);
+
+/// <summary>
+/// Safe workstation inventory metadata. Device credentials, fingerprints and diagnostic payloads are never exposed.
+/// </summary>
+public sealed record OrganizationAdminDevice(
+    Guid Id, string Name, string OwnerLogin, string OwnerEmail,
+    DateTime CreatedAt, DateTime? LastHeartbeatAt, string Status);
+
 public sealed record OrganizationAdminDetails(
     OrganizationAdminListItem Organization,
     IReadOnlyList<OrganizationAdminMember> Members,
     IReadOnlyList<OrganizationAdminInvite> Invites,
-    int ProjectCount);
+    int ProjectCount,
+    IReadOnlyList<OrganizationAdminProject> Projects,
+    int DeviceCount,
+    IReadOnlyList<OrganizationAdminDevice> Devices);
 
 public sealed record CreateOrganizationWithOwnerRequest(
     string Name, string? Description, string OwnerEmail);
