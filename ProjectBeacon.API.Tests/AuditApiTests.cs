@@ -11,12 +11,13 @@ using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Infrastructure.Security;
 
+[Collection("api-http")]
 public sealed class AuditApiTests
 {
     [Fact]
     public async Task PlatformAdmin_CanReadAndExportAudit_ButRegularUserCannot()
     {
-        await using var factory = new AuthApiFactory();
+        await using var factory = new AuditApiFactory();
         var client = factory.CreateClient();
 
         var deniedBootstrap = await client.SendAsync(BootstrapRequest("invalid-bootstrap-token"),
@@ -232,5 +233,29 @@ public sealed class AuditApiTests
         var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/recover-admin");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
+    }
+}
+
+
+/// <summary>
+/// The audit lifecycle scenario intentionally performs more than five auth operations.
+/// Rate limiting is covered independently by AuthHttpTests; keep this test's auth budget
+/// high and serialize it with those tests because the host reads limits from process env.
+/// </summary>
+public sealed class AuditApiFactory : AuthApiFactory
+{
+    private readonly string? _previousAuthLimit;
+
+    public AuditApiFactory()
+    {
+        _previousAuthLimit = Environment.GetEnvironmentVariable("RATE_LIMIT_PER_WINDOW");
+        Environment.SetEnvironmentVariable("RATE_LIMIT_PER_WINDOW", "20");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            Environment.SetEnvironmentVariable("RATE_LIMIT_PER_WINDOW", _previousAuthLimit);
+        base.Dispose(disposing);
     }
 }
