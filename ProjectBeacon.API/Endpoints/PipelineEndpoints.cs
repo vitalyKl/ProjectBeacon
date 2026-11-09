@@ -244,12 +244,22 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> ApprovePipeline(Guid taskId, [FromBody] ApproveBody body, ApprovePipelineHandler handler, CancellationToken ct)
+    private static async Task<IResult> ApprovePipeline(
+        Guid taskId,
+        [FromBody] ApproveBody body,
+        HttpContext ctx,
+        ApprovePipelineHandler handler,
+        CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(body.TaskId, body.Note)), ct);
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
+            return ProblemResults.Unauthorized();
+
+        var result = await handler.HandleAsync(new ApprovePipelineCommand(
+            new ApprovePipelineRequest(body.TaskId, body.Note, actor.UserId.Value.ToString("D"))), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
