@@ -2576,4 +2576,6 @@
   <data name="ExecutionProfileAct" xml:space="preserve"><value>Выполнение</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>Модель</value></data>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Для выбранной модели размер контекста должен быть больше нуля. Укажите размер контекстного окна перед запуском сессии.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Резерв токенов для ответа (0 — автоматически)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
 </root>
