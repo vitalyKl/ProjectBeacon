@@ -140,11 +140,21 @@ FORWARDEDHEADERS__KNOWNNETWORKS__0=<pod CIDR, e.g. 10.244.0.0/16>
 or pin exact ingress pod IPs with `FORWARDEDHEADERS__KNOWNPROXIES__0=<ingress pod IP>`. For multiple
 entries append `__1`, `__2`, ... Check the source address the web pods actually see with
 `kubectl get pods -n ingress-nginx -o wide`. Set the variables in the `env:` list of
-`deploy/k8s/web.yaml` or in the `beacon-web` secret (`envFrom`).
+`deploy/k8s/web.yaml` or in the `beacon-web` secret (`envFrom`), for **both** blue and green Web
+deployments.
+
+This is required for the Control Plane on Kubernetes, not merely an optimization: its login and
+logout endpoints compare the browser's exact `Origin` with the request scheme and host, and reject
+the request with `403` when they differ. Since the ingress terminates TLS, the browser sends an
+`https://...` Origin while the pod otherwise sees the upstream request as `http://...`. Trusting
+the actual ingress source restores `Request.Scheme=https` before the origin check. In Production,
+authentication cookies remain `Secure` independently because their cookie policy is
+`SecurePolicy.Always`; that flag does not replace correct forwarded-header handling.
 
 Do not set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` — it bypasses the trust lists and would honor
-forwarded headers from any client. Without the variables, forwarded headers are ignored and the app
-behaves as before (plain HTTP, no `Secure` flag).
+forwarded headers from any client. Without the variables, forwarded headers are ignored: the
+application sees the internal HTTP request, and Control Plane form login/logout fail closed with
+`403`.
 
 ## CI
 
