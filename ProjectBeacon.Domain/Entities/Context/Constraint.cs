@@ -28,16 +28,8 @@ public class Constraint : Entity, IProjectScoped
         return constraint;
     }
 
-    public void UpdateBody(string body)
-    {
-        if (string.Equals(Body, body, StringComparison.Ordinal))
-            return;
-        Body = body;
-        Revision++;
-    }
-
-    /// <summary>Restores the editable body and scope path from a historical content snapshot.</summary>
-    public void RestoreContentFromHistory(string body, string scopePath)
+    /// <summary>Updates all editable constraint content as one revision.</summary>
+    public void UpdateContent(string body, string? scopePath)
     {
         var normalizedPath = scopePath ?? string.Empty;
         if (string.Equals(Body, body, StringComparison.Ordinal)
@@ -48,6 +40,12 @@ public class Constraint : Entity, IProjectScoped
         ScopePath = normalizedPath;
         Revision++;
     }
+
+    public void UpdateBody(string body) => UpdateContent(body, ScopePath);
+
+    /// <summary>Restores the editable body and scope path from a historical content snapshot.</summary>
+    public void RestoreContentFromHistory(string body, string scopePath)
+        => UpdateContent(body, scopePath);
 
     public void Activate()
     {
@@ -63,8 +61,5 @@ public class Constraint : Entity, IProjectScoped
         Status = ConstraintStatus.Rejected;
     }
 
-    public void SetScopePath(string path)
-    {
-        ScopePath = path ?? string.Empty;
-    }
+    public void SetScopePath(string path) => UpdateContent(Body, path);
 }
