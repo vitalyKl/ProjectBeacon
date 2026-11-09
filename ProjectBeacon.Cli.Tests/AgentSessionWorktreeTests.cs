@@ -110,7 +110,7 @@ public sealed class AgentSessionWorktreeTests
             await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.cs"), "class AgentChange {}\n");
             var artifact = await workspace.BuildDiffArtifactAsync(CancellationToken.None);
             Assert.Contains("agent-change.cs", artifact);
-            Assert.Contains("git diff --stat", artifact);
+            Assert.Contains("Git diff --stat", artifact);
             Assert.DoesNotContain("DO-NOT-LEAK", artifact);
             Assert.DoesNotContain("SECRET=", artifact);
         }

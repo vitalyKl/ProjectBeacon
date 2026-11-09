@@ -268,8 +268,8 @@ public sealed class McpStdioServerTests
             Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.Contains("task_create_subtask", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
             Assert.Contains("task_pipeline_status", toolsJson, StringComparison.Ordinal);
         }
         finally
@@ -279,7 +279,7 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
-    public async Task PlannerCanLaunchActorWhileItsSubtaskIsRestricted()
+    public async Task PlannerCannotInvokeHiddenActorLaunchTool()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         var sessionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -342,8 +342,8 @@ public sealed class McpStdioServerTests
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
-            Assert.True(launchCalled);
-            Assert.DoesNotContain("\"isError\":true", frames[0].ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            Assert.False(launchCalled);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -452,7 +452,7 @@ public sealed class McpStdioServerTests
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
             Assert.Equal(0, apiCallCount);
-            Assert.Contains("must match BEACON_TASK_ID", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -516,7 +516,7 @@ public sealed class McpStdioServerTests
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
             Assert.False(launchCalled);
-            Assert.Contains("does not belong to the current pipeline task", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -996,8 +996,8 @@ public sealed class McpStdioServerTests
             var toolsJson = frames[0]["result"]!["tools"]!.ToJsonString();
             Assert.Contains("task_create_subtask", toolsJson, StringComparison.Ordinal);
             Assert.Contains("context_compile", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
             Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("apply_patch", toolsJson, StringComparison.Ordinal);
