@@ -146,7 +146,7 @@ public static class DeviceEndpoints
         {
             return result.FromResult();
         }
-        return Results.Accepted($"/v1/commands/{result.Value!.Id}", result.Value);
+        return Results.Accepted($"/v1/projects/{projectId}/git-sync/{result.Value!.Id}", result.Value);
     }
 
     private static async Task<IResult> EnqueueGitSync(
