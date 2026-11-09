@@ -3,7 +3,7 @@
 <MudTabs Class="@EditorClass">
     <MudTabPanel Text="@L["MarkdownEdit"]">
         <MudTextField T="string" Value="@Value" ValueChanged="OnValueChanged"
-                      Label="@Label" Lines="@Lines" MaxLength="@MaxLength"
+                      Label="@Label" Lines="@Lines" MaxLength="@(MaxLength ?? 0)"
                       Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true"
                       Counter="@CounterValue" />
     </MudTabPanel>
