@@ -102,7 +102,7 @@ public record FinishWorkRequest(
 /// <summary>
 /// Command for finish work.
 /// </summary>
-public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
+public record FinishWorkCommand(FinishWorkRequest Request, ActorContext? Actor = null) : ICommand<Result>;
 /// <summary>
 /// A task row, including status, priority, review notes, and timestamps.
 /// </summary>
