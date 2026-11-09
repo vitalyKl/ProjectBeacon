@@ -9,6 +9,65 @@ using ProjectBeacon.Domain.Common;
 public sealed class McpApiToolsTests
 {
     [Fact]
+    public async Task ContentWriteTools_PassExpectedRevisionsToHttpApi()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var upsert = await McpApiTools.CallAsync(
+            McpToolNames.UpsertContextNode,
+            new JsonObject
+            {
+                ["title"] = "Goals", ["bodyMarkdown"] = "Updated goals", ["scopeType"] = "Project",
+                ["sectionId"] = "goals", ["expectedRevision"] = 4
+            }, api, env);
+        Assert.False(upsert.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/context/nodes"
+            && call.Body.Contains("\"expectedRevision\":4", StringComparison.Ordinal));
+
+        var draft = await McpApiTools.CallAsync(
+            McpToolNames.ContextCreateDraft,
+            new JsonObject
+            {
+                ["title"] = "Agent notes", ["bodyMarkdown"] = "Updated draft", ["scopeType"] = "Project",
+                ["sectionId"] = "agent_notes", ["expectedRevision"] = 2
+            }, api, env);
+        Assert.False(draft.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/context/drafts"
+            && call.Body.Contains("\"expectedRevision\":2", StringComparison.Ordinal));
+
+        var updateTask = await McpApiTools.CallAsync(
+            McpToolNames.UpdateTask,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"), ["description"] = "Updated task",
+                ["expectedContentRevision"] = 7
+            }, api, env);
+        Assert.False(updateTask.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "PUT" && call.Path == $"/v1/projects/{projectId:D}/tasks/{taskId:D}"
+            && call.Body.Contains("\"expectedContentRevision\":7", StringComparison.Ordinal));
+
+        var notes = await McpApiTools.CallAsync(
+            McpToolNames.AddReviewNotes,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"), ["reviewNotes"] = "Reviewed",
+                ["expectedContentRevision"] = 8
+            }, api, env);
+        Assert.False(notes.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "PATCH" && call.Path == $"/v1/projects/{projectId:D}/tasks/{taskId:D}/review-notes"
+            && call.IfMatchRevision == "8");
+    }
+
+    [Fact]
     public async Task TaskAttachFile_UploadsWorkspaceFileToCurrentTask()
     {
         var root = TempRoot();
@@ -401,14 +460,15 @@ public sealed class McpApiToolsTests
 
     private sealed class RecordingHandler : HttpMessageHandler
     {
-        public List<(string Method, string Path, string Body, string? ProjectHeader)> Calls { get; } = [];
+        public List<(string Method, string Path, string Body, string? ProjectHeader, string? IfMatchRevision)> Calls { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             var project = request.Headers.TryGetValues("X-Project-Id", out var values) ? values.Single() : null;
+            var ifMatch = request.Headers.TryGetValues("If-Match", out var ifMatchValues) ? ifMatchValues.Single() : null;
             var path = request.RequestUri!.PathAndQuery;
-            Calls.Add((request.Method.Method, path, body, project));
+            Calls.Add((request.Method.Method, path, body, project, ifMatch));
 
             var payload = path switch
             {
