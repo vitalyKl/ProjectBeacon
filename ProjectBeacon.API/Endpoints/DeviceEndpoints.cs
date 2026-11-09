@@ -158,7 +158,7 @@ public static class DeviceEndpoints
     {
         var result = await handler.HandleAsync(projectId, ctx.GetActor(), body.Mode, ct);
         return result.Success
-            ? Results.Accepted($"/v1/commands/{result.Value!.Id}", result.Value)
+            ? Results.Accepted($"/v1/projects/{projectId}/git-sync/{result.Value!.Id}", result.Value)
             : result.FromResult();
     }
 
