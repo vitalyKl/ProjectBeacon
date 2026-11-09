@@ -77,10 +77,12 @@ public static class McpToolNames
     public const string DeleteContextNode = "delete_context_node";
     public const string ExportAgentsMd = "export_agents_md";
     public const string ListConstraints = "list_constraints";
+    public const string GetConstraint = "get_constraint";
     public const string CreateConstraint = "create_constraint";
     public const string ActivateConstraint = "activate_constraint";
     public const string RejectConstraint = "reject_constraint";
     public const string ListDecisions = "list_decisions";
+    public const string GetDecision = "get_decision";
     public const string RecordDecision = "record_decision";
     public const string AcceptDecision = "accept_decision";
     public const string DeprecateDecision = "deprecate_decision";
@@ -188,7 +190,8 @@ public static class McpToolCatalog
             // Context and governance tools use the explicit context capability.
             ..Api(McpToolScope.Read, ApiTokenCapability.ContextRead,
                 McpToolNames.ContextCompile, McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
-                McpToolNames.ExportAgentsMd, McpToolNames.ListConstraints, McpToolNames.ListDecisions),
+                McpToolNames.ExportAgentsMd, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+                McpToolNames.ListDecisions, McpToolNames.GetDecision),
             ..Api(McpToolScope.Write, ApiTokenCapability.ContextRead,
                 McpToolNames.UpsertContextNode, McpToolNames.DeleteContextNode, McpToolNames.CreateConstraint,
                 McpToolNames.ActivateConstraint, McpToolNames.RejectConstraint, McpToolNames.RecordDecision,

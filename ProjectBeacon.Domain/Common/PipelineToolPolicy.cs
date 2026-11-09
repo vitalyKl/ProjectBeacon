@@ -34,18 +34,22 @@ public static class PipelineToolPolicy
         {
             McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject,
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-            McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones,
+            McpToolNames.ListConstraints, McpToolNames.GetConstraint, McpToolNames.ListDecisions,
+            McpToolNames.GetDecision, McpToolNames.ListMilestones,
             McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.WorkspaceWrite
         }).Concat(PlannerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ReviewerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
             McpToolNames.GetProject, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-            McpToolNames.ListContextNodes, McpToolNames.GetContextNode
+            McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
+            McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+            McpToolNames.ListDecisions, McpToolNames.GetDecision
         }).Concat(ReviewerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.ListDecisions,
+        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
@@ -76,7 +80,8 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> AgentProfileContextTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.GetTask, McpToolNames.TaskPipelineStatus, McpToolNames.ListConstraints,
-        McpToolNames.ListDecisions, McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
+        McpToolNames.GetConstraint, McpToolNames.ListDecisions, McpToolNames.GetDecision,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
     });
     public static IReadOnlyList<string> AgentProfileWriteTools { get; } = Array.AsReadOnly(new[]
@@ -91,7 +96,9 @@ public static class PipelineToolPolicy
         McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
         McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        McpToolNames.ListDecisions, McpToolNames.GetDecision,
+        McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
         McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "suggest_command_prefixes",
         "run_log", "service_status", "service_logs"
