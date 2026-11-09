@@ -5,6 +5,7 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Domain.Common
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
@@ -116,7 +117,7 @@ else
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <div class="beacon-field-row">
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => RunGitSync(GitSyncMode.Status))"
-                       Disabled="@(_gitSyncBusy || !_runtimes.Any(runtime => runtime.DeviceOnline))">
+                       Disabled="@(_gitSyncBusy || !HasGitSyncWorkstation)">
                 @L["GitSyncCheck"]
             </MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunGitSync(GitSyncMode.PullFastForward))"
@@ -153,7 +154,7 @@ else
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncStillRunning"]</MudText>
         }
-        @if (!_runtimes.Any(runtime => runtime.DeviceOnline))
+        @if (!HasGitSyncWorkstation)
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncNoOnlineDevice"]</MudText>
         }
@@ -180,6 +181,11 @@ else
     private GitSyncResultDto? _gitSyncResult;
     private bool _gitSyncBusy;
     private bool _gitSyncCommandPending;
+
+    private bool HasGitSyncWorkstation => _runtimes.Any(runtime =>
+        runtime.DeviceOnline
+        && _devices.Any(device => device.Id == runtime.DeviceId
+            && WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1)));
 
     private Severity GitSyncSeverity => _gitSyncResult?.Outcome switch
     {

@@ -92,7 +92,7 @@ public sealed class EnqueueProjectGitSyncHandler
             command.Id.ToString(),
             project.OrgId,
             project.Id,
-            detailsJson: """{"source":"project-settings"}"""));
+            detailsJson: JsonSerializer.Serialize(new { mode = mode.ToString() })));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(EnqueueCommandHandler.MapCommand(command));
