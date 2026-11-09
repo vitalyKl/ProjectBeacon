@@ -19,18 +19,16 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService? _auth;
-    private readonly ITenantContext _tenant;
     private readonly IAdminGate? _adminGate;
 
     public CreateProjectHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService? auth,
-        ITenantContext tenant,
+        ITenantContext _,
         IAdminGate? adminGate = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
-        _tenant = tenant;
         _adminGate = adminGate;
     }
 
