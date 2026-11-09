@@ -89,7 +89,8 @@ public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : IComman
 /// </summary>
 public record FinishWorkReview(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);
 /// <summary>
-/// Result is done, failed, skipped, or partial. ActorId is the principal user id supplied by the host, not a client body field. Done requires ReviewRunId.
+/// Result is done, failed, skipped, or partial. ActorId is retained for legacy access validation;
+/// the trusted caller identity is supplied separately on FinishWorkCommand. Done requires ReviewRunId.
 /// </summary>
 public record FinishWorkRequest(
     string TaskId,
