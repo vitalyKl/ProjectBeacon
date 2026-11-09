@@ -56,7 +56,7 @@ public static class ContextEndpoints
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             projectId, request.Title, request.BodyMarkdown, request.SectionId,
             request.ScopeType, request.Key, request.RepoId, request.TaskId,
-            request.Path, ContextSource.Native, request.SourcePath, request.ExpectedRevision));
+            request.Path, ContextSource.Native, request.SourcePath, request.ExpectedRevision), actor);
         var result = await handler.HandleDraftAsync(command, authorId, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
@@ -128,6 +128,7 @@ public static class ContextEndpoints
     private static async Task<IResult> UpsertNode(
         Guid projectId,
         [FromBody] UpsertNodeRequest request,
+        HttpContext context,
         UpsertContextNodeHandler handler)
     {
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
@@ -142,7 +143,7 @@ public static class ContextEndpoints
             request.Path,
             request.Source,
             request.SourcePath,
-            request.ExpectedRevision));
+            request.ExpectedRevision), context.GetActor());
 
         var result = await handler.HandleAsync(command);
 
@@ -167,9 +168,10 @@ public static class ContextEndpoints
     private static async Task<IResult> DeleteNode(
         Guid projectId,
         Guid nodeId,
+        HttpContext context,
         DeleteContextNodeHandler handler)
     {
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId));
+        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
