@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
+using Domain.Common;
 using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpStdioServerTests
@@ -268,8 +269,8 @@ public sealed class McpStdioServerTests
             Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.Contains("task_create_subtask", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
             Assert.Contains("task_pipeline_status", toolsJson, StringComparison.Ordinal);
         }
         finally
@@ -279,7 +280,7 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
-    public async Task PlannerCanLaunchActorWhileItsSubtaskIsRestricted()
+    public async Task PlannerCannotInvokeHiddenActorLaunchTool()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         var sessionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -342,8 +343,8 @@ public sealed class McpStdioServerTests
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
-            Assert.True(launchCalled);
-            Assert.DoesNotContain("\"isError\":true", frames[0].ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            Assert.False(launchCalled);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -452,7 +453,7 @@ public sealed class McpStdioServerTests
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
             Assert.Equal(0, apiCallCount);
-            Assert.Contains("must match BEACON_TASK_ID", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -516,7 +517,7 @@ public sealed class McpStdioServerTests
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
             Assert.False(launchCalled);
-            Assert.Contains("does not belong to the current pipeline task", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Planner pipeline role", frames[0].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
@@ -574,6 +575,93 @@ public sealed class McpStdioServerTests
                     .Select(item => item!.GetValue<string>());
                 Assert.DoesNotContain("subtaskId", required);
             }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ToolsList_ActorReceivesGrantedWorkspaceAttachmentAndContextToolsAlongsideLifecycleTools()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var subtaskId = Guid.NewGuid();
+        var grants = new[]
+        {
+            McpToolNames.ReadFile,
+            McpToolNames.GetTree,
+            McpToolNames.SearchCode,
+            McpToolNames.TaskListAttachments,
+            McpToolNames.TaskReadAttachment,
+            McpToolNames.GetContextNode,
+            McpToolNames.ListContextNodes,
+            McpToolNames.WorkspaceIndex,
+            McpToolNames.WorkspaceRead
+        };
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"));
+        var pipelineBody = JsonSerializer.Serialize(new
+        {
+            subtasks = new[]
+            {
+                new
+                {
+                    id = subtaskId,
+                    status = "InProgress",
+                    allowedMcpTools = grants,
+                    allowedPaths = Array.Empty<string>()
+                }
+            }
+        });
+        var requestedPath = string.Empty;
+        using var http = new HttpClient(new StubApiHandler(request =>
+        {
+            requestedPath = request.RequestUri?.AbsolutePath ?? string.Empty;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(pipelineBody, Encoding.UTF8, "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-actor-tools-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Equal($"/v1/tasks/{taskId:D}/pipeline", requestedPath);
+            var tools = frames[0]["result"]!["tools"]!.AsArray();
+            var names = tools.Select(tool => tool?["name"]?.GetValue<string>())
+                .Where(name => name is not null)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var expected in grants)
+                Assert.Contains(expected, names);
+            Assert.Contains(McpToolNames.SubtaskReportResult, names);
+            Assert.Contains(McpToolNames.PipelineFailSubtask, names);
+            Assert.Contains(McpToolNames.TaskPipelineStatus, names);
+            Assert.DoesNotContain(McpToolNames.WriteFile, names);
+            Assert.DoesNotContain(McpToolNames.ApplyPatch, names);
+            Assert.DoesNotContain(McpToolNames.TaskReviewVerdict, names);
+            Assert.DoesNotContain(McpToolNames.PipelineApprove, names);
         }
         finally
         {
@@ -996,8 +1084,8 @@ public sealed class McpStdioServerTests
             var toolsJson = frames[0]["result"]!["tools"]!.ToJsonString();
             Assert.Contains("task_create_subtask", toolsJson, StringComparison.Ordinal);
             Assert.Contains("context_compile", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("pipeline_launch_session", toolsJson, StringComparison.Ordinal);
             Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("apply_patch", toolsJson, StringComparison.Ordinal);
@@ -1105,6 +1193,59 @@ public sealed class McpStdioServerTests
             Assert.Contains("apply_patch", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("shell", toolsJson, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("exec", toolsJson, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadFile_PaginatesLargeFilesAndExplainsExactContinuation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-read-page-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "large.md");
+        var firstPageSize = ProjectBeacon.Application.Mcp.FileWorkspace.DefaultReadPageSize;
+        var content = new string('x', firstPageSize) + "TAIL-CONTENT";
+        await File.WriteAllTextAsync(path, content);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"large.md"}}}""");
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 3,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "read_file",
+                    arguments = new { path = "large.md", offset = firstPageSize, limit = firstPageSize }
+                }
+            }));
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(3, frames.Count);
+
+            var definition = frames[0].ToJsonString();
+            Assert.Contains("offset", definition, StringComparison.Ordinal);
+            Assert.Contains("limit", definition, StringComparison.Ordinal);
+
+            var firstPage = ContentText(frames[1])!;
+            Assert.Contains($"Character range: [0, {firstPageSize}) of {content.Length}", firstPage, StringComparison.Ordinal);
+            Assert.Contains("[TRUNCATED", firstPage, StringComparison.Ordinal);
+            Assert.Contains($"offset={firstPageSize}, limit={firstPageSize}", firstPage, StringComparison.Ordinal);
+            Assert.DoesNotContain("TAIL-CONTENT", firstPage, StringComparison.Ordinal);
+
+            var secondPage = ContentText(frames[2])!;
+            Assert.Contains("[END OF FILE]", secondPage, StringComparison.Ordinal);
+            Assert.Contains("TAIL-CONTENT", secondPage, StringComparison.Ordinal);
+            Assert.DoesNotContain("[TRUNCATED", secondPage, StringComparison.Ordinal);
         }
         finally
         {

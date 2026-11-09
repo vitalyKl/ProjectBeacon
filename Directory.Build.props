@@ -2,8 +2,8 @@
   <PropertyGroup>
     <!-- Keep the NuGet/package version within its four-component numeric limit.
          The public application version is exposed through AssemblyInformationalVersion. -->
-    <Version>0.7.5.2</Version>
-    <InformationalVersion>0.7.5.2</InformationalVersion>
+    <Version>0.7.5.3</Version>
+    <InformationalVersion>0.7.5.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>

@@ -45,6 +45,15 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void SaveWorkstation_PersistsContextResponseReserveTokens()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        WorkstationSetup.SaveWorkstation("""{"contextResponseReserveTokens":16384}""", file);
+        var loaded = WorkstationSettings.Load(file);
+        Assert.Equal(16_384, loaded.ContextResponseReserveTokens);
+    }
+
+    [Fact]
     public void SaveWorkstation_MigratesLegacyTranscriptDirectoryAndIgnoresRuntimeSelector()
     {
         var file = Path.Combine(_dir, "workstation.json");

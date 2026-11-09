@@ -244,9 +244,19 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             }
 
             var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Actor, ct);
+            var attachments = subtask.AllowedMcpTools.Contains(McpToolNames.TaskListAttachments, StringComparer.Ordinal)
+                && subtask.AllowedMcpTools.Contains(McpToolNames.TaskReadAttachment, StringComparer.Ordinal)
+                ? await db.TaskAttachments.AsNoTracking()
+                    .Where(attachment => attachment.ProjectId == task.ProjectId && attachment.TaskId == task.Id)
+                    .OrderBy(attachment => attachment.FileName)
+                    .Select(attachment => new SessionPrompts.TaskAttachmentPromptReference(
+                        attachment.Id, attachment.FileName, attachment.ContentType, attachment.Length))
+                    .ToListAsync(ct)
+                : [];
             var session = PipelineSession.Create(
                 task.Id, task.ProjectId, PipelineRole.Actor,
-                SessionPrompts.Actor(task, subtask, profileInstructions), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
+                SessionPrompts.Actor(task, subtask, profileInstructions, attachments),
+                subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
             db.PipelineSessions.Add(session);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);

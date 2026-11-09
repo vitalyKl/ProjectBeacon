@@ -383,6 +383,9 @@ public sealed class ApiTokenAuthMiddleware
             if (ActorReadToolForRequest(segments, projectId, scopedTaskId, method) is { } actorReadTool)
                 return IsMcpToolGranted(allowedMcpTools, actorReadTool);
 
+            if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
+                return IsMcpToolGranted(allowedMcpTools, knowledgeWriteTool);
+
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
 
@@ -422,24 +425,6 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[1] == "tasks"
                 && GuidSegmentEquals(segments, 2, scopedTaskId)
                 && segments[3] == "subtasks")
-                return true;
-
-            if (method == HttpMethods.Post
-                && segments.Length == 6
-                && segments[1] == "tasks"
-                && GuidSegmentEquals(segments, 2, scopedTaskId)
-                && segments[3] == "subtasks"
-                && segments[5] == "session")
-                return true;
-
-            if (method == HttpMethods.Post
-                && segments.Length == 4
-                && segments[1] == "sessions"
-                && segments[3] == "launch"
-                && Guid.TryParse(segments[2], out _)
-                && launchSessionTaskId == scopedTaskId
-                && launchSessionRole == PipelineRole.Actor
-                && launchSessionStatus == SessionStatus.Ready)
                 return true;
 
             return method == HttpMethods.Post
@@ -514,7 +499,32 @@ public sealed class ApiTokenAuthMiddleware
             return McpToolNames.ListConstraints;
         if (segments.Length == 4 && segments[3] == "decisions")
             return McpToolNames.ListDecisions;
+        if (segments.Length == 5 && segments[3] == "decisions" && Guid.TryParse(segments[4], out _))
+            return McpToolNames.GetDecision;
+        if (segments.Length == 5 && segments[3] == "constraints" && Guid.TryParse(segments[4], out _))
+            return McpToolNames.GetConstraint;
+        if (segments.Length == 5 && segments[3] == "context" && segments[4] == "nodes")
+            return McpToolNames.ListContextNodes;
+        if (segments.Length == 6 && segments[3] == "context" && segments[4] == "nodes"
+            && Guid.TryParse(segments[5], out _))
+            return McpToolNames.GetContextNode;
         return null;
+    }
+
+    private static string? ActorKnowledgeWriteToolForRequest(string[] segments, Guid projectId, string method)
+    {
+        if (method != HttpMethods.Post || segments.Length != 5
+            || segments[0] != "v1" || segments[1] != "projects"
+            || !GuidSegmentEquals(segments, 2, projectId))
+            return null;
+
+        return (segments[3], segments[4]) switch
+        {
+            ("context", "drafts") => McpToolNames.ContextCreateDraft,
+            ("constraints", "propose") => McpToolNames.ConstraintPropose,
+            ("decisions", "propose") => McpToolNames.DecisionPropose,
+            _ => null
+        };
     }
 
     private static string? TaskWorkspaceToolForRequest(string[] segments, Guid taskId, string method)
@@ -562,6 +572,10 @@ public sealed class ApiTokenAuthMiddleware
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "tasks" && Guid.TryParse(segments[4], out _))
+            return true;
+        if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
+            && (segments[3] == "constraints" || segments[3] == "decisions")
+            && Guid.TryParse(segments[4], out _))
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "context" && segments[4] == "nodes")

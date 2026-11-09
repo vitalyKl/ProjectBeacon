@@ -18,7 +18,9 @@ public record SubtaskDto(
     DateTime? UpdatedAt,
     Guid? TaskPhaseId = null,
     string? ProfileKey = null,
-    bool WakePlannerAfter = false);
+    bool WakePlannerAfter = false,
+    string? ProfileName = null,
+    string AgentMode = "Act");
 
 /// <summary>One pipeline session, including role, status, and prompt context.</summary>
 public record PipelineSessionDto(
@@ -38,7 +40,9 @@ public record PipelineSessionDto(
     bool CanLaunch = false,
     string? LaunchBlockedReason = null,
     bool HasExternalResult = false,
-    bool IsQueued = false);
+    bool IsQueued = false,
+    string? ModelName = null,
+    string AgentMode = "Act");
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(

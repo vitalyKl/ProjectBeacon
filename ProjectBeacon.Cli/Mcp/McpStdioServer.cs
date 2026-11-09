@@ -176,7 +176,12 @@ public static partial class McpStdioServer
 
             return name switch
             {
-                McpToolNames.ReadFile => FileResult(id, workspace.ReadFile(Arg(arguments, "path"))),
+                McpToolNames.ReadFile => TextResult(id,
+                    workspace.ReadFilePage(
+                        Arg(arguments, "path"),
+                        OptInt(arguments, "offset") ?? 0,
+                        OptInt(arguments, "limit") ?? FileWorkspace.DefaultReadPageSize),
+                    page => FormatFileReadPage(Arg(arguments, "path"), page)),
                 McpToolNames.WriteFile => BoolResult(id, workspace.WriteFile(Arg(arguments, "path"), Arg(arguments, "content"))),
                 McpToolNames.ApplyPatch => BoolResult(id, workspace.ApplyPatch(
                     Arg(arguments, "path"),

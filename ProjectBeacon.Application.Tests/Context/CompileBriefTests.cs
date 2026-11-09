@@ -184,6 +184,36 @@ public sealed class CompileBriefTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertContextDraft_IsIdempotentForItsAuthorAndProtectsOtherAuthors()
+    {
+        var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
+        UpsertContextNodeCommand Command(string body) => new(new UpsertContextNodeRequest(
+            _projectId, "Goals", body, "goals", ContextScopeType.Project,
+            null, null, null, null, ContextSource.Native, "task/123"));
+
+        var created = await handler.HandleDraftAsync(Command("Initial draft"), "subtask-one",
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+        Assert.Equal(ContextReviewState.NeedsReview, created.Value!.ReviewState);
+        Assert.Equal("agent", created.Value.UpdatedByType);
+        Assert.Equal("subtask-one", created.Value.UpdatedById);
+
+        var retry = await handler.HandleDraftAsync(Command("Updated draft"), "subtask-one",
+            TestContext.Current.CancellationToken);
+        Assert.True(retry.Success, retry.Error);
+        Assert.Equal(created.Value.Id, retry.Value!.Id);
+        Assert.Equal("Updated draft", retry.Value.BodyMarkdown);
+        Assert.Equal(ContextReviewState.NeedsReview, retry.Value.ReviewState);
+
+        var otherAuthor = await handler.HandleDraftAsync(Command("Overwrite attempt"), "subtask-two",
+            TestContext.Current.CancellationToken);
+        Assert.False(otherAuthor.Success);
+        Assert.Equal(ErrorKind.Forbidden, otherAuthor.Kind);
+        Assert.Equal("Updated draft", (await _db.ContextSections.SingleAsync(
+            section => section.Id == created.Value.Id, TestContext.Current.CancellationToken)).BodyMarkdown);
+    }
+
+    [Fact]
     public async Task UpsertContextNode_UpdatesExistingSection()
     {
         var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));

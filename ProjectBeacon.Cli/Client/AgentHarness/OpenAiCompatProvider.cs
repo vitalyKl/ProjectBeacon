@@ -88,18 +88,19 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
             // never surfaced. A loopback model server is locally trusted and its short body
             // is useful when a template or tool-call parser rejects a request.
             var diagnostic = string.Empty;
-            if (_endpoint.IsLoopback)
+            var responseBody = await ChatProviderException.ReadBoundedErrorPayloadAsync(response.Content, ct);
+            var contextExceeded = status == 413 || ChatProviderException.IsContextLengthExceededPayload(responseBody);
+            if (_endpoint.IsLoopback && !string.IsNullOrWhiteSpace(responseBody))
             {
-                var responseBody = (await response.Content.ReadAsStringAsync(ct))
-                    .Replace('\r', ' ')
-                    .Replace('\n', ' ')
-                    .Trim();
-                if (!string.IsNullOrWhiteSpace(responseBody))
-                {
-                    if (responseBody.Length > 300)
-                        responseBody = responseBody[..300] + "…";
-                    diagnostic = $" Local provider: {responseBody}";
-                }
+                var safeLocalBody = responseBody.Replace('\r', ' ').Replace('\n', ' ').Trim();
+                if (safeLocalBody.Length > 300)
+                    safeLocalBody = safeLocalBody[..300] + "…";
+                diagnostic = $" Local provider: {safeLocalBody}";
+            }
+            else if (contextExceeded)
+            {
+                // Emit only a fixed marker: remote error payloads may echo prompt content or credentials.
+                diagnostic = " context_length_exceeded";
             }
 
             throw new ChatProviderException(
@@ -181,6 +182,22 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
         using (document)
         {
             var root = document.RootElement;
+            if (root.TryGetProperty("error", out var error))
+            {
+                var contextExceeded = error.ValueKind == JsonValueKind.String
+                    ? ChatProviderException.IsContextLengthExceededText(error.GetString())
+                    : error.ValueKind == JsonValueKind.Object
+                        && (ChatProviderException.IsContextLengthExceededText(ReadString(error, "code"))
+                            || ChatProviderException.IsContextLengthExceededText(ReadString(error, "type"))
+                            || ChatProviderException.IsContextLengthExceededText(ReadString(error, "message")));
+                var marker = contextExceeded ? " context_length_exceeded" : string.Empty;
+                // Never echo provider-controlled SSE error details; some gateways include request data.
+                throw new ChatProviderException(
+                    $"OpenAI-compatible stream returned an error.{marker}",
+                    (int)HttpStatusCode.BadRequest,
+                    retryable: false);
+            }
+
             if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
             {
                 var prompt = ReadInt(usage, "prompt_tokens") ?? ReadInt(usage, "input_tokens");
@@ -291,4 +308,68 @@ internal sealed class ChatProviderException(string message, int statusCode, bool
     : HttpRequestException(message, inner, (HttpStatusCode)statusCode)
 {
     public bool Retryable { get; } = retryable;
+
+    public static async Task<string> ReadBoundedErrorPayloadAsync(HttpContent content, CancellationToken ct)
+    {
+        const int maxBytes = 16 * 1024;
+        await using var stream = await content.ReadAsStreamAsync(ct);
+        using var buffer = new MemoryStream(maxBytes);
+        var bytes = new byte[4096];
+        while (buffer.Length < maxBytes)
+        {
+            var remaining = maxBytes - (int)buffer.Length;
+            var read = await stream.ReadAsync(bytes.AsMemory(0, Math.Min(bytes.Length, remaining)), ct);
+            if (read == 0)
+                break;
+            buffer.Write(bytes, 0, read);
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    public static bool IsContextLengthExceededPayload(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("error", out var error))
+                return false;
+            if (error.ValueKind == JsonValueKind.String)
+                return IsContextLengthExceededText(error.GetString());
+            if (error.ValueKind != JsonValueKind.Object)
+                return false;
+
+            return IsContextLengthExceededText(ReadErrorText(error, "code"))
+                || IsContextLengthExceededText(ReadErrorText(error, "type"))
+                || IsContextLengthExceededText(ReadErrorText(error, "message"));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    public static bool IsContextLengthExceededText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        return value.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("context length exceeded", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum context length", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum context window", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("context window is full", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("input is too long", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("input exceeds", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("too many tokens", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("request exceeds the model's context", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum input length", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ReadErrorText(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 }

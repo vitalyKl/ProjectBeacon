@@ -2350,7 +2350,6 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>TAKE CONTROL OF YOUR AI WORKFLOW</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Start with your own ProjectBeacon host and connect a workstation.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
-
 <data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation-level role defaults and AgentProvider settings. Pipeline sessions use the role bindings only when the task has no model configured for its semantic phase.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline model choices. Decision/worker defaults and phase-level overrides take precedence over workstation role bindings for the configured task phases.</value></data>
@@ -2564,7 +2563,6 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>No recent signal</value>
   </data>
-
   <data name="CommandPolicy" xml:space="preserve">
     <value>Agent command policy</value>
   </data>
@@ -2868,4 +2866,10 @@ No Beacon-hosted coding agent.</value>
 <data name="AuditTargetId" xml:space="preserve">
     <value>Target ID</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>Plan</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>Act</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>Model</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>The selected model must have a context size greater than zero. Configure its context window before launching this session.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Response token reserve (0 = automatic)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Compaction starts when prompt usage exceeds the lower of 82% of the context window and the window minus this reserve. Zero reserves 25% automatically.</value></data>
 </root>

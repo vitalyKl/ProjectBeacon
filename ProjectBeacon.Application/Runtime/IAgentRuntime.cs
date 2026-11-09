@@ -10,7 +10,14 @@ public sealed record AgentMessagePart(
 public sealed record AgentTurnStatus(bool Ended, string? Finish, string? Error, string? MessageId = null);
 
 /// <summary>Token, message, and cost totals read back from an agent session.</summary>
-public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, double GenerationSeconds = 0);
+public sealed record AgentSessionUsage(
+    int PromptTokens,
+    int CompletionTokens,
+    int AssistantMessages,
+    double TotalCost,
+    double GenerationSeconds = 0,
+    int PeakPromptTokens = 0,
+    int MaxCompletionTokens = 0);
 
 /// <summary>Transient authorization for local MCP calls during one active workstation command.</summary>
 /// <remarks>The token is memory-only and must never be copied to a transcript, log, or command payload.</remarks>
@@ -37,6 +44,8 @@ public sealed record AgentPromptControls(double? Temperature, string? ReasoningE
     public int? ContextLimit { get; init; }
     public int? MaxTokens { get; init; }
     public AgentHarnessAuthorization? HarnessAuthorization { get; init; }
+    /// <summary>Additional system-level execution context, such as the isolated worktree environment contract.</summary>
+    public string? SystemPromptAddition { get; init; }
 }
 
 /// <summary>Readiness reported by a workstation-local agent runtime.</summary>

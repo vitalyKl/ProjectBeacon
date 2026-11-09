@@ -113,6 +113,10 @@
                              Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
+            <MudNumericField T="int" @bind-Value="_contextResponseReserveTokens"
+                             Label="@L["ContextResponseReserveTokens"]" Min="0" Max="1000000" Step="1024"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ContextResponseReserveTokensHelp"]</MudText>
                         <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
                     <MudTextField @bind-Value="_agentDataDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
@@ -229,6 +233,7 @@
     private string _commandPolicy = "ask";
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
+    private int _contextResponseReserveTokens;
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
@@ -351,6 +356,8 @@
                 && pipelineMax.TryGetInt32(out var maxMinutes) ? Math.Clamp(maxMinutes, 15, 60) : 60;
             _pipelineIdleTimeoutMinutes = root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle)
                 && pipelineIdle.TryGetInt32(out var idleMinutes) ? Math.Clamp(idleMinutes, 1, 30) : 15;
+            _contextResponseReserveTokens = root.TryGetProperty("contextResponseReserveTokens", out var reserve)
+                && reserve.TryGetInt32(out var reserveTokens) ? Math.Clamp(reserveTokens, 0, 1_000_000) : 0;
         }
         catch (JsonException)
         {
@@ -457,6 +464,7 @@
                 commandPolicy = _commandPolicy,
                 pipelineTurnTimeoutMinutes = _pipelineTurnTimeoutMinutes,
                 pipelineIdleTimeoutMinutes = _pipelineIdleTimeoutMinutes,
+                contextResponseReserveTokens = _contextResponseReserveTokens,
                 llamaSwapBin = _llamaSwapBin,
                 llamaCppBin = _llamaCppBin
             });

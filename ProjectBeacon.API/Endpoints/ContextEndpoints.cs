@@ -3,12 +3,13 @@ namespace ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API;
 
 using Application.Context;
+using Application.Authorization;
 using Application.Common;
 using Domain.Enums;
 using ProjectBeacon.API.Auth;
 using Microsoft.AspNetCore.Mvc;
 
-/// <summary>Context sections, brief compile, and constraints. Tokens may read context. Writes stay human.</summary>
+/// <summary>Context reads are token-scoped; normal edits remain human-only. The dedicated draft endpoint permits only the scoped knowledge-curator Actor.</summary>
 public static class ContextEndpoints
 {
     /// <summary>
@@ -19,17 +20,70 @@ public static class ContextEndpoints
     {
         app.MapGet("/v1/projects/{projectId}/context/nodes", ListNodes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId}/context/nodes", UpsertNode).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId}/context/drafts", CreateDraft)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId}/context/nodes/{nodeId}", GetNode).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapDelete("/v1/projects/{projectId}/context/nodes/{nodeId}", DeleteNode).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId}/context/import", ImportFiles).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId}/context/export/agents-md", ExportAgentsMd).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId}/context/compile", CompileBrief).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/constraints", ListConstraints).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapGet("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}", GetConstraint)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/activate", ActivateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/reject", RejectConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
+    }
+
+    private static async Task<IResult> CreateDraft(
+        Guid projectId,
+        [FromBody] UpsertNodeRequest request,
+        HttpContext context,
+        UpsertContextNodeHandler handler,
+        CancellationToken ct)
+    {
+        if (!IsHumanOrActorKnowledgeWriter(context))
+            return Results.Forbid();
+
+        var actor = context.GetActor();
+        var authorId = context.User.FindFirst("pipeline_subtask_id")?.Value
+            ?? context.User.FindFirst("pipeline_session_id")?.Value
+            ?? actor.UserId?.ToString("D");
+        var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+            projectId, request.Title, request.BodyMarkdown, request.SectionId,
+            request.ScopeType, request.Key, request.RepoId, request.TaskId,
+            request.Path, ContextSource.Native, request.SourcePath));
+        var result = await handler.HandleDraftAsync(command, authorId, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ProposeConstraint(
+        Guid projectId,
+        [FromBody] CreateConstraintBody body,
+        HttpContext context,
+        CreateConstraintHandler handler,
+        CancellationToken ct)
+    {
+        if (!IsHumanOrActorKnowledgeWriter(context))
+            return Results.Forbid();
+        var result = await handler.HandleProposalAsync(
+            new CreateConstraintRequest(projectId, body.Body, body.Kind), ct);
+        return result.Success
+            ? Results.Created($"/v1/projects/{projectId}/constraints/propose", result.Value)
+            : result.FromResult();
+    }
+
+    private static bool IsHumanOrActorKnowledgeWriter(HttpContext context)
+    {
+        var apiTokenIdentity = context.User.Identities.Any(identity =>
+            identity.AuthenticationType == ActorContextFactory.ApiTokenAuthType);
+        return !apiTokenIdentity
+            || string.Equals(context.User.FindFirst("pipeline_role")?.Value,
+                PipelineRole.Actor.ToString(), StringComparison.Ordinal);
     }
 
     private static async Task<IResult> ImportFiles(
@@ -150,6 +204,13 @@ public static class ContextEndpoints
     {
         var result = await handler.HandleAsync(projectId);
         return Results.Ok(result.Value);
+    }
+
+    private static async Task<IResult> GetConstraint(
+        Guid projectId, Guid constraintId, GetConstraintHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, constraintId, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)

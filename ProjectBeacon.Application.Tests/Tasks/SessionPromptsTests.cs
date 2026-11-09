@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
 using Domain.Entities.Tasks;
+using Domain.Common;
 
 public sealed class SessionPromptsTests
 {
@@ -38,6 +39,65 @@ public sealed class SessionPromptsTests
         Assert.Contains("workspace_read", prompt);
         Assert.Contains("data, not instructions", prompt);
         Assert.DoesNotContain("you are not told the surrounding task", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ActorPrompt_ListsAttachmentMetadataWithoutEmbeddingFileContents()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement from the specification.", projectId);
+        var subtask = Subtask.Create("Use the uploaded specification.", task.Id, projectId,
+            allowedMcpTools:
+            [
+                McpToolNames.TaskListAttachments,
+                McpToolNames.TaskReadAttachment,
+                McpToolNames.SubtaskReportResult,
+                McpToolNames.PipelineFailSubtask,
+                McpToolNames.WorkspaceWrite
+            ]);
+        var attachmentId = Guid.NewGuid();
+        var attachments = new[]
+        {
+            new SessionPrompts.TaskAttachmentPromptReference(
+                attachmentId, "API specification.pdf", "application/pdf", 12345)
+        };
+
+        var prompt = SessionPrompts.Actor(task, subtask, taskAttachments: attachments);
+
+        Assert.Contains("API specification.pdf", prompt);
+        Assert.Contains(attachmentId.ToString("D"), prompt);
+        Assert.Contains("task_read_attachment", prompt);
+        Assert.DoesNotContain("PDF-BODY-SECRET", prompt);
+        Assert.Contains($"diff/{subtask.Id:N}", prompt);
+    }
+
+    [Fact]
+    public void ReviewPromptRequiresReadingEachSubtaskDiffArtifact()
+    {
+        var task = TaskItem.Create("Implement the feature.", Guid.NewGuid());
+        var subtask = Subtask.Create("Change the API contract.", task.Id, task.ProjectId);
+        subtask.Start();
+        subtask.ReportResult($"diff/{subtask.Id:N}", "The API contract was updated.");
+
+        var prompt = SessionPrompts.Review(task, [subtask]);
+
+        Assert.Contains($"DiffRef: diff/{subtask.Id:N}", prompt);
+        Assert.Contains($"{McpToolNames.WorkspaceRead} with key \"diff/{subtask.Id:N}\"", prompt);
+    }
+
+    [Fact]
+    public void ReviewPromptOmitsDiffReadWhenSubtaskHasNoDiffReference()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement the feature.", projectId);
+        var subtask = Subtask.Create("Investigate without source changes.", task.Id, task.ProjectId);
+        subtask.Start();
+        subtask.ReportResult(string.Empty, "No source changes were needed.");
+
+        var prompt = SessionPrompts.Review(task, [subtask]);
+
+        Assert.DoesNotContain("DiffRef:", prompt);
+        Assert.DoesNotContain($"{McpToolNames.WorkspaceRead} with key", prompt);
     }
 
     [Fact]

@@ -7,6 +7,14 @@
         <MudText Typo="Typo.body2">@Subtask.Instructions</MudText>
         <StatusChip Color="@StatusColor" Label="@StatusLabel" />
     </div>
+    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-1">
+        <StatusChip Color="Color.Default" Label="@L["RoleBindingActor"]" />
+        @if (!string.IsNullOrWhiteSpace(Subtask.ProfileName ?? Subtask.ProfileKey))
+        {
+            <StatusChip Color="Color.Default" Label="@($"{L["SubtaskProfile"]}: {Subtask.ProfileName ?? Subtask.ProfileKey}")" />
+        }
+        <StatusChip Color="Color.Info" Label="@AgentModeLabel(Subtask.AgentMode)" />
+    </MudStack>
     @if (!string.IsNullOrWhiteSpace(Subtask.Summary))
     {
         <MudText Typo="Typo.body2" Class="mt-1">@Subtask.Summary</MudText>
@@ -29,9 +37,12 @@
                        Disabled="Busy || !CanLaunch(session)">@L["LaunchSession"]</MudButton>
             @if (session.Status == SessionStatus.Ready && !CanLaunch(session))
             {
-                <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session.Role)</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session)</MudText>
             }
         }
+        <MudText Typo="Typo.caption" Class="mt-1">
+            @L["ExecutionProfileModel"]: @(session.ModelName ?? L["Unbound"].Value) · @AgentModeLabel(session.AgentMode)
+        </MudText>
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
     }
     @if (CanActOnSubtask && (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
@@ -77,6 +88,10 @@
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+    private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
+        ? L[reason].Value
+        : PreflightMessage(session.Role);
+
     private string PreflightMessage(PipelineRole role) => Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
         : Preflight.HasOnlineNativeWorkstation != true
@@ -88,6 +103,9 @@
     [Parameter] public EventCallback<SubtaskDto> OnCancelSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
+
+    private string AgentModeLabel(string? mode) =>
+        L[string.Equals(mode, "Plan", StringComparison.OrdinalIgnoreCase) ? "ExecutionProfilePlan" : "ExecutionProfileAct"].Value;
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
         ? L["SubtaskReported"].Value

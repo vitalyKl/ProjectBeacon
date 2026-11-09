@@ -140,6 +140,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             session.ContextLimit = controls?.ContextLimit is > 0 ? controls.ContextLimit : session.ContextLimit;
             turnNumber = ++session.TurnNumber;
             session.TurnStatus = new AgentTurnStatus(false, null, null, session.TurnStatus?.MessageId);
+            if (!string.IsNullOrWhiteSpace(controls?.SystemPromptAddition))
+            {
+                var systemMessage = session.Messages.FirstOrDefault(message =>
+                    string.Equals(message["role"]?.GetValue<string>(), "system", StringComparison.OrdinalIgnoreCase));
+                if (systemMessage is not null)
+                {
+                    var currentSystemPrompt = systemMessage["content"]?.GetValue<string>() ?? string.Empty;
+                    if (!currentSystemPrompt.Contains(controls.SystemPromptAddition, StringComparison.Ordinal))
+                        systemMessage["content"] = currentSystemPrompt + Environment.NewLine + Environment.NewLine
+                            + controls.SystemPromptAddition.Trim();
+                }
+            }
             userMessage = new JsonObject { ["role"] = "user", ["content"] = text };
             session.Messages.Add(userMessage);
         }
@@ -462,10 +474,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 }
             }
 
-            // Plan mode is read-only by construction. The model cannot invoke mutating MCP
-            // tools even if the general chat server advertises them.
+            // Interactive Plan keeps its strict read-only allowlist. Pipeline Plan profiles retain
+            // their role grants and deny only direct worktree/command mutations.
             if (string.Equals(agentMode, "plan", StringComparison.Ordinal))
-                mcpTools = FilterPlanTools(mcpTools);
+            {
+                if (controls?.HarnessAuthorization?.PipelineRole is not null)
+                    mcpTools = FilterDeniedTools(mcpTools, PipelineToolPolicy.PipelinePlanDeniedTools);
+                else
+                    mcpTools = FilterPlanTools(mcpTools);
+            }
 
             var hasFinalText = false;
             string? lastToolCallFingerprint = null;
@@ -507,10 +524,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 var toolCalls = new SortedDictionary<int, ToolCallAccumulator>();
                 var finishReason = "stop";
                 var requestCompleted = false;
+                var contextOverflowRetryUsed = false;
 
                 for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
                     var stepEmittedContent = false;
+                    var requestPromptTokens = 0;
+                    var requestCompletionTokens = 0;
+                    var estimatedPromptTokens = EstimatePromptTokens(
+                        request.Messages.OfType<JsonObject>().ToList(),
+                        EstimateToolTokens(request.Tools), 0, 0);
                     async Task StreamProviderAttemptAsync()
                     {
                         var provider = CreateProvider();
@@ -536,12 +559,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     break;
 
                                 case ChatProviderEventKind.Usage:
+                                    var promptUsage = Math.Max(0, item.PromptTokens ?? 0);
+                                    var completionUsage = Math.Max(0, item.CompletionTokens ?? 0);
+                                    requestPromptTokens = Math.Max(requestPromptTokens, promptUsage);
+                                    requestCompletionTokens = Math.Max(requestCompletionTokens, completionUsage);
                                     lock (session.Sync)
                                     {
                                         session.Usage = session.Usage with
                                         {
-                                            PromptTokens = session.Usage.PromptTokens + (item.PromptTokens ?? 0),
-                                            CompletionTokens = session.Usage.CompletionTokens + (item.CompletionTokens ?? 0)
+                                            PromptTokens = session.Usage.PromptTokens + promptUsage,
+                                            CompletionTokens = session.Usage.CompletionTokens + completionUsage,
+                                            PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, promptUsage),
+                                            MaxCompletionTokens = Math.Max(session.Usage.MaxCompletionTokens, completionUsage)
                                         };
                                         if (item.PromptTokens is > 0)
                                         {
@@ -574,6 +603,32 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     {
                         await RunModelRequestAsync(StreamProviderAttemptAsync, ct);
                         requestCompleted = true;
+                        var usageSource = requestPromptTokens > 0 ? "provider" : "estimate";
+                        var promptForLog = requestPromptTokens > 0 ? requestPromptTokens : estimatedPromptTokens;
+                        lock (session.Sync)
+                            session.Usage = session.Usage with
+                            {
+                                PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, promptForLog)
+                            };
+                        _log?.Invoke($"native usage turn={turnNumber} step={stepOrdinal + 1} attempt={attempt} prompt={promptForLog} completion={requestCompletionTokens} source={usageSource}");
+                    }
+                    catch (Exception ex) when (IsContextLengthExceeded(ex) && attempt < MaxAttempts
+                        && !contextOverflowRetryUsed && !stepEmittedContent && !ct.IsCancellationRequested)
+                    {
+                        contextOverflowRetryUsed = true;
+                        var rejectedPromptTokens = requestPromptTokens > 0 ? requestPromptTokens : estimatedPromptTokens;
+                        lock (session.Sync)
+                            session.Usage = session.Usage with
+                            {
+                                PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, rejectedPromptTokens)
+                            };
+                        _log?.Invoke($"native provider rejected turn={turnNumber} step={stepOrdinal + 1} attempt={attempt} for context length (prompt about {rejectedPromptTokens} tokens); compacting and retrying once");
+                        request = request with
+                        {
+                            Messages = await BuildContextMessagesAsync(
+                                session, resolved.Model, controls, mcpTools, SummarizeAsync, ct, forceCompaction: true)
+                        };
+                        requestMessageCount = request.Messages.Count;
                     }
                     catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
                         && !stepEmittedContent && !ct.IsCancellationRequested)
@@ -780,7 +835,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 commandAuthorization.WorkingDirectory,
                                                 session.Id,
                                                 parsedArguments!,
-                                                ct);
+                                                ct,
+                                                commandAuthorization.ProjectId.ToString("N"));
                                             isError = result.IsError;
                                             toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                                         }
@@ -1008,6 +1064,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             ct);
                     }
 
+                    var pipelineRole = controls?.HarnessAuthorization?.PipelineRole;
+                    if (executedTools.Any(item => !item.IsError
+                        && IsSuccessfulTerminalTool(pipelineRole, item.Call.Name, item.Call.Arguments.ToString())))
+                    {
+                        finish = "stop";
+                        hasFinalText = true;
+                        await PersistAsync(session, ct);
+                        break;
+                    }
                     finish = "tool_calls";
                     stepOrdinal++;
                     continue;
@@ -1187,7 +1252,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         AgentPromptControls? controls,
         JsonArray tools,
         Func<ChatProviderRequest, CancellationToken, Task<string>> summarize,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool forceCompaction = false)
     {
         List<JsonObject> snapshot;
         List<ToolJournalEntry> toolJournal;
@@ -1227,19 +1293,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             // The tool definitions travel with every request, so they count against the window too.
             var toolTokens = EstimateToolTokens(tools);
             var promptTokens = EstimatePromptTokens(snapshot, toolTokens, lastPromptTokens, lastPromptMessageCount);
-            if (promptTokens > (int)(limit * CompactionTriggerRatio) && snapshot.Count > 3)
+            var configuredReserve = Math.Max(0, _loadSettings().ContextResponseReserveTokens);
+            var promptBudget = CalculatePromptBudget(limit, configuredReserve);
+            if ((forceCompaction || promptTokens > promptBudget)
+                && snapshot.Count > (controls?.HarnessAuthorization?.PipelineRole is null ? 3 : 4))
             {
                 var changed = false;
-                var preserve = Math.Min(6, snapshot.Count - 1);
-                var splitAt = FindSafeContextSplitIndex(snapshot, snapshot.Count - preserve);
+                var protectedPrefixCount = controls?.HarnessAuthorization?.PipelineRole is null ? 1 : 2;
+                var preserve = Math.Min(6, snapshot.Count - protectedPrefixCount);
+                var splitAt = Math.Max(protectedPrefixCount,
+                    FindSafeContextSplitIndex(snapshot, snapshot.Count - preserve));
                 var keep = snapshot.Skip(splitAt).ToList();
-                var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
+                var old = snapshot.Skip(protectedPrefixCount).Take(splitAt - protectedPrefixCount).ToList();
 
                 // A checkpoint that is the only thing left to compress is already as small as it gets.
                 // Summarizing it again on every step would cost a model call and free nothing.
                 if (old.Any(m => !IsCheckpointMessage(m)))
                 {
-                    _log?.Invoke($"native context compaction: about {promptTokens} of {limit} tokens used (tools about {toolTokens}); summarizing {old.Count} messages");
+                    _log?.Invoke($"native context compaction: about {promptTokens} of {limit} tokens used (tools about {toolTokens}, response reserve {limit - promptBudget}); summarizing {old.Count} messages");
                     var summaryInput = PrepareSummaryInput(old, limit);
                     var summaryRequest = new ChatProviderRequest(
                         model,
@@ -1248,7 +1319,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             new JsonObject
                             {
                                 ["role"] = "system",
-                                ["content"] = "Create a compact continuation checkpoint as a valid JSON object with keys: goal, constraints, completed, inProgress, remaining, decisions, importantIdentifiers, importantFiles, toolResults, unresolvedQuestions, nextAction. Preserve exact identifiers, paths, tool outcomes, errors, and user constraints. Distinguish verified facts from assumptions. Do not invent facts. The checkpoint is internal runtime state, not a user-facing final answer."
+                                ["content"] = "Create a compact continuation checkpoint as a valid JSON object with keys: goal, constraints, completed, inProgress, remaining, decisions, importantIdentifiers, importantFiles, toolResults, unresolvedQuestions, nextAction. Preserve exact identifiers, paths, tool outcomes, errors, and user constraints. The original task is preserved verbatim outside this checkpoint; do not duplicate or paraphrase it in the checkpoint. Distinguish verified facts from assumptions. Do not invent facts. The checkpoint is internal runtime state, not a user-facing final answer."
                             },
                             new JsonObject
                             {
@@ -1262,8 +1333,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         },
                         new JsonArray(),
                         controls?.Temperature,
-                        controls?.ReasoningEffort,
-                        controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
+                        "low",
+                        4096);
                     var summary = new StringBuilder();
                     try
                     {
@@ -1282,11 +1353,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     {
                         // A failed/empty model summary must not terminate the user's task. Preserve
                         // a deterministic structured checkpoint from the recent transcript and tool journal.
-                        summary.Append(BuildFallbackCheckpoint(old, toolJournal));
+                        var fallbackJournal = toolJournal.TakeLast(8)
+                            .Select(entry => entry with
+                            {
+                                Result = entry.Result.Length <= 400 ? entry.Result : entry.Result[..400] + " [fallback journal entry clipped]"
+                            }).ToArray();
+                        summary.Append(BuildFallbackCheckpoint(old, fallbackJournal));
                         _log?.Invoke("native context compaction used a deterministic fallback checkpoint");
                     }
 
-                    var compacted = new List<JsonObject> { snapshot[0] };
+                    var compacted = snapshot.Take(protectedPrefixCount).Select(message => (JsonObject)message.DeepClone()).ToList();
                     compacted.Add(new JsonObject { ["role"] = "system", ["content"] = CheckpointHeader + "\n" + summary.ToString() });
                     compacted.AddRange(keep);
                     snapshot = compacted;
@@ -1338,6 +1414,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             ? 0
             : EstimateTokens(messages.Skip(lastPromptMessageCount).ToList());
         return Math.Max(estimate, lastPromptTokens + addedSince);
+    }
+
+    internal static int CalculatePromptBudget(int contextLimit, int configuredReserveTokens)
+    {
+        if (contextLimit <= 0)
+            return 0;
+
+        var automaticReserve = (int)Math.Ceiling(contextLimit * 0.25);
+        var requestedReserve = configuredReserveTokens > 0 ? configuredReserveTokens : automaticReserve;
+        // Always leave at least half of a tiny context window for the prompt itself.
+        var reserve = Math.Clamp(requestedReserve, 0, contextLimit / 2);
+        var ratioBudget = (int)Math.Floor(contextLimit * CompactionTriggerRatio);
+        return Math.Max(1, Math.Min(ratioBudget, contextLimit - reserve));
     }
 
     internal static int EstimateToolTokens(JsonArray tools) =>
@@ -1843,33 +1932,50 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         return common + Environment.NewLine + mode + Environment.NewLine + BeaconToolDiscipline.Rules;
     }
 
-    private static readonly HashSet<string> PlanAllowedTools = new(StringComparer.Ordinal)
-    {
-        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
-        McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
-        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
-        McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
-        McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "suggest_command_prefixes",
-        "run_log", "service_status", "service_logs"
-    };
-
-    internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
+    internal static bool IsPlanToolAllowed(string name) =>
+        PipelineToolPolicy.InteractivePlanTools.Contains(name, StringComparer.Ordinal);
 
     internal static bool IsPlanModeCommandExecutionBlocked(string agentMode, string? toolName)
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
             && toolName is "run_command" or "service_start" or "service_stop";
 
-    internal static JsonArray FilterPlanTools(JsonArray tools)
+    internal static JsonArray FilterPlanTools(JsonArray tools) =>
+        FilterToolsByPolicy(tools, PipelineToolPolicy.InteractivePlanTools, allowList: true);
+
+    internal static JsonArray FilterDeniedTools(JsonArray tools, IReadOnlyList<string> deniedTools) =>
+        FilterToolsByPolicy(tools, deniedTools, allowList: false);
+
+    private static JsonArray FilterToolsByPolicy(JsonArray tools, IReadOnlyList<string> names, bool allowList)
     {
+        var selected = names.ToHashSet(StringComparer.Ordinal);
         var filtered = new JsonArray();
         foreach (var tool in tools)
         {
             var name = tool?["function"]?["name"]?.GetValue<string>();
-            if (name is not null && IsPlanToolAllowed(name))
+            if (name is not null && (selected.Contains(name) == allowList))
                 filtered.Add(tool!.DeepClone());
         }
         return filtered;
+    }
+
+    internal static bool IsSuccessfulTerminalTool(string? role, string? toolName, string? argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(role) || string.IsNullOrWhiteSpace(toolName)) return false;
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+            return toolName is McpToolNames.SubtaskReportResult or McpToolNames.PipelineFailSubtask;
+        if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
+            return toolName == McpToolNames.PipelineStartReview;
+        if (!string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase)) return false;
+        if (toolName == McpToolNames.PipelineApprove) return true;
+        if (toolName != McpToolNames.TaskReviewVerdict || string.IsNullOrWhiteSpace(argumentsJson)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(argumentsJson);
+            if (!document.RootElement.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String) return false;
+            var normalized = new string((kind.GetString() ?? string.Empty).Where(char.IsLetterOrDigit).ToArray());
+            return string.Equals(normalized, "reopensubtask", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException) { return false; }
     }
 
     internal static bool IsAdvertisedMcpTool(JsonArray tools, string name)
@@ -2216,6 +2322,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             result.Length,
             keptCharacters);
         return result[..keptCharacters] + marker;
+    }
+
+    private static bool IsContextLengthExceeded(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is HttpRequestException { StatusCode: { } status } && (int)status == 413)
+                return true;
+            if (ChatProviderException.IsContextLengthExceededText(current.Message))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsRetryable(Exception ex) =>

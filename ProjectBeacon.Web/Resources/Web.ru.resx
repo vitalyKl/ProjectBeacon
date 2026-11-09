@@ -2157,7 +2157,6 @@
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>ВОЗЬМИТЕ AI-ПРОЦЕСС ПОД СВОЙ КОНТРОЛЬ</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Разверните собственный сервер ProjectBeacon и подключите рабочую станцию.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
-
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
@@ -2659,4 +2658,10 @@
 <data name="AuditTargetId" xml:space="preserve">
     <value>ID объекта</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>Планирование</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>Выполнение</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>Модель</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Для выбранной модели размер контекста должен быть больше нуля. Укажите размер контекстного окна перед запуском сессии.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Резерв токенов для ответа (0 — автоматически)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
 </root>

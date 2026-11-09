@@ -32,29 +32,17 @@ public sealed record BuiltInAgentProfile(
 /// </summary>
 public static class BuiltInAgentProfiles
 {
-    private static readonly string[] Read =
-    [
-        McpToolNames.GetTree, McpToolNames.ReadFile, McpToolNames.SearchCode,
-        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.GetChangedScope,
-        McpToolNames.HashRange
-    ];
-    private static readonly string[] Context =
-    [
-        McpToolNames.GetTask, McpToolNames.TaskPipelineStatus, McpToolNames.ListConstraints,
-        McpToolNames.ListDecisions, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
-    ];
-    private static readonly string[] Write = [McpToolNames.ApplyPatch, McpToolNames.WriteFile];
-    private static readonly string[] Always =
-    [
-        McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask, McpToolNames.WorkspaceWrite
-    ];
-    private static readonly IReadOnlyList<string> Required = Array.AsReadOnly(Always);
+    private static readonly IReadOnlyList<string> Read = PipelineToolPolicy.AgentProfileReadTools;
+    private static readonly IReadOnlyList<string> Context = PipelineToolPolicy.AgentProfileContextTools;
+    private static readonly IReadOnlyList<string> Write = PipelineToolPolicy.AgentProfileWriteTools;
+    private static readonly IReadOnlyList<string> Always = PipelineToolPolicy.AgentProfileRequiredTools;
+    private static readonly IReadOnlyList<string> Required = Always;
 
     private static readonly IReadOnlyList<BuiltInAgentProfile> Profiles =
     [
         Profile("explorer", "Investigate code and answer a question without changing files.",
             "Investigate; do not modify files. Start with get_tree/search_code and read only what answers the question. Cite path:line evidence for every claim. Separate repository facts from inference. Say when the answer is not in the repository instead of guessing. Put the answer before evidence and open questions.",
-            AgentProfileMode.Plan, ReadOnly(), AgentProfilePathPolicy.None, [], false, false, "one question, one code area", "low-medium"),
+            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], false, false, "one question, one code area", "low-medium"),
         Profile("implementer", "Add or change behaviour: a feature or improvement.",
             "Read neighbouring code first and follow its conventions. Do not add patterns, dependencies or abstractions the task does not require. Check list_constraints and list_decisions before designing. Make the smallest change; prefer apply_patch. Build and run relevant tests. Do not fix unrelated problems; list them as findings.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one goal, up to 3-5 files", "medium"),
@@ -74,8 +62,11 @@ public static class BuiltInAgentProfiles
             "Call suggest_command_prefixes before changes to inspect actual build and test commands. After changing a manifest or workflow, call it again before using changed commands. Never add secrets or absolute local paths. Pin versions consistently. Verify with the project's own build command.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one configuration change", "medium"),
         Profile("verifier", "Independently verify build, tests and linters; do not fix.",
-            "Verify; do not change files. Use task_pipeline_status and workspace reports to check other actors' claims. Run the named build, test and lint commands. Report each command, exit status and relevant failing lines. Start the summary with PASS or FAIL. A failed check is a valid report, not a reason to edit code.",
-            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], true, false, "one verification run", "low")
+            "Verify; do not change files. Use task_pipeline_status, context nodes, decisions and constraints to check project knowledge and other actors' claims. Run the named build, test and lint commands. Report each command, exit status and relevant failing lines. Start the summary with PASS or FAIL. A failed check is a valid report, not a reason to edit code.",
+            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], true, false, "one verification run", "low"),
+        Profile("knowledge-curator", "Prepare project knowledge updates for human review without accepting or activating them.",
+            "Capture durable project knowledge as a draft. Read the existing context, decisions and constraints first. Create context drafts and propose decisions or constraints only. Never edit or delete reviewed context, accept or deprecate decisions, supersede decisions, or activate or reject constraints. Use stable section identifiers so a retry updates the same NeedsReview draft instead of creating duplicates. Distinguish evidence from inference and include source paths or task references.",
+            AgentProfileMode.Act, KnowledgeWritable(), AgentProfilePathPolicy.None, [], false, false, "one focused knowledge update", "medium")
     ];
 
     private static readonly IReadOnlyDictionary<string, BuiltInAgentProfile> ByKey =
@@ -167,4 +158,7 @@ public static class BuiltInAgentProfiles
         Array.AsReadOnly(Read.Concat(Context).Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
     private static IReadOnlyList<string> Writable() =>
         Array.AsReadOnly(Read.Concat(Context).Concat(Write).Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
+    private static IReadOnlyList<string> KnowledgeWritable() =>
+        Array.AsReadOnly(Read.Concat(Context).Concat(PipelineToolPolicy.AgentProfileKnowledgeWriteTools)
+            .Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
 }

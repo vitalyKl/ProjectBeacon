@@ -76,7 +76,8 @@ internal static class NativeCommandRunner
         string workingDirectory,
         string sessionId,
         JsonObject arguments,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? cacheScope = null)
     {
         if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
             return new McpToolResult(true, "Command rejected: the project working directory does not exist.");
@@ -107,7 +108,7 @@ internal static class NativeCommandRunner
         ProcessStartInfo startInfo;
         try
         {
-            startInfo = CreateStartInfo(workingDirectory, sessionId, argv);
+            startInfo = CreateStartInfo(workingDirectory, sessionId, argv, cacheScope: cacheScope);
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or UnauthorizedAccessException)
         {
@@ -246,7 +247,8 @@ internal static class NativeCommandRunner
         string workingDirectory,
         string sessionId,
         IReadOnlyList<string> argv,
-        string? pathOverride = null)
+        string? pathOverride = null,
+        string? cacheScope = null)
     {
         if (argv.Count == 0)
             throw new ArgumentException("argv cannot be empty.", nameof(argv));
@@ -323,12 +325,17 @@ internal static class NativeCommandRunner
         startInfo.Environment["TEMP"] = tempDirectory;
         startInfo.Environment["TMPDIR"] = tempDirectory;
         startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(isolatedHome, ".dotnet");
-        startInfo.Environment["NUGET_PACKAGES"] = Path.Combine(isolatedHome, ".nuget", "packages");
-        startInfo.Environment["npm_config_cache"] = Path.Combine(isolatedHome, ".npm");
+        // Persist only package/build caches per project; HOME, CLI config and credentials stay session-local.
+        // Project-scoped caches avoid cold restores for every Actor without sharing mutable caches across tenants.
+        var packageCache = string.IsNullOrWhiteSpace(cacheScope) ? isolatedHome : ProjectCachePath(cacheScope);
+        Directory.CreateDirectory(packageCache);
+        startInfo.Environment["NUGET_PACKAGES"] = Path.Combine(packageCache, "nuget", "packages");
+        startInfo.Environment["npm_config_cache"] = Path.Combine(packageCache, "npm");
+        // Cargo home also contains credentials/configuration, so it remains session-local.
         startInfo.Environment["CARGO_HOME"] = Path.Combine(isolatedHome, ".cargo");
-        startInfo.Environment["PIP_CACHE_DIR"] = Path.Combine(isolatedHome, ".cache", "pip");
-        startInfo.Environment["GOCACHE"] = Path.Combine(isolatedHome, ".cache", "go-build");
-        startInfo.Environment["GOMODCACHE"] = Path.Combine(isolatedHome, "go", "pkg", "mod");
+        startInfo.Environment["PIP_CACHE_DIR"] = Path.Combine(packageCache, "pip");
+        startInfo.Environment["GOCACHE"] = Path.Combine(packageCache, "go-build");
+        startInfo.Environment["GOMODCACHE"] = Path.Combine(packageCache, "go-mod");
         startInfo.Environment["CI"] = "true";
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         startInfo.Environment["GIT_PAGER"] = "cat";
@@ -523,6 +530,19 @@ internal static class NativeCommandRunner
             .Where(line => Regex.IsMatch(line, @"\b(error|failed|failure|exception|fatal)\b", RegexOptions.IgnoreCase))
             .TakeLast(30)
             .ToArray();
+
+    internal static string ProjectCachePath(string projectId)
+    {
+        var safeId = new string((projectId ?? string.Empty)
+            .Where(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
+            .Take(80)
+            .ToArray());
+        if (string.IsNullOrWhiteSpace(safeId))
+            throw new ArgumentException("A project identifier is required for persistent package caches.", nameof(projectId));
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ProjectBeacon", "package-caches", safeId);
+    }
 
     private static string? ReadString(JsonObject arguments, string key) =>
         arguments[key] is JsonValue value && value.GetValueKind() == JsonValueKind.String

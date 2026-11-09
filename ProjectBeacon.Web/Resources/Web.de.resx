@@ -2134,7 +2134,6 @@ orthstar</value>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>ÜBERNEHMEN SIE DIE KONTROLLE ÜBER IHREN KI-WORKFLOW</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Starten Sie mit Ihrem eigenen ProjectBeacon-Host und verbinden Sie eine Workstation.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first-Steuerungsebene für KI-gestützte Entwicklung</value></data>
-
 <data name="AgentModeHint" xml:space="preserve"><value>Steuert das auf der Workstation angewendete AgentProvider-Profil für den interaktiven Chat. Standardmodelle für Aufgaben-Pipelines werden separat unter „Aufgabenarten“ konfiguriert.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Dies sind workstationweite Rollenvorgaben und AgentProvider-Einstellungen. Pipeline-Sitzungen verwenden die Rollenbindungen nur, wenn für die jeweilige Aufgabenphase kein eigenes Modell festgelegt ist.</value></data>
 <data name="PipelineStartHint" xml:space="preserve"><value>Startet den Planner, der diese Aufgabe analysiert und einen Ausführungsplan vorbereitet.</value></data>
@@ -2669,4 +2668,10 @@ orthstar</value>
 <data name="AuditTargetId" xml:space="preserve">
     <value>Ziel-ID</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>Planung</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>Ausführung</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>Modell</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Die Kontextgröße des ausgewählten Modells muss größer als null sein. Konfigurieren Sie das Kontextfenster vor dem Start.</value></data>
+  <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Tokenreserve für die Antwort (0 = automatisch)</value></data>
+  <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Die Komprimierung beginnt beim kleineren Wert aus 82 % des Kontextfensters und Fenstergröße minus Reserve. Bei 0 werden automatisch 25 % reserviert.</value></data>
 </root>
