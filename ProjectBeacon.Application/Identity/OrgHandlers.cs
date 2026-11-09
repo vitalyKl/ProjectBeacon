@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Identity;
 
 using Application.Common;
 using Application.Audit;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Enums;
 using Application.Persistence;
@@ -59,17 +60,58 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService? _authorization;
+    private readonly IAuditWriter? _auditWriter;
 
-    public UpdateOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateOrgHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService? authorization = null,
+        IAuditWriter? auditWriter = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result<OrgDto>> HandleAsync(UpdateOrgCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
+        if (!command.Actor.IsHuman || command.Actor.UserId is null)
+            return Result.Forbidden<OrgDto>();
+
+        // Rebind to the requested organization only; a previously selected project must
+        // never widen or redirect an organization-level mutation.
+        var tenant = new TenantContext();
+        tenant.Assign(null, command.Request.OrgId, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(tenant);
+
+        if (_authorization is not null)
+        {
+            var permission = await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Org, AuthAction.Administer,
+                orgId: command.Request.OrgId, ct: ct);
+            if (!permission.Success)
+                return Result.Forbidden<OrgDto>();
+        }
+        else
+        {
+            var isOrgAdmin = await db.OrgMembers.IgnoreQueryFilters().AnyAsync(m =>
+                m.OrgId == command.Request.OrgId &&
+                m.UserId == command.Actor.UserId &&
+                (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
+            var isSystemAdmin = await db.Users.IgnoreQueryFilters().AnyAsync(u =>
+                u.Id == command.Actor.UserId && u.IsAdmin, ct);
+            if (!isOrgAdmin && !isSystemAdmin)
+                return Result.Forbidden<OrgDto>();
+        }
+
+        var org = await db.Orgs.FirstOrDefaultAsync(o => o.Id == command.Request.OrgId, ct);
         if (org is null)
             return Result.Failure<OrgDto>("Org not found.");
 
         org.Update(command.Request.Name, command.Request.Description);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor, "org.updated", "Org", org.Id.ToString(), org.Id, null,
+            detailsJson: """{"newState":"Updated"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
