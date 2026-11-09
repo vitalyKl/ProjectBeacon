@@ -87,6 +87,38 @@ public sealed class CommandSandboxTests
         Assert.Equal("{}", result.Value);
     }
 
+
+    [Fact]
+    public void SanitizeProjectPayload_GitSyncAcceptsOnlyTypedProjectAndMode()
+    {
+        var projectId = Guid.NewGuid();
+        var payload = new JsonObject
+        {
+            ["projectId"] = projectId.ToString(),
+            ["mode"] = "PullFastForward"
+        }.ToJsonString();
+
+        var result = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.GitSync);
+
+        Assert.True(result.Success, result.Error);
+        using var document = JsonDocument.Parse(result.Value!);
+        Assert.Equal(projectId.ToString(), document.RootElement.GetProperty("projectId").GetString());
+        Assert.Equal("PullFastForward", document.RootElement.GetProperty("mode").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"projectId\":\"not-a-guid\",\"mode\":\"Status\"}")]
+    [InlineData("{\"projectId\":\"00000000-0000-0000-0000-000000000001\",\"mode\":\"Push\"}")]
+    [InlineData("{\"projectId\":\"00000000-0000-0000-0000-000000000001\",\"mode\":\"Status\",\"path\":\"..\"}")]
+    [InlineData("{\"projectId\":\"00000000-0000-0000-0000-000000000001\",\"mode\":\"Status\",\"arguments\":[\"push\"]}")]
+    [InlineData("{\"projectId\":\"00000000-0000-0000-0000-000000000001\"}")]
+    public void SanitizeProjectPayload_GitSyncRejectsUnknownFieldsAndInvalidValues(string payload)
+    {
+        var result = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.GitSync);
+
+        Assert.False(result.Success);
+    }
+
     [Fact]
     public void SanitizeProjectPayload_RunReviewCheck_StripsCheckCommand()
     {

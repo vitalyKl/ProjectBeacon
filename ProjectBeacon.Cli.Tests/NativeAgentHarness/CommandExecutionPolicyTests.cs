@@ -252,6 +252,42 @@ public sealed class CommandExecutionPolicyTests
         }
     }
 
+
+    [Fact]
+    public void TryValidate_BlocksGitConfigurationAndExternalProgramExecution()
+    {
+        var root = CreateProject();
+        try
+        {
+            var blocked = new[]
+            {
+                new[] { "git", "-c", "alias.x=!echo x", "x" },
+                new[] { "git", "-c", "core.fsmonitor=echo unsafe", "status" },
+                new[] { "git", "config", "core.fsmonitor", "echo unsafe" },
+                new[] { "git", "fetch", "--upload-pack=echo unsafe" },
+                new[] { "git", "diff", "--ext-diff" },
+                new[] { "git", "push", "origin", "main" },
+                new[] { "git", "--config-env=core.fsmonitor=UNSAFE", "status" },
+                new[] { "git", "--exec-path=/tmp", "status" },
+                new[] { "git", "--git-dir=/tmp/repo.git", "status" },
+                new[] { "git", "--work-tree=/tmp", "status" },
+                new[] { "git", "remote", "add", "origin", "https://example.invalid/repo.git" },
+                new[] { "git", "worktree", "add", "/tmp/other" },
+                new[] { "git", "submodule", "update" },
+                new[] { "git", "clone", "https://example.invalid/repo.git" }
+            };
+
+            foreach (var argv in blocked)
+                Assert.False(CommandExecutionPolicy.TryValidate(argv, root, out _), string.Join(' ', argv));
+
+            Assert.True(CommandExecutionPolicy.TryValidate(["git", "status"], root, out var error), error);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateProject()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-policy-" + Guid.NewGuid().ToString("N"));
