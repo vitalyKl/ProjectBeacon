@@ -19,43 +19,77 @@ public class LoginHandler
     private readonly IPasswordHasher _passwords;
     private readonly ITokenIssuer _tokens;
     private readonly IConfiguration? _configuration;
+    private readonly IAuditWriter? _auditWriter;
 
-    public LoginHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, ITokenIssuer tokens, IConfiguration? configuration = null)
+    public LoginHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        ITokenIssuer tokens,
+        IConfiguration? configuration = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _tokens = tokens;
         _configuration = configuration;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<LoginResponse>> HandleAsync(LoginCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        // User accounts and login sessions are platform-global. Keep this explicit rather
+        // than inheriting a stale project/org scope from a previous web circuit.
+        var globalTenant = new TenantContext();
+        globalTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(globalTenant);
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Login == command.Request.Login || u.Email == command.Request.Login, ct);
 
         if (user is null)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+                "account.login.denied", "Account", null, outcome: AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"invalid_credentials","authMethod":"password"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
+        }
 
         if (user.IsLockedOut)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"account_locked","authMethod":"password"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Account is temporarily locked. Try again later.");
+        }
 
         if (!_passwords.Verify(command.Request.Password, user.PasswordHash))
         {
             user.RecordFailedLogin();
+            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"invalid_credentials","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
         }
 
         if (user.IsDisabled)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"account_disabled","authMethod":"password"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
+        }
 
         user.RecordLogin();
         if (!string.IsNullOrEmpty(command.Request.IpAddress))
-        {
             db.Sessions.Add(UserSession.Create(user.Id, command.Request.IpAddress));
-        }
 
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            new ActorContext(ActorType.Human, user.Id, user.IsAdmin, null, null, null, null, ApiTokenCapability.None),
+            "account.login.succeeded", "User", user.Id.ToString(), null, null,
+            detailsJson: """{"authMethod":"password","newState":"Authenticated"}"""));
         await db.SaveChangesAsync(ct);
 
         var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, user.Id, user.IsAdmin, null, ct);
