@@ -118,11 +118,16 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public UpdateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
@@ -146,6 +151,14 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
         }
 
         project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.updated",
+            "Project",
+            project.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"changed":"metadata"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
