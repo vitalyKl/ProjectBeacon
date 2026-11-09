@@ -106,6 +106,12 @@ For the Kubernetes deployment:
 3. Add `control.projectbeacon.tech` as an ingress host routed to the Web service. Provision the
    referenced `beacon-web-tls` secret with a certificate covering both customer and control hostnames;
    the repo does not assume a particular cert-manager issuer.
+4. Configure trusted forwarded headers on **both** Web colors. TLS terminates at the ingress, so
+   `FORWARDEDHEADERS__KNOWNNETWORKS__0` must include the actual ingress-controller pod CIDR (or
+   configure its exact pod IPs with `FORWARDEDHEADERS__KNOWNPROXIES__0`). Without this, the
+   Control Plane exact-origin guard sees the upstream HTTP scheme and rejects browser login/logout
+   with `403`. See the TLS termination section in `deploy/README.md`; do not trust all proxy
+   sources.
 
 For either deployment, keep the standalone API service on its public API hostname; it never serves
 operator routes. Smoke-test that `/login` and `/dashboard` work on the customer host, while
