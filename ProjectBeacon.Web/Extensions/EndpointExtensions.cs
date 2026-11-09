@@ -8,10 +8,11 @@ using ProjectBeacon.Application.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Web.Authentication;
 
 namespace ProjectBeacon.Web.Extensions;
 /// <summary>
-/// Maps /health, the culture cookie, the /v1 API, and cookie login. /health checks that the database accepts a connection.
+/// Maps health, culture, the /v1 API, customer cookie login, and the separate operator Control Plane login.
 /// </summary>
 public static class EndpointExtensions
 {
@@ -61,6 +62,58 @@ public static class EndpointExtensions
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
             return Results.Redirect(returnUrl);
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
+
+        app.MapPost("/v1/auth/control-cookie-login", async (HttpContext ctx, LoginHandler handler) =>
+        {
+            var form = await ctx.Request.ReadFormAsync();
+            var login = form["login"].ToString();
+            var password = form["password"].ToString();
+            var result = await handler.HandleAsync(new LoginCommand(new LoginRequest(
+                login, password, ctx.Connection.RemoteIpAddress?.ToString())));
+            if (!result.Success)
+                return Results.Redirect("/control/login?error=1");
+
+            // Password authentication alone is not sufficient for the Control Plane.
+            // Only a currently persisted platform administrator may receive its separate cookie.
+            if (!result.Value!.IsAdmin)
+            {
+                ctx.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, result.Value.UserId.ToString()),
+                    new Claim(ClaimTypes.Name, result.Value.Login),
+                    new Claim("isAdmin", "false")
+                ], "ControlLoginAttempt"));
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, result.Value.UserId.ToString()),
+                new(ClaimTypes.Name, result.Value.Login),
+                new(ClaimTypes.Email, result.Value.Email),
+                new("isAdmin", "true"),
+                new("sv", result.Value.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("control_plane", "true")
+            };
+            var identity = new ClaimsIdentity(claims, ControlAuthenticationDefaults.Scheme);
+            await ctx.SignInAsync(
+                ControlAuthenticationDefaults.Scheme,
+                new ClaimsPrincipal(identity),
+                new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8),
+                    AllowRefresh = true
+                });
+
+            return Results.Redirect("/admin/audit");
+        }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
+
+        app.MapGet("/control/logout", async (HttpContext ctx) =>
+        {
+            await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
+            return Results.Redirect("/control/login");
+        }).RequireAuthorization();
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
         {
