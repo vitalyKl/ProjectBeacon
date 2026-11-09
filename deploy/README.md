@@ -32,7 +32,9 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
 ## First apply
 
 1. `kubectl apply -f deploy/k8s/namespace.yaml`
-2. Create the secret (see `secret.yaml.example`). Do not commit real secrets.
+2. Create the secret (see `secret.yaml.example`). Set `BEACON_PUBLIC_URL` to the customer
+   application hostname (the ingress customer host), not `control.projectbeacon.tech`.
+   Do not commit real secrets.
 3. Replace `OWNER` with your GHCR owner and `__PINNED_TAG__` with the immutable version tag in `deploy/k8s/*.yaml`, then:
    ```
    kubectl apply --dry-run=server -f deploy/k8s/web.yaml -f deploy/k8s/ingress.yaml
@@ -46,7 +48,10 @@ The ingress manifest includes both the existing customer host and `control.proje
 routed to the same Web service. Configure DNS records for both hostnames to the ingress address
 (an A/AAAA record or a CNAME where appropriate). The TLS section references `beacon-web-tls`,
 which must contain a certificate covering both hostnames. Set `CONTROL_HOST=control.projectbeacon.tech`
-in the `beacon-web` secret/environment. The application returns `404` for Control Plane paths
+and `BEACON_PUBLIC_URL=https://<customer-hostname>` in the `beacon-web` secret/environment.
+`BEACON_PUBLIC_URL` is the customer-facing origin used to build invite and password-reset links;
+never set it to the Control Plane host. Production invitation creation fails closed if this origin
+is missing, not HTTPS, or points to the Control Plane. The application returns `404` for Control Plane paths
 on the customer host; the standalone public API host independently rejects operator, bootstrap,
 and recovery endpoints.
 

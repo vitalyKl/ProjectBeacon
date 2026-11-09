@@ -96,7 +96,7 @@ The following commercial persistence models are still future work. Add them with
 | Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
 | PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 
-RLS must scope all organization-owned billing and entitlement rows by OrgId. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
+RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing rows must use the same isolation rule. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
 
 ## Delivery order
 

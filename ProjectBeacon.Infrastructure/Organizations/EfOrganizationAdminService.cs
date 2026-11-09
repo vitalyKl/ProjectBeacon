@@ -230,6 +230,8 @@ public sealed class EfOrganizationAdminService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var org = Org.Create(name, description);
         var rawToken = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
+        if (!TryInviteUrl(rawToken, out var url, out var urlError))
+            return Result.Failure<OperatorInviteCreated>(urlError, ErrorKind.Unavailable);
         var invite = OrgInvite.Create(org.Id, email, MemberRole.Owner, actor.UserId, OpaqueToken.Hash(rawToken), now);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -242,7 +244,6 @@ public sealed class EfOrganizationAdminService(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        var url = InviteUrl(rawToken);
         await TrySendInviteAsync(email, org.Name, url, ct);
         return Result.Ok(new OperatorInviteCreated(org.Id, invite.Id, email, invite.ExpiredAt, url));
     }
@@ -294,6 +295,8 @@ public sealed class EfOrganizationAdminService(
         }
 
         var rawToken = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
+        if (!TryInviteUrl(rawToken, out var url, out var urlError))
+            return Result.Failure<OperatorInviteCreated>(urlError, ErrorKind.Unavailable);
         var invite = OrgInvite.Create(orgId, email, MemberRole.Owner, actor.UserId, OpaqueToken.Hash(rawToken), now);
         db.OrgInvites.Add(invite);
         auditWriter.Stage(db, Audit(actor, "platform.organization.owner_invited", "OrgInvite",
@@ -301,7 +304,6 @@ public sealed class EfOrganizationAdminService(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        var url = InviteUrl(rawToken);
         await TrySendInviteAsync(email, org.Name, url, ct);
         return Result.Ok(new OperatorInviteCreated(orgId, invite.Id, email, invite.ExpiredAt, url));
     }
@@ -355,12 +357,42 @@ public sealed class EfOrganizationAdminService(
     private static bool CanManage(AdminActor actor) =>
         actor.HasPermission(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
 
-    private string InviteUrl(string rawToken)
+    private bool TryInviteUrl(string rawToken, out string url, out string error)
     {
+        url = string.Empty;
+        error = string.Empty;
         var baseUrl = LocalAuthOptions.PublicUrl(configuration);
-        return string.IsNullOrWhiteSpace(baseUrl)
-            ? $"/invite?token={rawToken}"
-            : $"{baseUrl.TrimEnd('/')}/invite?token={rawToken}";
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var publicUri)
+            || (publicUri.Scheme != Uri.UriSchemeHttps && publicUri.Scheme != Uri.UriSchemeHttp)
+            || string.IsNullOrWhiteSpace(publicUri.Host)
+            || !string.IsNullOrEmpty(publicUri.UserInfo)
+            || !string.IsNullOrEmpty(publicUri.Query)
+            || !string.IsNullOrEmpty(publicUri.Fragment))
+        {
+            error = "BEACON_PUBLIC_URL must be configured as an absolute customer application URL before creating invitations.";
+            return false;
+        }
+
+        var environment = configuration["ASPNETCORE_ENVIRONMENT"];
+        if (string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase)
+            && publicUri.Scheme != Uri.UriSchemeHttps)
+        {
+            error = "BEACON_PUBLIC_URL must use HTTPS in Production.";
+            return false;
+        }
+
+        var configuredControlHost = configuration["Control:Host"]
+            ?? Environment.GetEnvironmentVariable("CONTROL_HOST")
+            ?? "control.projectbeacon.tech";
+        if (string.Equals(publicUri.Host.TrimEnd('.'), configuredControlHost.Trim().TrimEnd('.'),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            error = "BEACON_PUBLIC_URL must point to the customer application host, not the Control Plane host.";
+            return false;
+        }
+
+        url = $"{baseUrl.TrimEnd('/')}/invite?token={Uri.EscapeDataString(rawToken)}";
+        return true;
     }
 
     private async Task TrySendInviteAsync(string email, string organizationName, string url, CancellationToken ct)

@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
@@ -43,6 +44,40 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         _seedDb.Dispose();
         _unscoped.Dispose();
         _connection.Dispose();
+    }
+
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("https://control.projectbeacon.tech")]
+    [InlineData("http://app.example.test")]
+    public async Task CreateOrganization_RejectsMissingOrUnsafeCustomerInviteBaseUrl(string publicUrl)
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        _seedDb.Users.Add(_admin);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                ["Control:Host"] = "control.projectbeacon.tech",
+                ["BEACON_PUBLIC_URL"] = publicUrl
+            })
+            .Build();
+        var service = new EfOrganizationAdminService(
+            _factory, _email, configuration, new EfAuditWriter(), TimeProvider.System);
+
+        var result = await service.CreateAsync(actor,
+            new CreateOrganizationWithOwnerRequest("Must not be created", null, "owner@example.test"));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Unavailable, result.Kind);
+        Assert.Empty(await _seedDb.Orgs.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await _seedDb.OrgInvites.IgnoreQueryFilters()
+            .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(_email.Sent);
     }
 
     [Fact]
