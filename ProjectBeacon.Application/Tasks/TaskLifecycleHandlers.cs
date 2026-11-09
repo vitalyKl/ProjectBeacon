@@ -195,8 +195,18 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public DeleteTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public DeleteTaskHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
@@ -240,6 +250,10 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             db.ReviewRuns.RemoveRange(reviewRuns);
             db.EvalRuns.RemoveRange(evalRuns);
             db.TaskDependencies.RemoveRange(dependencies);
+            task.MarkContentDeleted();
+            var attribution = ContentAttribution.FromActor(command.Actor);
+            _contentWriter.AddVersion(
+                db, task, attribution.Type ?? "System", attribution.Id, deleted: true);
             db.Tasks.Remove(task);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
