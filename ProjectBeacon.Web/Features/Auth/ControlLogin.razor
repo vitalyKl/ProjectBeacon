@@ -1,6 +1,8 @@
 @page "/control/login"
 @layout AuthLayout
 @using Microsoft.AspNetCore.Authorization
+@using ProjectBeacon.Web.Authentication
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @attribute [AllowAnonymous]
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -65,6 +67,12 @@
 
     protected override void OnInitialized()
     {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
             Navigation.ToAbsoluteUri(Navigation.Uri).Query);
         _error = query.ContainsKey("error");
