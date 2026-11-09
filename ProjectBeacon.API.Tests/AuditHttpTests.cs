@@ -31,7 +31,7 @@ public sealed class AuditHttpTests
 
         var export = await client.GetAsync("/v1/admin/audit/export", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
-        Assert.Contains("text/csv", export.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("text/csv", export.Content.Headers.ContentType?.MediaType);
         var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("AtUtc,ActorKind,ActorUserId", csv);
         Assert.Contains("account.login.succeeded", csv);
