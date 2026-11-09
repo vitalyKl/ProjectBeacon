@@ -496,6 +496,40 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal("""{"newState":"Detached"}""", detachedEvent.DetailsJson);
     }
 
+    [Fact]
+    public async Task OpenRegistration_AuditsGlobalAccountCreationAtomically()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPNETCORE_ENVIRONMENT"] = "Testing",
+            ["AUTH_LOCAL_INVITE_ONLY"] = "false"
+        }).Build();
+        var handler = new RegisterHandler(
+            _factory, new BcryptPasswordHasher(), config, auditWriter: _auditWriter);
+
+        var registered = await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest(
+                "open-registration-user",
+                "open-registration-user@example.test",
+                "password123")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(registered.Success, registered.Error);
+        var audit = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.registered"
+                && item.TargetId == registered.Value!.UserId.ToString(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(AuditActorKind.Human, audit.ActorKind);
+        Assert.Equal(registered.Value.UserId, audit.ActorUserId);
+        Assert.Null(audit.OrgId);
+        Assert.Null(audit.ProjectId);
+        Assert.Equal("""{"newState":"Active","source":"open-registration"}""", audit.DetailsJson);
+        Assert.True(await _seedDb.Users.AnyAsync(
+            user => user.Id == registered.Value.UserId,
+            TestContext.Current.CancellationToken));
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
