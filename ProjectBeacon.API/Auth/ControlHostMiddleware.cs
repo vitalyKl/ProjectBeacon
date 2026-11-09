@@ -101,6 +101,13 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
         // extension-bearing path: a future customer page or API route may also end in ".csv".
         return path.StartsWithSegments("/brand")
             || string.Equals(path.Value, "/app.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-base.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-controls.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-workspace.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-content.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-shell.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-chat.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/app-chat-responsive.css", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/shell.js", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/timezone.js", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/chat.js", StringComparison.OrdinalIgnoreCase)
