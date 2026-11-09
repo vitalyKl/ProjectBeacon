@@ -1620,7 +1620,7 @@ public sealed class NativeAgentRuntimeTests
                 CancellationToken.None,
                 new AgentPromptControls(null, "medium", null)
                 {
-                    ContextLimit = 32_768,
+                    ContextLimit = 65_536,
                     HarnessAuthorization = authorization
                 });
             await streamTask.WaitAsync(TimeSpan.FromSeconds(10));
@@ -1631,6 +1631,8 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal(1, provider.OverflowCount);
             Assert.True(provider.SummaryCalls > 0);
             Assert.True(provider.ReportToolAdvertisedAfterCompaction);
+            Assert.True(provider.StatusToolAdvertisedAfterCompaction);
+            Assert.False(provider.SawWasNotAdvertised);
             Assert.Contains(McpToolNames.SubtaskReportResult, mcp.CalledTools);
             Assert.DoesNotContain(logs, entry => entry.Contains("was not advertised", StringComparison.Ordinal));
             Assert.Contains(logs, entry => entry.Contains("context length", StringComparison.OrdinalIgnoreCase)
@@ -1975,6 +1977,8 @@ public sealed class NativeAgentRuntimeTests
         public int OverflowCount { get; private set; }
         public int SummaryCalls { get; private set; }
         public bool ReportToolAdvertisedAfterCompaction { get; private set; }
+        public bool StatusToolAdvertisedAfterCompaction { get; private set; }
+        public bool SawWasNotAdvertised { get; private set; }
 
         public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
             ChatProviderRequest request,
@@ -1992,6 +1996,8 @@ public sealed class NativeAgentRuntimeTests
                 yield break;
             }
 
+            SawWasNotAdvertised |= request.Messages.Any(message =>
+                message?["content"]?.GetValue<string>()?.Contains("was not advertised", StringComparison.OrdinalIgnoreCase) == true);
             var requestNumber = Interlocked.Increment(ref _regularCalls);
             if (requestNumber <= 2)
             {
@@ -2020,6 +2026,8 @@ public sealed class NativeAgentRuntimeTests
 
             ReportToolAdvertisedAfterCompaction = NativeAgentRuntime.IsAdvertisedMcpTool(
                 request.Tools, McpToolNames.SubtaskReportResult);
+            StatusToolAdvertisedAfterCompaction = NativeAgentRuntime.IsAdvertisedMcpTool(
+                request.Tools, McpToolNames.TaskPipelineStatus);
             yield return new ChatProviderEvent(ChatProviderEventKind.Usage,
                 PromptTokens: 21_000,
                 CompletionTokens: 1_000);
