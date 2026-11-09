@@ -49,6 +49,64 @@ public sealed class CapabilityAndWorkHttpTests
     }
 
     [Fact]
+    public async Task ContextReadToken_CannotReadTaskContentHistory()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "History Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "History Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var section = await PostJson(client, $"/v1/projects/{projectId}/context/nodes", new
+        {
+            title = "Goals",
+            bodyMarkdown = "Context that this token may read",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0
+        });
+        var sectionId = section.GetProperty("id").GetGuid();
+
+        var task = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
+        {
+            title = "Private task",
+            description = "Task description must stay behind TaskRead",
+            projectId,
+            priority = 1,
+            type = 3
+        });
+        var taskId = task.GetProperty("id").GetGuid();
+
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "context-only",
+            capabilities = 8
+        });
+        var raw = token.GetProperty("token").GetString();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", raw);
+
+        var contextHistory = await client.GetAsync(
+            $"/v1/projects/{projectId}/content-versions?targetKind=0&targetId={sectionId}",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, contextHistory.StatusCode);
+
+        var taskHistoryThroughContext = await client.GetAsync(
+            $"/v1/projects/{projectId}/content-versions?targetKind=5&targetId={taskId}",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, taskHistoryThroughContext.StatusCode);
+
+        var taskHistoryThroughTaskRoute = await client.GetAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, taskHistoryThroughTaskRoute.StatusCode);
+    }
+
+    [Fact]
     public async Task FinishWork_Done_RequiresStructuredReview()
     {
         await using var factory = new AuthApiFactory();
