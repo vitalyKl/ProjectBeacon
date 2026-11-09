@@ -424,24 +424,6 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[3] == "subtasks")
                 return true;
 
-            if (method == HttpMethods.Post
-                && segments.Length == 6
-                && segments[1] == "tasks"
-                && GuidSegmentEquals(segments, 2, scopedTaskId)
-                && segments[3] == "subtasks"
-                && segments[5] == "session")
-                return true;
-
-            if (method == HttpMethods.Post
-                && segments.Length == 4
-                && segments[1] == "sessions"
-                && segments[3] == "launch"
-                && Guid.TryParse(segments[2], out _)
-                && launchSessionTaskId == scopedTaskId
-                && launchSessionRole == PipelineRole.Actor
-                && launchSessionStatus == SessionStatus.Ready)
-                return true;
-
             return method == HttpMethods.Post
                 && segments.Length == 6
                 && segments[1] == "tasks"

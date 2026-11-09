@@ -168,6 +168,8 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         .FirstOrDefaultAsync(b => b.Id == backendId, ct);
                     if (backend is null)
                         return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
+                    if (backend.ContextSize <= 0)
+                        return Result.Failure<PipelineSessionDto>("PipelineContextSizeInvalid");
 
                     var model = ChatModelSelection.ResolveBackendModelId(
                         backend.BackendType, backend.Name, backend.ProviderModelId);

@@ -14,10 +14,13 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public static class PipelineMappers
 {
-    public static SubtaskDto ToDto(Subtask s) =>
-        new(s.Id, s.Instructions, s.Status, s.DiffRef, s.Summary, s.ReopenCount,
+    public static SubtaskDto ToDto(Subtask s)
+    {
+        var profile = BuiltInAgentProfiles.Resolve(s.ProfileKey, s.ProfileSnapshotJson);
+        return new SubtaskDto(s.Id, s.Instructions, s.Status, s.DiffRef, s.Summary, s.ReopenCount,
             s.AllowedMcpTools, s.AllowedPaths, s.CreatedAt, s.UpdatedAt, s.TaskPhaseId,
-            s.ProfileKey, s.WakePlannerAfter);
+            s.ProfileKey, s.WakePlannerAfter, profile?.Name, profile?.Mode.ToString() ?? "Act");
+    }
 
     public static PipelineSessionDto ToDto(PipelineSession s) =>
         new(s.Id, s.TaskId, s.SubtaskId, s.Role, s.Status, s.ModelBackendId,
@@ -145,12 +148,12 @@ internal static class PipelineSupport
             .Where(id => id != Guid.Empty)
             .Distinct()
             .ToArray();
-        var existingBackendIds = backendIds.Length == 0
-            ? new HashSet<Guid>()
-            : (await db.LocalModelBackends.AsNoTracking()
-                .Where(b => backendIds.Contains(b.Id))
-                .Select(b => b.Id)
-                .ToListAsync(ct)).ToHashSet();
+        var modelBackends = await db.LocalModelBackends.AsNoTracking()
+            .Where(b => backendIds.Contains(b.Id))
+            .Select(b => new ModelBackendSummary(b.Id, b.Name, b.ContextSize))
+            .ToListAsync(ct);
+        var modelBackendsById = modelBackends.ToDictionary(backend => backend.Id);
+        var existingBackendIds = modelBackendsById.Keys.ToHashSet();
 
         string? startBlockedReason = null;
         if (!hasNativeWorkstation)
@@ -161,6 +164,8 @@ internal static class PipelineSupport
             startBlockedReason = "PipelineNoPlannerModelConfigured";
         else if (!existingBackendIds.Contains(plannerBackendId.Value))
             startBlockedReason = "PipelinePlannerModelMissing";
+        else if (modelBackendsById[plannerBackendId.Value].ContextSize <= 0)
+            startBlockedReason = "PipelineContextSizeInvalid";
 
         var state = PipelineMappers.ToState(task, subtasks, sessions, verdicts);
         return state with
@@ -182,11 +187,29 @@ internal static class PipelineSupport
                         blockedReason = "PipelineModelMissing";
                 }
 
+                ModelBackendSummary? backend = session.ModelBackendId is { } modelId
+                    && modelBackendsById.TryGetValue(modelId, out var foundBackend)
+                        ? foundBackend
+                        : null;
+                if (session.Status == SessionStatus.Ready && blockedReason is null)
+                {
+                    if (session.ModelBackendId is null)
+                        blockedReason = "PipelineNoModelConfigured";
+                    else if (backend is null)
+                        blockedReason = "PipelineModelMissing";
+                    else if (backend.ContextSize <= 0)
+                        blockedReason = "PipelineContextSizeInvalid";
+                }
+                var subtask = session.SubtaskId is { } subtaskId
+                    ? subtasks.FirstOrDefault(item => item.Id == subtaskId)
+                    : null;
                 return PipelineMappers.ToDto(session) with
                 {
                     CanLaunch = session.Status == SessionStatus.Ready && blockedReason is null,
                     LaunchBlockedReason = blockedReason,
-                    IsQueued = queuedSessionIds.Contains(session.Id)
+                    IsQueued = queuedSessionIds.Contains(session.Id),
+                    ModelName = backend?.Name,
+                    AgentMode = session.Role == PipelineRole.Actor ? subtask?.AgentMode ?? "Act" : "Act"
                 };
             }).ToList()
         };
@@ -385,5 +408,7 @@ internal static class PipelineSupport
             return false;
         return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
     }
+    private sealed record ModelBackendSummary(Guid Id, string Name, int ContextSize);
+
 }
 
