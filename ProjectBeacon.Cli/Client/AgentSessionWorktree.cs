@@ -24,7 +24,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         string workingDirectory,
         string worktreeRoot,
         string snapshotCommit,
-        IReadOnlyCollection<string> disabledFilterDrivers)
+        IReadOnlyCollection<string> disabledFilterDrivers,
+        IReadOnlyList<string> missingIgnoredPaths,
+        IReadOnlyList<string> includedPaths,
+        IReadOnlyList<string> missingIncludePaths)
     {
         _repositoryRoot = repositoryRoot;
         _originalWorkingDirectory = originalWorkingDirectory;
@@ -32,11 +35,36 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         _worktreeRoot = worktreeRoot;
         _snapshotCommit = snapshotCommit;
         _disabledFilterDrivers = disabledFilterDrivers.ToArray();
+        MissingIgnoredPaths = Array.AsReadOnly(missingIgnoredPaths.ToArray());
+        IncludedPaths = Array.AsReadOnly(includedPaths.ToArray());
+        MissingIncludePaths = Array.AsReadOnly(missingIncludePaths.ToArray());
     }
 
     public string WorkingDirectory { get; }
     public string ProjectRoot => _originalWorkingDirectory;
     public string RecoveryPath => _worktreeRoot;
+    public IReadOnlyList<string> MissingIgnoredPaths { get; }
+    public IReadOnlyList<string> IncludedPaths { get; }
+    public IReadOnlyList<string> MissingIncludePaths { get; }
+
+    public string BuildEnvironmentContract()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("## Isolated worktree environment");
+        builder.AppendLine("This session runs in a Git snapshot under a temporary worktree. It is not the original project directory.");
+        builder.AppendLine("Git-ignored files and directories are absent unless explicitly listed in .beacon/worktree-include.");
+        if (MissingIgnoredPaths.Count > 0)
+            builder.AppendLine("Ignored paths not present in this snapshot: " + string.Join(", ", MissingIgnoredPaths.Take(30)));
+        else
+            builder.AppendLine("No top-level ignored paths were reported by git status --ignored.");
+        if (IncludedPaths.Count > 0)
+            builder.AppendLine("Explicitly included ignored paths: " + string.Join(", ", IncludedPaths));
+        if (MissingIncludePaths.Count > 0)
+            builder.AppendLine("Configured include paths currently missing: " + string.Join(", ", MissingIncludePaths));
+        builder.AppendLine("Do not treat absent ignored folders as a blocker. Use the repository's manifests and lockfiles to restore dependencies, and report a missing local-only configuration only when the task genuinely requires it.");
+        builder.AppendLine("The isolated HOME and configuration directories do not contain the user's shell profiles, package-manager credentials, or provider secrets. Never ask to copy or print secrets into the worktree.");
+        return builder.ToString().TrimEnd();
+    }
 
     public void Preserve() => _preserve = true;
 
@@ -84,6 +112,53 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             var add = await RunGitAsync(repositoryRoot, ct, disabledFilterDrivers, ["add", "-A", "--", "."], indexPath);
             if (add.ExitCode != 0 || add.TimedOut)
                 return await FailCreateAsync(repositoryRoot, worktreeRoot, disabledFilterDrivers, add, "Could not snapshot the project's current files.");
+
+            var ignoredStatus = await RunGitAsync(repositoryRoot, ct, disabledFilterDrivers,
+                "status", "--short", "--ignored", "--untracked-files=normal");
+            if (ignoredStatus.ExitCode != 0 || ignoredStatus.TimedOut)
+                return await FailCreateAsync(repositoryRoot, worktreeRoot, disabledFilterDrivers, ignoredStatus,
+                    "Could not inspect ignored paths in the project snapshot.");
+            var missingIgnoredPaths = ignoredStatus.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(line => line.StartsWith("!! ", StringComparison.Ordinal))
+                .Select(line => line[3..].Trim())
+                .Where(value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .Take(50)
+                .ToArray();
+
+            IReadOnlyList<string> includePaths;
+            try
+            {
+                includePaths = ReadWorktreeIncludePaths(repositoryRoot);
+            }
+            catch (InvalidDataException ex)
+            {
+                return (null, "Invalid .beacon/worktree-include: " + Clip(ex.Message));
+            }
+
+            var includedPaths = new List<string>();
+            var missingIncludePaths = new List<string>();
+            foreach (var includePath in includePaths)
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(repositoryRoot,
+                    includePath.Replace('/', Path.DirectorySeparatorChar)));
+                if (!IsInsideRoot(repositoryRoot, fullPath))
+                    return (null, $"Worktree include path escapes the repository: {includePath}");
+                if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
+                {
+                    missingIncludePaths.Add(includePath);
+                    continue;
+                }
+                if (HasReparsePointInPath(repositoryRoot, fullPath))
+                    return (null, $"Worktree include path contains a symbolic link or junction: {includePath}");
+
+                var forceAdd = await RunGitAsync(repositoryRoot, ct, disabledFilterDrivers,
+                    ["add", "-f", "--", includePath], indexPath);
+                if (forceAdd.ExitCode != 0 || forceAdd.TimedOut)
+                    return await FailCreateAsync(repositoryRoot, worktreeRoot, disabledFilterDrivers, forceAdd,
+                        $"Could not include '{includePath}' in the isolated snapshot.");
+                includedPaths.Add(includePath);
+            }
 
             var tree = await RunGitAsync(repositoryRoot, ct, disabledFilterDrivers, ["write-tree"], indexPath);
             if (tree.ExitCode != 0 || tree.TimedOut || string.IsNullOrWhiteSpace(tree.StdOut))
@@ -134,7 +209,8 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             }
 
             try { File.Delete(indexPath); } catch { }
-            return (new AgentSessionWorktree(repositoryRoot, original, targetDirectory, worktreeRoot, snapshotCommit, disabledFilterDrivers), null);
+            return (new AgentSessionWorktree(repositoryRoot, original, targetDirectory, worktreeRoot,
+                snapshotCommit, disabledFilterDrivers, missingIgnoredPaths, includedPaths, missingIncludePaths), null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -148,6 +224,46 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             await RemoveWorktreeAsync(repositoryRoot, worktreeRoot, disabledFilterDrivers);
             return (null, $"Could not create an isolated Git worktree ({ex.GetType().Name}).");
         }
+    }
+
+    /// <summary>Creates a bounded, reviewable text diff for the task workspace before patch-back.</summary>
+    public async Task<string> BuildDiffArtifactAsync(CancellationToken ct)
+    {
+        var stage = await RunGitAsync(WorkingDirectory, ct, _disabledFilterDrivers, "add", "-A", "--", ".");
+        if (stage.ExitCode != 0 || stage.TimedOut)
+            throw new InvalidOperationException("Could not stage the agent changes to prepare the diff artifact.");
+
+        string[] safePathspec =
+        [
+            ".", ":!.env", ":!.env.*", ":!**/.env", ":!**/.env.*",
+            ":!**/*secret*", ":!**/*credential*", ":!**/*.pem", ":!**/*.key"
+        ];
+        var stat = await RunGitAsync(WorkingDirectory, ct, _disabledFilterDrivers,
+            ["diff", "--cached", "--stat", "--no-ext-diff", "--no-textconv", _snapshotCommit, "--", .. safePathspec]);
+        if (stat.ExitCode != 0 || stat.TimedOut)
+            throw new InvalidOperationException("Could not inspect the agent diff statistics.");
+        var patch = await RunGitAsync(WorkingDirectory, ct, _disabledFilterDrivers,
+            ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--unified=3", _snapshotCommit, "--", .. safePathspec]);
+        if (patch.ExitCode != 0 || patch.TimedOut)
+            throw new InvalidOperationException("Could not generate the agent patch artifact.");
+
+        const int maxArtifactCharacters = 7200;
+        var patchText = patch.StdOut;
+        var truncated = patchText.Length > maxArtifactCharacters;
+        if (truncated)
+            patchText = patchText[..maxArtifactCharacters]
+                + "\n\n[PATCH TRUNCATED — the workspace copy is a review excerpt; the complete patch remains in the preserved/applied Git worktree history.]";
+        var builder = new StringBuilder();
+        builder.AppendLine("## Git diff --stat");
+        builder.AppendLine(string.IsNullOrWhiteSpace(stat.StdOut) ? "(No text changes.)" : stat.StdOut.TrimEnd());
+        builder.AppendLine();
+        builder.AppendLine("## Patch excerpt");
+        builder.AppendLine(string.IsNullOrWhiteSpace(patchText) ? "(No text patch.)" : patchText.TrimEnd());
+        builder.AppendLine();
+        builder.AppendLine("Sensitive-looking paths (.env, secret/credential names, .pem and .key files) are excluded from this artifact.");
+        if (truncated)
+            builder.AppendLine("The patch excerpt was truncated to fit the task workspace size limit.");
+        return builder.ToString().TrimEnd();
     }
 
     /// <summary>
@@ -215,7 +331,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         {
             var apply = await RunGitAsync(_repositoryRoot, ct, _disabledFilterDrivers, "apply", "--binary", "--whitespace=nowarn", patchPath);
             if (apply.ExitCode != 0 || apply.TimedOut)
-                return (false, $"The agent changes conflict with the current project files. The worktree was preserved at {_worktreeRoot}; patch: {patchPath}.");
+            {
+                var detail = string.IsNullOrWhiteSpace(apply.StdErr) ? apply.StdOut : apply.StdErr;
+                return (false, $"The agent changes conflict with the current project files. {Clip(detail)} The worktree was preserved at {_worktreeRoot}; patch: {patchPath}.");
+            }
 
             _snapshotCommit = nextSnapshot;
             _preserve = false;
@@ -254,6 +373,53 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     {
         var normalized = value.Trim();
         return normalized.Length <= 400 ? normalized : normalized[..400] + "…";
+    }
+
+    private static IReadOnlyList<string> ReadWorktreeIncludePaths(string repositoryRoot)
+    {
+        var manifest = Path.Combine(repositoryRoot, ".beacon", "worktree-include");
+        if (!File.Exists(manifest))
+            return [];
+        var paths = new List<string>();
+        foreach (var raw in File.ReadAllLines(manifest))
+        {
+            var value = raw.Trim();
+            if (value.Length == 0 || value.StartsWith("#", StringComparison.Ordinal))
+                continue;
+            value = value.Replace('\\', '/').Trim('/');
+            var segments = value.Split('/');
+            if (Path.IsPathRooted(value) || value.Contains(':')
+                || segments.Any(segment => segment.Length == 0 || segment is "." or ".."
+                    || string.Equals(segment, ".git", StringComparison.OrdinalIgnoreCase))
+                || value.IndexOfAny(['*', '?']) >= 0)
+                throw new InvalidDataException($"'{raw}' must be a literal repository-relative file or directory path without traversal, wildcards, or .git.");
+            if (!paths.Contains(value, StringComparer.Ordinal))
+                paths.Add(value);
+        }
+        return paths;
+    }
+
+    private static bool IsInsideRoot(string root, string fullPath)
+    {
+        var relative = Path.GetRelativePath(root, fullPath);
+        return !Path.IsPathRooted(relative) && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    private static bool HasReparsePointInPath(string root, string fullPath)
+    {
+        var relative = Path.GetRelativePath(root, fullPath);
+        var current = root;
+        foreach (var segment in relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            if ((File.Exists(current) || Directory.Exists(current))
+                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                return true;
+        }
+        return false;
     }
 
     private static string[] ParseFilterDriverNames(string configKeys)
