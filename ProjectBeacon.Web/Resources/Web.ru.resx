@@ -2578,4 +2578,106 @@
 <data name="NoOrganizationAccess" xml:space="preserve">
     <value>Вы ещё не состоите в организации. Примите приглашение или обратитесь к оператору сервиса.</value>
   </data>
+<data name="AuditHistory" xml:space="preserve">
+    <value>Журнал аудита</value>
+  </data>
+<data name="AuditHistoryLead" xml:space="preserve">
+    <value>События безопасности и действия операторов по организациям и проектам. Время указано в UTC.</value>
+  </data>
+<data name="AuditAccessDenied" xml:space="preserve">
+    <value>Недостаточно прав для просмотра журнала аудита.</value>
+  </data>
+<data name="AuditFilterOrg" xml:space="preserve">
+    <value>ID организации</value>
+  </data>
+<data name="AuditFilterProject" xml:space="preserve">
+    <value>ID проекта</value>
+  </data>
+<data name="AuditFilterActor" xml:space="preserve">
+    <value>ID пользователя-актора</value>
+  </data>
+<data name="AuditFilterAction" xml:space="preserve">
+    <value>Код действия</value>
+  </data>
+<data name="AuditFilterFromUtc" xml:space="preserve">
+    <value>С даты (UTC)</value>
+  </data>
+<data name="AuditFilterToUtc" xml:space="preserve">
+    <value>По дату (UTC)</value>
+  </data>
+<data name="AuditActorKind" xml:space="preserve">
+    <value>Тип актора</value>
+  </data>
+<data name="AuditOutcome" xml:space="preserve">
+    <value>Результат</value>
+  </data>
+<data name="All" xml:space="preserve">
+    <value>Все</value>
+  </data>
+<data name="ApplyFilters" xml:space="preserve">
+    <value>Применить фильтры</value>
+  </data>
+<data name="ClearFilters" xml:space="preserve">
+    <value>Сбросить фильтры</value>
+  </data>
+<data name="AuditPageSummary" xml:space="preserve">
+    <value>Событий: {0} · страница {1} из {2}</value>
+  </data>
+<data name="AuditNoEvents" xml:space="preserve">
+    <value>По заданным фильтрам событий нет.</value>
+  </data>
+<data name="AuditTimestamp" xml:space="preserve">
+    <value>Время (UTC)</value>
+  </data>
+<data name="AuditActor" xml:space="preserve">
+    <value>Актор</value>
+  </data>
+<data name="AuditAction" xml:space="preserve">
+    <value>Действие</value>
+  </data>
+<data name="AuditTarget" xml:space="preserve">
+    <value>Объект</value>
+  </data>
+<data name="AuditScope" xml:space="preserve">
+    <value>Область</value>
+  </data>
+<data name="AuditDetails" xml:space="preserve">
+    <value>Детали</value>
+  </data>
+<data name="AuditActorHuman" xml:space="preserve">
+    <value>Пользователь</value>
+  </data>
+<data name="AuditActorApiToken" xml:space="preserve">
+    <value>API-токен</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Устройство</value>
+  </data>
+<data name="AuditActorWorker" xml:space="preserve">
+    <value>Рабочий процесс</value>
+  </data>
+<data name="AuditActorSystem" xml:space="preserve">
+    <value>Система</value>
+  </data>
+<data name="AuditOutcomeSuccess" xml:space="preserve">
+    <value>Успех</value>
+  </data>
+<data name="AuditOutcomeDenied" xml:space="preserve">
+    <value>Запрещено</value>
+  </data>
+<data name="AuditOutcomeFailed" xml:space="preserve">
+    <value>Ошибка</value>
+  </data>
+<data name="AuditProjectScope" xml:space="preserve">
+    <value>Проект {0}</value>
+  </data>
+<data name="AuditOrgScope" xml:space="preserve">
+    <value>Организация {0}</value>
+  </data>
+<data name="AuditPlatformScope" xml:space="preserve">
+    <value>Вся платформа</value>
+  </data>
+<data name="AuditInvalidGuid" xml:space="preserve">
+    <value>ID организации, проекта и актора должны быть корректными GUID.</value>
+  </data>
 </root>
