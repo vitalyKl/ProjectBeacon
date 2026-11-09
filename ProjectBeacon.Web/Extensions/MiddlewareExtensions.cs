@@ -75,6 +75,7 @@ public static class MiddlewareExtensions
         app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
+        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseAntiforgery();
 
         app.MapEndpoints();
