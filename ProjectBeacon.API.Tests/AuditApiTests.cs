@@ -8,6 +8,8 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Domain.Entities.Audit;
+using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Infrastructure.Security;
 
 public sealed class AuditApiTests
 {
@@ -106,13 +108,17 @@ public sealed class AuditApiTests
             TestContext.Current.CancellationToken);
         Assert.Equal(1, deviceFilter.GetProperty("items").GetArrayLength());
 
-        var registration = await client.PostAsJsonAsync("/v1/auth/register", new
+        var member = User.Create(
+            "audit-member",
+            "audit-member@example.com",
+            PasswordHasher.Hash("password1"));
+        using (TenantScope.EnterUnscoped())
         {
-            login = "audit-member",
-            email = "audit-member@example.com",
-            password = "password1"
-        }, cancellationToken: TestContext.Current.CancellationToken);
-        registration.EnsureSuccessStatusCode();
+            using var seedScope = factory.Services.CreateScope();
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            seedDb.Users.Add(member);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var memberLogin = await client.PostAsJsonAsync("/v1/auth/login",
             new { Login = "audit-member", Password = "password1" },
@@ -148,18 +154,17 @@ public sealed class AuditApiTests
         var logout = await client.PostAsync("/v1/auth/logout", content: null,
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
-        var loginAgain = await client.PostAsJsonAsync("/v1/auth/login",
-            new { Login = "admin", Password = adminPassword },
-            cancellationToken: TestContext.Current.CancellationToken);
-        loginAgain.EnsureSuccessStatusCode();
-        var renewedAdminJwt = (await loginAgain.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
-            .GetProperty("token").GetString()!;
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", renewedAdminJwt);
 
-        var logoutFilter = await client.GetFromJsonAsync<JsonElement>(
-            $"/v1/admin/audit?actorUserId={adminId}&action=account.logout",
-            TestContext.Current.CancellationToken);
-        Assert.Equal(1, logoutFilter.GetProperty("items").GetArrayLength());
+        using (TenantScope.EnterUnscoped())
+        {
+            using var auditScope = factory.Services.CreateScope();
+            var auditDb = auditScope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            var logoutEvent = await auditDb.AuditEvents.SingleAsync(
+                item => item.Action == "account.logout" && item.ActorUserId == adminId,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(AuditActorKind.Human, logoutEvent.ActorKind);
+            Assert.Equal(adminId.ToString(), logoutEvent.TargetId);
+        }
     }
 
     private static HttpRequestMessage BootstrapRequest(string token)
