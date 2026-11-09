@@ -96,13 +96,13 @@ public static class EndpointExtensions
                 });
 
             return Results.Redirect("/admin/audit");
-        }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
+        }).AllowAnonymous().RequireRateLimiting("auth").RequireAntiforgery();
 
         app.MapPost("/control/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
             return Results.Redirect("/control/login");
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization().RequireAntiforgery();
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
         {
