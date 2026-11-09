@@ -21,6 +21,7 @@ public sealed class AuditApiTests
             cancellationToken: TestContext.Current.CancellationToken);
         bootstrap.EnsureSuccessStatusCode();
         var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var adminId = bootJson.GetProperty("userId").GetGuid();
         var adminPassword = bootJson.GetProperty("password").GetString()!;
 
         var adminLogin = await client.PostAsJsonAsync("/v1/auth/login",
@@ -45,19 +46,44 @@ public sealed class AuditApiTests
         {
             using var exportScope = factory.Services.CreateScope();
             var exportDb = exportScope.ServiceProvider.GetRequiredService<BeaconDbContext>();
-            exportDb.AuditEvents.Add(AuditEvent.Create(
-                DateTime.UtcNow,
-                AuditActorKind.System,
-                null,
-                null,
-                null,
-                "audit.export.formula_test",
-                "Test",
-                "formula",
-                null,
-                null,
-                AuditOutcome.Success,
-                userAgent: "=HYPERLINK(\"https://example.invalid\",\"open\")"));
+            exportDb.AuditEvents.AddRange(
+                AuditEvent.Create(
+                    DateTime.UtcNow,
+                    AuditActorKind.System,
+                    null,
+                    null,
+                    null,
+                    "audit.export.formula_test",
+                    "Test",
+                    "formula",
+                    null,
+                    null,
+                    AuditOutcome.Success,
+                    userAgent: "  =HYPERLINK(\"https://example.invalid\",\"open\")"),
+                AuditEvent.Create(
+                    DateTime.UtcNow,
+                    AuditActorKind.ApiToken,
+                    null,
+                    Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    null,
+                    "audit.filter.token",
+                    "ApiToken",
+                    "11111111-1111-1111-1111-111111111111",
+                    null,
+                    null,
+                    AuditOutcome.Success),
+                AuditEvent.Create(
+                    DateTime.UtcNow,
+                    AuditActorKind.Device,
+                    null,
+                    null,
+                    Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                    "audit.filter.device",
+                    "Device",
+                    "22222222-2222-2222-2222-222222222222",
+                    null,
+                    null,
+                    AuditOutcome.Success));
             await exportDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -68,8 +94,17 @@ public sealed class AuditApiTests
         Assert.Contains("platform.bootstrap.completed", csv);
         Assert.Contains("account.login.succeeded", csv);
         Assert.Contains("account.login.denied", csv);
-        Assert.Contains("'=HYPERLINK(", csv);
+        Assert.Contains("'  =HYPERLINK(", csv);
         Assert.DoesNotContain(adminPassword, csv);
+
+        var tokenFilter = await client.GetFromJsonAsync<JsonElement>(
+            "/v1/admin/audit?actorTokenId=11111111-1111-1111-1111-111111111111",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, tokenFilter.GetProperty("items").GetArrayLength());
+        var deviceFilter = await client.GetFromJsonAsync<JsonElement>(
+            "/v1/admin/audit?actorDeviceId=22222222-2222-2222-2222-222222222222",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, deviceFilter.GetProperty("items").GetArrayLength());
 
         var registration = await client.PostAsJsonAsync("/v1/auth/register", new
         {
@@ -102,6 +137,29 @@ public sealed class AuditApiTests
             Assert.Equal(Domain.Entities.Audit.AuditActorKind.Human, deniedEvent.ActorKind);
             Assert.Contains("/v1/admin/audit", deniedEvent.TargetId);
         }
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+        var deniedFilter = await client.GetFromJsonAsync<JsonElement>(
+            "/v1/admin/audit?action=security.authorization.denied&targetType=HttpEndpoint&targetId="
+                + Uri.EscapeDataString("GET /v1/admin/audit"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, deniedFilter.GetProperty("items").GetArrayLength());
+
+        var logout = await client.PostAsync("/v1/auth/logout", content: null,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+        var loginAgain = await client.PostAsJsonAsync("/v1/auth/login",
+            new { Login = "admin", Password = adminPassword },
+            cancellationToken: TestContext.Current.CancellationToken);
+        loginAgain.EnsureSuccessStatusCode();
+        var renewedAdminJwt = (await loginAgain.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("token").GetString()!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", renewedAdminJwt);
+
+        var logoutFilter = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/admin/audit?actorUserId={adminId}&action=account.logout",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, logoutFilter.GetProperty("items").GetArrayLength());
     }
 
     private static HttpRequestMessage BootstrapRequest(string token)
