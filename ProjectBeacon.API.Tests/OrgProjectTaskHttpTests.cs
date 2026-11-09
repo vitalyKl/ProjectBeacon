@@ -293,6 +293,32 @@ public sealed class OrgProjectTaskHttpTests
         var current = await client.GetFromJsonAsync<JsonElement>(url, TestContext.Current.CancellationToken);
         Assert.Equal("Updated", current[0].GetProperty("bodyMarkdown").GetString());
         Assert.Equal(2, current[0].GetProperty("revision").GetInt32());
+
+        var draftsUrl = $"/v1/projects/{projectId}/context/drafts";
+        var draft = await PostJson(client, draftsUrl, new
+        {
+            title = "Agent notes",
+            bodyMarkdown = "First draft",
+            sectionId = "agent_notes",
+            scopeType = 0,
+            source = 0,
+            sourcePath = "task/123"
+        });
+        Assert.Equal(1, draft.GetProperty("revision").GetInt32());
+
+        var draftUpdate = await client.PostAsJsonAsync(draftsUrl, new
+        {
+            title = "Agent notes",
+            bodyMarkdown = "Updated draft",
+            sectionId = "agent_notes",
+            scopeType = 0,
+            source = 0,
+            sourcePath = "task/123",
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, draftUpdate.StatusCode);
+        var updatedDraft = await draftUpdate.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updatedDraft.GetProperty("revision").GetInt32());
     }
 
     [Fact]
