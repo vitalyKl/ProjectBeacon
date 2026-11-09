@@ -1,0 +1,296 @@
+@page "/admin/audit"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Audit
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Domain.Entities.Audit
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject IAuditReader AuditReader
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["AuditHistory"]</PageTitle>
+
+<PageHeader Title="@L["AuditHistory"]" />
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["AuditHistoryLead"]</MudText>
+
+@if (_loading && _page is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+}
+else if (_forbidden)
+{
+    <MudAlert Severity="Severity.Error">@L["AuditAccessDenied"]</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="d-flex flex-wrap align-center gap-3">
+            <MudTextField @bind-Value="_orgId" Label="@L["AuditFilterOrg"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_projectId" Label="@L["AuditFilterProject"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_actorUserId" Label="@L["AuditFilterActor"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_action" Label="@L["AuditFilterAction"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudDatePicker @bind-Date="_fromDate" Label="@L["AuditFilterFromUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+            <MudDatePicker @bind-Date="_toDate" Label="@L["AuditFilterToUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+            <MudSelect T="AuditActorKind?" @bind-Value="_actorKind" Label="@L["AuditActorKind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
+                <MudSelectItem T="AuditActorKind?" Value="@((AuditActorKind?)null)">@L["All"]</MudSelectItem>
+                @foreach (var kind in Enum.GetValues<AuditActorKind>())
+                {
+                    <MudSelectItem T="AuditActorKind?" Value="@((AuditActorKind?)kind)">@ActorKindLabel(kind)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="AuditOutcome?" @bind-Value="_outcome" Label="@L["AuditOutcome"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
+                <MudSelectItem T="AuditOutcome?" Value="@((AuditOutcome?)null)">@L["All"]</MudSelectItem>
+                @foreach (var outcome in Enum.GetValues<AuditOutcome>())
+                {
+                    <MudSelectItem T="AuditOutcome?" Value="@((AuditOutcome?)outcome)">@OutcomeLabel(outcome)</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+        <div class="d-flex justify-end gap-2 mt-3">
+            <MudButton Variant="Variant.Text" OnClick="ClearFilters" Disabled="_loading">@L["ClearFilters"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFilters" Disabled="_loading">@L["ApplyFilters"]</MudButton>
+        </div>
+    </MudPaper>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+    }
+
+    @if (_page is { } page)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+            <div class="d-flex justify-between align-center mb-3">
+                <MudText Typo="Typo.subtitle2">@string.Format(L["AuditPageSummary"].Value, page.TotalCount, page.Page, PageCount(page))</MudText>
+                <div class="d-flex gap-2">
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_loading || page.Page <= 1)" OnClick="PreviousPage">@L["Previous"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_loading || page.Page >= PageCount(page))" OnClick="NextPage">@L["Next"]</MudButton>
+                </div>
+            </div>
+            @if (page.Items.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary py-4">@L["AuditNoEvents"]</MudText>
+            }
+            else
+            {
+                <MudTable T="AuditEntry" Items="page.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>@L["AuditTimestamp"]</MudTh>
+                        <MudTh>@L["AuditActor"]</MudTh>
+                        <MudTh>@L["AuditAction"]</MudTh>
+                        <MudTh>@L["AuditTarget"]</MudTh>
+                        <MudTh>@L["AuditScope"]</MudTh>
+                        <MudTh>@L["AuditOutcome"]</MudTh>
+                        <MudTh>@L["AuditDetails"]</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="entry">
+                        <MudTd DataLabel="@L["AuditTimestamp"]">
+                            <MudText Typo="Typo.body2" Class="text-nowrap">@entry.At.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditActor"]">
+                            <MudText Typo="Typo.body2">@ActorLabel(entry)</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditAction"]">
+                            <MudText Typo="Typo.body2">@entry.Action</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditTarget"]">
+                            <MudText Typo="Typo.body2">@entry.TargetType</MudText>
+                            @if (!string.IsNullOrEmpty(entry.TargetId))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@entry.TargetId</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditScope"]">
+                            @if (entry.ProjectId is { } projectId)
+                            {
+                                <MudText Typo="Typo.caption">@string.Format(L["AuditProjectScope"].Value, projectId)</MudText>
+                            }
+                            else if (entry.OrgId is { } orgId)
+                            {
+                                <MudText Typo="Typo.caption">@string.Format(L["AuditOrgScope"].Value, orgId)</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AuditPlatformScope"]</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditOutcome"]">
+                            <MudChip T="string" Size="Size.Small" Color="@OutcomeColor(entry.Outcome)">@OutcomeLabel(entry.Outcome)</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="@L["AuditDetails"]">
+                            @if (!string.IsNullOrWhiteSpace(entry.DetailsJson))
+                            {
+                                <MudText Typo="Typo.caption">@entry.DetailsJson</MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(entry.TraceId))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@entry.TraceId</MudText>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private AuditPage? _page;
+    private string _orgId = string.Empty;
+    private string _projectId = string.Empty;
+    private string _actorUserId = string.Empty;
+    private string _action = string.Empty;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private AuditActorKind? _actorKind;
+    private AuditOutcome? _outcome;
+    private bool _loading = true;
+    private bool _forbidden;
+    private int _pageNumber = 1;
+
+    protected override async Task OnInitializedAsync() => await LoadPage();
+
+    private async Task ApplyFilters()
+    {
+        _pageNumber = 1;
+        await LoadPage();
+    }
+
+    private async Task ClearFilters()
+    {
+        _orgId = string.Empty;
+        _projectId = string.Empty;
+        _actorUserId = string.Empty;
+        _action = string.Empty;
+        _fromDate = null;
+        _toDate = null;
+        _actorKind = null;
+        _outcome = null;
+        _pageNumber = 1;
+        await LoadPage();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_pageNumber <= 1)
+            return;
+        _pageNumber--;
+        await LoadPage();
+    }
+
+    private async Task NextPage()
+    {
+        if (_page is null || _pageNumber >= PageCount(_page))
+            return;
+        _pageNumber++;
+        await LoadPage();
+    }
+
+    private async Task LoadPage()
+    {
+        _loading = true;
+        _forbidden = false;
+        try
+        {
+            var state = await Auth.GetAuthenticationStateAsync();
+            var actor = ActorContextFactory.FromPrincipal(state.User);
+            var gate = await AdminGate.RequireAsync(actor, OperatorPermission.AuditRead);
+            if (!gate.Success || gate.Value is null)
+            {
+                _forbidden = true;
+                _page = null;
+                return;
+            }
+
+            if (!TryGuid(_orgId, out var orgId)
+                || !TryGuid(_projectId, out var projectId)
+                || !TryGuid(_actorUserId, out var actorUserId))
+                {
+                    Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
+                    return;
+                }
+
+            var fromUtc = _fromDate.HasValue
+                ? DateTime.SpecifyKind(_fromDate.Value.Date, DateTimeKind.Utc)
+                : null;
+            var toUtc = _toDate.HasValue
+                ? DateTime.SpecifyKind(_toDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc)
+                : null;
+            var query = new AuditQuery(
+                OrgId: orgId,
+                ProjectId: projectId,
+                FromUtc: fromUtc,
+                ToUtc: toUtc,
+                Action: string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
+                ActorKind: _actorKind,
+                ActorUserId: actorUserId,
+                Outcome: _outcome,
+                Page: _pageNumber,
+                PageSize: 50);
+            _page = await AuditReader.ListAsync(gate.Value, query);
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(string.IsNullOrWhiteSpace(exception.Message) ? L["Error"].Value : exception.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static bool TryGuid(string value, out Guid? result)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            result = null;
+            return true;
+        }
+
+        if (Guid.TryParse(value.Trim(), out var parsed))
+        {
+            result = parsed;
+            return true;
+        }
+
+        result = null;
+        return false;
+    }
+
+    private static int PageCount(AuditPage page) =>
+        Math.Max(1, (int)Math.Ceiling(page.TotalCount / (double)page.PageSize));
+
+    private string ActorLabel(AuditEntry entry)
+    {
+        var id = entry.ActorUserId ?? entry.ActorTokenId ?? entry.ActorDeviceId;
+        return id is { } actorId
+            ? $"{ActorKindLabel(entry.ActorKind)} · {actorId}"
+            : ActorKindLabel(entry.ActorKind);
+    }
+
+    private string ActorKindLabel(AuditActorKind kind) => kind switch
+    {
+        AuditActorKind.Human => L["AuditActorHuman"].Value,
+        AuditActorKind.ApiToken => L["AuditActorApiToken"].Value,
+        AuditActorKind.Device => L["AuditActorDevice"].Value,
+        AuditActorKind.Worker => L["AuditActorWorker"].Value,
+        _ => L["AuditActorSystem"].Value
+    };
+
+    private string OutcomeLabel(AuditOutcome outcome) => outcome switch
+    {
+        AuditOutcome.Success => L["AuditOutcomeSuccess"].Value,
+        AuditOutcome.Denied => L["AuditOutcomeDenied"].Value,
+        _ => L["AuditOutcomeFailed"].Value
+    };
+
+    private static Color OutcomeColor(AuditOutcome outcome) => outcome switch
+    {
+        AuditOutcome.Success => Color.Success,
+        AuditOutcome.Denied => Color.Warning,
+        _ => Color.Error
+    };
+}
