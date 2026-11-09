@@ -109,6 +109,36 @@ public sealed class NativeAgentRuntimeTests
         Assert.False(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth("Planner", Guid.NewGuid())));
     }
 
+    [Theory]
+    [InlineData("Actor", "subtask_report_result", null, true)]
+    [InlineData("Actor", "pipeline_fail_subtask", null, true)]
+    [InlineData("Planner", "pipeline_start_review", null, true)]
+    [InlineData("Review", "pipeline_approve", null, true)]
+    [InlineData("Review", "task_review_verdict", "{\\"kind\\":\\"ReopenSubtask\\"}", true)]
+    [InlineData("Review", "task_review_verdict", "{\\"kind\\":\\"Approve\\"}", false)]
+    [InlineData("Planner", "pipeline_start_actor", null, false)]
+    public void OnlyRoleTerminalToolsCompleteTheTurn(string role, string tool, string? arguments, bool expected)
+    {
+        Assert.Equal(expected, NativeAgentRuntime.IsSuccessfulTerminalTool(role, tool, arguments));
+    }
+
+    [Fact]
+    public void PipelinePlanFilterPreservesRoleReadsButDeniesDirectMutations()
+    {
+        var tools = new JsonArray(
+            new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "read_file" } },
+            new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "write_file" } },
+            new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "apply_patch" } },
+            new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "run_command" } },
+            new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "task_pipeline_status" } });
+        var filtered = NativeAgentRuntime.FilterDeniedTools(tools, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "read_file"));
+        Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "task_pipeline_status"));
+        Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "write_file"));
+        Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "apply_patch"));
+        Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "run_command"));
+    }
+
     [Fact]
     public void RunCommandRequiresTasklessChatOrFullyScopedActorAuthorization()
     {

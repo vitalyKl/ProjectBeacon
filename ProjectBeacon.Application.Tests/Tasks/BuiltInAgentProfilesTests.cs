@@ -36,7 +36,7 @@ public sealed class BuiltInAgentProfilesTests
     public void ReadOnlyAndCommandPoliciesMatchTheBuiltInProfileIntent()
     {
         var explorer = AssertProfile("explorer");
-        Assert.Equal(AgentProfileMode.Plan, explorer.Mode);
+        Assert.Equal(AgentProfileMode.Act, explorer.Mode);
         Assert.False(explorer.CommandsEnabled);
         Assert.DoesNotContain(McpToolNames.WriteFile, explorer.Tools);
         Assert.DoesNotContain(McpToolNames.ApplyPatch, explorer.Tools);
@@ -60,6 +60,21 @@ public sealed class BuiltInAgentProfilesTests
         Assert.False(BuiltInAgentProfiles.IsSafeRelativePath("/etc/passwd"));
         Assert.True(BuiltInAgentProfiles.IsSafeRelativePath("src/Feature.cs"));
         Assert.True(BuiltInAgentProfiles.IsSafeRelativePath("src/"));
+    }
+
+    [Fact]
+    public void SharedPipelineToolPolicyKeepsRoleGrantsAligned()
+    {
+        Assert.DoesNotContain(McpToolNames.PipelineStartActor, PipelineToolPolicy.PlannerTools);
+        Assert.DoesNotContain(McpToolNames.PipelineLaunchSession, PipelineToolPolicy.PlannerTools);
+        Assert.Contains(McpToolNames.PipelineStartReview, PipelineToolPolicy.PlannerTools);
+        Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.ActorWorkspaceTools);
+        Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.AgentProfileContextTools);
+        foreach (var profile in BuiltInAgentProfiles.All)
+        {
+            Assert.All(profile.RequiredTools, tool => Assert.Contains(tool, PipelineToolPolicy.AgentProfileRequiredTools));
+            Assert.DoesNotContain(profile.Tools, tool => tool is McpToolNames.PipelineStartActor or McpToolNames.PipelineLaunchSession);
+        }
     }
 
     [Fact]
