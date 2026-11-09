@@ -74,11 +74,8 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
             || path.StartsWithSegments("/_blazor"))
             return true;
 
-        // Public static resources are shared, but application pages and APIs are not.
-        if (Path.HasExtension(path.Value))
-            return true;
-
-        return string.Equals(path.Value, "/health", StringComparison.OrdinalIgnoreCase)
+        var exactAllowedRoute =
+            string.Equals(path.Value, "/health", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/culture", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/control/login", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/control/bootstrap", StringComparison.OrdinalIgnoreCase)
@@ -90,5 +87,17 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
             || string.Equals(path.Value, "/v1/auth/recover-admin", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/admin/audit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/admin/audit/export.csv", StringComparison.OrdinalIgnoreCase);
+        if (exactAllowedRoute)
+            return true;
+
+        // Do not turn the host allowlist into a wildcard for future API/admin routes merely
+        // because a route happens to have a file extension such as .csv.
+        if (path.StartsWithSegments("/v1")
+            || path.StartsWithSegments("/admin")
+            || path.StartsWithSegments("/control"))
+            return false;
+
+        // Static assets (app.css, JavaScript bundles, icons and fonts) are shared.
+        return Path.HasExtension(path.Value);
     }
 }
