@@ -48,6 +48,11 @@ public sealed class RestoreContentVersionHandler
         if (source is null)
             return Result.Failure<RestoreContentVersionDto>("Content version not found.");
 
+        if (command.ExpectedTargetKind is { } expectedKind && source.TargetKind != expectedKind)
+            return Result.Failure<RestoreContentVersionDto>("Content version does not belong to the requested target.");
+        if (command.ExpectedTargetId is { } expectedTargetId && source.TargetId != expectedTargetId)
+            return Result.Failure<RestoreContentVersionDto>("Content version does not belong to the requested target.");
+
         var attribution = ContentAttribution.FromActor(command.Actor);
         object target;
         var changed = false;
@@ -257,4 +262,6 @@ public sealed record RestoreContentVersionCommand(
     Guid ProjectId,
     Guid ContentVersionId,
     int ExpectedRevision,
-    ActorContext Actor) : ICommand<Result<RestoreContentVersionDto>>;
+    ActorContext Actor,
+    ContentTargetKind? ExpectedTargetKind = null,
+    Guid? ExpectedTargetId = null) : ICommand<Result<RestoreContentVersionDto>>;
