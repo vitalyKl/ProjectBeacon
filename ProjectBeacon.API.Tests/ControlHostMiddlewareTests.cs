@@ -13,6 +13,9 @@ public sealed class ControlHostMiddlewareTests
     [Theory]
     [InlineData("/admin/audit")]
     [InlineData("/control/login")]
+    [InlineData("/control/bootstrap")]
+    [InlineData("/control/recover")]
+    [InlineData("/control/logout")]
     [InlineData("/bootstrap")]
     [InlineData("/recover")]
     [InlineData("/v1/admin/audit")]
@@ -42,7 +45,11 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/brand/beacon-mark.svg")]
     [InlineData("/_framework/blazor.web.js")]
     [InlineData("/_content/MudBlazor/MudBlazor.min.css")]
-    public async Task ControlHost_AllowsAuditApiAndRequiredShellAssets(string path)
+    [InlineData("/control/login")]
+    [InlineData("/control/bootstrap")]
+    [InlineData("/control/recover")]
+    [InlineData("/control/logout")]
+    public async Task ControlHost_AllowsAuditApiShellAssetsAndControlPages(string path)
     {
         var context = Context(ControlHost, path);
         var nextCalled = false;
