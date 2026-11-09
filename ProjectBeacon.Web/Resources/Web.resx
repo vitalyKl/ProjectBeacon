@@ -2793,7 +2793,7 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronize</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Waiting for the workstation to complete the Git operation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>The Git operation is still running. Refresh this page and check the repository status again.</value></data>
-  <data name="GitSyncNoOnlineDevice" xml:space="preserve"><value>No online workstation advertising GitSync support is attached to this project.</value></data>
+  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>No online workstation with GitSync support is attached to this project.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
   <data name="GitSyncAhead" xml:space="preserve"><value>Ahead</value></data>

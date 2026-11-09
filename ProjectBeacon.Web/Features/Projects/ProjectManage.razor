@@ -129,7 +129,7 @@ else
                 @L["GitSyncCheck"]
             </MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunGitSync(GitSyncMode.PullFastForward))"
-                       Disabled="@(_gitSyncBusy || !_runtimes.Any(runtime => runtime.DeviceOnline))">
+                       Disabled="@(_gitSyncBusy || !HasGitSyncWorkstation)">
                 @L["GitSyncNow"]
             </MudButton>
         </div>
@@ -164,7 +164,7 @@ else
         }
         @if (!HasGitSyncWorkstation)
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncNoOnlineDevice"]</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncNoCompatibleDevice"]</MudText>
         }
     </MudPaper>
 

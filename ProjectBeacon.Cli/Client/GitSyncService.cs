@@ -441,7 +441,7 @@ internal sealed class GitSyncService
         if (string.IsNullOrWhiteSpace(value))
             return null;
         var text = value.Trim();
-        text = Regex.Replace(text, @"(?i)(https?://)[^/@\s]+:[^/@\s]+@", "$1[redacted]@");
+        text = Regex.Replace(text, @"(?i)(https?://)[^/@\s]+@", "$1[redacted]@");
         text = Regex.Replace(text, @"(?i)\b(Bearer\s+)[A-Za-z0-9._~+/=-]+", "$1[redacted]");
         text = Regex.Replace(text, @"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|bcd_[A-Za-z0-9_-]{20,}|bcn_[A-Za-z0-9_-]{20,})\b", "[redacted]");
         return text.Length <= 2000 ? text : text[..2000] + "…";
