@@ -2787,4 +2787,106 @@ No Beacon-hosted coding agent.</value>
 <data name="NoOrganizationAccess" xml:space="preserve">
     <value>You are not a member of an organization yet. Accept an organization invitation or contact the service operator.</value>
   </data>
+<data name="AuditHistory" xml:space="preserve">
+    <value>Audit history</value>
+  </data>
+<data name="AuditHistoryLead" xml:space="preserve">
+    <value>Security and operator activity across organizations and projects. Times are shown in UTC.</value>
+  </data>
+<data name="AuditAccessDenied" xml:space="preserve">
+    <value>You do not have permission to view the audit history.</value>
+  </data>
+<data name="AuditFilterOrg" xml:space="preserve">
+    <value>Organization ID</value>
+  </data>
+<data name="AuditFilterProject" xml:space="preserve">
+    <value>Project ID</value>
+  </data>
+<data name="AuditFilterActor" xml:space="preserve">
+    <value>Actor user ID</value>
+  </data>
+<data name="AuditFilterAction" xml:space="preserve">
+    <value>Action code</value>
+  </data>
+<data name="AuditFilterFromUtc" xml:space="preserve">
+    <value>From (UTC)</value>
+  </data>
+<data name="AuditFilterToUtc" xml:space="preserve">
+    <value>To (UTC)</value>
+  </data>
+<data name="AuditActorKind" xml:space="preserve">
+    <value>Actor type</value>
+  </data>
+<data name="AuditOutcome" xml:space="preserve">
+    <value>Outcome</value>
+  </data>
+<data name="All" xml:space="preserve">
+    <value>All</value>
+  </data>
+<data name="ApplyFilters" xml:space="preserve">
+    <value>Apply filters</value>
+  </data>
+<data name="ClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+<data name="AuditPageSummary" xml:space="preserve">
+    <value>{0} events · page {1} of {2}</value>
+  </data>
+<data name="AuditNoEvents" xml:space="preserve">
+    <value>No audit events match these filters.</value>
+  </data>
+<data name="AuditTimestamp" xml:space="preserve">
+    <value>Time (UTC)</value>
+  </data>
+<data name="AuditActor" xml:space="preserve">
+    <value>Actor</value>
+  </data>
+<data name="AuditAction" xml:space="preserve">
+    <value>Action</value>
+  </data>
+<data name="AuditTarget" xml:space="preserve">
+    <value>Target</value>
+  </data>
+<data name="AuditScope" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+<data name="AuditDetails" xml:space="preserve">
+    <value>Details</value>
+  </data>
+<data name="AuditActorHuman" xml:space="preserve">
+    <value>Human</value>
+  </data>
+<data name="AuditActorApiToken" xml:space="preserve">
+    <value>API token</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Device</value>
+  </data>
+<data name="AuditActorWorker" xml:space="preserve">
+    <value>Worker</value>
+  </data>
+<data name="AuditActorSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+<data name="AuditOutcomeSuccess" xml:space="preserve">
+    <value>Success</value>
+  </data>
+<data name="AuditOutcomeDenied" xml:space="preserve">
+    <value>Denied</value>
+  </data>
+<data name="AuditOutcomeFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+<data name="AuditProjectScope" xml:space="preserve">
+    <value>Project {0}</value>
+  </data>
+<data name="AuditOrgScope" xml:space="preserve">
+    <value>Organization {0}</value>
+  </data>
+<data name="AuditPlatformScope" xml:space="preserve">
+    <value>Platform-wide</value>
+  </data>
+<data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Organization, project and actor filters must be valid GUIDs.</value>
+  </data>
 </root>
