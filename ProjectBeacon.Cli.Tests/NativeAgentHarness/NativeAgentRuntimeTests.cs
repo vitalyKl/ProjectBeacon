@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
+using ProjectBeacon.Domain.Common;
 
 public sealed class NativeAgentRuntimeTests
 {
