@@ -60,7 +60,7 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
                     current.Priority, current.Type,
                     current.Status == TaskItemStatus.InProgress ? current.SubStage : null,
                     current.ProjectId, current.LabelId, current.MilestoneId, current.ReviewNotes,
-                    current.CreatedAt, current.CompletedAt, [], []));
+                    current.CreatedAt, current.CompletedAt, [], [], current.ContentRevision));
             return Result.Failure<TaskItemDto>("Task state changed while transitioning; retry.", ErrorKind.Conflict);
         }
 
@@ -69,6 +69,6 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
             task.Priority, task.Type,
             task.Status == TaskItemStatus.InProgress ? task.SubStage : null,
             task.ProjectId, task.LabelId, task.MilestoneId, task.ReviewNotes,
-            task.CreatedAt, task.CompletedAt, [], []));
+            task.CreatedAt, task.CompletedAt, [], [], task.ContentRevision));
     }
 }
