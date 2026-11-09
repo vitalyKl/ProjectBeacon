@@ -30,6 +30,8 @@ public static class ContextEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/constraints", ListConstraints).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}", GetConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapGet("/v1/projects/{projectId:guid}/content-versions", ListContentVersions)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -217,6 +219,19 @@ public static class ContextEndpoints
     {
         var result = await handler.HandleAsync(projectId, constraintId, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
+
+    private static async Task<IResult> ListContentVersions(
+        Guid projectId,
+        ContentTargetKind targetKind,
+        Guid targetId,
+        int? limit,
+        ListContentVersionsHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, targetKind, targetId, limit ?? 50, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> CreateConstraint(
