@@ -233,6 +233,11 @@ public static class ContextEndpoints
         ListContentVersionsHandler handler,
         CancellationToken ct)
     {
+        // Task history has its own TaskRead capability and endpoint. Do not let a token
+        // holding only ContextRead enumerate task descriptions through this generic route.
+        if (targetKind == ContentTargetKind.TaskDescription)
+            return Results.Forbid();
+
         var result = await handler.HandleAsync(projectId, targetKind, targetId, limit ?? 50, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
