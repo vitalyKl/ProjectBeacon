@@ -35,6 +35,28 @@ public sealed class ContentWriter
                 "Content changed since it was loaded. Refresh the item and retry.",
                 ErrorKind.Conflict);
         }
+        catch (DbUpdateException)
+        {
+            // Two writers can both read revision N and race to insert the same N+1
+            // snapshot. Depending on EF command ordering, PostgreSQL may report the
+            // unique ContentVersions index before the target row's concurrency token.
+            // Treat that specific duplicate revision as the same stale-write conflict.
+            var (projectId, targetId, kind, revision) = GetIdentity(target);
+            var duplicateRevision = await db.ContentVersions.AnyAsync(
+                version => version.ProjectId == projectId
+                    && version.TargetId == targetId
+                    && version.TargetKind == kind
+                    && version.Revision == revision,
+                ct);
+            if (duplicateRevision)
+            {
+                return Result.Failure<int>(
+                    "Content changed since it was loaded. Refresh the item and retry.",
+                    ErrorKind.Conflict);
+            }
+
+            throw;
+        }
     }
 
     public void AddVersion(
@@ -121,6 +143,17 @@ public sealed class ContentWriter
             changedById,
             proposalId));
     }
+
+    private static (Guid ProjectId, Guid TargetId, ContentTargetKind TargetKind, int Revision) GetIdentity(object target) => target switch
+    {
+        ContextSection section => (section.ProjectId, section.Id, ContentTargetKind.ContextSection, section.Revision),
+        Decision decision => (decision.ProjectId, decision.Id, ContentTargetKind.Decision, decision.Revision),
+        Constraint constraint => (constraint.ProjectId, constraint.Id, ContentTargetKind.Constraint, constraint.Revision),
+        Milestone milestone => (milestone.ProjectId, milestone.Id, ContentTargetKind.Milestone, milestone.Revision),
+        Project project => (project.Id, project.Id, ContentTargetKind.ProjectDescription, project.Revision),
+        TaskItem task => (task.ProjectId, task.Id, ContentTargetKind.TaskDescription, task.ContentRevision),
+        _ => throw new ArgumentException($"'{target.GetType().Name}' is not a revisioned content target.", nameof(target))
+    };
 
     private static int GetRevision(object target) => target switch
     {
