@@ -154,7 +154,7 @@ public record ListCommandsCommand(ListCommandsRequest Request) : ICommand<Result
 /// <summary>
 /// Project, device, user, and the local root to bind.
 /// </summary>
-public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot);
+public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot, ActorContext? Actor = null);
 /// <summary>
 /// Command for attach runtime.
 /// </summary>
@@ -170,7 +170,7 @@ public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result
 /// <summary>
 /// User and runtime id for detach runtime.
 /// </summary>
-public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
+public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId, ActorContext? Actor = null);
 /// <summary>
 /// Command for detach runtime.
 /// </summary>
