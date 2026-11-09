@@ -62,16 +62,29 @@ and `docker inspect` `.Networks` keys.
    ```
 
    Keep `DATA_PROTECTION_WRITE_V2=true` (fresh install). Set
-   `BEACON_DOMAIN` (your A record) and `ACME_EMAIL`. For invite emails set
-   `MAIL__Host` / `MAIL__From`.
+   `BEACON_DOMAIN` (your existing customer hostname), `CONTROL_HOST`
+   (default `control.projectbeacon.tech`) and `ACME_EMAIL`. Both hostnames
+   must resolve to this VPS. Caddy automatically obtains and renews a separate
+   Let's Encrypt certificate for each hostname using HTTP-01; no second domain
+   registration or manually managed certificate is required. For invite emails
+   set `MAIL__Host` / `MAIL__From`.
 
    Keep `.env` on Unix line endings (LF). A CRLF file puts a hidden carriage
    return into `BEACON_WEB_IMAGE`, and `docker compose run` then rejects it
    as an invalid image reference.
 
-3. DNS: point an **A record** `beacon.example.com` → VPS IP and wait for
-   propagation (`dig +short beacon.example.com`). Ports 80/443 must be open
-   before Caddy can issue the certificate.
+3. DNS: point both hostnames to the VPS IP. For example, create an **A record**
+   for `BEACON_DOMAIN` and an **A record** for `CONTROL_HOST` (or a CNAME for
+   `CONTROL_HOST` to `BEACON_DOMAIN`). Verify both resolve to the VPS:
+
+   ```bash
+   dig +short "$BEACON_DOMAIN"
+   dig +short "$CONTROL_HOST"
+   ```
+
+   Open ports 80/443 before Caddy starts: it obtains independent Let's Encrypt
+   certificates for both site names and renews them automatically. The existing
+   registered domain remains the same; only a DNS record for the subdomain is added.
 
 4. Get an image reference. Images are published only by the release workflow
    on `v*` tags (`.github/workflows/release.yml`: tests → image → scan →
@@ -109,9 +122,11 @@ and `docker inspect` `.Networks` keys.
    curl -fsS https://beacon.example.com/v1/version      # {"version":"X.Y.Z","gitSha":"..."}
    ```
 
-   Then in a browser: `https://beacon.example.com/bootstrap` (enter
+   Then in a browser open `https://<CONTROL_HOST>/control/bootstrap` (enter
    `BOOTSTRAP_ADMIN_TOKEN`; the generated admin password is shown **once**),
-   log in at `/login`, create the org/project. With
+   log in to the operator console at `https://<CONTROL_HOST>/control/login`,
+   and verify that `https://<BEACON_DOMAIN>/control/login` returns 404. Customer
+   users continue to sign in at `https://<BEACON_DOMAIN>/login`. With
    `AUTH_LOCAL_INVITE_ONLY=true` (set in `.env.example`) registration requires
     an invite.
 
@@ -224,8 +239,8 @@ dotnet ef migrations script --idempotent --from <older-migration> --to <newer-mi
 
 ## Data Protection key ring
 
-The ASP.NET Data Protection key ring that protects the `BeaconAuth` cookie
-lives in the shared Postgres database (`DataProtectionKeys` table), not in a
+The ASP.NET Data Protection key ring that protects both the customer
+`BeaconAuth` and operator `BeaconControlAuth` cookies lives in the shared Postgres database (`DataProtectionKeys` table), not in a
 container file system — the containers are read-only, so a file-based ring
 would not survive a re-deploy. Each row is sealed with key material derived
 from `DATA_PROTECTION_KEY` (AES-GCM); rows sealed before a key change stay
@@ -291,8 +306,9 @@ configured key material (fail-closed).
   as the only writable mount. web/worker/migrate run as the non-root `app`
   image user; Caddy runs as root with only `cap_add: NET_BIND_SERVICE`
   (required to bind 80/443 — everything else stays dropped).
-- The bootstrap endpoint works only until the first admin exists (then 409);
-  the token stays in `.env` but grants nothing afterwards. Rotate
+- The initial-admin bootstrap endpoint is exposed only on `CONTROL_HOST` and
+  works only until the first admin exists (then 409); the token stays in `.env`
+  but grants nothing afterwards. Rotate
   `BOOTSTRAP_ADMIN_TOKEN` anyway and keep `.env` out of backups unless
   encrypted.
 - Do not point `BEACON_TEST_DATABASE_URL` or any tooling at this database.
