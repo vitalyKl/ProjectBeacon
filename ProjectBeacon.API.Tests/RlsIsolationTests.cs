@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Tests;
 
 using Domain.Entities.Identity;
+using Domain.Entities.Content;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -148,6 +149,67 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         Assert.Contains(taskA, ids);
         // taskB belongs to a different project and must be hidden by the tenant policy.
         Assert.DoesNotContain(taskB, ids);
+    }
+
+    [Fact]
+    public async Task Rls_ContentVersions_AreProjectScoped_AndAppendOnly()
+    {
+        _postgres.RequirePostgres();
+
+        var (projectA, _) = await SeedTestDataAsync("ContentA");
+        var (projectB, _) = await SeedTestDataAsync("ContentB");
+        var targetA = Guid.NewGuid();
+        var targetB = Guid.NewGuid();
+        var versionA = ContentVersion.Create(
+            projectA, ContentTargetKind.ContextSection, targetA, 1, "{\\"title\\":\\"A\\"}", "Human", Guid.NewGuid().ToString("D"));
+        var versionB = ContentVersion.Create(
+            projectB, ContentTargetKind.ContextSection, targetB, 1, "{\\"title\\":\\"B\\"}", "Human", Guid.NewGuid().ToString("D"));
+
+        await using (var seed = NewAdminContext())
+        {
+            seed.ContentVersions.AddRange(versionA, versionB);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var conn = await OpenRlsConnectionAsync())
+        {
+            await using (var setCmd = new NpgsqlCommand(
+                "SELECT set_config('app.tenant_project_id', @pid, false)," +
+                "       set_config('app.tenant_unscoped', 'false', false)", conn))
+            {
+                setCmd.Parameters.AddWithValue("@pid", projectA.ToString());
+                await setCmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
+            }
+
+            await using var listCmd = new NpgsqlCommand("SELECT \\"TargetId\\" FROM \\"ContentVersions\\"", conn);
+            using var reader = await listCmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            var targetIds = new List<Guid>();
+            while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+                targetIds.Add(reader.GetGuid(0));
+
+            Assert.Contains(targetA, targetIds);
+            Assert.DoesNotContain(targetB, targetIds);
+        }
+
+        await using (var admin = new NpgsqlConnection(_adminConn))
+        {
+            await admin.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await using var update = new NpgsqlCommand(
+                "UPDATE \\"ContentVersions\\" SET \\"ContentJson\\" = '{\\"title\\":\\"tampered\\"}'::jsonb WHERE \\"Id\\" = @id",
+                admin);
+            update.Parameters.AddWithValue("@id", versionA.Id);
+            var exception = await Assert.ThrowsAsync<PostgresException>(
+                () => update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            Assert.Contains("append-only", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+            await using var delete = new NpgsqlCommand(
+                "DELETE FROM \\"ContentVersions\\" WHERE \\"Id\\" = @id",
+                admin);
+            delete.Parameters.AddWithValue("@id", versionA.Id);
+            exception = await Assert.ThrowsAsync<PostgresException>(
+                () => delete.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            Assert.Contains("append-only", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
