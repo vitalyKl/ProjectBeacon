@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Security;
 
 using Application.Persistence;
+using Domain.Entities.Email;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 
@@ -80,6 +81,35 @@ public static class DataKeyMigration
                 break;
         }
 
+        var emailSettings = await db.PlatformEmailSettings
+            .Where(settings => settings.PasswordCipher != ""
+                && !settings.PasswordCipher.StartsWith(ISecretProtector.V2Prefix))
+            .SingleOrDefaultAsync(ct);
+        if (emailSettings is not null)
+        {
+            if (ReEncrypt(
+                () => secrets.Open(emailSettings.PasswordCipher),
+                secrets,
+                cipher => emailSettings.Update(
+                    emailSettings.Enabled,
+                    emailSettings.Host,
+                    emailSettings.Port,
+                    emailSettings.Username,
+                    cipher,
+                    emailSettings.FromAddress,
+                    emailSettings.UseStartTls,
+                    DateTime.SpecifyKind(emailSettings.UpdatedAt, DateTimeKind.Utc))))
+            {
+                migrated++;
+            }
+            else
+            {
+                failed++;
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+
         return new Result(migrated, await CountRemainingAsync(db, ct), failed, secrets.HasLegacyKey);
     }
 
@@ -87,7 +117,10 @@ public static class DataKeyMigration
         => await db.Users
             .CountAsync(u => u.TotpSecretCipher != "" && !u.TotpSecretCipher.StartsWith(ISecretProtector.V2Prefix), ct)
            + await db.AgentProviderConnections
-            .CountAsync(c => c.ApiKeyCipher != "" && !c.ApiKeyCipher.StartsWith(ISecretProtector.V2Prefix), ct);
+            .CountAsync(c => c.ApiKeyCipher != "" && !c.ApiKeyCipher.StartsWith(ISecretProtector.V2Prefix), ct)
+           + await db.PlatformEmailSettings
+            .CountAsync(settings => settings.PasswordCipher != ""
+                && !settings.PasswordCipher.StartsWith(ISecretProtector.V2Prefix), ct);
 
     private static bool ReEncrypt(Func<string> open, ISecretProtector secrets, Action<string> write)
     {

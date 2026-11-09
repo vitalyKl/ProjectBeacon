@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Persistence;
 using Application.Security;
 using Domain.Entities.Agents;
+using Domain.Entities.Email;
 using Domain.Entities.Identity;
 using Infrastructure.Security;
 using Microsoft.Data.Sqlite;
@@ -50,6 +51,41 @@ public sealed class DataKeyMigrationTests : IDisposable
         Assert.StartsWith(ISecretProtector.V2Prefix, migrated);
         Assert.Equal("secret-material", TestProtectors.Dev().Open(migrated));
         Assert.Equal(v2UserBefore, await Cipher(v2User.Id));
+    }
+
+    [Fact]
+    public async Task PlatformSmtpPassword_IsIncludedInKeyRotation()
+    {
+        const string password = "smtp-secret";
+        var ciphertext = SecretBox.Seal(password, TestProtectors.LegacyKey);
+        var settings = PlatformEmailSettings.Create(
+            true,
+            "smtp.example.test",
+            587,
+            "beacon",
+            ciphertext,
+            "beacon@example.test",
+            true,
+            DateTime.UtcNow);
+
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            db.PlatformEmailSettings.Add(settings);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var result = await Run(TestProtectors.Dev(TestProtectors.LegacyKey));
+
+        Assert.Equal(1, result.Migrated);
+        Assert.Equal(0, result.RemainingV1);
+        Assert.Equal(0, result.Failed);
+
+        await using var verifyDb = _dbFactory.CreateDbContext();
+        var migrated = await verifyDb.PlatformEmailSettings.SingleAsync(
+            item => item.Id == PlatformEmailSettings.SingletonId,
+            TestContext.Current.CancellationToken);
+        Assert.StartsWith(ISecretProtector.V2Prefix, migrated.PasswordCipher);
+        Assert.Equal(password, TestProtectors.Dev().Open(migrated.PasswordCipher));
     }
 
     [Fact]
