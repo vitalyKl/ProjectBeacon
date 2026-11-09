@@ -12,8 +12,18 @@ using Microsoft.EntityFrameworkCore;
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CreateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateTaskHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public CreateTaskHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(CreateTaskCommand command, CancellationToken ct = default)
     {
@@ -53,7 +63,10 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
         db.Tasks.Add(task);
         if (command.Actor.UserId is { } actorId && actorId != Guid.Empty)
             await TaskKindCopy.CopyOntoTaskAsync(db, task, actorId, command.Request.KindId, ct);
-        await db.SaveChangesAsync(ct);
+        var saved = await _contentWriter.SaveAsync(
+            db, task, command.Actor.UserId is null ? null : "Human", command.Actor.UserId?.ToString(), ct);
+        if (!saved.Success)
+            return Result.Failure<TaskItemDto>(saved.Error ?? "Task content version could not be saved.", ErrorKind.Conflict);
 
         return Result.Ok(MapToDto(task));
     }
@@ -74,7 +87,8 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             task.CreatedAt,
             task.CompletedAt,
             [],
-            []);
+            [],
+            task.ContentRevision);
 }
 /// <summary>
 /// Updates a task title, description, priority, type, label, or milestone. Description updates are last-writer-wins against finish_work atomic note appends; status transitions never depend on the description value.
@@ -82,8 +96,18 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public UpdateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateTaskHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public UpdateTaskHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(UpdateTaskCommand command, CancellationToken ct = default)
     {
@@ -109,11 +133,27 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
 
+        var contentChanged = command.Request.Description is not null
+            && !string.Equals(task.Description, command.Request.Description, StringComparison.Ordinal);
+        if (contentChanged && command.Request.ExpectedContentRevision != task.ContentRevision)
+            return Result.Failure<TaskItemDto>(
+                "Task content changed since it was loaded. Refresh the task and retry.",
+                ErrorKind.Conflict);
+
         task.Update(command.Request.Title, command.Request.Description, command.Request.Priority, command.Request.Type);
         task.AssignLabel(command.Request.LabelId);
         task.SetMilestone(command.Request.MilestoneId);
 
-        await db.SaveChangesAsync(ct);
+        if (contentChanged)
+        {
+            var saved = await _contentWriter.SaveAsync(db, task, "Human", null, ct);
+            if (!saved.Success)
+                return Result.Failure<TaskItemDto>(saved.Error ?? "Task content conflict.", ErrorKind.Conflict);
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         return Result.Ok(MapToDto(task));
     }
@@ -134,7 +174,8 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
             task.CreatedAt,
             task.CompletedAt,
             [],
-            []);
+            [],
+            task.ContentRevision);
 }
 /// <summary>
 /// Deletes a task.
@@ -243,7 +284,8 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
             task.CreatedAt,
             task.CompletedAt,
             [],
-            []);
+            [],
+            task.ContentRevision);
 }
 /// <summary>
 /// Saves review notes. The domain rejects an empty note. Last-writer-wins by design: the notes are free-form review text; only their non-emptiness is read at a status transition.
@@ -251,8 +293,18 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public AddReviewNotesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AddReviewNotesHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public AddReviewNotesHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(AddReviewNotesCommand command, CancellationToken ct = default)
     {
@@ -261,16 +313,27 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 
-        try
-        {
-            task.SetReviewNotes(command.Request.ReviewNotes);
-        }
-        catch (ArgumentException ex)
-        {
-            return Result.Failure<TaskItemDto>(ex.Message);
-        }
+        var contentChanged = !string.Equals(task.ReviewNotes, command.Request.ReviewNotes, StringComparison.Ordinal);
+        if (contentChanged && command.Request.ExpectedContentRevision != task.ContentRevision)
+            return Result.Failure<TaskItemDto>(
+                "Task content changed since it was loaded. Refresh the task and retry.",
+                ErrorKind.Conflict);
 
-        await db.SaveChangesAsync(ct);
+        if (contentChanged)
+        {
+            try
+            {
+                task.SetReviewNotes(command.Request.ReviewNotes);
+            }
+            catch (ArgumentException ex)
+            {
+                return Result.Failure<TaskItemDto>(ex.Message);
+            }
+
+            var saved = await _contentWriter.SaveAsync(db, task, "Human", null, ct);
+            if (!saved.Success)
+                return Result.Failure<TaskItemDto>(saved.Error ?? "Task review-notes conflict.", ErrorKind.Conflict);
+        }
 
         return Result.Ok(MapToDto(task));
     }
@@ -291,5 +354,6 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
             task.CreatedAt,
             task.CompletedAt,
             [],
-            []);
+            [],
+            task.ContentRevision);
 }
