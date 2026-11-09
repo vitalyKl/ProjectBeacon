@@ -88,17 +88,28 @@ administrator only.
 
 ## Deployment
 
-For Production:
+For the single-VPS Docker Compose deployment:
+
+1. Set `CONTROL_HOST=control.projectbeacon.tech` in `deploy/compose/.env`.
+2. Create a DNS A/AAAA record for the control hostname pointing to the same VPS as `BEACON_DOMAIN`,
+   or a CNAME from `control.projectbeacon.tech` to `BEACON_DOMAIN`.
+3. The production Caddyfile serves both `BEACON_DOMAIN` and `CONTROL_HOST`. Caddy obtains and renews
+   separate Let's Encrypt certificates for both names automatically; keep ports 80 and 443 reachable.
+4. The Web container and Caddy receive the same `CONTROL_HOST` value.
+
+For the Kubernetes deployment:
 
 1. Set `CONTROL_HOST=control.projectbeacon.tech` on every Web color/deployment.
 2. Create a DNS A/AAAA or CNAME record for `control.projectbeacon.tech` pointing to the same ingress
    entry point as the customer Web host.
-3. Add `control.projectbeacon.tech` as an ingress host routed to the Web service and include it in
-   the TLS certificate.
-4. Keep the standalone API service on its public API hostname; it never serves operator routes.
-5. Smoke-test that `/login` and `/dashboard` work on the customer host, while
-   `/admin/audit`, `/control/login`, `/bootstrap`, and `/recover` return `404` there. Verify
-   that `/control/login` works only on the control host and that a non-operator account is refused.
+3. Add `control.projectbeacon.tech` as an ingress host routed to the Web service. Provision the
+   referenced `beacon-web-tls` secret with a certificate covering both customer and control hostnames;
+   the repo does not assume a particular cert-manager issuer.
+
+For either deployment, keep the standalone API service on its public API hostname; it never serves
+operator routes. Smoke-test that `/login` and `/dashboard` work on the customer host, while
+`/admin/audit`, `/control/login`, `/bootstrap`, and `/recover` return `404` there. Verify that
+`/control/login` works only on the control host and that a non-operator account is refused.
 
 For local development, add `CONTROL_HOST=control.localhost` to `.env`. Browse the customer app at
 `http://localhost:5083` and the Control Plane at `http://control.localhost:5083/control/login`.
