@@ -161,11 +161,17 @@ public sealed class ControlPlaneAuthenticationHttpTests
         && values.Any(value => value.StartsWith(name + "=", StringComparison.Ordinal));
 }
 
-public sealed class ControlPlaneWebTestFactory : WebProductionTestFactory
+public sealed class ControlPlaneWebTestFactory : WebTestFactory
 {
+    public ControlPlaneWebTestFactory()
+    {
+        Environment.SetEnvironmentVariable("BEACON_MIGRATE_ON_START", "false");
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
+        builder.UseEnvironment("Production");
         builder.UseSetting("Control:Host", "control.localhost");
     }
 }
