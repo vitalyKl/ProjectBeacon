@@ -225,9 +225,8 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         var changed = await service.ChangeMemberRoleAsync(actor, org.Id, firstOwner.Id, MemberRole.Admin);
         Assert.True(changed.Success, changed.Error);
-        Assert.Equal(MemberRole.Admin, (await _seedDb.OrgMembers.IgnoreQueryFilters()
-            .SingleAsync(x => x.OrgId == org.Id && x.UserId == firstOwner.Id,
-                TestContext.Current.CancellationToken)).Role);
+        await _seedDb.Entry(firstMembership).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(MemberRole.Admin, firstMembership.Role);
         Assert.True(await _seedDb.AuditEvents.IgnoreQueryFilters()
             .AnyAsync(x => x.Action == "platform.organization.member_role_changed",
                 TestContext.Current.CancellationToken));
@@ -271,14 +270,14 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         await _seedDb.Entry(customerOwner).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(customerOwner.DisabledAt);
         Assert.Equal(1, customerOwner.SessionVersion);
-        Assert.Equal([customerOwner.Id], cache.Invalidated);
+        Assert.Equal(new[] { customerOwner.Id }, cache.Invalidated);
 
         var enabled = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: false);
         Assert.True(enabled.Success, enabled.Error);
         await _seedDb.Entry(customerOwner).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Null(customerOwner.DisabledAt);
         Assert.Equal(2, customerOwner.SessionVersion);
-        Assert.Equal([customerOwner.Id, customerOwner.Id], cache.Invalidated);
+        Assert.Equal(new[] { customerOwner.Id, customerOwner.Id }, cache.Invalidated);
 
         Assert.Equal(2, await _seedDb.AuditEvents.IgnoreQueryFilters()
             .CountAsync(x => x.TargetType == "User" && x.TargetId == customerOwner.Id.ToString()
