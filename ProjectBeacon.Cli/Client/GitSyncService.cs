@@ -134,7 +134,7 @@ internal sealed class GitSyncService
             var after = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
             if (after.Error is not null)
                 return Complete(Failed(after, GitSyncRefusalCode.FetchFailed, after.Error));
-            return Complete(ToResult(after, GitSyncOutcome.FastForwarded, null, state.Head, after.Head));
+            return Complete(ToResult(after, GitSyncOutcome.FastForwarded, null, null, after.Head) with { HeadBefore = state.Head });
         }
         finally
         {

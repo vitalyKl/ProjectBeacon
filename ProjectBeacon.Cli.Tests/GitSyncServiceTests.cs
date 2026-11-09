@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
 using System.Diagnostics;
-using System.Security;
 using System.Text.Json;
 using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Cli.Client;
@@ -144,7 +143,7 @@ public sealed class GitSyncServiceTests
         var result = await _service.ExecuteAsync(repo.Root, repo.ProjectId, payload, CancellationToken.None);
 
         Assert.False(result.Ok);
-        Assert.Contains("invalid", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("invalid", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<GitSyncResultDto> ExecuteAsync(RepositoryFixture repo, GitSyncMode mode)
