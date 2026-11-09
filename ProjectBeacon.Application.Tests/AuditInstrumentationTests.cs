@@ -522,6 +522,32 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal("""{"newState":"Revoked"}""", revokedEvent.DetailsJson);
     }
 
+    [Fact]
+    public async Task OpenRegistration_IsAuditedAsAPlatformWideAccountEvent()
+    {
+        var registration = new RegisterHandler(
+            _factory, new BcryptPasswordHasher(),
+            new ConfigurationBuilder().Build(),
+            auditWriter: _auditWriter);
+
+        var result = await registration.HandleAsync(
+            new RegisterCommand(new RegisterRequest(
+                "open-registration", "open-registration@example.test", "password123")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        var auditEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.registered"
+                && item.TargetId == result.Value!.UserId.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AuditActorKind.Human, auditEvent.ActorKind);
+        Assert.Equal(result.Value.UserId, auditEvent.ActorUserId);
+        Assert.Null(auditEvent.OrgId);
+        Assert.Null(auditEvent.ProjectId);
+        Assert.Equal("""{"newState":"Active"}""", auditEvent.DetailsJson);
+        Assert.DoesNotContain("open-registration@example.test", auditEvent.DetailsJson ?? string.Empty);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
