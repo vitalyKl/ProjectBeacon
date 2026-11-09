@@ -22,3 +22,13 @@ spec:
                 name: beacon-web
                 port:
                   name: http
+    - host: control.projectbeacon.tech
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beacon-web
+                port:
+                  name: http
