@@ -13,6 +13,11 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
 
+    public CreateMilestoneHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
     public CreateMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
@@ -50,6 +55,11 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+
+    public UpdateMilestoneHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
 
     public UpdateMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {
@@ -98,6 +108,11 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+
+    public DeleteMilestoneHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
 
     public DeleteMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {

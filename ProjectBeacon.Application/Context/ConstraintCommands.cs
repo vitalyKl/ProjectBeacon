@@ -22,6 +22,11 @@ public class CreateConstraintHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
 
+    public CreateConstraintHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
     public CreateConstraintHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;

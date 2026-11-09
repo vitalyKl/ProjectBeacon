@@ -13,6 +13,11 @@ public class UpsertContextNodeHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
 
+    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
     public UpsertContextNodeHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;

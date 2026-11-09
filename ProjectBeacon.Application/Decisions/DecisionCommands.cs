@@ -31,6 +31,11 @@ public class CreateDecisionHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
 
+    public CreateDecisionHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
     public CreateDecisionHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
