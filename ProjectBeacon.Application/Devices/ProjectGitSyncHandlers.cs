@@ -3,26 +3,24 @@ namespace ProjectBeacon.Application.Devices;
 using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
-using Domain.Enums;
 using Application.Persistence;
+using Domain.Entities.Devices;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
-/// <summary>Queues a repository operation on the project's most recently active online workstation.</summary>
+/// <summary>Queues a repository operation on the most recently active online project workstation.</summary>
 public sealed class EnqueueProjectGitSyncHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly EnqueueCommandHandler _enqueue;
     private readonly IAuthorizationService _authorization;
     private readonly TimeProvider _timeProvider;
 
     public EnqueueProjectGitSyncHandler(
         IBeaconDbFactory dbFactory,
-        EnqueueCommandHandler enqueue,
         IAuthorizationService authorization,
         TimeProvider? timeProvider = null)
     {
         _dbFactory = dbFactory;
-        _enqueue = enqueue;
         _authorization = authorization;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -39,8 +37,8 @@ public sealed class EnqueueProjectGitSyncHandler
             return Result.Failure<WorkstationCommandDto>("Unsupported GitSync mode.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await _authorization.CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Update, projectId: projectId, ct: ct);
+        var permission = await ProjectGitSyncAuthorization.CanWriteAsync(
+            db, actor, userId, _authorization, projectId, ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
                 permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
@@ -68,13 +66,79 @@ public sealed class EnqueueProjectGitSyncHandler
                 "No online workstation is attached to this project.", ErrorKind.Conflict);
 
         var payload = JsonSerializer.Serialize(new { projectId, mode = mode.ToString() });
-        // Audit event: connect this operation to the project audit stream when that
-        // infrastructure is available in the target branch.
-        return await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+        var command = WorkstationCommand.Create(
             selected.Device.Id,
-            userId,
             WorkstationCommandKind.GitSync,
             payload,
-            projectId)), ct);
+            projectId,
+            selected.Device.UserId);
+        db.WorkstationCommands.Add(command);
+        await db.SaveChangesAsync(ct);
+
+        // Audit event: connect this human-requested operation to the project audit stream
+        // when the audit infrastructure is available in the target branch.
+        return Result.Ok(EnqueueCommandHandler.MapCommand(command, selected.Runtime.LocalRoot));
+    }
+}
+
+/// <summary>Reads only a GitSync command belonging to the authorized project.</summary>
+public sealed class GetProjectGitSyncCommandHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
+
+    public GetProjectGitSyncCommandHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<WorkstationCommandDto>> HandleAsync(
+        Guid projectId,
+        Guid commandId,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is not { } userId)
+            return Result.Forbidden<WorkstationCommandDto>();
+
+        await using var db = _dbFactory.CreateDbContext();
+        var permission = await ProjectGitSyncAuthorization.CanWriteAsync(
+            db, actor, userId, _authorization, projectId, ct);
+        if (!permission.Success)
+            return Result.Failure<WorkstationCommandDto>(
+                permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
+
+        var command = await db.WorkstationCommands.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(candidate => candidate.Id == commandId
+                && candidate.ProjectId == projectId
+                && candidate.Kind == WorkstationCommandKind.GitSync, ct);
+        if (command is null)
+            return Result.Failure<WorkstationCommandDto>("GitSync command not found.", ErrorKind.NotFound);
+
+        var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, command, ct);
+        return Result.Ok(EnqueueCommandHandler.MapCommand(command, localRoot));
+    }
+}
+
+internal static class ProjectGitSyncAuthorization
+{
+    public static async Task<Result> CanWriteAsync(
+        IBeaconDb db,
+        ActorContext actor,
+        Guid userId,
+        IAuthorizationService authorization,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        var isMember = await db.ProjectMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.ProjectId == projectId && member.UserId == userId, ct);
+        if (isMember)
+            return Result.Ok();
+
+        return await authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
     }
 }

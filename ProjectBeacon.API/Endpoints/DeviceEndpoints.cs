@@ -28,6 +28,7 @@ public static class DeviceEndpoints
         app.MapPost(ApiRoutes.CommandHarnessTokenRoute, IssueHarnessToken).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/devices/{id:guid}/commands", EnqueueCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/git-sync", EnqueueGitSync).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/git-sync/{commandId:guid}", GetGitSyncCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/commands/{id:guid}", GetCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/runtimes", ListRuntimes).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/runtimes/{id:guid}/diagnostics", GetRuntimeDiagnostics).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -158,6 +159,19 @@ public static class DeviceEndpoints
         var result = await handler.HandleAsync(projectId, ctx.GetActor(), body.Mode, ct);
         return result.Success
             ? Results.Accepted($"/v1/commands/{result.Value!.Id}", result.Value)
+            : result.FromResult();
+    }
+
+    private static async Task<IResult> GetGitSyncCommand(
+        Guid projectId,
+        Guid commandId,
+        GetProjectGitSyncCommandHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, commandId, ctx.GetActor(), ct);
+        return result.Success
+            ? Results.Ok(result.Value)
             : result.FromResult();
     }
 

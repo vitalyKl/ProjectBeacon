@@ -19,7 +19,7 @@
 @inject UpdateProjectHandler UpdateProject
 @inject DeleteProjectHandler DeleteProject
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
-@inject GetCommandHandler GetCommand
+@inject GetProjectGitSyncCommandHandler GetGitSyncCommand
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 @inject NavigationManager Navigation
@@ -334,7 +334,7 @@ else
             {
                 await Task.Delay(TimeSpan.FromSeconds(1));
                 var current = await GetCommand.HandleAsync(
-                    new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
+                    GetGitSyncCommand.HandleAsync(projectId, commandId, _actor));
                 if (!current.Success || current.Value is null)
                 {
                     Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
