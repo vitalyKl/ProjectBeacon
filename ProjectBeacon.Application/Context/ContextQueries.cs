@@ -75,7 +75,9 @@ public class DeleteContextNodeHandler
 
         section.Delete();
         db.ContextSections.Remove(section);
-        var saved = await _contentWriter.SaveAsync(db, section, "Human", null, ct, deleted: true);
+        var attribution = ContentAttribution.FromActor(command.Actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, section, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
         return saved.Success
             ? Result.Ok()
             : Result.Failure(saved.Error ?? "Context section delete conflict.", ErrorKind.Conflict);
