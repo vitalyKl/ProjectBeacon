@@ -162,9 +162,9 @@ public class FinishWorkHandler
                             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
                         if (currentTask is null)
                             return Result.Failure("Task not found.");
+                        var attribution = ResolveContentAttribution(command);
                         _contentWriter.AddVersion(
-                            db, currentTask, Guid.TryParse(command.Request.ActorId, out _) ? "Human" : "Worker",
-                            command.Request.ActorId);
+                            db, currentTask, attribution.Type, attribution.Id);
                         break;
                     }
 
@@ -228,9 +228,8 @@ public class FinishWorkHandler
 
             if (guardedTransition && task.ContentRevision != expectedContentRevision)
             {
-                _contentWriter.AddVersion(
-                    db, task, Guid.TryParse(command.Request.ActorId, out _) ? "Human" : "Worker",
-                    command.Request.ActorId);
+                var attribution = ResolveContentAttribution(command);
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
             }
 
             if (Guid.TryParse(command.Request.ActorId, out var userId))
@@ -263,6 +262,19 @@ public class FinishWorkHandler
             }
             return Result.Ok();
         });
+    }
+
+    private static (string? Type, string? Id) ResolveContentAttribution(FinishWorkCommand command)
+    {
+        var trusted = ContentAttribution.FromActor(command.Actor);
+        if (trusted.Type is not null)
+            return trusted;
+
+        // Legacy internal worker-token callers remain supported for authorization,
+        // but the secret itself must never be copied into the immutable history.
+        return Guid.TryParse(command.Request.ActorId, out var userId)
+            ? ("Human", userId.ToString("D"))
+            : ("Worker", "worker");
     }
 
     private static async Task<Domain.Entities.Evals.ReviewRun?> FindReviewRun(
