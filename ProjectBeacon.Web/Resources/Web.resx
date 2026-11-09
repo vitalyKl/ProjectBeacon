@@ -2788,7 +2788,7 @@ No Beacon-hosted coding agent.</value>
     <value>Audit log</value>
   </data>
   <data name="AuditLead" xml:space="preserve">
-    <value>Append-only security and operator activity. Access is limited to platform operators.</value>
+    <value>Security and operator activity across organizations and projects. Event times are shown in your browser's local time zone; date filters and CSV timestamps use UTC.</value>
   </data>
   <data name="AuditAction" xml:space="preserve">
     <value>Action code</value>
@@ -2809,7 +2809,7 @@ No Beacon-hosted coding agent.</value>
     <value>Scope</value>
   </data>
   <data name="AuditWhen" xml:space="preserve">
-    <value>Time</value>
+    <value>Time (local)</value>
   </data>
   <data name="AuditOrgId" xml:space="preserve">
     <value>Organization ID</value>
@@ -2855,5 +2855,17 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="AuditInvalidFilter" xml:space="preserve">
     <value>Check the actor, outcome and UTC date filters.</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>Actor API-token ID</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Actor device ID</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>Target type</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>Target ID</value>
   </data>
 </root>
