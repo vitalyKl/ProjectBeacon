@@ -91,6 +91,37 @@ public sealed class NativeCommandRunnerTests
         }
     }
 
+
+    [Fact]
+    public void GitInspectionStartInfoDisablesRepositoryHooksFsmonitorAndExternalDiff()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var sessionId = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["git", "status", "--short"]);
+            var args = start.ArgumentList.ToArray();
+            Assert.Equal("git", Path.GetFileNameWithoutExtension(start.FileName));
+            Assert.Equal("--no-pager", args[0]);
+            Assert.Contains("core.fsmonitor=false", args);
+            Assert.Contains("diff.external=", args);
+            Assert.Contains("core.pager=cat", args);
+            Assert.Contains(args, value => value.StartsWith("core.hooksPath=", StringComparison.Ordinal));
+            Assert.True(Directory.Exists(Path.Combine(
+                NativeCommandRunner.SessionHomePath(sessionId), "home", "git-hooks-empty")));
+            Assert.Equal("cat", start.Environment["GIT_PAGER"]);
+            Assert.False(start.Environment.ContainsKey("GIT_EXTERNAL_DIFF"));
+            Assert.Equal("status", args[^2]);
+            Assert.Equal("--short", args[^1]);
+        }
+        finally
+        {
+            NativeCommandRunner.CleanupSession(sessionId);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void ExecutableResolutionDoesNotSearchTheProjectWorktree()
     {

@@ -25,6 +25,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
     private readonly IDaemonChatSession _chat;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
+    private readonly GitSyncService _gitSync;
 
     public DaemonCommandExecutor(
         DaemonDependencies deps,
@@ -32,7 +33,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         IDaemonLlamaSync llamaSync,
         IDaemonChatSession chat,
         IDaemonRuntimeState state,
-        DaemonTiming timing)
+        DaemonTiming timing,
+        GitSyncService gitSync)
     {
         _http = deps.Http;
         _llama = deps.Llama;
@@ -42,6 +44,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         _chat = chat;
         _state = state;
         _timing = timing;
+        _gitSync = gitSync;
     }
 
     public async Task<(bool Ok, string? Result, string? Error)> ExecuteAsync(WorkstationDaemon.CommandWire command, CancellationToken ct)
@@ -95,6 +98,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             {
                 if (string.IsNullOrWhiteSpace(command.LocalRoot))
                     return (false, null, CommandSandbox.RuntimeRequired);
+                if (kind == WorkstationCommandKind.GitSync)
+                    return await _gitSync.ExecuteAsync(command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
                 if (kind == WorkstationCommandKind.ChatEnsureSession || kind == WorkstationCommandKind.ChatPrompt)
                 {
                     var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, DaemonPayload.ReadPath(payload), relativeOnly: true);

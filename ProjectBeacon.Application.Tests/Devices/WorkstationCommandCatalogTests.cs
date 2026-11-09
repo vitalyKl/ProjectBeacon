@@ -27,7 +27,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.ChatPrompt,
             WorkstationCommandKind.RunEvalTurn,
             WorkstationCommandKind.RunReviewCheck,
-            WorkstationCommandKind.RunPipelineSession
+            WorkstationCommandKind.RunPipelineSession,
+            WorkstationCommandKind.GitSync
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
@@ -48,6 +49,18 @@ public sealed class WorkstationCommandCatalogTests
             descriptor.PayloadContract);
         Assert.Equal(OperationRetrySemantics.AtMostOnce, descriptor.RetrySemantics);
         Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
+    }
+
+    [Fact]
+    public void GitSync_IsAnIdempotentProjectRuntimeCommand()
+    {
+        var descriptor = WorkstationCommandCatalog.Get(WorkstationCommandKind.GitSync);
+
+        Assert.Equal(OperationRetrySemantics.Idempotent, descriptor.RetrySemantics);
+        Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
+        Assert.Equal("{projectId:guid,mode:Status|PullFastForward}", descriptor.PayloadContract);
+        Assert.False(descriptor.ReconcileBacked);
+        Assert.Equal(TimeSpan.FromMinutes(CommandLease.Minutes), descriptor.LeaseDuration);
     }
 
     [Fact]

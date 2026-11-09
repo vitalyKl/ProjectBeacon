@@ -32,7 +32,7 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> PlannerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
-            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject,
+            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject, "repo_status",
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint, McpToolNames.ListDecisions,
             McpToolNames.GetDecision, McpToolNames.ListMilestones,
@@ -48,7 +48,7 @@ public static class PipelineToolPolicy
         }).Concat(ReviewerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        "repo_status", McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
         McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
@@ -101,7 +101,7 @@ public static class PipelineToolPolicy
         McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
-        McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "suggest_command_prefixes",
+        McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "repo_status", "suggest_command_prefixes",
         "run_log", "service_status", "service_logs"
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]

@@ -2,7 +2,9 @@
 @layout MainLayout
 @attribute [Authorize]
 @using System.Security.Claims
+@using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
@@ -16,6 +18,8 @@
 @inject ListMyProjectsHandler MyProjects
 @inject UpdateProjectHandler UpdateProject
 @inject DeleteProjectHandler DeleteProject
+@inject EnqueueProjectGitSyncHandler EnqueueGitSync
+@inject GetProjectGitSyncCommandHandler GetGitSyncCommand
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 @inject NavigationManager Navigation
@@ -115,6 +119,55 @@ else
         </div>
     </MudPaper>
 
+
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["GitSyncTitle"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["GitSyncHelp"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="beacon-field-row">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => RunGitSync(GitSyncMode.Status))"
+                       Disabled="@(_gitSyncBusy || !HasGitSyncWorkstation)">
+                @L["GitSyncCheck"]
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunGitSync(GitSyncMode.PullFastForward))"
+                       Disabled="@(_gitSyncBusy || !HasGitSyncWorkstation)">
+                @L["GitSyncNow"]
+            </MudButton>
+        </div>
+        @if (_gitSyncBusy)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-3" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncWorking"]</MudText>
+        }
+        @if (_gitSyncResult is not null)
+        {
+            <MudAlert Severity="@GitSyncSeverity" Dense="true" Class="mt-3">
+                <MudText Typo="Typo.body2"><b>@L["GitSyncBranch"]:</b> @(_gitSyncResult.Branch ?? "—")</MudText>
+                <MudText Typo="Typo.body2"><b>@L["GitSyncUpstream"]:</b> @(_gitSyncResult.Upstream ?? "—")</MudText>
+                <MudText Typo="Typo.body2">
+                    @L["GitSyncAhead"]: @_gitSyncResult.Ahead · @L["GitSyncBehind"]: @_gitSyncResult.Behind
+                </MudText>
+                <MudText Typo="Typo.body2">@( _gitSyncResult.Clean ? L["GitSyncClean"] : L["GitSyncDirty"] )</MudText>
+                <MudText Typo="Typo.body2">@GitSyncOutcomeText</MudText>
+                @if (_gitSyncResult.ReasonCode is { } reason)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-1">@GitSyncReasonText(reason)</MudText>
+                }
+                @if (!string.IsNullOrWhiteSpace(_gitSyncResult.Stderr))
+                {
+                    <MudText Typo="Typo.caption" Class="mt-1">@_gitSyncResult.Stderr</MudText>
+                }
+            </MudAlert>
+        }
+        @if (_gitSyncCommandPending)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncStillRunning"]</MudText>
+        }
+        @if (!HasGitSyncWorkstation)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["GitSyncNoCompatibleDevice"]</MudText>
+        }
+    </MudPaper>
+
     <ProjectMembersPanel ProjectId="_projectId" UserId="_userId" Actor="_actor" @bind-Busy="_busy" />
     <ProjectLabelsPanel ProjectId="_projectId" @bind-Busy="_busy" />
 }
@@ -134,6 +187,31 @@ else
     private int _projectRevision;
     private Guid? _folderDeviceId;
     private string _folderPath = string.Empty;
+    private GitSyncResultDto? _gitSyncResult;
+    private bool _gitSyncBusy;
+    private bool _gitSyncCommandPending;
+
+    private bool HasGitSyncWorkstation =>
+        _runtimes.Any(runtime => runtime.DeviceOnline && runtime.GitSyncSupported);
+
+    private Severity GitSyncSeverity => _gitSyncResult?.Outcome switch
+    {
+        GitSyncOutcome.Failed => Severity.Error,
+        GitSyncOutcome.Refused => Severity.Warning,
+        GitSyncOutcome.FastForwarded => Severity.Success,
+        _ => Severity.Info
+    };
+
+    private string GitSyncOutcomeText => _gitSyncResult?.Outcome switch
+    {
+        GitSyncOutcome.FastForwarded => L["GitSyncOutcomeFastForwarded"].Value,
+        GitSyncOutcome.Refused => L["GitSyncOutcomeRefused"].Value,
+        GitSyncOutcome.Failed => L["GitSyncOutcomeFailed"].Value,
+        _ => L["GitSyncOutcomeUpToDate"].Value
+    };
+
+    private string GitSyncReasonText(GitSyncRefusalCode reason) =>
+        L["GitSyncReason" + reason].Value;
 
     private DaemonDeviceDto? FolderDevice => _devices.FirstOrDefault(d => d.Id == _folderDeviceId);
 
@@ -246,6 +324,74 @@ else
     {
         _folderPath = path;
         return Task.CompletedTask;
+    }
+
+    private async Task RunGitSync(GitSyncMode mode)
+    {
+        if (_projectId is not { } projectId || _userId == Guid.Empty || _gitSyncBusy)
+            return;
+
+        _gitSyncBusy = true;
+        _gitSyncCommandPending = false;
+        _gitSyncResult = null;
+        try
+        {
+            var queued = await EnqueueGitSync.HandleAsync(projectId, _actor, mode);
+            if (!queued.Success || queued.Value is null)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var commandId = queued.Value.Id;
+            var deadline = DateTime.UtcNow.AddSeconds(65);
+            while (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                var current = await GetGitSyncCommand.HandleAsync(projectId, commandId, _actor);
+                if (!current.Success || current.Value is null)
+                {
+                    Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+
+                if (current.Value.Status == WorkstationCommandStatus.Failed)
+                {
+                    Snackbar.Add(current.Value.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+
+                if (current.Value.Status == WorkstationCommandStatus.Succeeded)
+                {
+                    if (!string.IsNullOrWhiteSpace(current.Value.ResultJson))
+                    {
+                        _gitSyncResult = JsonSerializer.Deserialize<GitSyncResultDto>(
+                            current.Value.ResultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                    }
+                    if (_gitSyncResult is null)
+                    {
+                        Snackbar.Add(L["Error"].Value, Severity.Error);
+                        return;
+                    }
+                    if (_gitSyncResult.Outcome == GitSyncOutcome.FastForwarded)
+                        Snackbar.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
+                    else if (_gitSyncResult.Outcome is GitSyncOutcome.Refused or GitSyncOutcome.Failed)
+                        Snackbar.Add(GitSyncReasonText(_gitSyncResult.ReasonCode ?? GitSyncRefusalCode.FetchFailed), Severity.Warning);
+                    return;
+                }
+            }
+
+            _gitSyncCommandPending = true;
+            Snackbar.Add(L["GitSyncStillRunning"].Value, Severity.Info);
+        }
+        catch (JsonException)
+        {
+            Snackbar.Add(L["Error"].Value, Severity.Error);
+        }
+        finally
+        {
+            _gitSyncBusy = false;
+        }
     }
 
     private async Task ReloadRuntimes()
