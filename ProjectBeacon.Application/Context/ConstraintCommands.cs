@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// A project constraint and whether it is still proposed.
 /// </summary>
-public record ConstraintDto(Guid Id, string Body, ConstraintKind Kind, ConstraintStatus Status, Guid ProjectId);
+public record ConstraintDto(Guid Id, string Body, ConstraintKind Kind, ConstraintStatus Status, Guid ProjectId, int Revision = 1);
 /// <summary>
 /// Project, body, and kind for a new proposed constraint.
 /// </summary>
@@ -20,8 +20,13 @@ public record CreateConstraintRequest(Guid ProjectId, string Body, ConstraintKin
 public class CreateConstraintHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CreateConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateConstraintHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<ConstraintDto>> HandleAsync(CreateConstraintRequest request, CancellationToken ct = default)
     {
@@ -31,8 +36,10 @@ public class CreateConstraintHandler
         await using var db = _dbFactory.CreateDbContext();
         var constraint = Constraint.Create(request.Body.Trim(), request.Kind, request.ProjectId);
         db.Constraints.Add(constraint);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(Map(constraint));
+        var saved = await _contentWriter.SaveAsync(db, constraint, null, null, ct);
+        return saved.Success
+            ? Result.Ok(Map(constraint))
+            : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint version could not be saved.", ErrorKind.Conflict);
     }
 
     public async Task<Result<ConstraintDto>> HandleProposalAsync(CreateConstraintRequest request, CancellationToken ct = default)
@@ -50,12 +57,14 @@ public class CreateConstraintHandler
 
         var constraint = Constraint.Create(body, request.Kind, request.ProjectId);
         db.Constraints.Add(constraint);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(Map(constraint));
+        var saved = await _contentWriter.SaveAsync(db, constraint, null, null, ct);
+        return saved.Success
+            ? Result.Ok(Map(constraint))
+            : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint version could not be saved.", ErrorKind.Conflict);
     }
 
     private static ConstraintDto Map(Constraint c) =>
-        new(c.Id, c.Body, c.Kind, c.Status, c.ProjectId);
+        new(c.Id, c.Body, c.Kind, c.Status, c.ProjectId, c.Revision);
 }
 /// <summary>
 /// Lists constraints for the current project.
@@ -72,7 +81,7 @@ public class ListConstraintsHandler
         var items = await db.Constraints
             .Where(c => c.ProjectId == projectId)
             .OrderByDescending(c => c.CreatedAt)
-            .Select(c => new ConstraintDto(c.Id, c.Body, c.Kind, c.Status, c.ProjectId))
+            .Select(c => new ConstraintDto(c.Id, c.Body, c.Kind, c.Status, c.ProjectId, c.Revision))
             .ToListAsync(ct);
         return Result.Ok((IList<ConstraintDto>)items);
     }
@@ -94,7 +103,7 @@ public class ActivateConstraintHandler
             return Result.Failure<ConstraintDto>("Constraint not found.");
         constraint.Activate();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId));
+        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
     }
 }
 /// <summary>
@@ -114,6 +123,6 @@ public class RejectConstraintHandler
             return Result.Failure<ConstraintDto>("Constraint not found.");
         constraint.Reject();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId));
+        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
     }
 }

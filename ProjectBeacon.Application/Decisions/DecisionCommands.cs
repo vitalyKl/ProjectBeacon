@@ -17,7 +17,8 @@ public record DecisionDto(
     string? Consequences,
     DecisionStatus Status,
     Guid ProjectId,
-    Guid? SupersededById = null);
+    Guid? SupersededById = null,
+    int Revision = 1);
 /// <summary>
 /// Project, title, context, body, and optional consequences for a proposed decision.
 /// </summary>
@@ -28,8 +29,13 @@ public record CreateDecisionRequest(Guid ProjectId, string Title, string Context
 public class CreateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CreateDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateDecisionHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<DecisionDto>> HandleAsync(CreateDecisionRequest request, CancellationToken ct = default)
     {
@@ -44,8 +50,10 @@ public class CreateDecisionHandler
             request.ProjectId,
             string.IsNullOrWhiteSpace(request.Consequences) ? null : request.Consequences.Trim());
         db.Decisions.Add(decision);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(Map(decision));
+        var saved = await _contentWriter.SaveAsync(db, decision, null, null, ct);
+        return saved.Success
+            ? Result.Ok(Map(decision))
+            : Result.Failure<DecisionDto>(saved.Error ?? "Decision version could not be saved.", ErrorKind.Conflict);
     }
 
     public async Task<Result<DecisionDto>> HandleProposalAsync(CreateDecisionRequest request, CancellationToken ct = default)
@@ -67,12 +75,14 @@ public class CreateDecisionHandler
 
         var decision = Decision.Create(title, context, body, request.ProjectId, consequences);
         db.Decisions.Add(decision);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(Map(decision));
+        var saved = await _contentWriter.SaveAsync(db, decision, null, null, ct);
+        return saved.Success
+            ? Result.Ok(Map(decision))
+            : Result.Failure<DecisionDto>(saved.Error ?? "Decision version could not be saved.", ErrorKind.Conflict);
     }
 
     private static DecisionDto Map(Decision d) =>
-        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
+        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById, d.Revision);
 }
 /// <summary>
 /// Lists decisions for the project.
@@ -89,7 +99,7 @@ public class ListDecisionsHandler
         var items = await db.Decisions
             .Where(d => d.ProjectId == projectId)
             .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new DecisionDto(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById))
+            .Select(d => new DecisionDto(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById, d.Revision))
             .ToListAsync(ct);
         return Result.Ok((IList<DecisionDto>)items);
     }
@@ -113,7 +123,7 @@ public class AcceptDecisionHandler
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
             decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById));
+            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision));
     }
 }
 /// <summary>
@@ -137,7 +147,7 @@ public class DeprecateDecisionHandler
     }
 
     private static DecisionDto Map(Decision d) =>
-        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
+        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById, d.Revision);
 }
 /// <summary>
 /// Supersedes an accepted decision with a different one. The domain rejects a decision that is not accepted.
@@ -173,6 +183,6 @@ public class SupersedeDecisionHandler
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
             decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById));
+            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision));
     }
 }

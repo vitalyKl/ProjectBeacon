@@ -17,7 +17,7 @@ public sealed class GetConstraintHandler
         await using var db = _dbFactory.CreateDbContext();
         var constraint = await db.Constraints.AsNoTracking()
             .Where(item => item.ProjectId == projectId && item.Id == constraintId)
-            .Select(item => new ConstraintDto(item.Id, item.Body, item.Kind, item.Status, item.ProjectId))
+            .Select(item => new ConstraintDto(item.Id, item.Body, item.Kind, item.Status, item.ProjectId, item.Revision))
             .FirstOrDefaultAsync(ct);
         return constraint is null
             ? Result.Failure<ConstraintDto>("Constraint not found.", ErrorKind.NotFound)
