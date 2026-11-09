@@ -133,6 +133,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             }
             catch (InvalidDataException ex)
             {
+                try { File.Delete(indexPath); } catch { }
                 return (null, "Invalid .beacon/worktree-include: " + Clip(ex.Message));
             }
 
@@ -143,14 +144,20 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
                 var fullPath = Path.GetFullPath(Path.Combine(repositoryRoot,
                     includePath.Replace('/', Path.DirectorySeparatorChar)));
                 if (!IsInsideRoot(repositoryRoot, fullPath))
+                {
+                    try { File.Delete(indexPath); } catch { }
                     return (null, $"Worktree include path escapes the repository: {includePath}");
+                }
                 if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
                 {
                     missingIncludePaths.Add(includePath);
                     continue;
                 }
                 if (HasReparsePointInPath(repositoryRoot, fullPath))
+                {
+                    try { File.Delete(indexPath); } catch { }
                     return (null, $"Worktree include path contains a symbolic link or junction: {includePath}");
+                }
 
                 var forceAdd = await RunGitAsync(repositoryRoot, ct, disabledFilterDrivers,
                     ["add", "-f", "--", includePath], indexPath);
