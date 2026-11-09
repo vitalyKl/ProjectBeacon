@@ -109,7 +109,7 @@ public static class PipelineToolPolicy
         McpToolNames.WriteFile, McpToolNames.ApplyPatch, "run_command", "service_start"
     });
 
-    /// <summary>Single role-to-tool ceiling used by MCP advertisement and invocation guards.</summary>
+    /// <summary>Shared maximum set of role-scoped Beacon MCP tools; local execution tools have separate guards.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> PipelineRoleTools { get; } =
         new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)

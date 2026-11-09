@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests.NativeAgentHarness;
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Cli.Client.AgentHarness;
 

@@ -2328,17 +2328,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     {
         for (Exception? current = ex; current is not null; current = current.InnerException)
         {
-            var message = current.Message;
-            if (message.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("context length exceeded", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("maximum context length", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("maximum context window", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("context window is full", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("input is too long", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("input exceeds", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("too many tokens", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("request exceeds the model's context", StringComparison.OrdinalIgnoreCase))
+            if (current is HttpRequestException { StatusCode: { } status } && (int)status == 413)
+                return true;
+            if (ChatProviderException.IsContextLengthExceededText(current.Message))
                 return true;
         }
         return false;
