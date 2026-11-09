@@ -58,7 +58,7 @@ public class LoginHandler
                 null,
                 null,
                 AuditOutcome.Failed,
-                detailsJson: """{"reasonCode":"invalid_credentials"}"""));
+                detailsJson: """{"reasonCode":"invalid-credentials"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
         }
@@ -77,7 +77,7 @@ public class LoginHandler
                 null,
                 null,
                 AuditOutcome.Denied,
-                detailsJson: """{"reasonCode":"account_locked"}"""));
+                detailsJson: """{"reasonCode":"account-locked"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Account is temporarily locked. Try again later.");
         }
@@ -97,7 +97,7 @@ public class LoginHandler
                 null,
                 null,
                 AuditOutcome.Failed,
-                detailsJson: """{"reasonCode":"invalid_credentials"}"""));
+                detailsJson: """{"reasonCode":"invalid-credentials"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
         }
@@ -116,7 +116,7 @@ public class LoginHandler
                 null,
                 null,
                 AuditOutcome.Denied,
-                detailsJson: """{"reasonCode":"account_disabled"}"""));
+                detailsJson: """{"reasonCode":"account-disabled"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
         }
