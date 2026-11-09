@@ -71,7 +71,7 @@ public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, 
 /// <summary>
 /// Command for create device.
 /// </summary>
-public record CreateDeviceCommand(CreateDeviceRequest Request) : ICommand<Result<DaemonDeviceDto>>;
+public record CreateDeviceCommand(CreateDeviceRequest Request, ActorContext? Actor = null) : ICommand<Result<DaemonDeviceDto>>;
 /// <summary>
 /// Fields for list devices.
 /// </summary>
@@ -87,7 +87,7 @@ public record RevokeDeviceRequest(Guid DeviceId, Guid UserId);
 /// <summary>
 /// Command for revoke device.
 /// </summary>
-public record RevokeDeviceCommand(RevokeDeviceRequest Request) : ICommand<Result>;
+public record RevokeDeviceCommand(RevokeDeviceRequest Request, ActorContext? Actor = null) : ICommand<Result>;
 /// <summary>
 /// Fields for heartbeat device. InstanceId identifies the daemon process instance.
 /// </summary>
