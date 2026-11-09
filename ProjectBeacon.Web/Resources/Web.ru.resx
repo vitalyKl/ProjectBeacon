@@ -2680,4 +2680,13 @@
 <data name="AuditInvalidGuid" xml:space="preserve">
     <value>ID организации, проекта и актора должны быть корректными GUID.</value>
   </data>
+<data name="AuditExportCsv" xml:space="preserve">
+    <value>Экспорт CSV</value>
+  </data>
+<data name="AuditExportTooLarge" xml:space="preserve">
+    <value>Выгрузка превышает {0} событий. Уточните фильтры и повторите попытку.</value>
+  </data>
+<data name="AuditExported" xml:space="preserve">
+    <value>Выгружено событий аудита: {0}.</value>
+  </data>
 </root>
