@@ -1,9 +1,9 @@
 name: Diagnose EF model delta
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/saas-audit-completion
+      - main
 
 permissions:
   contents: read
