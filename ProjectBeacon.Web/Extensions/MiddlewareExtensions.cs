@@ -71,6 +71,9 @@ public static class MiddlewareExtensions
         app.UseRouting();
         app.UseRateLimiter();
         app.UseAuthentication();
+        // The Control Plane is served only on its dedicated host; public app hosts cannot
+        // reach operator pages or audit endpoints, and the control host cannot reach app pages.
+        app.UseMiddleware<ProjectBeacon.API.Auth.ControlHostMiddleware>();
         // Wrap token/device boundaries, tenant isolation and endpoint authorization so every
         // explicit HTTP 403 on a versioned API route is observed.
         app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
