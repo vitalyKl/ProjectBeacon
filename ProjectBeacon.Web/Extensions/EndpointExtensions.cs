@@ -65,6 +65,9 @@ public static class EndpointExtensions
 
         app.MapPost("/v1/auth/control-cookie-login", async (HttpContext ctx, LoginHandler handler) =>
         {
+            if (!IsSameOriginControlForm(ctx))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
             var form = await ctx.Request.ReadFormAsync();
             var login = form["login"].ToString();
             var password = form["password"].ToString();
@@ -96,13 +99,16 @@ public static class EndpointExtensions
                 });
 
             return Results.Redirect("/admin/audit");
-        }).AllowAnonymous().RequireRateLimiting("auth").RequireAntiforgery();
+        }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
 
         app.MapPost("/control/logout", async (HttpContext ctx) =>
         {
+            if (!IsSameOriginControlForm(ctx))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
             return Results.Redirect("/control/login");
-        }).RequireAuthorization().RequireAntiforgery();
+        }).RequireAuthorization().DisableAntiforgery();
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
         {
@@ -138,6 +144,32 @@ public static class EndpointExtensions
         }).RequireAuthorization();
 
         return app;
+    }
+
+
+    private static bool IsSameOriginControlForm(HttpContext context)
+    {
+        if (!context.Request.HasFormContentType)
+            return false;
+
+        var originValue = context.Request.Headers.Origin.ToString();
+        if (string.IsNullOrWhiteSpace(originValue)
+            || string.Equals(originValue, "null", StringComparison.OrdinalIgnoreCase)
+            || originValue.Contains(',', StringComparison.Ordinal))
+            return false;
+
+        if (!Uri.TryCreate(originValue, UriKind.Absolute, out var origin)
+            || !Uri.TryCreate($"{context.Request.Scheme}://{context.Request.Host.Value}", UriKind.Absolute, out var expected))
+            return false;
+
+        if (!string.Equals(origin.GetLeftPart(UriPartial.Authority),
+                expected.GetLeftPart(UriPartial.Authority),
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var fetchSite = context.Request.Headers["Sec-Fetch-Site"].ToString();
+        return string.IsNullOrWhiteSpace(fetchSite)
+            || string.Equals(fetchSite, "same-origin", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IResult SetCulture(HttpContext ctx, string culture, string? returnUrl)
