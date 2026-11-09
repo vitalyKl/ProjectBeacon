@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Common;
+using Application.Audit;
 using Domain.Entities.Identity;
 using Domain.Enums;
 using Application.Persistence;
@@ -15,11 +16,13 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ITenantContext _tenant;
+    private readonly IAuditWriter? _auditWriter;
 
-    public CreateOrgHandler(IBeaconDbFactory dbFactory, ITenantContext tenant)
+    public CreateOrgHandler(IBeaconDbFactory dbFactory, ITenantContext tenant, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _tenant = tenant;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
@@ -32,11 +35,16 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
         var window = new TenantContext();
-        window.Assign(_tenant.ProjectId, org.Id, _tenant.Unscoped);
+        // An organization-level write must not inherit the previously selected project.
+        window.Assign(null, org.Id, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
         writeDb.Orgs.Add(org);
         if (command.Actor.UserId is { } ownerId)
             writeDb.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
+        if (command.Actor.UserId is not null)
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                command.Actor, "org.created", "Org", org.Id.ToString(), org.Id, null,
+                detailsJson: """{"newState":"Created"}"""));
         await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
