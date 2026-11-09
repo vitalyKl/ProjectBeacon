@@ -162,12 +162,18 @@
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Description</MudText>
                     <MudText Typo="Typo.body2">@(_detail.Organization.Description ?? "—")</MudText>
                 </MudItem>
-                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Members</MudText><MudText>@_detail.Members.Count</MudText></MudItem>
-                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Projects</MudText><MudText>@_detail.ProjectCount</MudText></MudItem>
-                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Pending invites</MudText><MudText>@_detail.Invites.Count(x => x.Status == "Pending")</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Members</MudText><MudText>@_detail.Organization.MemberCount</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Projects</MudText><MudText>@_detail.Organization.ProjectCount</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Pending invites</MudText><MudText>@_detail.Organization.PendingInviteCount</MudText></MudItem>
             </MudGrid>
         </MudPaper>
 
+        @if (!_canReadUsers)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-4">You do not have permission to view organization members or invitation details.</MudAlert>
+        }
+        else
+        {
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             <MudText Typo="Typo.h6" Class="mb-3">Members</MudText>
             @if (_detail.Members.Count == 0)
@@ -234,6 +240,7 @@
             }
         </MudPaper>
 
+        }
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             @if (!_canReadEntitlements)
             {
@@ -263,7 +270,10 @@
                         <MudTd DataLabel="Source">@context.Source</MudTd>
                         <MudTd DataLabel="Status">@context.Status</MudTd>
                         <MudTd DataLabel="Starts"><LocalTime Value="context.StartsAtUtc.UtcDateTime" Format="g" /></MudTd>
-                        <MudTd DataLabel="Ends">@(context.EndsAtUtc is null ? "No expiry" : context.EndsAtUtc.Value.UtcDateTime.ToString("u"))</MudTd>
+                        <MudTd DataLabel="Ends">
+                            @if (context.EndsAtUtc is null) { <text>No expiry</text> }
+                            else { <LocalTime Value="context.EndsAtUtc.Value.UtcDateTime" Format="g" /> }
+                        </MudTd>
                         <MudTd DataLabel="Features">@string.Join(", ", context.Features.OrderBy(x => x))</MudTd>
                         <MudTd DataLabel="Limits">@JsonSerializer.Serialize(context.Limits)</MudTd>
                         <MudTd>
@@ -280,6 +290,10 @@
             {
                 <MudDivider Class="my-4" />
                 <MudText Typo="Typo.subtitle1" Class="mb-2">Issue or renew Alpha access</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">
+                    A new grant replaces any active or scheduled grant; previous entries remain in history.
+                    Feature keys are exact product capabilities. An empty feature list does not grant feature flags.
+                </MudText>
                 <MudTextField T="string" @bind-Value="_features" Label="Feature keys (comma-separated)"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
                 <MudTextField T="string" @bind-Value="_limitsJson" Label="Limits (JSON object)"
@@ -305,6 +319,7 @@
     private bool _blocked;
     private bool _authorized;
     private bool _canManageOrganizations;
+    private bool _canReadUsers;
     private bool _canReadEntitlements;
     private bool _canManageEntitlements;
     private bool _loading;
@@ -336,6 +351,7 @@
         _authorized = await EnsurePermissionAsync(OperatorPermission.OrganizationsRead);
         if (!_authorized) return;
         _canManageOrganizations = await HasPermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        _canReadUsers = await HasPermissionAsync(OperatorPermission.UsersRead);
         _canReadEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsRead);
         _canManageEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsManage);
 
@@ -525,6 +541,8 @@
         if (result.Success) return true;
         if (permission == OperatorPermission.OrganizationsRead)
             _authorized = false;
+        if (permission == OperatorPermission.UsersRead)
+            _canReadUsers = false;
         if (permission == OperatorPermission.EntitlementsRead)
             _canReadEntitlements = false;
         if (permission == (OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage))

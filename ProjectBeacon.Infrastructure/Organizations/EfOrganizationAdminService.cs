@@ -37,23 +37,36 @@ public sealed class EfOrganizationAdminService(
         if (search?.Length > 200)
             return Result.Failure<OrganizationAdminPage>("Search text is too long.");
 
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var canReadUsers = actor.HasPermission(OperatorPermission.UsersRead);
         using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext();
         IQueryable<Org> query = db.Orgs.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var matchingMemberOwnerOrgs =
-                from member in db.OrgMembers.IgnoreQueryFilters()
-                join user in db.Users on member.UserId equals user.Id
-                where member.Role == MemberRole.Owner && user.Email.Contains(search)
-                select member.OrgId;
-            var matchingPendingOwnerOrgs = db.OrgInvites.IgnoreQueryFilters()
-                .Where(invite => invite.Role == MemberRole.Owner
-                    && invite.Status == InviteStatus.Pending
-                    && invite.Email.Contains(search))
-                .Select(invite => invite.OrgId);
-            var matchingOwnerOrgs = matchingMemberOwnerOrgs.Union(matchingPendingOwnerOrgs);
-            query = query.Where(org => org.Name.Contains(search) || matchingOwnerOrgs.Contains(org.Id));
+            var nameSearch = search.ToLowerInvariant();
+            if (canReadUsers)
+            {
+                var emailSearch = nameSearch;
+                var matchingMemberOwnerOrgs =
+                    from member in db.OrgMembers.IgnoreQueryFilters()
+                    join user in db.Users on member.UserId equals user.Id
+                    where member.Role == MemberRole.Owner && user.Email.ToLower().Contains(emailSearch)
+                    select member.OrgId;
+                var matchingPendingOwnerOrgs = db.OrgInvites.IgnoreQueryFilters()
+                    .Where(invite => invite.Role == MemberRole.Owner
+                        && invite.Status == InviteStatus.Pending
+                        && invite.ExpiredAt >= now
+                        && invite.Email.ToLower().Contains(emailSearch))
+                    .Select(invite => invite.OrgId);
+                var matchingOwnerOrgs = matchingMemberOwnerOrgs.Union(matchingPendingOwnerOrgs);
+                query = query.Where(org => org.Name.ToLower().Contains(nameSearch)
+                    || matchingOwnerOrgs.Contains(org.Id));
+            }
+            else
+            {
+                query = query.Where(org => org.Name.ToLower().Contains(nameSearch));
+            }
         }
 
         var total = await query.LongCountAsync(ct);
@@ -80,10 +93,12 @@ public sealed class EfOrganizationAdminService(
                 select new MemberAggregate(
                     groupRows.Key,
                     groupRows.Count(),
-                    groupRows.Where(x => x.member.Role == MemberRole.Owner)
-                        .OrderBy(x => x.member.JoinedAt)
-                        .Select(x => x.user.Email)
-                        .FirstOrDefault()))
+                    canReadUsers
+                        ? groupRows.Where(x => x.member.Role == MemberRole.Owner)
+                            .OrderBy(x => x.member.JoinedAt)
+                            .Select(x => x.user.Email)
+                            .FirstOrDefault()
+                        : null))
                 .ToListAsync(ct);
 
             projectRows = await db.Projects.IgnoreQueryFilters()
@@ -93,22 +108,27 @@ public sealed class EfOrganizationAdminService(
                 .ToListAsync(ct);
 
             inviteRows = await db.OrgInvites.IgnoreQueryFilters()
-                .Where(invite => ids.Contains(invite.OrgId) && invite.Status == InviteStatus.Pending)
+                .Where(invite => ids.Contains(invite.OrgId)
+                    && invite.Status == InviteStatus.Pending && invite.ExpiredAt >= now)
                 .GroupBy(invite => invite.OrgId)
                 .Select(groupRows => new CountAggregate(groupRows.Key, groupRows.Count()))
                 .ToListAsync(ct);
 
-            pendingOwnerRows = await db.OrgInvites.IgnoreQueryFilters()
-                .Where(invite => ids.Contains(invite.OrgId)
-                    && invite.Role == MemberRole.Owner
-                    && invite.Status == InviteStatus.Pending)
+            if (canReadUsers)
+            {
+                pendingOwnerRows = await db.OrgInvites.IgnoreQueryFilters()
+                    .Where(invite => ids.Contains(invite.OrgId)
+                        && invite.Role == MemberRole.Owner
+                        && invite.Status == InviteStatus.Pending
+                        && invite.ExpiredAt >= now)
                 .GroupBy(invite => invite.OrgId)
                 .Select(groupRows => new OwnerEmailAggregate(
                     groupRows.Key,
                     groupRows.OrderBy(invite => invite.CreatedAt)
                         .Select(invite => invite.Email)
                         .FirstOrDefault()))
-                .ToListAsync(ct);
+                    .ToListAsync(ct);
+            }
         }
 
         var membersByOrg = memberRows.ToDictionary(x => x.OrgId);
@@ -143,32 +163,48 @@ public sealed class EfOrganizationAdminService(
         if (org is null)
             return Result.Failure<OrganizationAdminDetails>("Organization not found.", ErrorKind.NotFound);
 
-        var members = await (
-            from member in db.OrgMembers.IgnoreQueryFilters()
-            join user in db.Users on member.UserId equals user.Id
-            where member.OrgId == orgId
-            orderby member.Role, member.JoinedAt
-            select new OrganizationAdminMember(
-                user.Id, user.Login, user.Email, member.Role.ToString(),
-                user.DisabledAt != null, member.JoinedAt))
-            .ToListAsync(ct);
+        var canReadUsers = actor.HasPermission(OperatorPermission.UsersRead);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var memberCount = await db.OrgMembers.IgnoreQueryFilters()
+            .CountAsync(member => member.OrgId == orgId, ct);
+        var pendingInviteCount = await db.OrgInvites.IgnoreQueryFilters()
+            .CountAsync(invite => invite.OrgId == orgId
+                && invite.Status == InviteStatus.Pending && invite.ExpiredAt >= now, ct);
 
-        var invites = await db.OrgInvites.IgnoreQueryFilters()
-            .Where(invite => invite.OrgId == orgId)
-            .OrderByDescending(invite => invite.CreatedAt)
-            .Take(100)
-            .Select(invite => new OrganizationAdminInvite(
-                invite.Id, invite.Email, invite.Role.ToString(), invite.Status.ToString(),
-                invite.CreatedAt, invite.ExpiredAt))
-            .ToListAsync(ct);
+        var members = new List<OrganizationAdminMember>();
+        var invites = new List<OrganizationAdminInvite>();
+        if (canReadUsers)
+        {
+            members = await (
+                from member in db.OrgMembers.IgnoreQueryFilters()
+                join user in db.Users on member.UserId equals user.Id
+                where member.OrgId == orgId
+                orderby member.Role, member.JoinedAt
+                select new OrganizationAdminMember(
+                    user.Id, user.Login, user.Email, member.Role.ToString(),
+                    user.DisabledAt != null, member.JoinedAt))
+                .ToListAsync(ct);
+
+            invites = await db.OrgInvites.IgnoreQueryFilters()
+                .Where(invite => invite.OrgId == orgId)
+                .OrderByDescending(invite => invite.CreatedAt)
+                .Take(100)
+                .Select(invite => new OrganizationAdminInvite(
+                    invite.Id, invite.Email, invite.Role.ToString(),
+                    invite.Status == InviteStatus.Pending && invite.ExpiredAt < now
+                        ? nameof(InviteStatus.Expired) : invite.Status.ToString(),
+                    invite.CreatedAt, invite.ExpiredAt))
+                .ToListAsync(ct);
+        }
 
         var projectCount = await db.Projects.IgnoreQueryFilters()
             .CountAsync(project => project.OrgId == orgId, ct);
-        var ownerEmail = members.FirstOrDefault(x => x.Role == nameof(MemberRole.Owner))?.Email;
+        var ownerEmail = members.FirstOrDefault(x => x.Role == nameof(MemberRole.Owner))?.Email
+            ?? invites.Where(x => x.Role == nameof(MemberRole.Owner) && x.Status == nameof(InviteStatus.Pending))
+                .OrderBy(x => x.CreatedAt).Select(x => x.Email).FirstOrDefault();
         var summary = new OrganizationAdminListItem(
             org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt,
-            ownerEmail, members.Count, projectCount,
-            invites.Count(x => x.Status == nameof(InviteStatus.Pending)));
+            ownerEmail, memberCount, projectCount, pendingInviteCount);
 
         return Result.Ok(new OrganizationAdminDetails(summary, members, invites, projectCount));
     }
@@ -196,6 +232,7 @@ public sealed class EfOrganizationAdminService(
         var rawToken = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
         var invite = OrgInvite.Create(org.Id, email, MemberRole.Owner, actor.UserId, OpaqueToken.Hash(rawToken), now);
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.Orgs.Add(org);
         db.OrgInvites.Add(invite);
         auditWriter.Stage(db, Audit(actor, "platform.organization.created", "Org", org.Id, org.Id, now,
@@ -343,7 +380,7 @@ public sealed class EfOrganizationAdminService(
     private static string NormalizeEmail(string? raw)
     {
         var email = OrgInvite.NormalizeEmail(raw ?? string.Empty);
-        if (email.Length is 0 or > 320
+        if (email.Length is 0 or > 200
             || !MailAddress.TryCreate(email, out var parsed)
             || !string.Equals(parsed.Address, email, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("A valid owner email address is required.", nameof(raw));

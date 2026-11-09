@@ -94,7 +94,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
             new CreateOrganizationWithOwnerRequest("Northwind", null, "owner@northwind.example"));
         Assert.True(created.Success, created.Error);
 
-        var page = await service.ListAsync(actor, "owner@northwind.example");
+        var page = await service.ListAsync(actor, "OWNER@NORTHWIND.EXAMPLE");
         Assert.True(page.Success, page.Error);
         var listed = Assert.Single(page.Value!.Items);
         Assert.Equal("owner@northwind.example", listed.OwnerEmail);
@@ -109,6 +109,33 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.True(revoked.Success, revoked.Error);
         Assert.Equal(InviteStatus.Revoked, (await _seedDb.OrgInvites.IgnoreQueryFilters()
             .SingleAsync(x => x.Id == created.Value.InviteId, TestContext.Current.CancellationToken)).Status);
+    }
+
+
+    [Fact]
+    public async Task ExpiredOwnerInvitationsAreNotCountedAsPendingOrShownAsPending()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        _seedDb.Users.Add(_admin);
+        var org = Org.Create("Expired invite customer");
+        var invite = OrgInvite.Create(org.Id, "owner@expired.example", MemberRole.Owner,
+            _admin.Id, "hashed-expired-token", DateTime.UtcNow.AddDays(-8));
+        _seedDb.Orgs.Add(org);
+        _seedDb.OrgInvites.Add(invite);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsRead);
+        var service = CreateService();
+
+        var page = await service.ListAsync(actor);
+        Assert.True(page.Success, page.Error);
+        var row = Assert.Single(page.Value!.Items);
+        Assert.Equal(0, row.PendingInviteCount);
+        Assert.Null(row.OwnerEmail);
+
+        var details = await service.GetAsync(actor, org.Id);
+        Assert.True(details.Success, details.Error);
+        Assert.Equal("Expired", Assert.Single(details.Value!.Invites).Status);
     }
 
     private EfOrganizationAdminService CreateService() =>

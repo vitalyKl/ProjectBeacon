@@ -85,16 +85,15 @@ The alpha flow is operator-created organization → organization-owner invitatio
 
 ## Data and extension points for later phases
 
-The following persistence models are not created by this contract-only change. When implementing billing, add them with EF configurations, migrations, RLS/grants, and PostgreSQL tests:
+Alpha entitlement grants now have PostgreSQL persistence in `OrganizationEntitlements`, an operator/tenant RLS policy, transactional grant/revoke writes, and audit events. The table is managed through the PostgreSQL entitlement service rather than an EF entity; it is covered by the runtime-role RLS tests.
+
+The following commercial persistence models are still future work. Add them with EF configurations or reviewed SQL migrations, RLS/grants, and PostgreSQL tests:
 
 | Future model | Responsibility | Required invariant |
-|---|---|---|
-| OrganizationEntitlements | Versioned access grants for an organization | Source, status and effective period are explicit; no implicit access from Org existence |
-| Plan | Product-owned plan key, public name, cadence and limits | Price may be unset in alpha; provider price IDs are never the plan identity |
+|---|---|
 | Subscription | Commercial state, source and billing period | At most one effective subscription per organization |
 | BillingEvent | Verified payment/subscription facts | Append-only and provider-event idempotency |
 | Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
-| PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 | PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 
 RLS must scope all organization-owned billing and entitlement rows by OrgId. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.

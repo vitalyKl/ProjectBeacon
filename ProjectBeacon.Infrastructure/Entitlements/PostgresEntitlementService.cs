@@ -119,14 +119,14 @@ public sealed class PostgresEntitlementService(
     {
         if (!actor.HasPermission(OperatorPermission.EntitlementsManage))
             return Result.Failure<OrganizationEntitlement>("EntitlementsManage permission is required.", ErrorKind.Forbidden);
-        var invalid = Validate(request);
+        var now = timeProvider.GetUtcNow();
+        var invalid = Validate(request, now);
         if (invalid is not null)
             return Result.Failure<OrganizationEntitlement>(invalid);
-
-        var now = timeProvider.GetUtcNow();
         var status = request.StartsAtUtc > now ? EntitlementStatus.Scheduled : EntitlementStatus.Active;
         var id = Guid.NewGuid();
-        var features = request.Features.Select(NormalizeKey).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var features = request.Features.Select(NormalizeKey).Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal).ToArray();
         var limits = request.Limits.OrderBy(x => NormalizeKey(x.Key), StringComparer.Ordinal)
             .ToDictionary(x => NormalizeKey(x.Key), x => x.Value, StringComparer.Ordinal);
 
@@ -260,8 +260,10 @@ public sealed class PostgresEntitlementService(
             ErrorKind.Unavailable));
     }
 
-    private static string? Validate(GrantOrganizationEntitlementRequest request)
+    private static string? Validate(GrantOrganizationEntitlementRequest request, DateTimeOffset now)
     {
+        if (request.Features is null || request.Limits is null)
+            return "Feature and limit collections are required.";
         if (request.OrgId == Guid.Empty) return "Organization id is required.";
         if (!Enum.IsDefined(request.Source)) return "Entitlement source is invalid.";
         if (request.StartsAtUtc.Offset != TimeSpan.Zero
@@ -269,7 +271,7 @@ public sealed class PostgresEntitlementService(
             return "Entitlement timestamps must be UTC.";
         if (request.EndsAtUtc is { } ends && ends <= request.StartsAtUtc)
             return "Entitlement end must be after its start.";
-        if (request.EndsAtUtc is { } end && end <= DateTimeOffset.UtcNow)
+        if (request.EndsAtUtc is { } end && end <= now)
             return "Entitlement end must be in the future.";
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 500)
             return "A reason of 1 to 500 characters is required.";
@@ -278,6 +280,9 @@ public sealed class PostgresEntitlementService(
         if (request.Features.Any(key => !ValidKey(key))
             || request.Limits.Any(x => !ValidKey(x.Key) || x.Value < 0))
             return "Feature and limit keys must be product keys; limits must be non-negative.";
+        if (request.Features.Select(NormalizeKey).Distinct(StringComparer.Ordinal).Count() != request.Features.Count
+            || request.Limits.Keys.Select(NormalizeKey).Distinct(StringComparer.Ordinal).Count() != request.Limits.Count)
+            return "Feature and limit keys must be unique after normalization.";
         return null;
     }
 

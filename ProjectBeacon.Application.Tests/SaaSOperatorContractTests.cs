@@ -77,7 +77,9 @@ public sealed class SaaSOperatorContractTests
             | OperatorPermission.ContainerLogsRead
             | OperatorPermission.AuditRead
             | OperatorPermission.AuditExport
-            | OperatorPermission.SystemMaintenance;
+            | OperatorPermission.SystemMaintenance
+            | OperatorPermission.EmailSettingsRead
+            | OperatorPermission.EmailSettingsManage;
 
         Assert.True(OperatorPermissionSets.Includes(
             OperatorPermissionSets.CurrentSystemAdministrator, all));
