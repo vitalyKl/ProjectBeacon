@@ -203,6 +203,9 @@ public class TaskItem : Entity, IProjectScoped
         }
     }
 
+    /// <summary>Advances the content stream when a revisioned task target is deleted.</summary>
+    public void MarkContentDeleted() => ContentRevision++;
+
     private string StageName => PipelineStage?.ToString() ?? TaskPipelineStage.None.ToString();
 
     /// <summary>Starts the pipeline at Planning and moves the task to InProgress. Throws if a stage is already set.</summary>
