@@ -60,12 +60,12 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAuthorizationService? _authorization;
+    private readonly IAuthorizationService _authorization;
     private readonly IAuditWriter? _auditWriter;
 
     public UpdateOrgHandler(
         IBeaconDbFactory dbFactory,
-        IAuthorizationService? authorization = null,
+        IAuthorizationService authorization,
         IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
@@ -84,25 +84,11 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
         tenant.Assign(null, command.Request.OrgId, unscoped: false);
         await using var db = _dbFactory.CreateDbContext(tenant);
 
-        if (_authorization is not null)
-        {
-            var permission = await _authorization.CanAsync(
-                db, command.Actor, ResourceType.Org, AuthAction.Administer,
-                orgId: command.Request.OrgId, ct: ct);
-            if (!permission.Success)
-                return Result.Forbidden<OrgDto>();
-        }
-        else
-        {
-            var isOrgAdmin = await db.OrgMembers.IgnoreQueryFilters().AnyAsync(m =>
-                m.OrgId == command.Request.OrgId &&
-                m.UserId == command.Actor.UserId &&
-                (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
-            var isSystemAdmin = await db.Users.IgnoreQueryFilters().AnyAsync(u =>
-                u.Id == command.Actor.UserId && u.IsAdmin, ct);
-            if (!isOrgAdmin && !isSystemAdmin)
-                return Result.Forbidden<OrgDto>();
-        }
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Org, AuthAction.Administer,
+            orgId: command.Request.OrgId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<OrgDto>();
 
         var org = await db.Orgs.FirstOrDefaultAsync(o => o.Id == command.Request.OrgId, ct);
         if (org is null)
