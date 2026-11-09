@@ -86,6 +86,21 @@ public sealed class SessionPromptsTests
     }
 
     [Fact]
+    public void ReviewPromptOmitsDiffReadWhenSubtaskHasNoDiffReference()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement the feature.", projectId);
+        var subtask = Subtask.Create("Investigate without source changes.", task.Id, task.ProjectId);
+        subtask.Start();
+        subtask.ReportResult(string.Empty, "No source changes were needed.");
+
+        var prompt = SessionPrompts.Review(task, [subtask]);
+
+        Assert.DoesNotContain("DiffRef:", prompt);
+        Assert.DoesNotContain($"{McpToolNames.WorkspaceRead} with key", prompt);
+    }
+
+    [Fact]
     public void PlannerWake_IncludesReportsWorkspaceIndexAndProfileCatalog()
     {
         var projectId = Guid.NewGuid();
