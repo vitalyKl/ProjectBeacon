@@ -103,7 +103,7 @@ registration through an invitation.
 
 A human-operator-only `GET /v1/admin/audit` endpoint exposes the bounded `IAuditReader`
 query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted account state,
-and supports organization, project, time, action, human/API-token/device actor ids and kind, and outcome filters. API tokens, devices
+and supports organization, project, time, action, human/API-token/device actor ids and kind, target type/id, and outcome filters. API tokens, devices
 and workers cannot use this endpoint. `GET /v1/admin/audit/export` uses the separate `AuditExport`
 permission and streams a stable, bounded result set into a spreadsheet-safe UTF-8 CSV (10,000-row
 cap, formula-injection escaping, no request-controlled filenames).
