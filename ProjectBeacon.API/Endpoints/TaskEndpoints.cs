@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API;
 
 using Application.Common;
+using Application.Context;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
 using Application.Persistence;
@@ -31,6 +32,8 @@ public static class TaskEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/tasks", ListTasks).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", GetTaskInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/tasks/{taskId:guid}", GetTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions", ListTaskContentVersions)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/status", ChangeStatusInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/status", ChangeStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -67,6 +70,18 @@ public static class TaskEndpoints
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value!.Id}", MapTaskResponse(result.Value!))
             : result.FromResult();
+    }
+
+    private static async Task<IResult> ListTaskContentVersions(
+        Guid projectId,
+        Guid taskId,
+        [FromQuery] int? limit,
+        ListContentVersionsHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            projectId, ContentTargetKind.TaskDescription, taskId, limit ?? 50, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> UpdateTask(
