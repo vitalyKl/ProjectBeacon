@@ -40,11 +40,12 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
    ```
    The `--dry-run=server` pass is required: client-side YAML checks do not validate against the cluster's admission policies (`restricted` PSA) or the API schema.
 4. Run a migrate Job once (`BEACON_MIGRATE_ON_START=true`, `BEACON_MIGRATE_THEN_EXIT=true`).
-5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits.
+5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits. Before sending traffic, provision the TLS secret `beacon-web-tls` in namespace `beacon`; its certificate SANs must include both the customer hostname (`beacon.example.com` in the sample manifest) and `control.projectbeacon.tech`. Use the cluster's existing cert-manager/ACME issuer or your certificate-management process; this repository does not assume a cluster issuer.
 
 The ingress manifest includes both the existing customer host and `control.projectbeacon.tech`,
-routed to the same Web service. Configure a DNS record for `control.projectbeacon.tech` to the
-ingress address, include that name in the TLS certificate, and set `CONTROL_HOST=control.projectbeacon.tech`
+routed to the same Web service. Configure DNS records for both hostnames to the ingress address
+(an A/AAAA record or a CNAME where appropriate). The TLS section references `beacon-web-tls`,
+which must contain a certificate covering both hostnames. Set `CONTROL_HOST=control.projectbeacon.tech`
 in the `beacon-web` secret/environment. The application returns `404` for Control Plane paths
 on the customer host; the standalone public API host independently rejects operator, bootstrap,
 and recovery endpoints.
