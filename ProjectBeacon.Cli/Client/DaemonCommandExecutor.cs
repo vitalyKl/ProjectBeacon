@@ -588,7 +588,24 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 }
             }
 
-            var applied = await sessionWorktree.ApplyChangesAsync(applyCt);
+            (bool Success, string? Error) applied;
+            try
+            {
+                applied = await sessionWorktree.ApplyChangesAsync(applyCt);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException
+                or System.ComponentModel.Win32Exception)
+            {
+                sessionWorktree.Preserve();
+                var error = $"Could not apply the isolated worktree patch ({ex.GetType().Name}): {ex.Message}";
+                try
+                {
+                    var currentStatus = await runtime.GetTurnStatusAsync(externalSessionId, CancellationToken.None);
+                    await PublishActivityAsync("conflict", currentStatus, CancellationToken.None, terminal: true);
+                }
+                catch { }
+                return (false, error, null);
+            }
             if (!applied.Success)
             {
                 sessionWorktree.Preserve();
@@ -624,8 +641,17 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 || !await IsSubtaskReportedDoneAsync(taskId, completedSubtaskId, token.Token, CancellationToken.None))
                 return (false, false, null, null);
 
-            var apply = await ApplyWorktreeChangesAsync(CancellationToken.None);
-            return (true, apply.Success, apply.Error, apply.DiffArtifactError);
+            try
+            {
+                var apply = await ApplyWorktreeChangesAsync(CancellationToken.None);
+                return (true, apply.Success, apply.Error, apply.DiffArtifactError);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException
+                or HttpRequestException or System.ComponentModel.Win32Exception)
+            {
+                sessionWorktree.Preserve();
+                return (true, false, $"The Actor reported Done, but worktree recovery failed ({ex.GetType().Name}): {ex.Message}", null);
+            }
         }
 
         async Task<(bool Success, string? Result, string? Error, bool Done)> CompleteRecoveredActorAsync()
