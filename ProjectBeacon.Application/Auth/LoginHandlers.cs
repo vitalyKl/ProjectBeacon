@@ -19,36 +19,106 @@ public class LoginHandler
     private readonly IPasswordHasher _passwords;
     private readonly ITokenIssuer _tokens;
     private readonly IConfiguration? _configuration;
+    private readonly IAuditWriter? _auditWriter;
 
-    public LoginHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, ITokenIssuer tokens, IConfiguration? configuration = null)
+    public LoginHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        ITokenIssuer tokens,
+        IConfiguration? configuration = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _tokens = tokens;
         _configuration = configuration;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<LoginResponse>> HandleAsync(LoginCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        var unscopedTenant = new TenantContext();
+        unscopedTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(unscopedTenant);
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Login == command.Request.Login || u.Email == command.Request.Login, ct);
 
         if (user is null)
+        {
+            _auditWriter?.Stage(db, AuditEvent.Create(
+                DateTime.UtcNow,
+                AuditActorKind.System,
+                null,
+                null,
+                null,
+                "account.login.failed",
+                "Authentication",
+                null,
+                null,
+                null,
+                AuditOutcome.Failed,
+                detailsJson: """{"reasonCode":"invalid_credentials"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
+        }
 
         if (user.IsLockedOut)
+        {
+            _auditWriter?.Stage(db, AuditEvent.Create(
+                DateTime.UtcNow,
+                AuditActorKind.System,
+                null,
+                null,
+                null,
+                "account.login.denied",
+                "User",
+                user.Id.ToString(),
+                null,
+                null,
+                AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"account_locked"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Account is temporarily locked. Try again later.");
+        }
 
         if (!_passwords.Verify(command.Request.Password, user.PasswordHash))
         {
             user.RecordFailedLogin();
+            _auditWriter?.Stage(db, AuditEvent.Create(
+                DateTime.UtcNow,
+                AuditActorKind.System,
+                null,
+                null,
+                null,
+                "account.login.failed",
+                "User",
+                user.Id.ToString(),
+                null,
+                null,
+                AuditOutcome.Failed,
+                detailsJson: """{"reasonCode":"invalid_credentials"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
         }
 
         if (user.IsDisabled)
+        {
+            _auditWriter?.Stage(db, AuditEvent.Create(
+                DateTime.UtcNow,
+                AuditActorKind.System,
+                null,
+                null,
+                null,
+                "account.login.denied",
+                "User",
+                user.Id.ToString(),
+                null,
+                null,
+                AuditOutcome.Denied,
+                detailsJson: """{"reasonCode":"account_disabled"}"""));
+            await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
+        }
 
         user.RecordLogin();
         if (!string.IsNullOrEmpty(command.Request.IpAddress))
@@ -56,6 +126,16 @@ public class LoginHandler
             db.Sessions.Add(UserSession.Create(user.Id, command.Request.IpAddress));
         }
 
+        var loginActor = new ActorContext(
+            ActorType.Human, user.Id, user.IsAdmin, null, null, null, null, ApiTokenCapability.None);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            loginActor,
+            "account.login.succeeded",
+            "User",
+            user.Id.ToString(),
+            null,
+            null,
+            detailsJson: """{"authMethod":"password"}"""));
         await db.SaveChangesAsync(ct);
 
         var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, user.Id, user.IsAdmin, null, ct);
