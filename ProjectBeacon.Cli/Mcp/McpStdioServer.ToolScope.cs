@@ -90,7 +90,9 @@ public static partial class McpStdioServer
         McpToolNames.WriteFile, McpToolNames.ApplyPatch,
         McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
+        McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        McpToolNames.ListDecisions, McpToolNames.GetDecision,
+        McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport
     ];
 

@@ -499,6 +499,10 @@ public sealed class ApiTokenAuthMiddleware
             return McpToolNames.ListConstraints;
         if (segments.Length == 4 && segments[3] == "decisions")
             return McpToolNames.ListDecisions;
+        if (segments.Length == 5 && segments[3] == "decisions" && Guid.TryParse(segments[4], out _))
+            return McpToolNames.GetDecision;
+        if (segments.Length == 5 && segments[3] == "constraints" && Guid.TryParse(segments[4], out _))
+            return McpToolNames.GetConstraint;
         if (segments.Length == 5 && segments[3] == "context" && segments[4] == "nodes")
             return McpToolNames.ListContextNodes;
         if (segments.Length == 6 && segments[3] == "context" && segments[4] == "nodes"
@@ -568,6 +572,10 @@ public sealed class ApiTokenAuthMiddleware
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "tasks" && Guid.TryParse(segments[4], out _))
+            return true;
+        if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
+            && (segments[3] == "constraints" || segments[3] == "decisions")
+            && Guid.TryParse(segments[4], out _))
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "context" && segments[4] == "nodes")

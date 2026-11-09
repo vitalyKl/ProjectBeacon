@@ -11,6 +11,8 @@ internal static partial class McpApiTools
     [
         new(McpToolNames.ListConstraints, "List project constraints.",
             () => Props(("projectId", "string", false)), ConstraintsList),
+        new(McpToolNames.GetConstraint, "Get one project constraint by ID.",
+            () => Props(("constraintId", "string", true), ("projectId", "string", false)), ConstraintGet),
         new(McpToolNames.ConstraintPropose, "Propose a new constraint. It remains Proposed until a human activates it.",
             () => Props(("body", "string", true), ("kind", "string", true), ("projectId", "string", false)), ConstraintPropose),
         new(McpToolNames.CreateConstraint, "Create a constraint (human operation). kind: Must, MustNot, Security, Compliance.",
@@ -21,6 +23,8 @@ internal static partial class McpApiTools
             () => Props(("constraintId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => ConstraintPost(args, "reject", api, env, ct)),
         new(McpToolNames.ListDecisions, "List project decisions.",
             () => Props(("projectId", "string", false)), DecisionsList),
+        new(McpToolNames.GetDecision, "Get one project decision by ID.",
+            () => Props(("decisionId", "string", true), ("projectId", "string", false)), DecisionGet),
         new(McpToolNames.DecisionPropose, "Propose a decision. It remains Proposed until a human accepts it.",
             () => Props(("title", "string", true), ("body", "string", true), ("context", "string", false),
                 ("consequences", "string", false), ("projectId", "string", false)), DecisionPropose),
@@ -40,6 +44,17 @@ internal static partial class McpApiTools
         if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/constraints", null, ct);
+    }
+
+    private static async Task<McpToolText> ConstraintGet(
+        JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryProject(env, args, out var projectId, out var error))
+            return new McpToolText(true, error);
+        if (!TryGuid(args, "constraintId", out var constraintId))
+            return new McpToolText(true, "missing or invalid 'constraintId'");
+        return await SendAsync(api, HttpMethod.Get,
+            $"v1/projects/{projectId:D}/constraints/{constraintId:D}", null, ct);
     }
 
     private static async Task<McpToolText> ConstraintPropose(
@@ -81,6 +96,17 @@ internal static partial class McpApiTools
         if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/decisions", null, ct);
+    }
+
+    private static async Task<McpToolText> DecisionGet(
+        JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryProject(env, args, out var projectId, out var error))
+            return new McpToolText(true, error);
+        if (!TryGuid(args, "decisionId", out var decisionId))
+            return new McpToolText(true, "missing or invalid 'decisionId'");
+        return await SendAsync(api, HttpMethod.Get,
+            $"v1/projects/{projectId:D}/decisions/{decisionId:D}", null, ct);
     }
 
     private static async Task<McpToolText> DecisionPropose(
