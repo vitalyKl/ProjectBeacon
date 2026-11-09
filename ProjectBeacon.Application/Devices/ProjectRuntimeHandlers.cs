@@ -81,7 +81,7 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<IList<RuntimeSummary>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAdminGate _adminGate;
+    private readonly IAdminGate? _adminGate;
 
     public ListRuntimesHandler(IBeaconDbFactory dbFactory, IAdminGate? adminGate = null)
     {

@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Domain.Entities.Identity;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 [Collection("api-http")]
