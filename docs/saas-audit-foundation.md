@@ -54,6 +54,9 @@ same unit of work as their state changes:
 - Project creation, metadata updates and deletion (`project.created`, `project.updated`,
   `project.deleted`). Project deletion and dependent cleanup run in one explicit transaction
   with the audit event.
+- Project runtime attachment, local-root metadata update and detachment (`project.runtime.attached`,
+  `project.runtime.updated`, `project.runtime.detached`). Local filesystem paths are never copied
+  into audit metadata.
 - Device enrollment, token rotation and revocation (`device.created`, `device.token.rotated`,
   `device.revoked`). These user-owned, non-tenant devices are written through an explicit
   unscoped context; the event records only the actor/device ids and fixed state codes, never
