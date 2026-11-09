@@ -158,6 +158,7 @@ else
 
 @code {
     private ProjectDto? _project;
+    private ActorContext _actor = ActorContext.Anonymous;
     private List<ContextSectionDto> _nodes = [];
     private string _title = string.Empty;
     private string _sectionId = "goals";
@@ -180,7 +181,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
         if (_project is not null)
             await Reload();
@@ -214,7 +216,7 @@ else
         _busy = true;
         var result = await Upsert.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _project.Id, _title, _body, _sectionId, ContextScopeType.Project,
-            null, null, null, null, ContextSource.Native, null, _sectionRevision)));
+            null, null, null, null, ContextSource.Native, null, _sectionRevision), _actor));
         _busy = false;
         if (!result.Success)
         {
@@ -277,7 +279,7 @@ else
     {
         if (_project is null || string.IsNullOrWhiteSpace(_constraintBody))
             return;
-        var result = await CreateConstraint.HandleAsync(new CreateConstraintRequest(_project.Id, _constraintBody.Trim(), _constraintKind));
+        var result = await CreateConstraint.HandleAsync(new CreateConstraintRequest(_project.Id, _constraintBody.Trim(), _constraintKind, _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
