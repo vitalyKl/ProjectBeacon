@@ -22,14 +22,14 @@ internal static partial class McpApiTools
             () => Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
                 ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
                 ("source", "string", false), ("sourcePath", "string", false), ("repoId", "string", false),
-                ("taskId", "string", false), ("projectId", "string", false)), NodeUpsert),
+                ("taskId", "string", false), ("projectId", "string", false), ("expectedRevision", "integer", false)), NodeUpsert),
         new(McpToolNames.DeleteContextNode, "Delete a context section.",
             () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeDelete),
         new(McpToolNames.ContextCreateDraft, "Create or retry a NeedsReview context draft. A reviewed section cannot be overwritten by an agent.",
             () => Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
                 ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
                 ("sourcePath", "string", false), ("repoId", "string", false), ("taskId", "string", false),
-                ("projectId", "string", false)), NodeDraft),
+                ("projectId", "string", false), ("expectedRevision", "integer", false)), NodeDraft),
         new(McpToolNames.ExportAgentsMd, "Export AGENTS.md markdown for the project.",
             () => Props(("repoId", "string", false), ("path", "string", false), ("projectId", "string", false)), ExportAgents),
     ];
@@ -92,6 +92,9 @@ internal static partial class McpApiTools
         Put(body, "sourcePath", Text(args, "sourcePath"));
         Put(body, "repoId", Text(args, "repoId"));
         Put(body, "taskId", Text(args, "taskId"));
+        var expectedRevision = IntArg(args, "expectedRevision");
+        if (expectedRevision is not null)
+            body["expectedRevision"] = expectedRevision.Value;
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/nodes", body, ct);
     }
 
@@ -118,6 +121,9 @@ internal static partial class McpApiTools
         Put(body, "sourcePath", Text(args, "sourcePath"));
         Put(body, "repoId", Text(args, "repoId"));
         Put(body, "taskId", Text(args, "taskId"));
+        var expectedRevision = IntArg(args, "expectedRevision");
+        if (expectedRevision is not null)
+            body["expectedRevision"] = expectedRevision.Value;
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/drafts", body, ct);
     }
 
