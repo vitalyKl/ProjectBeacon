@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
