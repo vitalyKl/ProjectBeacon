@@ -101,7 +101,8 @@ internal sealed class GitSyncService
 
                 var fetch = await RunGitAsync(
                     repositoryRoot, hooksDirectory, filters.Drivers, ct,
-                    "fetch", "--no-tags", "--no-recurse-submodules", "--", state.Remote, "+" + state.MergeRef + ":" + state.UpstreamRef);
+                    "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                    "--", state.Remote, "+" + state.MergeRef + ":" + state.UpstreamRef);
                 if (fetch.TimedOut)
                     return Complete(Failed(state, GitSyncRefusalCode.Timeout, fetch.StdErr));
                 if (fetch.ExitCode != 0)
@@ -369,6 +370,22 @@ internal sealed class GitSyncService
         info.Environment["PAGER"] = "cat";
         info.Environment.Remove("GIT_EXTERNAL_DIFF");
         info.Environment.Remove("GIT_CONFIG_PARAMETERS");
+
+        // Never let a daemon environment redirect Git away from the explicitly configured
+        // project root or expose verbose transport traces. Credential helpers and SSH agent
+        // variables remain available so the workstation can authenticate its configured remote.
+        foreach (var name in new[]
+        {
+            "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+            "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            "GIT_CEILING_DIRECTORIES", "GIT_PREFIX", "GIT_SHALLOW_FILE",
+            "GIT_REPLACE_REF_BASE", "GIT_TRACE_REDACT"
+        })
+            info.Environment.Remove(name);
+        foreach (var name in info.Environment.Keys
+            .Where(name => name.StartsWith("GIT_TRACE", StringComparison.OrdinalIgnoreCase))
+            .ToArray())
+            info.Environment.Remove(name);
         var index = 0;
         foreach (var driver in filters)
         {
