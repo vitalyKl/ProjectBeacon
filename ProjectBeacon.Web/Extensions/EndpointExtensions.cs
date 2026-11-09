@@ -68,31 +68,20 @@ public static class EndpointExtensions
             var form = await ctx.Request.ReadFormAsync();
             var login = form["login"].ToString();
             var password = form["password"].ToString();
-            var result = await handler.HandleAsync(new LoginCommand(new LoginRequest(
-                login, password, ctx.Connection.RemoteIpAddress?.ToString())));
-            if (!result.Success)
+            var result = await handler.HandleAsync(
+                new LoginCommand(new LoginRequest(login, password, ctx.Connection.RemoteIpAddress?.ToString())),
+                requireOperator: true);
+            if (!result.Success || result.Value is not { IsAdmin: true } operatorLogin)
                 return Results.Redirect("/control/login?error=1");
 
-            // Password authentication alone is not sufficient for the Control Plane.
-            // Only a currently persisted platform administrator may receive its separate cookie.
-            if (!result.Value!.IsAdmin)
-            {
-                ctx.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [
-                    new Claim(ClaimTypes.NameIdentifier, result.Value.UserId.ToString()),
-                    new Claim(ClaimTypes.Name, result.Value.Login),
-                    new Claim("isAdmin", "false")
-                ], "ControlLoginAttempt"));
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            }
-
+            // LoginHandler performs the persisted operator check before creating a session.
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, result.Value.UserId.ToString()),
-                new(ClaimTypes.Name, result.Value.Login),
-                new(ClaimTypes.Email, result.Value.Email),
+                new(ClaimTypes.NameIdentifier, operatorLogin.UserId.ToString()),
+                new(ClaimTypes.Name, operatorLogin.Login),
+                new(ClaimTypes.Email, operatorLogin.Email),
                 new("isAdmin", "true"),
-                new("sv", result.Value.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("sv", operatorLogin.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("control_plane", "true")
             };
             var identity = new ClaimsIdentity(claims, ControlAuthenticationDefaults.Scheme);
