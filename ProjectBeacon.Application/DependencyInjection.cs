@@ -143,6 +143,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ActivateConstraintHandler>();
         services.AddTransient<RejectConstraintHandler>();
         services.AddTransient<ListContextRevisionsHandler>();
+        services.AddTransient<ListContentVersionsHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
