@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Common;
 using Domain.Enums;
 /// <summary>
@@ -66,7 +67,7 @@ public record RuntimeDiagnostics(
 /// <summary>
 /// Name, fingerprint, and owning user. TotpCode is required when that user has TOTP enabled.
 /// </summary>
-public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, string? TotpCode = null);
+public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, string? TotpCode = null, ActorContext Actor = default);
 /// <summary>
 /// Command for create device.
 /// </summary>
@@ -82,7 +83,7 @@ public record ListDevicesCommand(ListDevicesRequest Request) : ICommand<Result<I
 /// <summary>
 /// Fields for revoke device.
 /// </summary>
-public record RevokeDeviceRequest(Guid DeviceId, Guid UserId);
+public record RevokeDeviceRequest(Guid DeviceId, Guid UserId, ActorContext Actor = default);
 /// <summary>
 /// Command for revoke device.
 /// </summary>
