@@ -29,6 +29,7 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
     public async Task<Result<RuntimeDiagnostics>> HandleAsync(AttachRuntimeCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
+        var actor = request.Actor;
         if (string.IsNullOrWhiteSpace(request.LocalRoot) || request.LocalRoot.Trim().Length > 1000)
             return Result.Failure<RuntimeDiagnostics>("LocalRoot is required (max 1000 characters).");
 
@@ -42,7 +43,7 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         if (device is null || device.IsRevoked || device.UserId != request.UserId)
             return Result.Failure<RuntimeDiagnostics>("Device not found.");
 
-        if (_auditWriter is not null && request.Actor is not null
+        if (_auditWriter is not null && actor is not null
             && (db.FilterProjectId != request.ProjectId || db.FilterOrgId is null))
             return Result.Failure<RuntimeDiagnostics>("Project not found.");
 
@@ -51,9 +52,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         if (existing is not null)
         {
             existing.SetLocalRoot(request.LocalRoot);
-            if (request.Actor is not null)
+            if (actor is not null)
                 _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                    request.Actor,
+                    actor,
                     "project.runtime.updated",
                     "ProjectRuntime",
                     existing.Id.ToString(),
@@ -66,9 +67,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 
         var runtime = ProjectRuntime.Create(request.ProjectId, request.DeviceId, request.LocalRoot);
         db.ProjectRuntimes.Add(runtime);
-        if (request.Actor is not null)
+        if (actor is not null)
             _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                request.Actor,
+                actor,
                 "project.runtime.attached",
                 "ProjectRuntime",
                 runtime.Id.ToString(),
@@ -138,6 +139,7 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
 
     public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
+        var actor = command.Request.Actor;
         await using var db = _dbFactory.CreateDbContext();
         var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
@@ -147,14 +149,14 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
         if (!member)
             return Result.Failure("Runtime not found.");
-        if (_auditWriter is not null && command.Request.Actor is not null
+        if (_auditWriter is not null && actor is not null
             && (db.FilterProjectId != runtime.ProjectId || db.FilterOrgId is null))
             return Result.Failure("Runtime not found.");
 
         db.ProjectRuntimes.Remove(runtime);
-        if (command.Request.Actor is not null)
+        if (actor is not null)
             _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                command.Request.Actor,
+                actor,
                 "project.runtime.detached",
                 "ProjectRuntime",
                 runtime.Id.ToString(),
