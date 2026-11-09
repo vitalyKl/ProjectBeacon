@@ -13,12 +13,18 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class RunPipelineSessionDispatchTests
 {
-    [Fact]
-    public async Task RunPipelineSession_ExecutesNativeTurn_WithScopedHarnessAuthorization()
+    [Theory]
+    [InlineData("Planner")]
+    [InlineData("Actor")]
+    [InlineData("Review")]
+    public async Task RunPipelineSession_ExecutesNativeTurn_WithScopedHarnessAuthorization(string role)
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-dispatch-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
         var sessionId = Guid.NewGuid();
+        var subtaskId = string.Equals(role, "Actor", StringComparison.Ordinal)
+            ? Guid.NewGuid()
+            : (Guid?)null;
         Directory.CreateDirectory(projectRoot);
 
         try
@@ -74,7 +80,9 @@ public sealed class RunPipelineSessionDispatchTests
                 projectId,
                 taskId,
                 sessionId,
-                role = "Planner",
+                role,
+                subtaskId,
+                reportsDiff = false,
                 title = "Native pipeline dispatch test",
                 prompt = "Respond with the completion marker.",
                 model = "beacon-local/test-model",
@@ -104,11 +112,28 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(taskId, capturedAuthorization.TaskId);
             Assert.Equal(commandId, capturedAuthorization.CommandId);
             Assert.Equal(generation, capturedAuthorization.Generation);
-            Assert.NotEqual(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.WorkingDirectory));
+            var worktreePath = Path.GetFullPath(capturedAuthorization.WorkingDirectory);
+            Assert.NotEqual(Path.GetFullPath(projectRoot), worktreePath);
             Assert.Equal(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.ProjectRoot!));
+            var worktreeParent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ProjectBeacon", "agent-worktrees"))
+                + Path.DirectorySeparatorChar;
+            Assert.StartsWith(worktreeParent, worktreePath,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+            // The built-in Beacon MCP child must use exactly the same isolated root as the agent.
+            var mcpStart = McpStdioClient.CreateStartInfo(worktreePath, capturedAuthorization);
+            Assert.Equal(worktreePath, Path.GetFullPath(mcpStart.WorkingDirectory));
+            var mcpArguments = mcpStart.ArgumentList.ToArray();
+            Assert.True(mcpArguments.Length >= 3);
+            Assert.Equal("mcp", mcpArguments[^3]);
+            Assert.Equal("--root", mcpArguments[^2]);
+            Assert.Equal(worktreePath, Path.GetFullPath(mcpArguments[^1]));
+            Assert.Equal(role, mcpStart.Environment["BEACON_PIPELINE_ROLE"]);
+
             Assert.True(capturedAuthorization.IsolatedWorkspace);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
-            Assert.Equal("Planner", capturedAuthorization.PipelineRole);
+            Assert.Equal(role, capturedAuthorization.PipelineRole);
+            Assert.Equal(subtaskId, capturedAuthorization.SubtaskId);
             Assert.Empty(capturedAuthorization.AllowedMcpTools!);
             Assert.True(capturedAuthorization.ExpiresAt > DateTime.UtcNow);
             Assert.Equal(generation, tokenHandler.RequestedGeneration);
