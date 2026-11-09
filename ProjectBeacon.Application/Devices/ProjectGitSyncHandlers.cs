@@ -34,7 +34,7 @@ public sealed class EnqueueProjectGitSyncHandler
         CancellationToken ct = default)
     {
         if (!actor.IsHuman || actor.UserId is not { } userId)
-            return Result.Forbidden();
+            return Result.Forbidden<WorkstationCommandDto>();
         if (!Enum.IsDefined(mode))
             return Result.Failure<WorkstationCommandDto>("Unsupported GitSync mode.", ErrorKind.Validation);
 
