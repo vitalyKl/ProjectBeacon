@@ -52,9 +52,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         if (existing is not null)
         {
             existing.SetLocalRoot(request.LocalRoot);
-            if (actor is not null)
+            if (actor is { } trustedActor)
                 _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                    actor,
+                    trustedActor,
                     "project.runtime.updated",
                     "ProjectRuntime",
                     existing.Id.ToString(),
@@ -67,9 +67,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 
         var runtime = ProjectRuntime.Create(request.ProjectId, request.DeviceId, request.LocalRoot);
         db.ProjectRuntimes.Add(runtime);
-        if (actor is not null)
+        if (actor is { } trustedActor)
             _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                actor,
+                trustedActor,
                 "project.runtime.attached",
                 "ProjectRuntime",
                 runtime.Id.ToString(),
@@ -154,9 +154,9 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
             return Result.Failure("Runtime not found.");
 
         db.ProjectRuntimes.Remove(runtime);
-        if (actor is not null)
+        if (actor is { } trustedActor)
             _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-                actor,
+                trustedActor,
                 "project.runtime.detached",
                 "ProjectRuntime",
                 runtime.Id.ToString(),
