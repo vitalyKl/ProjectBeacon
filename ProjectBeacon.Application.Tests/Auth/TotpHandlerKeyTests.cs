@@ -5,6 +5,7 @@ using Application.Persistence;
 using Application.Security;
 using Domain.Entities.Identity;
 using Infrastructure.Security;
+using ProjectBeacon.Infrastructure.Audit;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,6 +46,48 @@ public sealed class TotpHandlerKeyTests : IDisposable
         var row = await db.Users.FirstAsync(u => u.Id == user.Id, TestContext.Current.CancellationToken);
         Assert.StartsWith(ISecretProtector.V2Prefix, row.TotpSecretCipher);
         Assert.False(row.TotpEnabled);
+    }
+
+    [Fact]
+    public async Task TotpLifecycle_IsAuditedWithoutAuthenticatorSecrets()
+    {
+        var user = await AddUser("audit-totp");
+        var protector = TestProtectors.Dev();
+        var writer = new EfAuditWriter();
+
+        var started = await new BeginTotpHandler(_dbFactory, protector, new RfcTotp(), writer)
+            .HandleAsync(new BeginTotpCommand(user.Id), TestContext.Current.CancellationToken);
+        Assert.True(started.Success);
+
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var setupEvent = await db.AuditEvents.SingleAsync(
+                e => e.Action == "account.mfa.setup_started" && e.ActorUserId == user.Id,
+                TestContext.Current.CancellationToken);
+            Assert.Equal("""{"newState":"Pending"}""", setupEvent.DetailsJson);
+            Assert.DoesNotContain("JBSWY3DPEHPK3PXP", setupEvent.DetailsJson ?? string.Empty);
+        }
+
+        var secret = await PendingSecret(user.Id, protector);
+        var enabled = await new ConfirmTotpHandler(_dbFactory, protector, new RfcTotp(), writer)
+            .HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(user.Id, CurrentCode(secret))),
+                TestContext.Current.CancellationToken);
+        Assert.True(enabled.Success, enabled.Error);
+
+        var disabled = await new DisableTotpHandler(_dbFactory, protector, new RfcTotp(), writer)
+            .HandleAsync(new DisableTotpCommand(new DisableTotpRequest(user.Id, CurrentCode(secret))),
+                TestContext.Current.CancellationToken);
+        Assert.True(disabled.Success, disabled.Error);
+
+        await using var auditDb = _dbFactory.CreateDbContext();
+        var events = await auditDb.AuditEvents
+            .Where(e => e.ActorUserId == user.Id && e.Action.StartsWith("account.mfa."))
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(events, e => e.Action == "account.mfa.enabled"
+            && e.DetailsJson == """{"newState":"Enabled"}""");
+        Assert.Contains(events, e => e.Action == "account.mfa.disabled"
+            && e.DetailsJson == """{"newState":"Disabled"}""");
+        Assert.All(events, e => Assert.DoesNotContain(secret, e.DetailsJson ?? string.Empty));
     }
 
     [Fact]
