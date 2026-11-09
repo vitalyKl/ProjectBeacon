@@ -25,12 +25,18 @@ public static class AuditEventFactory
             _ => throw new ArgumentOutOfRangeException(nameof(actor), "Unknown actor type.")
         };
 
+        var actorUserId = actor.Type is ActorType.Human or ActorType.Worker
+            ? actor.UserId
+            : null;
+        var actorTokenId = actor.Type == ActorType.ApiToken ? actor.TokenId : null;
+        var actorDeviceId = actor.Type == ActorType.Device ? actor.DeviceId : null;
+
         return AuditEvent.Create(
             DateTime.UtcNow,
             actorKind,
-            actor.UserId,
-            actor.TokenId,
-            actor.DeviceId,
+            actorUserId,
+            actorTokenId,
+            actorDeviceId,
             action,
             targetType,
             targetId,
