@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
+using Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
@@ -34,8 +35,19 @@ public static class OrgEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateOrg([FromBody] CreateOrgRequest request, HttpContext ctx, CreateOrgHandler handler)
+    private static async Task<IResult> CreateOrg(
+        [FromBody] CreateOrgRequest request,
+        HttpContext ctx,
+        CreateOrgHandler handler,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
+        if (LocalAuthOptions.InviteOnly(configuration, environment.EnvironmentName))
+        {
+            return ProblemResults.Forbidden(
+                "Organizations are provisioned by the ProjectBeacon platform operator during the SaaS alpha. Contact support to request an organization.");
+        }
+
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(command: new CreateOrgCommand(request, actor));
 

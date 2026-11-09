@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Application.Auth;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -86,6 +87,29 @@ public sealed class AuthHttpTests
         var version = json.GetProperty("version").GetString();
         Assert.False(string.IsNullOrWhiteSpace(version));
         Assert.Contains('.', version);
+    }
+
+
+    [Fact]
+    public async Task OrganizationCreation_IsBlockedByInviteOnlySaaSAlpha()
+    {
+        await using var factory = new AuthApiFactory(inviteOnly: true);
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        using var response = await client.PostAsJsonAsync(
+            "/v1/orgs",
+            new { name = "Self-service must be disabled" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("provisioned by the ProjectBeacon platform operator", body, StringComparison.Ordinal);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+            Assert.Empty(await db.Orgs.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -281,10 +305,12 @@ public class AuthApiFactory : WebApplicationFactory<Program>
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly bool _configureBootstrapToken;
+    private readonly bool _inviteOnly;
 
-    public AuthApiFactory(bool configureBootstrapToken = true)
+    public AuthApiFactory(bool configureBootstrapToken = true, bool inviteOnly = false)
     {
         _configureBootstrapToken = configureBootstrapToken;
+        _inviteOnly = inviteOnly;
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
         Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
         _connection.Open();
@@ -296,7 +322,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Testing");
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
-        builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", "false");
+        builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", _inviteOnly ? "true" : "false");
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())
