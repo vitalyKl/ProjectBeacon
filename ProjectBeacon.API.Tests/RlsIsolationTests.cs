@@ -212,6 +212,18 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
                 () => delete.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
             Assert.Contains("append-only", exception.Message, StringComparison.OrdinalIgnoreCase);
         }
+
+        // Direct deletes are rejected, but a project lifecycle delete must still be able
+        // to retire the whole tenant and its history through the FK cascade.
+        await using (var deleteProject = NewAdminContext())
+        {
+            var project = await deleteProject.Projects.IgnoreQueryFilters()
+                .FirstAsync(p => p.Id == projectA, TestContext.Current.CancellationToken);
+            deleteProject.Projects.Remove(project);
+            await deleteProject.SaveChangesAsync(TestContext.Current.CancellationToken);
+            Assert.False(await deleteProject.ContentVersions.IgnoreQueryFilters()
+                .AnyAsync(v => v.ProjectId == projectA, TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]
