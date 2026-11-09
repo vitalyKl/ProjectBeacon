@@ -17,8 +17,8 @@ public sealed class AuditHttpTests
         var anonymous = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
-        await Bootstrap(client);
-        var adminToken = await Login(client, "admin", await GetBootstrapPassword(client));
+        var bootstrapPassword = await Bootstrap(client);
+        var adminToken = await Login(client, "admin", bootstrapPassword);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
         var audit = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
@@ -47,22 +47,12 @@ public sealed class AuditHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
     }
 
-    private static async Task Bootstrap(HttpClient client)
+    private static async Task<string> Bootstrap(HttpClient client)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap")
         {
             Content = JsonContent.Create(new { })
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthApiFactory.BootstrapToken);
-        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
-    private static async Task<string> GetBootstrapPassword(HttpClient client)
-    {
-        // The bootstrap response is intentionally one-time; recover the seeded test account
-        // through the dedicated test token so the test does not depend on a fixed password.
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/recover-admin");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthApiFactory.BootstrapToken);
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
