@@ -10,9 +10,9 @@
     <div class="beacon-ops-pad">
         @if (!string.IsNullOrEmpty(Task?.ReviewNotes))
         {
-            <MudText Typo="Typo.body2" Class="beacon-pre">@Task.ReviewNotes</MudText>
+            <MarkdownView Text="@Task.ReviewNotes" MaxHeight="280" />
         }
-        <MudTextField @bind-Value="_draft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MarkdownEditor @bind-Value="_draft" Label="@L["ReviewNotes"]" Lines="4" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
     </div>
 </section>

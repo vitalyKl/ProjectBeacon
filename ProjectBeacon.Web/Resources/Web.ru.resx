@@ -2578,4 +2578,9 @@
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Для выбранной модели размер контекста должен быть больше нуля. Укажите размер контекстного окна перед запуском сессии.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Резерв токенов для ответа (0 — автоматически)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>Редактировать</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>Просмотр</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
+  <data name="Characters" xml:space="preserve"><value>символов</value></data>
 </root>

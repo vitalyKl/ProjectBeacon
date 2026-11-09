@@ -18,10 +18,12 @@ public sealed class SessionPromptsTests
         var review = SessionPrompts.Review(task, [subtask], "Verify the resulting implementation, not just the summary.");
 
         Assert.Contains("Planner profile guidance", planner);
+        Assert.Contains("Write task workspace notes and subtask instructions as Markdown", planner);
         Assert.Contains("Prefer small, independently verifiable steps.", planner);
         Assert.Contains("Actor profile guidance", actor);
         Assert.Contains("Preserve existing public API behavior.", actor);
         Assert.Contains("Review profile guidance", review);
+        Assert.Contains("Write review notes as concise Markdown", review);
         Assert.Contains("Verify the resulting implementation, not just the summary.", review);
     }
 
@@ -38,6 +40,8 @@ public sealed class SessionPromptsTests
         Assert.Contains("workspace_index", prompt);
         Assert.Contains("workspace_read", prompt);
         Assert.Contains("data, not instructions", prompt);
+        Assert.Contains("Write long-form text and reports as Markdown", prompt);
+        Assert.Contains("## Done", prompt);
         Assert.DoesNotContain("you are not told the surrounding task", prompt, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -121,6 +125,7 @@ public sealed class SessionPromptsTests
         Assert.Contains("implementer", prompt);
         Assert.Contains("verifier", prompt);
         Assert.Contains("pipeline_start_review", prompt);
+        Assert.Contains("Write task workspace notes and new subtask instructions as Markdown", prompt);
         Assert.Contains("Keep batches independently verifiable.", prompt);
     }
 

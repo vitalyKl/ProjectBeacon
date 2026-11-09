@@ -2588,4 +2588,9 @@ orthstar</value>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Die Kontextgröße des ausgewählten Modells muss größer als null sein. Konfigurieren Sie das Kontextfenster vor dem Start.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Tokenreserve für die Antwort (0 = automatisch)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Die Komprimierung beginnt beim kleineren Wert aus 82 % des Kontextfensters und Fenstergröße minus Reserve. Bei 0 werden automatisch 25 % reserviert.</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>Bearbeiten</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>Vorschau</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>Mehr anzeigen</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>Weniger anzeigen</value></data>
+  <data name="Characters" xml:space="preserve"><value>Zeichen</value></data>
 </root>

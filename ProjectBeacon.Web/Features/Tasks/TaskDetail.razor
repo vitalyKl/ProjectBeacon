@@ -264,8 +264,7 @@ else
                             <MudText Typo="Typo.subtitle1">@_selectedWorkspace.Title</MudText>
                             <MudText Typo="Typo.caption">@_selectedWorkspace.Key · @_selectedWorkspace.Kind · @_selectedWorkspace.AuthorRole · <LocalTime Value="_selectedWorkspace.UpdatedAt" Format="g" /></MudText>
                             <MudText Typo="Typo.body2">@_selectedWorkspace.Abstract</MudText>
-                            <MudTextField T="string" Value="_selectedWorkspace.Content" ReadOnly="true" Lines="12"
-                                          Variant="Variant.Outlined" FullWidth="true" />
+                            <MarkdownView Text="@_selectedWorkspace.Content" MaxHeight="520" />
                         </MudStack>
                     }
                     else
@@ -280,7 +279,7 @@ else
                         <MudTextField T="string" @bind-Value="_workspaceKey" Label="@L["WorkspaceKey"]" Variant="Variant.Outlined" />
                         <MudTextField T="string" @bind-Value="_workspaceTitle" Label="@L["Title"]" Variant="Variant.Outlined" />
                         <MudTextField T="string" @bind-Value="_workspaceAbstract" Label="@L["WorkspaceAbstract"]" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_workspaceContent" Label="@L["Content"]" Variant="Variant.Outlined" Lines="5" />
+                        <MarkdownEditor @bind-Value="_workspaceContent" Label="@L["Content"]" Lines="6" />
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnCreateWorkspaceNote"
                                    Disabled="_busy || string.IsNullOrWhiteSpace(_workspaceKey) || string.IsNullOrWhiteSpace(_workspaceTitle) || string.IsNullOrWhiteSpace(_workspaceAbstract) || string.IsNullOrWhiteSpace(_workspaceContent)">
                             @L["Create"]

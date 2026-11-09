@@ -2596,4 +2596,9 @@ orthstar</value>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>選択したモデルのコンテキストサイズは 0 より大きくする必要があります。起動前にコンテキストウィンドウを設定してください。</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回答用トークン予約数（0 = 自動）</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>コンテキスト圧縮は、ウィンドウの82%と「ウィンドウサイズ−予約数」の小さい方をプロンプトが超えたときに開始します。0の場合は25%を自動予約します。</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
+  <data name="Characters" xml:space="preserve"><value>文字</value></data>
 </root>

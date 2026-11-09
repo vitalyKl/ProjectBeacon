@@ -43,7 +43,7 @@ else
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
             <MudText Typo="Typo.h6">@L["CreateMilestone"]</MudText>
             <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MarkdownEditor @bind-Value="_editDescription" Label="@L["Description"]" Lines="3" Class="mt-2 mb-2" />
             <MudTextField @bind-Value="_newOrder" Label="@L["Order"]" InputType="InputType.Number" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
             <MudStack Row="true" Spacing="2" Class="mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateMilestone">@L["Create"]</MudButton>
@@ -57,7 +57,7 @@ else
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
             <MudText Typo="Typo.h6">@L["UpdateMilestone"]</MudText>
             <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MarkdownEditor @bind-Value="_editDescription" Label="@L["Description"]" Lines="3" Class="mt-2 mb-2" />
             <MudTextField @bind-Value="_editOrder" Label="@L["Order"]" InputType="InputType.Number" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
             <MudStack Row="true" Spacing="2" Class="mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveMilestone">@L["Save"]</MudButton>
@@ -74,7 +74,7 @@ else
                     <MudText Typo="Typo.h6">@milestone.Name</MudText>
                     @if (!string.IsNullOrEmpty(milestone.Description))
                     {
-                        <MudText Typo="Typo.body2" Class="mt-2">@milestone.Description</MudText>
+                        <MarkdownView Text="@milestone.Description" MaxHeight="120" Class="mt-2" />
                     }
                     @{
                         var milestoneTasks = _tasks.Where(t => t.MilestoneId == milestone.Id).ToList();
@@ -131,7 +131,7 @@ else
                 var openTasks = _tasks.Where(t => t.MilestoneId == _open.Id).ToList();
                 @if (!string.IsNullOrEmpty(_open.Description))
                 {
-                    <MudText Typo="Typo.body2">@_open.Description</MudText>
+                    <MarkdownView Text="@_open.Description" MaxHeight="320" />
                 }
                 @if (openTasks.Count == 0)
                 {

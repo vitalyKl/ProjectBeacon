@@ -43,7 +43,16 @@
                     <span class="beacon-state is-info ml-2">@L["CurrentProject"]</span>
                 }
             </MudTd>
-            <MudTd DataLabel="@L["Description"]">@(string.IsNullOrWhiteSpace(context.Description) ? "—" : context.Description)</MudTd>
+            <MudTd DataLabel="@L["Description"]">
+                @if (string.IsNullOrWhiteSpace(context.Description))
+                {
+                    <MudText Typo="Typo.caption">—</MudText>
+                }
+                else
+                {
+                    <MarkdownView Text="@context.Description" MaxHeight="96" />
+                }
+            </MudTd>
             <MudTd>
                 @if (context.Id != _projectId)
                 {
@@ -65,7 +74,7 @@ else
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <div class="beacon-form">
             <MudTextField @bind-Value="_projectName" InputId="project-name" Label="@L["ProjectName"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
-            <MudTextField @bind-Value="_projectDescription" InputId="project-description" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" />
+            <MarkdownEditor @bind-Value="_projectDescription" Label="@L["Description"]" Lines="5" Class="mt-3" />
             <div class="beacon-field-row">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProject" Disabled="_busy">@L["Save"]</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>

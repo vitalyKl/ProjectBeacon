@@ -26,7 +26,7 @@
 }
 @if (Task is not null)
 {
-<MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+<MarkdownEditor @bind-Value="_description" Label="@L["Description"]" Lines="4" Class="mt-2" />
 <MudSelect T="TaskPriority" @bind-Value="_priority" Label="@L["Priority"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
     <MudSelectItem Value="TaskPriority.Low">@ChromeLabels.Priority(L, TaskPriority.Low)</MudSelectItem>
     <MudSelectItem Value="TaskPriority.Medium">@ChromeLabels.Priority(L, TaskPriority.Medium)</MudSelectItem>
