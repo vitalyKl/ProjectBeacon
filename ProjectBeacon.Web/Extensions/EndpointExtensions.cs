@@ -70,9 +70,10 @@ public static class EndpointExtensions
             var password = form["password"].ToString();
             var result = await handler.HandleOperatorAsync(
                 new LoginCommand(new LoginRequest(login, password, ctx.Connection.RemoteIpAddress?.ToString())));
-            if (!result.Success || result.Value is not { IsAdmin: true } operatorLogin)
+            if (!result.Success || result.Value is null || !result.Value.IsAdmin)
                 return Results.Redirect("/control/login?error=1");
 
+            var operatorLogin = result.Value;
             // LoginHandler performs the persisted operator check before creating a session.
             var claims = new List<Claim>
             {
