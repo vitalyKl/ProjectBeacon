@@ -22,8 +22,9 @@ public static partial class McpStdioServer
 {
     private static JsonObject[] LocalTools() =>
     [
-        Tool(McpToolNames.ReadFile, "Read a file inside the project root.",
-            Props(("path", "string", true))),
+        Tool(McpToolNames.ReadFile,
+            "Read a bounded page from a file inside the project root. offset is a zero-based character offset (not a line number); limit is the maximum number of characters, default 12288 and maximum 12288. The response says whether more remains and gives the exact nextOffset. For a truncated file, call read_file again with the same path and that nextOffset until END OF FILE.",
+            Props(("path", "string", true), ("offset", "integer", false), ("limit", "integer", false))),
         Tool(McpToolNames.WriteFile, "Write a file inside the project root. Rejects path escape.",
             Props(("path", "string", true), ("content", "string", true))),
         Tool(McpToolNames.ApplyPatch, "Replace one exact occurrence of oldText with newText in a file.",
@@ -79,6 +80,16 @@ public static partial class McpStdioServer
         if (files.Count == 0)
             return "No changed files.";
         return string.Join("\n", files);
+    }
+
+    private static string FormatFileReadPage(string path, FileReadPage page)
+    {
+        var end = page.Offset + page.Content.Length;
+        var header = $"# File: {path}\\n# Character range: [{page.Offset}, {end}) of {page.TotalCharacters}";
+        var continuation = page.HasMore
+            ? $"\\n\\n[TRUNCATED — this is only one page, not the complete file. Continue with read_file(path=\\"{path}\\", offset={page.NextOffset}, limit={page.Limit}).]"
+            : "\\n\\n[END OF FILE]";
+        return header + "\\n\\n" + page.Content + continuation;
     }
 
     private static string FormatSignatures(SignatureResult result)
