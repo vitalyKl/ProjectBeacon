@@ -47,7 +47,7 @@ public sealed class EnqueueProjectGitSyncHandler
             db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
-                permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
+                permission.Error ?? "Project administration permission is required.", ErrorKind.Forbidden);
 
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(runtime => runtime.ProjectId == projectId)
