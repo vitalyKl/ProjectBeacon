@@ -28,8 +28,11 @@ internal static class GitRepositoryOperationGate
         return new SessionLease(state);
     }
 
-    public static bool HasActiveSessions(string repositoryRoot) =>
-        Volatile.Read(ref GetState(repositoryRoot).ActiveSessions) > 0;
+    public static bool HasActiveSessions(string repositoryRoot)
+    {
+        var state = GetState(repositoryRoot);
+        return Volatile.Read(ref state.ActiveSessions) > 0;
+    }
 
     public static string NormalizeRoot(string repositoryRoot)
     {

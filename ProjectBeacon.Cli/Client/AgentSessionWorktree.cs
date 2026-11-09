@@ -17,6 +17,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     private readonly string[] _disabledFilterDrivers;
     private string _snapshotCommit;
     private bool _preserve;
+    private IDisposable? _activeSessionLease;
 
     private AgentSessionWorktree(
         string repositoryRoot,
@@ -38,6 +39,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         MissingIgnoredPaths = Array.AsReadOnly(missingIgnoredPaths.ToArray());
         IncludedPaths = Array.AsReadOnly(includedPaths.ToArray());
         MissingIncludePaths = Array.AsReadOnly(missingIncludePaths.ToArray());
+        _activeSessionLease = GitRepositoryOperationGate.RegisterSession(repositoryRoot);
     }
 
     public string WorkingDirectory { get; }
@@ -84,6 +86,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             return (null, "Agent command execution requires a Git repository so the session can use an isolated worktree.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+        using var repositoryLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
         var filterConfig = await RunGitAsync(repositoryRoot, ct, [], "config", "--name-only", "--get-regexp", "^filter\\.");
         if (filterConfig.TimedOut || filterConfig.ExitCode is not (0 or 1))
             return (null, "Could not inspect Git filter configuration safely.");
@@ -360,6 +363,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        Interlocked.Exchange(ref _activeSessionLease, null)?.Dispose();
         if (_preserve)
             return;
         await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot, _disabledFilterDrivers);

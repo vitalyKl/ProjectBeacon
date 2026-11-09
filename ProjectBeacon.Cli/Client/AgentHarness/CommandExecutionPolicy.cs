@@ -532,18 +532,15 @@ internal static class CommandExecutionPolicy
 
             if (ContainsPathOutsideWorktree(argument, workingDirectory))
             {
-                error = "Absolute paths and parent-directory traversal outside the isolated project worktree are not allowed in command arguments.";
+                error = "This isolated session cannot access the real project directory. Synchronize the repository from the ProjectBeacon interface; absolute paths and parent-directory traversal outside the worktree are blocked.";
                 return false;
             }
         }
 
         var args = argv.Skip(1).ToArray();
         var command = basename.ToLowerInvariant();
-        if (command == "git" && string.Equals(GetGitSubcommand(args), "push", StringComparison.OrdinalIgnoreCase))
-        {
-            error = "git push is blocked on the workstation command interface.";
+        if (command == "git" && !TryValidateGitArguments(args, out error))
             return false;
-        }
 
         if (IsGlobalInstall(command, args))
         {
@@ -632,6 +629,53 @@ internal static class CommandExecutionPolicy
         }
 
         return false;
+    }
+
+    private static readonly HashSet<string> BlockedGitGlobalOptions = new(StringComparer.Ordinal)
+    {
+        "-c", "--config-env", "--exec-path", "--git-dir", "--work-tree"
+    };
+
+    private static readonly HashSet<string> BlockedGitSubcommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "push", "pull", "fetch", "checkout", "switch", "reset", "merge", "rebase",
+        "branch", "tag", "commit", "restore", "clean", "stash", "cherry-pick",
+        "revert", "config", "alias", "remote", "worktree", "submodule",
+        "filter-branch", "fast-import", "daemon", "clone", "update-ref", "symbolic-ref"
+    };
+
+    private static readonly string[] BlockedGitOptions =
+    [
+        "--upload-pack", "--receive-pack", "--exec", "--ext-diff", "--textconv", "--output", "-o"
+    ];
+
+    private static bool TryValidateGitArguments(IReadOnlyList<string> args, out string error)
+    {
+        error = string.Empty;
+        foreach (var argument in args)
+        {
+            if (BlockedGitGlobalOptions.Contains(argument)
+                || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
+                    && argument.StartsWith(option + "=", StringComparison.Ordinal))
+                || BlockedGitOptions.Any(option => argument == option
+                    || (option.StartsWith("--", StringComparison.Ordinal)
+                        && argument.StartsWith(option + "=", StringComparison.Ordinal))))
+            {
+                error = "Git configuration, executable override, and external program options are blocked in agent sessions. Use the structured repo_status tool for repository status.";
+                return false;
+            }
+        }
+
+        var subcommand = GetGitSubcommand(args);
+        if (subcommand is not null && BlockedGitSubcommands.Contains(subcommand))
+        {
+            error = subcommand.Equals("push", StringComparison.OrdinalIgnoreCase)
+                ? "git push is blocked on the workstation command interface."
+                : "This git subcommand is blocked in agent sessions. Use the structured repo_status tool for repository status; repository synchronization is a human action in the ProjectBeacon interface.";
+            return false;
+        }
+
+        return true;
     }
 
     private static string? GetGitSubcommand(IReadOnlyList<string> args)
