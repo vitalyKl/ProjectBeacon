@@ -129,7 +129,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity store and assignable operator-role administration; the alpha still maps `User.IsAdmin` to SystemAdministrator. Lost-authenticator recovery, member disable/role changes, and organization suspension/closure are not exposed.
+- A separate operator identity store and assignable operator-role administration; the alpha still maps `User.IsAdmin` to SystemAdministrator. Lost-authenticator recovery and organization suspension/closure are not exposed.
 - Entitlement grants can be managed and evaluated, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
