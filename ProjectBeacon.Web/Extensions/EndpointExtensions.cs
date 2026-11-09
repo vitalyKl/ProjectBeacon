@@ -5,6 +5,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Localization;
 using ProjectBeacon.API.Endpoints;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Entities.Audit;
+using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Infrastructure.Data;
@@ -101,10 +105,36 @@ public static class EndpointExtensions
             return Results.Redirect("/admin/audit");
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
 
-        app.MapPost("/control/logout", async (HttpContext ctx) =>
+        app.MapPost("/control/logout", async (
+            HttpContext ctx,
+            IBeaconDbFactory dbFactory,
+            IAuditWriter auditWriter,
+            ILogger<EndpointExtensions> logger) =>
         {
             if (!ControlFormOriginGuard.IsAllowed(ctx))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            try
+            {
+                var tenant = new TenantContext();
+                tenant.Assign(null, null, unscoped: true);
+                await using var db = dbFactory.CreateDbContext(tenant);
+                auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    ctx.GetActor(),
+                    "platform.control_logout.succeeded",
+                    "User",
+                    ctx.GetActor().UserId?.ToString(),
+                    null,
+                    null,
+                    outcome: AuditOutcome.Success,
+                    detailsJson: """{"authMethod":"control-cookie"}"""));
+                await db.SaveChangesAsync(ctx.RequestAborted);
+            }
+            catch (Exception ex)
+            {
+                // A logging outage must not leave a user signed in to the Control Plane.
+                logger.LogWarning(ex, "Could not persist the Control Plane logout audit event.");
+            }
 
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
             return Results.Redirect("/control/login");
