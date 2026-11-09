@@ -2620,4 +2620,9 @@ orthstar</value>
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>現在のブランチに Upstream が設定されていません。</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>追跡対象の Upstream を取得できません。ワークステーションの Remote と認証情報を確認してください。</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作がタイムアウトしました。</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
+  <data name="Characters" xml:space="preserve"><value>文字</value></data>
 </root>

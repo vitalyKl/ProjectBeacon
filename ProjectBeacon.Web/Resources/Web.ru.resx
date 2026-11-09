@@ -2602,4 +2602,9 @@
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Для текущей ветки не настроен upstream.</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Не удалось получить данные upstream. Проверьте remote и учётные данные на рабочей станции.</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Время выполнения Git-операции истекло.</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>Редактировать</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>Просмотр</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
+  <data name="Characters" xml:space="preserve"><value>символов</value></data>
 </root>

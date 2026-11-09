@@ -2811,4 +2811,9 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>The current branch has no configured upstream.</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Could not fetch the tracked upstream. Check the remote and credentials on the workstation.</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>The Git operation timed out.</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>Edit</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>Preview</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>Show more</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>Show less</value></data>
+  <data name="Characters" xml:space="preserve"><value>characters</value></data>
 </root>
