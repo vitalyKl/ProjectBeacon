@@ -33,7 +33,7 @@ public sealed class AuditHttpTests
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
         Assert.Equal("text/csv", export.Content.Headers.ContentType?.MediaType);
         var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.Contains("AtUtc,ActorKind,ActorUserId", csv);
+        Assert.Contains("\"AtUtc\",\"ActorKind\",\"ActorUserId\"", csv);
         Assert.Contains("account.login.succeeded", csv);
 
         var invalidPage = await client.GetAsync("/v1/admin/audit?pageSize=201", TestContext.Current.CancellationToken);
