@@ -45,6 +45,17 @@ public class Project : Entity, IOrgScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Restores the nullable description from a historical content snapshot.</summary>
+    public void RestoreDescriptionFromHistory(string? description)
+    {
+        if (string.Equals(Description, description, StringComparison.Ordinal))
+            return;
+
+        Description = description;
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Update(string? name = null, string? description = null, string? reviewCheckCommand = null)
     {
         if (name is not null) Name = name;
