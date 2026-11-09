@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
@@ -294,6 +295,118 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.DoesNotContain("new-project-member@example.test", projectAccount.DetailsJson ?? string.Empty);
         Assert.True(await _seedDb.ProjectMembers.AnyAsync(
             m => m.ProjectId == _project.Id && m.UserId == projectRegistration.Value.UserId,
+            TestContext.Current.CancellationToken));
+    }
+
+
+    [Fact]
+    public async Task OrganizationAndProjectLifecycle_AreAuditedWithCorrectTenantScope()
+    {
+        var priorTenant = new TenantContext();
+        priorTenant.Assign(_project.Id, _org.Id, unscoped: false);
+
+        var createdOrg = await new CreateOrgHandler(_factory, priorTenant, _auditWriter)
+            .HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Created by audit test", null), AdminActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(createdOrg.Success, createdOrg.Error);
+
+        var orgCreatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.created" && e.TargetId == createdOrg.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(createdOrg.Value.Id, orgCreatedEvent.OrgId);
+        Assert.Null(orgCreatedEvent.ProjectId);
+
+        var renamedOrg = await new UpdateOrgHandler(_factory, _authorization, _auditWriter)
+            .HandleAsync(new UpdateOrgCommand(
+                new UpdateOrgRequest(createdOrg.Value.Id, "Renamed org", null), AdminActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(renamedOrg.Success, renamedOrg.Error);
+
+        var orgUpdatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "org.updated" && e.TargetId == createdOrg.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(createdOrg.Value.Id, orgUpdatedEvent.OrgId);
+        Assert.Null(orgUpdatedEvent.ProjectId);
+
+        var denied = await new UpdateOrgHandler(_factory, _authorization, _auditWriter)
+            .HandleAsync(new UpdateOrgCommand(
+                new UpdateOrgRequest(createdOrg.Value.Id, "Unauthorized rename", null),
+                Human(_invitee.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.False(denied.Success);
+
+        var orgTenant = new TenantContext();
+        orgTenant.Assign(null, _org.Id, unscoped: false);
+        var createdProject = await new CreateProjectHandler(_factory, _authorization, orgTenant, _auditWriter)
+            .HandleAsync(new CreateProjectCommand(
+                new CreateProjectRequest("Audited project", null, _org.Id), AdminActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(createdProject.Success, createdProject.Error);
+
+        var projectCreatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "project.created" && e.TargetId == createdProject.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_org.Id, projectCreatedEvent.OrgId);
+        Assert.Equal(createdProject.Value.Id, projectCreatedEvent.ProjectId);
+
+        var scopedActor = new ActorContext(
+            ActorType.Human, _admin.Id, true, null, null,
+            createdProject.Value.Id, _org.Id, ApiTokenCapability.None);
+        var updatedProject = await new UpdateProjectHandler(_factory, _authorization, _auditWriter)
+            .HandleAsync(new UpdateProjectCommand(
+                new UpdateProjectRequest(createdProject.Value.Id, "Updated audited project", null), scopedActor),
+                TestContext.Current.CancellationToken);
+        Assert.True(updatedProject.Success, updatedProject.Error);
+
+        var deletedProject = await new DeleteProjectHandler(_factory, _authorization, _auditWriter)
+            .HandleAsync(new DeleteProjectCommand(createdProject.Value.Id, scopedActor),
+                TestContext.Current.CancellationToken);
+        Assert.True(deletedProject.Success, deletedProject.Error);
+
+        var lifecycle = await _seedDb.AuditEvents
+            .Where(e => e.TargetType == "Project" && e.TargetId == createdProject.Value.Id.ToString())
+            .OrderBy(e => e.Action)
+            .Select(e => e.Action)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("project.created", lifecycle);
+        Assert.Contains("project.updated", lifecycle);
+        Assert.Contains("project.deleted", lifecycle);
+    }
+
+    [Fact]
+    public async Task DeviceEnrollmentRotationAndRevocation_AreAuditedWithoutDeviceSecrets()
+    {
+        var actor = AdminActor();
+        var create = new CreateDeviceHandler(_factory, auditWriter: _auditWriter);
+
+        var first = await create.HandleAsync(new CreateDeviceCommand(
+            new CreateDeviceRequest("Audit device", "audit-fingerprint", _admin.Id, Actor: actor)),
+            TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+        Assert.False(string.IsNullOrWhiteSpace(first.Value!.Token));
+
+        var enrolled = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "device.enrolled" && e.TargetId == first.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(first.Value.Token!, enrolled.DetailsJson ?? string.Empty);
+        Assert.DoesNotContain("audit-fingerprint", enrolled.DetailsJson ?? string.Empty);
+
+        var rotated = await create.HandleAsync(new CreateDeviceCommand(
+            new CreateDeviceRequest("Renamed audit device", "audit-fingerprint", _admin.Id, Actor: actor)),
+            TestContext.Current.CancellationToken);
+        Assert.True(rotated.Success, rotated.Error);
+        Assert.NotEqual(first.Value.Token, rotated.Value!.Token);
+        Assert.True(await _seedDb.AuditEvents.AnyAsync(
+            e => e.Action == "device.token.rotated" && e.TargetId == first.Value.Id.ToString(),
+            TestContext.Current.CancellationToken));
+
+        var revoked = await new RevokeDeviceHandler(_factory, _auditWriter)
+            .HandleAsync(new RevokeDeviceCommand(
+                new RevokeDeviceRequest(first.Value.Id, _admin.Id, actor)),
+                TestContext.Current.CancellationToken);
+        Assert.True(revoked.Success, revoked.Error);
+        Assert.True(await _seedDb.AuditEvents.AnyAsync(
+            e => e.Action == "device.revoked" && e.TargetId == first.Value.Id.ToString(),
             TestContext.Current.CancellationToken));
     }
 
