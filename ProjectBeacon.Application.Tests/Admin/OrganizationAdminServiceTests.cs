@@ -112,6 +112,30 @@ public sealed class OrganizationAdminServiceTests : IDisposable
     }
 
 
+
+    [Fact]
+    public async Task InviteOwner_ExistingOrganization_CommitsInvitationBeforeSendingEmail()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        _seedDb.Users.Add(_admin);
+        var org = Org.Create("Existing customer");
+        _seedDb.Orgs.Add(org);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var invited = await CreateService().InviteOwnerAsync(actor, org.Id, "OWNER@existing.example");
+
+        Assert.True(invited.Success, invited.Error);
+        Assert.Equal("owner@existing.example", invited.Value!.Email);
+        Assert.Single(_email.Sent);
+
+        var persisted = await _seedDb.OrgInvites.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(x => x.Id == invited.Value.InviteId, TestContext.Current.CancellationToken);
+        Assert.NotNull(persisted);
+        Assert.Equal(InviteStatus.Pending, persisted.Status);
+        Assert.NotEqual(invited.Value.InviteUrl.Split("token=")[1], persisted.TokenHash);
+    }
+
     [Fact]
     public async Task ExpiredOwnerInvitationsAreNotCountedAsPendingOrShownAsPending()
     {

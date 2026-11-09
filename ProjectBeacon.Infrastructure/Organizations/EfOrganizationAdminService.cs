@@ -299,6 +299,7 @@ public sealed class EfOrganizationAdminService(
         auditWriter.Stage(db, Audit(actor, "platform.organization.owner_invited", "OrgInvite",
             invite.Id, orgId, now, """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var url = InviteUrl(rawToken);
         await TrySendInviteAsync(email, org.Name, url, ct);
