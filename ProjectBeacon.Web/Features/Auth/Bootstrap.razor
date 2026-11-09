@@ -15,6 +15,8 @@
 
 <PageTitle>@L["Bootstrap"]</PageTitle>
 
+@if (!_blocked)
+{
 <MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
     <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Bootstrap"]</MudText>
 
@@ -59,13 +61,16 @@
         </MudAlert>
     }
 </MudPaper>
+}
 
 @code {
     private bool _success;
+    private bool _blocked;
 
     protected override void OnInitialized()
     {
-        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        _blocked = !ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration);
+        if (_blocked)
             Navigation.NavigateTo("/", forceLoad: true);
     }
 
@@ -76,6 +81,12 @@
 
     private async Task HandleBootstrap()
     {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
         _error = null;
         _loading = true;
         StateHasChanged();
