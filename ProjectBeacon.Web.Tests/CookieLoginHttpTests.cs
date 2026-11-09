@@ -222,7 +222,10 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
 
     public static async Task<string> GetBootstrapPasswordAsync(HttpClient client)
     {
+        // Bootstrap is a Control Plane-only operation. The subsequent cookie-login
+        // request in these tests intentionally uses the customer host.
         var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+        request.Headers.Host = "control.projectbeacon.tech";
         request.Content = System.Net.Http.Json.JsonContent.Create(new { });
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", BootstrapToken);
         var boot = await client.SendAsync(request);
