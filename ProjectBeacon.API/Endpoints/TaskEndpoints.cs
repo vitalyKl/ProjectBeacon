@@ -72,13 +72,14 @@ public static class TaskEndpoints
     private static async Task<IResult> UpdateTask(
         Guid taskId,
         [FromBody] UpdateTaskRequest request,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request), ct);
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -197,9 +198,15 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
+    private static async Task<IResult> AddReviewNotes(
+        Guid taskId,
+        [FromBody] string reviewNotes,
+        [FromHeader(Name = "If-Match")] int? expectedContentRevision,
+        HttpContext ctx,
+        AddReviewNotesHandler handler)
     {
-        var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
+        var result = await handler.HandleAsync(new AddReviewNotesCommand(
+            new AddReviewNotesRequest(taskId, reviewNotes, expectedContentRevision), ctx.GetActor()));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -209,7 +216,7 @@ public static class TaskEndpoints
     private static TaskItemDto MapTaskResponse(TaskItemDto dto) =>
         new(dto.Id, dto.Title, dto.Description, dto.Status, dto.Priority, dto.Type, dto.SubStage,
             dto.ProjectId, dto.LabelId, dto.MilestoneId, dto.ReviewNotes, dto.CreatedAt, dto.CompletedAt,
-            dto.Comments, dto.Dependencies);
+            dto.Comments, dto.Dependencies, dto.ContentRevision);
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
