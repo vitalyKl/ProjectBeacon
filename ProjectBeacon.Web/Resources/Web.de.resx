@@ -2588,4 +2588,127 @@ orthstar</value>
 <data name="NoOrganizationAccess" xml:space="preserve">
     <value>Sie gehören noch keiner Organisation an. Nehmen Sie eine Einladung an oder wenden Sie sich an den Servicebetreiber.</value>
   </data>
+<data name="AuditHistory" xml:space="preserve">
+    <value>Auditverlauf</value>
+  </data>
+<data name="AuditHistoryLead" xml:space="preserve">
+    <value>Sicherheits- und Operatoraktivitäten über Organisationen und Projekte hinweg. Zeiten werden in UTC angezeigt.</value>
+  </data>
+<data name="AuditAccessDenied" xml:space="preserve">
+    <value>Sie haben keine Berechtigung, den Auditverlauf anzuzeigen.</value>
+  </data>
+<data name="AuditFilterOrg" xml:space="preserve">
+    <value>Organisations-ID</value>
+  </data>
+<data name="AuditFilterProject" xml:space="preserve">
+    <value>Projekt-ID</value>
+  </data>
+<data name="AuditFilterActor" xml:space="preserve">
+    <value>Benutzer-ID des Akteurs</value>
+  </data>
+<data name="AuditFilterActorToken" xml:space="preserve">
+    <value>API-Token-ID des Akteurs</value>
+  </data>
+<data name="AuditFilterActorDevice" xml:space="preserve">
+    <value>Geräte-ID des Akteurs</value>
+  </data>
+<data name="AuditFilterAction" xml:space="preserve">
+    <value>Aktionscode</value>
+  </data>
+<data name="AuditFilterTargetType" xml:space="preserve">
+    <value>Zieltyp</value>
+  </data>
+<data name="AuditFilterTargetId" xml:space="preserve">
+    <value>Ziel-ID</value>
+  </data>
+<data name="AuditFilterFromUtc" xml:space="preserve">
+    <value>Von (UTC)</value>
+  </data>
+<data name="AuditFilterToUtc" xml:space="preserve">
+    <value>Bis (UTC)</value>
+  </data>
+<data name="AuditActorKind" xml:space="preserve">
+    <value>Akteurstyp</value>
+  </data>
+<data name="AuditOutcome" xml:space="preserve">
+    <value>Ergebnis</value>
+  </data>
+<data name="All" xml:space="preserve">
+    <value>Alle</value>
+  </data>
+<data name="ApplyFilters" xml:space="preserve">
+    <value>Filter anwenden</value>
+  </data>
+<data name="ClearFilters" xml:space="preserve">
+    <value>Filter zurücksetzen</value>
+  </data>
+<data name="AuditPageSummary" xml:space="preserve">
+    <value>{0} Ereignisse · Seite {1} von {2}</value>
+  </data>
+<data name="AuditNoEvents" xml:space="preserve">
+    <value>Keine Auditereignisse entsprechen diesen Filtern.</value>
+  </data>
+<data name="AuditTimestamp" xml:space="preserve">
+    <value>Zeit (UTC)</value>
+  </data>
+<data name="AuditActor" xml:space="preserve">
+    <value>Akteur</value>
+  </data>
+<data name="AuditAction" xml:space="preserve">
+    <value>Aktion</value>
+  </data>
+<data name="AuditTarget" xml:space="preserve">
+    <value>Ziel</value>
+  </data>
+<data name="AuditScope" xml:space="preserve">
+    <value>Bereich</value>
+  </data>
+<data name="AuditDetails" xml:space="preserve">
+    <value>Details</value>
+  </data>
+<data name="AuditActorHuman" xml:space="preserve">
+    <value>Benutzer</value>
+  </data>
+<data name="AuditActorApiToken" xml:space="preserve">
+    <value>API-Token</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Gerät</value>
+  </data>
+<data name="AuditActorWorker" xml:space="preserve">
+    <value>Worker</value>
+  </data>
+<data name="AuditActorSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+<data name="AuditOutcomeSuccess" xml:space="preserve">
+    <value>Erfolgreich</value>
+  </data>
+<data name="AuditOutcomeDenied" xml:space="preserve">
+    <value>Verweigert</value>
+  </data>
+<data name="AuditOutcomeFailed" xml:space="preserve">
+    <value>Fehlgeschlagen</value>
+  </data>
+<data name="AuditProjectScope" xml:space="preserve">
+    <value>Projekt {0}</value>
+  </data>
+<data name="AuditOrgScope" xml:space="preserve">
+    <value>Organisation {0}</value>
+  </data>
+<data name="AuditPlatformScope" xml:space="preserve">
+    <value>Plattformweit</value>
+  </data>
+<data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Organisations-, Projekt- und Akteurfilter müssen gültige GUIDs sein.</value>
+  </data>
+<data name="AuditExportCsv" xml:space="preserve">
+    <value>CSV exportieren</value>
+  </data>
+<data name="AuditExportTooLarge" xml:space="preserve">
+    <value>Der Export überschreitet {0} Ereignisse. Grenzen Sie die Filter ein und versuchen Sie es erneut.</value>
+  </data>
+<data name="AuditExported" xml:space="preserve">
+    <value>{0} Auditereignisse exportiert.</value>
+  </data>
 </root>
