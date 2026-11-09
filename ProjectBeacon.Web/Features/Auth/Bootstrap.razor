@@ -1,6 +1,8 @@
 @page "/control/bootstrap"
 @layout AuthLayout
 @using Microsoft.AspNetCore.Authorization
+@using ProjectBeacon.Web.Authentication
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @attribute [AllowAnonymous]
 @using Microsoft.Extensions.Localization
 @using MudBlazor
@@ -60,6 +62,13 @@
 
 @code {
     private bool _success;
+
+    protected override void OnInitialized()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+            Navigation.NavigateTo("/", forceLoad: true);
+    }
+
     private string _password = string.Empty;
     private string _token = string.Empty;
     private string? _error;
