@@ -56,6 +56,9 @@ public sealed class TaskItemTests
         var task = TaskItem.Create("Task", Guid.NewGuid());
 
         Assert.Equal(1, task.ContentRevision);
+        var describedAtCreation = TaskItem.Create("With description", Guid.NewGuid(), description: "Initial");
+        Assert.Equal("Initial", describedAtCreation.Description);
+        Assert.Equal(1, describedAtCreation.ContentRevision);
 
         task.Update(title: "Renamed", description: null);
         Assert.Equal(1, task.ContentRevision);
