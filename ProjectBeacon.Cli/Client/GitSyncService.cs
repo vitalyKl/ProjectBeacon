@@ -91,12 +91,9 @@ internal sealed class GitSyncService
 
             if (!string.Equals(state.Remote, ".", StringComparison.Ordinal))
             {
-                var validUpstream = string.Equals(state.Remote, ".", StringComparison.Ordinal)
-                    ? BranchRefPattern.IsMatch(state.UpstreamRef)
-                    : RemoteTrackingRefPattern.IsMatch(state.UpstreamRef);
-                if ((!RemoteNamePattern.IsMatch(state.Remote) && !string.Equals(state.Remote, ".", StringComparison.Ordinal))
+                if (!RemoteNamePattern.IsMatch(state.Remote)
                     || !BranchRefPattern.IsMatch(state.MergeRef)
-                    || !validUpstream)
+                    || !RemoteTrackingRefPattern.IsMatch(state.UpstreamRef))
                     return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, "The configured upstream ref is not a supported branch ref."));
 
                 var fetch = await RunGitAsync(
@@ -174,6 +171,8 @@ internal sealed class GitSyncService
         try
         {
             var filters = await ReadFilterDriversAsync(repositoryRoot, hooksDirectory, ct);
+            if (filters.Error is not null)
+                return JsonSerializer.Serialize(new { untrustedRepositoryData = true, error = filters.Error });
             var state = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
             return JsonSerializer.Serialize(new
             {

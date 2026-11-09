@@ -363,10 +363,21 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Interlocked.Exchange(ref _activeSessionLease, null)?.Dispose();
         if (_preserve)
+        {
+            Interlocked.Exchange(ref _activeSessionLease, null)?.Dispose();
             return;
-        await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot, _disabledFilterDrivers);
+        }
+
+        using var repositoryLock = await GitRepositoryOperationGate.AcquireAsync(_repositoryRoot, CancellationToken.None);
+        try
+        {
+            await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot, _disabledFilterDrivers);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _activeSessionLease, null)?.Dispose();
+        }
     }
 
     private static async Task<(AgentSessionWorktree? Workspace, string? Error)> FailCreateAsync(
