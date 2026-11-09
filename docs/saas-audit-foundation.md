@@ -58,8 +58,8 @@ same unit of work as their state changes:
   `device.revoked`). These user-owned, non-tenant devices are written through an explicit
   unscoped context; the event records only the actor/device ids and fixed state codes, never
   the raw device token or token hash.
-- Account registration, password-reset requests, password resets, password changes, and login
-  success/failure/denial (`account.registered`, `account.password_*`, `account.login.*`). Events
+- Account registration, logout, password-reset requests, password resets, password changes, and login
+  success/failure/denial (`account.registered`, `account.logout`, `account.password_*`, `account.login.*`). Events
   use global unscoped account storage, never include email addresses or password/token material,
   and use fixed reason/authentication method codes.
 - Authenticated HTTP 403 responses (`authorization.denied`) are recorded by API middleware in
@@ -103,7 +103,7 @@ registration through an invitation.
 
 A human-operator-only `GET /v1/admin/audit` endpoint exposes the bounded `IAuditReader`
 query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted account state,
-and supports organization, project, time, action, actor and outcome filters. API tokens, devices
+and supports organization, project, time, action, human/API-token/device actor ids and kind, and outcome filters. API tokens, devices
 and workers cannot use this endpoint. `GET /v1/admin/audit/export` uses the separate `AuditExport`
 permission and streams a stable, bounded result set into a spreadsheet-safe UTF-8 CSV (10,000-row
 cap, formula-injection escaping, no request-controlled filenames).
