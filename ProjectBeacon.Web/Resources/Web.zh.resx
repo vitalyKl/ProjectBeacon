@@ -2590,4 +2590,79 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>平台管理</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>审计日志</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>记录安全和操作员活动的只追加日志，仅平台操作员可以访问。</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>操作代码</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>主体类型</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>用户 ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>目标</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>范围</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>时间</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>组织 ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>项目 ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>开始时间 (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>结束时间 (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>应用筛选</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>导出 CSV</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>上一页</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>下一页</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>第 {0} 页</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>事件数：{0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>没有符合筛选条件的审计事件。</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>没有读取平台审计日志的权限。</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>其中一个标识符不是有效的 GUID。</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>请检查主体、结果和 UTC 日期筛选条件。</value>
+  </data>
 </root>
