@@ -41,11 +41,14 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
-    public async Task RecoverPage_AccessibleToAnonymous()
+    public async Task ControlRecoverPage_HasDedicatedRoute()
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient();
-        var response = await client.GetAsync("/recover", cancellationToken: TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/control/recover",
+            cancellationToken: TestContext.Current.CancellationToken);
+
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
