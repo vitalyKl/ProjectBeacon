@@ -35,10 +35,16 @@ public sealed class ControlHostMiddlewareTests
         Assert.Equal("no-store", context.Response.Headers.CacheControl.ToString());
     }
 
-    [Fact]
-    public async Task ControlHost_AllowsAuditAndItsApi()
+    [Theory]
+    [InlineData("/v1/admin/audit")]
+    [InlineData("/app.css")]
+    [InlineData("/shell.js")]
+    [InlineData("/brand/beacon-mark.svg")]
+    [InlineData("/_framework/blazor.web.js")]
+    [InlineData("/_content/MudBlazor/MudBlazor.min.css")]
+    public async Task ControlHost_AllowsAuditApiAndRequiredShellAssets(string path)
     {
-        var context = Context(ControlHost, "/v1/admin/audit");
+        var context = Context(ControlHost, path);
         var nextCalled = false;
         var middleware = new ControlHostMiddleware(
             _ => { nextCalled = true; return Task.CompletedTask; },
@@ -57,6 +63,8 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/v1/auth/login")]
     [InlineData("/v1/tasks")]
     [InlineData("/v1/admin/future-export.csv")]
+    [InlineData("/dashboard/index.html")]
+    [InlineData("/future-export.csv")]
     public async Task ControlHost_DoesNotExposeCustomerOrUnlistedAdminRoutes(string path)
     {
         var context = Context(ControlHost, path);
