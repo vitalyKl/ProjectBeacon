@@ -2582,4 +2582,79 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Relative Repository-Pfade eingeben, einen pro Zeile. Für dieses Profil erforderlich.</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>Plattformverwaltung</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>Auditprotokoll</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>Unveränderliches Protokoll von Sicherheits- und Operatoraktionen. Nur Plattformoperatoren haben Zugriff.</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>Aktionscode</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>Akteurstyp</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>Benutzer-ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>Ergebnis</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>Ziel</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>Geltungsbereich</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>Zeit</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>Organisations-ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>Projekt-ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>Von (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>Bis (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>Filter anwenden</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>Filter löschen</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>CSV exportieren</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>Zurück</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>Weiter</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>Seite {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>Ereignisse: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>Keine Auditereignisse für diese Filter.</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>Keine Berechtigung zum Lesen des Plattform-Auditprotokolls.</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Eine Kennung hat kein gültiges GUID-Format.</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>Akteurstyp, Ergebnis und UTC-Daten prüfen.</value>
+  </data>
 </root>
