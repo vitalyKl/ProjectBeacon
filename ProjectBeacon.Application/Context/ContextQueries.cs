@@ -51,8 +51,18 @@ public class GetContextNodeHandler
 public class DeleteContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public DeleteContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteContextNodeHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public DeleteContextNodeHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
     {
@@ -63,9 +73,11 @@ public class DeleteContextNodeHandler
         if (section is null)
             return Result.Failure("Context node not found.");
 
+        section.Delete();
         db.ContextSections.Remove(section);
-        await db.SaveChangesAsync(ct);
-
-        return Result.Ok();
+        var saved = await _contentWriter.SaveAsync(db, section, "Human", null, ct, deleted: true);
+        return saved.Success
+            ? Result.Ok()
+            : Result.Failure(saved.Error ?? "Context section delete conflict.", ErrorKind.Conflict);
     }
 }
