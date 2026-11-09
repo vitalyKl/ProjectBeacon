@@ -29,6 +29,13 @@ public sealed class AuditHttpTests
         Assert.Equal(1, page.GetProperty("totalCount").GetInt64());
         Assert.Equal(1, page.GetProperty("items").GetArrayLength());
 
+        var export = await client.GetAsync("/v1/admin/audit/export", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        Assert.Contains("text/csv", export.Content.Headers.ContentType?.MediaType);
+        var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("AtUtc,ActorKind,ActorUserId", csv);
+        Assert.Contains("account.login.succeeded", csv);
+
         var invalidPage = await client.GetAsync("/v1/admin/audit?pageSize=201", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, invalidPage.StatusCode);
 
@@ -56,6 +63,8 @@ public sealed class AuditHttpTests
 
         var forbidden = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        var forbiddenExport = await client.GetAsync("/v1/admin/audit/export", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenExport.StatusCode);
 
         var deniedCreate = await client.PostAsJsonAsync(
             "/v1/projects",
