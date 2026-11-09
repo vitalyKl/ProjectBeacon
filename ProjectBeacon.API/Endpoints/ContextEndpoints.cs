@@ -70,8 +70,11 @@ public static class ContextEndpoints
     {
         if (!IsHumanOrActorKnowledgeWriter(context))
             return Results.Forbid();
+        var actor = context.GetActor();
+        var agentId = context.User.FindFirst("pipeline_subtask_id")?.Value
+            ?? context.User.FindFirst("pipeline_session_id")?.Value;
         var result = await handler.HandleProposalAsync(
-            new CreateConstraintRequest(projectId, body.Body, body.Kind), ct);
+            new CreateConstraintRequest(projectId, body.Body, body.Kind, actor, agentId), ct);
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints/propose", result.Value)
             : result.FromResult();
@@ -216,9 +219,13 @@ public static class ContextEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)
+    private static async Task<IResult> CreateConstraint(
+        Guid projectId,
+        [FromBody] CreateConstraintBody body,
+        HttpContext context,
+        CreateConstraintHandler handler)
     {
-        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind));
+        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind, context.GetActor()));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints", result.Value)
             : result.FromResult();
