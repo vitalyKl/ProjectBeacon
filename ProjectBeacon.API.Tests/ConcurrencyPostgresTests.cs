@@ -127,10 +127,13 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         // Create revision 1 before both writers load the same task revision.
         await using (var seed = _postgres.CreateAdminContext())
         {
-            var task = await seed.Tasks.SingleAsync(
-                item => item.Id == taskId, TestContext.Current.CancellationToken);
-            new ContentWriter().AddVersion(seed, task, "System", "race-test-seed");
-            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            using (TenantScope.EnterUnscoped())
+            {
+                var task = await seed.Tasks.SingleAsync(
+                    item => item.Id == taskId, TestContext.Current.CancellationToken);
+                new ContentWriter().AddVersion(seed, task, "System", "race-test-seed");
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
         }
 
         var factory = _postgres.CreateFactory();
