@@ -2898,4 +2898,10 @@ No Beacon-hosted coding agent.</value>
 <data name="AuditExported" xml:space="preserve">
     <value>Exported {0} audit events.</value>
   </data>
+<data name="AuditFilterActorToken" xml:space="preserve">
+    <value>Actor API-token ID</value>
+  </data>
+<data name="AuditFilterActorDevice" xml:space="preserve">
+    <value>Actor device ID</value>
+  </data>
 </root>
