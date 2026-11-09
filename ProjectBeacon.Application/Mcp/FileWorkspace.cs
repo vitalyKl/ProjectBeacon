@@ -14,7 +14,7 @@ public sealed class FileWorkspace
 {
     public const int DefaultReadPageSize = 12 * 1024;
     public const int MaxReadPageSize = 12 * 1024;
-{
+
     public string Root { get; }
 
     public FileWorkspace(string root)
