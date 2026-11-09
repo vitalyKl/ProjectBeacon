@@ -2781,4 +2781,79 @@ No Beacon-hosted coding agent.</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Enter repository-relative paths, one per line. Required by this profile.</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>Platform administration</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>Audit log</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>Append-only security and operator activity. Access is limited to platform operators.</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>Action code</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>Actor kind</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>Actor user ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>Outcome</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>Target</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>Organization ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>Project ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>From (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>To (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>Apply filters</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>Export CSV</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>Page {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>Events: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>No audit events match these filters.</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>You do not have permission to read the platform audit log.</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>One of the identifiers is not a valid GUID.</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>Check the actor, outcome and UTC date filters.</value>
+  </data>
 </root>
