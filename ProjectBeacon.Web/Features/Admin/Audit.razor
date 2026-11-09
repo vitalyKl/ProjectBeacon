@@ -1,11 +1,12 @@
 @page "/admin/audit"
-@layout MainLayout
-@attribute [Authorize]
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
 @using System.Globalization
 @using ProjectBeacon.Application.Admin
 @using ProjectBeacon.Application.Audit
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Domain.Entities.Audit
+@using ProjectBeacon.Web.Authentication
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
