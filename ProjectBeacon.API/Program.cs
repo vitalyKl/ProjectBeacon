@@ -129,6 +129,7 @@ app.UseMiddleware<ApiTokenAuthMiddleware>();
 app.UseMiddleware<DeviceActorBoundaryMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
 app.UseAuthorization();
+app.UseMiddleware<AuditDeniedRequestMiddleware>();
 
 app.MapBeaconApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
