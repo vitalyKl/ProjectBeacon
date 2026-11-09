@@ -6,6 +6,7 @@ using Application.Authorization;
 using Application.Identity;
 using Application.Security;
 using Domain.Entities.Identity;
+using Domain.Entities.Audit;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
