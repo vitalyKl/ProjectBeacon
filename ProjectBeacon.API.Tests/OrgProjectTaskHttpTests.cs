@@ -394,6 +394,46 @@ public sealed class OrgProjectTaskHttpTests
     }
 
     [Fact]
+    public async Task ContextImport_RecordsAuthenticatedHumanAttribution()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var userId = me.GetProperty("id").GetGuid();
+        var org = await PostJson(client, "/v1/orgs", new { name = "Import Attribution Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Import Attribution Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var imported = await PostJson(client, $"/v1/projects/{projectId}/context/import", new[]
+        {
+            new
+            {
+                fileName = "AGENTS.md",
+                content = "# Imported instructions\n\nPreserve source attribution.",
+                sourcePath = "AGENTS.md"
+            }
+        });
+        Assert.Equal(1, imported.GetProperty("created").GetInt32());
+
+        var nodes = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
+        var importedNode = nodes.EnumerateArray()
+            .Single(node => node.GetProperty("sectionId").GetString() == "agents");
+        var targetId = importedNode.GetProperty("id").GetGuid();
+
+        var history = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/content-versions?targetKind=0&targetId={targetId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, history.GetArrayLength());
+        Assert.Equal("Human", history[0].GetProperty("changedByType").GetString());
+        Assert.Equal(userId.ToString("D"), history[0].GetProperty("changedById").GetString());
+    }
+
+    [Fact]
     public async Task NonMember_CannotListForeignProjectTasks()
     {
         await using var factory = new AuthApiFactory();
