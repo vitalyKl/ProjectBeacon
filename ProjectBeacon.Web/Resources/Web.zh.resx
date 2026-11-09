@@ -2596,4 +2596,127 @@ orthstar</value>
 <data name="NoOrganizationAccess" xml:space="preserve">
     <value>您尚未加入任何组织。请接受组织邀请或联系服务运营方。</value>
   </data>
+<data name="AuditHistory" xml:space="preserve">
+    <value>审计历史</value>
+  </data>
+<data name="AuditHistoryLead" xml:space="preserve">
+    <value>跨组织和项目的安全及运营操作记录。时间以 UTC 显示。</value>
+  </data>
+<data name="AuditAccessDenied" xml:space="preserve">
+    <value>您没有查看审计历史的权限。</value>
+  </data>
+<data name="AuditFilterOrg" xml:space="preserve">
+    <value>组织 ID</value>
+  </data>
+<data name="AuditFilterProject" xml:space="preserve">
+    <value>项目 ID</value>
+  </data>
+<data name="AuditFilterActor" xml:space="preserve">
+    <value>操作者用户 ID</value>
+  </data>
+<data name="AuditFilterActorToken" xml:space="preserve">
+    <value>操作者 API 令牌 ID</value>
+  </data>
+<data name="AuditFilterActorDevice" xml:space="preserve">
+    <value>操作者设备 ID</value>
+  </data>
+<data name="AuditFilterAction" xml:space="preserve">
+    <value>操作代码</value>
+  </data>
+<data name="AuditFilterTargetType" xml:space="preserve">
+    <value>目标类型</value>
+  </data>
+<data name="AuditFilterTargetId" xml:space="preserve">
+    <value>目标 ID</value>
+  </data>
+<data name="AuditFilterFromUtc" xml:space="preserve">
+    <value>开始时间 (UTC)</value>
+  </data>
+<data name="AuditFilterToUtc" xml:space="preserve">
+    <value>结束时间 (UTC)</value>
+  </data>
+<data name="AuditActorKind" xml:space="preserve">
+    <value>操作者类型</value>
+  </data>
+<data name="AuditOutcome" xml:space="preserve">
+    <value>结果</value>
+  </data>
+<data name="All" xml:space="preserve">
+    <value>全部</value>
+  </data>
+<data name="ApplyFilters" xml:space="preserve">
+    <value>应用筛选</value>
+  </data>
+<data name="ClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+<data name="AuditPageSummary" xml:space="preserve">
+    <value>共 {0} 个事件 · 第 {1}/{2} 页</value>
+  </data>
+<data name="AuditNoEvents" xml:space="preserve">
+    <value>没有符合这些筛选条件的审计事件。</value>
+  </data>
+<data name="AuditTimestamp" xml:space="preserve">
+    <value>时间 (UTC)</value>
+  </data>
+<data name="AuditActor" xml:space="preserve">
+    <value>操作者</value>
+  </data>
+<data name="AuditAction" xml:space="preserve">
+    <value>操作</value>
+  </data>
+<data name="AuditTarget" xml:space="preserve">
+    <value>目标</value>
+  </data>
+<data name="AuditScope" xml:space="preserve">
+    <value>范围</value>
+  </data>
+<data name="AuditDetails" xml:space="preserve">
+    <value>详情</value>
+  </data>
+<data name="AuditActorHuman" xml:space="preserve">
+    <value>用户</value>
+  </data>
+<data name="AuditActorApiToken" xml:space="preserve">
+    <value>API 令牌</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>设备</value>
+  </data>
+<data name="AuditActorWorker" xml:space="preserve">
+    <value>工作进程</value>
+  </data>
+<data name="AuditActorSystem" xml:space="preserve">
+    <value>系统</value>
+  </data>
+<data name="AuditOutcomeSuccess" xml:space="preserve">
+    <value>成功</value>
+  </data>
+<data name="AuditOutcomeDenied" xml:space="preserve">
+    <value>已拒绝</value>
+  </data>
+<data name="AuditOutcomeFailed" xml:space="preserve">
+    <value>失败</value>
+  </data>
+<data name="AuditProjectScope" xml:space="preserve">
+    <value>项目 {0}</value>
+  </data>
+<data name="AuditOrgScope" xml:space="preserve">
+    <value>组织 {0}</value>
+  </data>
+<data name="AuditPlatformScope" xml:space="preserve">
+    <value>全平台</value>
+  </data>
+<data name="AuditInvalidGuid" xml:space="preserve">
+    <value>组织、项目和操作者筛选项必须是有效的 GUID。</value>
+  </data>
+<data name="AuditExportCsv" xml:space="preserve">
+    <value>导出 CSV</value>
+  </data>
+<data name="AuditExportTooLarge" xml:space="preserve">
+    <value>导出超过 {0} 个事件。请缩小筛选范围后重试。</value>
+  </data>
+<data name="AuditExported" xml:space="preserve">
+    <value>已导出 {0} 个审计事件。</value>
+  </data>
 </root>
