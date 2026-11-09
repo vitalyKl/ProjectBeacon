@@ -8,7 +8,7 @@ using ProjectBeacon.API;
 public static class BeaconApi
 {
     /// <summary>
-    /// Maps every <c>/v1</c> group onto the host: version, auth, orgs, projects, tasks, milestones, work, pipeline, context, labels, reports, evals, decisions, models, devices, and chat.
+    /// Maps every <c>/v1</c> group onto the host: version, auth, orgs, projects, tasks, milestones, work, pipeline, context, labels, reports, evals, decisions, models, devices, audit, and chat.
     /// </summary>
     public static IEndpointRouteBuilder MapBeaconApi(this IEndpointRouteBuilder app)
     {
@@ -29,6 +29,7 @@ public static class BeaconApi
         app.MapDecisionEndpoints();
         app.MapModelEndpoints();
         app.MapDeviceEndpoints();
+        app.MapAuditEndpoints();
         app.MapChatEndpoints();
         return app;
     }
