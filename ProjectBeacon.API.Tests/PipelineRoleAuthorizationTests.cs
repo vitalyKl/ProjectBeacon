@@ -32,6 +32,8 @@ public sealed class PipelineRoleAuthorizationTests
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         var nodeId = Guid.NewGuid();
+        var decisionId = Guid.NewGuid();
+        var constraintId = Guid.NewGuid();
 
         Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
@@ -49,10 +51,21 @@ public sealed class PipelineRoleAuthorizationTests
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
             HttpMethods.Get, $"/v1/projects/{projectId:D}/decisions",
             allowedMcpTools: [McpToolNames.ListDecisions]));
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
+            HttpMethods.Get, $"/v1/projects/{projectId:D}/decisions/{decisionId:D}",
+            allowedMcpTools: [McpToolNames.GetDecision]));
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
+            HttpMethods.Get, $"/v1/projects/{projectId:D}/constraints/{constraintId:D}",
+            allowedMcpTools: [McpToolNames.GetConstraint]));
 
         Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
             HttpMethods.Get, $"/v1/projects/{projectId:D}/context/nodes"));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, null,
+            HttpMethods.Get, $"/v1/projects/{projectId:D}/decisions/{decisionId:D}"));
     }
 
     [Fact]

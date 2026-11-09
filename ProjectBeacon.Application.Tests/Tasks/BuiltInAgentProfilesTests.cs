@@ -50,7 +50,9 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.ListContextNodes, verifier.Tools);
         Assert.Contains(McpToolNames.GetContextNode, verifier.Tools);
         Assert.Contains(McpToolNames.ListDecisions, verifier.Tools);
+        Assert.Contains(McpToolNames.GetDecision, verifier.Tools);
         Assert.Contains(McpToolNames.ListConstraints, verifier.Tools);
+        Assert.Contains(McpToolNames.GetConstraint, verifier.Tools);
         Assert.DoesNotContain(McpToolNames.ContextCreateDraft, verifier.Tools);
 
         var knowledge = AssertProfile("knowledge-curator");
@@ -93,6 +95,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.AgentProfileContextTools);
         Assert.Contains(McpToolNames.ListContextNodes, PipelineToolPolicy.AgentProfileContextTools);
         Assert.Contains(McpToolNames.GetContextNode, PipelineToolPolicy.AgentProfileContextTools);
+        Assert.Contains(McpToolNames.GetDecision, PipelineToolPolicy.AgentProfileContextTools);
+        Assert.Contains(McpToolNames.GetConstraint, PipelineToolPolicy.AgentProfileContextTools);
         Assert.DoesNotContain(McpToolNames.ActivateConstraint, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
         Assert.DoesNotContain(McpToolNames.AcceptDecision, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
         foreach (var profile in BuiltInAgentProfiles.All)
