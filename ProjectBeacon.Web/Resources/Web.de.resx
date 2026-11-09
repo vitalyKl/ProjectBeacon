@@ -2589,7 +2589,7 @@ orthstar</value>
     <value>Auditprotokoll</value>
   </data>
   <data name="AuditLead" xml:space="preserve">
-    <value>Unveränderliches Protokoll von Sicherheits- und Operatoraktionen. Nur Plattformoperatoren haben Zugriff.</value>
+    <value>Sicherheits- und Operatoraktivitäten über Organisationen und Projekte hinweg. Ereigniszeiten werden in der lokalen Browser-Zeitzone angezeigt; Datumsfilter und CSV-Zeitstempel verwenden UTC.</value>
   </data>
   <data name="AuditAction" xml:space="preserve">
     <value>Aktionscode</value>
@@ -2610,7 +2610,7 @@ orthstar</value>
     <value>Geltungsbereich</value>
   </data>
   <data name="AuditWhen" xml:space="preserve">
-    <value>Zeit</value>
+    <value>Zeit (lokal)</value>
   </data>
   <data name="AuditOrgId" xml:space="preserve">
     <value>Organisations-ID</value>
@@ -2656,5 +2656,17 @@ orthstar</value>
   </data>
   <data name="AuditInvalidFilter" xml:space="preserve">
     <value>Akteurstyp, Ergebnis und UTC-Daten prüfen.</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>API-Token-ID des Akteurs</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Geräte-ID des Akteurs</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>Zieltyp</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>Ziel-ID</value>
   </data>
 </root>
