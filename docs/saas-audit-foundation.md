@@ -98,15 +98,23 @@ The platform-operator HTTP API exposes:
   `nosniff`.
 
 Both endpoints require an authenticated human and an `AdminActor` returned by `IAdminGate`.
-The Blazor operator console at `/admin/audit` provides the same filters, paging, event details,
-and CSV download. Its navigation item is shown only to accounts whose authenticated ticket
-identifies them as system administrators; the page still revalidates the account through
-`IAdminGate` before reading any audit data.
+The Blazor operator console is hosted at `https://control.projectbeacon.tech/admin/audit`, not
+under the customer application's origin. The customer Web host returns `404` for operator,
+bootstrap, and break-glass routes. The standalone public API host does not serve operator
+endpoints at all. The Web host exposes the audit API only when the request uses the configured
+Control Plane hostname. See `docs/control-plane-access.md` for the route and deployment boundary.
 
-There is no separate audit login endpoint. Operators sign in through the shared human
-authentication endpoint `POST /v1/auth/login`; the audit page and each audit API request then
-enforce the operator permission independently. Audit events are written by server-side
-application handlers, not through a public client-writable audit endpoint.
+Operators sign in on `/control/login` through the separate
+`POST /v1/auth/control-cookie-login` endpoint. A successful password check issues the host-only
+`BeaconControlAuth` cookie only to a persisted platform administrator. The Control Plane
+authentication selector does not accept the customer application's `BeaconAuth` cookie or a
+customer JWT as an alternate operator session. The audit page is explicitly bound to that cookie
+scheme and each API operation rechecks persisted operator rights through `IAdminGate`.
+The first slice reuses `User.IsAdmin` as the operator eligibility source; separate persisted
+operator accounts/role assignment and MFA remain follow-up authorization work.
+
+Audit events are written by server-side application handlers, not through a public client-writable
+audit endpoint. Bootstrap and administrator recovery are also Control Plane-only operations.
 
 ## Verification
 
