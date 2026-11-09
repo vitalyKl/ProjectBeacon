@@ -347,6 +347,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 ? "plan" : "build";
         var commandsEnabled = !root.TryGetProperty("commandsEnabled", out var commandsValue)
             || commandsValue.ValueKind != JsonValueKind.False;
+        var reportsDiff = !root.TryGetProperty("reportsDiff", out var reportsDiffValue)
+            || reportsDiffValue.ValueKind != JsonValueKind.False;
         var contextLimit = root.TryGetProperty("contextLimit", out var limitValue)
             && limitValue.ValueKind == JsonValueKind.Number
             && limitValue.TryGetInt32(out var parsedLimit)
@@ -579,7 +581,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 new AgentPromptControls(null, reasoningEffort, null)
                 {
                     ContextLimit = contextLimit,
-                    HarnessAuthorization = authorization
+                    HarnessAuthorization = authorization,
+                    SystemPromptAddition = sessionWorktree.BuildEnvironmentContract()
                 });
 
             AgentTurnStatus? status;
@@ -604,8 +607,16 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(status.Finish);
 
-            await PublishActivityAsync(failed ? "failed" : "completed", status, ct, terminal: true);
-            if (failed)
+            var serverReportedDone = string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+                && subtaskId is { } completedSubtaskId
+                && await IsSubtaskReportedDoneAsync(taskId, completedSubtaskId, token.Token, ct);
+            await PublishActivityAsync(failed && !serverReportedDone ? "failed" : "completed",
+                status, ct, terminal: true);
+
+            // The result tool commits Done before the provider response has necessarily ended.
+            // Server-side Done is authoritative, so a later empty/error final response must not
+            // discard the Actor's worktree.
+            if (failed && !serverReportedDone)
             {
                 var failure = status.Error
                     ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
@@ -615,12 +626,39 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, null, failure + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
             }
 
+            string? diffArtifact = null;
+            if (subtaskId is not null && reportsDiff)
+            {
+                try
+                {
+                    diffArtifact = await sessionWorktree.BuildDiffArtifactAsync(ct);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+                {
+                    _state.Log($"pipeline diff artifact could not be generated: {ex.Message}");
+                }
+            }
+
             var applied = await sessionWorktree.ApplyChangesAsync(ct);
             if (!applied.Success)
             {
                 sessionWorktree.Preserve();
+                try { await PublishActivityAsync("conflict", status, ct, terminal: true); } catch { }
                 return (false, null, (applied.Error ?? "Could not apply isolated agent changes.")
                     + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+            }
+
+            string? diffArtifactError = null;
+            if (subtaskId is not null && reportsDiff && !string.IsNullOrWhiteSpace(diffArtifact)
+                && !diffArtifact.Contains("(No text changes.)", StringComparison.Ordinal))
+            {
+                var stored = await StoreSubtaskDiffArtifactAsync(
+                    taskId, subtaskId.Value, diffArtifact, token.Token, ct);
+                if (!stored.Success)
+                {
+                    diffArtifactError = stored.Error;
+                    _state.Log("pipeline diff artifact was not stored: " + stored.Error);
+                }
             }
 
             return (true, JsonSerializer.Serialize(new
@@ -628,6 +666,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 pipelineSessionId,
                 externalSessionId,
                 finish = status.Finish,
+                serverReportedDone,
+                diffRef = subtaskId is not null && reportsDiff ? $"diff/{subtaskId.Value:N}" : null,
+                diffArtifactError,
                 usage.PromptTokens,
                 usage.CompletionTokens,
                 usage.AssistantMessages
@@ -658,6 +699,92 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             try { await runtime.StopServicesAsync(externalSessionId, CancellationToken.None); } catch { }
         }
+    }
+
+    private async Task<bool> IsSubtaskReportedDoneAsync(
+        Guid taskId, Guid subtaskId, string bearerToken, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"v1/tasks/{taskId:D}/pipeline");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            using var response = await _http.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+                return false;
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            if (!TryGetProperty(document.RootElement, "subtasks", out var subtasks)
+                || subtasks.ValueKind != JsonValueKind.Array)
+                return false;
+            foreach (var item in subtasks.EnumerateArray())
+            {
+                if (TryGetProperty(item, "id", out var id)
+                    && id.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(id.GetString(), out var candidate)
+                    && candidate == subtaskId
+                    && TryGetProperty(item, "status", out var state)
+                    && state.ValueKind == JsonValueKind.String
+                    && string.Equals(state.GetString(), "Done", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or IOException)
+        {
+            _state.Log("could not confirm Actor subtask result before worktree apply: " + ex.GetType().Name);
+        }
+        return false;
+    }
+
+    private async Task<(bool Success, string? Error)> StoreSubtaskDiffArtifactAsync(
+        Guid taskId, Guid subtaskId, string content, string bearerToken, CancellationToken ct)
+    {
+        var key = $"diff/{subtaskId:N}";
+        async Task<HttpResponseMessage> SendAsync(string mode)
+        {
+            var body = new
+            {
+                taskId,
+                key,
+                title = $"Subtask diff {subtaskId.ToString("N")[..8]}",
+                @abstract = "Workstation-generated git diff --stat and bounded patch excerpt.",
+                content,
+                mode
+            };
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"v1/tasks/{taskId:D}/workspace")
+            {
+                Content = System.Net.Http.Json.JsonContent.Create(body)
+            };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            return await _http.SendAsync(request, ct);
+        }
+
+        using var create = await SendAsync("create");
+        if (create.IsSuccessStatusCode)
+            return (true, null);
+        if (create.StatusCode != System.Net.HttpStatusCode.Conflict)
+            return (false, $"workspace write returned HTTP {(int)create.StatusCode}");
+
+        using var append = await SendAsync("append");
+        return append.IsSuccessStatusCode
+            ? (true, null)
+            : (false, $"workspace append returned HTTP {(int)append.StatusCode}");
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+        }
+        value = default;
+        return false;
     }
 
     private static string? ClipActivityText(string? value, int maxLength)
