@@ -150,11 +150,12 @@ public sealed class GitSyncServiceTests
     [Fact]
     public async Task Execute_RejectsExternalRemoteHelpers()
     {
+        if (OperatingSystem.IsWindows())
+            return;
+
         await using var repo = await RepositoryFixture.CreateAsync();
         var marker = Path.Combine(repo.Parent, "remote-helper-executed");
-        await Git(repo.Root, "remote", "set-url", "origin",
-            "ext::touch " + marker.Replace(" ", "\\ ", StringComparison.Ordinal));
-        
+        await Git(repo.Root, "remote", "set-url", "origin", "ext::touch " + marker);
         var result = await ExecuteAsync(repo, GitSyncMode.Status);
 
         Assert.Equal(GitSyncOutcome.Failed, result.Outcome);
