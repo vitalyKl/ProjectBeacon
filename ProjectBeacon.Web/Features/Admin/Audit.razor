@@ -207,35 +207,16 @@ else
             if (!gate.Success || gate.Value is null)
             {
                 _forbidden = true;
+                _canExport = false;
                 _page = null;
                 return;
             }
 
-            if (!TryGuid(_orgId, out var orgId)
-                || !TryGuid(_projectId, out var projectId)
-                || !TryGuid(_actorUserId, out var actorUserId))
-                {
-                    Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
-                    return;
-                }
+            var exportGate = await AdminGate.RequireAsync(actor, OperatorPermission.AuditExport);
+            _canExport = exportGate.Success && exportGate.Value is not null;
+            if (!TryBuildQuery(_pageNumber, 50, out var query))
+                return;
 
-            var fromUtc = _fromDate.HasValue
-                ? DateTime.SpecifyKind(_fromDate.Value.Date, DateTimeKind.Utc)
-                : null;
-            var toUtc = _toDate.HasValue
-                ? DateTime.SpecifyKind(_toDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc)
-                : null;
-            var query = new AuditQuery(
-                OrgId: orgId,
-                ProjectId: projectId,
-                FromUtc: fromUtc,
-                ToUtc: toUtc,
-                Action: string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
-                ActorKind: _actorKind,
-                ActorUserId: actorUserId,
-                Outcome: _outcome,
-                Page: _pageNumber,
-                PageSize: 50);
             _page = await AuditReader.ListAsync(gate.Value, query);
         }
         catch (Exception exception)
