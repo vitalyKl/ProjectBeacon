@@ -300,7 +300,7 @@ public sealed class SmtpEmailSender : IEmailSender
             username,
             passwordFromEnvironment,
             from,
-            port != 25);
+            port != 25 || !string.IsNullOrWhiteSpace(username));
     }
 
     private async Task RecordAsync(

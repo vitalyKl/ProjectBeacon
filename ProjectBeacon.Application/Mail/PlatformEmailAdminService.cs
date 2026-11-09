@@ -101,7 +101,7 @@ public sealed class PlatformEmailAdminService
             port,
             Config("MAIL:User"),
             from,
-            port != 25,
+            port != 25 || !string.IsNullOrWhiteSpace(Config("MAIL:User")),
             !string.IsNullOrEmpty(Config("MAIL:Password")),
             configured ? "environment" : "not_configured",
             null);
