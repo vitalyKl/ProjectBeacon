@@ -171,7 +171,7 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
             project.Id.ToString(),
             project.OrgId,
             project.Id,
-            detailsJson: """{"changed":"metadata"}"""));
+            detailsJson: """{"reasonCode":"metadata-updated"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
@@ -326,7 +326,7 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
                 await using var db = _dbFactory.CreateDbContext(tenant);
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-                var currentProject = await db.Projects.IgnoreQueryFilters()
+                var currentProject = await db.Projects
                     .FirstOrDefaultAsync(item => item.Id == project.Id, ct);
                 if (currentProject is null)
                     return;
