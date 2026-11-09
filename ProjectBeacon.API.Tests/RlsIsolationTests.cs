@@ -161,9 +161,9 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         var targetA = Guid.NewGuid();
         var targetB = Guid.NewGuid();
         var versionA = ContentVersion.Create(
-            projectA, ContentTargetKind.ContextSection, targetA, 1, "{\\"title\\":\\"A\\"}", "Human", Guid.NewGuid().ToString("D"));
+            projectA, ContentTargetKind.ContextSection, targetA, 1, "{\"title\":\"A\"}", "Human", Guid.NewGuid().ToString("D"));
         var versionB = ContentVersion.Create(
-            projectB, ContentTargetKind.ContextSection, targetB, 1, "{\\"title\\":\\"B\\"}", "Human", Guid.NewGuid().ToString("D"));
+            projectB, ContentTargetKind.ContextSection, targetB, 1, "{\"title\":\"B\"}", "Human", Guid.NewGuid().ToString("D"));
 
         await using (var seed = NewAdminContext())
         {
@@ -181,7 +181,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
                 await setCmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
             }
 
-            await using var listCmd = new NpgsqlCommand("SELECT \\"TargetId\\" FROM \\"ContentVersions\\"", conn);
+            await using var listCmd = new NpgsqlCommand(
+                "SELECT \"TargetId\" FROM \"ContentVersions\"", conn);
             using var reader = await listCmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
             var targetIds = new List<Guid>();
             while (await reader.ReadAsync(TestContext.Current.CancellationToken))
@@ -195,15 +196,16 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         {
             await admin.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
             await using var update = new NpgsqlCommand(
-                "UPDATE \\"ContentVersions\\" SET \\"ContentJson\\" = '{\\"title\\":\\"tampered\\"}'::jsonb WHERE \\"Id\\" = @id",
+                "UPDATE \"ContentVersions\" SET \"ContentJson\" = @json WHERE \"Id\" = @id",
                 admin);
+            update.Parameters.AddWithValue("@json", "{\"title\":\"tampered\"}");
             update.Parameters.AddWithValue("@id", versionA.Id);
             var exception = await Assert.ThrowsAsync<PostgresException>(
                 () => update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
             Assert.Contains("append-only", exception.Message, StringComparison.OrdinalIgnoreCase);
 
             await using var delete = new NpgsqlCommand(
-                "DELETE FROM \\"ContentVersions\\" WHERE \\"Id\\" = @id",
+                "DELETE FROM \"ContentVersions\" WHERE \"Id\" = @id",
                 admin);
             delete.Parameters.AddWithValue("@id", versionA.Id);
             exception = await Assert.ThrowsAsync<PostgresException>(
