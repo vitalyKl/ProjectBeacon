@@ -63,7 +63,8 @@ operator session.
   this protects against client-side navigation inside an already-open customer circuit. The audit
   API independently rechecks the current persisted operator authority using `IAdminGate` on every request.
 - The control host serves only the explicit shared shell asset allowlist (`/_framework/*`, `/_content/*`,
-  `/_blazor/*`, `/brand/*`, `/app.css`, `/shell.js`, `/timezone.js`, `/chat.js`, and `/favicon.ico`).
+  `/_blazor/*`, `/brand/*`, `/app.css` and its seven imported `app-*.css` stylesheets,
+  `/shell.js`, `/timezone.js`, `/chat.js`, and `/favicon.ico`).
 
 The first slice deliberately reuses the existing `User` account and `User.IsAdmin` flag as the
 operator eligibility source. This is separate authentication and session handling, not yet a
