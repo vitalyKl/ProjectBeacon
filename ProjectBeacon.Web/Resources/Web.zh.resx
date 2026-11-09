@@ -2597,7 +2597,7 @@ orthstar</value>
     <value>审计日志</value>
   </data>
   <data name="AuditLead" xml:space="preserve">
-    <value>记录安全和操作员活动的只追加日志，仅平台操作员可以访问。</value>
+    <value>跨组织和项目的安全及运营操作记录。事件时间按浏览器本地时区显示；日期筛选和 CSV 时间戳使用 UTC。</value>
   </data>
   <data name="AuditAction" xml:space="preserve">
     <value>操作代码</value>
@@ -2618,7 +2618,7 @@ orthstar</value>
     <value>范围</value>
   </data>
   <data name="AuditWhen" xml:space="preserve">
-    <value>时间</value>
+    <value>时间（本地）</value>
   </data>
   <data name="AuditOrgId" xml:space="preserve">
     <value>组织 ID</value>
@@ -2664,5 +2664,17 @@ orthstar</value>
   </data>
   <data name="AuditInvalidFilter" xml:space="preserve">
     <value>请检查主体、结果和 UTC 日期筛选条件。</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>操作者 API 令牌 ID</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>操作者设备 ID</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>目标类型</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>目标 ID</value>
   </data>
 </root>
