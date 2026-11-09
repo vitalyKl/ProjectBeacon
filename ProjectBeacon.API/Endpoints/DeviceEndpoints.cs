@@ -62,7 +62,7 @@ public static class DeviceEndpoints
         [FromBody] CreateDeviceBody body, CreateDeviceHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest(body.Name, body.Fingerprint, actor.UserId!.Value)), ct);
+        var result = await handler.HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest(body.Name, body.Fingerprint, actor.UserId!.Value, Actor: actor)), ct);
         return result.Success
             ? Results.Created($"/v1/devices/{result.Value!.Id}", result.Value)
             : result.FromResult();
@@ -79,7 +79,7 @@ public static class DeviceEndpoints
         Guid id, RevokeDeviceHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(id, actor.UserId!.Value)), ct);
+        var result = await handler.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(id, actor.UserId!.Value, actor)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
