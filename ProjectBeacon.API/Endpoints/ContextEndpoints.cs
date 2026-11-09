@@ -9,7 +9,7 @@ using Domain.Enums;
 using ProjectBeacon.API.Auth;
 using Microsoft.AspNetCore.Mvc;
 
-/// <summary>Context sections, brief compile, and constraints. Tokens may read context. Writes stay human.</summary>
+/// <summary>Context reads are token-scoped; normal edits remain human-only. The dedicated draft endpoint permits only the scoped knowledge-curator Actor.</summary>
 public static class ContextEndpoints
 {
     /// <summary>

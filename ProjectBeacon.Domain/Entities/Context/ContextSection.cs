@@ -85,6 +85,7 @@ public class ContextSection : Entity, IProjectScoped
     public void UpdateDraft(string title, string bodyMarkdown, string? sourcePath, string? updatedById)
     {
         Update(title, bodyMarkdown, "agent", updatedById);
+        Source = ContextSource.Native;
         SourcePath = sourcePath;
         ReviewState = ContextReviewState.NeedsReview;
     }
