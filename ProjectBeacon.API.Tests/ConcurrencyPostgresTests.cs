@@ -164,7 +164,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             Run("writer B"));
 
         Assert.Equal(1, results.Count(result => result.Success));
-        var conflict = Assert.Single(results.Where(result => !result.Success));
+        var conflict = Assert.Single(results, result => !result.Success);
         Assert.Equal(ErrorKind.Conflict, conflict.Kind);
 
         await using var verify = _postgres.CreateAdminContext();
