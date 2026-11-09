@@ -1,0 +1,176 @@
+@using System.Collections.Concurrent
+@using System.Security.Cryptography
+@using System.Text
+@using System.Text.RegularExpressions
+@using Ganss.Xss
+@using Markdig
+@using Markdig.Renderers.Html
+@using Microsoft.Extensions.Localization
+@using ProjectBeacon.Web.Features.Chat
+@inject IStringLocalizer<Web> L
+
+@if (!string.IsNullOrWhiteSpace(Text))
+{
+    @if (Inline)
+    {
+        <span class="@CssClass">@((MarkupString)Rendered)</span>
+    }
+    else
+    {
+        <div class="@CssClass" style="@ContainerStyle">@((MarkupString)Rendered)</div>
+        @if (CanExpand)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Text" Class="beacon-markdown-expand"
+                       OnClick="ToggleExpanded">
+                @L[_expanded ? "MarkdownCollapse" : "MarkdownExpand"]
+            </MudButton>
+        }
+    }
+}
+
+@code {
+    private const int CacheCapacity = 256;
+    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
+        .UsePipeTables()
+        .UseTaskLists()
+        .UseAutoLinks()
+        .UseEmphasisExtras()
+        .DisableHtml()
+        .Build();
+    private static readonly ConcurrentDictionary<string, string> RenderCache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentQueue<string> CacheOrder = new();
+    private static readonly Regex AnchorTag = new("<a\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex LinkTargetAttributes = new("\\s+(?:target|rel)\\s*=\\s*(?:\"[^\"]*\"|'[^']*')", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ParagraphTags = new("</?p>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex HeadingTags = new("(?<prefix></?h)(?<level>[1-6])(?=[\\s>])", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly object SanitizerLock = new();
+    private static HtmlSanitizer? _sanitizer;
+    private static int _cacheMissCount;
+
+    private string? _lastText;
+    private bool _expanded;
+
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+    [Parameter] public bool Inline { get; set; }
+    [Parameter] public int? MaxHeight { get; set; }
+    [Parameter] public bool UseChatCodeActions { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool CanExpand => !Inline && MaxHeight is > 0;
+    private string CssClass => string.Join(" ", new[]
+    {
+        "beacon-markdown",
+        Inline ? "beacon-markdown-inline" : null,
+        Class
+    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    private string? ContainerStyle => CanExpand && !_expanded
+        ? $"max-height:{MaxHeight!.Value}px;overflow:hidden;"
+        : null;
+
+    private string Rendered
+    {
+        get
+        {
+            var collapse = UseChatCodeActions ? L["ChatCollapse"].Value : string.Empty;
+            var expand = UseChatCodeActions ? L["ChatExpand"].Value : string.Empty;
+            var copy = UseChatCodeActions ? L["ChatCopyCode"].Value : string.Empty;
+            var fingerprint = string.Join("\0", Text, Inline ? "inline" : "block",
+                UseChatCodeActions ? "chat-code" : "plain", collapse, expand, copy);
+            var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
+
+            if (RenderCache.TryGetValue(key, out var cached))
+                return cached;
+
+            var writer = new StringWriter();
+            var renderer = new Markdig.Renderers.HtmlRenderer(writer);
+            Pipeline.Setup(renderer);
+            if (UseChatCodeActions)
+                renderer.ObjectRenderers.Insert(0, new ChatCodeBlockRenderer(collapse, expand, copy));
+
+            renderer.Render(Markdown.Parse(Text, Pipeline));
+            var html = ShiftHeadings(Sanitize(writer.ToString()));
+            if (Inline)
+                html = ParagraphTags.Replace(html, string.Empty);
+
+            Interlocked.Increment(ref _cacheMissCount);
+            if (RenderCache.TryAdd(key, html))
+            {
+                CacheOrder.Enqueue(key);
+                while (RenderCache.Count > CacheCapacity && CacheOrder.TryDequeue(out var oldest))
+                    RenderCache.TryRemove(oldest, out _);
+            }
+
+            return html;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (string.Equals(_lastText, Text, StringComparison.Ordinal))
+            return;
+
+        _lastText = Text;
+        _expanded = false;
+    }
+
+    private void ToggleExpanded() => _expanded = !_expanded;
+
+    private static string Sanitize(string html)
+    {
+        string sanitized;
+        lock (SanitizerLock)
+        {
+            _sanitizer ??= CreateSanitizer();
+            sanitized = _sanitizer.Sanitize(html);
+        }
+
+        return AnchorTag.Replace(sanitized, match =>
+        {
+            var tag = match.Value;
+            if (!tag.Contains("href=", StringComparison.OrdinalIgnoreCase))
+                return tag;
+
+            var cleanTag = LinkTargetAttributes.Replace(tag, string.Empty);
+            return cleanTag[..^1] + " target=\"_blank\" rel=\"noopener noreferrer\">";
+        });
+    }
+
+    private static string ShiftHeadings(string html) =>
+        HeadingTags.Replace(html, match =>
+        {
+            var level = int.Parse(match.Groups["level"].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var shifted = Math.Min(6, level + 3).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return match.Groups["prefix"].Value + shifted;
+        });
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        foreach (var tag in new[] { "button", "input", "table", "thead", "tbody", "tr", "th", "td", "del" })
+            sanitizer.AllowedTags.Add(tag);
+
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.Add("http");
+        sanitizer.AllowedSchemes.Add("https");
+
+        foreach (var attribute in new[]
+        {
+            "class", "type", "checked", "disabled", "align", "href", "title", "target", "rel",
+            "aria-label", "data-beacon-code-collapse", "data-beacon-code-collapse-label",
+            "data-beacon-code-expand", "data-beacon-code-copy"
+        })
+            sanitizer.AllowedAttributes.Add(attribute);
+
+        return sanitizer;
+    }
+
+    internal static int CacheMissCount => Volatile.Read(ref _cacheMissCount);
+
+    internal static void ClearCacheForTests()
+    {
+        RenderCache.Clear();
+        while (CacheOrder.TryDequeue(out _)) { }
+        Interlocked.Exchange(ref _cacheMissCount, 0);
+    }
+}

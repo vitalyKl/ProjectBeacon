@@ -151,7 +151,11 @@ public static class BuiltInAgentProfiles
         string key, string description, string instruction, AgentProfileMode mode,
         IReadOnlyList<string> tools, AgentProfilePathPolicy pathPolicy, IReadOnlyList<string> defaultPaths,
         bool commands, bool reportsDiff, string sizeHint, string effort) =>
-        new(key, key, description, instruction, mode, tools, Required, pathPolicy, defaultPaths,
+        new(key, key, description,
+            instruction + Environment.NewLine + Environment.NewLine
+                + "Write long-form text and reports as Markdown, without HTML. Use headings no deeper than ##. "
+                + "Final subtask reports must use these headings: ## Done, ## Findings, ## Changed, ## Verified and ## Left.",
+            mode, tools, Required, pathPolicy, defaultPaths,
             commands, reportsDiff, sizeHint, effort, [McpToolNames.TaskAttachFile]);
 
     private static IReadOnlyList<string> ReadOnly() =>

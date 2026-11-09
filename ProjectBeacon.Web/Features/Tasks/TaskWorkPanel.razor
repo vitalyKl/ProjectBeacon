@@ -24,7 +24,7 @@
             @if (Phases.FirstOrDefault(p => p.Id == OpenPhaseId) is { } open)
             {
                 <div class="beacon-task-phase-content">
-                    <MudText Typo="Typo.body2">@open.Instruction</MudText>
+                    <MarkdownView Text="@open.Instruction" MaxHeight="220" />
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
                     @foreach (var sub in PhaseSubtasks(open.Id))
                     {

@@ -4,7 +4,7 @@
 
 <MudPaper Elevation="0" Outlined="false" Class="beacon-card beacon-task-subtask pa-3 mt-2">
     <div class="beacon-task-subtask-head">
-        <MudText Typo="Typo.body2">@Subtask.Instructions</MudText>
+        <div class="beacon-task-subtask-instructions"><MarkdownView Text="@Subtask.Instructions" MaxHeight="160" /></div>
         <StatusChip Color="@StatusColor" Label="@StatusLabel" />
     </div>
     <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-1">
@@ -17,7 +17,7 @@
     </MudStack>
     @if (!string.IsNullOrWhiteSpace(Subtask.Summary))
     {
-        <MudText Typo="Typo.body2" Class="mt-1">@Subtask.Summary</MudText>
+        <MarkdownView Text="@Subtask.Summary" MaxHeight="220" Class="mt-1" />
     }
     @if (!string.IsNullOrWhiteSpace(Subtask.DiffRef))
     {

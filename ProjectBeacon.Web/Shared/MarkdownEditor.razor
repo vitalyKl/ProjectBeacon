@@ -1,0 +1,29 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudTabs Class="@EditorClass">
+    <MudTabPanel Text="@L["MarkdownEdit"]">
+        <MudTextField T="string" Value="@Value" ValueChanged="OnValueChanged"
+                      Label="@Label" Lines="@Lines" MaxLength="@(MaxLength ?? int.MaxValue)"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true"
+                      Counter="@CounterValue" />
+    </MudTabPanel>
+    <MudTabPanel Text="@L["MarkdownPreview"]">
+        <MarkdownView Text="@Value" />
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public int Lines { get; set; } = 6;
+    [Parameter] public int? MaxLength { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private int CounterValue => MaxLength ?? 0;
+    private string EditorClass => string.Join(" ", new[] { "beacon-markdown-editor", Class }
+        .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    private Task OnValueChanged(string? value) =>
+        ValueChanged.InvokeAsync(value ?? string.Empty);
+}
