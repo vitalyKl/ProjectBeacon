@@ -636,35 +636,38 @@ internal static class CommandExecutionPolicy
         "-c", "-C", "--config-env", "--exec-path", "--git-dir", "--work-tree", "--super-prefix"
     };
 
-    private static readonly HashSet<string> BlockedGitSubcommands = new(StringComparer.OrdinalIgnoreCase)
+    // Allow only built-in inspection commands. A deny-list is unsafe here because
+    // unrecognized names can resolve to user-defined aliases, including shell aliases.
+    private static readonly HashSet<string> AllowedGitSubcommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "push", "pull", "fetch", "checkout", "switch", "reset", "merge", "rebase",
-        "branch", "tag", "commit", "restore", "clean", "stash", "cherry-pick",
-        "revert", "config", "alias", "remote", "worktree", "submodule",
-        "filter-branch", "fast-import", "daemon", "clone", "update-ref", "symbolic-ref",
-        "difftool", "mergetool", "archive", "upload-archive", "upload-pack", "receive-pack",
-        "credential", "gui", "citool", "instaweb", "web--browse", "send-email"
+        "status", "diff", "log", "show", "rev-parse", "ls-files", "grep", "blame",
+        "shortlog", "describe", "rev-list", "merge-base", "diff-tree", "name-rev",
+        "count-objects", "check-ignore", "check-attr"
     };
 
     private static readonly string[] BlockedGitOptions =
     [
-        "--upload-pack", "--receive-pack", "--exec", "--ext-diff", "--textconv", "--output", "-o"
+        "--upload-pack", "--receive-pack", "--exec", "--ext-diff", "--textconv", "--output", "-o",
+        "--pager", "--paginate", "--open-files-in-pager"
     ];
 
     private static bool TryValidateGitArguments(IReadOnlyList<string> args, out string error)
     {
         error = string.Empty;
         var subcommand = GetGitSubcommand(args);
-        if (subcommand is not null && BlockedGitSubcommands.Contains(subcommand))
+        if (subcommand is null || !AllowedGitSubcommands.Contains(subcommand))
         {
-            error = subcommand.Equals("push", StringComparison.OrdinalIgnoreCase)
+            error = subcommand is not null && subcommand.Equals("push", StringComparison.OrdinalIgnoreCase)
                 ? "git push is blocked on the workstation command interface."
-                : "This git subcommand is blocked in agent sessions. Use the structured repo_status tool for repository status; repository synchronization is a human action in the ProjectBeacon interface.";
+                : "Only built-in read-only Git inspection commands are allowed in agent sessions. Use repo_status for the real project branch and synchronize from the ProjectBeacon interface.";
             return false;
         }
         foreach (var argument in args)
         {
             if (BlockedGitGlobalOptions.Contains(argument)
+                || argument == "--paginate"
+                || argument.StartsWith("--pager=", StringComparison.Ordinal)
+                || argument.StartsWith("--open-files-in-pager=", StringComparison.Ordinal)
                 || (argument.StartsWith("-c", StringComparison.Ordinal) && argument.Length > 2)
                 || (argument.StartsWith("-C", StringComparison.Ordinal) && argument.Length > 2)
                 || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
