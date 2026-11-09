@@ -56,7 +56,7 @@ public static class ContextEndpoints
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             projectId, request.Title, request.BodyMarkdown, request.SectionId,
             request.ScopeType, request.Key, request.RepoId, request.TaskId,
-            request.Path, ContextSource.Native, request.SourcePath));
+            request.Path, ContextSource.Native, request.SourcePath, request.ExpectedRevision));
         var result = await handler.HandleDraftAsync(command, authorId, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
@@ -141,7 +141,8 @@ public static class ContextEndpoints
             request.TaskId,
             request.Path,
             request.Source,
-            request.SourcePath));
+            request.SourcePath,
+            request.ExpectedRevision));
 
         var result = await handler.HandleAsync(command);
 
@@ -253,7 +254,8 @@ public static class ContextEndpoints
         Guid? TaskId,
         string? Path,
         ContextSource Source,
-        string? SourcePath);
+        string? SourcePath,
+        int? ExpectedRevision = null);
     /// <summary>
     /// Body for compiling a brief: optional repo, path, task, token budget, and which capsules to include.
     /// </summary>
