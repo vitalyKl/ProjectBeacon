@@ -35,6 +35,22 @@ public sealed class ConstraintHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Propose_IsIdempotentAndNeverActivatesConstraint()
+    {
+        var handler = new CreateConstraintHandler(HandlerSqlite.Factory(_connection));
+        var request = new CreateConstraintRequest(_projectId, "Agents may only propose constraints", ConstraintKind.Must);
+
+        var first = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+        var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(first.Success, first.Error);
+        Assert.True(retry.Success, retry.Error);
+        Assert.Equal(first.Value!.Id, retry.Value!.Id);
+        Assert.Equal(ConstraintStatus.Proposed, retry.Value.Status);
+        Assert.Equal(1, await _db.Constraints.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Activate_ThenReject_UpdatesStatus()
     {
         var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(

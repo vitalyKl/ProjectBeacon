@@ -1118,7 +1118,7 @@ public sealed class McpStdioServerTests
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-read-page-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "large.md");
-        var firstPageSize = Application.Mcp.FileWorkspace.DefaultReadPageSize;
+        var firstPageSize = ProjectBeacon.Application.Mcp.FileWorkspace.DefaultReadPageSize;
         var content = new string('x', firstPageSize) + "TAIL-CONTENT";
         await File.WriteAllTextAsync(path, content);
         try

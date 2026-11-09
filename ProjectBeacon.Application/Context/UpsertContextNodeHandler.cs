@@ -45,9 +45,12 @@ public class UpsertContextNodeHandler
 
         if (existing is not null)
         {
-            if (isDraft && existing.ReviewState != ContextReviewState.NeedsReview)
+            if (isDraft
+                && (existing.ReviewState != ContextReviewState.NeedsReview
+                    || !string.Equals(existing.UpdatedByType, "agent", StringComparison.Ordinal)
+                    || !string.Equals(existing.UpdatedById, authorId, StringComparison.Ordinal)))
                 return Result.Failure<ContextSectionDto>(
-                    "A reviewed context section cannot be overwritten by an agent draft.",
+                    "An agent draft may only update its own NeedsReview section; reviewed or other-author sections are protected.",
                     ErrorKind.Forbidden);
 
             if (isDraft)

@@ -5,6 +5,7 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Decisions;
 
 public sealed class DecisionLifecycleHandlerTests : IDisposable
@@ -31,6 +32,23 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         _unscoped.Dispose();
         _db.Dispose();
         _connection.Dispose();
+    }
+
+    [Fact]
+    public async Task Propose_IsIdempotentAndNeverAcceptsDecision()
+    {
+        var handler = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
+        var request = new CreateDecisionRequest(
+            _projectId, "Use a review gate", "Human-owned knowledge", "Keep Proposed until reviewed", null);
+
+        var first = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+        var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(first.Success, first.Error);
+        Assert.True(retry.Success, retry.Error);
+        Assert.Equal(first.Value!.Id, retry.Value!.Id);
+        Assert.Equal(DecisionStatus.Proposed, retry.Value.Status);
+        Assert.Equal(1, await _db.Decisions.CountAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
