@@ -59,8 +59,16 @@ else
                         @foreach (var node in _nodes)
                         {
                             <MudListItem T="string">
-                                <div role="button" tabindex="0" class="beacon-section-row" @onclick="() => LoadSection(node)" @onkeydown="e => OnSectionKey(e, node)">
-                                    @ChromeLabels.Section(L, node.SectionId) — @node.Title
+                                <div>
+                                    <div role="button" tabindex="0" class="beacon-section-row" @onclick="() => LoadSection(node)" @onkeydown="e => OnSectionKey(e, node)">
+                                        @ChromeLabels.Section(L, node.SectionId) — @node.Title
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(node.BodyMarkdown))
+                                    {
+                                        <div class="beacon-section-preview">
+                                            <MarkdownView Text="@node.BodyMarkdown" MaxHeight="120" />
+                                        </div>
+                                    }
                                 </div>
                             </MudListItem>
                         }
@@ -79,7 +87,7 @@ else
                     <MudSelectItem Value="@("architecture")">@L["SectionArchitecture"]</MudSelectItem>
                     <MudSelectItem Value="@("conventions")">@L["SectionConventions"]</MudSelectItem>
                 </MudSelect>
-                <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MarkdownEditor @bind-Value="_body" Label="@L["Content"]" Lines="8" Class="mt-2" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="Save">@L["Save"]</MudButton>
             </MudPaper>
         </div>
@@ -120,7 +128,7 @@ else
 
     <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Constraints"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
-        <MudTextField @bind-Value="_constraintBody" Label="@L["ConstraintBody"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MarkdownEditor @bind-Value="_constraintBody" Label="@L["ConstraintBody"]" Lines="3" />
         <MudSelect T="ConstraintKind" @bind-Value="_constraintKind" Label="@L["Kind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
             <MudSelectItem Value="ConstraintKind.Must">@L["KindMust"]</MudSelectItem>
             <MudSelectItem Value="ConstraintKind.MustNot">@L["KindMustNot"]</MudSelectItem>
@@ -135,7 +143,7 @@ else
                     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
                         <StatusChip Color="Color.Default" Label="@L["Kind" + c.Kind]" />
                         <StatusChip Color="@ChipPalette.ForConstraintStatus(c.Status)" Label="@ChromeLabels.Constraint(L, c.Status)" />
-                        <MudText Typo="Typo.body2" Class="grow">@c.Body</MudText>
+                        <div class="grow beacon-table-cell-clamp"><MarkdownView Text="@c.Body" Inline="true" /></div>
                         @if (c.Status == ConstraintStatus.Proposed)
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ActivateConstraint(c)">@L["Activate"]</MudButton>

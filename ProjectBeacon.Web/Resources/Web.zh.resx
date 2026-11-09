@@ -2596,4 +2596,9 @@ orthstar</value>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>所选模型的上下文大小必须大于零。请在启动会话前配置上下文窗口。</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回复 Token 预留量（0 = 自动）</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>当提示词用量超过上下文窗口的 82% 与“窗口大小减去预留量”两者中的较小值时开始压缩。设置为 0 时自动预留 25%。</value></data>
+  <data name="MarkdownEdit" xml:space="preserve"><value>编辑</value></data>
+  <data name="MarkdownPreview" xml:space="preserve"><value>预览</value></data>
+  <data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
+  <data name="MarkdownCollapse" xml:space="preserve"><value>收起</value></data>
+  <data name="Characters" xml:space="preserve"><value>字符</value></data>
 </root>

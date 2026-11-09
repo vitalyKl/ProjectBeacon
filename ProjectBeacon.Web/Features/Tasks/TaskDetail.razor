@@ -264,8 +264,7 @@ else
                             <MudText Typo="Typo.subtitle1">@_selectedWorkspace.Title</MudText>
                             <MudText Typo="Typo.caption">@_selectedWorkspace.Key · @_selectedWorkspace.Kind · @_selectedWorkspace.AuthorRole · <LocalTime Value="_selectedWorkspace.UpdatedAt" Format="g" /></MudText>
                             <MudText Typo="Typo.body2">@_selectedWorkspace.Abstract</MudText>
-                            <MudTextField T="string" Value="_selectedWorkspace.Content" ReadOnly="true" Lines="12"
-                                          Variant="Variant.Outlined" FullWidth="true" />
+                            <MarkdownView Text="@_selectedWorkspace.Content" MaxHeight="520" />
                         </MudStack>
                     }
                     else

@@ -1,0 +1,37 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudTabs Class="@EditorClass">
+    <MudTabPanel Text="@L["MarkdownEdit"]">
+        <MudTextField T="string" Value="@Value" ValueChanged="OnValueChanged"
+                      Label="@Label" Lines="@Lines" MaxLength="@InputMaxLength"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true"
+                      Counter="@HasLimit" />
+        <MudText Typo="Typo.caption" Class="mt-1">
+            @Value.Length @L["Characters"]
+            @if (HasLimit)
+            {
+                <span> / @MaxLength</span>
+            }
+        </MudText>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["MarkdownPreview"]">
+        <MarkdownView Text="@Value" />
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public int Lines { get; set; } = 6;
+    [Parameter] public int? MaxLength { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool HasLimit => MaxLength is > 0;
+    private int InputMaxLength => HasLimit ? MaxLength!.Value : int.MaxValue;
+    private string EditorClass => string.Join(" ", new[] { "beacon-markdown-editor", Class }
+        .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    private Task OnValueChanged(string? value) =>
+        ValueChanged.InvokeAsync(value ?? string.Empty);
+}
