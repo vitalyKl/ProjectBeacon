@@ -47,7 +47,9 @@ public class ImportFilesHandler
                 if (existing is null)
                 {
                     db.ContextSections.Add(section);
-                    _contentWriter.AddVersion(db, section, "System", file.SourcePath);
+                    var attribution = ContentAttribution.FromActor(command.Actor);
+                    _contentWriter.AddVersion(
+                        db, section, attribution.Type ?? "System", attribution.Id ?? file.SourcePath);
                     createdCount++;
                 }
                 else
@@ -58,10 +60,14 @@ public class ImportFilesHandler
                     existing.Update(
                         title: section.Title,
                         bodyMarkdown: section.BodyMarkdown,
-                        updatedByType: "system",
-                        updatedById: file.SourcePath);
+                        updatedByType: command.Actor?.Type.ToString().ToLowerInvariant() ?? "system",
+                        updatedById: command.Actor?.UserId?.ToString("D") ?? file.SourcePath);
                     if (contentChanged)
-                        _contentWriter.AddVersion(db, existing, "System", file.SourcePath);
+                    {
+                        var attribution = ContentAttribution.FromActor(command.Actor);
+                        _contentWriter.AddVersion(
+                            db, existing, attribution.Type ?? "System", attribution.Id ?? file.SourcePath);
+                    }
                 }
             }
         }
