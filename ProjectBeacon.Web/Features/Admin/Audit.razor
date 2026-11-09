@@ -35,6 +35,8 @@ else
             <MudTextField @bind-Value="_actorTokenId" Label="@L["AuditFilterActorToken"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudTextField @bind-Value="_actorDeviceId" Label="@L["AuditFilterActorDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudTextField @bind-Value="_action" Label="@L["AuditFilterAction"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_targetType" Label="@L["AuditFilterTargetType"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_targetId" Label="@L["AuditFilterTargetId"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudDatePicker @bind-Date="_fromDate" Label="@L["AuditFilterFromUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
             <MudDatePicker @bind-Date="_toDate" Label="@L["AuditFilterToUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
             <MudSelect T="AuditActorKind?" @bind-Value="_actorKind" Label="@L["AuditActorKind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true">
@@ -152,6 +154,8 @@ else
     private string _actorTokenId = string.Empty;
     private string _actorDeviceId = string.Empty;
     private string _action = string.Empty;
+    private string _targetType = string.Empty;
+    private string _targetId = string.Empty;
     private DateTime? _fromDate;
     private DateTime? _toDate;
     private AuditActorKind? _actorKind;
@@ -177,6 +181,8 @@ else
         _actorTokenId = string.Empty;
         _actorDeviceId = string.Empty;
         _action = string.Empty;
+        _targetType = string.Empty;
+        _targetId = string.Empty;
         _fromDate = null;
         _toDate = null;
         _actorKind = null;
@@ -266,7 +272,9 @@ else
             Page: page,
             PageSize: pageSize,
             ActorTokenId: actorTokenId,
-            ActorDeviceId: actorDeviceId);
+            ActorDeviceId: actorDeviceId,
+            TargetType: string.IsNullOrWhiteSpace(_targetType) ? null : _targetType.Trim(),
+            TargetId: string.IsNullOrWhiteSpace(_targetId) ? null : _targetId.Trim());
         return true;
     }
 
