@@ -105,6 +105,12 @@ public sealed class CapabilityAndWorkHttpTests
             $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, taskHistoryThroughTaskRoute.StatusCode);
+
+        var taskRestoreWithoutTaskWrite = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions/{Guid.NewGuid()}/restore",
+            new { expectedRevision = 1 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, taskRestoreWithoutTaskWrite.StatusCode);
     }
 
     [Fact]
