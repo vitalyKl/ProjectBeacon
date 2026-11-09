@@ -2600,7 +2600,7 @@ orthstar</value>
     <value>审计历史</value>
   </data>
 <data name="AuditHistoryLead" xml:space="preserve">
-    <value>跨组织和项目的安全及运营操作记录。时间以 UTC 显示。</value>
+    <value>跨组织和项目的安全及运营操作记录。时间按您的本地时区显示；筛选条件和 CSV 时间戳使用 UTC。</value>
   </data>
 <data name="AuditAccessDenied" xml:space="preserve">
     <value>您没有查看审计历史的权限。</value>
@@ -2657,7 +2657,7 @@ orthstar</value>
     <value>没有符合这些筛选条件的审计事件。</value>
   </data>
 <data name="AuditTimestamp" xml:space="preserve">
-    <value>时间 (UTC)</value>
+    <value>时间（本地）</value>
   </data>
 <data name="AuditActor" xml:space="preserve">
     <value>操作者</value>
