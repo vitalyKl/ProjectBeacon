@@ -22,6 +22,7 @@ using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
+using ProjectBeacon.Web.Authentication;
 
 namespace ProjectBeacon.Web.Extensions;
 /// <summary>
@@ -29,6 +30,7 @@ namespace ProjectBeacon.Web.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    private const string DefaultControlHost = "control.projectbeacon.tech";
     private static readonly string[] SupportedCultures = ["en", "ru", "de", "ja", "zh"];
 
     public static IServiceCollection ConfigureServices(this IServiceCollection services, IConfiguration configuration, string environmentName)
@@ -36,6 +38,9 @@ public static class ServiceCollectionExtensions
         var connectionString = ProjectBeacon.Infrastructure.Data.PostgresConnection.Resolve(configuration);
 
         var jwtSecret = JwtSecretPolicy.EnsureConfigured(configuration["JWT:Secret"], environmentName);
+        var controlHost = (configuration["Control:Host"]
+            ?? Environment.GetEnvironmentVariable("CONTROL_HOST")
+            ?? DefaultControlHost).Trim().TrimEnd('.');
 
         // Fail-fast: resolve the data-protection keys at startup. The JWT secret signs tokens
         // only; it never becomes the current data key.
@@ -73,12 +78,17 @@ public static class ServiceCollectionExtensions
             options.DefaultScheme = "smart";
             options.DefaultAuthenticateScheme = "smart";
             options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = "smart";
         })
-        .AddPolicyScheme("smart", "JWT or cookie", options =>
+        .AddPolicyScheme("smart", "JWT, customer cookie, or Control Plane cookie", options =>
         {
             options.ForwardDefaultSelector = ctx =>
             {
+                // The control host accepts only its own host-scoped operator cookie.
+                // Customer JWTs and customer cookies are never an alternate login path there.
+                if (string.Equals(ctx.Request.Host.Host.TrimEnd('.'), controlHost, StringComparison.OrdinalIgnoreCase))
+                    return ControlAuthenticationDefaults.Scheme;
+
                 var header = ctx.Request.Headers.Authorization.ToString();
                 if (header.StartsWith("Bearer bcn_", StringComparison.OrdinalIgnoreCase)
                     || header.StartsWith("Bearer bcd_", StringComparison.OrdinalIgnoreCase))
@@ -121,6 +131,41 @@ public static class ServiceCollectionExtensions
                 ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
                     ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status403Forbidden, "Forbidden",
                         "https://tools.ietf.org/html/rfc9110#section-15.5.4", "Forbidden.")
+                    : Redirect(ctx);
+        })
+        .AddCookie(ControlAuthenticationDefaults.Scheme, options =>
+        {
+            // Separate host-only session for the operator Control Plane. Do not set Cookie.Domain.
+            options.Cookie.Name = ControlAuthenticationDefaults.CookieName;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.Path = "/";
+            options.Cookie.SecurePolicy =
+                string.Equals(environmentName, "Production", StringComparison.OrdinalIgnoreCase)
+                    ? CookieSecurePolicy.Always
+                    : CookieSecurePolicy.SameAsRequest;
+            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.SlidingExpiration = true;
+            options.LoginPath = "/control/login";
+            options.LogoutPath = "/control/logout";
+            options.Events.OnValidatePrincipal = async ctx =>
+            {
+                var valid = await UserSessionVersionValidator.ValidateAsync(
+                    ctx.HttpContext.RequestServices,
+                    ctx.Principal,
+                    ctx.HttpContext.RequestAborted);
+                if (!valid)
+                    ctx.RejectPrincipal();
+            };
+            options.Events.OnRedirectToLogin = ctx =>
+                ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
+                    ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status401Unauthorized, "Unauthorized",
+                        "https://tools.ietf.org/html/rfc9110#section-15.5.2", "Control Plane authentication is required.")
+                    : Redirect(ctx);
+            options.Events.OnRedirectToAccessDenied = ctx =>
+                ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
+                    ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status403Forbidden, "Forbidden",
+                        "https://tools.ietf.org/html/rfc9110#section-15.5.4", "Operator access is required.")
                     : Redirect(ctx);
         })
         .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
