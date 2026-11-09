@@ -2590,4 +2590,8 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
   </data>
+  <data name="ExecutionProfilePlan" xml:space="preserve"><value>规划</value></data>
+  <data name="ExecutionProfileAct" xml:space="preserve"><value>执行</value></data>
+  <data name="ExecutionProfileModel" xml:space="preserve"><value>模型</value></data>
+  <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>所选模型的上下文大小必须大于零。请在启动会话前配置上下文窗口。</value></data>
 </root>
