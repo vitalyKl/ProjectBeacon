@@ -38,6 +38,18 @@ else
                 <MudTextField @bind-Value="_actorUserId" Label="@L["AuditActorUser"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_actorTokenId" Label="@L["AuditActorToken"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_actorDeviceId" Label="@L["AuditActorDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_targetType" Label="@L["AuditTargetType"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_targetId" Label="@L["AuditTargetId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
                 <MudTextField @bind-Value="_actorKind" Label="@L["AuditActorKind"]" Placeholder="Human / ApiToken / Device / Worker / System" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" md="3">
@@ -94,7 +106,7 @@ else
                     <MudTh>@L["AuditOutcome"]</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="@L["AuditWhen"]">@context.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</MudTd>
+                    <MudTd DataLabel="@L["AuditWhen"]"><LocalTime Value="context.At" Format="g" /></MudTd>
                     <MudTd DataLabel="@L["AuditAction"]"><MudText Typo="Typo.body2" Class="font-weight-medium">@context.Action</MudText></MudTd>
                     <MudTd DataLabel="@L["AuditActorKind"]">
                         @context.ActorKind
@@ -155,6 +167,10 @@ else
     private string _orgId = string.Empty;
     private string _projectId = string.Empty;
     private string _actorUserId = string.Empty;
+    private string _actorTokenId = string.Empty;
+    private string _actorDeviceId = string.Empty;
+    private string _targetType = string.Empty;
+    private string _targetId = string.Empty;
     private string _actorKind = string.Empty;
     private string _outcome = string.Empty;
     private string _fromUtc = string.Empty;
@@ -188,7 +204,7 @@ else
 
     private async Task ClearFilters()
     {
-        _action = _orgId = _projectId = _actorUserId = _actorKind = _outcome = _fromUtc = _toUtc = string.Empty;
+        _action = _orgId = _projectId = _actorUserId = _actorTokenId = _actorDeviceId = _targetType = _targetId = _actorKind = _outcome = _fromUtc = _toUtc = string.Empty;
         _pageNumber = 1;
         await LoadPage();
     }
@@ -214,7 +230,9 @@ else
 
         if (!TryGuid(_orgId, out var orgId)
             || !TryGuid(_projectId, out var projectId)
-            || !TryGuid(_actorUserId, out var actorUserId))
+            || !TryGuid(_actorUserId, out var actorUserId)
+            || !TryGuid(_actorTokenId, out var actorTokenId)
+            || !TryGuid(_actorDeviceId, out var actorDeviceId))
         {
             Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
             return;
@@ -235,7 +253,10 @@ else
             _page = await AuditReader.ListAsync(_admin, new AuditQuery(
                 orgId, projectId, fromUtc, toUtc,
                 string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
-                actorKind, actorUserId, outcome, _pageNumber, PageSize));
+                actorKind, actorUserId, outcome, _pageNumber, PageSize,
+                actorTokenId, actorDeviceId,
+                string.IsNullOrWhiteSpace(_targetType) ? null : _targetType.Trim(),
+                string.IsNullOrWhiteSpace(_targetId) ? null : _targetId.Trim()));
         }
         catch (ArgumentException ex)
         {
@@ -258,6 +279,10 @@ else
         AddQuery(query, "orgId", _orgId);
         AddQuery(query, "projectId", _projectId);
         AddQuery(query, "actorUserId", _actorUserId);
+        AddQuery(query, "actorTokenId", _actorTokenId);
+        AddQuery(query, "actorDeviceId", _actorDeviceId);
+        AddQuery(query, "targetType", _targetType);
+        AddQuery(query, "targetId", _targetId);
         AddQuery(query, "actorKind", _actorKind);
         AddQuery(query, "outcome", _outcome);
         AddQuery(query, "fromUtc", _fromUtc);
