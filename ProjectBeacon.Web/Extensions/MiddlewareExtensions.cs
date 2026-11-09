@@ -73,9 +73,10 @@ public static class MiddlewareExtensions
         app.UseAuthentication();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
+        // Wrap tenant and authorization middleware so all 403 responses are observed.
+        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
-        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseAntiforgery();
 
         app.MapEndpoints();
