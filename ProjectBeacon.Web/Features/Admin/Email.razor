@@ -195,18 +195,19 @@
             return;
         }
 
-        var actor = ActorContextFactory.FromPrincipal(principal);
-        var read = await AdminGate.RequireAsync(actor, OperatorPermission.EmailSettingsRead);
-        if (!read.Success)
+        _authorized = await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead);
+        if (!_authorized)
             return;
 
-        _authorized = true;
-        _canManage = (await AdminGate.RequireAsync(actor, OperatorPermission.EmailSettingsManage)).Success;
+        _canManage = await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage);
         await Reload();
     }
 
     private async Task Reload()
     {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead))
+            return;
+
         try
         {
             var settings = await EmailAdmin.GetAsync();
@@ -232,6 +233,9 @@
 
     private async Task Save()
     {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+            return;
+
         _saving = true;
         try
         {
@@ -259,6 +263,9 @@
 
     private async Task TestConnection()
     {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+            return;
+
         _testingConnection = true;
         try
         {
@@ -282,6 +289,9 @@
 
     private async Task SendTest()
     {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage))
+            return;
+
         _testingEmail = true;
         try
         {
@@ -304,8 +314,45 @@
         }
     }
 
+    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission)
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return false;
+        }
+
+        var access = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal),
+            permission);
+
+        if (access.Success)
+            return true;
+
+        if (permission == OperatorPermission.EmailSettingsRead)
+            _authorized = false;
+        if (permission == OperatorPermission.EmailSettingsManage)
+            _canManage = false;
+
+        Snackbar.Add("Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
+        return false;
+    }
+
     private async Task ReloadLogs()
     {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead))
+            return;
+
         _loadingLogs = true;
         try
         {
