@@ -69,7 +69,8 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(restored.Value!.Changed);
         Assert.Equal(3, restored.Value.Revision);
 
-        var current = await _db.Projects.SingleAsync(p => p.Id == _projectId, TestContext.Current.CancellationToken);
+        await _db.Entry(project).ReloadAsync(TestContext.Current.CancellationToken);
+        var current = project;
         Assert.Equal("Original description", current.Description);
         Assert.Equal(3, current.Revision);
 
@@ -77,7 +78,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
             .Where(v => v.TargetKind == ContentTargetKind.ProjectDescription && v.TargetId == _projectId)
             .OrderBy(v => v.Revision)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Equal([1, 2, 3], history.Select(v => v.Revision));
+        Assert.Equal(new[] { 1, 2, 3 }, history.Select(v => v.Revision).ToArray());
         Assert.Equal("Human", history[^1].ChangedByType);
         Assert.Equal(_actorId.ToString("D"), history[^1].ChangedById);
         using var snapshot = JsonDocument.Parse(history[^1].ContentJson);
@@ -127,7 +128,8 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(restored.Success, restored.Error);
         Assert.Equal(4, restored.Value!.Revision);
 
-        var current = await _db.Tasks.SingleAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken);
+        await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
+        var current = task;
         Assert.Equal("Original task description", current.Description);
         Assert.Null(current.ReviewNotes);
         Assert.Equal(4, current.ContentRevision);
