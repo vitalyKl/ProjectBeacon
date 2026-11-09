@@ -74,55 +74,14 @@ public static partial class McpStdioServer
         return Result(id, new JsonObject { ["tools"] = filtered });
     }
 
-    private static readonly string[] ReadOnlyWorkspaceTools =
-    [
-        McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,
-        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.HashRange,
-        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
-    ];
-
-    private static readonly string[] PlannerSupervisorTools =
-    [
-        McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.TaskCreateSubtask, McpToolNames.PipelineStartActor,
-        McpToolNames.PipelineLaunchSession, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
-    ];
-
-    private static readonly string[] ReviewerSupervisorTools =
-    [
-        McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict, McpToolNames.PipelineApprove
-    ];
-
-    private static readonly string[] PlannerTools =
-    [
-        ..ReadOnlyWorkspaceTools,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject,
-        McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
-        McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.ListLabels, McpToolNames.MatchLabel,
-        McpToolNames.WorkspaceWrite,
-        ..PlannerSupervisorTools
-    ];
-
-    private static readonly string[] ReviewerTools =
-    [
-        ..ReadOnlyWorkspaceTools,
-        McpToolNames.GetProject,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
-        ..ReviewerSupervisorTools
-    ];
-
-    private static readonly string[] ActorTerminalTools =
-    [
-        McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask
-    ];
-
-    private static readonly string[] ActorWorkspaceTools =
-    [
-        McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.ListDecisions,
-        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite,
-        McpToolNames.TaskAttachFile, McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
-    ];
+    private static readonly IReadOnlyList<string> ReadOnlyWorkspaceTools = PipelineToolPolicy.ReadOnlyWorkspaceTools;
+    private static readonly IReadOnlyList<string> PlannerSupervisorTools = PipelineToolPolicy.PlannerSupervisorTools;
+    private static readonly IReadOnlyList<string> ReviewerSupervisorTools = PipelineToolPolicy.ReviewerSupervisorTools;
+    private static readonly IReadOnlyList<string> PlannerTools = PipelineToolPolicy.PlannerTools;
+    private static readonly IReadOnlyList<string> ReviewerTools = PipelineToolPolicy.ReviewerTools;
+    private static readonly IReadOnlyList<string> ActorTerminalTools = PipelineToolPolicy.ActorTerminalTools;
+    private static readonly IReadOnlyList<string> ActorWorkspaceTools = PipelineToolPolicy.ActorWorkspaceTools;
+    private static readonly IReadOnlyList<string> ActorForbiddenTools = PipelineToolPolicy.ActorForbiddenTools;
 
     private static readonly string[] EvalAllowedTools =
     [

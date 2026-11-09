@@ -32,29 +32,17 @@ public sealed record BuiltInAgentProfile(
 /// </summary>
 public static class BuiltInAgentProfiles
 {
-    private static readonly string[] Read =
-    [
-        McpToolNames.GetTree, McpToolNames.ReadFile, McpToolNames.SearchCode,
-        McpToolNames.GetSignatures, McpToolNames.GetCallers, McpToolNames.GetChangedScope,
-        McpToolNames.HashRange
-    ];
-    private static readonly string[] Context =
-    [
-        McpToolNames.GetTask, McpToolNames.TaskPipelineStatus, McpToolNames.ListConstraints,
-        McpToolNames.ListDecisions, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
-    ];
-    private static readonly string[] Write = [McpToolNames.ApplyPatch, McpToolNames.WriteFile];
-    private static readonly string[] Always =
-    [
-        McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask, McpToolNames.WorkspaceWrite
-    ];
-    private static readonly IReadOnlyList<string> Required = Array.AsReadOnly(Always);
+    private static readonly IReadOnlyList<string> Read = PipelineToolPolicy.AgentProfileReadTools;
+    private static readonly IReadOnlyList<string> Context = PipelineToolPolicy.AgentProfileContextTools;
+    private static readonly IReadOnlyList<string> Write = PipelineToolPolicy.AgentProfileWriteTools;
+    private static readonly IReadOnlyList<string> Always = PipelineToolPolicy.AgentProfileRequiredTools;
+    private static readonly IReadOnlyList<string> Required = Always;
 
     private static readonly IReadOnlyList<BuiltInAgentProfile> Profiles =
     [
         Profile("explorer", "Investigate code and answer a question without changing files.",
             "Investigate; do not modify files. Start with get_tree/search_code and read only what answers the question. Cite path:line evidence for every claim. Separate repository facts from inference. Say when the answer is not in the repository instead of guessing. Put the answer before evidence and open questions.",
-            AgentProfileMode.Plan, ReadOnly(), AgentProfilePathPolicy.None, [], false, false, "one question, one code area", "low-medium"),
+            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], false, false, "one question, one code area", "low-medium"),
         Profile("implementer", "Add or change behaviour: a feature or improvement.",
             "Read neighbouring code first and follow its conventions. Do not add patterns, dependencies or abstractions the task does not require. Check list_constraints and list_decisions before designing. Make the smallest change; prefer apply_patch. Build and run relevant tests. Do not fix unrelated problems; list them as findings.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one goal, up to 3-5 files", "medium"),
