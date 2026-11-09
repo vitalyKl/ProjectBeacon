@@ -132,6 +132,7 @@ public sealed class OrgProjectTaskHttpTests
             type = 3
         });
         var taskId = created.GetProperty("id").GetGuid();
+        Assert.Equal(1, created.GetProperty("contentRevision").GetInt32());
         var other = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
         {
             title = "B",
@@ -155,9 +156,46 @@ public sealed class OrgProjectTaskHttpTests
             title = "A2",
             description = "two",
             priority = 2,
-            type = 3
+            type = 3,
+            expectedContentRevision = 1
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updatedBody.GetProperty("contentRevision").GetInt32());
+
+        var staleUpdate = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}", new
+        {
+            taskId,
+            title = "A3",
+            description = "stale",
+            priority = 2,
+            type = 3,
+            expectedContentRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleUpdate.StatusCode);
+
+        client.DefaultRequestHeaders.TryAddWithoutValidation("If-Match", "2");
+        var notesResponse = await client.PatchAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/review-notes",
+            "Review approved",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, notesResponse.StatusCode);
+        var notesBody = await notesResponse.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(3, notesBody.GetProperty("contentRevision").GetInt32());
+        client.DefaultRequestHeaders.Remove("If-Match");
+
+        var staleNotesResponse = await client.PatchAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/review-notes",
+            "Stale review",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleNotesResponse.StatusCode);
+
+        var taskHistory = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(3, taskHistory.GetArrayLength());
+        Assert.Equal(3, taskHistory[0].GetProperty("revision").GetInt32());
+
         var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}", TestContext.Current.CancellationToken);
         Assert.Equal("A2", got.GetProperty("title").GetString());
 
