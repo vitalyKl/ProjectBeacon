@@ -37,6 +37,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       BEACON_MIGRATE_ON_START: "false"
+      CONTROL_HOST: ${CONTROL_HOST:-control.projectbeacon.tech}
       # Application role is beacon_app (NOSUPERUSER NOBYPASSRLS); migrations use beacon (superuser).
       # The superuser password doubles as the beacon_app password (EnsureAppRoleAsync bootstraps it).
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
@@ -121,6 +122,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       BEACON_DOMAIN: ${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}
+      CONTROL_HOST: ${CONTROL_HOST:-control.projectbeacon.tech}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
     depends_on:
       - web
