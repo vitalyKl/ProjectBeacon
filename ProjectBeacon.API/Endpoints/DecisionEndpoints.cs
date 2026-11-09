@@ -39,8 +39,11 @@ public static class DecisionEndpoints
     {
         if (!IsHumanOrActorKnowledgeWriter(context))
             return Results.Forbid();
+        var actor = context.GetActor();
+        var agentId = context.User.FindFirst("pipeline_subtask_id")?.Value
+            ?? context.User.FindFirst("pipeline_session_id")?.Value;
         var result = await handler.HandleProposalAsync(new CreateDecisionRequest(
-            projectId, body.Title, body.Context ?? string.Empty, body.Body, body.Consequences), ct);
+            projectId, body.Title, body.Context ?? string.Empty, body.Body, body.Consequences, actor, agentId), ct);
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/decisions/propose", result.Value)
             : result.FromResult();
@@ -55,10 +58,14 @@ public static class DecisionEndpoints
                 PipelineRole.Actor.ToString(), StringComparison.Ordinal);
     }
 
-    private static async Task<IResult> Create(Guid projectId, [FromBody] CreateDecisionBody body, CreateDecisionHandler handler)
+    private static async Task<IResult> Create(
+        Guid projectId,
+        [FromBody] CreateDecisionBody body,
+        HttpContext context,
+        CreateDecisionHandler handler)
     {
         var result = await handler.HandleAsync(new CreateDecisionRequest(
-            projectId, body.Title, body.Context ?? "", body.Body, body.Consequences));
+            projectId, body.Title, body.Context ?? "", body.Body, body.Consequences, context.GetActor()));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/decisions", result.Value)
             : result.FromResult();
