@@ -209,7 +209,9 @@ internal static class PipelineSupport
                     LaunchBlockedReason = blockedReason,
                     IsQueued = queuedSessionIds.Contains(session.Id),
                     ModelName = backend?.Name,
-                    AgentMode = session.Role == PipelineRole.Actor ? subtask?.AgentMode ?? "Act" : "Act"
+                    AgentMode = session.Role == PipelineRole.Actor && subtask is not null
+                        ? PipelineMappers.ToDto(subtask).AgentMode
+                        : "Act"
                 };
             }).ToList()
         };
