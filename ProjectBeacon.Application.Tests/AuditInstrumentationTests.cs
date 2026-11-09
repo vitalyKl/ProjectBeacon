@@ -464,6 +464,64 @@ public sealed class AuditInstrumentationTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task DeviceCreateRotateAndRevoke_AreAuditedWithoutCredentialMaterial()
+    {
+        var actor = Human(_admin.Id);
+        var create = new CreateDeviceHandler(_factory, auditWriter: _auditWriter);
+
+        var created = await create.HandleAsync(
+            new CreateDeviceCommand(
+                new CreateDeviceRequest("Audit Workstation", "fingerprint-audit", _admin.Id),
+                actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+        Assert.NotNull(created.Value!.Token);
+
+        var createdEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "device.created" && item.TargetId == created.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_admin.Id, createdEvent.ActorUserId);
+        Assert.Null(createdEvent.OrgId);
+        Assert.Null(createdEvent.ProjectId);
+        Assert.DoesNotContain(created.Value.Token, createdEvent.DetailsJson ?? string.Empty);
+
+        var rotated = await create.HandleAsync(
+            new CreateDeviceCommand(
+                new CreateDeviceRequest("Audit Workstation Renamed", "fingerprint-audit", _admin.Id),
+                actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(rotated.Success, rotated.Error);
+        Assert.Equal(created.Value.Id, rotated.Value!.Id);
+        Assert.NotEqual(created.Value.Token, rotated.Value.Token);
+
+        var rotatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "device.token.rotated" && item.TargetId == created.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_admin.Id, rotatedEvent.ActorUserId);
+        Assert.DoesNotContain(rotated.Value.Token!, rotatedEvent.DetailsJson ?? string.Empty);
+
+        var stored = await _seedDb.DaemonDevices.SingleAsync(
+            device => device.Id == created.Value.Id,
+            TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(stored.TokenHash, createdEvent.DetailsJson ?? string.Empty);
+        Assert.DoesNotContain(stored.TokenHash, rotatedEvent.DetailsJson ?? string.Empty);
+
+        var revoke = new RevokeDeviceHandler(_factory, _auditWriter);
+        var revoked = await revoke.HandleAsync(
+            new RevokeDeviceCommand(new RevokeDeviceRequest(created.Value.Id, _admin.Id), actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(revoked.Success, revoked.Error);
+
+        var revokedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "device.revoked" && item.TargetId == created.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_admin.Id, revokedEvent.ActorUserId);
+        Assert.Null(revokedEvent.OrgId);
+        Assert.Null(revokedEvent.ProjectId);
+        Assert.Equal("""{"newState":"Revoked"}""", revokedEvent.DetailsJson);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
