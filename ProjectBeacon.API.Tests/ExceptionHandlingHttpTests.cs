@@ -28,6 +28,29 @@ public sealed class ExceptionHandlingHttpTests
         Assert.DoesNotContain("InvalidOperationException", body);
     }
 
+    [Fact]
+    public async Task DatabaseConcurrencyException_Returns_409_ProblemDetails()
+    {
+        await using var factory = new TestingApiFactory();
+        var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/v1/__test/concurrency-conflict",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        Assert.Equal(409, doc.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("Conflict", doc.RootElement.GetProperty("title").GetString());
+        Assert.Equal(
+            "The resource changed since it was loaded. Refresh and retry.",
+            doc.RootElement.GetProperty("detail").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("exceptionType", out _));
+        Assert.DoesNotContain("test concurrency conflict", body);
+    }
+
     // A BadHttpRequestException is a client fault: the handler must surface its own
     // status code (400) as problem+json, not mask it as a 500.
     [Fact]
