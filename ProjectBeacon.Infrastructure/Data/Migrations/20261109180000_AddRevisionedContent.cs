@@ -88,6 +88,85 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                 columns: new[] { "ProjectId", "TargetKind", "TargetId", "Revision" },
                 unique: true);
 
+            // Preserve the pre-revision state as revision 1 so existing records have a complete history.
+            migrationBuilder.Sql("""
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'sectionId', "SectionId",
+                        'key', "Key",
+                        'title', "Title",
+                        'bodyMarkdown', "BodyMarkdown",
+                        'ordinal', "Ordinal",
+                        'scopeType', "ScopeType",
+                        'repoId', "RepoId",
+                        'taskId', "TaskId",
+                        'path', "Path",
+                        'deleted', false),
+                    "ProjectId", NULL, 1, "Id", 'ContextSection'
+                FROM "ContextSections";
+
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'title', "Title",
+                        'context', "Context",
+                        'decisionBody', "DecisionBody",
+                        'consequences', "Consequences",
+                        'deleted', false),
+                    "ProjectId", NULL, 1, "Id", 'Decision'
+                FROM "Decisions";
+
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'body', "Body",
+                        'scopePath', "ScopePath",
+                        'kind', CASE "Kind"
+                            WHEN 'Must' THEN 0
+                            WHEN 'MustNot' THEN 1
+                            WHEN 'Security' THEN 2
+                            WHEN 'Compliance' THEN 3
+                            ELSE NULL
+                        END,
+                        'deleted', false),
+                    "ProjectId", NULL, 1, "Id", 'Constraint'
+                FROM "Constraints";
+
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'name', "Name",
+                        'description', "Description",
+                        'order', "Order",
+                        'deleted', false),
+                    "ProjectId", NULL, 1, "Id", 'Milestone'
+                FROM "Milestones";
+
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'description', "Description",
+                        'deleted', false),
+                    "Id", NULL, 1, "Id", 'ProjectDescription'
+                FROM "Projects";
+
+                INSERT INTO "ContentVersions"
+                    ("Id", "At", "ChangedById", "ChangedByType", "ContentJson", "ProjectId", "ProposalId", "Revision", "TargetId", "TargetKind")
+                SELECT gen_random_uuid(), CURRENT_TIMESTAMP, 'migration:20261109180000', 'System',
+                    jsonb_build_object(
+                        'description', "Description",
+                        'reviewNotes', "ReviewNotes",
+                        'deleted', false),
+                    "ProjectId", NULL, 1, "Id", 'TaskDescription'
+                FROM "Tasks";
+                """);
+
             // ContentVersions belongs to exactly one tenant project and fails closed without a project scope.
             migrationBuilder.Sql("""
                 ALTER TABLE "ContentVersions" ENABLE ROW LEVEL SECURITY;
