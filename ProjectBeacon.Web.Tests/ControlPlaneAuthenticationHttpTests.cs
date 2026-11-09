@@ -58,6 +58,7 @@ public sealed class ControlPlaneAuthenticationHttpTests
         Assert.Contains("Secure", setCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("HttpOnly", setCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SameSite=Strict", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Domain=", setCookie, StringComparison.OrdinalIgnoreCase);
         Assert.False(HasCookie(controlLoginResponse, "BeaconAuth"));
 
         using var controlCookieAudit = Request(HttpMethod.Get, "/v1/admin/audit", "control.localhost");
