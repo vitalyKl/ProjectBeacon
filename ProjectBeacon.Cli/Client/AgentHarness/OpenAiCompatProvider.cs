@@ -88,7 +88,7 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
             // never surfaced. A loopback model server is locally trusted and its short body
             // is useful when a template or tool-call parser rejects a request.
             var diagnostic = string.Empty;
-            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            var responseBody = await ChatProviderException.ReadBoundedErrorPayloadAsync(response.Content, ct);
             var contextExceeded = status == 413 || ChatProviderException.IsContextLengthExceededPayload(responseBody);
             if (_endpoint.IsLoopback && !string.IsNullOrWhiteSpace(responseBody))
             {
@@ -292,6 +292,23 @@ internal sealed class ChatProviderException(string message, int statusCode, bool
     : HttpRequestException(message, inner, (HttpStatusCode)statusCode)
 {
     public bool Retryable { get; } = retryable;
+
+    public static async Task<string> ReadBoundedErrorPayloadAsync(HttpContent content, CancellationToken ct)
+    {
+        const int maxBytes = 16 * 1024;
+        await using var stream = await content.ReadAsStreamAsync(ct);
+        using var buffer = new MemoryStream(maxBytes);
+        var bytes = new byte[4096];
+        while (buffer.Length < maxBytes)
+        {
+            var remaining = maxBytes - (int)buffer.Length;
+            var read = await stream.ReadAsync(bytes.AsMemory(0, Math.Min(bytes.Length, remaining)), ct);
+            if (read == 0)
+                break;
+            buffer.Write(bytes, 0, read);
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
 
     public static bool IsContextLengthExceededPayload(string? payload)
     {

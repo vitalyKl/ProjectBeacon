@@ -1629,7 +1629,8 @@ public sealed class NativeAgentRuntimeTests
                 new AgentPromptControls(null, "medium", null)
                 {
                     ContextLimit = 65_536,
-                    HarnessAuthorization = authorization
+                    HarnessAuthorization = authorization,
+                    SystemPromptAddition = explorer.Instruction
                 });
             await streamTask.WaitAsync(TimeSpan.FromSeconds(10));
 

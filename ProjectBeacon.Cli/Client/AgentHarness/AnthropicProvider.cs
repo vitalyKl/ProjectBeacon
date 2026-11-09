@@ -70,7 +70,7 @@ internal sealed class AnthropicProvider(HttpClient http, string baseUrl, string?
                 or HttpStatusCode.RequestTimeout
                 || status >= 500
                 || status == 529;
-            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            var responseBody = await ChatProviderException.ReadBoundedErrorPayloadAsync(response.Content, ct);
             var contextExceeded = status == 413 || ChatProviderException.IsContextLengthExceededPayload(responseBody);
             var marker = contextExceeded ? " context_length_exceeded" : string.Empty;
             throw new ChatProviderException($"Anthropic provider returned HTTP {status}.{marker}", status, retryable);
