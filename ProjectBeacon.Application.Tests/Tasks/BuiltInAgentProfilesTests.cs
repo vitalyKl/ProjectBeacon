@@ -6,9 +6,9 @@ using Domain.Common;
 public sealed class BuiltInAgentProfilesTests
 {
     [Fact]
-    public void CatalogContainsEightBuiltInProfilesWithRequiredLifecycleTools()
+    public void CatalogContainsNineBuiltInProfilesWithRequiredLifecycleTools()
     {
-        Assert.Equal(8, BuiltInAgentProfiles.All.Count);
+        Assert.Equal(9, BuiltInAgentProfiles.All.Count);
         var required = new[]
         {
             McpToolNames.SubtaskReportResult,
@@ -47,6 +47,22 @@ public sealed class BuiltInAgentProfilesTests
         Assert.DoesNotContain(McpToolNames.WriteFile, verifier.Tools);
         Assert.DoesNotContain(McpToolNames.ApplyPatch, verifier.Tools);
 
+        Assert.Contains(McpToolNames.ListContextNodes, verifier.Tools);
+        Assert.Contains(McpToolNames.GetContextNode, verifier.Tools);
+        Assert.Contains(McpToolNames.ListDecisions, verifier.Tools);
+        Assert.Contains(McpToolNames.ListConstraints, verifier.Tools);
+        Assert.DoesNotContain(McpToolNames.ContextCreateDraft, verifier.Tools);
+
+        var knowledge = AssertProfile("knowledge-curator");
+        Assert.Contains(McpToolNames.ContextCreateDraft, knowledge.Tools);
+        Assert.Contains(McpToolNames.ConstraintPropose, knowledge.Tools);
+        Assert.Contains(McpToolNames.DecisionPropose, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.UpsertContextNode, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.ActivateConstraint, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.AcceptDecision, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.DeprecateDecision, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.SupersedeDecision, knowledge.Tools);
+
         var docs = AssertProfile("docs-writer");
         Assert.False(docs.CommandsEnabled);
         Assert.Equal(AgentProfilePathPolicy.Defaults, docs.PathPolicy);
@@ -70,6 +86,10 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.PipelineStartReview, PipelineToolPolicy.PlannerTools);
         Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.ActorWorkspaceTools);
         Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.AgentProfileContextTools);
+        Assert.Contains(McpToolNames.ListContextNodes, PipelineToolPolicy.AgentProfileContextTools);
+        Assert.Contains(McpToolNames.GetContextNode, PipelineToolPolicy.AgentProfileContextTools);
+        Assert.DoesNotContain(McpToolNames.ActivateConstraint, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
+        Assert.DoesNotContain(McpToolNames.AcceptDecision, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
         foreach (var profile in BuiltInAgentProfiles.All)
         {
             Assert.All(profile.RequiredTools, tool => Assert.Contains(tool, PipelineToolPolicy.AgentProfileRequiredTools));

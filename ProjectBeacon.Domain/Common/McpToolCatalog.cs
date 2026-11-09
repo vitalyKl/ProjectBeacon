@@ -68,6 +68,9 @@ public static class McpToolNames
     public const string DeleteTaskStep = "delete_task_step";
     public const string FinishWork = "finish_work";
     public const string ContextCompile = "context_compile";
+    public const string ContextCreateDraft = "context_create_draft";
+    public const string ConstraintPropose = "constraint_propose";
+    public const string DecisionPropose = "decision_propose";
     public const string ListContextNodes = "list_context_nodes";
     public const string GetContextNode = "get_context_node";
     public const string UpsertContextNode = "upsert_context_node";
@@ -190,6 +193,10 @@ public static class McpToolCatalog
                 McpToolNames.UpsertContextNode, McpToolNames.DeleteContextNode, McpToolNames.CreateConstraint,
                 McpToolNames.ActivateConstraint, McpToolNames.RejectConstraint, McpToolNames.RecordDecision,
                 McpToolNames.AcceptDecision, McpToolNames.DeprecateDecision, McpToolNames.SupersedeDecision),
+            // Pipeline knowledge authors can only create reviewable drafts and Proposed records.
+            // The API role guard checks each dedicated proposal route against the subtask grant.
+            ..Api(McpToolScope.Write, ApiTokenCapability.ContextRead,
+                McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose),
 
             // Catalog and roadmap reads/writes.
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,

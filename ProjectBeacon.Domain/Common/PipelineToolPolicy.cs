@@ -12,6 +12,14 @@ public static class PipelineToolPolicy
     {
         McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask
     });
+    public static IReadOnlyList<string> ActorReadOnlyAlwaysTools { get; } = Array.AsReadOnly(new[]
+    {
+        McpToolNames.TaskPipelineStatus
+    });
+    public static IReadOnlyList<string> AgentProfileKnowledgeWriteTools { get; } = Array.AsReadOnly(new[]
+    {
+        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose
+    });
     public static IReadOnlyList<string> PlannerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
@@ -38,6 +46,7 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.ListDecisions,
+        McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
         McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment
@@ -66,7 +75,8 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> AgentProfileContextTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.GetTask, McpToolNames.TaskPipelineStatus, McpToolNames.ListConstraints,
-        McpToolNames.ListDecisions, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
+        McpToolNames.ListDecisions, McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
+        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
     });
     public static IReadOnlyList<string> AgentProfileWriteTools { get; } = Array.AsReadOnly(new[]
     {

@@ -56,15 +56,16 @@ public static partial class McpStdioServer
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
             filtered = FilterActorTools(filtered, allowlists, explicitSubtaskId);
 
-        // Actors must always be able to report success or failure for their own subtask,
-        // even when the caller omitted these mandatory lifecycle tools from the allowlist.
+        // Lifecycle calls and task status are always available to an Actor.
+        // The status tool is read-only; it does not grant queue or pipeline control.
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
         {
             foreach (var tool in tools)
             {
                 var name = tool?["name"]?.GetValue<string>();
                 if (name is not null
-                    && ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && (ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                        || PipelineToolPolicy.ActorReadOnlyAlwaysTools.Contains(name, StringComparer.OrdinalIgnoreCase))
                     && !filtered.Any(existing => string.Equals(
                         existing?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)))
                     filtered.Add(tool!.DeepClone());
@@ -91,23 +92,6 @@ public static partial class McpStdioServer
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
         McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport
-    ];
-
-    private static readonly string[] ActorForbiddenTools =
-    [
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict,
-        McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
-        McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
-        McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,
-        McpToolNames.ProxyReload, McpToolNames.ProxyUnload,
-        McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus, McpToolNames.SetTaskSubstage,
-        McpToolNames.ClaimTask, McpToolNames.AddTaskComment, McpToolNames.SetTaskDependencies, McpToolNames.AddReviewNotes,
-        McpToolNames.ListTaskSteps, McpToolNames.AddTaskStep, McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork,
-        McpToolNames.UpsertContextNode, McpToolNames.DeleteContextNode,
-        McpToolNames.CreateConstraint, McpToolNames.ActivateConstraint, McpToolNames.RejectConstraint,
-        McpToolNames.RecordDecision, McpToolNames.AcceptDecision, McpToolNames.DeprecateDecision, McpToolNames.SupersedeDecision,
-        McpToolNames.CreateMilestone, McpToolNames.UpdateMilestone, McpToolNames.DeleteMilestone, McpToolNames.CloseMilestone, McpToolNames.ReopenMilestone,
-        McpToolNames.AddLabelPath, McpToolNames.GenerateReport
     ];
 
     private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)

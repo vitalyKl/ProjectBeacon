@@ -62,8 +62,11 @@ public static class BuiltInAgentProfiles
             "Call suggest_command_prefixes before changes to inspect actual build and test commands. After changing a manifest or workflow, call it again before using changed commands. Never add secrets or absolute local paths. Pin versions consistently. Verify with the project's own build command.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one configuration change", "medium"),
         Profile("verifier", "Independently verify build, tests and linters; do not fix.",
-            "Verify; do not change files. Use task_pipeline_status and workspace reports to check other actors' claims. Run the named build, test and lint commands. Report each command, exit status and relevant failing lines. Start the summary with PASS or FAIL. A failed check is a valid report, not a reason to edit code.",
-            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], true, false, "one verification run", "low")
+            "Verify; do not change files. Use task_pipeline_status, context nodes, decisions and constraints to check project knowledge and other actors' claims. Run the named build, test and lint commands. Report each command, exit status and relevant failing lines. Start the summary with PASS or FAIL. A failed check is a valid report, not a reason to edit code.",
+            AgentProfileMode.Act, ReadOnly(), AgentProfilePathPolicy.None, [], true, false, "one verification run", "low"),
+        Profile("knowledge-curator", "Prepare project knowledge updates for human review without accepting or activating them.",
+            "Capture durable project knowledge as a draft. Read the existing context, decisions and constraints first. Create context drafts and propose decisions or constraints only. Never edit or delete reviewed context, accept or deprecate decisions, supersede decisions, or activate or reject constraints. Use stable section identifiers so a retry updates the same NeedsReview draft instead of creating duplicates. Distinguish evidence from inference and include source paths or task references.",
+            AgentProfileMode.Act, KnowledgeWritable(), AgentProfilePathPolicy.None, [], false, false, "one focused knowledge update", "medium")
     ];
 
     private static readonly IReadOnlyDictionary<string, BuiltInAgentProfile> ByKey =
@@ -155,4 +158,7 @@ public static class BuiltInAgentProfiles
         Array.AsReadOnly(Read.Concat(Context).Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
     private static IReadOnlyList<string> Writable() =>
         Array.AsReadOnly(Read.Concat(Context).Concat(Write).Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
+    private static IReadOnlyList<string> KnowledgeWritable() =>
+        Array.AsReadOnly(Read.Concat(Context).Concat(PipelineToolPolicy.AgentProfileKnowledgeWriteTools)
+            .Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
 }
