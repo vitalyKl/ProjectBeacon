@@ -532,7 +532,7 @@ internal static class CommandExecutionPolicy
 
             if (ContainsPathOutsideWorktree(argument, workingDirectory))
             {
-                error = "This isolated session cannot access the real project directory. Synchronize the repository from the ProjectBeacon interface; absolute paths and parent-directory traversal outside the worktree are blocked.";
+                error = "Absolute paths and parent-directory traversal outside the isolated worktree are not allowed. Synchronize the real project from the ProjectBeacon interface; an agent session cannot access the real project directory.";
                 return false;
             }
         }
