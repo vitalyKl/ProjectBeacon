@@ -109,11 +109,11 @@ public static class EndpointExtensions
             return Results.Redirect("/admin/audit");
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
 
-        app.MapGet("/control/logout", async (HttpContext ctx) =>
+        app.MapPost("/control/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
             return Results.Redirect("/control/login");
-        }).RequireAuthorization();
+        }).RequireAuthorization().DisableAntiforgery();
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
         {
