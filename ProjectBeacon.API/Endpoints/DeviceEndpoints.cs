@@ -175,7 +175,7 @@ public static class DeviceEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, body.DeviceId, actor.UserId!.Value, body.LocalRoot)), ct);
+            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, body.DeviceId, actor.UserId!.Value, body.LocalRoot, actor)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -185,7 +185,7 @@ public static class DeviceEndpoints
         Guid projectId, Guid id, DetachRuntimeHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, actor.UserId!.Value)), ct);
+        var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, actor.UserId!.Value, actor)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
