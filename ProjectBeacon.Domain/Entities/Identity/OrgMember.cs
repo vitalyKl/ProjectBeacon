@@ -20,11 +20,22 @@ public class OrgMember : Entity, IOrgScoped
 
     public static OrgMember Create(Guid orgId, Guid userId, MemberRole role)
     {
+        if (!Enum.IsDefined(role))
+            throw new ArgumentOutOfRangeException(nameof(role));
+
         var member = Entity.New<OrgMember>();
         member.OrgId = orgId;
         member.UserId = userId;
         member.Role = role;
         member.JoinedAt = DateTime.UtcNow;
         return member;
+    }
+
+    public void ChangeRole(MemberRole role)
+    {
+        if (!Enum.IsDefined(role))
+            throw new ArgumentOutOfRangeException(nameof(role));
+
+        Role = role;
     }
 }

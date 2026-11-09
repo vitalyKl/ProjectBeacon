@@ -13,6 +13,7 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Enums;
@@ -23,7 +24,8 @@ public sealed class EfOrganizationAdminService(
     IEmailSender emailSender,
     IConfiguration configuration,
     IAuditWriter auditWriter,
-    TimeProvider timeProvider) : IOrganizationAdminService
+    TimeProvider timeProvider,
+    IUserSessionVersionCache? sessionVersions = null) : IOrganizationAdminService
 {
     public async Task<Result<OrganizationAdminPage>> ListAsync(
         AdminActor actor, string? search = null, int page = 1, int pageSize = 25,
@@ -182,7 +184,7 @@ public sealed class EfOrganizationAdminService(
                 orderby member.Role, member.JoinedAt
                 select new OrganizationAdminMember(
                     user.Id, user.Login, user.Email, member.Role.ToString(),
-                    user.DisabledAt != null, member.JoinedAt))
+                    user.DisabledAt != null, user.IsAdmin, member.JoinedAt))
                 .ToListAsync(ct);
 
             invites = await db.OrgInvites.IgnoreQueryFilters()
@@ -358,6 +360,171 @@ public sealed class EfOrganizationAdminService(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Result.Ok();
+    }
+
+    public async Task<Result> ChangeMemberRoleAsync(
+        AdminActor actor, Guid orgId, Guid userId, MemberRole role, CancellationToken ct = default)
+    {
+        if (!CanManage(actor))
+            return Result.Forbidden("Organization and user management permissions are required.");
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Forbidden("Recent Control Plane authenticator verification is required.");
+        if (orgId == Guid.Empty || userId == Guid.Empty)
+            return Result.Failure("Organization and user ids are required.");
+        if (!Enum.IsDefined(role))
+            return Result.Failure("Member role is invalid.");
+
+        using var unscoped = TenantScope.EnterUnscoped();
+        await using var db = dbFactory.CreateDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await LockOrganizationAsync(db, transaction, orgId, ct))
+            return Result.Failure("Organization not found.", ErrorKind.NotFound);
+
+        var member = await db.OrgMembers.IgnoreQueryFilters()
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.OrgId == orgId && x.UserId == userId, ct);
+        if (member is null)
+            return Result.Failure("Organization member not found.", ErrorKind.NotFound);
+        if (member.Role == role)
+            return Result.Ok();
+        if (role == MemberRole.Owner && member.User.DisabledAt is not null)
+            return Result.Failure("A disabled account cannot become an organization owner.", ErrorKind.Conflict);
+
+        var previousRole = member.Role;
+        if (previousRole == MemberRole.Owner && role != MemberRole.Owner)
+        {
+            var activeOwnerCount = await (
+                from other in db.OrgMembers.IgnoreQueryFilters()
+                join user in db.Users on other.UserId equals user.Id
+                where other.OrgId == orgId
+                    && other.Role == MemberRole.Owner
+                    && other.UserId != userId
+                    && user.DisabledAt == null
+                select other.Id)
+                .CountAsync(ct);
+            if (activeOwnerCount == 0)
+                return Result.Failure(
+                    "The last active organization owner cannot be demoted. Assign another active owner first.",
+                    ErrorKind.Conflict);
+        }
+
+        member.ChangeRole(role);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        auditWriter.Stage(db, Audit(actor, "platform.organization.member_role_changed",
+            "OrgMember", member.Id, orgId, now,
+            $"""{"previousRole":"{{previousRole}}","newRole":"{{role}}"}"""));
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Result.Ok();
+    }
+
+    public async Task<Result> SetAccountDisabledAsync(
+        AdminActor actor, Guid orgId, Guid userId, bool disabled, CancellationToken ct = default)
+    {
+        if (!CanManage(actor))
+            return Result.Forbidden("Organization and user management permissions are required.");
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Forbidden("Recent Control Plane authenticator verification is required.");
+        if (orgId == Guid.Empty || userId == Guid.Empty)
+            return Result.Failure("Organization and user ids are required.");
+
+        using var unscoped = TenantScope.EnterUnscoped();
+        await using var db = dbFactory.CreateDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await LockUserAsync(db, transaction, userId, ct))
+            return Result.Failure("User not found.", ErrorKind.NotFound);
+
+        var isMember = await db.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(x => x.OrgId == orgId && x.UserId == userId, ct);
+        if (!isMember)
+            return Result.Failure("User is not a member of this organization.", ErrorKind.NotFound);
+
+        var user = await db.Users.FirstOrDefaultAsync(x => x.Id == userId, ct);
+        if (user is null)
+            return Result.Failure("User not found.", ErrorKind.NotFound);
+        if (user.IsAdmin)
+            return Result.Failure("Platform operator accounts cannot be managed as customer accounts.", ErrorKind.Conflict);
+        if (user.IsDisabled == disabled)
+            return Result.Ok();
+
+        if (disabled)
+        {
+            // Lock every organization for which this account is an owner in a stable order.
+            // This serializes concurrent owner deactivations so two operators cannot both
+            // pass the active-owner check and leave an organization ownerless.
+            var ownedOrgIds = await db.OrgMembers.IgnoreQueryFilters()
+                .Where(x => x.UserId == userId && x.Role == MemberRole.Owner)
+                .Select(x => x.OrgId)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToListAsync(ct);
+            foreach (var ownedOrgId in ownedOrgIds)
+            {
+                if (!await LockOrganizationAsync(db, transaction, ownedOrgId, ct))
+                    return Result.Failure("An owned organization no longer exists.", ErrorKind.Conflict);
+            }
+
+            foreach (var ownedOrgId in ownedOrgIds)
+            {
+                var activeOwnerCount = await (
+                    from member in db.OrgMembers.IgnoreQueryFilters()
+                    join owner in db.Users on member.UserId equals owner.Id
+                    where member.OrgId == ownedOrgId
+                        && member.Role == MemberRole.Owner
+                        && member.UserId != userId
+                        && owner.DisabledAt == null
+                    select member.Id)
+                    .CountAsync(ct);
+                if (activeOwnerCount == 0)
+                    return Result.Failure(
+                        "This account is an owner and cannot be disabled until every affected organization has another active owner.",
+                        ErrorKind.Conflict);
+            }
+
+            user.Disable(timeProvider.GetUtcNow().UtcDateTime);
+        }
+        else
+        {
+            user.Enable();
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var action = disabled ? "platform.user.account_disabled" : "platform.user.account_enabled";
+        var details = disabled
+            ? """{"scope":"global_account","newState":"Disabled"}"""
+            : """{"scope":"global_account","newState":"Enabled"}""";
+        auditWriter.Stage(db, AuditEvent.Create(
+            now, AuditActorKind.Human, actor.UserId, null, null,
+            action, "User", userId.ToString(), null, null, AuditOutcome.Success,
+            detailsJson: details));
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        sessionVersions?.Invalidate(userId);
+        return Result.Ok();
+    }
+
+    private static async Task<bool> LockUserAsync(
+        IBeaconDb db, IDbContextTransaction transaction, Guid userId, CancellationToken ct)
+    {
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction.GetDbTransaction();
+        command.CommandText = db.Database.IsNpgsql()
+            ? """SELECT "Id" FROM "Users" WHERE "Id" = @user_id FOR UPDATE"""
+            : """SELECT "Id" FROM "Users" WHERE "Id" = @user_id""";
+        Add(command, "user_id", DbType.Guid, userId);
+        return await command.ExecuteScalarAsync(ct) is Guid;
+    }
+
+    private static async Task<bool> LockOrganizationAsync(
+        IBeaconDb db, IDbContextTransaction transaction, Guid orgId, CancellationToken ct)
+    {
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction.GetDbTransaction();
+        command.CommandText = db.Database.IsNpgsql()
+            ? """SELECT "Id" FROM "Orgs" WHERE "Id" = @org_id FOR UPDATE"""
+            : """SELECT "Id" FROM "Orgs" WHERE "Id" = @org_id""";
+        Add(command, "org_id", DbType.Guid, orgId);
+        return await command.ExecuteScalarAsync(ct) is Guid;
     }
 
     private static bool CanManage(AdminActor actor) =>

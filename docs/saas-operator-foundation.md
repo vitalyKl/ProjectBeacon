@@ -122,6 +122,9 @@ Implemented in the foundation branch:
 - Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
+- Operator organization management: paginated/searchable customer list, organization detail, member/invitation metadata, organization creation with owner invitation, invite reissue/revocation, member-role changes, and global account disable/enable with owner-protection and session invalidation.
+- Persisted organization entitlements with operator list/grant/renew/revoke, replacement history, transactionally staged audit events, tenant RLS and an active-grant uniqueness constraint.
+- Sensitive organization, user and entitlement mutations require TOTP step-up and are independently checked by the Application services.
 - SaaS-only product boundary documented in README and AGENTS.
 
 Not implemented by this foundation:

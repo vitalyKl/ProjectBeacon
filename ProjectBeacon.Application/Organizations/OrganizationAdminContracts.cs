@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Organizations;
 
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Common;
+using ProjectBeacon.Domain.Enums;
 
 public sealed record OrganizationAdminListItem(
     Guid Id, string Name, string? Description, DateTime CreatedAt, DateTime? UpdatedAt,
@@ -11,7 +12,7 @@ public sealed record OrganizationAdminPage(
     IReadOnlyList<OrganizationAdminListItem> Items, long TotalCount, int Page, int PageSize);
 
 public sealed record OrganizationAdminMember(
-    Guid UserId, string Login, string Email, string Role, bool IsDisabled, DateTime JoinedAt);
+    Guid UserId, string Login, string Email, string Role, bool IsDisabled, bool IsPlatformAdmin, DateTime JoinedAt);
 
 public sealed record OrganizationAdminInvite(
     Guid Id, string Email, string Role, string Status, DateTime CreatedAt, DateTime ExpiresAt);
@@ -46,4 +47,15 @@ public interface IOrganizationAdminService
 
     Task<Result> RevokeInviteAsync(
         AdminActor actor, Guid orgId, Guid inviteId, CancellationToken ct = default);
+
+    Task<Result> ChangeMemberRoleAsync(
+        AdminActor actor, Guid orgId, Guid userId, MemberRole role, CancellationToken ct = default);
+
+    /// <summary>
+    /// Enables or disables the global user account, not just access to the supplied organization.
+    /// Disabling invalidates every existing customer session and is rejected if it would leave
+    /// any organization without an active owner.
+    /// </summary>
+    Task<Result> SetAccountDisabledAsync(
+        AdminActor actor, Guid orgId, Guid userId, bool disabled, CancellationToken ct = default);
 }

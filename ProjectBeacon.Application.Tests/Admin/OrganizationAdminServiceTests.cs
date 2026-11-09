@@ -198,6 +198,81 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.Equal("Expired", Assert.Single(details.Value!.Invites).Status);
     }
 
+    [Fact]
+    public async Task ChangeMemberRole_PreventsDemotingLastActiveOwner_AndAllowsOwnerHandoff()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var firstOwner = User.Create("first-owner", "first@example.test", "hash");
+        var secondOwner = User.Create("second-owner", "second@example.test", "hash");
+        var org = Org.Create("Role management customer");
+        _seedDb.Users.AddRange(_admin, firstOwner, secondOwner);
+        _seedDb.Orgs.Add(org);
+        var firstMembership = OrgMember.Create(org.Id, firstOwner.Id, MemberRole.Owner);
+        _seedDb.OrgMembers.Add(firstMembership);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var service = CreateService();
+
+        var blocked = await service.ChangeMemberRoleAsync(actor, org.Id, firstOwner.Id, MemberRole.Admin);
+        Assert.False(blocked.Success);
+        Assert.Equal(ErrorKind.Conflict, blocked.Kind);
+        Assert.Equal(MemberRole.Owner, firstMembership.Role);
+
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, secondOwner.Id, MemberRole.Owner));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var changed = await service.ChangeMemberRoleAsync(actor, org.Id, firstOwner.Id, MemberRole.Admin);
+        Assert.True(changed.Success, changed.Error);
+        Assert.Equal(MemberRole.Admin, (await _seedDb.OrgMembers.IgnoreQueryFilters()
+            .SingleAsync(x => x.OrgId == org.Id && x.UserId == firstOwner.Id,
+                TestContext.Current.CancellationToken)).Role);
+        Assert.True(await _seedDb.AuditEvents.IgnoreQueryFilters()
+            .AnyAsync(x => x.Action == "platform.organization.member_role_changed",
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SetAccountDisabled_ProtectsLastOwnerAndInvalidatesSessionsOnDisableAndEnable()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var customerOwner = User.Create("customer-owner", "owner@customer.example", "hash");
+        var org = Org.Create("Account access customer");
+        _seedDb.Users.AddRange(_admin, customerOwner);
+        _seedDb.Orgs.Add(org);
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, customerOwner.Id, MemberRole.Owner));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var service = CreateService();
+
+        var blocked = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: true);
+        Assert.False(blocked.Success);
+        Assert.Equal(ErrorKind.Conflict, blocked.Kind);
+        Assert.Null(customerOwner.DisabledAt);
+        Assert.Equal(0, customerOwner.SessionVersion);
+
+        var backupOwner = User.Create("backup-owner", "backup@customer.example", "hash");
+        _seedDb.Users.Add(backupOwner);
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, backupOwner.Id, MemberRole.Owner));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var disabled = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: true);
+        Assert.True(disabled.Success, disabled.Error);
+        Assert.NotNull(customerOwner.DisabledAt);
+        Assert.Equal(1, customerOwner.SessionVersion);
+
+        var enabled = await service.SetAccountDisabledAsync(actor, org.Id, customerOwner.Id, disabled: false);
+        Assert.True(enabled.Success, enabled.Error);
+        Assert.Null(customerOwner.DisabledAt);
+        Assert.Equal(2, customerOwner.SessionVersion);
+
+        Assert.Equal(2, await _seedDb.AuditEvents.IgnoreQueryFilters()
+            .CountAsync(x => x.TargetType == "User" && x.TargetId == customerOwner.Id.ToString()
+                && (x.Action == "platform.user.account_disabled" || x.Action == "platform.user.account_enabled"),
+                TestContext.Current.CancellationToken));
+    }
+
     private EfOrganizationAdminService CreateService() =>
         new(_factory, _email, _configuration, new EfAuditWriter(), TimeProvider.System);
 
