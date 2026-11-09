@@ -20,8 +20,8 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
 
         if (!actor.HasPermission(OperatorPermission.AuditRead))
             throw new UnauthorizedAccessException("The operator does not have AuditRead permission.");
-        if (query.Page < 1)
-            throw new ArgumentOutOfRangeException(nameof(query.Page));
+        if (query.Page < 1 || (long)(query.Page - 1) * query.PageSize > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(query.Page), "Audit page offset is outside the supported range.");
         if (query.PageSize is < 1 or > 200)
             throw new ArgumentOutOfRangeException(nameof(query.PageSize));
         if ((query.FromUtc.HasValue && query.FromUtc.Value.Kind != DateTimeKind.Utc)
