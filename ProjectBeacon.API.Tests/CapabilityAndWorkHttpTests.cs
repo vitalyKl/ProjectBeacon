@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Domain.Entities.Evals;
+using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -104,6 +105,90 @@ public sealed class CapabilityAndWorkHttpTests
             $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, taskHistoryThroughTaskRoute.StatusCode);
+    }
+
+    [Fact]
+    public async Task TaskContentHistory_CanRestoreOnlyTheRoutedTask()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Task Restore Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Task Restore Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var task = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
+        {
+            title = "Restorable task",
+            description = "Original description",
+            projectId,
+            priority = 1,
+            type = 3
+        });
+        var taskId = task.GetProperty("id").GetGuid();
+        Assert.Equal(1, task.GetProperty("contentRevision").GetInt32());
+
+        Guid originalVersionId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                originalVersionId = await db.ContentVersions
+                    .Where(version => version.ProjectId == projectId
+                        && version.TargetKind == ContentTargetKind.TaskDescription
+                        && version.TargetId == taskId
+                        && version.Revision == 1)
+                    .Select(version => version.Id)
+                    .SingleAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var update = await client.PutAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}",
+            new
+            {
+                taskId,
+                title = "Restorable task",
+                description = "Updated description",
+                priority = 1,
+                type = 3,
+                expectedContentRevision = 1
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updated.GetProperty("contentRevision").GetInt32());
+
+        var restore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+
+        var restored = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/tasks/{taskId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Original description", restored.GetProperty("description").GetString());
+        Assert.Equal(3, restored.GetProperty("contentRevision").GetInt32());
+
+        var otherTask = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
+        {
+            title = "Other task",
+            description = "Other description",
+            projectId,
+            priority = 1,
+            type = 3
+        });
+        var otherTaskId = otherTask.GetProperty("id").GetGuid();
+        var wrongTarget = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{otherTaskId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 1 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongTarget.StatusCode);
     }
 
     [Fact]
