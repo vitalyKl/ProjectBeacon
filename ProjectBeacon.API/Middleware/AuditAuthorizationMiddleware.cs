@@ -2,6 +2,7 @@ namespace ProjectBeacon.API.Middleware;
 
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Audit;
 using Microsoft.AspNetCore.Routing;
