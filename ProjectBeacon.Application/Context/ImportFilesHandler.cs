@@ -12,8 +12,18 @@ using Microsoft.EntityFrameworkCore;
 public class ImportFilesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public ImportFilesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ImportFilesHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public ImportFilesHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<int>> HandleAsync(ImportFilesCommand command, CancellationToken ct = default)
     {
@@ -37,21 +47,36 @@ public class ImportFilesHandler
                 if (existing is null)
                 {
                     db.ContextSections.Add(section);
+                    _contentWriter.AddVersion(db, section, "System", file.SourcePath);
                     createdCount++;
                 }
                 else
                 {
+                    var contentChanged =
+                        !string.Equals(existing.Title, section.Title, StringComparison.Ordinal)
+                        || !string.Equals(existing.BodyMarkdown, section.BodyMarkdown, StringComparison.Ordinal);
                     existing.Update(
                         title: section.Title,
                         bodyMarkdown: section.BodyMarkdown,
                         updatedByType: "system",
                         updatedById: file.SourcePath);
+                    if (contentChanged)
+                        _contentWriter.AddVersion(db, existing, "System", file.SourcePath);
                 }
             }
         }
 
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(createdCount);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return Result.Ok(createdCount);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<int>(
+                "Imported context changed while it was being saved. Refresh and retry.",
+                ErrorKind.Conflict);
+        }
     }
 
     private static IList<ContextSection> ParseMarkdownFile(Guid projectId, string fileName, string content)
