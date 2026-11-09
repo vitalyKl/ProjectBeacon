@@ -103,7 +103,7 @@ public static class EndpointExtensions
 
         app.MapPost("/control/logout", async (HttpContext ctx) =>
         {
-            if (!IsSameOriginControlForm(ctx))
+            if (!ControlFormOriginGuard.IsAllowed(ctx))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
 
             await ctx.SignOutAsync(ControlAuthenticationDefaults.Scheme);
