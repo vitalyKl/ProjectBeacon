@@ -1,4 +1,4 @@
-@page "/bootstrap"
+@page "/control/bootstrap"
 @layout AuthLayout
 @using Microsoft.AspNetCore.Authorization
 @attribute [AllowAnonymous]
@@ -30,7 +30,7 @@
         </MudAlert>
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   OnClick="@(() => Navigation.NavigateTo("/control/login"))"
                    Class="w-100">
             @L["GoToLogin"]
         </MudButton>
