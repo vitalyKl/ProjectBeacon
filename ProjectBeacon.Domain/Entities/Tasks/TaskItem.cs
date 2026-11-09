@@ -45,7 +45,7 @@ public class TaskItem : Entity, IProjectScoped
     public ICollection<TaskDependency> Dependencies { get; private set; } = [];
     public ICollection<Subtask> Subtasks { get; private set; } = [];
 
-    public static TaskItem Create(string title, Guid projectId, TaskPriority priority = TaskPriority.Medium, TaskType type = TaskType.Task)
+    public static TaskItem Create(string title, Guid projectId, TaskPriority priority = TaskPriority.Medium, TaskType type = TaskType.Task, string? description = null)
     {
         var task = Entity.New<TaskItem>();
         task.Title = title;
@@ -53,6 +53,7 @@ public class TaskItem : Entity, IProjectScoped
         task.Status = TaskItemStatus.Todo;
         task.Priority = priority;
         task.Type = type;
+        task.Description = description;
         task.CreatedAt = DateTime.UtcNow;
         return task;
     }
