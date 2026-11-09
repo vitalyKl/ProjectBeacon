@@ -48,8 +48,12 @@ This foundation does not expose an unauthenticated audit endpoint or operator UI
 
 ## Instrumented operations (A2)
 
-The first write-path integration records the following successful project operations in the
+The write-path integration records the following successful project operations in the
 same unit of work as their state changes:
+
+- Project creation, metadata updates and deletion (`project.created`, `project.updated`,
+  `project.deleted`). Project deletion and dependent cleanup run in one explicit transaction
+  with the audit event.
 
 - API token creation and revocation (`project.api_token.created`,
   `project.api_token.revoked`). Raw token values and token hashes are never written.
@@ -82,11 +86,15 @@ invite acceptance.
 
 Implemented: domain event, append-only storage, EF tenant filter, PostgreSQL RLS, atomic staging
 port, permission-checked read contract/implementation, model migration, tests, and transactional
-instrumentation for organization creation/update, project API tokens, project invitations,
-project membership, organization invitations, and first-time account registration through an
-invitation.
+instrumentation for organization creation/update, project lifecycle operations, project API tokens,
+project invitations, project membership, organization invitations, and first-time account
+registration through an invitation.
 
-Not implemented: instrumentation of remaining org/project lifecycle operations (such as
-deletion), device lifecycle, other account/password operations and denied authorization attempts,
-operator HTTP endpoints, audit UI, export, retention, or distributed audit streaming. These remain separate
-follow-up slices; this PR does not claim comprehensive audit coverage.
+A human-operator-only `GET /v1/admin/audit` endpoint now exposes the bounded `IAuditReader`
+query. It obtains `AdminActor` through `IAdminGate`, which rechecks persisted account state,
+and supports organization, project, time, action, actor and outcome filters. API tokens, devices
+and workers cannot use this endpoint.
+
+Not implemented: device lifecycle, other account/password operations and denied authorization
+attempts, audit UI, export, retention, or distributed audit streaming. This branch does not claim
+comprehensive audit coverage.
