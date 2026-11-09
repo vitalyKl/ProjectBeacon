@@ -1,6 +1,6 @@
 # Control-plane deploy (Kubernetes blue-green)
 
-Ships **Web** (Blazor + `/v1`) as one image. Postgres is shared and is not blue-green. `beacon client` on developer machines is **not** auto-updated.
+Ships **Web** (Blazor + `/v1`) as one image. It serves the customer application on the existing public host and the isolated operator Control Plane on `control.projectbeacon.tech`; both ingress hosts target the Web service, while host middleware keeps their route surfaces separate. Postgres is shared and is not blue-green. `beacon client` on developer machines is **not** auto-updated.
 
 ## Image
 
@@ -42,6 +42,13 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
 4. Run a migrate Job once (`BEACON_MIGRATE_ON_START=true`, `BEACON_MIGRATE_THEN_EXIT=true`).
 5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits.
 
+The ingress manifest includes both the existing customer host and `control.projectbeacon.tech`,
+routed to the same Web service. Configure a DNS record for `control.projectbeacon.tech` to the
+ingress address, include that name in the TLS certificate, and set `CONTROL_HOST=control.projectbeacon.tech`
+in the `beacon-web` secret/environment. The application returns `404` for Control Plane paths
+on the customer host; the standalone public API host independently rejects operator, bootstrap,
+and recovery endpoints.
+
 ## Switch
 
 ```
@@ -65,7 +72,8 @@ Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY
 
 ## Data Protection key ring
 
-The ASP.NET Data Protection key ring (which protects the `BeaconAuth` cookie)
+The ASP.NET Data Protection key ring (which protects both the customer `BeaconAuth` and operator
+`BeaconControlAuth` cookies)
 lives in the shared Postgres database (`DataProtectionKeys` table), not on the
 pod file system. Each row is sealed with key material derived from
 `DATA_PROTECTION_KEY` (AES-GCM); rows sealed before a key change stay readable
