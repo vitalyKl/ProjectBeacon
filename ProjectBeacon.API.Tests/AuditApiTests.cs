@@ -19,6 +19,10 @@ public sealed class AuditApiTests
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
 
+        var deniedBootstrap = await client.SendAsync(BootstrapRequest("invalid-bootstrap-token"),
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, deniedBootstrap.StatusCode);
+
         var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken),
             cancellationToken: TestContext.Current.CancellationToken);
         bootstrap.EnsureSuccessStatusCode();
@@ -47,7 +51,7 @@ public sealed class AuditApiTests
         var page = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         var pageJson = await page.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        Assert.True(pageJson.GetProperty("totalCount").GetInt64() >= 2);
+        Assert.True(pageJson.GetProperty("totalCount").GetInt64() >= 3);
 
         using (TenantScope.EnterUnscoped())
         {
@@ -99,6 +103,7 @@ public sealed class AuditApiTests
         Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
         var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("platform.bootstrap.completed", csv);
+        Assert.Contains("platform.bootstrap.denied", csv);
         Assert.Contains("platform.admin_recovery.denied", csv);
         Assert.Contains("account.login.succeeded", csv);
         Assert.Contains("account.login.denied", csv);
