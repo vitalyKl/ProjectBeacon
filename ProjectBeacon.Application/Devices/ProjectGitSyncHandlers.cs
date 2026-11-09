@@ -1,10 +1,12 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
 using Domain.Entities.Devices;
+using Domain.Entities.Audit;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,15 +16,18 @@ public sealed class EnqueueProjectGitSyncHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditWriter? _auditWriter;
 
     public EnqueueProjectGitSyncHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService authorization,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(
@@ -65,6 +70,11 @@ public sealed class EnqueueProjectGitSyncHandler
             return Result.Failure<WorkstationCommandDto>(
                 "No online workstation is attached to this project.", ErrorKind.Conflict);
 
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(candidate => candidate.Id == projectId, ct);
+        if (project is null)
+            return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
+
         var payload = JsonSerializer.Serialize(new { projectId, mode = mode.ToString() });
         var command = WorkstationCommand.Create(
             selected.Device.Id,
@@ -73,10 +83,16 @@ public sealed class EnqueueProjectGitSyncHandler
             projectId,
             userId);
         db.WorkstationCommands.Add(command);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            actor,
+            "project.git_sync.requested",
+            "WorkstationCommand",
+            command.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"source":"project-settings"}"""));
         await db.SaveChangesAsync(ct);
 
-        // Audit event: connect this human-requested operation to the project audit stream
-        // when the audit infrastructure is available in the target branch.
         return Result.Ok(EnqueueCommandHandler.MapCommand(command));
     }
 }
