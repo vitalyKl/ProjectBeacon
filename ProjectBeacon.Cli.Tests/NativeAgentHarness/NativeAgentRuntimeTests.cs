@@ -140,7 +140,7 @@ public sealed class NativeAgentRuntimeTests
         Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(filtered, "run_command"));
         Assert.True(NativeAgentRuntime.IsPlanModeCommandExecutionBlocked("plan", "run_command"));
         Assert.True(NativeAgentRuntime.IsPlanModeCommandExecutionBlocked("plan", "service_start"));
-        Assert.False(NativeAgentRuntime.IsPlanModeCommandExecutionBlocked("plan", "service_stop"));
+        Assert.True(NativeAgentRuntime.IsPlanModeCommandExecutionBlocked("plan", "service_stop"));
     }
 
     [Fact]
