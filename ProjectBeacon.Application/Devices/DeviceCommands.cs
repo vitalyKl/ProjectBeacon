@@ -50,7 +50,8 @@ public record RuntimeSummary(
     string DeviceName,
     bool DeviceOnline,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    bool GitSyncSupported = false);
 /// <summary>
 /// Runtime diagnostics for privileged viewers (owner/admin, system admin, or device owner): adds the local root.
 /// </summary>

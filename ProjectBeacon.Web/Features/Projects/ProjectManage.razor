@@ -5,7 +5,6 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Domain.Enums
-@using ProjectBeacon.Domain.Common
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
@@ -182,10 +181,8 @@ else
     private bool _gitSyncBusy;
     private bool _gitSyncCommandPending;
 
-    private bool HasGitSyncWorkstation => _runtimes.Any(runtime =>
-        runtime.DeviceOnline
-        && _devices.Any(device => device.Id == runtime.DeviceId
-            && WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1)));
+    private bool HasGitSyncWorkstation =>
+        _runtimes.Any(runtime => runtime.DeviceOnline && runtime.GitSyncSupported);
 
     private Severity GitSyncSeverity => _gitSyncResult?.Outcome switch
     {
