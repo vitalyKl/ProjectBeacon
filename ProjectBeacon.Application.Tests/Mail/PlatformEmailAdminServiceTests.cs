@@ -17,7 +17,7 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
     private readonly BeaconDbContext _seedDb;
     private readonly IDisposable _unscoped;
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly AesSecretProtector _protector = TestProtectors.Dev();
+    private readonly ISecretProtector _protector = TestProtectors.Dev();
     private readonly CapturingEmailSender _email = new();
 
     public PlatformEmailAdminServiceTests()

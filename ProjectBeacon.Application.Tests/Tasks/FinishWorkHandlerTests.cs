@@ -5,6 +5,7 @@ using Application.Persistence;
 using Application.Tasks;
 using Domain.Entities.Agents;
 using Domain.Entities.Audit;
+using Domain.Entities.Email;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
@@ -546,6 +547,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
         public DbSet<DataProtectionKey> DataProtectionKeys => _inner.DataProtectionKeys;
         public DbSet<AuditEvent> AuditEvents => _inner.AuditEvents;
+        public DbSet<PlatformEmailSettings> PlatformEmailSettings => _inner.PlatformEmailSettings;
+        public DbSet<EmailDeliveryLog> EmailDeliveryLogs => _inner.EmailDeliveryLogs;
         public DbSet<Project> Projects => _inner.Projects;
         public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
         public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
@@ -624,6 +627,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
         public DbSet<DataProtectionKey> DataProtectionKeys => _inner.DataProtectionKeys;
         public DbSet<AuditEvent> AuditEvents => _inner.AuditEvents;
+        public DbSet<PlatformEmailSettings> PlatformEmailSettings => _inner.PlatformEmailSettings;
+        public DbSet<EmailDeliveryLog> EmailDeliveryLogs => _inner.EmailDeliveryLogs;
         public DbSet<Project> Projects => _inner.Projects;
         public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
         public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
