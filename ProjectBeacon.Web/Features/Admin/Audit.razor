@@ -32,6 +32,8 @@ else
             <MudTextField @bind-Value="_orgId" Label="@L["AuditFilterOrg"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudTextField @bind-Value="_projectId" Label="@L["AuditFilterProject"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudTextField @bind-Value="_actorUserId" Label="@L["AuditFilterActor"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_actorTokenId" Label="@L["AuditFilterActorToken"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
+            <MudTextField @bind-Value="_actorDeviceId" Label="@L["AuditFilterActorDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudTextField @bind-Value="_action" Label="@L["AuditFilterAction"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1" />
             <MudDatePicker @bind-Date="_fromDate" Label="@L["AuditFilterFromUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
             <MudDatePicker @bind-Date="_toDate" Label="@L["AuditFilterToUtc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
@@ -147,6 +149,8 @@ else
     private string _orgId = string.Empty;
     private string _projectId = string.Empty;
     private string _actorUserId = string.Empty;
+    private string _actorTokenId = string.Empty;
+    private string _actorDeviceId = string.Empty;
     private string _action = string.Empty;
     private DateTime? _fromDate;
     private DateTime? _toDate;
@@ -170,6 +174,8 @@ else
         _orgId = string.Empty;
         _projectId = string.Empty;
         _actorUserId = string.Empty;
+        _actorTokenId = string.Empty;
+        _actorDeviceId = string.Empty;
         _action = string.Empty;
         _fromDate = null;
         _toDate = null;
@@ -233,7 +239,9 @@ else
     {
         if (!TryGuid(_orgId, out var orgId)
             || !TryGuid(_projectId, out var projectId)
-            || !TryGuid(_actorUserId, out var actorUserId))
+            || !TryGuid(_actorUserId, out var actorUserId)
+            || !TryGuid(_actorTokenId, out var actorTokenId)
+            || !TryGuid(_actorDeviceId, out var actorDeviceId))
         {
             Snackbar.Add(L["AuditInvalidGuid"].Value, Severity.Warning);
             query = new AuditQuery();
@@ -256,7 +264,9 @@ else
             ActorUserId: actorUserId,
             Outcome: _outcome,
             Page: page,
-            PageSize: pageSize);
+            PageSize: pageSize,
+            ActorTokenId: actorTokenId,
+            ActorDeviceId: actorDeviceId);
         return true;
     }
 
