@@ -11,8 +11,13 @@ using Microsoft.EntityFrameworkCore;
 public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CreateMilestoneHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<MilestoneDto>> HandleAsync(CreateMilestoneCommand command, CancellationToken ct = default)
     {
@@ -28,13 +33,15 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
             command.Request.Order);
 
         db.Milestones.Add(milestone);
-        await db.SaveChangesAsync(ct);
+        var saved = await _contentWriter.SaveAsync(db, milestone, null, null, ct);
+        if (!saved.Success)
+            return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone version could not be saved.", ErrorKind.Conflict);
 
         return Result.Ok(MapToDto(milestone));
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
 }
 /// <summary>
 /// Updates a milestone name, description, or order.
@@ -42,8 +49,13 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
 public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public UpdateMilestoneHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<MilestoneDto>> HandleAsync(UpdateMilestoneCommand command, CancellationToken ct = default)
     {
@@ -52,14 +64,32 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
 
+        var contentChanged =
+            (command.Request.Name is not null && !string.Equals(milestone.Name, command.Request.Name, StringComparison.Ordinal))
+            || (command.Request.Description is not null && !string.Equals(milestone.Description, command.Request.Description, StringComparison.Ordinal))
+            || (command.Request.Order is not null && milestone.Order != command.Request.Order.Value);
+        if (contentChanged && command.Request.ExpectedRevision != milestone.Revision)
+            return Result.Failure<MilestoneDto>(
+                "Milestone changed since it was loaded. Refresh it and retry.",
+                ErrorKind.Conflict);
+
         milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
-        await db.SaveChangesAsync(ct);
+        if (contentChanged)
+        {
+            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            if (!saved.Success)
+                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone content conflict.", ErrorKind.Conflict);
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         return Result.Ok(MapToDto(milestone));
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
 }
 /// <summary>
 /// Deletes a milestone.
@@ -67,8 +97,13 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
 public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public DeleteMilestoneHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
     {
@@ -77,10 +112,12 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
         if (milestone is null)
             return Result.Failure("Milestone not found.");
 
+        milestone.Delete();
         db.Milestones.Remove(milestone);
-        await db.SaveChangesAsync(ct);
-
-        return Result.Ok();
+        var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct, deleted: true);
+        return saved.Success
+            ? Result.Ok()
+            : Result.Failure(saved.Error ?? "Milestone delete conflict.", ErrorKind.Conflict);
     }
 }
 /// <summary>
@@ -103,7 +140,7 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
 }
 /// <summary>
 /// Lists milestones for a project.
@@ -121,7 +158,7 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
             .Select(m => new MilestoneDto(
-                m.Id, m.Name, m.Description, m.ProjectId, m.Order, m.CreatedAt, m.UpdatedAt, m.ClosedAt))
+                m.Id, m.Name, m.Description, m.ProjectId, m.Order, m.CreatedAt, m.UpdatedAt, m.ClosedAt, m.Revision))
             .ToListAsync(ct);
 
         return Result.Ok((IList<MilestoneDto>)milestones);
@@ -146,7 +183,7 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
         await db.SaveChangesAsync(ct);
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt));
+            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
     }
 }
 /// <summary>
@@ -168,6 +205,6 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
         await db.SaveChangesAsync(ct);
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt));
+            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
     }
 }

@@ -12,7 +12,7 @@ public record CreateMilestoneCommand(CreateMilestoneRequest Request) : ICommand<
 /// <summary>
 /// Fields for update milestone.
 /// </summary>
-public record UpdateMilestoneRequest(Guid MilestoneId, string? Name, string? Description, int? Order);
+public record UpdateMilestoneRequest(Guid MilestoneId, string? Name, string? Description, int? Order, int? ExpectedRevision = null);
 /// <summary>
 /// Command for update milestone.
 /// </summary>
@@ -52,4 +52,5 @@ public record MilestoneDto(
     int Order,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    DateTime? ClosedAt);
+    DateTime? ClosedAt,
+    int Revision = 1);
