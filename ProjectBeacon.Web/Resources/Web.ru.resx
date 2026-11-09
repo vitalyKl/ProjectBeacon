@@ -2582,7 +2582,7 @@
     <value>Журнал аудита</value>
   </data>
 <data name="AuditHistoryLead" xml:space="preserve">
-    <value>События безопасности и действия операторов по организациям и проектам. Время указано в UTC.</value>
+    <value>События безопасности и действия операторов по организациям и проектам. Время отображается в вашем часовом поясе; фильтры и CSV используют UTC.</value>
   </data>
 <data name="AuditAccessDenied" xml:space="preserve">
     <value>Недостаточно прав для просмотра журнала аудита.</value>
@@ -2627,7 +2627,7 @@
     <value>По заданным фильтрам событий нет.</value>
   </data>
 <data name="AuditTimestamp" xml:space="preserve">
-    <value>Время (UTC)</value>
+    <value>Время (местное)</value>
   </data>
 <data name="AuditActor" xml:space="preserve">
     <value>Актор</value>
