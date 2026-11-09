@@ -438,7 +438,7 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal(_admin.Id, auditEvent.ActorUserId);
         Assert.Equal(_org.Id, auditEvent.OrgId);
         Assert.Equal(_project.Id, auditEvent.ProjectId);
-        Assert.Equal("""{"changed":"metadata"}""", auditEvent.DetailsJson);
+        Assert.Equal("""{"reasonCode":"metadata-updated"}""", auditEvent.DetailsJson);
     }
 
     [Fact]
