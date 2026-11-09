@@ -22,8 +22,11 @@ public sealed class McpApiToolsTests
             McpToolNames.UpsertContextNode,
             new JsonObject
             {
-                ["title"] = "Goals", ["bodyMarkdown"] = "Updated goals", ["scopeType"] = "Project",
-                ["sectionId"] = "goals", ["expectedRevision"] = 4
+                ["title"] = "Goals",
+                ["bodyMarkdown"] = "Updated goals",
+                ["scopeType"] = "Project",
+                ["sectionId"] = "goals",
+                ["expectedRevision"] = 4
             }, api, env);
         Assert.False(upsert.IsError);
         Assert.Contains(handler.Calls, call =>
@@ -34,8 +37,11 @@ public sealed class McpApiToolsTests
             McpToolNames.ContextCreateDraft,
             new JsonObject
             {
-                ["title"] = "Agent notes", ["bodyMarkdown"] = "Updated draft", ["scopeType"] = "Project",
-                ["sectionId"] = "agent_notes", ["expectedRevision"] = 2
+                ["title"] = "Agent notes",
+                ["bodyMarkdown"] = "Updated draft",
+                ["scopeType"] = "Project",
+                ["sectionId"] = "agent_notes",
+                ["expectedRevision"] = 2
             }, api, env);
         Assert.False(draft.IsError);
         Assert.Contains(handler.Calls, call =>
@@ -46,7 +52,8 @@ public sealed class McpApiToolsTests
             McpToolNames.UpdateTask,
             new JsonObject
             {
-                ["taskId"] = taskId.ToString("D"), ["description"] = "Updated task",
+                ["taskId"] = taskId.ToString("D"),
+                ["description"] = "Updated task",
                 ["expectedContentRevision"] = 7
             }, api, env);
         Assert.False(updateTask.IsError);
@@ -58,7 +65,8 @@ public sealed class McpApiToolsTests
             McpToolNames.AddReviewNotes,
             new JsonObject
             {
-                ["taskId"] = taskId.ToString("D"), ["reviewNotes"] = "Reviewed",
+                ["taskId"] = taskId.ToString("D"),
+                ["reviewNotes"] = "Reviewed",
                 ["expectedContentRevision"] = 8
             }, api, env);
         Assert.False(notes.IsError);
