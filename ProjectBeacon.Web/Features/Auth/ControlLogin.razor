@@ -9,6 +9,8 @@
 
 <PageTitle>ProjectBeacon Control — @L["Login"]</PageTitle>
 
+@if (!_blocked)
+{
 <MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
     <div class="d-flex align-center justify-center mb-4">
         <img src="brand/beacon-mark.svg" alt="" aria-hidden="true" style="width:36px;height:36px" />
@@ -49,6 +51,7 @@
         @L["Bootstrap"]
     </MudButton>
 </MudPaper>
+}
 
 @code {
     private static readonly Dictionary<string, object> LoginFieldAttrs = new()
@@ -64,11 +67,13 @@
     };
 
     private bool _error;
+    private bool _blocked;
 
     protected override void OnInitialized()
     {
         if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
         {
+            _blocked = true;
             Navigation.NavigateTo("/", forceLoad: true);
             return;
         }
