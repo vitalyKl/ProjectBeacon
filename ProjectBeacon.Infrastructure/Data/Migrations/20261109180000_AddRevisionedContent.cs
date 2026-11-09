@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using ProjectBeacon.Infrastructure.Data;
 
@@ -6,7 +5,6 @@ using ProjectBeacon.Infrastructure.Data;
 
 namespace ProjectBeacon.Infrastructure.Data.Migrations
 {
-    [DbContext(typeof(BeaconDbContext))]
     public partial class AddRevisionedContent : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
