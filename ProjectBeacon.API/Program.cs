@@ -125,6 +125,8 @@ app.UseBeaconExceptionHandler();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
+// Keep platform-operator endpoints off the public API origin.
+app.UseMiddleware<ControlHostMiddleware>();
 // Wrap token/device boundaries, tenant isolation and endpoint authorization so every
 // explicit HTTP 403 on a versioned API route is observed.
 app.UseMiddleware<AuditDeniedRequestMiddleware>();
