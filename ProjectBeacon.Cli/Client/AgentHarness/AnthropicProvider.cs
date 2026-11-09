@@ -70,7 +70,10 @@ internal sealed class AnthropicProvider(HttpClient http, string baseUrl, string?
                 or HttpStatusCode.RequestTimeout
                 || status >= 500
                 || status == 529;
-            throw new ChatProviderException($"Anthropic provider returned HTTP {status}.", status, retryable);
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            var contextExceeded = status == 413 || ChatProviderException.IsContextLengthExceededPayload(responseBody);
+            var marker = contextExceeded ? " context_length_exceeded" : string.Empty;
+            throw new ChatProviderException($"Anthropic provider returned HTTP {status}.{marker}", status, retryable);
         }
 
         int? inputTokens = null;
@@ -98,8 +101,12 @@ internal sealed class AnthropicProvider(HttpClient http, string baseUrl, string?
                     var errorType = root.TryGetProperty("error", out var error)
                         ? ReadString(error, "type") ?? "provider_error"
                         : "provider_error";
+                    var errorMessage = root.TryGetProperty("error", out error) ? ReadString(error, "message") : null;
                     var retryable = errorType is "overloaded_error" or "rate_limit_error" or "api_error";
-                    throw new ChatProviderException($"Anthropic stream returned {errorType}.", retryable ? 503 : 400, retryable);
+                    var contextExceeded = ChatProviderException.IsContextLengthExceededText(errorType)
+                        || ChatProviderException.IsContextLengthExceededText(errorMessage);
+                    var marker = contextExceeded ? " context_length_exceeded" : string.Empty;
+                    throw new ChatProviderException($"Anthropic stream returned {errorType}.{marker}", retryable ? 503 : 400, retryable);
                 }
 
                 switch (type)

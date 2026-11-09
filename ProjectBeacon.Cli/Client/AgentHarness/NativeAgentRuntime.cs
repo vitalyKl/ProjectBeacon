@@ -531,6 +531,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     var stepEmittedContent = false;
                     var requestPromptTokens = 0;
                     var requestCompletionTokens = 0;
+                    var estimatedPromptTokens = EstimatePromptTokens(
+                        request.Messages.OfType<JsonObject>().ToList(),
+                        EstimateToolTokens(request.Tools), 0, 0);
                     async Task StreamProviderAttemptAsync()
                     {
                         var provider = CreateProvider();
@@ -600,18 +603,26 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     {
                         await RunModelRequestAsync(StreamProviderAttemptAsync, ct);
                         requestCompleted = true;
-                        var estimatedPromptTokens = EstimatePromptTokens(
-                            request.Messages.OfType<JsonObject>().ToList(),
-                            EstimateToolTokens(request.Tools), 0, 0);
                         var usageSource = requestPromptTokens > 0 ? "provider" : "estimate";
                         var promptForLog = requestPromptTokens > 0 ? requestPromptTokens : estimatedPromptTokens;
+                        lock (session.Sync)
+                            session.Usage = session.Usage with
+                            {
+                                PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, promptForLog)
+                            };
                         _log?.Invoke($"native usage turn={turnNumber} step={stepOrdinal + 1} attempt={attempt} prompt={promptForLog} completion={requestCompletionTokens} source={usageSource}");
                     }
                     catch (Exception ex) when (IsContextLengthExceeded(ex) && attempt < MaxAttempts
                         && !contextOverflowRetryUsed && !stepEmittedContent && !ct.IsCancellationRequested)
                     {
                         contextOverflowRetryUsed = true;
-                        _log?.Invoke($"native provider rejected turn={turnNumber} step={stepOrdinal + 1} for context length; compacting and retrying once");
+                        var rejectedPromptTokens = requestPromptTokens > 0 ? requestPromptTokens : estimatedPromptTokens;
+                        lock (session.Sync)
+                            session.Usage = session.Usage with
+                            {
+                                PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, rejectedPromptTokens)
+                            };
+                        _log?.Invoke($"native provider rejected turn={turnNumber} step={stepOrdinal + 1} attempt={attempt} for context length (prompt about {rejectedPromptTokens} tokens); compacting and retrying once");
                         request = request with
                         {
                             Messages = await BuildContextMessagesAsync(

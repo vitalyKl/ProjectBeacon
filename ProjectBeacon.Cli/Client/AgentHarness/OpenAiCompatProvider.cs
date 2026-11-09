@@ -88,18 +88,19 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
             // never surfaced. A loopback model server is locally trusted and its short body
             // is useful when a template or tool-call parser rejects a request.
             var diagnostic = string.Empty;
-            if (_endpoint.IsLoopback)
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            var contextExceeded = status == 413 || ChatProviderException.IsContextLengthExceededPayload(responseBody);
+            if (_endpoint.IsLoopback && !string.IsNullOrWhiteSpace(responseBody))
             {
-                var responseBody = (await response.Content.ReadAsStringAsync(ct))
-                    .Replace('\r', ' ')
-                    .Replace('\n', ' ')
-                    .Trim();
-                if (!string.IsNullOrWhiteSpace(responseBody))
-                {
-                    if (responseBody.Length > 300)
-                        responseBody = responseBody[..300] + "…";
-                    diagnostic = $" Local provider: {responseBody}";
-                }
+                var safeLocalBody = responseBody.Replace('\r', ' ').Replace('\n', ' ').Trim();
+                if (safeLocalBody.Length > 300)
+                    safeLocalBody = safeLocalBody[..300] + "…";
+                diagnostic = $" Local provider: {safeLocalBody}";
+            }
+            else if (contextExceeded)
+            {
+                // Emit only a fixed marker: remote error payloads may echo prompt content or credentials.
+                diagnostic = " context_length_exceeded";
             }
 
             throw new ChatProviderException(
@@ -291,4 +292,51 @@ internal sealed class ChatProviderException(string message, int statusCode, bool
     : HttpRequestException(message, inner, (HttpStatusCode)statusCode)
 {
     public bool Retryable { get; } = retryable;
+
+    public static bool IsContextLengthExceededPayload(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("error", out var error))
+                return false;
+            if (error.ValueKind == JsonValueKind.String)
+                return IsContextLengthExceededText(error.GetString());
+            if (error.ValueKind != JsonValueKind.Object)
+                return false;
+
+            return IsContextLengthExceededText(ReadErrorText(error, "code"))
+                || IsContextLengthExceededText(ReadErrorText(error, "type"))
+                || IsContextLengthExceededText(ReadErrorText(error, "message"));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    public static bool IsContextLengthExceededText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        return value.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("context length exceeded", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum context length", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum context window", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("context window is full", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("input is too long", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("input exceeds", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("too many tokens", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("request exceeds the model's context", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("maximum input length", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ReadErrorText(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 }
