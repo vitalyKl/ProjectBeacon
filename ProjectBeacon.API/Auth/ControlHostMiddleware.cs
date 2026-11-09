@@ -97,7 +97,13 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
             || path.StartsWithSegments("/control"))
             return false;
 
-        // Static assets (app.css, JavaScript bundles, icons and fonts) are shared.
-        return Path.HasExtension(path.Value);
+        // Only the shared shell assets are available on this host. Do not allow every
+        // extension-bearing path: a future customer page or API route may also end in ".csv".
+        return path.StartsWithSegments("/brand")
+            || string.Equals(path.Value, "/app.css", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/shell.js", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/timezone.js", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/chat.js", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/favicon.ico", StringComparison.OrdinalIgnoreCase);
     }
 }
