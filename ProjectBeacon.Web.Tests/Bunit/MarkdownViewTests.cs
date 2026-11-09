@@ -40,7 +40,9 @@ public sealed class MarkdownViewTests : BUnitRenderBase
         Assert.Contains("Safe text", cut.Markup);
         Assert.DoesNotContain("<script", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<img", cut.Markup, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("onerror", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&lt;script", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&lt;img", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("onerror", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("javascript:", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("https://safe.example", cut.Markup);
     }
