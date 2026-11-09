@@ -225,6 +225,10 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
         if (project is null)
             return Result.Failure<bool>("Project not found.");
 
+        // Bulk cleanup commands execute immediately, so keep them and the audit insert
+        // inside one transaction. A failed audit insert must not leave a half-deleted project.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
         await db.TaskDependencies.IgnoreQueryFilters()
             .Where(d => taskIds.Contains(d.TaskId) || taskIds.Contains(d.DependentTaskId))
@@ -254,9 +258,11 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
         try
         {
             await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException)
         {
+            await transaction.RollbackAsync(ct);
             return Result.Failure<bool>("Project could not be deleted.");
         }
 
