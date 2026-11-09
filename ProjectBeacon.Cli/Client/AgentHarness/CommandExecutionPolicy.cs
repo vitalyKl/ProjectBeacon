@@ -633,7 +633,7 @@ internal static class CommandExecutionPolicy
 
     private static readonly HashSet<string> BlockedGitGlobalOptions = new(StringComparer.Ordinal)
     {
-        "-c", "--config-env", "--exec-path", "--git-dir", "--work-tree"
+        "-c", "-C", "--config-env", "--exec-path", "--git-dir", "--work-tree", "--super-prefix"
     };
 
     private static readonly HashSet<string> BlockedGitSubcommands = new(StringComparer.OrdinalIgnoreCase)
@@ -641,7 +641,9 @@ internal static class CommandExecutionPolicy
         "push", "pull", "fetch", "checkout", "switch", "reset", "merge", "rebase",
         "branch", "tag", "commit", "restore", "clean", "stash", "cherry-pick",
         "revert", "config", "alias", "remote", "worktree", "submodule",
-        "filter-branch", "fast-import", "daemon", "clone", "update-ref", "symbolic-ref"
+        "filter-branch", "fast-import", "daemon", "clone", "update-ref", "symbolic-ref",
+        "difftool", "mergetool", "archive", "upload-archive", "upload-pack", "receive-pack",
+        "credential", "gui", "citool", "instaweb", "web--browse", "send-email"
     };
 
     private static readonly string[] BlockedGitOptions =
@@ -664,6 +666,7 @@ internal static class CommandExecutionPolicy
         {
             if (BlockedGitGlobalOptions.Contains(argument)
                 || (argument.StartsWith("-c", StringComparison.Ordinal) && argument.Length > 2)
+                || (argument.StartsWith("-C", StringComparison.Ordinal) && argument.Length > 2)
                 || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
                     && argument.StartsWith(option + "=", StringComparison.Ordinal))
                 || BlockedGitOptions.Any(option => argument == option

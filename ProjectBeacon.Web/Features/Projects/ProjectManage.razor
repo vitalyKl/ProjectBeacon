@@ -333,8 +333,7 @@ else
             while (DateTime.UtcNow < deadline)
             {
                 await Task.Delay(TimeSpan.FromSeconds(1));
-                var current = await GetCommand.HandleAsync(
-                    GetGitSyncCommand.HandleAsync(projectId, commandId, _actor));
+                var current = await GetGitSyncCommand.HandleAsync(projectId, commandId, _actor);
                 if (!current.Success || current.Value is null)
                 {
                     Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);

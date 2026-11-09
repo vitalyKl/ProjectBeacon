@@ -11,7 +11,7 @@ internal sealed class GitSyncService
 {
     private const int MaxOutputCharacters = 16_000;
     private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(60);
-    private static readonly Regex RemoteNamePattern = new(@"^[A-Za-z0-9._-]{1,128}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RemoteNamePattern = new(@"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant);
     private static readonly Regex BranchRefPattern = new(@"^refs/heads/[A-Za-z0-9._/-]{1,180}$", RegexOptions.CultureInvariant);
     private static readonly Regex RemoteTrackingRefPattern = new(@"^refs/remotes/[A-Za-z0-9._/-]{1,180}$", RegexOptions.CultureInvariant);
 
@@ -101,7 +101,7 @@ internal sealed class GitSyncService
 
                 var fetch = await RunGitAsync(
                     repositoryRoot, hooksDirectory, filters.Drivers, ct,
-                    "fetch", "--no-tags", state.Remote, "+" + state.MergeRef + ":" + state.UpstreamRef);
+                    "fetch", "--no-tags", "--no-recurse-submodules", "--", state.Remote, "+" + state.MergeRef + ":" + state.UpstreamRef);
                 if (fetch.TimedOut)
                     return Complete(Failed(state, GitSyncRefusalCode.Timeout, fetch.StdErr));
                 if (fetch.ExitCode != 0)
@@ -189,7 +189,7 @@ internal sealed class GitSyncService
                 hasUpstream = state.HasUpstream,
                 diverged = state.Diverged,
                 head = state.Head,
-                error = filters.Error ?? state.Error
+                error = filters.Error ?? SanitizeStderr(state.Error)
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         }
         finally

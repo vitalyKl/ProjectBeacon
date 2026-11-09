@@ -77,7 +77,7 @@ public sealed class EnqueueProjectGitSyncHandler
 
         // Audit event: connect this human-requested operation to the project audit stream
         // when the audit infrastructure is available in the target branch.
-        return Result.Ok(EnqueueCommandHandler.MapCommand(command, selected.Runtime.LocalRoot));
+        return Result.Ok(EnqueueCommandHandler.MapCommand(command));
     }
 }
 
@@ -118,8 +118,9 @@ public sealed class GetProjectGitSyncCommandHandler
         if (command is null)
             return Result.Failure<WorkstationCommandDto>("GitSync command not found.", ErrorKind.NotFound);
 
-        var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, command, ct);
-        return Result.Ok(EnqueueCommandHandler.MapCommand(command, localRoot));
+        // Project members can inspect the command result, but the workstation's local
+        // filesystem path is never disclosed through a human-facing endpoint.
+        return Result.Ok(EnqueueCommandHandler.MapCommand(command));
     }
 }
 
