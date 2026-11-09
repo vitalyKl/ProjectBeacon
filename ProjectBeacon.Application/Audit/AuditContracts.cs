@@ -18,6 +18,11 @@ public interface IAuditWriter
 public interface IAuditReader
 {
     Task<AuditPage> ListAsync(AdminActor actor, AuditQuery query, CancellationToken ct = default);
+    IAsyncEnumerable<AuditEntry> StreamAsync(
+        AdminActor actor,
+        AuditQuery query,
+        int maxRows,
+        CancellationToken ct = default);
 }
 
 public sealed record AuditQuery(
