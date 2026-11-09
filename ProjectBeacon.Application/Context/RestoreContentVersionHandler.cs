@@ -48,6 +48,7 @@ public sealed class RestoreContentVersionHandler
         if (source is null)
             return Result.Failure<RestoreContentVersionDto>("Content version not found.");
 
+        var attribution = ContentAttribution.FromActor(command.Actor);
         object target;
         var changed = false;
         var currentRevision = 0;
@@ -79,7 +80,11 @@ public sealed class RestoreContentVersionHandler
                         return UnsupportedStructureFailure();
 
                     currentRevision = section.Revision;
-                    section.Update(snapshot.Title, snapshot.BodyMarkdown);
+                    section.Update(
+                        snapshot.Title,
+                        snapshot.BodyMarkdown,
+                        updatedByType: command.Actor.IsHuman ? "user" : "system",
+                        updatedById: attribution.Id);
                     target = section;
                     changed = section.Revision != currentRevision;
                     break;
@@ -194,7 +199,6 @@ public sealed class RestoreContentVersionHandler
             return Result.Ok(new RestoreContentVersionDto(
                 source.Id, source.TargetKind, source.TargetId, currentRevision, false));
 
-        var attribution = ContentAttribution.FromActor(command.Actor);
         var saved = await _contentWriter.SaveAsync(
             db, target, attribution.Type ?? "Human", attribution.Id, ct);
         if (!saved.Success)
