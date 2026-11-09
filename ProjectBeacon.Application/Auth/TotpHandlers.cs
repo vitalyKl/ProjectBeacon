@@ -97,7 +97,9 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
 
     public async Task<Result<string>> HandleAsync(BeginTotpCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
+        var globalTenant = new TenantContext();
+        globalTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(globalTenant);
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.UserId, ct);
         if (user is null)
             return Result.Failure<string>("Account is not resolved.");
