@@ -71,7 +71,7 @@ public sealed class EnqueueProjectGitSyncHandler
             WorkstationCommandKind.GitSync,
             payload,
             projectId,
-            selected.Device.UserId);
+            userId);
         db.WorkstationCommands.Add(command);
         await db.SaveChangesAsync(ct);
 

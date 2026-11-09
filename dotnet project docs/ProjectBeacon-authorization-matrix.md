@@ -425,7 +425,7 @@ These are places where the three enforcement layers disagree or are applied unev
 
 ### GitSync route
 
-`POST /v1/projects/{projectId}/git-sync` — `RequireHuman`; the application handler requires a human actor and project `Update` access (project membership), then queues the command to an attached online workstation. API tokens, devices, workers, and non-members are rejected. The route appears in the generated route-policy inventory.
+`POST /v1/projects/{projectId}/git-sync` and `GET /v1/projects/{projectId}/git-sync/{commandId}` — `RequireHuman`; both handlers require a human actor and membership in the target project (or project-admin authority). The POST queues the command to an attached online workstation; the GET reads only a GitSync command bound to that same project. API tokens, devices, workers, and non-members are rejected. Neither human-facing response discloses the workstation's local filesystem path. Both routes appear in the generated route-policy inventory.
 
 ## 6. Route inventory cross-check
 
