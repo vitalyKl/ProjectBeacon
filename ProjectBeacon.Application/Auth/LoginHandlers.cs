@@ -52,13 +52,20 @@ public class LoginHandler
         var globalTenant = new TenantContext();
         globalTenant.Assign(null, null, unscoped: true);
         await using var db = _dbFactory.CreateDbContext(globalTenant);
+        var deniedAction = requireOperator
+            ? "platform.control_login.denied"
+            : "account.login.denied";
+        var successAction = requireOperator
+            ? "platform.control_login.succeeded"
+            : "account.login.succeeded";
+
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Login == command.Request.Login || u.Email == command.Request.Login, ct);
 
         if (user is null)
         {
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
-                "account.login.denied", "Account", null, outcome: AuditOutcome.Denied,
+                deniedAction, "Account", null, outcome: AuditOutcome.Denied,
                 detailsJson: """{"reasonCode":"invalid_credentials","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
@@ -67,7 +74,7 @@ public class LoginHandler
         if (user.IsLockedOut)
         {
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
-                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                deniedAction, "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
                 detailsJson: """{"reasonCode":"account_locked","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Account is temporarily locked. Try again later.");
@@ -77,7 +84,7 @@ public class LoginHandler
         {
             user.RecordFailedLogin();
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
-                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                deniedAction, "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
                 detailsJson: """{"reasonCode":"invalid_credentials","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.");
@@ -86,7 +93,7 @@ public class LoginHandler
         if (user.IsDisabled)
         {
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
-                "account.login.denied", "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
+                deniedAction, "User", user.Id.ToString(), outcome: AuditOutcome.Denied,
                 detailsJson: """{"reasonCode":"account_disabled","authMethod":"password"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
@@ -113,7 +120,7 @@ public class LoginHandler
 
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
             new ActorContext(ActorType.Human, user.Id, user.IsAdmin, null, null, null, null, ApiTokenCapability.None),
-            "account.login.succeeded", "User", user.Id.ToString(), null, null,
+            successAction, "User", user.Id.ToString(), null, null,
             detailsJson: """{"authMethod":"password","newState":"Authenticated"}"""));
         await db.SaveChangesAsync(ct);
 
