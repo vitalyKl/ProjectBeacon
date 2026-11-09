@@ -64,14 +64,21 @@ The audit writer stages these events in the same database unit of work as the re
 | Project runtimes | `project.runtime.attached`, `project.runtime.updated`, `project.runtime.detached` |
 | Account credentials | `account.registered` (open and invited registration), `account.login.succeeded`, `account.login.denied`, `account.logout`, `account.password_reset.requested`, `account.password_reset.completed`, `account.password_changed` |
 | Multi-factor authentication | `account.mfa.setup_started`, `account.mfa.enabled`, `account.mfa.disabled` |
-| Platform bootstrap | `platform.bootstrap.completed` |
+| Platform bootstrap and recovery | `platform.bootstrap.completed`, `platform.admin_recovery.denied`, `platform.admin_recovery.failed`, `platform.admin_recovery.completed` |
 | Authorization | `security.authorization.denied` for explicit HTTP 403 responses on `/v1` routes |
 
 Login-denial events use a generic target for unknown accounts and machine-readable reason codes;
 they never store the submitted login, email address, password, password-reset token, TOTP code,
-device fingerprint, raw device token, or API token. A generic 403 event stores only the route
+device fingerprint, raw device token, or API token. Break-glass recovery events likewise store
+only a fixed reason/result code and, on success, the recovered administrator's id; the bootstrap
+token and generated password are never recorded. A generic 403 event stores only the route
 template and HTTP method, actor identifier when available, bounded request metadata and a fixed
 reason code. It never captures request bodies or query-string values.
+
+Successful administrator recovery stages its audit event in the same database unit of work as
+the password reset. Rejected recovery attempts are recorded in a separate platform-scoped write
+because no account mutation occurs; failure to persist such a denial event does not replace the
+original authentication response.
 
 Invitations, account registration through invitations, token changes, and membership operations
 retain their existing transactional instrumentation. Organization-level mutations use a tenant
@@ -96,19 +103,24 @@ and CSV download. Its navigation item is shown only to accounts whose authentica
 identifies them as system administrators; the page still revalidates the account through
 `IAdminGate` before reading any audit data.
 
+There is no separate audit login endpoint. Operators sign in through the shared human
+authentication endpoint `POST /v1/auth/login`; the audit page and each audit API request then
+enforce the operator permission independently. Audit events are written by server-side
+application handlers, not through a public client-writable audit endpoint.
+
 ## Verification
 
 Tests cover permission-denied reads, operator reads and export, denial-event persistence,
 CSV formula-injection and row-limit protections, organization/project/runtime lifecycle,
 device enrollment/token rotation/revocation, logout/session invalidation, open and invited
-registration, invitation flows, machine-actor mapping, and the absence of credentials,
-invite secrets or local paths from event details. The
+registration, invitation flows, machine-actor mapping, break-glass recovery success/denial,
+and the absence of credentials, invite secrets or local paths from event details. The
 PostgreSQL RLS and append-only trigger tests remain the database-level enforcement layer.
 
 ## Remaining scope
 
-The alpha audit console and the primary organization/project/device/account security lifecycle
-are implemented. Deliberately not included in this slice:
+The alpha audit console and the primary organization/project/device/account/platform-recovery
+security lifecycle are implemented. Deliberately not included in this slice:
 
 - Automated retention/deletion. A retention period must be chosen with product, privacy and legal
   requirements; until then the application does not purge audit rows.
@@ -118,7 +130,4 @@ are implemented. Deliberately not included in this slice:
 - Full event capture for every task, chat, context, pipeline and read operation. High-volume
   content events are not audit records; any new action must be explicitly selected and use the
   fixed metadata allowlist.
-- Break-glass `recover-admin` attempts are not yet explicitly recorded as platform audit events.
-  The endpoint remains rate-limited and token-protected; add dedicated denied/success events before
-  treating recovery activity as fully covered.
 - Step-up authentication for sensitive operator actions. Elevated actions remain fail-closed.
