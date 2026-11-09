@@ -19,9 +19,10 @@ public sealed class ContentWriter
         string? changedByType,
         string? changedById,
         CancellationToken ct = default,
-        bool deleted = false)
+        bool deleted = false,
+        Guid? proposalId = null)
     {
-        AddVersion(db, target, changedByType, changedById, deleted);
+        AddVersion(db, target, changedByType, changedById, deleted, proposalId);
         try
         {
             await db.SaveChangesAsync(ct);
@@ -40,7 +41,8 @@ public sealed class ContentWriter
         object target,
         string? changedByType,
         string? changedById,
-        bool deleted = false)
+        bool deleted = false,
+        Guid? proposalId = null)
     {
         var snapshot = target switch
         {
@@ -90,7 +92,8 @@ public sealed class ContentWriter
             revision,
             JsonSerializer.Serialize(snapshot, JsonOptions),
             changedByType,
-            changedById));
+            changedById,
+            proposalId));
     }
 
     private static int GetRevision(object target) => target switch
