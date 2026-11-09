@@ -64,7 +64,8 @@ The audit writer stages these events in the same database unit of work as the re
 | Project runtimes | `project.runtime.attached`, `project.runtime.updated`, `project.runtime.detached` |
 | Account credentials | `account.registered` (open and invited registration), `account.login.succeeded`, `account.login.denied`, `account.logout`, `account.password_reset.requested`, `account.password_reset.completed`, `account.password_changed` |
 | Multi-factor authentication | `account.mfa.setup_started`, `account.mfa.enabled`, `account.mfa.disabled` |
-| Platform bootstrap and recovery | `platform.bootstrap.completed`, `platform.admin_recovery.denied`, `platform.admin_recovery.failed`, `platform.admin_recovery.completed` |
+| Platform bootstrap and recovery | `platform.bootstrap.denied`, `platform.bootstrap.completed`, `platform.admin_recovery.denied`, `platform.admin_recovery.failed`, `platform.admin_recovery.completed` |
+| Control Plane authentication | `platform.control_login.denied` for valid credentials without persisted operator authority |
 | Authorization | `security.authorization.denied` for explicit HTTP 403 responses on `/v1` routes |
 
 Login-denial events use a generic target for unknown accounts and machine-readable reason codes;
