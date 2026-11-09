@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
 using ProjectBeacon.Domain.Common;
@@ -1564,7 +1565,7 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
-    public async Task ActorPlanModeRetriesContextOverflowAfterCompactionAndStillReportsSubtask()
+    public async Task ExplorerPlanModeRetriesContextOverflowAfterCompactionAndStillReportsSubtask()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-actor-compaction-" + Guid.NewGuid().ToString("N"));
         var project = Path.Combine(temp, "project");
@@ -1586,7 +1587,14 @@ public sealed class NativeAgentRuntimeTests
         };
         await using var llama = new ClientLlamaSwap();
         var provider = new ActorPlanReportAfterCompactionProvider();
-        var mcp = new ActorPipelineMcpToolClient(new string('R', 12_000));
+        var explorer = BuiltInAgentProfiles.Get("explorer");
+        Assert.NotNull(explorer);
+        Assert.Equal(AgentProfileMode.Act, explorer!.Mode);
+        var actorGrants = explorer.Tools.Concat(explorer.RequiredTools)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        Assert.Contains(McpToolNames.ReadFile, actorGrants);
+        Assert.Contains(McpToolNames.SubtaskReportResult, actorGrants);
+        var mcp = new ActorPipelineMcpToolClient(new string('R', 12_000), actorGrants);
         var logs = new List<string>();
         var runtime = new NativeAgentRuntime(
             control,
@@ -1608,7 +1616,7 @@ public sealed class NativeAgentRuntimeTests
                 1, project, DateTime.UtcNow.AddMinutes(2),
                 SubtaskId: subtaskId,
                 PipelineRole: "Actor",
-                AllowedMcpTools: [McpToolNames.ReadFile, McpToolNames.SubtaskReportResult],
+                AllowedMcpTools: actorGrants,
                 ProjectRoot: project,
                 IsolatedWorkspace: true);
 
@@ -2043,16 +2051,19 @@ public sealed class NativeAgentRuntimeTests
         }
     }
 
-    private sealed class ActorPipelineMcpToolClient(string readResult) : IMcpToolClient
+    private sealed class ActorPipelineMcpToolClient : IMcpToolClient
     {
-        public JsonArray OpenAiTools { get; } = new()
-        {
-            ActorTool("read_file"),
-            ActorTool(McpToolNames.TaskPipelineStatus),
-            ActorTool(McpToolNames.SubtaskReportResult)
-        };
-
+        private readonly string _readResult;
+        public JsonArray OpenAiTools { get; } = [];
         public List<string> CalledTools { get; } = [];
+
+        public ActorPipelineMcpToolClient(string readResult, IReadOnlyList<string> grants)
+        {
+            _readResult = readResult;
+            foreach (var name in grants.Concat([McpToolNames.TaskPipelineStatus])
+                         .Distinct(StringComparer.Ordinal))
+                OpenAiTools.Add(ActorTool(name));
+        }
 
         public Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
         {
@@ -2060,7 +2071,7 @@ public sealed class NativeAgentRuntimeTests
             CalledTools.Add(name);
             return Task.FromResult(new McpToolResult(false,
                 name == McpToolNames.SubtaskReportResult ? "Subtask marked Done." :
-                name == McpToolNames.TaskPipelineStatus ? "Pipeline status: InProgress." : readResult));
+                name == McpToolNames.TaskPipelineStatus ? "Pipeline status: InProgress." : _readResult));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
