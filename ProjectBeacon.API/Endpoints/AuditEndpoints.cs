@@ -37,6 +37,10 @@ public static class AuditEndpoints
         [FromQuery] string? action,
         [FromQuery] AuditActorKind? actorKind,
         [FromQuery] Guid? actorUserId,
+        [FromQuery] Guid? actorTokenId,
+        [FromQuery] Guid? actorDeviceId,
+        [FromQuery] string? targetType,
+        [FromQuery] string? targetId,
         [FromQuery] AuditOutcome? outcome,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
@@ -48,7 +52,8 @@ public static class AuditEndpoints
             return access.FromResult();
 
         var query = new AuditQuery(orgId, projectId, fromUtc, toUtc, action, actorKind,
-            actorUserId, outcome, page ?? 1, pageSize ?? 50);
+            actorUserId, outcome, page ?? 1, pageSize ?? 50,
+            actorTokenId, actorDeviceId, targetType, targetId);
         try
         {
             return Results.Ok(await reader.ListAsync(access.Value!, query, ct));
@@ -80,7 +85,11 @@ public static class AuditEndpoints
             return access.FromResult();
 
         var filter = new AuditQuery(orgId, projectId, fromUtc, toUtc, action, actorKind,
-            actorUserId, outcome, Page: 1, PageSize: ExportPageSize);
+            actorUserId, outcome, Page: 1, PageSize: ExportPageSize,
+            ActorTokenId: actorTokenId,
+            ActorDeviceId: actorDeviceId,
+            TargetType: targetType,
+            TargetId: targetId);
         var rows = new List<AuditEntry>();
         long total;
         try
@@ -94,7 +103,7 @@ public static class AuditEndpoints
             for (var currentPage = 2; currentPage <= pages; currentPage++)
             {
                 var next = await reader.ListAsync(access.Value!, filter with { Page = currentPage }, ct);
-                rows.AddRange(next.Items.Take(MaximumExportRows - rows.Count));
+                rows.AddRange(next.Items);
             }
         }
         catch (ArgumentException ex)
