@@ -31,6 +31,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         var descriptor = WorkstationCommandCatalog.Get(command.Request.Kind);
         if (!descriptor.Enabled)
             return Result.Failure<WorkstationCommandDto>("This workstation command has been retired.", ErrorKind.Validation);
+        if (command.Request.Kind == WorkstationCommandKind.GitSync)
+            return Result.Forbidden<WorkstationCommandDto>(
+                "GitSync must be requested through the project GitSync endpoint.");
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
