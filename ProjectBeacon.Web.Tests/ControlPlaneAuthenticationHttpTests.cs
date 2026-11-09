@@ -58,8 +58,7 @@ public sealed class ControlPlaneAuthenticationHttpTests
         Assert.Contains("Secure", setCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("HttpOnly", setCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SameSite=Strict", setCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(controlLoginResponse.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith("BeaconAuth=", StringComparison.Ordinal));
+        Assert.False(HasCookie(controlLoginResponse, "BeaconAuth"));
 
         using var controlCookieAudit = Request(HttpMethod.Get, "/v1/admin/audit", "control.localhost");
         controlCookieAudit.Headers.TryAddWithoutValidation("Cookie", controlCookie);
@@ -94,8 +93,7 @@ public sealed class ControlPlaneAuthenticationHttpTests
         var loginResponse = await client.SendAsync(
             controlLoginOnCustomerHost, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, loginResponse.StatusCode);
-        Assert.DoesNotContain(loginResponse.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith("BeaconControlAuth=", StringComparison.Ordinal));
+        Assert.False(HasCookie(loginResponse, "BeaconControlAuth"));
 
         using var auditOnCustomerHost = Request(
             HttpMethod.Get, "/v1/admin/audit", "app.projectbeacon.tech");
@@ -127,8 +125,7 @@ public sealed class ControlPlaneAuthenticationHttpTests
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.DoesNotContain(response.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith("BeaconControlAuth=", StringComparison.Ordinal));
+        Assert.False(HasCookie(response, "BeaconControlAuth"));
     }
 
     private static async Task<string> BootstrapOnControlHostAsync(HttpClient client)
@@ -151,10 +148,17 @@ public sealed class ControlPlaneAuthenticationHttpTests
         return request;
     }
 
-    private static string? GetCookie(HttpResponseMessage response, string name) =>
-        response.Headers.GetValues("Set-Cookie")
-            .FirstOrDefault(value => value.StartsWith(name + "=", StringComparison.Ordinal))
-            ?.Split(';', 2)[0];
+    private static string? GetCookie(HttpResponseMessage response, string name)
+    {
+        var cookie = response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? values.FirstOrDefault(value => value.StartsWith(name + "=", StringComparison.Ordinal))
+            : null;
+        return cookie?.Split(';', 2)[0];
+    }
+
+    private static bool HasCookie(HttpResponseMessage response, string name) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values)
+        && values.Any(value => value.StartsWith(name + "=", StringComparison.Ordinal));
 }
 
 public sealed class ControlPlaneWebTestFactory : WebProductionTestFactory
