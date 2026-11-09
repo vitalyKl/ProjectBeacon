@@ -225,6 +225,96 @@ public sealed class RunPipelineSessionDispatchTests
         }
     }
 
+    [Fact]
+    public async Task RunPipelineSession_AppliesWorktreeWhenActorReportedDoneBeforeProgressFailure()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-done-after-error-" + Guid.NewGuid().ToString("N"));
+        var projectRoot = Path.Combine(temp, "project");
+        var pipelineSessionId = Guid.NewGuid();
+        Directory.CreateDirectory(projectRoot);
+
+        try
+        {
+            await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var subtaskId = Guid.NewGuid();
+            var commandId = Guid.NewGuid();
+            const int generation = 2;
+            var tokenHandler = new DoneAfterReportTokenHandler(projectId, taskId, subtaskId, commandId, generation);
+            using var http = new HttpClient(tokenHandler) { BaseAddress = new Uri("http://localhost/") };
+            await using var llama = new ClientLlamaSwap
+            {
+                SkipRealProcess = true,
+                UseOwnSwapper = false,
+                ConfigFile = Path.Combine(temp, "llamaswap.yaml")
+            };
+            var settings = new WorkstationSettings
+            {
+                AgentDataDir = Path.Combine(temp, "native-data"),
+                LlamaSwapPort = 8080,
+                CommandPolicy = "off"
+            };
+            Func<WorkstationSettings> settingsLoader = () => settings;
+            var deps = new DaemonDependencies(
+                http,
+                llama,
+                settingsLoader,
+                runtimeFactory: llamaSync => new NativeAgentRuntime(
+                    http,
+                    llama,
+                    llamaSync,
+                    settingsLoader,
+                    providerFactory: (_, _, _) => new ActorReportProvider(),
+                    mcpClientFactory: (authorization, _) => Task.FromResult<IMcpToolClient>(
+                        new ReportAndEditMcpToolClient(authorization.WorkingDirectory, tokenHandler.MarkSubtaskReported))));
+            var state = new DaemonRuntimeState("http://localhost", null);
+            var timing = new DaemonTiming
+            {
+                ChatPollInterval = TimeSpan.FromMilliseconds(1),
+                ChatMaxDuration = TimeSpan.FromSeconds(5)
+            };
+            await using var services = DaemonServices.Build(deps, timing, state);
+            var executor = services.GetRequiredService<IDaemonCommandExecutor>();
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                projectId,
+                taskId,
+                sessionId = pipelineSessionId,
+                subtaskId,
+                role = "Actor",
+                title = "Actor Done recovery test",
+                prompt = "Make the assigned change and report it.",
+                model = "beacon-local/test-model",
+                reportsDiff = true
+            });
+
+            var (ok, resultJson, error) = await executor.ExecuteAsync(new WorkstationDaemon.CommandWire
+            {
+                Id = commandId,
+                Kind = WorkstationCommandKind.RunPipelineSession,
+                Generation = generation,
+                LocalRoot = projectRoot,
+                PayloadJson = payload
+            }, TestContext.Current.CancellationToken);
+
+            Assert.True(ok, error);
+            Assert.True(tokenHandler.SubtaskReported);
+            Assert.Equal("actor change\n", await File.ReadAllTextAsync(Path.Combine(projectRoot, "actor-output.txt")));
+            using var result = JsonDocument.Parse(resultJson!);
+            Assert.True(result.RootElement.GetProperty("serverReportedDone").GetBoolean());
+            Assert.True(result.RootElement.GetProperty("recoveredAfterTurnError").GetBoolean());
+            Assert.Equal($"diff/{subtaskId:N}", result.RootElement.GetProperty("diffRef").GetString());
+            Assert.True(tokenHandler.WorkspaceDiffStored);
+        }
+        finally
+        {
+            await RemovePreservedWorktreesAsync(projectRoot, pipelineSessionId);
+            try { Directory.Delete(temp, true); } catch { }
+        }
+    }
+
     private static async Task InitializeGitRepositoryAsync(string projectRoot, CancellationToken ct)
     {
         await GitAsync(projectRoot, ct, "init", "-b", "main");
@@ -290,6 +380,127 @@ public sealed class RunPipelineSessionDispatchTests
         var output = await stdout;
         var error = await stderr;
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
+    }
+
+    private sealed class DoneAfterReportTokenHandler(
+        Guid projectId, Guid taskId, Guid subtaskId, Guid commandId, int generation) : HttpMessageHandler
+    {
+        private int _reported;
+        private int _failNextProgress;
+        public bool SubtaskReported => Volatile.Read(ref _reported) == 1;
+        public bool WorkspaceDiffStored { get; private set; }
+
+        public void MarkSubtaskReported()
+        {
+            Interlocked.Exchange(ref _reported, 1);
+            Interlocked.Exchange(ref _failNextProgress, 1);
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.AbsolutePath.TrimEnd('/');
+            if (request.Method == HttpMethod.Post && path == $"/v1/commands/{commandId:D}/harness-token")
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                if (body.RootElement.GetProperty("generation").GetInt32() != generation)
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new
+                    {
+                        token = "test-short-lived-token",
+                        projectId,
+                        commandId,
+                        generation,
+                        expiresAt = DateTime.UtcNow.AddMinutes(2),
+                        allowedMcpTools = new[] { "subtask_report_result" }
+                    }), System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (request.Method == HttpMethod.Get && path == $"/v1/tasks/{taskId:D}/pipeline")
+            {
+                var state = SubtaskReported ? "Done" : "InProgress";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new
+                    {
+                        subtasks = new[] { new { id = subtaskId, status = state } }
+                    }), System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (request.Method == HttpMethod.Post && path is not null && path.EndsWith("/progress", StringComparison.OrdinalIgnoreCase))
+            {
+                if (SubtaskReported && Interlocked.Exchange(ref _failNextProgress, 0) == 1)
+                    throw new HttpRequestException("simulated progress transport failure after Actor Done");
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            if (request.Method == HttpMethod.Post && path == $"/v1/tasks/{taskId:D}/workspace")
+            {
+                WorkspaceDiffStored = true;
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+    }
+
+    private sealed class ActorReportProvider : IChatProvider
+    {
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return new ChatProviderEvent(
+                ChatProviderEventKind.ToolCallDelta,
+                ToolIndex: 0,
+                ToolCallId: "actor-report",
+                ToolName: "subtask_report_result",
+                ToolArguments: """{"summary":"The change is complete.","diffRef":""}""");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class ReportAndEditMcpToolClient(string workingDirectory, Action onReported) : IMcpToolClient
+    {
+        public JsonArray OpenAiTools { get; } =
+        [
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject
+                {
+                    ["name"] = "subtask_report_result",
+                    ["description"] = "Report the Actor result.",
+                    ["parameters"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["summary"] = new JsonObject { ["type"] = "string" },
+                            ["diffRef"] = new JsonObject { ["type"] = "string" }
+                        },
+                        ["required"] = new JsonArray { JsonValue.Create("summary") }
+                    }
+                }
+            }
+        ];
+
+        public async Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
+        {
+            if (!string.Equals(name, "subtask_report_result", StringComparison.Ordinal))
+                return new McpToolResult(true, "unexpected tool");
+            await File.WriteAllTextAsync(Path.Combine(workingDirectory, "actor-output.txt"), "actor change\n", ct);
+            onReported();
+            return new McpToolResult(false, "Subtask status: Done.");
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class HarnessTokenHandler(Guid projectId, Guid commandId, int generation) : HttpMessageHandler

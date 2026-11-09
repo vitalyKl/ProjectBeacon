@@ -573,6 +573,90 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return madeProgress;
         }
 
+        async Task<(bool Success, string? Error, string? DiffArtifactError)> ApplyWorktreeChangesAsync(CancellationToken applyCt)
+        {
+            string? diffArtifact = null;
+            if (subtaskId is not null && reportsDiff)
+            {
+                try
+                {
+                    diffArtifact = await sessionWorktree.BuildDiffArtifactAsync(applyCt);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+                {
+                    _state.Log($"pipeline diff artifact could not be generated: {ex.Message}");
+                }
+            }
+
+            var applied = await sessionWorktree.ApplyChangesAsync(applyCt);
+            if (!applied.Success)
+            {
+                sessionWorktree.Preserve();
+                try
+                {
+                    var currentStatus = await runtime.GetTurnStatusAsync(externalSessionId, CancellationToken.None);
+                    await PublishActivityAsync("conflict", currentStatus, CancellationToken.None, terminal: true);
+                }
+                catch { }
+                return (false, applied.Error ?? "Could not apply isolated agent changes.", null);
+            }
+
+            string? diffArtifactError = null;
+            if (subtaskId is not null && reportsDiff && !string.IsNullOrWhiteSpace(diffArtifact)
+                && !diffArtifact.Contains("(No text changes.)", StringComparison.Ordinal))
+            {
+                var stored = await StoreSubtaskDiffArtifactAsync(
+                    taskId, subtaskId.Value, diffArtifact, token.Token, applyCt);
+                if (!stored.Success)
+                {
+                    diffArtifactError = stored.Error;
+                    _state.Log("pipeline diff artifact was not stored: " + stored.Error);
+                }
+            }
+
+            return (true, null, diffArtifactError);
+        }
+
+        async Task<(bool Done, bool Applied, string? Error, string? DiffArtifactError)> RecoverReportedDoneAfterFailureAsync()
+        {
+            if (!string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+                || subtaskId is not { } completedSubtaskId
+                || !await IsSubtaskReportedDoneAsync(taskId, completedSubtaskId, token.Token, CancellationToken.None))
+                return (false, false, null, null);
+
+            var apply = await ApplyWorktreeChangesAsync(CancellationToken.None);
+            return (true, apply.Success, apply.Error, apply.DiffArtifactError);
+        }
+
+        async Task<(bool Success, string? Result, string? Error, bool Done)> CompleteRecoveredActorAsync()
+        {
+            var recovered = await RecoverReportedDoneAfterFailureAsync();
+            if (!recovered.Done)
+                return (false, null, null, false);
+            if (!recovered.Applied)
+                return (false, null, (recovered.Error ?? "The Actor reported Done, but its worktree could not be applied.")
+                    + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.", true);
+
+            AgentTurnStatus? recoveredStatus = null;
+            AgentSessionUsage? recoveredUsage = null;
+            try { recoveredStatus = await runtime.GetTurnStatusAsync(externalSessionId, CancellationToken.None); } catch { }
+            try { recoveredUsage = await runtime.ReadUsageAsync(externalSessionId, CancellationToken.None); } catch { }
+
+            return (true, JsonSerializer.Serialize(new
+            {
+                pipelineSessionId,
+                externalSessionId,
+                finish = recoveredStatus?.Finish ?? "reported_done",
+                serverReportedDone = true,
+                recoveredAfterTurnError = true,
+                diffRef = reportsDiff ? $"diff/{subtaskId!.Value:N}" : null,
+                recovered.DiffArtifactError,
+                PromptTokens = recoveredUsage?.PromptTokens ?? 0,
+                CompletionTokens = recoveredUsage?.CompletionTokens ?? 0,
+                AssistantMessages = recoveredUsage?.AssistantMessages ?? 0
+            }), null, true);
+        }
+
         try
         {
             await runtime.SendPromptAsync(
@@ -628,40 +712,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, null, failure + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
             }
 
-            string? diffArtifact = null;
-            if (subtaskId is not null && reportsDiff)
-            {
-                try
-                {
-                    diffArtifact = await sessionWorktree.BuildDiffArtifactAsync(ct);
-                }
-                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
-                {
-                    _state.Log($"pipeline diff artifact could not be generated: {ex.Message}");
-                }
-            }
-
-            var applied = await sessionWorktree.ApplyChangesAsync(ct);
-            if (!applied.Success)
-            {
-                sessionWorktree.Preserve();
-                try { await PublishActivityAsync("conflict", status, ct, terminal: true); } catch { }
-                return (false, null, (applied.Error ?? "Could not apply isolated agent changes.")
+            var apply = await ApplyWorktreeChangesAsync(ct);
+            if (!apply.Success)
+                return (false, null, (apply.Error ?? "Could not apply isolated agent changes.")
                     + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
-            }
-
-            string? diffArtifactError = null;
-            if (subtaskId is not null && reportsDiff && !string.IsNullOrWhiteSpace(diffArtifact)
-                && !diffArtifact.Contains("(No text changes.)", StringComparison.Ordinal))
-            {
-                var stored = await StoreSubtaskDiffArtifactAsync(
-                    taskId, subtaskId.Value, diffArtifact, token.Token, ct);
-                if (!stored.Success)
-                {
-                    diffArtifactError = stored.Error;
-                    _state.Log("pipeline diff artifact was not stored: " + stored.Error);
-                }
-            }
 
             return (true, JsonSerializer.Serialize(new
             {
@@ -670,7 +724,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 finish = status.Finish,
                 serverReportedDone,
                 diffRef = subtaskId is not null && reportsDiff ? $"diff/{subtaskId.Value:N}" : null,
-                diffArtifactError,
+                diffArtifactError = apply.DiffArtifactError,
                 usage.PromptTokens,
                 usage.CompletionTokens,
                 usage.AssistantMessages
@@ -680,6 +734,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
             try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
+            var recovered = await CompleteRecoveredActorAsync();
+            if (recovered.Success)
+                return (true, recovered.Result, null);
+            if (recovered.Done)
+                return (false, null, recovered.Error);
             sessionWorktree.Preserve();
             return (false, null, (timeoutReason
                 ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.")
@@ -687,6 +746,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         }
         catch (OperationCanceledException)
         {
+            try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
+            var recovered = await CompleteRecoveredActorAsync();
+            if (recovered.Success)
+                return (true, recovered.Result, null);
+            if (recovered.Done)
+                return (false, null, recovered.Error);
             sessionWorktree.Preserve();
             throw;
         }
@@ -694,6 +760,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
             try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
+            var recovered = await CompleteRecoveredActorAsync();
+            if (recovered.Success)
+                return (true, recovered.Result, null);
+            if (recovered.Done)
+                return (false, null, recovered.Error);
             sessionWorktree.Preserve();
             return (false, null, $"Pipeline agent failed ({ex.GetType().Name}). Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
         }
