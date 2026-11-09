@@ -116,7 +116,7 @@ public sealed class NativeAgentRuntimeTests
     [InlineData("Planner", "pipeline_start_review", null, true)]
     [InlineData("Review", "pipeline_approve", null, true)]
     [InlineData("Review", "task_review_verdict", "{\"kind\":\"ReopenSubtask\"}", true)]
-    [InlineData("Review", "task_review_verdict", "{\\"kind\\":\\"Approve\\"}", false)]
+    [InlineData("Review", "task_review_verdict", """{"kind":"Approve"}""", false)]
     [InlineData("Planner", "pipeline_start_actor", null, false)]
     public void OnlyRoleTerminalToolsCompleteTheTurn(string role, string tool, string? arguments, bool expected)
     {

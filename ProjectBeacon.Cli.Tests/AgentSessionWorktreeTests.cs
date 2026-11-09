@@ -86,7 +86,7 @@ public sealed class AgentSessionWorktreeTests
 
             var ignoredDirectory = Path.Combine(root, "local-only");
             Directory.CreateDirectory(ignoredDirectory);
-            await File.WriteAllTextAsync(Path.Combine(ignoredDirectory, "settings.json"), "{\\"local\\":true}");
+            await File.WriteAllTextAsync(Path.Combine(ignoredDirectory, "settings.json"), """{"local":true}""");
             await File.WriteAllTextAsync(Path.Combine(root, ".env"), "SECRET=DO-NOT-LEAK");
             var beaconDirectory = Path.Combine(root, ".beacon");
             Directory.CreateDirectory(beaconDirectory);
@@ -99,7 +99,7 @@ public sealed class AgentSessionWorktreeTests
             Assert.Null(created.Error);
             await using var workspace = created.Workspace!;
 
-            Assert.Equal("{\\"local\\":true}", await File.ReadAllTextAsync(
+            Assert.Equal("""{"local":true}""", await File.ReadAllTextAsync(
                 Path.Combine(workspace.WorkingDirectory, "local-only", "settings.json")));
             Assert.Contains("local-only/settings.json", workspace.IncludedPaths);
             Assert.Contains(workspace.MissingIgnoredPaths,
