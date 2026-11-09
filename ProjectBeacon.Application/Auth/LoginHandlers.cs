@@ -199,6 +199,10 @@ public class RegisterHandler
             window.Assign(null, orgInvite.OrgId, unscoped: false);
         else if (projectInvite is not null)
             window.Assign(projectInvite.ProjectId, projectOrgId, unscoped: false);
+        else
+            // Open registration has no tenant membership yet; the account and its
+            // platform-level audit event must be committed in an explicit global scope.
+            window.Assign(null, null, unscoped: true);
 
         var user = User.Create(login, email, _passwords.Hash(password));
         await using var writeDb = _dbFactory.CreateDbContext(window);
@@ -271,6 +275,20 @@ public class RegisterHandler
                 project.OrgId,
                 project.Id,
                 detailsJson: """{"newState":"Active"}"""));
+        }
+
+        if (orgInvite is null && projectInvite is null)
+        {
+            var registeredActor = new ActorContext(
+                ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                registeredActor,
+                "account.registered",
+                "User",
+                user.Id.ToString(),
+                null,
+                null,
+                detailsJson: """{"newState":"Active","source":"open-registration"}"""));
         }
 
         await writeDb.SaveChangesAsync(ct);
