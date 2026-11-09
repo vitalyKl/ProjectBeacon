@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -18,12 +19,18 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService? _auth;
     private readonly ITenantContext _tenant;
+    private readonly IAuditWriter? _auditWriter;
 
-    public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant)
+    public CreateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService? auth,
+        ITenantContext tenant,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _tenant = tenant;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -53,6 +60,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (command.Actor.UserId is { } ownerId)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
+        _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.created",
+            "Project",
+            project.Id.ToString(),
+            orgId,
+            project.Id,
+            detailsJson: """{"newState":"Active"}"""));
         await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
