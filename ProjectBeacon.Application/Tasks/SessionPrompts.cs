@@ -16,6 +16,7 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: planner. You plan the work; you do not implement it.");
+        sb.AppendLine("Write task workspace notes and subtask instructions as Markdown, without HTML. Use headings no deeper than ##.");
         AppendProfileInstructions(sb, "Planner", profileInstructions);
         sb.AppendLine($"Project: {(string.IsNullOrWhiteSpace(projectName) ? "(unnamed)" : projectName)}");
         sb.AppendLine($"Task: {task.Title}");
@@ -56,6 +57,7 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: planner (wake-up). This is a new short planning turn; there is no live Planner process to resume.");
+        sb.AppendLine("Write task workspace notes and new subtask instructions as Markdown, without HTML. Use headings no deeper than ##.");
         sb.AppendLine($"Task: {task.Title}");
         if (!string.IsNullOrWhiteSpace(task.Description))
         {
@@ -176,6 +178,7 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: reviewer. Review the artifacts below; you do not see the planning or actor transcripts.");
+        sb.AppendLine("Write review notes as concise Markdown, without HTML. Use headings no deeper than ##.");
         AppendProfileInstructions(sb, "Review", profileInstructions);
         sb.AppendLine($"Task: {task.Title}");
         if (!string.IsNullOrWhiteSpace(task.Description))

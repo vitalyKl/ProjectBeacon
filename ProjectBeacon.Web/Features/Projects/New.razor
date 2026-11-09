@@ -26,7 +26,7 @@
     <MudText Typo="Typo.subtitle2">1. @L["CreateProjectStepNames"]</MudText>
     <MudTextField @bind-Value="_projectName" Label="@L["ProjectName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
     <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OrgNameHint"]" />
-    <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+    <MarkdownEditor @bind-Value="_description" Label="@L["Description"]" Lines="5" Class="mt-2" />
 
     <MudText Typo="Typo.subtitle2" Class="mt-6">2. @L["CreateProjectStepDevice"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["RuntimeDeviceHint"]</MudText>

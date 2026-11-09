@@ -77,4 +77,16 @@ public sealed class MarkdownViewTests : BUnitRenderBase
 
         Assert.Equal(before + 1, MarkdownView.CacheMissCount);
     }
+    [Fact]
+    public void MarkdownEditor_RendersEditTabAndCharacterCounter()
+    {
+        var cut = Bunit.RenderComponent<MarkdownEditor>(ps => ps
+            .Add(p => p.Value, "Initial **markdown**")
+            .Add(p => p.MaxLength, 120));
+
+        Assert.Contains("Edit", cut.Markup);
+        Assert.Contains("Initial", cut.Markup);
+        Assert.Contains("120", cut.Markup);
+    }
+
 }

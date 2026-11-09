@@ -35,11 +35,11 @@
                 <MudText Typo="Typo.caption" Class="mt-2">@L["ExecutionProfileDefaultPaths"]: @string.Join(", ", selectedProfile.DefaultPaths)</MudText>
             }
         }
-        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+        <MarkdownEditor @bind-Value="_instructions" Label="@L["Instructions"]" Lines="4" Class="mt-3" />
         break;
     case PipelineDialogMode.ReportResult:
         <MudTextField @bind-Value="_diffRef" Label="@L["DiffRef"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudTextField @bind-Value="_summary" Label="@L["Summary"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+        <MarkdownEditor @bind-Value="_summary" Label="@L["Summary"]" Lines="4" Class="mt-3" />
         break;
     case PipelineDialogMode.FailSubtask:
         <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
