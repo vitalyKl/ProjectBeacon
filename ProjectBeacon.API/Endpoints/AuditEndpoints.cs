@@ -146,7 +146,7 @@ public static class AuditEndpoints
 
         // User-Agent and some target metadata may be supplied by clients. Prefix cells
         // that spreadsheets could interpret as formulas before applying CSV quoting.
-        if (value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\\t' or '\\r' or '\\n')
+        if (value.Length > 0 && ("=+-@".Contains(value[0]) || char.IsControl(value[0])))
             value = "'" + value;
 
         return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
