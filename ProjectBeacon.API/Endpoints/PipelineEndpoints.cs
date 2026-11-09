@@ -84,12 +84,14 @@ public static class PipelineEndpoints
         Guid taskId,
         [FromBody] PipelineControlBody body,
         CancelPipelineHandler handler,
+        HttpContext context,
         CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(taskId)), ct);
+        var result = await handler.HandleAsync(
+            new CancelPipelineCommand(new CancelPipelineRequest(taskId), context.GetActor()), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
@@ -97,12 +99,14 @@ public static class PipelineEndpoints
         Guid taskId,
         [FromBody] PipelineControlBody body,
         RestartPipelineHandler handler,
+        HttpContext context,
         CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(taskId)), ct);
+        var result = await handler.HandleAsync(
+            new RestartPipelineCommand(new RestartPipelineRequest(taskId), context.GetActor()), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
