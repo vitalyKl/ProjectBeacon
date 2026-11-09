@@ -26,8 +26,13 @@ public sealed class AuditHttpTests
         var page = await audit.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(1, page.GetProperty("page").GetInt32());
         Assert.Equal(50, page.GetProperty("pageSize").GetInt32());
-        Assert.Equal(1, page.GetProperty("totalCount").GetInt64());
-        Assert.Equal(1, page.GetProperty("items").GetArrayLength());
+        Assert.Equal(2, page.GetProperty("totalCount").GetInt64());
+        Assert.Equal(2, page.GetProperty("items").GetArrayLength());
+        var initialActions = page.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("action").GetString())
+            .ToArray();
+        Assert.Contains("platform.bootstrap.completed", initialActions);
+        Assert.Contains("account.login.succeeded", initialActions);
 
         var export = await client.GetAsync("/v1/admin/audit/export", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
