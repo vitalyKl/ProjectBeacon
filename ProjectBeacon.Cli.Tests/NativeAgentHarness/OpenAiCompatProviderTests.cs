@@ -136,6 +136,30 @@ public sealed class OpenAiCompatProviderTests
     }
 
     [Fact]
+    public async Task RecognizesContextLengthErrorInsideSseStream()
+    {
+        const string privateDetail = "context_length_exceeded for private prompt fragment";
+        using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                "data: " + JsonSerializer.Serialize(new { error = new { message = privateDetail, code = "context_length_exceeded" } }) + "\\n\\n",
+                Encoding.UTF8,
+                "text/event-stream")
+        }));
+        var provider = new OpenAiCompatProvider(http, "https://example.test/v1", "private-key");
+        var request = new ChatProviderRequest("model", new JsonArray(), new JsonArray());
+
+        var ex = await Assert.ThrowsAsync<ChatProviderException>(async () =>
+        {
+            await foreach (var _ in provider.StreamAsync(request, CancellationToken.None)) { }
+        });
+
+        Assert.Contains("context_length_exceeded", ex.Message);
+        Assert.DoesNotContain("private prompt fragment", ex.Message);
+        Assert.DoesNotContain(privateDetail, ex.Message);
+    }
+
+    [Fact]
     public async Task RecognizesRemoteContextLengthErrorWithoutExposingProviderBody()
     {
         const string privateDetail = "context_length_exceeded: maximum context length exceeded for private prompt fragment";

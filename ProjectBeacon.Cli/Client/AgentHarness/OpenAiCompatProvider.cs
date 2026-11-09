@@ -182,6 +182,22 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
         using (document)
         {
             var root = document.RootElement;
+            if (root.TryGetProperty("error", out var error))
+            {
+                var contextExceeded = error.ValueKind == JsonValueKind.String
+                    ? ChatProviderException.IsContextLengthExceededText(error.GetString())
+                    : error.ValueKind == JsonValueKind.Object
+                        && (ChatProviderException.IsContextLengthExceededText(ReadString(error, "code"))
+                            || ChatProviderException.IsContextLengthExceededText(ReadString(error, "type"))
+                            || ChatProviderException.IsContextLengthExceededText(ReadString(error, "message")));
+                var marker = contextExceeded ? " context_length_exceeded" : string.Empty;
+                // Never echo provider-controlled SSE error details; some gateways include request data.
+                throw new ChatProviderException(
+                    $"OpenAI-compatible stream returned an error.{marker}",
+                    (int)HttpStatusCode.BadRequest,
+                    retryable: false);
+            }
+
             if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
             {
                 var prompt = ReadInt(usage, "prompt_tokens") ?? ReadInt(usage, "input_tokens");
