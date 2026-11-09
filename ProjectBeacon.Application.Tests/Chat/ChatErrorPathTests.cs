@@ -160,14 +160,21 @@ public sealed class ChatErrorPathTests : IDisposable
 
                     using (TenantScope.EnterUnscoped())
                     {
-                        var createTask = Task.Run(() => new CreateChatSessionHandler(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory))
-                            .HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(userId, "Chat"))));
+                        var createTask = new CreateChatSessionHandler(
+                                factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory))
+                            .HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(userId, "Chat")));
 
                         // Wait for the ensure-session command to be enqueued, then fail it on the device.
                         Guid commandId = Guid.Empty;
                         var deadline = DateTime.UtcNow.AddSeconds(20);
                         while (commandId == Guid.Empty && DateTime.UtcNow < deadline)
                         {
+                            if (createTask.IsCompleted)
+                            {
+                                var early = await createTask;
+                                Assert.Fail($"CreateChatSession completed before enqueue observation. Success={early.Success}; Error={early.Error}");
+                            }
+
                             commandId = await testDb.WorkstationCommands
                                 .Where(c => c.DeviceId == deviceId && c.Kind == WorkstationCommandKind.ChatEnsureSession)
                                 .Select(c => (Guid?)c.Id)
