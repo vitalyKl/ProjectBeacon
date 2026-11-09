@@ -252,6 +252,95 @@ public sealed class CommandExecutionPolicyTests
         }
     }
 
+
+    [Fact]
+    public void TryValidate_BlocksGitConfigurationAndExternalProgramExecution()
+    {
+        var root = CreateProject();
+        try
+        {
+            var blocked = new[]
+            {
+                new[] { "git", "-c", "alias.x=!echo x", "x" },
+                new[] { "git", "-c", "core.fsmonitor=echo unsafe", "status" },
+                new[] { "git", "config", "core.fsmonitor", "echo unsafe" },
+                new[] { "git", "fetch", "--upload-pack=echo unsafe" },
+                new[] { "git", "diff", "--ext-diff" },
+                new[] { "git", "push", "origin", "main" },
+                new[] { "git", "--config-env=core.fsmonitor=UNSAFE", "status" },
+                new[] { "git", "--exec-path=/tmp", "status" },
+                new[] { "git", "--git-dir=/tmp/repo.git", "status" },
+                new[] { "git", "--work-tree=/tmp", "status" },
+                new[] { "git", "-C", "/tmp/real-project", "status" },
+                new[] { "git", "-C/tmp/real-project", "status" },
+                new[] { "git", "difftool", "main" },
+                new[] { "git", "mergetool" },
+                new[] { "git", "archive", "--remote=origin", "HEAD" },
+                new[] { "git", "remote", "add", "origin", "https://example.invalid/repo.git" },
+                new[] { "git", "worktree", "add", "/tmp/other" },
+                new[] { "git", "submodule", "update" },
+                new[] { "git", "clone", "https://example.invalid/repo.git" }
+            };
+
+            foreach (var argv in blocked)
+                Assert.False(CommandExecutionPolicy.TryValidate(argv, root, out _), string.Join(' ', argv));
+
+            Assert.True(CommandExecutionPolicy.TryValidate(["git", "status"], root, out var error), error);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+
+    [Fact]
+    public void TryValidate_AllowsOnlyBuiltInReadOnlyGitCommands()
+    {
+        var root = CreateProject();
+        try
+        {
+            foreach (var argv in new[]
+            {
+                new[] { "git", "status", "--short" },
+                new[] { "git", "--no-pager", "diff", "--stat" },
+                new[] { "git", "log", "-5", "--oneline" },
+                new[] { "git", "show", "--stat", "HEAD" },
+                new[] { "git", "rev-parse", "--show-toplevel" },
+                new[] { "git", "ls-files" },
+                new[] { "git", "grep", "TODO" },
+                new[] { "git", "blame", "README.md" }
+            })
+            {
+                Assert.True(CommandExecutionPolicy.TryValidate(argv, root, out var allowedError),
+                    $"{string.Join(' ', argv)}: {allowedError}");
+            }
+
+            foreach (var argv in new[]
+            {
+                new[] { "git", "custom-alias" },
+                new[] { "git", "difftool" },
+                new[] { "git", "mergetool" },
+                new[] { "git", "credential", "fill" },
+                new[] { "git", "grep", "--open-files-in-pager", "TODO" },
+                new[] { "git", "--paginate", "status" },
+                new[] { "git", "--pager=cmd.exe", "status" },
+                new[] { "git", "-C", root, "status" },
+                new[] { "git", "-C" + root, "status" },
+                new[] { "git", "--config-env", "alias.x=BEACON_UNSAFE", "status" },
+                new[] { "git", "--exec-path", root, "status" }
+            })
+            {
+                Assert.False(CommandExecutionPolicy.TryValidate(argv, root, out _),
+                    string.Join(' ', argv));
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateProject()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-policy-" + Guid.NewGuid().ToString("N"));

@@ -27,5 +27,6 @@ public enum WorkstationCommandKind
     RunReviewCheck,
     RunPipelineSession,
     CheckClientUpdate,
-    UpdateClient
+    UpdateClient,
+    GitSync
 }

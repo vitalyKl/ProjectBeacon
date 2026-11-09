@@ -532,18 +532,15 @@ internal static class CommandExecutionPolicy
 
             if (ContainsPathOutsideWorktree(argument, workingDirectory))
             {
-                error = "Absolute paths and parent-directory traversal outside the isolated project worktree are not allowed in command arguments.";
+                error = "Absolute paths and parent-directory traversal outside the isolated worktree are not allowed. Synchronize the real project from the ProjectBeacon interface; an agent session cannot access the real project directory.";
                 return false;
             }
         }
 
         var args = argv.Skip(1).ToArray();
         var command = basename.ToLowerInvariant();
-        if (command == "git" && string.Equals(GetGitSubcommand(args), "push", StringComparison.OrdinalIgnoreCase))
-        {
-            error = "git push is blocked on the workstation command interface.";
+        if (command == "git" && !TryValidateGitArguments(args, out error))
             return false;
-        }
 
         if (IsGlobalInstall(command, args))
         {
@@ -632,6 +629,60 @@ internal static class CommandExecutionPolicy
         }
 
         return false;
+    }
+
+    private static readonly HashSet<string> BlockedGitGlobalOptions = new(StringComparer.Ordinal)
+    {
+        "-c", "-C", "--config-env", "--exec-path", "--git-dir", "--work-tree", "--super-prefix"
+    };
+
+    // Allow only built-in inspection commands. A deny-list is unsafe here because
+    // unrecognized names can resolve to user-defined aliases, including shell aliases.
+    private static readonly HashSet<string> AllowedGitSubcommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "status", "diff", "log", "show", "rev-parse", "ls-files", "grep", "blame",
+        "shortlog", "describe", "rev-list", "merge-base", "diff-tree", "name-rev",
+        "count-objects", "check-ignore", "check-attr"
+    };
+
+    private static readonly string[] BlockedGitOptions =
+    [
+        "--upload-pack", "--receive-pack", "--exec", "--ext-diff", "--textconv", "--output", "-o",
+        "--pager", "--paginate", "--open-files-in-pager", "-p"
+    ];
+
+    private static bool TryValidateGitArguments(IReadOnlyList<string> args, out string error)
+    {
+        error = string.Empty;
+        var subcommand = GetGitSubcommand(args);
+        if (subcommand is null || !AllowedGitSubcommands.Contains(subcommand))
+        {
+            error = subcommand is not null && subcommand.Equals("push", StringComparison.OrdinalIgnoreCase)
+                ? "git push is blocked on the workstation command interface."
+                : "Only built-in read-only Git inspection commands are allowed in agent sessions. Use repo_status for the real project branch and synchronize from the ProjectBeacon interface.";
+            return false;
+        }
+        foreach (var argument in args)
+        {
+            if (BlockedGitGlobalOptions.Contains(argument)
+                || argument == "--paginate"
+                || argument.StartsWith("--pager=", StringComparison.Ordinal)
+                || argument.StartsWith("--open-files-in-pager=", StringComparison.Ordinal)
+                || (argument.StartsWith("-c", StringComparison.Ordinal) && argument.Length > 2)
+                || (argument.StartsWith("-C", StringComparison.Ordinal) && argument.Length > 2)
+                || BlockedGitGlobalOptions.Any(option => option.StartsWith("--", StringComparison.Ordinal)
+                    && argument.StartsWith(option + "=", StringComparison.Ordinal))
+                || BlockedGitOptions.Any(option => argument == option
+                    || (option.StartsWith("--", StringComparison.Ordinal)
+                        && argument.StartsWith(option + "=", StringComparison.Ordinal))
+                    || (option == "-o" && argument.StartsWith("-o", StringComparison.Ordinal) && argument.Length > 2)))
+            {
+                error = "Git configuration, executable override, and external program options are blocked in agent sessions. Use the structured repo_status tool for repository status.";
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static string? GetGitSubcommand(IReadOnlyList<string> args)

@@ -162,6 +162,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RevokeDeviceHandler>();
         services.AddTransient<HeartbeatDeviceHandler>();
         services.AddTransient<EnqueueCommandHandler>();
+        services.AddTransient<EnqueueProjectGitSyncHandler>();
+        services.AddTransient<GetProjectGitSyncCommandHandler>();
         services.AddTransient<ClaimNextCommandHandler>();
         services.AddTransient<CompleteCommandHandler>();
         // Device progress endpoint injects this concrete handler directly.

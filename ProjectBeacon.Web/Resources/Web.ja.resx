@@ -2596,6 +2596,30 @@ orthstar</value>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>選択したモデルのコンテキストサイズは 0 より大きくする必要があります。起動前にコンテキストウィンドウを設定してください。</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回答用トークン予約数（0 = 自動）</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>コンテキスト圧縮は、ウィンドウの82%と「ウィンドウサイズ−予約数」の小さい方をプロンプトが超えたときに開始します。0の場合は25%を自動予約します。</value></data>
+  <data name="GitSyncTitle" xml:space="preserve"><value>Git リポジトリ</value></data>
+  <data name="GitSyncHelp" xml:space="preserve"><value>リポジトリの状態を確認するか、現在のブランチを Fast-Forward で更新します。同期は接続されたワークステーションで実行され、ローカル変更を上書きしません。</value></data>
+  <data name="GitSyncCheck" xml:space="preserve"><value>状態を確認</value></data>
+  <data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
+  <data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。ページを更新して、リポジトリの状態を再確認してください。</value></data>
+  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
+  <data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
+  <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+  <data name="GitSyncAhead" xml:space="preserve"><value>先行</value></data>
+  <data name="GitSyncBehind" xml:space="preserve"><value>遅れ</value></data>
+  <data name="GitSyncClean" xml:space="preserve"><value>作業ツリーはクリーンです</value></data>
+  <data name="GitSyncDirty" xml:space="preserve"><value>作業ツリーにローカル変更があります</value></data>
+  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>リポジトリの状態を確認しました。</value></data>
+  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>リポジトリを Fast-Forward で更新しました。</value></data>
+  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同期は拒否されました。作業ツリーに変更はありません。</value></data>
+  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git の同期に失敗しました。</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同期前にローカル変更をコミットするか stash してください。</value></data>
+  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>ネイティブエージェントセッションが実行中です。終了するまでお待ちください。</value></data>
+  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>ローカルブランチと Upstream ブランチが分岐しているため、Fast-Forward できません。</value></data>
+  <data name="GitSyncReasonDetached" xml:space="preserve"><value>リポジトリは Detached HEAD 状態です。</value></data>
+  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>現在のブランチに Upstream が設定されていません。</value></data>
+  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>追跡対象の Upstream を取得できません。ワークステーションの Remote と認証情報を確認してください。</value></data>
+  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作がタイムアウトしました。</value></data>
   <data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
   <data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
   <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>

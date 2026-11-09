@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Client;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using ProjectBeacon.Domain.Common;
 /// <summary>
 /// Builds heartbeat probeJson: tool paths, clientVersion from the assembly informational version, plus optional llama-swap, host load, and active agent-runtime status.
 /// </summary>
@@ -10,9 +11,10 @@ public static class WorkstationProbe
 {
     public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? agentRuntimeStatus = null)
     {
+        var gitPath = Which("git");
         var probe = new Dictionary<string, object?>
         {
-            ["git"] = Which("git"),
+            ["git"] = gitPath,
             ["llamaServer"] = Which("llama-server") ?? Which("llama-server.exe"),
             ["llamaSwap"] = Which("llama-swap") ?? Which("llama-swap.exe"),
             ["node"] = Which("node"),
@@ -20,6 +22,9 @@ public static class WorkstationProbe
             ["dotnet"] = Which("dotnet"),
             ["os"] = Environment.OSVersion.ToString(),
             ["machine"] = Environment.MachineName,
+            ["capabilities"] = gitPath is null
+                ? Array.Empty<string>()
+                : new[] { WorkstationCapabilities.GitSyncV1 },
             ["clientVersion"] = typeof(WorkstationProbe).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                 ?? typeof(WorkstationProbe).Assembly.GetName().Version?.ToString()
                 ?? "0"
