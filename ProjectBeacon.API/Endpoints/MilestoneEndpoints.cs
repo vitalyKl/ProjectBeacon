@@ -34,33 +34,42 @@ public static class MilestoneEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateMilestone(Guid projectId, [FromBody] CreateMilestoneRequest request, CreateMilestoneHandler handler)
+    private static async Task<IResult> CreateMilestone(
+        Guid projectId,
+        [FromBody] CreateMilestoneRequest request,
+        HttpContext context,
+        CreateMilestoneHandler handler)
     {
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var result = await handler.HandleAsync(new CreateMilestoneCommand(request));
+        var result = await handler.HandleAsync(new CreateMilestoneCommand(request, context.GetActor()));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value!.Id}", MapMilestoneResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> UpdateMilestone(Guid milestoneId, [FromBody] UpdateMilestoneRequest request, UpdateMilestoneHandler handler)
+    private static async Task<IResult> UpdateMilestone(
+        Guid milestoneId,
+        [FromBody] UpdateMilestoneRequest request,
+        HttpContext context,
+        UpdateMilestoneHandler handler)
     {
         if (milestoneId != request.MilestoneId)
             return ProblemResults.Bad("MilestoneId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateMilestoneCommand(request));
+        var result = await handler.HandleAsync(new UpdateMilestoneCommand(request, context.GetActor()));
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteMilestone(Guid milestoneId, DeleteMilestoneHandler handler)
+    private static async Task<IResult> DeleteMilestone(Guid milestoneId, HttpContext context, DeleteMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new DeleteMilestoneCommand(
+            new DeleteMilestoneRequest(milestoneId), context.GetActor()));
 
         return result.Success
             ? Results.NoContent()
