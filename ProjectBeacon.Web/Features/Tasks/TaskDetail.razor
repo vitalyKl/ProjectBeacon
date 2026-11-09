@@ -666,7 +666,7 @@ else
         try
         {
             var result = await CancelPipeline.HandleAsync(
-                new CancelPipelineCommand(new CancelPipelineRequest(TaskId)));
+                new CancelPipelineCommand(new CancelPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -693,7 +693,7 @@ else
         try
         {
             var result = await RestartPipeline.HandleAsync(
-                new RestartPipelineCommand(new RestartPipelineRequest(TaskId)));
+                new RestartPipelineCommand(new RestartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
