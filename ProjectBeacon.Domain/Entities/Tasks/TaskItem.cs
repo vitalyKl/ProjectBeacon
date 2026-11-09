@@ -70,6 +70,18 @@ public class TaskItem : Entity, IProjectScoped
         if (type is not null) Type = type.Value;
     }
 
+    /// <summary>Restores nullable description and review notes from a historical content snapshot.</summary>
+    public void RestoreContentFromHistory(string? description, string? reviewNotes)
+    {
+        if (string.Equals(Description, description, StringComparison.Ordinal)
+            && string.Equals(ReviewNotes, reviewNotes, StringComparison.Ordinal))
+            return;
+
+        Description = description;
+        ReviewNotes = reviewNotes;
+        ContentRevision++;
+    }
+
     public void AssignLabel(Guid? labelId)
     {
         LabelId = labelId;
