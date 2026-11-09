@@ -88,7 +88,7 @@ public sealed class RestoreContentVersionHandler
                         target = section;
                         changed = section.Revision != currentRevision;
                         break;
-                }
+                    }
                 case ContentTargetKind.Decision:
                     {
                         var snapshot = Deserialize<DecisionSnapshot>(source.ContentJson);
@@ -107,7 +107,7 @@ public sealed class RestoreContentVersionHandler
                         target = decision;
                         changed = decision.Revision != currentRevision;
                         break;
-                }
+                    }
                 case ContentTargetKind.Constraint:
                     {
                         var snapshot = Deserialize<ConstraintSnapshot>(source.ContentJson);
@@ -128,7 +128,7 @@ public sealed class RestoreContentVersionHandler
                         target = constraint;
                         changed = constraint.Revision != currentRevision;
                         break;
-                }
+                    }
                 case ContentTargetKind.Milestone:
                     {
                         var snapshot = Deserialize<MilestoneSnapshot>(source.ContentJson);
@@ -147,7 +147,7 @@ public sealed class RestoreContentVersionHandler
                         target = milestone;
                         changed = milestone.Revision != currentRevision;
                         break;
-                }
+                    }
                 case ContentTargetKind.ProjectDescription:
                     {
                         var snapshot = Deserialize<ProjectDescriptionSnapshot>(source.ContentJson);
@@ -166,7 +166,7 @@ public sealed class RestoreContentVersionHandler
                         target = project;
                         changed = project.Revision != currentRevision;
                         break;
-                }
+                    }
                 case ContentTargetKind.TaskDescription:
                     {
                         var snapshot = Deserialize<TaskDescriptionSnapshot>(source.ContentJson);
@@ -185,7 +185,7 @@ public sealed class RestoreContentVersionHandler
                         target = task;
                         changed = task.ContentRevision != currentRevision;
                         break;
-                }
+                    }
                 default:
                     return Result.Failure<RestoreContentVersionDto>("Unsupported content target kind.");
             }
