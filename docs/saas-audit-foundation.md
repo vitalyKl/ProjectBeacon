@@ -61,12 +61,14 @@ same unit of work as their state changes:
   `device.revoked`). These user-owned, non-tenant devices are written through an explicit
   unscoped context; the event records only the actor/device ids and fixed state codes, never
   the raw device token or token hash.
-- Account registration, logout, password-reset requests, password resets, password changes, and login
-  success/failure/denial (`account.registered`, `account.logout`, `account.password_*`, `account.login.*`). Events
+- Platform bootstrap, account registration, logout, password-reset requests, password resets,
+  password changes, login success/failure/denial, and authenticator setup/enable/disable
+  (`platform.bootstrap.completed`, `account.registered`, `account.logout`, `account.password_*`,
+  `account.login.*`, `account.mfa.*`). Events
   use global unscoped account storage, never include email addresses or password/token material,
   and use fixed reason/authentication method codes.
-- Authenticated HTTP 403 responses (`authorization.denied`) are recorded by API middleware in
-  a separate explicit unscoped write. The event stores the route template and actor identity, not
+- Authenticated HTTP 403 responses on `/v1` (`authorization.denied`) are recorded by middleware
+  in both API and Web hosts through a separate explicit unscoped write. The event stores the route template and actor identity, not
   request bodies, query strings, or tenant data.
 
 - API token creation and revocation (`project.api_token.created`,
@@ -112,7 +114,8 @@ permission and streams a stable, bounded result set into a spreadsheet-safe UTF-
 cap, formula-injection escaping, no request-controlled filenames).
 
 The operator web UI at `/admin/audit` provides the same filters, UTC date boundaries, paging and
-CSV download. Both UI and API revalidate the operator permission for each read/export operation.
+CSV download. Event timestamps are localized in the browser; filter boundaries and CSV timestamps
+remain UTC. Both UI and API revalidate the operator permission for each read/export operation.
 
 Not implemented: a defined retention policy and distributed audit streaming. Retention remains
 unconfigured rather than silently deleting audit history; a concrete duration requires a product
