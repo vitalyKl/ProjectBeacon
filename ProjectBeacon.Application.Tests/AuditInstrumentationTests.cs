@@ -320,6 +320,30 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal("""{"newState":"Active"}""", auditEvent.DetailsJson);
     }
 
+    [Fact]
+    public async Task ProjectUpdate_IsAuditedWithTheProjectMutation()
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(_project.Id, _org.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, tenant);
+        var handler = new UpdateProjectHandler(scopedFactory, _authorization, _auditWriter);
+
+        var updated = await handler.HandleAsync(
+            new UpdateProjectCommand(
+                new UpdateProjectRequest(_project.Id, "Updated Audit Project", null),
+                AdminActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(updated.Success, updated.Error);
+        var auditEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "project.updated" && e.TargetId == _project.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_admin.Id, auditEvent.ActorUserId);
+        Assert.Equal(_org.Id, auditEvent.OrgId);
+        Assert.Equal(_project.Id, auditEvent.ProjectId);
+        Assert.Equal("""{"changed":"metadata"}""", auditEvent.DetailsJson);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
