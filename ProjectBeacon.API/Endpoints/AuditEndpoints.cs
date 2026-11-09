@@ -38,6 +38,8 @@ public static class AuditEndpoints
         Guid? actorUserId,
         Guid? actorTokenId,
         Guid? actorDeviceId,
+        string? targetType,
+        string? targetId,
         AuditOutcome? outcome,
         int? page,
         int? pageSize,
@@ -51,7 +53,7 @@ public static class AuditEndpoints
             return admin.FromResult();
 
         var query = BuildQuery(
-            orgId, projectId, fromUtc, toUtc, action, actorKind, actorUserId, actorTokenId, actorDeviceId, outcome,
+            orgId, projectId, fromUtc, toUtc, action, actorKind, actorUserId, actorTokenId, actorDeviceId, targetType, targetId, outcome,
             page ?? 1, pageSize ?? 50);
         try
         {
@@ -127,6 +129,8 @@ public static class AuditEndpoints
         Guid? actorUserId,
         Guid? actorTokenId,
         Guid? actorDeviceId,
+        string? targetType,
+        string? targetId,
         AuditOutcome? outcome,
         int page,
         int pageSize) =>
@@ -142,6 +146,8 @@ public static class AuditEndpoints
             Page: page,
             PageSize: pageSize,
             ActorTokenId: actorTokenId,
-            ActorDeviceId: actorDeviceId);
+            ActorDeviceId: actorDeviceId,
+            TargetType: targetType,
+            TargetId: targetId);
 
 }
