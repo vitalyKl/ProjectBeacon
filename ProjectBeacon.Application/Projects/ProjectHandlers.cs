@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Admin;
+using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
@@ -20,16 +21,19 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService? _auth;
     private readonly IAdminGate? _adminGate;
+    private readonly IAuditWriter? _auditWriter;
 
     public CreateProjectHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService? auth,
         ITenantContext _,
-        IAdminGate? adminGate = null)
+        IAdminGate? adminGate = null,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _adminGate = adminGate;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -61,6 +65,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (command.Actor.UserId is { } ownerId && !command.Actor.IsAdmin)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
+        _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.created",
+            "Project",
+            project.Id.ToString(),
+            orgId,
+            project.Id,
+            detailsJson: """{"newState":"Active"}"""));
         await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
@@ -119,11 +131,16 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public UpdateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
@@ -147,6 +164,14 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
         }
 
         project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.updated",
+            "Project",
+            project.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"changed":"metadata"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
@@ -257,11 +282,16 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public DeleteProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public DeleteProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
@@ -275,6 +305,8 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
         if (project is null)
             return Result.Failure<bool>("Project not found.");
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
         await db.TaskDependencies.IgnoreQueryFilters()
@@ -299,9 +331,18 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .ExecuteDeleteAsync(ct);
 
         db.Projects.Remove(project);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.deleted",
+            "Project",
+            project.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"previousState":"Active","newState":"Deleted"}"""));
         try
         {
             await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException)
         {
