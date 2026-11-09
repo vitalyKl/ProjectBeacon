@@ -5,6 +5,7 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Common;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -62,13 +63,14 @@ public sealed class EnqueueProjectGitSyncHandler
         var selected = runtimes
             .Join(devices, runtime => runtime.DeviceId, device => device.Id,
                 (runtime, device) => new { Runtime = runtime, Device = device })
-            .Where(candidate => candidate.Device.IsOnline(now))
+            .Where(candidate => candidate.Device.IsOnline(now)
+                && WorkstationCapabilities.Supports(candidate.Device.ProbeJson, WorkstationCapabilities.GitSyncV1))
             .OrderByDescending(candidate => candidate.Device.LastHeartbeatAt)
             .FirstOrDefault();
 
         if (selected is null)
             return Result.Failure<WorkstationCommandDto>(
-                "No online workstation is attached to this project.", ErrorKind.Conflict);
+                "No online workstation advertising GitSync support is attached to this project.", ErrorKind.Conflict);
 
         var project = await db.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(candidate => candidate.Id == projectId, ct);
