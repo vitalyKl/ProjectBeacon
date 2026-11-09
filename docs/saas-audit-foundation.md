@@ -85,9 +85,10 @@ The platform-operator HTTP API exposes:
 - `GET /v1/admin/audit` — filtered, bounded pages (up to 200 rows) with organization, project,
   UTC time range, action, actor kind/user/token/device id, target type/id, and outcome filters.
 - `GET /v1/admin/audit/export.csv` — CSV using the same filters, separately gated by
-  `AuditExport`. Export is capped at 10,000 events; `X-Audit-Export-Truncated` reports whether
-  the result was capped. CSV fields are quoted, formula-prefixed values are neutralized, and
-  the response is marked `no-store`/ `nosniff`.
+  `AuditExport`. If more than 10,000 events match, the endpoint returns `413 Payload Too Large`
+  and requires narrower filters; it never silently exports a partial result. CSV fields are
+  quoted, formula-prefixed values are neutralized, and the response is marked `no-store` and
+  `nosniff`.
 
 Both endpoints require an authenticated human and an `AdminActor` returned by `IAdminGate`.
 The Blazor operator console at `/admin/audit` provides the same filters, paging, event details,
