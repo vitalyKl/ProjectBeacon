@@ -724,6 +724,67 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Contains("account.login.succeeded", csv);
     }
 
+    [Fact]
+    public async Task ProjectRuntimeAttachUpdateAndDetach_AreAuditedWithoutLocalRoot()
+    {
+        var actor = Human(_admin.Id);
+        var deviceHandler = new CreateDeviceHandler(_factory, auditWriter: _auditWriter);
+        var device = await deviceHandler.HandleAsync(
+            new CreateDeviceCommand(
+                new CreateDeviceRequest("Runtime Audit Device", "runtime-audit-fingerprint", _admin.Id),
+                actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(device.Success, device.Error);
+
+        var tenant = new TenantContext();
+        tenant.Assign(_project.Id, _org.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, tenant);
+        var adminGate = new DatabaseAdminGate(_factory);
+        var attach = new AttachRuntimeHandler(scopedFactory, adminGate, _auditWriter);
+
+        var attached = await attach.HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(
+                _project.Id, device.Value!.Id, actor, "/private/local/root")),
+            TestContext.Current.CancellationToken);
+        Assert.True(attached.Success, attached.Error);
+
+        var attachedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "project.runtime.attached"
+                && item.TargetId == attached.Value!.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_org.Id, attachedEvent.OrgId);
+        Assert.Equal(_project.Id, attachedEvent.ProjectId);
+        Assert.Equal("""{"newState":"Attached"}""", attachedEvent.DetailsJson);
+        Assert.DoesNotContain("/private/local/root", attachedEvent.DetailsJson ?? string.Empty);
+
+        var updated = await attach.HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(
+                _project.Id, device.Value.Id, actor, "/another/private/root")),
+            TestContext.Current.CancellationToken);
+        Assert.True(updated.Success, updated.Error);
+
+        var updatedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "project.runtime.updated"
+                && item.TargetId == attached.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal("""{"reasonCode":"local-root-updated"}""", updatedEvent.DetailsJson);
+        Assert.DoesNotContain("/another/private/root", updatedEvent.DetailsJson ?? string.Empty);
+
+        var detach = new DetachRuntimeHandler(scopedFactory, adminGate, _auditWriter);
+        var detached = await detach.HandleAsync(
+            new DetachRuntimeCommand(new DetachRuntimeRequest(attached.Value.Id, actor)),
+            TestContext.Current.CancellationToken);
+        Assert.True(detached.Success, detached.Error);
+
+        var detachedEvent = await _seedDb.AuditEvents.SingleAsync(
+            item => item.Action == "project.runtime.detached"
+                && item.TargetId == attached.Value.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_org.Id, detachedEvent.OrgId);
+        Assert.Equal(_project.Id, detachedEvent.ProjectId);
+        Assert.Equal("""{"newState":"Detached"}""", detachedEvent.DetailsJson);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
