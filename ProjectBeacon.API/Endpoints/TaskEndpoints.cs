@@ -34,6 +34,8 @@ public static class TaskEndpoints
         app.MapGet("/v1/tasks/{taskId:guid}", GetTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions", ListTaskContentVersions)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions/{versionId:guid}/restore", RestoreTaskContentVersion)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/status", ChangeStatusInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/status", ChangeStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -82,6 +84,26 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(
             projectId, ContentTargetKind.TaskDescription, taskId, limit ?? 50, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> RestoreTaskContentVersion(
+        Guid projectId,
+        Guid taskId,
+        Guid versionId,
+        [FromBody] ContextEndpoints.RestoreContentVersionRequest request,
+        HttpContext ctx,
+        RestoreContentVersionHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestoreContentVersionCommand(
+            projectId,
+            versionId,
+            request.ExpectedRevision,
+            ctx.GetActor(),
+            ContentTargetKind.TaskDescription,
+            taskId), ct);
+
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> UpdateTask(
