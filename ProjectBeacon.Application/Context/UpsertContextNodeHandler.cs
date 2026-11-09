@@ -80,7 +80,7 @@ public class UpsertContextNodeHandler
                     title: command.Request.Title,
                     bodyMarkdown: command.Request.BodyMarkdown,
                     updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
-                    updatedById: command.Request.SourcePath);
+                    updatedById: isDraft ? authorId : command.Actor?.UserId?.ToString("D") ?? command.Request.SourcePath);
 
             if (contentChanged)
             {
