@@ -331,10 +331,12 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
 
             if (task.ContentRevision != expectedContentRevision)
             {
-                _contentWriter.AddVersion(
-                    db, task,
-                    Guid.TryParse(command.Request.ActorId, out _) ? "Human" : "System",
-                    command.Request.ActorId ?? "pipeline-approval");
+                var attribution = ContentAttribution.FromActor(command.Actor);
+                if (attribution.Type is null)
+                    attribution = Guid.TryParse(command.Request.ActorId, out var userId)
+                        ? ("Human", userId.ToString("D"))
+                        : ("System", "pipeline-approval");
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
             }
 
             await db.SaveChangesAsync(ct);
@@ -414,7 +416,14 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
                 return Result.Failure<PipelineStateDto>("Pipeline state or content changed while force-closing; retry.");
 
             if (task.ContentRevision != expectedContentRevision)
-                _contentWriter.AddVersion(db, task, "Human", command.Request.ActorId);
+            {
+                var attribution = ContentAttribution.FromActor(command.Actor);
+                if (attribution.Type is null)
+                    attribution = Guid.TryParse(command.Request.ActorId, out var userId)
+                        ? ("Human", userId.ToString("D"))
+                        : ("System", "pipeline-force-close");
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
+            }
 
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
