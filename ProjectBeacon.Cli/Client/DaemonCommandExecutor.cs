@@ -576,14 +576,16 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         async Task<(bool Success, string? Error, string? DiffArtifactError)> ApplyWorktreeChangesAsync(CancellationToken applyCt)
         {
             string? diffArtifact = null;
+            string? diffArtifactError = null;
             if (subtaskId is not null && reportsDiff)
             {
                 try
                 {
                     diffArtifact = await sessionWorktree.BuildDiffArtifactAsync(applyCt);
                 }
-                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    diffArtifactError = $"diff generation failed ({ex.GetType().Name})";
                     _state.Log($"pipeline diff artifact could not be generated: {ex.Message}");
                 }
             }
@@ -617,7 +619,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, applied.Error ?? "Could not apply isolated agent changes.", null);
             }
 
-            string? diffArtifactError = null;
             if (subtaskId is not null && reportsDiff && !string.IsNullOrWhiteSpace(diffArtifact)
                 && !diffArtifact.Contains("(No text changes.)", StringComparison.Ordinal))
             {
@@ -628,7 +629,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     if (!stored.Success)
                         diffArtifactError = stored.Error;
                 }
-                catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     diffArtifactError = $"workspace write failed ({ex.GetType().Name})";
                 }
