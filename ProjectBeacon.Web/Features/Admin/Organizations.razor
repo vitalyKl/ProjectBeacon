@@ -342,7 +342,7 @@
                 <MudText Typo="Typo.subtitle1" Class="mb-2">Issue or renew Alpha access</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">
                     A new grant replaces any active or scheduled grant; previous entries remain in history.
-                    Feature keys are exact product capabilities. An empty feature list does not grant feature flags.
+                    The required `core` feature enables tenant API access. Additional feature keys are reserved for product-specific gates.
                 </MudText>
                 <MudTextField T="string" @bind-Value="_features" Label="Feature keys (comma-separated)"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -386,7 +386,7 @@
     private string _newDescription = string.Empty;
     private string _ownerEmail = string.Empty;
     private string _inviteEmail = string.Empty;
-    private string _features = string.Empty;
+    private string _features = EntitlementFeatureKeys.Core;
     private string _limitsJson = "{}";
     private string _reason = "alpha_access";
     private string _endsAt = string.Empty;

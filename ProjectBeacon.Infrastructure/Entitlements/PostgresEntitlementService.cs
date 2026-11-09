@@ -279,6 +279,9 @@ public sealed class PostgresEntitlementService(
             return "Entitlement end must be in the future.";
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 500)
             return "A reason of 1 to 500 characters is required.";
+        if (!request.Features.Any(key =>
+                string.Equals(NormalizeKey(key), EntitlementFeatureKeys.Core, StringComparison.Ordinal)))
+            return "Every organization entitlement must include the required 'core' feature.";
         if (request.Features.Count > 100 || request.Limits.Count > 100)
             return "At most 100 feature and limit keys may be granted.";
         if (request.Features.Any(key => !ValidKey(key))

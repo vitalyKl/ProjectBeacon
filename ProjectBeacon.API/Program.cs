@@ -133,6 +133,7 @@ app.UseMiddleware<AuditDeniedRequestMiddleware>();
 app.UseMiddleware<ApiTokenAuthMiddleware>();
 app.UseMiddleware<DeviceActorBoundaryMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
+app.UseMiddleware<OrganizationEntitlementMiddleware>();
 app.UseAuthorization();
 
 app.MapBeaconApi();

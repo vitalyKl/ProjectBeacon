@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Application.Auth;
 using Infrastructure.Data;
+using ProjectBeacon.Application.Entitlements;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -340,6 +341,10 @@ public class AuthApiFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<BeaconDbContext>(o => o.UseSqlite(_connection));
             services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>();
+
+            foreach (var descriptor in services.Where(x => x.ServiceType == typeof(IEntitlementService)).ToList())
+                services.Remove(descriptor);
+            services.AddSingleton<IEntitlementService, AllowAllEntitlementService>();
             using var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<BeaconDbContext>().Database.EnsureCreated();
@@ -353,3 +358,28 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
     }
 }
+
+internal sealed class AllowAllEntitlementService : IEntitlementService
+{
+    public Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<OrganizationEntitlement?>(null));
+
+    public Task<Result<OrganizationEntitlement?>> GetForOperatorAsync(AdminActor actor, Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<OrganizationEntitlement?>(null));
+
+    public Task<Result<IReadOnlyList<OrganizationEntitlement>>> ListForOperatorAsync(AdminActor actor, Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<IReadOnlyList<OrganizationEntitlement>>(Array.Empty<OrganizationEntitlement>()));
+
+    public Task<Result<EntitlementDecision>> EvaluateAsync(Guid orgId, EntitlementRequirement requirement, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok(new EntitlementDecision(true)));
+
+    public Task<Result<OrganizationEntitlement>> GrantAsync(GrantOrganizationEntitlementRequest request, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure<OrganizationEntitlement>("Not supported by the API test entitlement stub."));
+
+    public Task<Result> RevokeAsync(Guid entitlementId, string reason, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure("Not supported by the API test entitlement stub."));
+
+    public Task<Result<OrganizationEntitlement>> ConvertAlphaToProductionAsync(ConvertAlphaToProductionRequest request, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure<OrganizationEntitlement>("Not supported by the API test entitlement stub."));
+}
+

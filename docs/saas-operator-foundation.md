@@ -85,7 +85,7 @@ The alpha flow is operator-created organization → organization-owner invitatio
 
 ## Data and extension points for later phases
 
-Alpha entitlement grants now have PostgreSQL persistence in `OrganizationEntitlements`, an operator/tenant RLS policy, transactional grant/revoke writes, and audit events. The table is managed through the PostgreSQL entitlement service rather than an EF entity; it is covered by the runtime-role RLS tests.
+Alpha entitlement grants now have PostgreSQL persistence in `OrganizationEntitlements`, an operator/tenant RLS policy, transactional grant/revoke writes, and audit events. Every operator-issued grant must include the stable `core` feature. The table is managed through the PostgreSQL entitlement service rather than an EF entity; it is covered by the runtime-role RLS tests.
 
 The following commercial persistence models are still future work. Add them with EF configurations or reviewed SQL migrations, RLS/grants, and PostgreSQL tests:
 
@@ -130,7 +130,7 @@ Implemented in the foundation branch:
 Not implemented by this foundation:
 
 - A separate operator identity store and assignable operator-role administration; the alpha still maps `User.IsAdmin` to SystemAdministrator. Lost-authenticator recovery and organization suspension/closure are not exposed.
-- Entitlement grants can be managed and evaluated, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
+- Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. More granular product-feature gates and usage-counter enforcement are still future work; generic numeric limits are not yet enforced.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
 - Production deployment of an ops-agent or external log stack.

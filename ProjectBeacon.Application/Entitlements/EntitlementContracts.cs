@@ -1,5 +1,12 @@
 namespace ProjectBeacon.Application.Entitlements;
 
+/// <summary>Stable product-owned capability keys required by the runtime access boundary.</summary>
+public static class EntitlementFeatureKeys
+{
+    /// <summary>Baseline entitlement required for any tenant-scoped ProjectBeacon API operation.</summary>
+    public const string Core = "core";
+}
+
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Common;
 
