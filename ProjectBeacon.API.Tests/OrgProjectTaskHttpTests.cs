@@ -346,6 +346,26 @@ public sealed class OrgProjectTaskHttpTests
         Assert.Equal("Human", history[0].GetProperty("changedByType").GetString());
         Assert.False(string.IsNullOrWhiteSpace(history[0].GetProperty("changedById").GetString()));
 
+        var originalVersionId = history[1].GetProperty("id").GetGuid();
+        var restore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var restored = await restore.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(3, restored.GetProperty("revision").GetInt32());
+        Assert.True(restored.GetProperty("changed").GetBoolean());
+
+        current = await client.GetFromJsonAsync<JsonElement>(url, TestContext.Current.CancellationToken);
+        Assert.Equal("Initial", current[0].GetProperty("bodyMarkdown").GetString());
+        Assert.Equal(3, current[0].GetProperty("revision").GetInt32());
+
+        var staleRestore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleRestore.StatusCode);
+
         var draftsUrl = $"/v1/projects/{projectId}/context/drafts";
         var draft = await PostJson(client, draftsUrl, new
         {
