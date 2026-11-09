@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** foundation contracts and SaaS registration defaults. This document does not claim that the operator UI, billing persistence, provider adapters, or access enforcement are implemented.
+**Status:** SaaS operator contracts, registration defaults, the initial isolated Control Plane host, and the A1 audit console are implemented in the current development stack. This document does not claim that the complete operator console, billing persistence, provider adapters, or the full role/elevation model are implemented.
 
 ## Product boundary
 
@@ -116,7 +116,8 @@ The first customer-alpha acceptance criterion is operational, not architectural:
 
 Implemented in the foundation branch:
 
-- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and IAdminGate port.
+- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and database-backed IAdminGate authorization.
+- An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
 - Entitlement source/status/limit/snapshot contracts, IEntitlementService port, and the atomic Alpha → Production conversion contract.
 - Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
 - Registration mode/policy contracts.
@@ -125,7 +126,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- AdminGate implementation, access revocation, audit storage, elevation/TOTP flow, Admin UI, organization creation or alpha-grant persistence.
+- A separate operator identity store and assignable operator-role administration, mandatory MFA/elevation flow, the complete organization/customer-management UI, and alpha-grant persistence.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
 - Production deployment of an ops-agent or external log stack.
