@@ -202,7 +202,8 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         contextLimit = backend.ContextSize,
                         reasoningEffort,
                         agentMode,
-                        commandsEnabled
+                        commandsEnabled,
+                        reportsDiff = profile?.ReportsDiff ?? true
                     });
                     pipelineCommand = WorkstationCommand.Create(
                         selected.Device.Id,

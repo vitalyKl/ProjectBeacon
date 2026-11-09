@@ -82,6 +82,7 @@ public static class PipelineToolPolicy
         McpToolNames.GetTask, McpToolNames.TaskPipelineStatus, McpToolNames.ListConstraints,
         McpToolNames.GetConstraint, McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
+        McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
         McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead
     });
     public static IReadOnlyList<string> AgentProfileWriteTools { get; } = Array.AsReadOnly(new[]
