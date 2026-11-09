@@ -184,7 +184,12 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
             }
 
             if (task.ContentRevision != expectedContentRevision)
-                _contentWriter.AddVersion(db, task, "System", "pipeline-cancel");
+            {
+                var attribution = ContentAttribution.FromActor(command.Actor);
+                if (attribution.Type is null)
+                    attribution = ("System", "pipeline-cancel");
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
+            }
             await db.SaveChangesAsync(ct);
             await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(s => s.Id).ToArray(), ct);
             await PipelineSupport.CancelReviewCheckCommandsAsync(db, task.ProjectId, task.Id, ct);
@@ -268,7 +273,12 @@ public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineComm
                 return Result.Failure<PipelineStateDto>("Pipeline state changed while restarting; retry.");
 
             if (task.ContentRevision != expectedContentRevision)
-                _contentWriter.AddVersion(db, task, "System", "pipeline-restart");
+            {
+                var attribution = ContentAttribution.FromActor(command.Actor);
+                if (attribution.Type is null)
+                    attribution = ("System", "pipeline-restart");
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
+            }
             await db.SaveChangesAsync(ct);
             await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(s => s.Id).ToArray(), ct);
             await PipelineSupport.CancelReviewCheckCommandsAsync(db, task.ProjectId, task.Id, ct);
