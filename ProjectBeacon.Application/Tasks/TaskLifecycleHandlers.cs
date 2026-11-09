@@ -318,7 +318,7 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
             task.ContentRevision);
 }
 /// <summary>
-/// Saves review notes. The domain rejects an empty note. Last-writer-wins by design: the notes are free-form review text; only their non-emptiness is read at a status transition.
+/// Saves review notes. The domain rejects an empty note; content edits require the caller's expected content revision.
 /// </summary>
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
