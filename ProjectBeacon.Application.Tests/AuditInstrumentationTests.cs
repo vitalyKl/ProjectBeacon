@@ -344,6 +344,32 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal("""{"changed":"metadata"}""", auditEvent.DetailsJson);
     }
 
+    [Fact]
+    public async Task ProjectDeletion_IsAuditedWithTheCleanupTransaction()
+    {
+        var tenant = new TenantContext();
+        tenant.Assign(_project.Id, _org.Id, unscoped: false);
+        var scopedFactory = new TenantBoundDbFactory(_factory, tenant);
+        var handler = new DeleteProjectHandler(scopedFactory, _authorization, _auditWriter);
+
+        var deleted = await handler.HandleAsync(
+            new DeleteProjectCommand(_project.Id, AdminActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(deleted.Success, deleted.Error);
+        Assert.True(deleted.Value);
+        var auditEvent = await _seedDb.AuditEvents.SingleAsync(
+            e => e.Action == "project.deleted" && e.TargetId == _project.Id.ToString(),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_admin.Id, auditEvent.ActorUserId);
+        Assert.Equal(_org.Id, auditEvent.OrgId);
+        Assert.Equal(_project.Id, auditEvent.ProjectId);
+        Assert.Equal("""{"previousState":"Active","newState":"Deleted"}""", auditEvent.DetailsJson);
+        Assert.False(await _seedDb.Projects.AnyAsync(
+            p => p.Id == _project.Id,
+            TestContext.Current.CancellationToken));
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
