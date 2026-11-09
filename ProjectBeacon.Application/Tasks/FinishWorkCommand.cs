@@ -189,7 +189,10 @@ public class FinishWorkHandler
                             .SetProperty(t => t.ContentRevision, task.ContentRevision)
                             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
                     : await db.Tasks
-                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .Where(t => t.Id == taskId
+                            && t.Status == expectedStatus
+                            && t.StateRevision == expectedRevision
+                            && t.ContentRevision == expectedContentRevision)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(t => t.Status, task.Status)
                             .SetProperty(t => t.CompletedAt, task.CompletedAt)
