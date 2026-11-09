@@ -95,7 +95,7 @@ For the single-VPS Docker Compose deployment:
 2. Create a DNS A/AAAA record for the control hostname pointing to the same VPS as `BEACON_DOMAIN`,
    or a CNAME from `control.projectbeacon.tech` to `BEACON_DOMAIN`.
 3. The production Caddyfile serves both `BEACON_DOMAIN` and `CONTROL_HOST`. Caddy obtains and renews
-   separate Let's Encrypt certificates for both names automatically; keep ports 80 and 443 reachable.
+   Let's Encrypt certificates covering both names automatically; keep ports 80 and 443 reachable.
 4. The Web container and Caddy receive the same `CONTROL_HOST` value.
 
 For the Kubernetes deployment:
