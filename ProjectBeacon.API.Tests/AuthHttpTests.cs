@@ -118,6 +118,19 @@ public sealed class AuthHttpTests
 
         var after = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+        {
+            var logoutEvent = await db.AuditEvents.SingleAsync(
+                item => item.Action == "account.logout",
+                TestContext.Current.CancellationToken);
+            Assert.Equal(ProjectBeacon.Domain.Entities.Audit.AuditActorKind.Human, logoutEvent.ActorKind);
+            Assert.Equal("User", logoutEvent.TargetType);
+            Assert.NotNull(logoutEvent.ActorUserId);
+            Assert.Equal(logoutEvent.ActorUserId.Value.ToString(), logoutEvent.TargetId);
+        }
     }
 
     [Fact]
