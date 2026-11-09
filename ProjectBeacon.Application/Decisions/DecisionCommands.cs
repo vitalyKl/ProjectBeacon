@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Decisions;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -22,7 +23,7 @@ public record DecisionDto(
 /// <summary>
 /// Project, title, context, body, and optional consequences for a proposed decision.
 /// </summary>
-public record CreateDecisionRequest(Guid ProjectId, string Title, string Context, string Body, string? Consequences);
+public record CreateDecisionRequest(Guid ProjectId, string Title, string Context, string Body, string? Consequences, ActorContext? Actor = null, string? AgentId = null);
 /// <summary>
 /// Records a proposed decision. Title and body are required.
 /// </summary>
@@ -55,7 +56,8 @@ public class CreateDecisionHandler
             request.ProjectId,
             string.IsNullOrWhiteSpace(request.Consequences) ? null : request.Consequences.Trim());
         db.Decisions.Add(decision);
-        var saved = await _contentWriter.SaveAsync(db, decision, null, null, ct);
+        var attribution = ContentAttribution.FromActor(request.Actor, request.AgentId);
+        var saved = await _contentWriter.SaveAsync(db, decision, attribution.Type, attribution.Id, ct);
         return saved.Success
             ? Result.Ok(Map(decision))
             : Result.Failure<DecisionDto>(saved.Error ?? "Decision version could not be saved.", ErrorKind.Conflict);
@@ -80,7 +82,8 @@ public class CreateDecisionHandler
 
         var decision = Decision.Create(title, context, body, request.ProjectId, consequences);
         db.Decisions.Add(decision);
-        var saved = await _contentWriter.SaveAsync(db, decision, null, null, ct);
+        var attribution = ContentAttribution.FromActor(request.Actor, request.AgentId);
+        var saved = await _contentWriter.SaveAsync(db, decision, attribution.Type, attribution.Id, ct);
         return saved.Success
             ? Result.Ok(Map(decision))
             : Result.Failure<DecisionDto>(saved.Error ?? "Decision version could not be saved.", ErrorKind.Conflict);
