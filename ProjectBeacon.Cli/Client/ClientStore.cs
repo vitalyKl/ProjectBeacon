@@ -123,6 +123,8 @@ public sealed class WorkstationSettings
     public int ConcurrentPortBase { get; set; } = 9000;
     /// <summary>Absolute cap for one native pipeline agent turn. The server lease is 75 minutes.</summary>
     public int PipelineTurnTimeoutMinutes { get; set; } = 60;
+    /// <summary>Tokens reserved for the model response. Zero uses an automatic 25% of the context window.</summary>
+    public int ContextResponseReserveTokens { get; set; }
     /// <summary>Abort a pipeline turn after this many minutes without transcript/tool/form progress.</summary>
     public int PipelineIdleTimeoutMinutes { get; set; } = 15;
     public string? AgentDataDir { get; set; }

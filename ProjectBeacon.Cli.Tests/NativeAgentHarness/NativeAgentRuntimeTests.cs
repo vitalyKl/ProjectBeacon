@@ -418,7 +418,10 @@ public sealed class NativeAgentRuntimeTests
             Assert.True(status!.Ended);
             Assert.Equal("stop", status.Finish);
             Assert.Equal("Hello, world.", string.Concat(streamed));
-            Assert.Equal(12, (await runtime.ReadUsageAsync(session, CancellationToken.None)).PromptTokens);
+            var usage = await runtime.ReadUsageAsync(session, CancellationToken.None);
+            Assert.Equal(12, usage.PromptTokens);
+            Assert.Equal(12, usage.PeakPromptTokens);
+            Assert.Equal(3, usage.MaxCompletionTokens);
             Assert.Equal(32768, await runtime.ReadContextLimitAsync("beacon-local/test-model", CancellationToken.None));
             var parts = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(session, CancellationToken.None))
@@ -1552,6 +1555,99 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public void PromptBudgetReservesResponseTokensBeforeTheRatioTrigger()
+    {
+        Assert.Equal(49_152, NativeAgentRuntime.CalculatePromptBudget(65_536, 16_384));
+        Assert.Equal((int)Math.Floor(65_536 * 0.82), NativeAgentRuntime.CalculatePromptBudget(65_536, 8_192));
+        Assert.Equal(24_576, NativeAgentRuntime.CalculatePromptBudget(32_768, 0));
+        Assert.Equal(2, NativeAgentRuntime.CalculatePromptBudget(4, 100));
+    }
+
+    [Fact]
+    public async Task ActorPlanModeRetriesContextOverflowAfterCompactionAndStillReportsSubtask()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-actor-compaction-" + Guid.NewGuid().ToString("N"));
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            AgentDataDir = Path.Combine(temp, ".beacon-agent", "data"),
+            ContextResponseReserveTokens = 8_192
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new ActorPlanReportAfterCompactionProvider();
+        var mcp = new ActorPipelineMcpToolClient(new string('R', 12_000));
+        var logs = new List<string>();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            logs.Add,
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+
+        try
+        {
+            var session = await runtime.CreateSessionAsync("Actor report after compaction", CancellationToken.None);
+            await runtime.SwitchAgentAsync(session, "plan", CancellationToken.None);
+            var taskId = Guid.NewGuid();
+            var subtaskId = Guid.NewGuid();
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "ephemeral-token", Guid.NewGuid(), taskId, Guid.NewGuid(),
+                1, project, DateTime.UtcNow.AddMinutes(2),
+                SubtaskId: subtaskId,
+                PipelineRole: "Actor",
+                AllowedMcpTools: [McpToolNames.ReadFile, McpToolNames.SubtaskReportResult],
+                ProjectRoot: project,
+                IsolatedWorkspace: true);
+
+            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            await runtime.SendPromptAsync(
+                session,
+                "Inspect the relevant files, then report the subtask result.",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null)
+                {
+                    ContextLimit = 32_768,
+                    HarnessAuthorization = authorization
+                });
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status?.Ended, status?.Error ?? "Actor did not finish after the context retry.");
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(1, provider.OverflowCount);
+            Assert.True(provider.SummaryCalls > 0);
+            Assert.True(provider.ReportToolAdvertisedAfterCompaction);
+            Assert.Contains(McpToolNames.SubtaskReportResult, mcp.CalledTools);
+            Assert.DoesNotContain(logs, entry => entry.Contains("was not advertised", StringComparison.Ordinal));
+            Assert.Contains(logs, entry => entry.Contains("context length", StringComparison.OrdinalIgnoreCase)
+                && entry.Contains("retrying once", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(logs, entry => entry.Contains("native usage turn=", StringComparison.Ordinal));
+            var usage = await runtime.ReadUsageAsync(session, CancellationToken.None);
+            Assert.True(usage.PeakPromptTokens >= 18_000);
+            Assert.True(usage.MaxCompletionTokens >= 2_000);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public void PromptEstimateCountsToolDefinitionsAndPrefersProviderUsage()
     {
         var messages = new List<JsonObject>
@@ -1871,6 +1967,110 @@ public sealed class NativeAgentRuntimeTests
             await runtime.DisposeAsync();
             Directory.Delete(temp, true);
         }
+    }
+
+    private sealed class ActorPlanReportAfterCompactionProvider : IChatProvider
+    {
+        private int _regularCalls;
+        public int OverflowCount { get; private set; }
+        public int SummaryCalls { get; private set; }
+        public bool ReportToolAdvertisedAfterCompaction { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var summaryRequest = request.Messages.Any(message =>
+                message?["content"]?.GetValue<string>()?.Contains("Create a compact continuation checkpoint", StringComparison.Ordinal) == true);
+            if (summaryRequest)
+            {
+                SummaryCalls++;
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Keep the task goal and report only after verification.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+
+            var requestNumber = Interlocked.Increment(ref _regularCalls);
+            if (requestNumber <= 2)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.Usage,
+                    PromptTokens: requestNumber == 1 ? 18_000 : 19_000,
+                    CompletionTokens: requestNumber == 1 ? 2_000 : 2_300);
+                yield return new ChatProviderEvent(
+                    ChatProviderEventKind.ToolCallDelta,
+                    ToolIndex: 0,
+                    ToolCallId: $"actor-read-{requestNumber}",
+                    ToolName: "read_file",
+                    ToolArguments: JsonSerializer.Serialize(new { path = $"src/file-{requestNumber}.cs" }));
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+
+            if (requestNumber == 3)
+            {
+                OverflowCount++;
+                throw new ChatProviderException(
+                    "context_length_exceeded: maximum context length exceeded",
+                    (int)HttpStatusCode.BadRequest,
+                    retryable: false);
+            }
+
+            ReportToolAdvertisedAfterCompaction = NativeAgentRuntime.IsAdvertisedMcpTool(
+                request.Tools, McpToolNames.SubtaskReportResult);
+            yield return new ChatProviderEvent(ChatProviderEventKind.Usage,
+                PromptTokens: 21_000,
+                CompletionTokens: 1_000);
+            yield return new ChatProviderEvent(
+                ChatProviderEventKind.ToolCallDelta,
+                ToolIndex: 0,
+                ToolCallId: "actor-report-after-compaction",
+                ToolName: McpToolNames.SubtaskReportResult,
+                ToolArguments: """{"summary":"Actor completed after compaction.","diffRef":""}""");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class ActorPipelineMcpToolClient(string readResult) : IMcpToolClient
+    {
+        public JsonArray OpenAiTools { get; } = new()
+        {
+            ActorTool("read_file"),
+            ActorTool(McpToolNames.TaskPipelineStatus),
+            ActorTool(McpToolNames.SubtaskReportResult)
+        };
+
+        public List<string> CalledTools { get; } = [];
+
+        public Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            CalledTools.Add(name);
+            return Task.FromResult(new McpToolResult(false,
+                name == McpToolNames.SubtaskReportResult ? "Subtask marked Done." :
+                name == McpToolNames.TaskPipelineStatus ? "Pipeline status: InProgress." : readResult));
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        private static JsonObject ActorTool(string name) => new()
+        {
+            ["type"] = "function",
+            ["function"] = new JsonObject
+            {
+                ["name"] = name,
+                ["description"] = "Actor pipeline test tool.",
+                ["parameters"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject()
+                }
+            }
+        };
     }
 
     private sealed class BlockingProvider : IChatProvider

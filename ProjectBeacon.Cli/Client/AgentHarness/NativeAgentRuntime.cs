@@ -524,10 +524,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 var toolCalls = new SortedDictionary<int, ToolCallAccumulator>();
                 var finishReason = "stop";
                 var requestCompleted = false;
+                var contextOverflowRetryUsed = false;
 
                 for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
                     var stepEmittedContent = false;
+                    var requestPromptTokens = 0;
+                    var requestCompletionTokens = 0;
                     async Task StreamProviderAttemptAsync()
                     {
                         var provider = CreateProvider();
@@ -553,12 +556,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     break;
 
                                 case ChatProviderEventKind.Usage:
+                                    var promptUsage = Math.Max(0, item.PromptTokens ?? 0);
+                                    var completionUsage = Math.Max(0, item.CompletionTokens ?? 0);
+                                    requestPromptTokens = Math.Max(requestPromptTokens, promptUsage);
+                                    requestCompletionTokens = Math.Max(requestCompletionTokens, completionUsage);
                                     lock (session.Sync)
                                     {
                                         session.Usage = session.Usage with
                                         {
-                                            PromptTokens = session.Usage.PromptTokens + (item.PromptTokens ?? 0),
-                                            CompletionTokens = session.Usage.CompletionTokens + (item.CompletionTokens ?? 0)
+                                            PromptTokens = session.Usage.PromptTokens + promptUsage,
+                                            CompletionTokens = session.Usage.CompletionTokens + completionUsage,
+                                            PeakPromptTokens = Math.Max(session.Usage.PeakPromptTokens, promptUsage),
+                                            MaxCompletionTokens = Math.Max(session.Usage.MaxCompletionTokens, completionUsage)
                                         };
                                         if (item.PromptTokens is > 0)
                                         {
@@ -591,6 +600,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     {
                         await RunModelRequestAsync(StreamProviderAttemptAsync, ct);
                         requestCompleted = true;
+                        var estimatedPromptTokens = EstimatePromptTokens(
+                            request.Messages.OfType<JsonObject>().ToList(),
+                            EstimateToolTokens(request.Tools), 0, 0);
+                        var usageSource = requestPromptTokens > 0 ? "provider" : "estimate";
+                        var promptForLog = requestPromptTokens > 0 ? requestPromptTokens : estimatedPromptTokens;
+                        _log?.Invoke($"native usage turn={turnNumber} step={stepOrdinal + 1} attempt={attempt} prompt={promptForLog} completion={requestCompletionTokens} source={usageSource}");
+                    }
+                    catch (Exception ex) when (IsContextLengthExceeded(ex) && attempt < MaxAttempts
+                        && !contextOverflowRetryUsed && !stepEmittedContent && !ct.IsCancellationRequested)
+                    {
+                        contextOverflowRetryUsed = true;
+                        _log?.Invoke($"native provider rejected turn={turnNumber} step={stepOrdinal + 1} for context length; compacting and retrying once");
+                        request = request with
+                        {
+                            Messages = await BuildContextMessagesAsync(
+                                session, resolved.Model, controls, mcpTools, SummarizeAsync, ct, forceCompaction: true)
+                        };
+                        requestMessageCount = request.Messages.Count;
                     }
                     catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
                         && !stepEmittedContent && !ct.IsCancellationRequested)
@@ -1255,7 +1282,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             // The tool definitions travel with every request, so they count against the window too.
             var toolTokens = EstimateToolTokens(tools);
             var promptTokens = EstimatePromptTokens(snapshot, toolTokens, lastPromptTokens, lastPromptMessageCount);
-            if ((forceCompaction || promptTokens > (int)(limit * CompactionTriggerRatio))
+            var configuredReserve = Math.Max(0, _loadSettings().ContextResponseReserveTokens);
+            var promptBudget = CalculatePromptBudget(limit, configuredReserve);
+            if ((forceCompaction || promptTokens > promptBudget)
                 && snapshot.Count > (controls?.HarnessAuthorization?.PipelineRole is null ? 3 : 4))
             {
                 var changed = false;
@@ -1270,7 +1299,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 // Summarizing it again on every step would cost a model call and free nothing.
                 if (old.Any(m => !IsCheckpointMessage(m)))
                 {
-                    _log?.Invoke($"native context compaction: about {promptTokens} of {limit} tokens used (tools about {toolTokens}); summarizing {old.Count} messages");
+                    _log?.Invoke($"native context compaction: about {promptTokens} of {limit} tokens used (tools about {toolTokens}, response reserve {limit - promptBudget}); summarizing {old.Count} messages");
                     var summaryInput = PrepareSummaryInput(old, limit);
                     var summaryRequest = new ChatProviderRequest(
                         model,
@@ -1374,6 +1403,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             ? 0
             : EstimateTokens(messages.Skip(lastPromptMessageCount).ToList());
         return Math.Max(estimate, lastPromptTokens + addedSince);
+    }
+
+    internal static int CalculatePromptBudget(int contextLimit, int configuredReserveTokens)
+    {
+        if (contextLimit <= 0)
+            return 0;
+
+        var automaticReserve = (int)Math.Ceiling(contextLimit * 0.25);
+        var requestedReserve = configuredReserveTokens > 0 ? configuredReserveTokens : automaticReserve;
+        // Always leave at least half of a tiny context window for the prompt itself.
+        var reserve = Math.Clamp(requestedReserve, 0, contextLimit / 2);
+        var ratioBudget = (int)Math.Floor(contextLimit * CompactionTriggerRatio);
+        return Math.Max(1, Math.Min(ratioBudget, contextLimit - reserve));
     }
 
     internal static int EstimateToolTokens(JsonArray tools) =>
@@ -2269,6 +2311,26 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             result.Length,
             keptCharacters);
         return result[..keptCharacters] + marker;
+    }
+
+    private static bool IsContextLengthExceeded(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("context length exceeded", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("maximum context length", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("maximum context window", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("context window is full", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("input is too long", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("input exceeds", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("too many tokens", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("request exceeds the model's context", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsRetryable(Exception ex) =>
