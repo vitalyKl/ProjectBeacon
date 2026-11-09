@@ -115,6 +115,13 @@
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
+                @if (_isPlatformOperator)
+                {
+                    <div class="beacon-nav-label">@L["PlatformAdmin"]</div>
+                    <MudNavLink Href="/admin/audit" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Policy">
+                        @L["AuditLog"]
+                    </MudNavLink>
+                }
             </MudNavMenu>
             <div class="beacon-drawer-footer">
                 <a class="beacon-fleet" href="/settings/workstations">
@@ -167,6 +174,7 @@
     private string _pipelineHref = "/board";
     private bool _drawerOpen = true;
     private bool _bodyReady;
+    private bool _isPlatformOperator;
     private bool _commandOpen;
     private bool _hooked;
     private bool _watchingSystem;
@@ -338,6 +346,7 @@
             return;
         var state = await AuthState;
         var actor = ActorContextFactory.FromPrincipal(state.User);
+        _isPlatformOperator = actor.IsHuman && actor.IsAdmin;
         await TenantBinder.BindUserAsync(actor);
         await LoadProfile(state);
         if (actor.UserId is not Guid userId)
@@ -394,6 +403,7 @@
             "decisions" => (L["Decisions"].Value, L["ShellHintDecisions"].Value),
             "chat" => (L["AgentChat"].Value, L["ShellHintChat"].Value),
             "reports" => (L["Reports"].Value, L["ShellHintReports"].Value),
+            "admin" => (L["AuditLog"].Value, L["AuditLead"].Value),
             "settings" => (L["Settings"].Value, L["ShellHintSettings"].Value),
             "task" => (L["TaskDetail"].Value, L["ShellHintTask"].Value),
             "projects" => (L["CreateProject"].Value, L["ShellHintNewProject"].Value),
