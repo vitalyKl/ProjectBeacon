@@ -179,6 +179,12 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
             if (mode == "replace" && content.Length > MaxSectionLength)
                 return Result.Failure<TaskWorkspaceSectionDto>($"A workspace section cannot exceed {MaxSectionLength} characters.");
 
+            if (mode == "append" && ContainsAppendBlock(section.Content, content))
+            {
+                await transaction.CommitAsync(ct);
+                return Result.Ok(WorkspaceReadHandler.ToDto(section));
+            }
+
             var existingTotal = await db.TaskWorkspaceSections
                 .Where(s => s.TaskId == request.TaskId)
                 .Select(s => (long)s.Content.Length)
@@ -195,6 +201,8 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
             {
                 changed = await db.TaskWorkspaceSections
                     .Where(s => s.Id == section.Id && s.Kind == "Notes"
+                        && s.Content != content
+                        && !s.Content.Contains("\n\n" + content)
                         && s.Content.Length <= MaxSectionLength - content.Length - 2)
                     .ExecuteUpdateAsync(update => update
                         .SetProperty(s => s.Content, s => s.Content + "\n\n" + content)
@@ -219,15 +227,32 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
             }
 
             if (changed == 0)
+            {
+                if (mode == "append")
+                {
+                    var latest = await db.TaskWorkspaceSections.AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Id == section.Id, ct);
+                    if (latest is not null && ContainsAppendBlock(latest.Content, content))
+                    {
+                        await transaction.CommitAsync(ct);
+                        return Result.Ok(WorkspaceReadHandler.ToDto(latest));
+                    }
+                }
+
                 return Result.Failure<TaskWorkspaceSectionDto>(
                     mode == "append" ? "Workspace section size limit reached or section changed; retry."
                         : "Workspace section revision changed; reload and retry.", ErrorKind.Conflict);
+            }
 
             await transaction.CommitAsync(ct);
             var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
             return Result.Ok(WorkspaceReadHandler.ToDto(updated));
         });
     }
+
+    private static bool ContainsAppendBlock(string existing, string appended) =>
+        existing.Split("\n\n", StringSplitOptions.None)
+            .Contains(appended, StringComparer.Ordinal);
 
     private static bool IsSameAuthor(
         TaskWorkspaceSection section,

@@ -98,6 +98,38 @@ public sealed class TaskWorkspaceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Workspace_AppendIsIdempotentForRepeatedKnowledgeWrites()
+    {
+        var (projectId, task) = await SeedTaskAsync();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var writer = new WorkspaceWriteHandler(factory);
+        var actor = ApiActor(Guid.NewGuid());
+        const string repeatedBlock = "Wake-3 correction";
+
+        var created = await writer.HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "notes/knowledge", "Knowledge", "Project knowledge",
+                "Initial notes.", "create"), actor, "Actor"));
+        Assert.True(created.Success, created.Error);
+
+        var firstAppend = await writer.HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "notes/knowledge", null, null,
+                repeatedBlock, "append"), actor, "Actor"));
+        Assert.True(firstAppend.Success, firstAppend.Error);
+        Assert.Equal(2, firstAppend.Value!.Revision);
+        Assert.Equal(1, firstAppend.Value.Content.Split(
+            repeatedBlock, StringSplitOptions.None).Length - 1);
+
+        var retry = await writer.HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "notes/knowledge", null, null,
+                repeatedBlock, "append"), actor, "Actor"));
+        Assert.True(retry.Success, retry.Error);
+        Assert.Equal(firstAppend.Value.Revision, retry.Value!.Revision);
+        Assert.Equal(firstAppend.Value.Content, retry.Value.Content);
+        Assert.Equal(1, retry.Value.Content.Split(
+            repeatedBlock, StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public async Task Workspace_ActorFromSameUserCannotReplaceAnotherSubtasksSection()
     {
         var (projectId, task) = await SeedTaskAsync();
