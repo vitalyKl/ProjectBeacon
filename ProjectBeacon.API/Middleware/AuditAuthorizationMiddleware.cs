@@ -36,6 +36,7 @@ public sealed class AuditAuthorizationMiddleware
         await _next(context);
 
         if (context.Response.StatusCode != StatusCodes.Status403Forbidden
+            || !context.Request.Path.StartsWithSegments("/v1")
             || context.User.Identity?.IsAuthenticated != true)
             return;
 
