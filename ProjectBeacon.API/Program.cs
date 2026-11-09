@@ -127,9 +127,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ApiTokenAuthMiddleware>();
 app.UseMiddleware<DeviceActorBoundaryMiddleware>();
+// Wrap tenant and authorization middleware so all 403 responses are observed.
+app.UseMiddleware<AuditDeniedRequestMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
 app.UseAuthorization();
-app.UseMiddleware<AuditDeniedRequestMiddleware>();
 
 app.MapBeaconApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
