@@ -82,8 +82,8 @@ and `docker inspect` `.Networks` keys.
    dig +short "$CONTROL_HOST"
    ```
 
-   Open ports 80/443 before Caddy starts: it obtains independent Let's Encrypt
-   certificates for both site names and renews them automatically. The existing
+   Open ports 80/443 before Caddy starts: Caddy automatically obtains and renews
+   certificates covering both site names. The existing
    registered domain remains the same; only a DNS record for the subdomain is added.
    If `CONTROL_HOST` is a CNAME, point it to `BEACON_DOMAIN`; otherwise use the
    same VPS IPv4/IPv6 address in both A/AAAA records.
