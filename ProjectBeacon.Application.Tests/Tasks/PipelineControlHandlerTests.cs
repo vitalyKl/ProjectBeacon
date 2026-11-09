@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Evals;
 using Domain.Entities.Tasks;
@@ -34,8 +35,18 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(actor.Value!.Id)), TestContext.Current.CancellationToken);
         Assert.True(actorLaunch.Success, actorLaunch.Error);
 
+        using (TenantScope.EnterUnscoped())
+        {
+            var taskForNotes = await _db.Tasks.FirstAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken);
+            taskForNotes.SetReviewNotes("notes to clear on cancellation");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actorUserId = Guid.NewGuid();
+        var actorContext = new ActorContext(
+            ActorType.Human, actorUserId, false, null, null, projectId, null, ApiTokenCapability.None);
         var cancelled = await new CancelPipelineHandler(factory)
-            .HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(task.Id), actorContext), TestContext.Current.CancellationToken);
 
         Assert.True(cancelled.Success, cancelled.Error);
         Assert.Equal(TaskPipelineStage.Cancelled, cancelled.Value!.Stage);
@@ -51,6 +62,13 @@ public sealed partial class PipelineHandlerTests
                 .ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, commands.Count);
             Assert.All(commands, command => Assert.Equal(WorkstationCommandStatus.Cancelled, command.Status));
+            var history = await _db.ContentVersions.SingleAsync(
+                version => version.TargetId == task.Id
+                    && version.TargetKind == ContentTargetKind.TaskDescription
+                    && version.Revision == 3,
+                TestContext.Current.CancellationToken);
+            Assert.Equal("Human", history.ChangedByType);
+            Assert.Equal(actorUserId.ToString("D"), history.ChangedById);
         }
     }
 
@@ -108,8 +126,18 @@ public sealed partial class PipelineHandlerTests
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
+        Guid actorUserId;
+        using (TenantScope.EnterUnscoped())
+        {
+            var taskForNotes = await _db.Tasks.FirstAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken);
+            taskForNotes.SetReviewNotes("notes to clear on restart");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            actorUserId = Guid.NewGuid();
+        }
+        var actorContext = new ActorContext(
+            ActorType.Human, actorUserId, false, null, null, projectId, null, ApiTokenCapability.None);
         var restarted = await new RestartPipelineHandler(factory)
-            .HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(task.Id), actorContext), TestContext.Current.CancellationToken);
 
         Assert.True(restarted.Success, restarted.Error);
         Assert.Null(restarted.Value!.Stage);
@@ -123,6 +151,13 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal(0, await _db.ReviewRuns.CountAsync(r => r.TaskId == task.Id, TestContext.Current.CancellationToken));
             Assert.Equal(0, await _db.Subtasks.CountAsync(s => s.TaskId == task.Id, TestContext.Current.CancellationToken));
             Assert.Equal(0, await _db.ReviewVerdicts.CountAsync(v => v.TaskId == task.Id, TestContext.Current.CancellationToken));
+            var history = await _db.ContentVersions.SingleAsync(
+                version => version.TargetId == task.Id
+                    && version.TargetKind == ContentTargetKind.TaskDescription
+                    && version.Revision == 3,
+                TestContext.Current.CancellationToken);
+            Assert.Equal("Human", history.ChangedByType);
+            Assert.Equal(actorUserId.ToString("D"), history.ChangedById);
         }
     }
 
