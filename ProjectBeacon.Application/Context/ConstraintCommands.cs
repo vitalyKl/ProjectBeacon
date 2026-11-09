@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -13,7 +14,7 @@ public record ConstraintDto(Guid Id, string Body, ConstraintKind Kind, Constrain
 /// <summary>
 /// Project, body, and kind for a new proposed constraint.
 /// </summary>
-public record CreateConstraintRequest(Guid ProjectId, string Body, ConstraintKind Kind);
+public record CreateConstraintRequest(Guid ProjectId, string Body, ConstraintKind Kind, ActorContext? Actor = null, string? AgentId = null);
 /// <summary>
 /// Proposes a constraint. The body is required.
 /// </summary>
@@ -41,7 +42,8 @@ public class CreateConstraintHandler
         await using var db = _dbFactory.CreateDbContext();
         var constraint = Constraint.Create(request.Body.Trim(), request.Kind, request.ProjectId);
         db.Constraints.Add(constraint);
-        var saved = await _contentWriter.SaveAsync(db, constraint, null, null, ct);
+        var attribution = ContentAttribution.FromActor(request.Actor, request.AgentId);
+        var saved = await _contentWriter.SaveAsync(db, constraint, attribution.Type, attribution.Id, ct);
         return saved.Success
             ? Result.Ok(Map(constraint))
             : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint version could not be saved.", ErrorKind.Conflict);
@@ -62,7 +64,8 @@ public class CreateConstraintHandler
 
         var constraint = Constraint.Create(body, request.Kind, request.ProjectId);
         db.Constraints.Add(constraint);
-        var saved = await _contentWriter.SaveAsync(db, constraint, null, null, ct);
+        var attribution = ContentAttribution.FromActor(request.Actor, request.AgentId);
+        var saved = await _contentWriter.SaveAsync(db, constraint, attribution.Type, attribution.Id, ct);
         return saved.Success
             ? Result.Ok(Map(constraint))
             : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint version could not be saved.", ErrorKind.Conflict);
