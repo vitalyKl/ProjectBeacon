@@ -7,6 +7,7 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Domain.Entities.Audit
 @using ProjectBeacon.Web.Authentication
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
@@ -181,7 +182,22 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Component routing can occur inside an existing Blazor circuit without a new HTTP
+        // request, so enforce the Control Plane origin and session claim here as well.
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
         var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return;
+        }
+
         var actor = ActorContextFactory.FromPrincipal(principal);
         var access = await AdminGate.RequireAsync(actor, OperatorPermission.AuditRead);
         if (!access.Success)
