@@ -2791,7 +2791,7 @@ No Beacon-hosted coding agent.</value>
     <value>Audit history</value>
   </data>
 <data name="AuditHistoryLead" xml:space="preserve">
-    <value>Security and operator activity across organizations and projects. Times are shown in UTC.</value>
+    <value>Security and operator activity across organizations and projects. Times are displayed in your local time zone; filters and CSV timestamps use UTC.</value>
   </data>
 <data name="AuditAccessDenied" xml:space="preserve">
     <value>You do not have permission to view the audit history.</value>
@@ -2836,7 +2836,7 @@ No Beacon-hosted coding agent.</value>
     <value>No audit events match these filters.</value>
   </data>
 <data name="AuditTimestamp" xml:space="preserve">
-    <value>Time (UTC)</value>
+    <value>Time (local)</value>
   </data>
 <data name="AuditActor" xml:space="preserve">
     <value>Actor</value>
