@@ -52,6 +52,8 @@ operator session.
 - The control cookie is HttpOnly, SameSite=Strict, Secure in Production, and has an eight-hour
   absolute ticket lifetime. No cookie Domain attribute is set, so the browser does not send it
   to the customer hostname.
+- Control sign-in and sign-out forms include antiforgery tokens; both endpoints require antiforgery
+  validation as well as the login rate limit / authenticated-session check.
 - On the control hostname, the default authentication selector uses only the Control Plane cookie
   scheme; customer JWTs and the customer cookie are not alternate authentication paths.
 - The audit page is explicitly bound to the Control Plane cookie scheme. The audit API independently
