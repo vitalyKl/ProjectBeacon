@@ -334,7 +334,7 @@ internal sealed class ChatProviderException(string message, int statusCode, bool
         {
             using var document = JsonDocument.Parse(payload);
             var root = document.RootElement;
-            if (!root.TryGetProperty("error", out var error))
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("error", out var error))
                 return false;
             if (error.ValueKind == JsonValueKind.String)
                 return IsContextLengthExceededText(error.GetString());

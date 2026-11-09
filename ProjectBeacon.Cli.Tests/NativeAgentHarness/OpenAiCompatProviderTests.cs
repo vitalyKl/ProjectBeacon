@@ -142,7 +142,7 @@ public sealed class OpenAiCompatProviderTests
         using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                "data: " + JsonSerializer.Serialize(new { error = new { message = privateDetail, code = "context_length_exceeded" } }) + "\\n\\n",
+                "data: " + JsonSerializer.Serialize(new { error = new { message = privateDetail, code = "context_length_exceeded" } }) + "\n\n",
                 Encoding.UTF8,
                 "text/event-stream")
         }));
