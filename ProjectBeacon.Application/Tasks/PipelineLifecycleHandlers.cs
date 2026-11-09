@@ -256,64 +256,91 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public ApprovePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ApprovePipelineHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public ApprovePipelineHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ApprovePipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineStateDto>("Task not found.");
-
-        if (task.PipelineStage != TaskPipelineStage.Approved)
-            return Result.Failure<PipelineStateDto>("Pipeline is not approved.");
-
-        var notes = command.Request.Note;
-        if (string.IsNullOrWhiteSpace(notes))
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            notes = await db.ReviewVerdicts
-                .Where(v => v.TaskId == task.Id && v.Kind == ReviewVerdictKind.Approve)
-                .OrderByDescending(v => v.CreatedAt).ThenByDescending(v => v.Id)
-                .Select(v => v.Note)
-                .FirstOrDefaultAsync(ct);
-        }
-        if (string.IsNullOrWhiteSpace(notes))
-            return Result.Failure<PipelineStateDto>("No review notes available to close the pipeline.");
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        var runs = await db.ReviewRuns.Where(r => r.TaskId == task.Id).ToListAsync(ct);
-        var proved = runs.Any(r => r.IsCheckProof());
-        if (!proved)
-            return Result.Failure<PipelineStateDto>("Close requires a completed review check.");
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
+            if (task.PipelineStage != TaskPipelineStage.Approved)
+                return Result.Failure<PipelineStateDto>("Pipeline is not approved.");
 
-        var expectedStatus = task.Status;
-        try
-        {
-            task.ClosePipeline(notes);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineStateDto>(ex.Message);
-        }
+            var notes = command.Request.Note;
+            if (string.IsNullOrWhiteSpace(notes))
+            {
+                notes = await db.ReviewVerdicts
+                    .Where(v => v.TaskId == task.Id && v.Kind == ReviewVerdictKind.Approve)
+                    .OrderByDescending(v => v.CreatedAt).ThenByDescending(v => v.Id)
+                    .Select(v => v.Note)
+                    .FirstOrDefaultAsync(ct);
+            }
+            if (string.IsNullOrWhiteSpace(notes))
+                return Result.Failure<PipelineStateDto>("No review notes available to close the pipeline.");
 
-        foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
-            session.Close();
+            var runs = await db.ReviewRuns.Where(r => r.TaskId == task.Id).ToListAsync(ct);
+            if (!runs.Any(r => r.IsCheckProof()))
+                return Result.Failure<PipelineStateDto>("Close requires a completed review check.");
 
-        var updated = await db.Tasks
-            .Where(t => t.Id == task.Id
-                && t.PipelineStage == TaskPipelineStage.Approved
-                && t.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status)
-                .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                .SetProperty(t => t.CompletedAt, task.CompletedAt), ct);
-        if (updated == 0)
-            return Result.Failure<PipelineStateDto>("Pipeline state changed while closing; retry.");
+            var expectedStatus = task.Status;
+            var expectedContentRevision = task.ContentRevision;
+            try
+            {
+                task.ClosePipeline(notes);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<PipelineStateDto>(ex.Message);
+            }
 
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+            foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
+                session.Close();
+
+            var updated = await db.Tasks
+                .Where(t => t.Id == task.Id
+                    && t.PipelineStage == TaskPipelineStage.Approved
+                    && t.Status == expectedStatus
+                    && t.ContentRevision == expectedContentRevision)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                    .SetProperty(t => t.Status, task.Status)
+                    .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                    .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                    .SetProperty(t => t.ContentRevision, task.ContentRevision), ct);
+            if (updated == 0)
+                return Result.Failure<PipelineStateDto>("Pipeline state or content changed while closing; retry.");
+
+            if (task.ContentRevision != expectedContentRevision)
+            {
+                _contentWriter.AddVersion(
+                    db, task,
+                    Guid.TryParse(command.Request.ActorId, out _) ? "Human" : "System",
+                    command.Request.ActorId ?? "pipeline-approval");
+            }
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+        });
     }
 }
 /// <summary>
@@ -322,54 +349,79 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
 public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ForceClosePipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineStateDto>("Task not found.");
-
-        if (!await PipelineSupport.IsPrivilegedAsync(db, command.Request.ActorId, ct))
-            return Result.Failure<PipelineStateDto>("Force close requires admin privileges.");
-
-        var reason = command.Request.Reason?.Trim();
-        var marker = string.IsNullOrEmpty(reason)
-            ? "force-closed without review"
-            : $"force-closed without review: {reason}";
-
-        var expectedStatus = task.Status;
-        var expectedStage = task.PipelineStage;
-        try
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            task.ClosePipeline(marker);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineStateDto>(ex.Message);
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
-            session.Close();
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
 
-        var updated = await db.Tasks
-            .Where(t => t.Id == task.Id && t.Status == expectedStatus && t.PipelineStage == expectedStage)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status)
-                .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                .SetProperty(t => t.CompletedAt, task.CompletedAt), ct);
-        if (updated == 0)
-            return Result.Failure<PipelineStateDto>("Pipeline state changed while force-closing; retry.");
+            if (!await PipelineSupport.IsPrivilegedAsync(db, command.Request.ActorId, ct))
+                return Result.Failure<PipelineStateDto>("Force close requires admin privileges.");
 
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+            var reason = command.Request.Reason?.Trim();
+            var marker = string.IsNullOrEmpty(reason)
+                ? "force-closed without review"
+                : $"force-closed without review: {reason}";
+
+            var expectedStatus = task.Status;
+            var expectedStage = task.PipelineStage;
+            var expectedContentRevision = task.ContentRevision;
+            try
+            {
+                task.ClosePipeline(marker);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<PipelineStateDto>(ex.Message);
+            }
+
+            foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
+                session.Close();
+
+            var updated = await db.Tasks
+                .Where(t => t.Id == task.Id
+                    && t.Status == expectedStatus
+                    && t.PipelineStage == expectedStage
+                    && t.ContentRevision == expectedContentRevision)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                    .SetProperty(t => t.Status, task.Status)
+                    .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                    .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                    .SetProperty(t => t.ContentRevision, task.ContentRevision), ct);
+            if (updated == 0)
+                return Result.Failure<PipelineStateDto>("Pipeline state or content changed while force-closing; retry.");
+
+            if (task.ContentRevision != expectedContentRevision)
+                _contentWriter.AddVersion(db, task, "Human", command.Request.ActorId);
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+        });
     }
 }
-
 /// <summary>
 /// Creates a fresh session from a failed or closed pipeline attempt while preserving the original attempt.
 /// </summary>
