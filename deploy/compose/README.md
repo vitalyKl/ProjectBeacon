@@ -85,6 +85,8 @@ and `docker inspect` `.Networks` keys.
    Open ports 80/443 before Caddy starts: it obtains independent Let's Encrypt
    certificates for both site names and renews them automatically. The existing
    registered domain remains the same; only a DNS record for the subdomain is added.
+   If `CONTROL_HOST` is a CNAME, point it to `BEACON_DOMAIN`; otherwise use the
+   same VPS IPv4/IPv6 address in both A/AAAA records.
 
 4. Get an image reference. Images are published only by the release workflow
    on `v*` tags (`.github/workflows/release.yml`: tests → image → scan →
@@ -118,8 +120,10 @@ and `docker inspect` `.Networks` keys.
 7. Verify:
 
    ```bash
-   curl -fsS https://beacon.example.com/health          # {"status":"healthy"}
-   curl -fsS https://beacon.example.com/v1/version      # {"version":"X.Y.Z","gitSha":"..."}
+   curl -fsS "https://${BEACON_DOMAIN}/health"          # {"status":"healthy"}
+   curl -fsS "https://${BEACON_DOMAIN}/v1/version"      # {"version":"X.Y.Z","gitSha":"..."}
+   curl -sSI "https://${CONTROL_HOST}/control/login"     # TLS + Control Plane route
+   curl -sSI "https://${BEACON_DOMAIN}/control/login"    # 404 on customer host
    ```
 
    Then in a browser open `https://<CONTROL_HOST>/control/bootstrap` (enter
