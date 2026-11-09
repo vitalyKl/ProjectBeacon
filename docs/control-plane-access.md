@@ -28,7 +28,7 @@ Plane in its own Web deployment without changing the application-level audit con
   `/v1/auth/recover-admin` return `404`.
 - On the control hostname, only the Control Plane pages and supporting routes are allowed:
   `/control/login`, `/control/bootstrap`, `/control/recover`, `/control/logout`,
-  `/admin/audit`, `/admin/email`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
+  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/email`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
   and static/Blazor framework assets. Customer application pages are not served from this origin.
 - The control hostname root redirects to `/admin/audit`; an unauthenticated browser is challenged
   to `/control/login`.
@@ -133,9 +133,13 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   enabled cannot perform these sensitive changes. Lost-authenticator recovery is not yet exposed.
 - Organization/customer onboarding and Alpha entitlement management are available under
   `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
-  member/invitation visibility, owner invitation creation/revocation, and Alpha grant/renew/revoke.
+  member/invitation visibility, owner invitation creation/revocation, member-role changes, global
+  customer-account enable/disable, and Alpha grant/renew/revoke. The account action is global across
+  every organization the user belongs to, increments the session version, invalidates the local
+  session-version cache, and refuses to disable an owner unless every affected organization has
+  another active owner. The last active owner also cannot be demoted.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
-- Billing persistence/provider integration, full operator-role administration, customer member
-  disable/role changes, organization suspension/closure, production operations telemetry/log access,
-  data export/deletion, and end-to-end entitlement enforcement remain future work.
+- Billing persistence/provider integration, full operator-role administration, lost-authenticator
+  recovery, organization suspension/closure, production operations telemetry/log access, data
+  export/deletion, and end-to-end entitlement enforcement remain future work.
