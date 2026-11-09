@@ -7,7 +7,7 @@ namespace ProjectBeacon.Application.Admin;
 public static class OperatorPermissionSets
 {
     public const OperatorPermission CurrentSystemAdministrator =
-        (OperatorPermission)((1UL << 13) - 1);
+        (OperatorPermission)((1UL << 15) - 1);
 
     public static bool Includes(OperatorPermission granted, OperatorPermission required) =>
         required != OperatorPermission.None && (granted & required) == required;

@@ -32,7 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAttachmentService, DatabaseAttachmentService>();
         services.AddSingleton<IAuditWriter, EfAuditWriter>();
         services.AddScoped<IAuditReader, EfAuditReader>();
-        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;
     }

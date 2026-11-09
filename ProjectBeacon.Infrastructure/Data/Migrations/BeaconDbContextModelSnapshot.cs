@@ -22,6 +22,34 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.EmailDeliveryLog", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<DateTime>("At").HasColumnType("timestamp with time zone");
+                    b.Property<string>("ErrorCode").HasMaxLength(80).HasColumnType("character varying(80)");
+                    b.Property<string>("Purpose").IsRequired().HasMaxLength(48).HasColumnType("character varying(48)");
+                    b.Property<string>("Recipient").IsRequired().HasMaxLength(320).HasColumnType("character varying(320)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
+                    b.HasKey("Id");
+                    b.HasIndex("At");
+                    b.ToTable("EmailDeliveryLogs");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.PlatformEmailSettings", b =>
+                {
+                    b.Property<bool>("Enabled").HasColumnType("boolean");
+                    b.Property<string>("FromAddress").IsRequired().HasMaxLength(320).HasColumnType("character varying(320)");
+                    b.Property<string>("Host").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid");
+                    b.Property<string>("PasswordCipher").IsRequired().HasMaxLength(4096).HasColumnType("character varying(4096)");
+                    b.Property<int>("Port").HasColumnType("integer");
+                    b.Property<string>("Username").IsRequired().HasMaxLength(320).HasColumnType("character varying(320)");
+                    b.Property<DateTime>("UpdatedAt").HasColumnType("timestamp with time zone");
+                    b.Property<bool>("UseStartTls").HasColumnType("boolean");
+                    b.HasKey("Id");
+                    b.ToTable("PlatformEmailSettings");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)

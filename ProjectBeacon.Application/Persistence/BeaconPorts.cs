@@ -9,6 +9,7 @@ using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
+using Domain.Entities.Email;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Reports;
@@ -49,6 +50,8 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<AgentTemplate> AgentTemplates { get; }
     DbSet<AgentProfile> AgentProfiles { get; }
     DbSet<AuditEvent> AuditEvents { get; }
+    DbSet<PlatformEmailSettings> PlatformEmailSettings { get; }
+    DbSet<EmailDeliveryLog> EmailDeliveryLogs { get; }
     DbSet<TaskKind> TaskKinds { get; }
     DbSet<TaskKindPhase> TaskKindPhases { get; }
     DbSet<TaskPhase> TaskPhases { get; }

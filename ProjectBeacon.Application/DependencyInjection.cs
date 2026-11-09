@@ -12,6 +12,7 @@ using Application.Identity;
 using Application.Projects;
 using Application.Tasks;
 using Application.Milestones;
+using Application.Mail;
 using Application.Context;
 using Application.Decisions;
 using Application.Reports;
@@ -28,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddScoped<IAdminGate, DatabaseAdminGate>();
+        services.AddScoped<PlatformEmailAdminService>();
 
         services.AddTransient<BootstrapHandler>();
         services.AddTransient<RecoverAdminHandler>();

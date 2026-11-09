@@ -90,7 +90,7 @@ public class CreateOrgInviteHandler
         await db.SaveChangesAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
-        await InviteMail.TrySendAsync(_email, email, org.Name, url, ct);
+        await InviteMail.TrySendAsync(_email, email, org.Name, url, "org_invite", ct);
         return Result.Ok(new InviteCreatedDto(invite.Id, invite.Email, invite.Role, invite.ExpiredAt, raw, url));
     }
 }
@@ -173,7 +173,7 @@ public class CreateProjectInviteHandler
         await db.SaveChangesAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
-        await InviteMail.TrySendAsync(_email, email, project.Name, url, ct);
+        await InviteMail.TrySendAsync(_email, email, project.Name, url, "project_invite", ct);
         return Result.Ok(new InviteCreatedDto(invite.Id, invite.Email, invite.Role, invite.ExpiredAt, raw, url));
     }
 }
@@ -505,7 +505,7 @@ internal static class InviteMail
         return string.IsNullOrEmpty(baseUrl) ? $"/invite?token={token}" : $"{baseUrl}/invite?token={token}";
     }
 
-    public static async Task TrySendAsync(IEmailSender email, string to, string targetName, string url, CancellationToken ct)
+    public static async Task TrySendAsync(IEmailSender email, string to, string targetName, string url, string purpose, CancellationToken ct)
     {
         try
         {
