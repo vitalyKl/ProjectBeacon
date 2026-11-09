@@ -61,7 +61,11 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
         path.StartsWithSegments("/admin")
         || path.StartsWithSegments("/control")
         || path.StartsWithSegments("/v1/admin")
-        || string.Equals(path.Value, "/v1/auth/control-cookie-login", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(path.Value, "/v1/auth/control-cookie-login", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path.Value, "/v1/auth/bootstrap", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path.Value, "/v1/auth/recover-admin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path.Value, "/bootstrap", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path.Value, "/recover", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAllowedOnControlHost(PathString path)
     {
@@ -77,9 +81,13 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
         return string.Equals(path.Value, "/health", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/culture", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/control/login", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/control/bootstrap", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/control/recover", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/control/logout", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/admin/audit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/auth/control-cookie-login", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/v1/auth/bootstrap", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/v1/auth/recover-admin", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/admin/audit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/v1/admin/audit/export.csv", StringComparison.OrdinalIgnoreCase);
     }
