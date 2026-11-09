@@ -2695,4 +2695,10 @@
 <data name="AuditFilterActorDevice" xml:space="preserve">
     <value>ID устройства актора</value>
   </data>
+<data name="AuditFilterTargetType" xml:space="preserve">
+    <value>Тип объекта</value>
+  </data>
+<data name="AuditFilterTargetId" xml:space="preserve">
+    <value>ID объекта</value>
+  </data>
 </root>
