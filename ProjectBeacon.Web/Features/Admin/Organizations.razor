@@ -1,0 +1,522 @@
+@page "/admin/organizations"
+@page "/admin/organizations/{OrganizationId:guid}"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Entitlements
+@using ProjectBeacon.Application.Organizations
+@using ProjectBeacon.Web.Authentication
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject IOrganizationAdminService Organizations
+@inject IEntitlementService Entitlements
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Control — Organizations</PageTitle>
+
+@if (!_blocked)
+{
+    @if (OrganizationId is null)
+    {
+        <PageHeader Title="Organizations" />
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Customer organizations, owner invitations, and Alpha access.
+        </MudText>
+
+        @if (!_authorized)
+        {
+            <MudAlert Severity="Severity.Error">You do not have permission to view organizations.</MudAlert>
+        }
+        else
+        {
+            @if (_canManage)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Create organization and invite its owner</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudTextField T="string" @bind-Value="_newName" Label="Organization name"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField T="string" @bind-Value="_ownerEmail" Label="Owner email"
+                                          InputType="InputType.Email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField T="string" @bind-Value="_newDescription" Label="Description (optional)"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateOrganization"
+                                       Disabled="_saving">
+                                @(_saving ? "Creating…" : "Create and invite owner")
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                    @if (_createdInvite is not null && OrganizationId is null)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mt-3">
+                            Organization created. The invitation link is shown once here; copy and share it with the owner if email delivery is unavailable.
+                            <MudTextField T="string" Value="@_createdInvite.InviteUrl" ReadOnly="true"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudButton Variant="Variant.Text" Href="@($"/admin/organizations/{_createdInvite.OrgId}")">
+                                Open organization
+                            </MudButton>
+                        </MudAlert>
+                    }
+                </MudPaper>
+            }
+
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+                <div class="d-flex align-center gap-2 mb-3">
+                    <MudText Typo="Typo.h6">Customer organizations</MudText>
+                    <MudSpacer />
+                    <MudTextField T="string" @bind-Value="_search" Placeholder="Name or owner email"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  OnKeyDown="SearchKeyDown" />
+                    <MudButton Variant="Variant.Outlined" OnClick="Search" Disabled="_loading">Search</MudButton>
+                </div>
+                @if (_loading)
+                {
+                    <LoadingState />
+                }
+                else if (_organizations.Count == 0)
+                {
+                    <EmptyState>No organizations found.</EmptyState>
+                }
+                else
+                {
+                    <MudTable Items="_organizations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Organization</MudTh>
+                            <MudTh>Owner</MudTh>
+                            <MudTh>Members</MudTh>
+                            <MudTh>Projects</MudTh>
+                            <MudTh>Pending invites</MudTh>
+                            <MudTh>Created</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Organization">
+                                <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Name</MudText>
+                                @if (!string.IsNullOrWhiteSpace(context.Description))
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Owner">@(!string.IsNullOrWhiteSpace(context.OwnerEmail) ? context.OwnerEmail : "Not assigned")</MudTd>
+                            <MudTd DataLabel="Members">@context.MemberCount</MudTd>
+                            <MudTd DataLabel="Projects">@context.ProjectCount</MudTd>
+                            <MudTd DataLabel="Pending invites">@context.PendingInviteCount</MudTd>
+                            <MudTd DataLabel="Created"><LocalTime Value="context.CreatedAt" Format="d" /></MudTd>
+                            <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/admin/organizations/{context.Id}")">Open</MudButton></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                    <div class="d-flex align-center justify-space-between mt-3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_totalCount organizations</MudText>
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Text" Disabled="@(_page <= 1 || _loading)" OnClick="PreviousPage">Previous</MudButton>
+                            <MudText Typo="Typo.caption" Class="align-self-center">Page @_page</MudText>
+                            <MudButton Variant="Variant.Text" Disabled="@(_page * PageSize >= _totalCount || _loading)" OnClick="NextPage">Next</MudButton>
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        }
+    }
+    else if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">You do not have permission to view this organization.</MudAlert>
+    }
+    else if (_detail is null)
+    {
+        <LoadingState />
+    }
+    else
+    {
+        <MudButton Variant="Variant.Text" Href="/admin/organizations" StartIcon="@Icons.Material.Filled.ArrowBack">Organizations</MudButton>
+        <PageHeader Title="@_detail.Organization.Name" />
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Customer information, owner invitations, and Alpha access.
+        </MudText>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Organization ID</MudText>
+                    <MudText Typo="Typo.body2">@_detail.Organization.Id</MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Created</MudText>
+                    <LocalTime Value="_detail.Organization.CreatedAt" Format="g" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Description</MudText>
+                    <MudText Typo="Typo.body2">@(_detail.Organization.Description ?? "—")</MudText>
+                </MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Members</MudText><MudText>@_detail.Members.Count</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Projects</MudText><MudText>@_detail.ProjectCount</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Pending invites</MudText><MudText>@_detail.Invites.Count(x => x.Status == "Pending")</MudText></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Members</MudText>
+            @if (_detail.Members.Count == 0)
+            {
+                <EmptyState>No members have joined this organization yet.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="_detail.Members" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent><MudTh>Login</MudTh><MudTh>Email</MudTh><MudTh>Role</MudTh><MudTh>Account</MudTh><MudTh>Joined</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Login">@context.Login</MudTd>
+                        <MudTd DataLabel="Email">@context.Email</MudTd>
+                        <MudTd DataLabel="Role">@context.Role</MudTd>
+                        <MudTd DataLabel="Account">@(context.IsDisabled ? "Disabled" : "Enabled")</MudTd>
+                        <MudTd DataLabel="Joined"><LocalTime Value="context.JoinedAt" Format="g" /></MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Owner invitations</MudText>
+            @if (_canManage)
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="8">
+                        <MudTextField T="string" @bind-Value="_inviteEmail" Label="Owner email"
+                                      InputType="InputType.Email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="InviteOwner" Disabled="_saving">
+                            Invite owner
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+                @if (_createdInvite is not null && _createdInvite.OrgId == OrganizationId)
+                {
+                    <MudAlert Severity="Severity.Success" Class="mt-3">
+                        Invitation link (shown once):
+                        <MudTextField T="string" Value="@_createdInvite.InviteUrl" ReadOnly="true"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudAlert>
+                }
+            }
+            @if (_detail.Invites.Count > 0)
+            {
+                <MudTable Items="_detail.Invites" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Class="mt-3">
+                    <HeaderContent><MudTh>Email</MudTh><MudTh>Status</MudTh><MudTh>Expires</MudTh><MudTh>Created</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Email">@context.Email</MudTd>
+                        <MudTd DataLabel="Status">@context.Status</MudTd>
+                        <MudTd DataLabel="Expires"><LocalTime Value="context.ExpiresAt" Format="g" /></MudTd>
+                        <MudTd DataLabel="Created"><LocalTime Value="context.CreatedAt" Format="g" /></MudTd>
+                        <MudTd>
+                            @if (_canManage && context.Status == "Pending")
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                           OnClick="@(() => RevokeInvite(context.Id))">Revoke</MudButton>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between mb-3">
+                <MudText Typo="Typo.h6">Alpha access</MudText>
+                @if (_entitlements.Count > 0)
+                {
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(_entitlements[0].Status == EntitlementStatus.Active ? Color.Success : Color.Default)">
+                        @_entitlements[0].Status
+                    </MudChip>
+                }
+            </div>
+            @if (_entitlements.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">No Alpha or operator entitlement has been issued.</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="_entitlements" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent><MudTh>Source</MudTh><MudTh>Status</MudTh><MudTh>Starts</MudTh><MudTh>Ends</MudTh><MudTh>Features</MudTh><MudTh>Limits</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Source">@context.Source</MudTd>
+                        <MudTd DataLabel="Status">@context.Status</MudTd>
+                        <MudTd DataLabel="Starts"><LocalTime Value="context.StartsAtUtc.UtcDateTime" Format="g" /></MudTd>
+                        <MudTd DataLabel="Ends">@(context.EndsAtUtc is null ? "No expiry" : context.EndsAtUtc.Value.ToLocalTime().ToString("g"))</MudTd>
+                        <MudTd DataLabel="Features">@string.Join(", ", context.Features.OrderBy(x => x))</MudTd>
+                        <MudTd DataLabel="Limits">@JsonSerializer.Serialize(context.Limits)</MudTd>
+                        <MudTd>
+                            @if (_canManage && (context.Status is EntitlementStatus.Active or EntitlementStatus.Scheduled))
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                           OnClick="@(() => RevokeEntitlement(context.Id))">Revoke</MudButton>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            @if (_canManage)
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Issue or renew Alpha access</MudText>
+                <MudTextField T="string" @bind-Value="_features" Label="Feature keys (comma-separated)"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField T="string" @bind-Value="_limitsJson" Label="Limits (JSON object)"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" />
+                <MudTextField T="string" @bind-Value="_reason" Label="Operator reason"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField T="string" @bind-Value="_endsAt" Label="End time UTC (optional, ISO-8601)"
+                              Placeholder="2026-12-31T23:59:59Z"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GrantAlpha" Disabled="_saving">
+                    Issue Alpha access
+                </MudButton>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private const int PageSize = 25;
+    [Parameter] public Guid? OrganizationId { get; set; }
+
+    private bool _blocked;
+    private bool _authorized;
+    private bool _canManage;
+    private bool _loading;
+    private bool _saving;
+    private string _search = string.Empty;
+    private int _page = 1;
+    private long _totalCount;
+    private List<OrganizationAdminListItem> _organizations = [];
+    private OrganizationAdminDetails? _detail;
+    private List<OrganizationEntitlement> _entitlements = [];
+    private OperatorInviteCreated? _createdInvite;
+    private string _newName = string.Empty;
+    private string _newDescription = string.Empty;
+    private string _ownerEmail = string.Empty;
+    private string _inviteEmail = string.Empty;
+    private string _features = string.Empty;
+    private string _limitsJson = "{}";
+    private string _reason = "alpha_access";
+    private string _endsAt = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+        _authorized = await EnsurePermissionAsync(OperatorPermission.OrganizationsRead);
+        if (!_authorized) return;
+        _canManage = await HasPermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+
+        if (OrganizationId is { } orgId)
+        {
+            var result = await Organizations.GetAsync(await CurrentAdminActor(), orgId);
+            if (!result.Success)
+            {
+                _detail = null;
+                Snackbar.Add(result.Error ?? "Could not load organization.", Severity.Error);
+                return;
+            }
+            _detail = result.Value;
+            await LoadEntitlements(orgId);
+        }
+        else
+        {
+            _detail = null;
+            await LoadList();
+        }
+    }
+
+    private async Task Search()
+    {
+        _page = 1;
+        await LoadList();
+    }
+
+    private async Task SearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") await Search();
+    }
+
+    private async Task PreviousPage() { _page--; await LoadList(); }
+    private async Task NextPage() { _page++; await LoadList(); }
+
+    private async Task LoadList()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.OrganizationsRead)) return;
+        _loading = true;
+        try
+        {
+            var result = await Organizations.ListAsync(await CurrentAdminActor(), _search, _page, PageSize);
+            if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not load organizations.");
+            _organizations = result.Value!.Items.ToList();
+            _totalCount = result.Value.TotalCount;
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private async Task CreateOrganization()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
+        _saving = true;
+        try
+        {
+            var result = await Organizations.CreateAsync(await CurrentAdminActor(),
+                new CreateOrganizationWithOwnerRequest(_newName, _newDescription, _ownerEmail));
+            if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not create organization.");
+            _createdInvite = result.Value;
+            _newName = _newDescription = _ownerEmail = string.Empty;
+            Snackbar.Add("Organization and owner invitation created.", Severity.Success);
+            await LoadList();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { _saving = false; }
+    }
+
+    private async Task InviteOwner()
+    {
+        if (OrganizationId is not { } orgId
+            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
+        _saving = true;
+        try
+        {
+            var result = await Organizations.InviteOwnerAsync(await CurrentAdminActor(), orgId, _inviteEmail);
+            if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not invite owner.");
+            _createdInvite = result.Value;
+            _inviteEmail = string.Empty;
+            Snackbar.Add("Owner invitation created.", Severity.Success);
+            await ReloadDetail();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { _saving = false; }
+    }
+
+    private async Task RevokeInvite(Guid inviteId)
+    {
+        if (OrganizationId is not { } orgId
+            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage)) return;
+        var result = await Organizations.RevokeInviteAsync(await CurrentAdminActor(), orgId, inviteId);
+        if (!result.Success) Snackbar.Add(result.Error ?? "Could not revoke invitation.", Severity.Error);
+        else { Snackbar.Add("Invitation revoked.", Severity.Success); await ReloadDetail(); }
+    }
+
+    private async Task LoadEntitlements(Guid orgId)
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EntitlementsRead)) return;
+        var result = await Entitlements.ListForOperatorAsync(await CurrentAdminActor(), orgId);
+        if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not load Alpha access.");
+        _entitlements = result.Value!.ToList();
+    }
+
+    private async Task GrantAlpha()
+    {
+        if (OrganizationId is not { } orgId
+            || !await EnsurePermissionAsync(OperatorPermission.EntitlementsManage)) return;
+        _saving = true;
+        try
+        {
+            var limits = JsonSerializer.Deserialize<Dictionary<string, long>>(_limitsJson)
+                ?? throw new ArgumentException("Limits must be a JSON object of non-negative integers.");
+            if (limits.Values.Any(x => x < 0))
+                throw new ArgumentException("Limits must be non-negative.");
+            var features = _features.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.Ordinal);
+            DateTimeOffset? ends = null;
+            if (!string.IsNullOrWhiteSpace(_endsAt))
+            {
+                if (!DateTimeOffset.TryParse(_endsAt, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+                    throw new ArgumentException("End time must be a valid ISO-8601 UTC timestamp.");
+                ends = parsed;
+            }
+            var request = new GrantOrganizationEntitlementRequest(
+                orgId, OperatorEntitlementSource.AlphaProgram, DateTimeOffset.UtcNow,
+                ends, limits, features, _reason);
+            var result = await Entitlements.GrantAsync(request, await CurrentAdminActor());
+            if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not grant Alpha access.");
+            Snackbar.Add("Alpha access granted.", Severity.Success);
+            _reason = "alpha_access";
+            _endsAt = string.Empty;
+            await LoadEntitlements(orgId);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { _saving = false; }
+    }
+
+    private async Task RevokeEntitlement(Guid entitlementId)
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EntitlementsManage)) return;
+        var result = await Entitlements.RevokeAsync(entitlementId, "operator_revoked", await CurrentAdminActor());
+        if (!result.Success) Snackbar.Add(result.Error ?? "Could not revoke Alpha access.", Severity.Error);
+        else { Snackbar.Add("Alpha access revoked.", Severity.Success); await LoadEntitlements(OrganizationId!.Value); }
+    }
+
+    private async Task ReloadDetail()
+    {
+        if (OrganizationId is not { } orgId) return;
+        var result = await Organizations.GetAsync(await CurrentAdminActor(), orgId);
+        if (result.Success) _detail = result.Value;
+        await LoadEntitlements(orgId);
+    }
+
+    private async Task<AdminActor> CurrentAdminActor()
+    {
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var result = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal), OperatorPermission.OrganizationsRead);
+        return result.Value ?? throw new UnauthorizedAccessException("Operator access is no longer available.");
+    }
+
+    private async Task<bool> HasPermissionAsync(OperatorPermission permission)
+    {
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        return (await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission)).Success;
+    }
+
+    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission)
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return false;
+        }
+        var result = await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission);
+        if (result.Success) return true;
+        if (permission == OperatorPermission.OrganizationsRead || permission == OperatorPermission.EntitlementsRead)
+            _authorized = false;
+        if (permission == (OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage))
+            _canManage = false;
+        Snackbar.Add("Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
+        return false;
+    }
+}

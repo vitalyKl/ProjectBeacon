@@ -14,6 +14,8 @@ using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Infrastructure.Attachments;
 using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Entitlements;
+using ProjectBeacon.Infrastructure.Organizations;
 /// <summary>
 /// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
 /// </summary>
@@ -33,6 +35,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditWriter, EfAuditWriter>();
         services.AddScoped<IAuditReader, EfAuditReader>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEntitlementService, PostgresEntitlementService>();
+        services.AddScoped<IOrganizationAdminService, EfOrganizationAdminService>();
 
         return services;
     }

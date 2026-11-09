@@ -112,6 +112,16 @@ public interface IEntitlementService
         Guid orgId,
         CancellationToken ct = default);
 
+    Task<Result<OrganizationEntitlement?>> GetForOperatorAsync(
+        AdminActor actor,
+        Guid orgId,
+        CancellationToken ct = default);
+
+    Task<Result<IReadOnlyList<OrganizationEntitlement>>> ListForOperatorAsync(
+        AdminActor actor,
+        Guid orgId,
+        CancellationToken ct = default);
+
     Task<Result<EntitlementDecision>> EvaluateAsync(
         Guid orgId,
         EntitlementRequirement requirement,

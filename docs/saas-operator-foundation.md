@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** SaaS operator contracts, registration defaults, the initial isolated Control Plane host, and the A1 audit console are implemented in the current development stack. This document does not claim that the complete operator console, billing persistence, provider adapters, or the full role/elevation model are implemented.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, and the initial B1 organization/owner-invitation/Alpha-entitlement workflow are implemented in the current development stack. Billing persistence/provider adapters, assignable operator roles, mandatory MFA/elevation, and the broader operations console remain incomplete.
 
 ## Product boundary
 
@@ -110,7 +110,7 @@ RLS must scope all organization-owned billing and entitlement rows by OrgId. Ope
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
 8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
 
-The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. Every privileged mutation is authorized, elevated where required, and audited.
+The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The initial B1 slice now provides create/invite, member and invitation visibility, and alpha grant/revoke. Full account operations, mandatory elevation, and end-to-end entitlement enforcement remain subsequent work. Privileged operations are authorized and audited; high-risk step-up operations remain unavailable until elevation is implemented.
 
 ## Current implementation status of this foundation
 
@@ -126,7 +126,8 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity store and assignable operator-role administration, mandatory MFA/elevation flow, the complete organization/customer-management UI, and alpha-grant persistence.
+- A separate operator identity store and assignable operator-role administration, mandatory MFA/elevation flow, and full customer account operations (including member disable/role changes and organization suspension/closure).
+- Entitlement grants are persisted and can be evaluated through the service contract, but product feature/usage checks have not yet been wired across all customer API operations. A recorded grant must not yet be treated as complete usage-limit enforcement.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
 - Production deployment of an ops-agent or external log stack.
