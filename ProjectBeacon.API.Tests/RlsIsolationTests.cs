@@ -196,7 +196,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         {
             await admin.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
             await using var update = new NpgsqlCommand(
-                "UPDATE \"ContentVersions\" SET \"ContentJson\" = @json WHERE \"Id\" = @id",
+                "UPDATE \"ContentVersions\" SET \"ContentJson\" = @json::jsonb WHERE \"Id\" = @id",
                 admin);
             update.Parameters.AddWithValue("@json", "{\"title\":\"tampered\"}");
             update.Parameters.AddWithValue("@id", versionA.Id);
