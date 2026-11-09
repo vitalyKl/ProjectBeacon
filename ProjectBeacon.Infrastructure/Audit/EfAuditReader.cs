@@ -87,6 +87,10 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
             events = events.Where(e => e.ActorKind == query.ActorKind.Value);
         if (query.ActorUserId.HasValue)
             events = events.Where(e => e.ActorUserId == query.ActorUserId);
+        if (query.ActorTokenId.HasValue)
+            events = events.Where(e => e.ActorTokenId == query.ActorTokenId);
+        if (query.ActorDeviceId.HasValue)
+            events = events.Where(e => e.ActorDeviceId == query.ActorDeviceId);
         if (query.Outcome.HasValue)
             events = events.Where(e => e.Outcome == query.Outcome.Value);
 
