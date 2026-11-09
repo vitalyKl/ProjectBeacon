@@ -30,11 +30,12 @@ public record UpdateTaskRequest(
     TaskPriority? Priority,
     TaskType? Type,
     Guid? LabelId,
-    Guid? MilestoneId);
+    Guid? MilestoneId,
+    int? ExpectedContentRevision = null);
 /// <summary>
 /// Command for update task.
 /// </summary>
-public record UpdateTaskCommand(UpdateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
+public record UpdateTaskCommand(UpdateTaskRequest Request, ActorContext? Actor = null) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Fields for delete task.
 /// </summary>
@@ -70,11 +71,11 @@ public record SetDependenciesCommand(SetDependenciesRequest Request) : ICommand<
 /// <summary>
 /// Task and the review notes. Empty notes are rejected.
 /// </summary>
-public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes);
+public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes, int? ExpectedContentRevision = null);
 /// <summary>
 /// Command for add review notes.
 /// </summary>
-public record AddReviewNotesCommand(AddReviewNotesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record AddReviewNotesCommand(AddReviewNotesRequest Request, ActorContext? Actor = null) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the target status. Done fails unless a completed review run exists.
 /// </summary>
@@ -120,7 +121,8 @@ public record TaskItemDto(
     DateTime CreatedAt,
     DateTime? CompletedAt,
     IList<TaskCommentDto> Comments,
-    IList<Guid> Dependencies);
+    IList<Guid> Dependencies,
+    int ContentRevision = 1);
 /// <summary>
 /// A comment, its author, and timestamps.
 /// </summary>
