@@ -60,6 +60,15 @@ public sealed class CapabilityWallHttpTests
         var constraints = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/constraints", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, constraints.StatusCode);
 
+        var decisions = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/decisions", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, decisions.StatusCode);
+
+        var missingDecision = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/decisions/{Guid.NewGuid():D}", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, missingDecision.StatusCode);
+
+        var missingConstraint = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/constraints/{Guid.NewGuid():D}", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, missingConstraint.StatusCode);
+
         var upsert = await client.PostAsJsonAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", new
         {
             title = "n",
@@ -115,7 +124,6 @@ public sealed class CapabilityWallHttpTests
         {
             ("GET", "/v1/orgs"),
             ("GET", "/v1/projects"),
-            ("GET", $"/v1/projects/{ctx.ProjectId}/decisions"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/milestones"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/reports"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/members"),

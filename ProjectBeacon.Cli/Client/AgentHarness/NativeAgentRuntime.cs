@@ -1015,7 +1015,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
                     var pipelineRole = controls?.HarnessAuthorization?.PipelineRole;
                     if (executedTools.Any(item => !item.IsError
-                        && IsSuccessfulTerminalTool(pipelineRole, item.Call.Name, item.Call.Arguments)))
+                        && IsSuccessfulTerminalTool(pipelineRole, item.Call.Name, item.Call.Arguments.ToString())))
                     {
                         finish = "stop";
                         hasFinalText = true;
