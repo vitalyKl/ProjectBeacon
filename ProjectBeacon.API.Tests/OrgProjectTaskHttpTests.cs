@@ -294,6 +294,15 @@ public sealed class OrgProjectTaskHttpTests
         Assert.Equal("Updated", current[0].GetProperty("bodyMarkdown").GetString());
         Assert.Equal(2, current[0].GetProperty("revision").GetInt32());
 
+        var sectionId = created.GetProperty("id").GetGuid();
+        var history = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/content-versions?targetKind=0&targetId={sectionId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(2, history.GetArrayLength());
+        Assert.Equal(2, history[0].GetProperty("revision").GetInt32());
+        Assert.Equal("Human", history[0].GetProperty("changedByType").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(history[0].GetProperty("changedById").GetString()));
+
         var draftsUrl = $"/v1/projects/{projectId}/context/drafts";
         var draft = await PostJson(client, draftsUrl, new
         {
