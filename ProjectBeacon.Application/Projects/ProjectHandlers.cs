@@ -221,11 +221,16 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public DeleteProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public DeleteProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
@@ -239,6 +244,8 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
         if (project is null)
             return Result.Failure<bool>("Project not found.");
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
         await db.TaskDependencies.IgnoreQueryFilters()
@@ -263,9 +270,18 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .ExecuteDeleteAsync(ct);
 
         db.Projects.Remove(project);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.deleted",
+            "Project",
+            project.Id.ToString(),
+            project.OrgId,
+            project.Id,
+            detailsJson: """{"previousState":"Active","newState":"Deleted"}"""));
         try
         {
             await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException)
         {
