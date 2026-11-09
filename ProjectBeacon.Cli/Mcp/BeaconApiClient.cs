@@ -38,12 +38,15 @@ internal sealed class BeaconApiClient
         HttpMethod method,
         string relativePath,
         JsonNode? body,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? ifMatchRevision = null)
     {
         using var request = new HttpRequestMessage(method, relativePath);
         var project = _env.Get("BEACON_PROJECT_ID");
         if (!string.IsNullOrWhiteSpace(project))
             request.Headers.TryAddWithoutValidation("X-Project-Id", project.Trim());
+        if (ifMatchRevision is { } revision)
+            request.Headers.TryAddWithoutValidation("If-Match", revision.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (body is not null)
             request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
 
