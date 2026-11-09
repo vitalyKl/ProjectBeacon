@@ -21,7 +21,7 @@ Plane in its own Web deployment without changing the application-level audit con
 `CONTROL_HOST` (or `Control:Host`) identifies the exact operator hostname. The production default is
 `control.projectbeacon.tech`; local development should set `CONTROL_HOST=control.localhost`.
 
-`ControlHostMiddleware` runs in the Web host after routing and authentication:
+`ControlHostMiddleware` runs in the Web host before static-file handling and endpoint routing:
 
 - On the customer hostname, `/admin/*`, `/control/*`, `/bootstrap`, `/recover`, `/v1/admin/*`,
   `/v1/auth/control-cookie-login`, `/v1/auth/bootstrap`, and
@@ -54,12 +54,16 @@ operator session.
   to the customer hostname.
 - Control sign-in and sign-out POSTs require a form content type and an exact same-origin
   `Origin` match; when Fetch Metadata is present, `Sec-Fetch-Site` must be `same-origin`.
-  Same-site sibling subdomains are rejected. Sign-in is also rate-limited; sign-out requires
-  an authenticated Control Plane session.
+  Same-site sibling subdomains are rejected. Sign-in is rate-limited; sign-out requires
+  an authenticated Control Plane session and records `platform.control_logout.succeeded`.
 - On the control hostname, the default authentication selector uses only the Control Plane cookie
   scheme; customer JWTs and the customer cookie are not alternate authentication paths.
-- The audit page is explicitly bound to the Control Plane cookie scheme. The audit API independently
-  rechecks the current persisted operator authority using `IAdminGate` on every request.
+- The audit page is explicitly bound to the Control Plane cookie scheme. Its Blazor component also
+  checks the current origin and the `control_plane` session claim before calling any audit service;
+  this protects against client-side navigation inside an already-open customer circuit. The audit
+  API independently rechecks the current persisted operator authority using `IAdminGate` on every request.
+- The control host serves only the explicit shared shell asset allowlist (`/_framework/*`, `/_content/*`,
+  `/_blazor/*`, `/brand/*`, `/app.css`, `/shell.js`, `/timezone.js`, `/chat.js`, and `/favicon.ico`).
 
 The first slice deliberately reuses the existing `User` account and `User.IsAdmin` flag as the
 operator eligibility source. This is separate authentication and session handling, not yet a
@@ -74,7 +78,9 @@ The initial administrator bootstrap and break-glass password recovery are Contro
 - `/control/bootstrap` calls `POST /v1/auth/bootstrap`.
 - `/control/recover` calls `POST /v1/auth/recover-admin`.
 
-Both are unavailable on the customer and standalone API hosts. The recovery handler records denied,
+Both are unavailable on the customer and standalone API hosts. Bootstrap and recovery pages also
+check the current browser origin and recheck it immediately before submitting their action. The
+recovery handler records denied,
 failed, and successful attempts without storing the bootstrap token or generated password.
 A successful password reset and its audit event are staged in the same database unit of work.
 Bootstrap remains protected by the configured secret and rate limit; it can create the first
