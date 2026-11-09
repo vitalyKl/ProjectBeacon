@@ -663,6 +663,36 @@ public sealed class AuditInstrumentationTests : IDisposable
         Assert.Equal("""{"authMethod":"password"}""", successEvent.DetailsJson);
     }
 
+    [Fact]
+    public void AuditEventFactory_RecordsOnlyThePrincipalForMachineActors()
+    {
+        var tokenId = Guid.NewGuid();
+        var tokenActor = new ActorContext(
+            ActorType.ApiToken, _admin.Id, false, tokenId, null,
+            _project.Id, _org.Id, ApiTokenCapability.TaskRead);
+        var tokenEvent = AuditEventFactory.ForActor(
+            tokenActor, "test.token.action", "Project", _project.Id.ToString(),
+            _org.Id, _project.Id);
+
+        Assert.Equal(AuditActorKind.ApiToken, tokenEvent.ActorKind);
+        Assert.Null(tokenEvent.ActorUserId);
+        Assert.Equal(tokenId, tokenEvent.ActorTokenId);
+        Assert.Null(tokenEvent.ActorDeviceId);
+
+        var deviceId = Guid.NewGuid();
+        var deviceActor = new ActorContext(
+            ActorType.Device, _admin.Id, false, null, deviceId,
+            null, null, ApiTokenCapability.None);
+        var deviceEvent = AuditEventFactory.ForActor(
+            deviceActor, "test.device.action", "Device", deviceId.ToString(),
+            null, null);
+
+        Assert.Equal(AuditActorKind.Device, deviceEvent.ActorKind);
+        Assert.Null(deviceEvent.ActorUserId);
+        Assert.Null(deviceEvent.ActorTokenId);
+        Assert.Equal(deviceId, deviceEvent.ActorDeviceId);
+    }
+
     private ActorContext AdminActor() =>
         new(ActorType.Human, _admin.Id, true, null, null, _project.Id, _org.Id, ApiTokenCapability.None);
 
