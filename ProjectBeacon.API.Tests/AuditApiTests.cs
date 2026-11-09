@@ -7,6 +7,7 @@ using System.Text.Json;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Domain.Entities.Audit;
 
 public sealed class AuditApiTests
 {
@@ -40,6 +41,26 @@ public sealed class AuditApiTests
         var pageJson = await page.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.True(pageJson.GetProperty("totalCount").GetInt64() >= 1);
 
+        using (TenantScope.EnterUnscoped())
+        {
+            using var exportScope = factory.Services.CreateScope();
+            var exportDb = exportScope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            exportDb.AuditEvents.Add(AuditEvent.Create(
+                DateTime.UtcNow,
+                AuditActorKind.System,
+                null,
+                null,
+                null,
+                "audit.export.formula_test",
+                "Test",
+                "formula",
+                null,
+                null,
+                AuditOutcome.Success,
+                userAgent: "=HYPERLINK(\"https://example.invalid\",\"open\")"));
+            await exportDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
         var export = await client.GetAsync("/v1/admin/audit/export.csv", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
         Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
@@ -47,6 +68,7 @@ public sealed class AuditApiTests
         Assert.Contains("platform.bootstrap.completed", csv);
         Assert.Contains("account.login.succeeded", csv);
         Assert.Contains("account.login.denied", csv);
+        Assert.Contains("'=HYPERLINK(", csv);
         Assert.DoesNotContain(adminPassword, csv);
 
         var registration = await client.PostAsJsonAsync("/v1/auth/register", new
