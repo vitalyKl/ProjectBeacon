@@ -1,7 +1,5 @@
 namespace ProjectBeacon.API.Endpoints;
 
-using System.Globalization;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
@@ -13,8 +11,6 @@ using ProjectBeacon.Domain.Entities.Audit;
 public static class AuditEndpoints
 {
     private const int ExportPageSize = 200;
-    private const int MaximumExportRows = 10_000;
-
     public static IEndpointRouteBuilder MapAuditEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/admin/audit", List)
@@ -91,7 +87,7 @@ public static class AuditEndpoints
         {
             var first = await reader.ListAsync(access.Value!, filter, ct);
             total = first.TotalCount;
-            rows.AddRange(first.Items.Take(MaximumExportRows));
+            rows.AddRange(first.Items.Take(AuditCsvWriter.MaxRows));
 
             var pages = (int)Math.Ceiling(
                 (double)Math.Min(total, MaximumExportRows) / ExportPageSize);
@@ -107,51 +103,9 @@ public static class AuditEndpoints
         }
 
         ctx.Response.Headers["X-Audit-Export-Truncated"] = total > rows.Count ? "true" : "false";
-        var csv = BuildCsv(rows);
-        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray();
+        var bytes = AuditCsvWriter.Encode(rows);
         var fileName = $"projectbeacon-audit-{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}.csv";
         return Results.File(bytes, "text/csv; charset=utf-8", fileName);
     }
 
-    private static string BuildCsv(IEnumerable<AuditEntry> rows)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine("id,atUtc,actorKind,actorUserId,actorTokenId,actorDeviceId,action,targetType,targetId,orgId,projectId,outcome,ip,userAgent,traceId,detailsJson");
-        foreach (var row in rows)
-        {
-            var values = new string?[]
-            {
-                row.Id.ToString(),
-                row.At.ToString("O", CultureInfo.InvariantCulture),
-                row.ActorKind.ToString(),
-                row.ActorUserId?.ToString(),
-                row.ActorTokenId?.ToString(),
-                row.ActorDeviceId?.ToString(),
-                row.Action,
-                row.TargetType,
-                row.TargetId,
-                row.OrgId?.ToString(),
-                row.ProjectId?.ToString(),
-                row.Outcome.ToString(),
-                row.Ip,
-                row.UserAgent,
-                row.TraceId,
-                row.DetailsJson
-            };
-            builder.AppendLine(string.Join(",", values.Select(EscapeCsv)));
-        }
-        return builder.ToString();
-    }
-
-    private static string EscapeCsv(string? value)
-    {
-        value ??= string.Empty;
-
-        // User-Agent and some target metadata may be supplied by clients. Prefix cells
-        // that spreadsheets could interpret as formulas before applying CSV quoting.
-        if (value.Length > 0 && ("=+-@".Contains(value[0]) || char.IsControl(value[0])))
-            value = "'" + value;
-
-        return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
-    }
 }
