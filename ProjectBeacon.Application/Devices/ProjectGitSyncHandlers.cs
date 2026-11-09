@@ -43,11 +43,11 @@ public sealed class EnqueueProjectGitSyncHandler
             return Result.Failure<WorkstationCommandDto>("Unsupported GitSync mode.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await _authorization.CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        var permission = await ProjectGitSyncAuthorization.CanAdministerAsync(
+            db, actor, userId, _authorization, projectId, ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
-                permission.Error ?? "Project administration permission is required.", ErrorKind.Forbidden);
+                permission.Error ?? "Project Owner/Admin permission is required.", ErrorKind.Forbidden);
 
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(runtime => runtime.ProjectId == projectId)
@@ -123,11 +123,11 @@ public sealed class GetProjectGitSyncCommandHandler
             return Result.Forbidden<WorkstationCommandDto>();
 
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await _authorization.CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        var permission = await ProjectGitSyncAuthorization.CanAdministerAsync(
+            db, actor, userId, _authorization, projectId, ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto>(
-                permission.Error ?? "Project write permission is required.", ErrorKind.Forbidden);
+                permission.Error ?? "Project Owner/Admin permission is required.", ErrorKind.Forbidden);
 
         var command = await db.WorkstationCommands.IgnoreQueryFilters()
             .FirstOrDefaultAsync(candidate => candidate.Id == commandId
@@ -142,3 +142,31 @@ public sealed class GetProjectGitSyncCommandHandler
     }
 }
 
+
+internal static class ProjectGitSyncAuthorization
+{
+    public static async Task<Result> CanAdministerAsync(
+        IBeaconDb db,
+        ActorContext actor,
+        Guid userId,
+        IAuthorizationService authorization,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        var authorizationResult = await authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!authorizationResult.Success)
+            return authorizationResult;
+
+        if (actor.IsAdmin)
+            return Result.Ok();
+
+        var isProjectAdmin = await db.ProjectMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.ProjectId == projectId
+                && member.UserId == userId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin), ct);
+        return isProjectAdmin
+            ? Result.Ok()
+            : Result.Forbidden("Project Owner/Admin permission is required.");
+    }
+}

@@ -253,7 +253,7 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 | GET | `/v1/commands/{id}` | Human only | — | RequireHuman | command | ENFORCED |
 | GET | `/v1/projects/{p}/runtimes` | Human only | — | RequireHuman | project | ENFORCED |
 | POST | `/v1/projects/{p}/runtimes` | Human only | — | RequireHuman | project | ENFORCED |
-| POST | `/v1/projects/{projectId}/git-sync` | Human only | Project Administer | RequireHuman + application project-admin check | project/workstation command | ENFORCED |
+| POST | `/v1/projects/{projectId}/git-sync` | Human only | Project Owner/Admin | RequireHuman + application project-role check | project/workstation command | ENFORCED |
 | GET | `/v1/projects/{projectId}/git-sync/{commandId}` | Human only | Project Administer | RequireHuman + application project-admin check | project/workstation command | ENFORCED |
 | DELETE | `/v1/projects/{p}/runtimes/{id}` | Human only | — | RequireHuman | project | ENFORCED |
 | GET | `/v1/devices/me/llamaswap-config` | Device only | — | RequireDevice | device (own) | ENFORCED |

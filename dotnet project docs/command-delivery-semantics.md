@@ -111,7 +111,7 @@ combination of the following. **All of these must be preserved.**
 
 ### GitSync
 
-`GitSync` is a project-runtime, idempotent command. It is human-initiated by a project/org administrator and is queued only to a workstation explicitly advertising the `git-sync-v1` heartbeat capability, so older daemons are never sent an unknown enum value. Its payload is restricted to `projectId` and `mode` (`Status` or `PullFastForward`). Re-delivery is safe: fetching the same tracked upstream converges on the same remote-tracking ref, and a repeated fast-forward after success returns `UpToDate`. The normal command lease applies; recovery may requeue a stale GitSync once under the existing idempotent recovery rule. This does not make arbitrary Git operations idempotent or permitted.
+`GitSync` is a project-runtime, idempotent command. It is human-initiated by a project Owner/Admin or system administrator and is queued only to a workstation explicitly advertising the `git-sync-v1` heartbeat capability, so older daemons are never sent an unknown enum value. Its payload is restricted to `projectId` and `mode` (`Status` or `PullFastForward`). Re-delivery is safe: fetching the same tracked upstream converges on the same remote-tracking ref, and a repeated fast-forward after success returns `UpToDate`. The normal command lease applies; recovery may requeue a stale GitSync once under the existing idempotent recovery rule. This does not make arbitrary Git operations idempotent or permitted.
 
 `Status` refreshes the current branch's tracked upstream and reports ahead/behind counts and worktree state. `PullFastForward` additionally refuses dirty, detached, unconfigured, diverged, or actively used repositories without applying a merge.
 
