@@ -30,6 +30,11 @@ public sealed class AuditApiTests
             .GetProperty("token").GetString()!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
 
+        var failedLogin = await client.PostAsJsonAsync("/v1/auth/login",
+            new { Login = "admin", Password = "wrong-password" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, failedLogin.StatusCode);
+
         var page = await client.GetAsync("/v1/admin/audit", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         var pageJson = await page.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
@@ -37,9 +42,11 @@ public sealed class AuditApiTests
 
         var export = await client.GetAsync("/v1/admin/audit/export.csv", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
-        Assert.StartsWith("text/csv", export.Content.Headers.ContentType!.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
         var csv = await export.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("platform.bootstrap.completed", csv);
+        Assert.Contains("account.login.succeeded", csv);
+        Assert.Contains("account.login.denied", csv);
         Assert.DoesNotContain(adminPassword, csv);
 
         var registration = await client.PostAsJsonAsync("/v1/auth/register", new
