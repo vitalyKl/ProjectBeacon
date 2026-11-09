@@ -88,6 +88,8 @@ public class ContextSection : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Delete() => Revision++;
+
     /// <summary>Updates only a NeedsReview draft; agent-authored content remains unreviewed.</summary>
     public void UpdateDraft(string title, string bodyMarkdown, string? sourcePath, string? updatedById)
     {

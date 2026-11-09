@@ -19,9 +19,10 @@ public sealed class ContentWriter
         object target,
         string? changedByType,
         string? changedById,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool deleted = false)
     {
-        AddVersion(db, target, changedByType, changedById);
+        AddVersion(db, target, changedByType, changedById, deleted);
         try
         {
             await db.SaveChangesAsync(ct);
