@@ -92,9 +92,14 @@ public sealed class SaaSOperatorContractTests
         var billing = OperatorRolePermissionSets.For(OperatorRole.Billing);
         var auditor = OperatorRolePermissionSets.For(OperatorRole.Auditor);
 
+        Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.OrganizationsManage));
         Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.UsersManage));
+        Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.EntitlementsRead));
+        Assert.False(OperatorPermissionSets.Includes(support, OperatorPermission.EntitlementsManage));
         Assert.False(OperatorPermissionSets.Includes(support, OperatorPermission.BillingManage));
+        Assert.True(OperatorPermissionSets.Includes(billing, OperatorPermission.EntitlementsManage));
         Assert.True(OperatorPermissionSets.Includes(billing, OperatorPermission.BillingManage));
+        Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.OrganizationsManage));
         Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.UsersManage));
         Assert.True(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditExport));
         Assert.False(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditRead | OperatorPermission.UsersManage));

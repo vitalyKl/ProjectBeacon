@@ -25,11 +25,11 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // xUnit instantiates this class once per test, so the heavy isolated-DB setup
     // (drop/create + full MigrateAsync + seed) must run only once per process. The
-    // static guard makes InitializeAsync idempotent across the 5 test instances.
+    // static guard makes InitializeAsync idempotent across all test instances.
     private static bool _initialized;
     private static string s_adminConn = string.Empty;
     private static string s_appConn = string.Empty;
-    private static Guid s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
+    private static Guid s_orgA, s_orgB, s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
     private static Guid s_user, s_commentA, s_commentB, s_depOwn, s_depCross, s_decisionA, s_decisionB;
     private static string s_apiToken = string.Empty;
 
@@ -130,6 +130,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     seed.DecisionTasks.Add(DecisionTask.Create(decisionB.Id, tB.Id));
                     await seed.SaveChangesAsync();
 
+                    s_orgA = orgA.Id;
+                    s_orgB = orgB.Id;
                     s_projectA = projA.Id;
                     s_projectB = projB.Id;
                     s_taskA1 = tA1.Id;
@@ -144,6 +146,9 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     s_decisionB = decisionB.Id;
                 }
             }
+
+            await InsertEntitlementSeedAsync(appConn, s_orgA);
+            await InsertEntitlementSeedAsync(appConn, s_orgB);
 
             s_adminConn = adminConn;
             s_appConn = appConn;
@@ -164,6 +169,50 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _depCross = s_depCross;
         _decisionA = s_decisionA;
         _decisionB = s_decisionB;
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_OrganizationEntitlements_AreScopedByOrgAndAllowOperatorScope()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(1, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, s_orgB, "false");
+        Assert.Equal(1, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "false");
+        Assert.Equal(0, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(2, await CountEntitlementsRawAsync(conn));
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_OrganizationEntitlements_RejectsCrossOrgInsertAndUpdate()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertEntitlementRawAsync(conn, Guid.NewGuid(), s_orgB));
+        Assert.Equal("42501", exception.SqlState);
+
+        await using var command = new NpgsqlCommand(
+            """
+            UPDATE "OrganizationEntitlements"
+            SET "Reason" = 'cross_org_mutation'
+            WHERE "OrgId" = @org_id
+            """, conn);
+        command.Parameters.AddWithValue("org_id", s_orgB);
+        Assert.Equal(0, await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
     }
 
     public ValueTask DisposeAsync()
@@ -626,6 +675,50 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         }
 
         Assert.True(violations.Count == 0, string.Join("; ", violations));
+    }
+
+    private static async Task InsertEntitlementSeedAsync(string connectionString, Guid orgId)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        await InsertEntitlementRawAsync(conn, Guid.NewGuid(), orgId);
+    }
+
+    private static async Task InsertEntitlementRawAsync(NpgsqlConnection conn, Guid id, Guid orgId)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "OrganizationEntitlements"
+                ("Id", "OrgId", "Source", "Status", "StartsAtUtc", "EndsAtUtc",
+                 "LimitsJson", "FeaturesJson", "SourceReference", "GrantedByUserId",
+                 "Reason", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @org_id, 0, 1, @now, NULL, '{}'::jsonb, '[]'::jsonb,
+                 NULL, NULL, 'rls_test', @now, @now)
+            """, conn);
+        var now = DateTimeOffset.UtcNow;
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> CountEntitlementsRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"OrganizationEntitlements\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task SetOrgScopeAsync(NpgsqlConnection conn, Guid orgId, string unscoped)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_project_id', '', false)," +
+            "       set_config('app.tenant_org_id', @org, false)," +
+            "       set_config('app.tenant_unscoped', @uns, false)", conn);
+        command.Parameters.AddWithValue("org", orgId == Guid.Empty ? string.Empty : orgId.ToString());
+        command.Parameters.AddWithValue("uns", unscoped);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
     private static async Task SetTenantScopeAsync(NpgsqlConnection conn, string projectGuc, string unscoped)

@@ -8,6 +8,7 @@ public static class OperatorRolePermissionSets
 {
     private const OperatorPermission SupportPermissions =
         OperatorPermission.OrganizationsRead
+        | OperatorPermission.OrganizationsManage
         | OperatorPermission.UsersRead
         | OperatorPermission.UsersManage
         | OperatorPermission.EntitlementsRead

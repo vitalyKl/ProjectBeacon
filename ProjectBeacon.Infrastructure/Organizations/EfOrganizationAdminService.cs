@@ -1,7 +1,10 @@
 namespace ProjectBeacon.Infrastructure.Organizations;
 
 using System.Net.Mail;
+using System.Data;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Audit;
@@ -39,11 +42,17 @@ public sealed class EfOrganizationAdminService(
         IQueryable<Org> query = db.Orgs.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var matchingOwnerOrgs =
+            var matchingMemberOwnerOrgs =
                 from member in db.OrgMembers.IgnoreQueryFilters()
                 join user in db.Users on member.UserId equals user.Id
                 where member.Role == MemberRole.Owner && user.Email.Contains(search)
                 select member.OrgId;
+            var matchingPendingOwnerOrgs = db.OrgInvites.IgnoreQueryFilters()
+                .Where(invite => invite.Role == MemberRole.Owner
+                    && invite.Status == InviteStatus.Pending
+                    && invite.Email.Contains(search))
+                .Select(invite => invite.OrgId);
+            var matchingOwnerOrgs = matchingMemberOwnerOrgs.Union(matchingPendingOwnerOrgs);
             query = query.Where(org => org.Name.Contains(search) || matchingOwnerOrgs.Contains(org.Id));
         }
 
@@ -60,6 +69,7 @@ public sealed class EfOrganizationAdminService(
         var memberRows = new List<MemberAggregate>();
         var projectRows = new List<CountAggregate>();
         var inviteRows = new List<CountAggregate>();
+        var pendingOwnerRows = new List<OwnerEmailAggregate>();
         if (ids.Length > 0)
         {
             memberRows = await (
@@ -87,18 +97,32 @@ public sealed class EfOrganizationAdminService(
                 .GroupBy(invite => invite.OrgId)
                 .Select(groupRows => new CountAggregate(groupRows.Key, groupRows.Count()))
                 .ToListAsync(ct);
+
+            pendingOwnerRows = await db.OrgInvites.IgnoreQueryFilters()
+                .Where(invite => ids.Contains(invite.OrgId)
+                    && invite.Role == MemberRole.Owner
+                    && invite.Status == InviteStatus.Pending)
+                .GroupBy(invite => invite.OrgId)
+                .Select(groupRows => new OwnerEmailAggregate(
+                    groupRows.Key,
+                    groupRows.OrderBy(invite => invite.CreatedAt)
+                        .Select(invite => invite.Email)
+                        .FirstOrDefault()))
+                .ToListAsync(ct);
         }
 
         var membersByOrg = memberRows.ToDictionary(x => x.OrgId);
         var projectsByOrg = projectRows.ToDictionary(x => x.OrgId, x => x.Count);
         var invitesByOrg = inviteRows.ToDictionary(x => x.OrgId, x => x.Count);
+        var pendingOwnerByOrg = pendingOwnerRows.ToDictionary(x => x.OrgId, x => x.Email);
         var items = orgRows.Select(org =>
         {
             membersByOrg.TryGetValue(org.Id, out var members);
             projectsByOrg.TryGetValue(org.Id, out var projects);
             invitesByOrg.TryGetValue(org.Id, out var invites);
+            pendingOwnerByOrg.TryGetValue(org.Id, out var pendingOwnerEmail);
             return new OrganizationAdminListItem(org.Id, org.Name, org.Description,
-                org.CreatedAt, org.UpdatedAt, members?.OwnerEmail,
+                org.CreatedAt, org.UpdatedAt, members?.OwnerEmail ?? pendingOwnerEmail,
                 members?.Count ?? 0, projects, invites);
         }).ToArray();
 
@@ -179,6 +203,7 @@ public sealed class EfOrganizationAdminService(
         auditWriter.Stage(db, Audit(actor, "platform.organization.owner_invited", "OrgInvite", invite.Id, org.Id, now,
             """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var url = InviteUrl(rawToken);
         await TrySendInviteAsync(email, org.Name, url, ct);
@@ -199,6 +224,16 @@ public sealed class EfOrganizationAdminService(
         var org = await db.Orgs.FirstOrDefaultAsync(x => x.Id == orgId, ct);
         if (org is null)
             return Result.Failure<OperatorInviteCreated>("Organization not found.", ErrorKind.NotFound);
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (db.Database.IsNpgsql())
+        {
+            await using var lockCommand = db.Database.GetDbConnection().CreateCommand();
+            lockCommand.Transaction = transaction.GetDbTransaction();
+            lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
+            Add(lockCommand, "lock_key", DbType.String, $"organization-owner-invite:{orgId:N}:{email}");
+            await lockCommand.ExecuteNonQueryAsync(ct);
+        }
 
         var alreadyMember = await (
             from member in db.OrgMembers.IgnoreQueryFilters()
@@ -243,6 +278,26 @@ public sealed class EfOrganizationAdminService(
 
         using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using (var rowLock = db.Database.GetDbConnection().CreateCommand())
+        {
+            rowLock.Transaction = transaction.GetDbTransaction();
+            rowLock.CommandText = db.Database.IsNpgsql()
+                ? """
+                    SELECT "Id" FROM "OrgInvites"
+                    WHERE "Id" = @invite_id AND "OrgId" = @org_id
+                    FOR UPDATE
+                    """
+                : """
+                    SELECT "Id" FROM "OrgInvites"
+                    WHERE "Id" = @invite_id AND "OrgId" = @org_id
+                    """;
+            Add(rowLock, "invite_id", DbType.Guid, inviteId);
+            Add(rowLock, "org_id", DbType.Guid, orgId);
+            if (await rowLock.ExecuteScalarAsync(ct) is not Guid)
+                return Result.Failure("Invitation not found.", ErrorKind.NotFound);
+        }
+
         var invite = await db.OrgInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == inviteId && x.OrgId == orgId, ct);
         if (invite is null)
@@ -255,6 +310,7 @@ public sealed class EfOrganizationAdminService(
         auditWriter.Stage(db, Audit(actor, "platform.organization.invite_revoked", "OrgInvite",
             invite.Id, orgId, now, """{"previousState":"Pending","newState":"Revoked"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Result.Ok();
     }
 
@@ -287,11 +343,20 @@ public sealed class EfOrganizationAdminService(
     private static string NormalizeEmail(string? raw)
     {
         var email = OrgInvite.NormalizeEmail(raw ?? string.Empty);
-        if (email.Length is 0 or > 200
+        if (email.Length is 0 or > 320
             || !MailAddress.TryCreate(email, out var parsed)
             || !string.Equals(parsed.Address, email, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("A valid owner email address is required.", nameof(raw));
         return email;
+    }
+
+    private static void Add(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
     }
 
     private static AuditEvent Audit(
@@ -302,5 +367,6 @@ public sealed class EfOrganizationAdminService(
             detailsJson: detailsJson);
 
     private sealed record MemberAggregate(Guid OrgId, int Count, string? OwnerEmail);
+    private sealed record OwnerEmailAggregate(Guid OrgId, string? Email);
     private sealed record CountAggregate(Guid OrgId, int Count);
 }

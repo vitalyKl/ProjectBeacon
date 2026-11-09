@@ -36,7 +36,7 @@
         }
         else
         {
-            @if (_canManage)
+            @if (_canManageOrganizations)
             {
                 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
                     <MudText Typo="Typo.h6" Class="mb-3">Create organization and invite its owner</MudText>
@@ -191,7 +191,7 @@
 
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             <MudText Typo="Typo.h6" Class="mb-3">Owner invitations</MudText>
-            @if (_canManage)
+            @if (_canManageOrganizations)
             {
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="8">
@@ -223,7 +223,7 @@
                         <MudTd DataLabel="Expires"><LocalTime Value="context.ExpiresAt" Format="g" /></MudTd>
                         <MudTd DataLabel="Created"><LocalTime Value="context.CreatedAt" Format="g" /></MudTd>
                         <MudTd>
-                            @if (_canManage && context.Status == "Pending")
+                            @if (_canManageOrganizations && context.Status == "Pending")
                             {
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
                                            OnClick="@(() => RevokeInvite(context.Id))">Revoke</MudButton>
@@ -235,6 +235,12 @@
         </MudPaper>
 
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            @if (!_canReadEntitlements)
+            {
+                <MudAlert Severity="Severity.Warning">You do not have permission to view entitlement history.</MudAlert>
+            }
+            else
+            {
             <div class="d-flex align-center justify-space-between mb-3">
                 <MudText Typo="Typo.h6">Alpha access</MudText>
                 @if (_entitlements.Count > 0)
@@ -257,11 +263,11 @@
                         <MudTd DataLabel="Source">@context.Source</MudTd>
                         <MudTd DataLabel="Status">@context.Status</MudTd>
                         <MudTd DataLabel="Starts"><LocalTime Value="context.StartsAtUtc.UtcDateTime" Format="g" /></MudTd>
-                        <MudTd DataLabel="Ends">@(context.EndsAtUtc is null ? "No expiry" : context.EndsAtUtc.Value.ToLocalTime().ToString("g"))</MudTd>
+                        <MudTd DataLabel="Ends">@(context.EndsAtUtc is null ? "No expiry" : context.EndsAtUtc.Value.UtcDateTime.ToString("u"))</MudTd>
                         <MudTd DataLabel="Features">@string.Join(", ", context.Features.OrderBy(x => x))</MudTd>
                         <MudTd DataLabel="Limits">@JsonSerializer.Serialize(context.Limits)</MudTd>
                         <MudTd>
-                            @if (_canManage && (context.Status is EntitlementStatus.Active or EntitlementStatus.Scheduled))
+                            @if (_canManageEntitlements && (context.Status is EntitlementStatus.Active or EntitlementStatus.Scheduled))
                             {
                                 <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
                                            OnClick="@(() => RevokeEntitlement(context.Id))">Revoke</MudButton>
@@ -270,7 +276,7 @@
                     </RowTemplate>
                 </MudTable>
             }
-            @if (_canManage)
+            @if (_canManageEntitlements)
             {
                 <MudDivider Class="my-4" />
                 <MudText Typo="Typo.subtitle1" Class="mb-2">Issue or renew Alpha access</MudText>
@@ -287,6 +293,7 @@
                     Issue Alpha access
                 </MudButton>
             }
+            }
         </MudPaper>
     }
 }
@@ -297,7 +304,9 @@
 
     private bool _blocked;
     private bool _authorized;
-    private bool _canManage;
+    private bool _canManageOrganizations;
+    private bool _canReadEntitlements;
+    private bool _canManageEntitlements;
     private bool _loading;
     private bool _saving;
     private string _search = string.Empty;
@@ -326,7 +335,9 @@
         }
         _authorized = await EnsurePermissionAsync(OperatorPermission.OrganizationsRead);
         if (!_authorized) return;
-        _canManage = await HasPermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        _canManageOrganizations = await HasPermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        _canReadEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsRead);
+        _canManageEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsManage);
 
         if (OrganizationId is { } orgId)
         {
@@ -512,10 +523,14 @@
         }
         var result = await AdminGate.RequireAsync(ActorContextFactory.FromPrincipal(principal), permission);
         if (result.Success) return true;
-        if (permission == OperatorPermission.OrganizationsRead || permission == OperatorPermission.EntitlementsRead)
+        if (permission == OperatorPermission.OrganizationsRead)
             _authorized = false;
+        if (permission == OperatorPermission.EntitlementsRead)
+            _canReadEntitlements = false;
         if (permission == (OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage))
-            _canManage = false;
+            _canManageOrganizations = false;
+        if (permission == OperatorPermission.EntitlementsManage)
+            _canManageEntitlements = false;
         Snackbar.Add("Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
         return false;
     }

@@ -145,6 +145,7 @@ public sealed class PostgresEntitlementService(
             await lockCommand.ExecuteNonQueryAsync(ct);
         }
 
+        var replacedEntitlementIds = new List<Guid>();
         await using (var revoke = connection.CreateCommand())
         {
             revoke.Transaction = transaction.GetDbTransaction();
@@ -152,13 +153,16 @@ public sealed class PostgresEntitlementService(
                 UPDATE "OrganizationEntitlements"
                 SET "Status" = @revoked, "UpdatedAtUtc" = @now
                 WHERE "OrgId" = @org_id AND "Status" IN (@active, @scheduled)
+                RETURNING "Id"
                 """;
             Add(revoke, "revoked", DbType.Int16, (short)EntitlementStatus.Revoked);
             Add(revoke, "now", DbType.DateTimeOffset, now);
             Add(revoke, "org_id", DbType.Guid, request.OrgId);
             Add(revoke, "active", DbType.Int16, (short)EntitlementStatus.Active);
             Add(revoke, "scheduled", DbType.Int16, (short)EntitlementStatus.Scheduled);
-            await revoke.ExecuteNonQueryAsync(ct);
+            await using var reader = await revoke.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                replacedEntitlementIds.Add(reader.GetGuid(0));
         }
 
         await using (var insert = connection.CreateCommand())
@@ -188,6 +192,12 @@ public sealed class PostgresEntitlementService(
             await insert.ExecuteNonQueryAsync(ct);
         }
 
+        foreach (var replacedId in replacedEntitlementIds)
+        {
+            auditWriter.Stage(db, Audit(actor, "organization.entitlement.replaced",
+                "OrganizationEntitlement", replacedId, request.OrgId, now.UtcDateTime,
+                """{"previousState":"ActiveOrScheduled","newState":"Revoked"}"""));
+        }
         auditWriter.Stage(db, Audit(actor, "organization.entitlement.granted",
             "OrganizationEntitlement", id, request.OrgId, now.UtcDateTime,
             """{"newState":"Granted"}"""));
