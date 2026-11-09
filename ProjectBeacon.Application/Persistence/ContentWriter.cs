@@ -44,30 +44,30 @@ public sealed class ContentWriter
         bool deleted = false,
         Guid? proposalId = null)
     {
-        var snapshot = target switch
+        var snapshotJson = target switch
         {
-            ContextSection section => new
+            ContextSection section => JsonSerializer.Serialize(new
             {
                 section.SectionId, section.Key, section.Title, section.BodyMarkdown, section.Ordinal,
                 section.ScopeType, section.RepoId, section.TaskId, section.Path, Deleted = deleted
-            },
-            Decision decision => new
+            }, JsonOptions),
+            Decision decision => JsonSerializer.Serialize(new
             {
                 decision.Title, decision.Context, decision.DecisionBody, decision.Consequences,
                 Deleted = deleted
-            },
-            Constraint constraint => new
+            }, JsonOptions),
+            Constraint constraint => JsonSerializer.Serialize(new
             {
                 constraint.Body, constraint.ScopePath, constraint.Kind, Deleted = deleted
-            },
-            Milestone milestone => new
+            }, JsonOptions),
+            Milestone milestone => JsonSerializer.Serialize(new
             {
                 milestone.Name, milestone.Description, milestone.Order, Deleted = deleted
-            },
-            Project project => new
+            }, JsonOptions),
+            Project project => JsonSerializer.Serialize(new
             {
                 project.Description, Deleted = deleted
-            },
+            }, JsonOptions),
             _ => throw new ArgumentException(
                 $"'{target.GetType().Name}' is not a revisioned content target.",
                 nameof(target))
@@ -90,7 +90,7 @@ public sealed class ContentWriter
             kind,
             targetId,
             revision,
-            JsonSerializer.Serialize(snapshot, JsonOptions),
+            snapshotJson,
             changedByType,
             changedById,
             proposalId));
