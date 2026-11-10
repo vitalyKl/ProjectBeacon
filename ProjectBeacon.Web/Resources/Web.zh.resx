@@ -2721,4 +2721,28 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>需要加入该项目才能查看此收件箱。</value>
   </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>内容历史</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>此项目暂无历史记录。</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>恢复此修订版本</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>已根据所选快照创建新的修订版本。</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>提案</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>查看代理在处理此任务期间提交的提案。</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>此任务没有提案。</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>打开提案收件箱</value>
+  </data>
 </root>
