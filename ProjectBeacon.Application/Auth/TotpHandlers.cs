@@ -152,7 +152,9 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
         if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure<TotpConfirmationDto>("Code is not valid.");
 
-        var recoveryCodes = TotpRecoveryCodeGenerator.GenerateCodes();
+        var recoveryCodes = string.IsNullOrWhiteSpace(user.OperatorRole)
+            ? Array.Empty<string>()
+            : TotpRecoveryCodeGenerator.GenerateCodes();
         user.SetTotpRecoveryCodeHashes(recoveryCodes.Select(TotpRecoveryCodeGenerator.HashCode));
         user.ConfirmTotp();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
