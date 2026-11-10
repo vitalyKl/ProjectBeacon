@@ -5,7 +5,7 @@ ProjectBeacon.Application/Agents/ApplyAgentConfigHandler.cs|1|Resolves the proje
 ProjectBeacon.Application/Agents/ModelBackendHandlers.cs|2|Checks cross-project membership and role bindings while authorizing model backend changes.
 ProjectBeacon.Application/Agents/ProjectMcpServerHandlers.cs|2|Loads project-scoped MCP configuration after validating the project requested by the caller.
 ProjectBeacon.Application/Auth/LoginHandlers.cs|9|Accepts invite and login flows using opaque invite credentials, then validates invite, organization, and project membership relationships explicitly.
-ProjectBeacon.Application/Authorization/AuthorizationService.cs|9|Implements central authorization by resolving the actor's project and organization memberships across tenant boundaries.
+ProjectBeacon.Application/Authorization/AuthorizationService.cs|11|Implements central authorization by resolving the actor's project and organization memberships across tenant boundaries.
 ProjectBeacon.Application/Chat/ChatHandlers.cs|8|Resolves chat sessions, parts, and project membership by explicit session and actor identifiers for authenticated chat operations.
 ProjectBeacon.Application/Devices/CommandCompletions.cs|11|Processes device-owned commands and associated pipeline, chat, eval, and review state after validating command, device, project, and generation identifiers; Actor failure completion also resolves its pinned subtask/session and writes the server-owned task workspace report within the command's project scope.
 ProjectBeacon.Application/Devices/CommandRecovery.cs|1|Recovers stale pipeline work by its persisted command/session identifiers across the request tenant boundary.
@@ -17,7 +17,7 @@ ProjectBeacon.Application/Devices/ProjectRuntimeHandlers.cs|11|Creates, attaches
 ProjectBeacon.Application/Devices/ProjectRuntimeResolver.cs|2|Resolves runtime assignment for a known project or device using explicit project and device identifiers.
 ProjectBeacon.Application/Devices/WorkstationCommandHandlers.cs|7|Claims and completes commands for an authenticated device and validates the associated task, session, subtask, project, and command generation.
 ProjectBeacon.Application/Evals/EvalPairHandler.cs|3|Loads and authorizes eval task, project membership, and pinned run state for the explicitly selected eval.
-ProjectBeacon.Application/Identity/CurrentProjectLookup.cs|4|Finds the current actor's project and organization memberships before a tenant context has been selected.
+ProjectBeacon.Application/Identity/CurrentProjectLookup.cs|6|Finds the current actor's project and organization memberships before a tenant context has been selected.
 ProjectBeacon.Application/Identity/InviteHandlers.cs|19|Resolves and manages organization/project invitations; acceptance uses a narrow token-and-target lookup, then re-reads and mutates only in the invitation's bound tenant.
 ProjectBeacon.Application/Projects/ApiTokenHandlers.cs|2|Lists and revokes API tokens by explicit token and owner identifiers, including tokens outside the default project filter.
 ProjectBeacon.Application/Projects/ProjectHandlers.cs|11|Authorizes project administration and performs project-scoped dependent cleanup after loading the explicitly requested project.
@@ -31,3 +31,6 @@ ProjectBeacon.Application/Tasks/TaskLifecycleHandlers.cs|6|Performs task deletio
 ProjectBeacon.Web/Extensions/CircuitTenantRevalidation.cs|1|Revalidates the authenticated user identity across tenant boundaries when a Blazor circuit changes its active tenant.
 ProjectBeacon.Infrastructure/Http/TenantIsolationMiddleware.cs|4|Resolves the authenticated tenant scope before tenant filters are activated; membership and project/org lookups are explicitly constrained by user, requested project, or authenticated token binding.
 ProjectBeacon.Application/Devices/ProjectGitSyncHandlers.cs|5|Selects the project's runtime and online capability-advertising device across tenant filters, loads the explicitly requested project for its audit envelope, and reads only the GitSync command bound to the authorized project; each query is constrained by the route projectId and, for the command, the exact commandId and kind.
+ProjectBeacon.Application/Identity/TenantContextBinder.cs|1|Resolves the authenticated user's current project and organization membership before the request tenant context has been bound.
+ProjectBeacon.Infrastructure/Entitlements/PostgresEntitlementService.cs|1|Reads the effective entitlement for an explicit organization before deciding whether tenant access is allowed.
+ProjectBeacon.Infrastructure/Organizations/EfOrganizationAdminService.cs|20|Performs Control Plane authorized organization, membership, invitation, account, and audit operations across customer tenant scopes.
