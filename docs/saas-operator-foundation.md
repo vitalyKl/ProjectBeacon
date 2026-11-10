@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor roles, TOTP step-up and one-time recovery codes for every operator role are implemented in the current development stack. B4 metadata-only Web/API/Worker heartbeats and the OperationsRead dashboard are implemented; restricted external container-log access remains incomplete. B2 now has a persisted provider-neutral BillingPlan catalog and operator editor at `/admin/billing/plans`; subscription/invoice/ledger/payment-method persistence, conversion workflows and provider adapters remain incomplete. Granular feature/usage entitlement enforcement and data export/deletion also remain incomplete. The primary SystemAdministrator retains deployment-token-protected break-glass recovery.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor roles, TOTP step-up and one-time recovery codes for every operator role are implemented in the current development stack. B4 metadata-only Web/API/Worker heartbeats and the OperationsRead dashboard are implemented; restricted external container-log access remains incomplete. B2 has a persisted provider-neutral BillingPlan catalog and Control Plane editor. B3 now persists organization subscriptions and an append-only billing ledger under tenant/operator FORCE RLS and implements an atomic Alpha → Production entitlement conversion with TOTP elevation, audit writes and idempotent replay. Manual invoice/receipt references are operator-attested only: invoice documents, payment receipt recording/reconciliation, customer billing UI and provider adapters remain incomplete. Granular feature/usage entitlement enforcement and data export/deletion also remain incomplete. The primary SystemAdministrator retains deployment-token-protected break-glass recovery.
 
 ## Product boundary
 
@@ -20,7 +20,7 @@ Organization lifecycle, access entitlement, and billing are separate concerns:
 - Entitlement answers which product capabilities and limits are currently available to that organization.
 - Subscription and invoices answer the commercial relationship, price, payment state, and billing periods.
 
-Alpha and Production both resolve to the same effective entitlement contract. The Application contract exposes `IEntitlementService.ConvertAlphaToProductionAsync` as the one-action transition. It replaces the active AlphaProgram grant with a Subscription-backed grant; it is not an organization migration. The implementation must atomically persist the subscription state and billing event, close the alpha grant, create the production entitlement, and stage the operator audit entry in one database transaction. Failed transitions must leave the existing alpha access unchanged. The operation must be idempotent on its request key so a retry does not double-activate or double-charge.
+Alpha and Production both resolve to the same effective entitlement contract. `IEntitlementService.ConvertAlphaToProductionAsync` is implemented as one atomic application operation. It locks the active organization, requires a persisted EntitlementsManage operator plus current TOTP elevation, verifies an active product plan and an effective AlphaProgram grant, creates a ManualInvoice subscription, replaces the Alpha entitlement with a Subscription-backed entitlement, appends a billing ledger activation event, and stages audit events in one PostgreSQL transaction. Exact retries return the original entitlement; conflicting idempotency-key reuse fails. The operation stores an operator-supplied manual invoice/receipt reference only: it does not itself verify receipt of funds or create an invoice document. Failed transitions roll back without dropping alpha access.
 
 ## Operator authorization contract
 
@@ -87,14 +87,14 @@ The alpha flow is operator-created organization → organization-owner invitatio
 
 Alpha entitlement grants now have PostgreSQL persistence in `OrganizationEntitlements`, an operator/tenant RLS policy, transactional grant/revoke writes, and audit events. Every operator-issued grant must include the stable `core` feature. The table is managed through the PostgreSQL entitlement service rather than an EF entity; it is covered by the runtime-role RLS tests.
 
-The provider-neutral `Plan` catalog is implemented in `BillingPlans` with operator-only FORCE RLS, an operator editor and SQLite/PostgreSQL authorization coverage. The following commercial persistence models remain future work; add them with EF configurations or reviewed SQL migrations, RLS/grants and PostgreSQL tests:
+The provider-neutral `BillingPlan` catalog is implemented in `BillingPlans` with operator-only FORCE RLS, a Control Plane editor and SQLite/PostgreSQL authorization coverage. Organization subscription and billing-ledger persistence are implemented in `OrganizationSubscriptions` and `BillingLedgerEntries`; both use tenant/operator FORCE RLS. The ledger also has provider-event/idempotency uniqueness, a same-organization subscription FK and a database append-only trigger. The remaining commercial persistence models are listed below; future work must include reviewed migrations, RLS/grants and PostgreSQL tests:
 
 | Future model | Responsibility | Required invariant |
 |---|---|
 | ~~Plan~~ | Implemented as `BillingPlan` / `BillingPlans`; price and currency remain nullable and no provider IDs are stored | Product-owned key, features and limits; provider identifiers never define plan identity |
-| Subscription | Commercial state, source and billing period | At most one effective subscription per organization |
-| BillingEvent | Verified payment/subscription facts | Append-only and provider-event idempotency |
-| Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
+| ~~Subscription~~ | Implemented as `OrganizationSubscriptions`; source, status, product plan and current period are stored | At most one non-terminal subscription per organization; tenant/operator RLS |
+| ~~BillingEvent~~ | Implemented as append-only `BillingLedgerEntries`; supports application and future provider event types | Immutable trigger, provider-event idempotency, operation idempotency and tenant/operator RLS |
+| Invoice | Manual invoice document, amount/currency, due date, status and explicit payment/receipt recording | Amount/currency/date/status are explicit; no payment credential data; manual payment confirmation must be audited |
 | PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 
 RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing rows must use the same isolation rule. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
@@ -106,7 +106,7 @@ RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing 
 3. **A2 — operator gate:** database-backed IAdminGate, AdminActor creation, TOTP/elevation, admin-only navigation and the system overview.
 4. **B1 — alpha onboarding:** organization creation, owner invitation, customer search/card, alpha grant/renew/revoke. This is the first operator-console acceptance milestone.
 5. **B4 — operations and support:** audit/error-event and traceId search plus metadata-only service heartbeats and the `/admin/operations` overview are implemented. Container-log access through a restricted external ops boundary remains future work.
-6. **B2/B3 — commercial conversion:** the provider-neutral operator plan catalog at `/admin/billing/plans` is implemented with nullable price/currency and product-owned feature/limit keys. Subscription, invoice and append-only billing-event persistence, entitlement enforcement, owner billing page and atomic one-action alpha-to-production conversion remain future work.
+6. **B2/B3 — commercial conversion:** the provider-neutral operator plan catalog at `/admin/billing/plans`, tenant-scoped subscription persistence, append-only billing ledger and atomic/idempotent Alpha → Production conversion are implemented. Manual invoice-document/payment recording, customer billing UI, granular entitlement/usage enforcement and provider adapters remain future work.
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
 8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
 
@@ -119,7 +119,7 @@ Implemented in the foundation branch:
 - Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, database-backed IAdminGate authorization, TOTP enrollment at `/control/security`, one-time SHA-256-hashed recovery codes with rotation and recovery for every operator role, and signed ten-minute step-up elevation for high-risk mutations.
 - An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
 - PostgreSQL-backed Alpha entitlements with tenant/operator RLS, atomic replace/grant/revoke operations, and transactional audit records; Alpha → Production remains a contract until billing persistence exists.
-- Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
+- Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port. Subscription and ledger persistence exist; invoice/payment-method persistence and provider adapters remain contracts only.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
 - Operator organization management: paginated/searchable customer list, organization detail, member/invitation metadata, organization creation with owner invitation, invite reissue/revocation, member-role changes, and global account disable/enable with owner-protection and session invalidation.
@@ -127,6 +127,10 @@ Implemented in the foundation branch:
 - Persisted organization entitlements with operator list/grant/renew/revoke, replacement history, transactionally staged audit events, tenant RLS and an active-grant uniqueness constraint.
 - First-party Web/API/Worker processes publish metadata-only heartbeats every 30 seconds. The `/admin/operations` overview is permission-gated by `OperationsRead` and marks instances stale after 90 seconds; it exposes no hostnames or log content.
 - The provider-neutral `BillingPlan` catalog is persisted in `BillingPlans` under FORCE RLS, with `/admin/billing/plans` gated by `BillingRead` for reads and `BillingManage` plus TOTP step-up for mutations. Price and currency are optional; the catalog does not create subscriptions or contact a payment provider.
+- `OrganizationSubscriptions` stores provider-neutral subscription status/source, plan key and period with one non-terminal subscription per organization; tenant and operator reads/writes are enforced by FORCE RLS.
+- `BillingLedgerEntries` is tenant/operator FORCE-RLS protected and database append-only. Provider event IDs and idempotency keys are unique; a composite FK prevents linking a ledger row to a subscription belonging to another organization.
+- Alpha → Production conversion is implemented in `PostgresEntitlementService`: a persisted operator permission plus TOTP step-up, active-org locking, exact idempotent replay, plan-feature/limit copy, atomic Alpha grant replacement, ManualInvoice subscription creation, ledger activation event and three audit records in one transaction. PostgreSQL runtime-role integration tests cover the conversion and replay.
+- The conversion currently records an operator-attested manual invoice/receipt reference. It does not prove that funds were received and does not create an invoice record; the actual invoice/payment-recording workflow remains future work.
 - Sensitive organization, user and entitlement mutations require TOTP step-up and are independently checked by the Application services.
 - SaaS-only product boundary documented in README and AGENTS.
 
