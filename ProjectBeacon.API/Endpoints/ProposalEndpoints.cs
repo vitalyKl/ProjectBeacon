@@ -21,7 +21,7 @@ public static class ProposalEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/proposals/mine", Mine)
             .RequireAuthorization().DisableAntiforgery()
-            .RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+            .RequireApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/accept", Accept)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/reject", Reject)
