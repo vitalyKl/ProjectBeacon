@@ -9,6 +9,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Proposals;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
 
