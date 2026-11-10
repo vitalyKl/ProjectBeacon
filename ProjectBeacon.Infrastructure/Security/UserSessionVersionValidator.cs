@@ -6,6 +6,7 @@ using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Application.Security;
+using ProjectBeacon.Application.Authorization;
 
 /// <summary>
 /// Validates cookie/JWT account claims against current persisted account state, with a
@@ -39,12 +40,15 @@ public static class UserSessionVersionValidator
 
         var adminValue = principal.FindFirstValue("isAdmin");
         var claimIsAdmin = bool.TryParse(adminValue, out var parsedAdmin) && parsedAdmin;
+        var isControlPlanePrincipal =
+            string.Equals(principal.Identity.AuthenticationType, ActorContextFactory.ControlCookieAuthType, StringComparison.Ordinal)
+            && string.Equals(principal.FindFirstValue("control_plane"), "true", StringComparison.Ordinal);
 
         var cache = services.GetRequiredService<IUserSessionVersionCache>();
         if (!cache.TryGet(userId, out var state)
             || state is null
             || state.SessionVersion != claimVersion
-            || state.IsAdmin != claimIsAdmin)
+            || (!isControlPlanePrincipal && state.IsAdmin != claimIsAdmin))
         {
             var dbFactory = services.GetRequiredService<IBeaconDbFactory>();
             await using var db = dbFactory.CreateDbContext();
@@ -68,6 +72,6 @@ public static class UserSessionVersionValidator
 
         return !state.IsDisabled
             && state.SessionVersion == claimVersion
-            && state.IsAdmin == claimIsAdmin;
+            && (isControlPlanePrincipal || state.IsAdmin == claimIsAdmin);
     }
 }
