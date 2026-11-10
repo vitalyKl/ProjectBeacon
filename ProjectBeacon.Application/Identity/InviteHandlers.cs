@@ -4,6 +4,7 @@ using Application.Auth;
 using Application.Audit;
 using Application.Authorization;
 using Application.Common;
+using Application.Entitlements;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -22,6 +23,7 @@ public class CreateOrgInviteHandler
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditWriter? _auditWriter;
+    private readonly IEntitlementEvaluator? _entitlements;
 
     public CreateOrgInviteHandler(
         IBeaconDbFactory dbFactory,
@@ -29,7 +31,8 @@ public class CreateOrgInviteHandler
         IAuthorizationService auth,
         IConfiguration? configuration = null,
         TimeProvider? timeProvider = null,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IEntitlementEvaluator? entitlements = null)
     {
         _dbFactory = dbFactory;
         _email = email;
@@ -37,6 +40,7 @@ public class CreateOrgInviteHandler
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _auditWriter = auditWriter;
+        _entitlements = entitlements;
     }
 
     public async Task<Result<InviteCreatedDto>> HandleAsync(CreateOrgInviteRequest request, CancellationToken ct = default)
@@ -57,6 +61,9 @@ public class CreateOrgInviteHandler
         if (org.LifecycleStatus != OrganizationLifecycleStatus.Active)
             return Result.Failure<InviteCreatedDto>(
                 "Invitations can only be created for active organizations.", ErrorKind.Conflict);
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await EntitlementCapacityLock.AcquireOrganizationAsync(db.Database, transaction, request.OrgId, ct);
 
         var pending = await db.OrgInvites.IgnoreQueryFilters()
             .Where(i => i.OrgId == request.OrgId && i.Email == email && i.Status == InviteStatus.Pending)
@@ -79,6 +86,38 @@ public class CreateOrgInviteHandler
                 return Result.Failure<InviteCreatedDto>("Invite already pending.");
         }
 
+        if (_entitlements is not null)
+        {
+            var memberCount = await db.OrgMembers.IgnoreQueryFilters()
+                .LongCountAsync(member => member.OrgId == request.OrgId, ct);
+            var pendingReservations = pending.LongCount(invite =>
+                invite.Status == InviteStatus.Pending && invite.ExpiredAt >= now);
+            var evaluation = await _entitlements.EvaluateAsync(
+                request.OrgId,
+                new EntitlementRequirement(
+                    EntitlementFeatureKeys.Core,
+                    EntitlementLimitKeys.Members,
+                    RequestedUnits: 1,
+                    CurrentUsage: memberCount + pendingReservations),
+                ct);
+            if (!evaluation.Success)
+                return Result.Failure<InviteCreatedDto>(
+                    "Organization member capacity could not be verified.",
+                    ErrorKind.Unavailable);
+            if (evaluation.Value is not { Allowed: true } decision)
+            {
+                if (decision?.ReasonCode == "limit_exceeded")
+                    return Result.Failure<InviteCreatedDto>(
+                        "The organization member limit has been reached.",
+                        "entitlement_limit_exceeded",
+                        ErrorKind.Conflict);
+                return Result.Failure<InviteCreatedDto>(
+                    "The organization is not entitled to add members.",
+                    "entitlement_feature_required",
+                    ErrorKind.Forbidden);
+            }
+        }
+
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
         var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
         db.OrgInvites.Add(invite);
@@ -91,6 +130,7 @@ public class CreateOrgInviteHandler
             null,
             detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
         await InviteMail.TrySendAsync(_email, email, org.Name, url, "org_invite", ct);
@@ -219,15 +259,18 @@ public class AcceptInviteHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditWriter? _auditWriter;
+    private readonly IEntitlementEvaluator? _entitlements;
 
     public AcceptInviteHandler(
         IBeaconDbFactory dbFactory,
         TimeProvider? timeProvider = null,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IEntitlementEvaluator? entitlements = null)
     {
         _dbFactory = dbFactory;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _auditWriter = auditWriter;
+        _entitlements = entitlements;
     }
 
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
@@ -273,14 +316,53 @@ public class AcceptInviteHandler
             var tenant = new TenantContext();
             tenant.Assign(null, orgInviteSnapshot.OrgId, unscoped: false);
             await using var writeDb = _dbFactory.CreateDbContext(tenant);
+            await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
+            await EntitlementCapacityLock.AcquireOrganizationAsync(
+                writeDb.Database, transaction, orgInviteSnapshot.OrgId, ct);
+
             var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.Id == orgInviteSnapshot.Id, ct);
             if (invite is null || !invite.TryAccept(now))
                 return Result.Failure("Invite is no longer valid.");
 
-            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
+            var alreadyMember = await writeDb.OrgMembers.IgnoreQueryFilters()
+                .AnyAsync(member => member.OrgId == invite.OrgId && member.UserId == user.Id, ct);
+            if (!alreadyMember)
+            {
+                var memberCount = await writeDb.OrgMembers.IgnoreQueryFilters()
+                    .LongCountAsync(member => member.OrgId == invite.OrgId, ct);
+                var otherPendingInvites = await writeDb.OrgInvites.IgnoreQueryFilters()
+                    .LongCountAsync(pending => pending.OrgId == invite.OrgId
+                        && pending.Id != invite.Id
+                        && pending.Status == InviteStatus.Pending
+                        && pending.ExpiredAt >= now, ct);
+                var evaluation = _entitlements is null
+                    ? null
+                    : await _entitlements.EvaluateAsync(
+                        invite.OrgId,
+                        new EntitlementRequirement(
+                            EntitlementFeatureKeys.Core,
+                            EntitlementLimitKeys.Members,
+                            RequestedUnits: 1,
+                            CurrentUsage: memberCount + otherPendingInvites),
+                        ct);
+                if (evaluation is { Success: false })
+                    return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
+                if (evaluation?.Value is { Allowed: false } denied)
+                {
+                    if (denied.ReasonCode == "limit_exceeded")
+                        return Result.Failure(
+                            "The organization member limit has been reached.",
+                            "entitlement_limit_exceeded",
+                            ErrorKind.Conflict);
+                    return Result.Failure(
+                        "The organization is not entitled to add members.",
+                        "entitlement_feature_required",
+                        ErrorKind.Forbidden);
+                }
+
                 writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
+            }
 
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
                 request.Actor,
@@ -291,6 +373,7 @@ public class AcceptInviteHandler
                 null,
                 detailsJson: """{"newState":"Accepted"}"""));
             await writeDb.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
             return Result.Ok();
         }
 
@@ -315,6 +398,10 @@ public class AcceptInviteHandler
         var projectTenant = new TenantContext();
         projectTenant.Assign(projectSnapshot.Id, projectSnapshot.OrgId, unscoped: false);
         await using var projectWriteDb = _dbFactory.CreateDbContext(projectTenant);
+        await using var projectTransaction = await projectWriteDb.Database.BeginTransactionAsync(ct);
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            projectWriteDb.Database, projectTransaction, projectSnapshot.OrgId, ct);
+
         var projectInvite = await projectWriteDb.ProjectInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.Id == projectInviteSnapshot.Id, ct);
         if (projectInvite is null || !projectInvite.TryAccept(now))
@@ -325,11 +412,68 @@ public class AcceptInviteHandler
         if (project is null)
             return Result.Failure("Project not found.");
 
-        if (!await projectWriteDb.OrgMembers.IgnoreQueryFilters()
-                .AnyAsync(m => m.OrgId == project.OrgId && m.UserId == user.Id, ct))
+        var alreadyOrganizationMember = await projectWriteDb.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.OrgId == project.OrgId && member.UserId == user.Id, ct);
+        if (!alreadyOrganizationMember)
+        {
+            // A project invitation becomes an organization seat only when it is accepted.
+            // Reserve seats for outstanding org invitations so project invites cannot overrun the cap.
+            var memberCount = await projectWriteDb.OrgMembers.IgnoreQueryFilters()
+                .LongCountAsync(member => member.OrgId == project.OrgId, ct);
+            var pendingOrgInvites = await projectWriteDb.OrgInvites.IgnoreQueryFilters()
+                .LongCountAsync(pending => pending.OrgId == project.OrgId
+                    && pending.Status == InviteStatus.Pending
+                    && pending.ExpiredAt >= now
+                    && pending.Email != user.Email, ct);
+            var evaluation = _entitlements is null
+                ? null
+                : await _entitlements.EvaluateAsync(
+                    project.OrgId,
+                    new EntitlementRequirement(
+                        EntitlementFeatureKeys.Core,
+                        EntitlementLimitKeys.Members,
+                        RequestedUnits: 1,
+                        CurrentUsage: memberCount + pendingOrgInvites),
+                    ct);
+            if (evaluation is { Success: false })
+                return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
+            if (evaluation?.Value is { Allowed: false } denied)
+            {
+                if (denied.ReasonCode == "limit_exceeded")
+                    return Result.Failure(
+                        "The organization member limit has been reached.",
+                        "entitlement_limit_exceeded",
+                        ErrorKind.Conflict);
+                return Result.Failure(
+                    "The organization is not entitled to add members.",
+                    "entitlement_feature_required",
+                    ErrorKind.Forbidden);
+            }
+
+            // A project invitation may supersede a separate pending org invitation for the
+            // same email. Expire those duplicates so they no longer reserve a second seat.
+            var duplicateOrgInvites = await projectWriteDb.OrgInvites.IgnoreQueryFilters()
+                .Where(pending => pending.OrgId == project.OrgId
+                    && pending.Email == user.Email
+                    && pending.Status == InviteStatus.Pending)
+                .ToListAsync(ct);
+            foreach (var duplicate in duplicateOrgInvites)
+            {
+                duplicate.Expire();
+                _auditWriter?.Stage(projectWriteDb, AuditEventFactory.ForActor(
+                    request.Actor,
+                    "org.invite.expired",
+                    "OrgInvite",
+                    duplicate.Id.ToString(),
+                    project.OrgId,
+                    null,
+                    detailsJson: """{"reason":"project_invite_accepted"}"""));
+            }
+
             projectWriteDb.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, MemberRole.Member));
+        }
         if (!await projectWriteDb.ProjectMembers.IgnoreQueryFilters()
-                .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
+                .AnyAsync(member => member.ProjectId == projectInvite.ProjectId && member.UserId == user.Id, ct))
             projectWriteDb.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
 
         _auditWriter?.Stage(projectWriteDb, AuditEventFactory.ForActor(
@@ -341,6 +485,7 @@ public class AcceptInviteHandler
             project.Id,
             detailsJson: """{"newState":"Accepted"}"""));
         await projectWriteDb.SaveChangesAsync(ct);
+        await projectTransaction.CommitAsync(ct);
         return Result.Ok();
     }
 }
