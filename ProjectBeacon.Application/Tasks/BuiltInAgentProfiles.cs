@@ -24,7 +24,8 @@ public sealed record BuiltInAgentProfile(
     bool ReportsDiff,
     string SizeHint,
     string Effort,
-    IReadOnlyList<string> OptionalTools);
+    IReadOnlyList<string> OptionalTools,
+    string ApplyPolicy = "Review");
 
 /// <summary>
 /// Versioned code-owned actor presets. User-authored role instructions remain separate:
@@ -98,7 +99,10 @@ public static class BuiltInAgentProfiles
             CommandsEnabled = basis.CommandsEnabled && custom.CommandsEnabled,
             ReportsDiff = custom.ReportsDiff,
             SizeHint = custom.SizeHint,
-            Effort = custom.Effort
+            Effort = custom.Effort,
+            ApplyPolicy = string.Equals(basis.Key, "docs-writer", StringComparison.OrdinalIgnoreCase)
+                ? custom.ApplyPolicy
+                : basis.ApplyPolicy
         };
     }
 
