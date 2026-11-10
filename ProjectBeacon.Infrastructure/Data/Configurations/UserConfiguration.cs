@@ -18,6 +18,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         entity.Property(e => e.OperatorRole).HasMaxLength(32);
         entity.Property(e => e.SessionVersion).HasDefaultValue(0);
         entity.Property(e => e.TotpSecretCipher).HasMaxLength(500);
+        entity.Property(e => e.TotpRecoveryCodeHashesJson).HasMaxLength(1024);
         entity.HasIndex(e => e.Login).IsUnique();
         entity.HasIndex(e => e.Email).IsUnique();
 
