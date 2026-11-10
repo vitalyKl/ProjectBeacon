@@ -139,6 +139,11 @@ public sealed class EfOrganizationDataExportService(
                 taskIds.Contains(item.TaskId) && taskIds.Contains(item.DependentTaskId), ct),
             await db.TaskSteps.LongCountAsync(item =>
                 projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
+            await db.TaskPhases.LongCountAsync(item =>
+                projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
+            await db.TaskWorkspaceSections.LongCountAsync(item =>
+                projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
+            await db.RoleBindings.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.Subtasks.LongCountAsync(item =>
                 projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
             await db.Reports.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
@@ -305,6 +310,61 @@ public sealed class EfOrganizationDataExportService(
                 item.SortOrder,
                 item.CreatedAt,
                 item.DoneAt
+            }).ToListAsync(ct);
+
+        var taskPhases = await db.TaskPhases.AsNoTracking()
+            .Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId))
+            .OrderBy(item => item.TaskId)
+            .ThenBy(item => item.SortOrder)
+            .Select(item => new
+            {
+                item.Id,
+                item.TaskId,
+                item.ProjectId,
+                item.SortOrder,
+                item.Key,
+                item.Title,
+                item.Instruction,
+                item.FanOut,
+                item.ModelBackendId,
+                item.Status
+            }).ToListAsync(ct);
+
+        var taskWorkspaceSections = await db.TaskWorkspaceSections.AsNoTracking()
+            .Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId))
+            .OrderBy(item => item.TaskId)
+            .ThenBy(item => item.Key)
+            .Select(item => new
+            {
+                item.Id,
+                item.TaskId,
+                item.ProjectId,
+                item.Key,
+                item.Title,
+                item.Abstract,
+                item.Kind,
+                item.Content,
+                item.AuthorType,
+                item.AuthorId,
+                item.AuthorRole,
+                item.AuthorProfileKey,
+                item.AuthorSubtaskId,
+                item.AuthorSessionId,
+                item.Revision,
+                item.CreatedAt,
+                item.UpdatedAt
+            }).ToListAsync(ct);
+
+        var roleBindings = await db.RoleBindings.AsNoTracking()
+            .Where(item => projectIds.Contains(item.ProjectId))
+            .OrderBy(item => item.Role)
+            .Select(item => new
+            {
+                item.Id,
+                item.ProjectId,
+                item.Role,
+                item.ModelBackendId,
+                item.ProfileInstructions
             }).ToListAsync(ct);
 
         var subtasks = await db.Subtasks.AsNoTracking()
@@ -517,6 +577,9 @@ public sealed class EfOrganizationDataExportService(
                 await AddJsonEntryAsync(archive, "task-comments.json", taskComments, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "task-dependencies.json", taskDependencies, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "task-steps.json", taskSteps, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "task-phases.json", taskPhases, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "task-workspace-sections.json", taskWorkspaceSections, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "role-bindings.json", roleBindings, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "subtasks.json", subtasks, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "reports.json", reports, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "context-sections.json", contextSections, jsonBudget, ct);
@@ -774,8 +837,9 @@ public sealed class EfOrganizationDataExportService(
         This archive is a read-only snapshot. It does not delete or change source data.
 
         Included: organization and membership metadata, invitations (without token hashes),
-        projects, tasks, comments, dependencies, checklists, subtasks, milestones, labels,
-        reports, context, decisions, constraints, chat content, and task attachments.
+        projects, memberships, tasks, task phases, task workspace sections, role bindings,
+        comments, dependencies, checklists, subtasks, milestones, labels, reports, context,
+        decisions, constraints, chat content, and task attachments.
 
         Excluded by design: password hashes, password-reset tokens, user sessions, TOTP
         secrets and recovery-code hashes, API-token hashes or raw credentials, device tokens
