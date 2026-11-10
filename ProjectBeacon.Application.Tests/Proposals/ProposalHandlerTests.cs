@@ -306,6 +306,14 @@ public sealed class ProposalHandlerTests : IDisposable
             .HandleAsync(command, TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
+        var creationAudit = await _db.AuditEvents.SingleAsync(item =>
+            item.TargetId == created.Value!.Id.ToString("D")
+            && item.Action == "proposal.created",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(Domain.Entities.Audit.AuditActorKind.ApiToken, creationAudit.ActorKind);
+        Assert.Null(creationAudit.ActorUserId);
+        Assert.Equal(tokenId, creationAudit.ActorTokenId);
+
         var handler = new ListOwnProposalsHandler(
             HandlerSqlite.Factory(_connection), new EfAuditWriter());
         var listed = await handler.HandleAsync(
