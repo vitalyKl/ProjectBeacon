@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
+using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Infrastructure.Audit;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Enums;
@@ -15,6 +17,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
         var project = DbContext.Projects.Single();
         var org = DbContext.Orgs.Single();
 
+        Bunit.Services.AddSingleton<IAuditWriter, EfAuditWriter>();
         var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
         auth.TriggerAuthenticationStateChanged(
             "tester",
@@ -74,6 +77,6 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains("Conflicted: 1", cut.Markup);
         Assert.Contains("ProjectDescription", cut.Markup);
         Assert.Contains("Clarifies the primary project goal.", cut.Markup);
-        Assert.Contains("AcceptedPayload", cut.Markup);
+        Assert.Contains("Payload to apply when accepted", cut.Markup);
     }
 }
