@@ -4,6 +4,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Infrastructure.Data;
 
 public sealed class ProjectSwitchHttpTests
 {
