@@ -92,7 +92,8 @@ public sealed record ProposalDto(
     int? ConflictRevision,
     string? ConflictReason,
     Guid? SupersededById,
-    int StateRevision);
+    int StateRevision,
+    Guid? ApplyCommandId = null);
 
 /// <summary>
 /// Creates revision-bound proposals. Agent submissions are accepted only from a live Actor
@@ -982,7 +983,7 @@ public sealed class ListProposalsHandler
                 proposal.AuthorUserId, proposal.AuthorTokenId, proposal.AuthorProfileKey, proposal.AuthorRole,
                 proposal.CreatedAt, proposal.ExpiresAt, proposal.DecidedAt, proposal.DecidedByUserId,
                 proposal.DecisionNote, proposal.AcceptedPayloadJson, proposal.AppliedRevision,
-                proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision))
+                proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision, proposal.ApplyCommandId))
             .ToListAsync(ct);
         return Result.Ok((IReadOnlyList<ProposalDto>)items);
     }
@@ -1175,7 +1176,7 @@ internal static class ProposalMapper
         proposal.AuthorProfileKey, proposal.AuthorRole, proposal.CreatedAt, proposal.ExpiresAt,
         proposal.DecidedAt, proposal.DecidedByUserId, proposal.DecisionNote, proposal.AcceptedPayloadJson,
         proposal.AppliedRevision, proposal.ConflictRevision, proposal.ConflictReason,
-        proposal.SupersededById, proposal.StateRevision);
+        proposal.SupersededById, proposal.StateRevision, proposal.ApplyCommandId);
 }
 
 /// <summary>Strict target-specific proposal payload validation and content application.</summary>
