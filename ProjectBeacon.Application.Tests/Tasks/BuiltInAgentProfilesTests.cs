@@ -95,6 +95,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains("targetKind RepoPatch", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_file", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_text", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("for a new file set baseHash to null", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("for a deletion set resultHash to null", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("baseRevision", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("not applied until a human accepts", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("allowed paths", docs.Instruction, StringComparison.Ordinal);
