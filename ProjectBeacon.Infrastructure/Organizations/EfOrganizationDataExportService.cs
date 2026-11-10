@@ -517,21 +517,45 @@ public sealed class EfOrganizationDataExportService(
             foreach (var attachment in attachmentRows)
             {
                 ct.ThrowIfCancellationRequested();
-                var read = await attachments.ReadTaskAsync(
-                    attachment.ProjectId,
-                    attachment.TaskId,
-                    attachment.Id,
-                    ct,
-                    MaximumAttachmentLength);
-                if (read is null)
+                // Prefer the bytea row in the same repeatable-read transaction. Only use
+                // the attachment service for legacy filesystem-backed rows, which are
+                // immutable once uploaded and still pass its safe path/content checks.
+                var storedContent = await db.TaskAttachmentContents.AsNoTracking()
+                    .Where(payload => payload.ProjectId == attachment.ProjectId
+                        && payload.TaskAttachmentId == attachment.Id)
+                    .Select(payload => payload.Content)
+                    .SingleOrDefaultAsync(ct);
+                byte[] content;
+                var detectedContentType = attachment.ContentType;
+                if (storedContent is not null)
+                {
+                    content = storedContent;
+                }
+                else
+                {
+                    var legacy = await attachments.ReadTaskAsync(
+                        attachment.ProjectId,
+                        attachment.TaskId,
+                        attachment.Id,
+                        ct,
+                        MaximumAttachmentLength);
+                    if (legacy is null)
+                        return Result.Failure<OrganizationDataExport>(
+                            "An attachment could not be read; no partial archive was produced.",
+                            ErrorKind.Unavailable);
+                    content = legacy.Value.Content;
+                    detectedContentType = legacy.Value.Attachment.ContentType;
+                }
+
+                if (content.LongLength != attachment.Length || content.LongLength > MaximumAttachmentLength)
                     return Result.Failure<OrganizationDataExport>(
-                        "An attachment could not be read; no partial archive was produced.",
+                        "An attachment failed the archive integrity or size check; no partial archive was produced.",
                         ErrorKind.Unavailable);
 
                 var archivePath = $"attachments/{attachment.Id:N}-{SafeFileName(attachment.FileName)}";
                 var entry = archive.CreateEntry(archivePath, CompressionLevel.Fastest);
                 await using (var entryStream = entry.Open())
-                    await entryStream.WriteAsync(read.Value.Content.AsMemory(), ct);
+                    await entryStream.WriteAsync(content.AsMemory(), ct);
 
                 attachmentManifest.Add(new
                 {
@@ -539,7 +563,7 @@ public sealed class EfOrganizationDataExportService(
                     attachment.ProjectId,
                     attachment.TaskId,
                     attachment.FileName,
-                    read.Value.Attachment.ContentType,
+                    ContentType = detectedContentType,
                     attachment.Length,
                     attachment.CreatedByType,
                     attachment.CreatedById,
