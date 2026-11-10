@@ -150,6 +150,9 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
             return Result.Forbidden<ProposalDto>();
+        if (command.Actor.IsApiToken
+            && !command.Actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead))
+            return Result.Forbidden<ProposalDto>("The API token requires ContextRead capability to submit proposals.");
 
         if (command.Actor.IsApiToken && command.Actor.ProjectId != command.ProjectId)
             return Result.Forbidden<ProposalDto>("The API token is not bound to this project.");
@@ -467,14 +470,6 @@ public sealed class AcceptProposalHandler
                 if (orgId is null)
                     return Result.Failure<ProposalDto>("Project not found.");
 
-                if (proposal.Expire(now))
-                {
-                    StageAudit(db, command.Actor, proposal, orgId.Value, "proposal.expired", ProposalStatus.Expired);
-                    await db.SaveChangesAsync(ct);
-                    await transaction.CommitAsync(ct);
-                    return Result.Failure<ProposalDto>("Proposal has expired.");
-                }
-
                 if (proposal.TargetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
                 {
                     var governance = await _authorization.CanAsync(
@@ -482,6 +477,14 @@ public sealed class AcceptProposalHandler
                         projectId: proposal.ProjectId, ct: ct);
                     if (!governance.Success)
                         return Result.Forbidden<ProposalDto>("Only a project or organization Owner/Admin can accept Decision or Constraint proposals.");
+                }
+
+                if (proposal.Expire(now))
+                {
+                    StageAudit(db, command.Actor, proposal, orgId.Value, "proposal.expired", ProposalStatus.Expired);
+                    await db.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
+                    return Result.Failure<ProposalDto>("Proposal has expired.");
                 }
 
                 var payload = command.AcceptedPayloadJson ?? proposal.PayloadJson;
@@ -695,6 +698,10 @@ public sealed class WithdrawProposalHandler
     {
         if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
             return Result.Forbidden<ProposalDto>();
+        if (command.Actor.IsApiToken
+            && !command.Actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead))
+            return Result.Forbidden<ProposalDto>("The API token requires ContextRead capability to withdraw proposals.");
+
         await using var db = _dbFactory.CreateDbContext();
         var proposal = await db.Proposals.FirstOrDefaultAsync(
             item => item.Id == command.ProposalId && item.ProjectId == command.ProjectId, ct);
