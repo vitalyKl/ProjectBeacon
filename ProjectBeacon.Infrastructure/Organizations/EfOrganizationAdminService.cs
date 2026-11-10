@@ -433,7 +433,6 @@ public sealed class EfOrganizationAdminService(
             return Result.Failure("Organization and invitation ids are required.");
 
         using var unscoped = TenantScope.EnterUnscoped();
-        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         // Match acceptance's lock order (organization capacity first, invite row second).
