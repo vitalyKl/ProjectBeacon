@@ -296,6 +296,8 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
             }
             if (string.IsNullOrWhiteSpace(notes))
                 return Result.Failure<PipelineStateDto>("No review notes available to close the pipeline.");
+            notes = await PipelineSupport.AppendProposalInboxSummaryAsync(
+                db, task.ProjectId, task.Id, notes, ct);
 
             var runs = await db.ReviewRuns.Where(r => r.TaskId == task.Id).ToListAsync(ct);
             if (!runs.Any(r => r.IsCheckProof()))
@@ -385,6 +387,8 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
             var marker = string.IsNullOrEmpty(reason)
                 ? "force-closed without review"
                 : $"force-closed without review: {reason}";
+            marker = await PipelineSupport.AppendProposalInboxSummaryAsync(
+                db, task.ProjectId, task.Id, marker, ct);
 
             var expectedStatus = task.Status;
             var expectedStage = task.PipelineStage;
