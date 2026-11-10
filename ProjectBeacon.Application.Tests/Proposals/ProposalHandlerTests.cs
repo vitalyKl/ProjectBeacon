@@ -107,6 +107,56 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AutoPolicy_AppliesProposalAndWritesLinkedContentVersionAndAuditAtomically()
+    {
+        var actor = HumanActor();
+        var factory = HandlerSqlite.Factory(_connection);
+        var policy = await new SetProposalPolicyHandler(
+                factory, new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new SetProposalPolicyCommand(
+                _projectId,
+                ContentTargetKind.ProjectDescription,
+                ProposalOperation.Update,
+                ProposalDecisionMode.Auto,
+                1,
+                actor), TestContext.Current.CancellationToken);
+        Assert.True(policy.Success, policy.Error);
+        Assert.Equal(ProposalDecisionMode.Auto, policy.Value!.Mode);
+
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), actor), TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        Assert.Equal(ProposalStatus.Accepted, created.Value!.Status);
+        Assert.Equal(2, created.Value.AppliedRevision);
+        Assert.Equal("""{"description":"Updated project description"}""", created.Value.AcceptedPayloadJson);
+
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        Assert.Equal("Updated project description", project.Description);
+        Assert.Equal(2, project.Revision);
+
+        var versions = await _db.ContentVersions
+            .Where(version => version.TargetKind == ContentTargetKind.ProjectDescription
+                && version.TargetId == _projectId)
+            .OrderBy(version => version.Revision)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2 }, versions.Select(version => version.Revision).ToArray());
+        Assert.Equal(created.Value.Id, versions[^1].ProposalId);
+
+        var actions = await _db.AuditEvents
+            .Where(item => item.ProjectId == _projectId)
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("proposal.policy.updated", actions);
+        Assert.Contains("proposal.created", actions);
+        Assert.Contains("proposal.auto_accepted", actions);
+        Assert.DoesNotContain(await _db.Proposals.Where(item => item.ProjectId == _projectId)
+            .Select(item => item.Status).ToListAsync(TestContext.Current.CancellationToken),
+            status => status == ProposalStatus.Pending);
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
     {
         var factory = HandlerSqlite.Factory(_connection);
