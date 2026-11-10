@@ -450,17 +450,26 @@ public sealed class McpApiToolsTests
         };
 
         var first = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
-        var second = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        var retry = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
 
         Assert.False(first.IsError, first.Text);
-        Assert.False(second.IsError, second.Text);
+        Assert.False(retry.IsError, retry.Text);
+
+        args["rationaleMarkdown"] = "Adds the missing audience and constraints.";
+        var revisedRationale = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.False(revisedRationale.IsError, revisedRationale.Text);
+
         var calls = handler.Calls.Where(call => call.Path == $"/v1/projects/{projectId:D}/proposals").ToArray();
-        Assert.Equal(2, calls.Length);
+        Assert.Equal(3, calls.Length);
         Assert.All(calls, call => Assert.Equal("POST", call.Method));
         var firstBody = JsonNode.Parse(calls[0].Body)!.AsObject();
-        var secondBody = JsonNode.Parse(calls[1].Body)!.AsObject();
-        Assert.Equal(firstBody["idempotencyKey"]!.GetValue<string>(), secondBody["idempotencyKey"]!.GetValue<string>());
-        Assert.StartsWith("knowledge-propose:", firstBody["idempotencyKey"]!.GetValue<string>(), StringComparison.Ordinal);
+        var retryBody = JsonNode.Parse(calls[1].Body)!.AsObject();
+        var revisedBody = JsonNode.Parse(calls[2].Body)!.AsObject();
+        var firstKey = firstBody["idempotencyKey"]!.GetValue<string>();
+        Assert.Equal(firstKey, retryBody["idempotencyKey"]!.GetValue<string>());
+        Assert.NotEqual(firstKey, revisedBody["idempotencyKey"]!.GetValue<string>());
+        Assert.Equal("Adds the missing audience and constraints.", revisedBody["rationaleMarkdown"]!.GetValue<string>());
+        Assert.StartsWith("knowledge-propose:", firstKey, StringComparison.Ordinal);
         Assert.Equal("Update", firstBody["operation"]!.GetValue<string>());
         Assert.Equal(3, firstBody["baseRevision"]!.GetValue<int>());
         Assert.Equal("Proposed Markdown description", firstBody["payload"]!["description"]!.GetValue<string>());
