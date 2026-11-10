@@ -116,7 +116,7 @@ The first customer-alpha acceptance criterion is operational, not architectural:
 
 Implemented in the foundation branch:
 
-- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, database-backed IAdminGate authorization, TOTP enrollment at `/control/security`, and signed ten-minute step-up elevation for high-risk mutations.
+- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, database-backed IAdminGate authorization, TOTP enrollment at `/control/security`, one-time SHA-256-hashed recovery codes with rotation and recovery for every operator role, and signed ten-minute step-up elevation for high-risk mutations.
 - An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
 - PostgreSQL-backed Alpha entitlements with tenant/operator RLS, atomic replace/grant/revoke operations, and transactional audit records; Alpha → Production remains a contract until billing persistence exists.
 - Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
