@@ -505,6 +505,8 @@ public sealed class ApiTokenAuthMiddleware
             return McpToolNames.GetConstraint;
         if (segments.Length == 5 && segments[3] == "context" && segments[4] == "nodes")
             return McpToolNames.ListContextNodes;
+        if (segments.Length == 5 && segments[3] == "proposals" && segments[4] == "mine")
+            return McpToolNames.KnowledgeProposals;
         if (segments.Length == 6 && segments[3] == "context" && segments[4] == "nodes"
             && Guid.TryParse(segments[5], out _))
             return McpToolNames.GetContextNode;
@@ -513,9 +515,17 @@ public sealed class ApiTokenAuthMiddleware
 
     private static string? ActorKnowledgeWriteToolForRequest(string[] segments, Guid projectId, string method)
     {
-        if (method != HttpMethods.Post || segments.Length != 5
+        if (method != HttpMethods.Post || segments.Length < 4
             || segments[0] != "v1" || segments[1] != "projects"
             || !GuidSegmentEquals(segments, 2, projectId))
+            return null;
+
+        if (segments.Length == 4 && segments[3] == "proposals")
+            return McpToolNames.KnowledgePropose;
+        if (segments.Length == 6 && segments[3] == "proposals"
+            && Guid.TryParse(segments[4], out _) && segments[5] == "withdraw")
+            return McpToolNames.KnowledgeWithdraw;
+        if (segments.Length != 5)
             return null;
 
         return (segments[3], segments[4]) switch
