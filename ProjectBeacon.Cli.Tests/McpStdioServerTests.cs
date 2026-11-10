@@ -1389,7 +1389,7 @@ public sealed class McpStdioServerTests
             using var input = new MemoryStream();
             WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
             WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hash_file","arguments":{"path":"docs/guide.md"}}}""");
-            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hash_text","arguments":{"content":"# Proposed document\\nExact UTF-8 bytes.\\n"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hash_text","arguments":{"content":"# Proposed document\nExact UTF-8 bytes.\n"}}}""");
             input.Position = 0;
 
             using var output = new MemoryStream();
