@@ -1,0 +1,519 @@
+@page "/inbox"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Decisions
+@using ProjectBeacon.Application.Proposals
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
+@inject ListProposalsHandler ListProposals
+@inject AcceptProposalHandler AcceptProposal
+@inject RejectProposalHandler RejectProposal
+@inject ListContentVersionsHandler ListContentVersions
+@inject ListDecisionsHandler ListDecisions
+@inject AcceptDecisionHandler AcceptDecision
+@inject DeprecateDecisionHandler DeprecateDecision
+@inject ListConstraintsHandler ListConstraints
+@inject ActivateConstraintHandler ActivateConstraint
+@inject RejectConstraintHandler RejectConstraint
+@inject ListContextNodesHandler ListContextNodes
+@inject ReviewContextDraftHandler ReviewContextDraft
+@inject IAuthorizationService Authorization
+@inject IBeaconDbFactory DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["ProposalInbox"]</PageTitle>
+<PageHeader Title="@L["ProposalInbox"]">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Reload" Disabled="_busy">
+        @L["Refresh"]
+    </MudButton>
+</PageHeader>
+
+@if (_loading)
+{
+    <LoadingState />
+}
+else if (_project is null)
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">@L["CreateProject"]</MudButton>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <ErrorState Message="@_error" />
+}
+else
+{
+    <MudStack Spacing="3">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" AlignItems="AlignItems.Center">
+                <StatusChip Color="Color.Warning" Label="@($"{L["Pending"]}: {_summary?.TotalPending ?? 0}")" />
+                <StatusChip Color="Color.Error" Label="@($"{L["Conflicted"]}: {_summary?.ConflictedProposals ?? 0}")" />
+                <MudText Typo="Typo.caption">@_project.Name</MudText>
+                @if (!_canGovernance)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["ProposalInboxMemberHint"]</MudText>
+                }
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="string" @bind-Value="_statusFilter" Label="@L["Status"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                        <MudSelectItem Value="@("")">@L["All"]</MudSelectItem>
+                        @foreach (var status in Enum.GetValues<ProposalStatus>())
+                        {
+                            <MudSelectItem Value="@status.ToString()">@ProposalStatusLabel(status)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="string" @bind-Value="_targetFilter" Label="@L["TargetKind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                        <MudSelectItem Value="@("")">@L["All"]</MudSelectItem>
+                        @foreach (var target in Enum.GetValues<ContentTargetKind>())
+                        {
+                            <MudSelectItem Value="@target.ToString()">@target</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_taskFilter" Label="@L["TaskId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_authorFilter" Label="@L["ProposalAuthor"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+            <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-2">
+                <MudText Typo="Typo.caption">@string.Format(L["ProposalFilterResults"].Value, _filteredProposals.Count)</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy || _selectedIds.Count == 0" OnClick="AcceptSelected">
+                    @L["AcceptSelected"] (@_selectedIds.Count)
+                </MudButton>
+                <MudButton Variant="Variant.Text" Disabled="_selectedIds.Count == 0" OnClick="ClearSelection">@L["ClearSelection"]</MudButton>
+            </MudStack>
+        </MudPaper>
+
+        <MudText Typo="Typo.h6">@L["RevisionBoundProposals"]</MudText>
+        @if (_filteredProposals.Count == 0)
+        {
+            <EmptyState>@L["NoPendingProposals"]</EmptyState>
+        }
+        else
+        {
+            @foreach (var proposal in _filteredProposals)
+            {
+                <MudPaper @key="proposal.Id" Elevation="0" Outlined="true" Class="beacon-card">
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                            <MudCheckBox T="bool" Value="@IsSelected(proposal.Id)" ValueChanged="value => SetSelected(proposal.Id, value)" Disabled="@(proposal.Status != ProposalStatus.Pending || _busy)" />
+                            <MudText Typo="Typo.subtitle1">@proposal.TargetKind</MudText>
+                            <StatusChip Color="@ProposalStatusColor(proposal.Status)" Label="@ProposalStatusLabel(proposal.Status)" />
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption">rev. @proposal.BaseRevision · @proposal.CreatedAt.ToString("u")</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.caption">@proposal.TargetId</MudText>
+                        @if (proposal.TaskId is Guid taskId)
+                        {
+                            <MudText Typo="Typo.caption">@L["TaskId"]: <a href="@($"/task/{taskId:D}")">@taskId</a></MudText>
+                        }
+                        <MudText Typo="Typo.caption">@L["ProposalAuthor"]: @proposal.AuthorKind · @(proposal.AuthorUserId?.ToString("D") ?? proposal.AuthorTokenId?.ToString("D") ?? "—")</MudText>
+                        <MarkdownView Text="@proposal.RationaleMarkdown" />
+                        @if (proposal.Status == ProposalStatus.Conflicted)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">
+                                @L["ProposalConflict"]: @proposal.ConflictReason · @L["CurrentRevision"]: @(proposal.ConflictRevision?.ToString() ?? "—")
+                            </MudAlert>
+                        }
+                        @if (proposal.Status == ProposalStatus.Accepted)
+                        {
+                            <MudText Typo="Typo.caption">@L["AppliedRevision"]: @(proposal.AppliedRevision?.ToString() ?? "—")</MudText>
+                        }
+                        <MudExpansionPanels Elevation="0" Outlined="true">
+                            <MudExpansionPanel Text="@L["ProposalDetails"]">
+                                <MudStack Spacing="2">
+                                    <MudTextField T="string" Value="@GetEditedPayload(proposal)" ValueChanged="value => SetEditedPayload(proposal.Id, value)"
+                                                  Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8" ReadOnly="@(proposal.Status != ProposalStatus.Pending)" />
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
+                                               OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
+                                        @L["CompareBaseRevision"] (@proposal.BaseRevision)
+                                    </MudButton>
+                                    @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
+                                    {
+                                        <MudGrid Spacing="2">
+                                            <MudItem xs="12" md="6">
+                                                <MudText Typo="Typo.subtitle2">@L["BaseRevision"]</MudText>
+                                                <MudTextField T="string" Value="@baseSnapshot" ReadOnly="true" Lines="8" Variant="Variant.Outlined" />
+                                            </MudItem>
+                                            <MudItem xs="12" md="6">
+                                                <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
+                                                <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" />
+                                            </MudItem>
+                                        </MudGrid>
+                                    }
+                                    @if (proposal.Status == ProposalStatus.Pending)
+                                    {
+                                        <MudTextField @bind-Value="_decisionNote" Label="@L["DecisionNote"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="() => AcceptOne(proposal)" Disabled="_busy">
+                                                @L["Accept"]
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => RejectOne(proposal)" Disabled="_busy">
+                                                @L["Reject"]
+                                            </MudButton>
+                                        </MudStack>
+                                    }
+                                </MudStack>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    </MudStack>
+                </MudPaper>
+            }
+        }
+
+        <MudText Typo="Typo.h6" Class="mt-2">@L["LegacyReviewItems"]</MudText>
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+            <MudText Typo="Typo.subtitle2">@L["NeedsReviewContext"] (@_contextDrafts.Count)</MudText>
+            @if (_contextDrafts.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["NoLegacyReviewItems"]</MudText>
+            }
+            @foreach (var draft in _contextDrafts)
+            {
+                <MudDivider Class="my-2" />
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.subtitle2">@draft.Title</MudText>
+                    <MudText Typo="Typo.caption">@draft.SectionId · rev. @draft.Revision</MudText>
+                    <MarkdownView Text="@draft.BodyMarkdown" MaxHeight="180" />
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                   Disabled="_busy" OnClick="() => ReviewDraft(draft, true)">@L["Approve"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                   Disabled="_busy" OnClick="() => ReviewDraft(draft, false)">@L["Reject"]</MudButton>
+                    </MudStack>
+                </MudStack>
+            }
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2">@L["ProposedDecisions"] (@_proposedDecisions.Count)</MudText>
+            @foreach (var decision in _proposedDecisions)
+            {
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.subtitle2">@decision.Title</MudText>
+                <MarkdownView Text="@decision.DecisionBody" MaxHeight="160" />
+                <MudText Typo="Typo.caption">@L["Revision"]: @decision.Revision</MudText>
+                @if (_canGovernance)
+                {
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy" OnClick="() => AcceptLegacyDecision(decision)">@L["Accept"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => RejectLegacyDecision(decision)">@L["Reject"]</MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["GovernanceOwnerAdminOnly"]</MudText>
+                }
+            }
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2">@L["ProposedConstraints"] (@_proposedConstraints.Count)</MudText>
+            @foreach (var constraint in _proposedConstraints)
+            {
+                <MudDivider Class="my-2" />
+                <StatusChip Color="Color.Default" Label="@constraint.Kind.ToString()" />
+                <MarkdownView Text="@constraint.Body" MaxHeight="140" />
+                <MudText Typo="Typo.caption">@L["Revision"]: @constraint.Revision</MudText>
+                @if (_canGovernance)
+                {
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy" OnClick="() => ActivateLegacyConstraint(constraint)">@L["Activate"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => RejectLegacyConstraint(constraint)">@L["Reject"]</MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["GovernanceOwnerAdminOnly"]</MudText>
+                }
+            }
+        </MudPaper>
+    </MudStack>
+}
+
+@code {
+    private ProjectDto? _project;
+    private ActorContext _actor = ActorContext.Anonymous;
+    private ProposalInboxSummaryDto? _summary;
+    private List<ProposalDto> _proposals = [];
+    private List<DecisionDto> _proposedDecisions = [];
+    private List<ConstraintDto> _proposedConstraints = [];
+    private List<ContextSectionDto> _contextDrafts = [];
+    private readonly HashSet<Guid> _selectedIds = [];
+    private readonly Dictionary<Guid, string> _editedPayloads = [];
+    private readonly Dictionary<Guid, string> _baseSnapshots = [];
+    private string _statusFilter = ProposalStatus.Pending.ToString();
+    private string _targetFilter = string.Empty;
+    private string _taskFilter = string.Empty;
+    private string _authorFilter = string.Empty;
+    private string _decisionNote = string.Empty;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _canGovernance;
+    private string? _error;
+
+    private List<ProposalDto> _filteredProposals => _proposals
+        .Where(item => string.IsNullOrWhiteSpace(_statusFilter) || item.Status.ToString() == _statusFilter)
+        .Where(item => string.IsNullOrWhiteSpace(_targetFilter) || item.TargetKind.ToString() == _targetFilter)
+        .Where(item => string.IsNullOrWhiteSpace(_taskFilter) || item.TaskId?.ToString("D").Contains(_taskFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true)
+        .Where(item => string.IsNullOrWhiteSpace(_authorFilter)
+            || item.AuthorUserId?.ToString("D").Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true
+            || item.AuthorTokenId?.ToString("D").Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true
+            || item.AuthorKind.ToString().Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actor);
+        _project = current.Value;
+        if (_project is not null)
+            await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        if (_project is null) return;
+        _busy = true;
+        try
+        {
+            var summary = await GetProposalInboxSummary(_project.Id);
+            if (!summary.Success)
+            {
+                _error = summary.Error ?? L["ProjectAccessRequired"].Value;
+                return;
+            }
+            _summary = summary.Value;
+
+            var proposals = await ListProposals.HandleAsync(new ListProposalsQuery(_project.Id, Limit: 100), _actor);
+            if (!proposals.Success)
+            {
+                _error = proposals.Error ?? L["ProjectAccessRequired"].Value;
+                return;
+            }
+            _proposals = proposals.Value!.ToList();
+            _editedPayloads.Clear();
+            foreach (var proposal in _proposals)
+                _editedPayloads[proposal.Id] = proposal.AcceptedPayloadJson ?? proposal.PayloadJson;
+
+            var decisions = await ListDecisions.HandleAsync(_project.Id);
+            _proposedDecisions = decisions.Success
+                ? decisions.Value!.Where(item => item.Status == DecisionStatus.Proposed).ToList()
+                : [];
+            var constraints = await ListConstraints.HandleAsync(_project.Id);
+            _proposedConstraints = constraints.Success
+                ? constraints.Value!.Where(item => item.Status == ConstraintStatus.Proposed).ToList()
+                : [];
+            var sections = await ListContextNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
+            _contextDrafts = sections.Success
+                ? sections.Value!.Where(item => item.ReviewState == ContextReviewState.NeedsReview).ToList()
+                : [];
+
+            await using var db = DbFactory.CreateDbContext();
+            var governance = await Authorization.CanAsync(
+                db, _actor, ResourceType.Project, AuthAction.Administer,
+                projectId: _project.Id, ct: CancellationToken.None);
+            _canGovernance = governance.Success;
+            _error = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task<Result<ProposalInboxSummaryDto>> GetProposalInboxSummary(Guid projectId) =>
+        Summary.HandleAsync(projectId, _actor);
+
+    [Inject] private GetProposalInboxSummaryHandler Summary { get; set; } = default!;
+
+    private bool IsSelected(Guid id) => _selectedIds.Contains(id);
+
+    private void SetSelected(Guid id, bool selected)
+    {
+        if (selected)
+            _selectedIds.Add(id);
+        else
+            _selectedIds.Remove(id);
+    }
+
+    private void ClearSelection() => _selectedIds.Clear();
+
+    private string GetEditedPayload(ProposalDto proposal) =>
+        _editedPayloads.TryGetValue(proposal.Id, out var value) ? value : proposal.PayloadJson;
+
+    private void SetEditedPayload(Guid proposalId, string? value) =>
+        _editedPayloads[proposalId] = value ?? string.Empty;
+
+    private async Task LoadBaseSnapshot(ProposalDto proposal)
+    {
+        if (_project is null) return;
+        var versions = await ListContentVersions.HandleAsync(
+            _project.Id, proposal.TargetKind, proposal.TargetId, 100);
+        var version = versions.Success
+            ? versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision)
+            : null;
+        if (version is null)
+        {
+            Snackbar.Add(L["BaseSnapshotMissing"].Value, Severity.Warning);
+            return;
+        }
+        _baseSnapshots[proposal.Id] = version.ContentJson;
+    }
+
+    private static string ExtractMarkdown(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var fields = new[] { "description", "bodyMarkdown", "body", "decisionBody", "context", "consequences", "name", "title" };
+            var values = fields
+                .Where(root.TryGetProperty)
+                .Select(key => root.GetProperty(key).ValueKind == JsonValueKind.String
+                    ? root.GetProperty(key).GetString()
+                    : null)
+                .Where(value => !string.IsNullOrWhiteSpace(value));
+            return string.Join(Environment.NewLine + Environment.NewLine, values!);
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private string ProposalStatusLabel(ProposalStatus status) =>
+        status == ProposalStatus.Conflicted ? L["Conflicted"].Value : L[status.ToString()].Value;
+
+    private static Color ProposalStatusColor(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Pending => Color.Warning,
+        ProposalStatus.Conflicted => Color.Error,
+        ProposalStatus.Accepted => Color.Success,
+        _ => Color.Default
+    };
+
+    private async Task AcceptOne(ProposalDto proposal)
+    {
+        if (_project is null || proposal.Status != ProposalStatus.Pending) return;
+        _busy = true;
+        try
+        {
+            var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
+                _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ProposalAccepted"].Value, Severity.Success);
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RejectOne(ProposalDto proposal)
+    {
+        if (_project is null || proposal.Status != ProposalStatus.Pending) return;
+        _busy = true;
+        try
+        {
+            var result = await RejectProposal.HandleAsync(new RejectProposalCommand(
+                _project.Id, proposal.Id, _actor, string.IsNullOrWhiteSpace(_decisionNote) ? null : _decisionNote));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _decisionNote = string.Empty;
+            Snackbar.Add(L["ProposalRejected"].Value, Severity.Success);
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task AcceptSelected()
+    {
+        if (_project is null || _selectedIds.Count == 0) return;
+        _busy = true;
+        var succeeded = 0;
+        var failed = 0;
+        try
+        {
+            foreach (var proposal in _proposals.Where(item => _selectedIds.Contains(item.Id) && item.Status == ProposalStatus.Pending))
+            {
+                var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
+                    _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
+                if (result.Success) succeeded++; else failed++;
+            }
+            _selectedIds.Clear();
+            await Reload();
+            Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded, failed),
+                failed == 0 ? Severity.Success : Severity.Warning);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReviewDraft(ContextSectionDto draft, bool accept)
+    {
+        if (_project is null) return;
+        _busy = true;
+        try
+        {
+            var result = await ReviewContextDraft.HandleAsync(new ReviewContextDraftCommand(
+                _project.Id, draft.Id, draft.Revision, accept, _actor));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(accept ? L["ContextDraftApproved"].Value : L["ContextDraftRejected"].Value, Severity.Success);
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task AcceptLegacyDecision(DecisionDto decision)
+    {
+        if (!_canGovernance) return;
+        var result = await AcceptDecision.HandleAsync(decision.Id);
+        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+    }
+
+    private async Task RejectLegacyDecision(DecisionDto decision)
+    {
+        if (!_canGovernance) return;
+        var result = await DeprecateDecision.HandleAsync(decision.Id);
+        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+    }
+
+    private async Task ActivateLegacyConstraint(ConstraintDto constraint)
+    {
+        if (!_canGovernance) return;
+        var result = await ActivateConstraint.HandleAsync(constraint.Id);
+        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+    }
+
+    private async Task RejectLegacyConstraint(ConstraintDto constraint)
+    {
+        if (!_canGovernance) return;
+        var result = await RejectConstraint.HandleAsync(constraint.Id);
+        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+    }
+}
