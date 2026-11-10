@@ -2912,4 +2912,28 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Project membership is required to view this inbox.</value>
   </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>Content history</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>No history is available for this item.</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>Restore this revision</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>A new revision was created from the selected snapshot.</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>Proposals</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>Review proposals submitted by actors while working on this task.</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>This task has no proposals.</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>Open proposal inbox</value>
+  </data>
 </root>
