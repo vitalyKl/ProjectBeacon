@@ -27,6 +27,7 @@ public static class BeaconApi
         app.MapReportEndpoints();
         app.MapEvalEndpoints();
         app.MapDecisionEndpoints();
+        app.MapProposalEndpoints();
         app.MapModelEndpoints();
         app.MapDeviceEndpoints();
         app.MapChatEndpoints();
