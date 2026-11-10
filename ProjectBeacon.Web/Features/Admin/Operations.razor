@@ -1,7 +1,6 @@
 @page "/admin/operations"
 @layout ControlLayout
 @attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
-@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Authorization
 @using ProjectBeacon.Application.Admin
@@ -38,7 +37,7 @@
                     <MudChip T="string" Size="Size.Small" Color="Color.Success">@HealthyCount healthy</MudChip>
                     <MudChip T="string" Size="Size.Small" Color="Color.Error">@StaleCount stale</MudChip>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                        Observed @_snapshot.ObservedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+                        Observed <LocalTime OffsetValue="@_snapshot.ObservedAtUtc" Format="g" />
                     </MudText>
                 }
                 <MudButton Variant="Variant.Outlined" OnClick="Refresh" Disabled="_busy">
@@ -82,8 +81,8 @@
                     <MudTd DataLabel="Instance">
                         <MudText Typo="Typo.caption" Class="font-monospace">@context.InstanceId</MudText>
                     </MudTd>
-                    <MudTd DataLabel="Started">@context.StartedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</MudTd>
-                    <MudTd DataLabel="Last heartbeat">@context.LastHeartbeatAtUtc.ToLocalTime().ToString("T", CultureInfo.CurrentCulture)</MudTd>
+                    <MudTd DataLabel="Started"><LocalTime OffsetValue="context.StartedAtUtc" Format="g" /></MudTd>
+                    <MudTd DataLabel="Last heartbeat"><LocalTime OffsetValue="context.LastHeartbeatAtUtc" Format="T" /></MudTd>
                     <MudTd DataLabel="Status">
                         <MudChip T="string" Size="Size.Small" Color="@StatusColor(context)">@StatusText(context)</MudChip>
                     </MudTd>
