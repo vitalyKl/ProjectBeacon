@@ -651,6 +651,11 @@ public sealed class AcceptProposalHandler
         }
         catch (DbUpdateConcurrencyException)
         {
+            await using var verify = _dbFactory.CreateDbContext();
+            var accepted = await verify.Proposals.FirstOrDefaultAsync(
+                item => item.Id == command.ProposalId && item.ProjectId == command.ProjectId, ct);
+            if (accepted?.Status == ProposalStatus.Accepted)
+                return Result.Ok(ProposalMapper.Map(accepted));
             return Result.Failure<ProposalDto>("The proposal or its target changed while it was being accepted. Refresh and retry.", ErrorKind.Conflict);
         }
         catch (DbUpdateException)
@@ -918,7 +923,7 @@ public sealed class ListProposalsHandler
             .Select(proposal => new ProposalDto(
                 proposal.Id, proposal.ProjectId, proposal.TaskId, proposal.SubtaskId, proposal.SessionId,
                 proposal.TargetKind, proposal.TargetId, proposal.Operation, proposal.BaseRevision, proposal.BaseHash,
-                proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status,
+                proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status, proposal.AuthorKind.ToString(),
                 proposal.AuthorUserId, proposal.AuthorTokenId, proposal.AuthorProfileKey, proposal.AuthorRole,
                 proposal.CreatedAt, proposal.ExpiresAt, proposal.DecidedAt, proposal.DecidedByUserId,
                 proposal.DecisionNote, proposal.AcceptedPayloadJson, proposal.AppliedRevision,
