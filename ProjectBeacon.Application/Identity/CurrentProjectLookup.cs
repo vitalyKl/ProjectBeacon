@@ -32,7 +32,7 @@ public static class CurrentProjectLookup
             {
                 preferredOrg = await db.ProjectMembers.IgnoreQueryFilters()
                     .Where(member => member.UserId == userId
-                        && member.ProjectId == preferredProject
+                        && member.ProjectId == preferredProjectIdValue
                         && member.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
                     .Select(member => (Guid?)member.Project.OrgId)
                     .FirstOrDefaultAsync(ct);
