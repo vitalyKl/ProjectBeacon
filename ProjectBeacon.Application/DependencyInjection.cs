@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminGate, DatabaseAdminGate>();
         services.AddScoped<PlatformEmailAdminService>();
         services.AddScoped<BillingPlanAdminService>();
+        services.AddScoped<BillingInvoiceAdminService>();
         services.AddScoped<OperatorRoleAdminService>();
 
         services.AddTransient<BootstrapHandler>();
