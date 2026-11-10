@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using Application.Common;
 using Application.Persistence;
 using Domain.Entities.Agents;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>Lists the current user's saved overrides without changing the code-owned catalogue.</summary>
