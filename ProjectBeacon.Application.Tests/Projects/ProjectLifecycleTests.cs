@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Authorization;
+using Application.Common;
+using Application.Entitlements;
 using Application.Identity;
 using Application.Persistence;
 using Application.Projects;
@@ -47,6 +49,58 @@ public sealed class ProjectLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateProject_EnforcesConfiguredOrganizationProjectLimit()
+    {
+        var evaluator = new ProjectLimitEvaluator(limit: 1);
+        var (actor, firstProjectId) = await CreateOwnedProject(evaluator);
+        var orgId = await _db.Projects.IgnoreQueryFilters()
+            .Where(project => project.Id == firstProjectId)
+            .Select(project => project.OrgId)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var handler = new CreateProjectHandler(
+            HandlerSqlite.Factory(_connection),
+            _auth,
+            new TenantContext(),
+            entitlements: evaluator);
+
+        var second = await handler.HandleAsync(
+            new CreateProjectCommand(new CreateProjectRequest("Second", null, orgId), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(second.Success);
+        Assert.Equal("entitlement_limit_exceeded", second.ErrorCode);
+        Assert.Equal(ErrorKind.Conflict, second.Kind);
+        Assert.Equal(1, evaluator.LastRequirement?.CurrentUsage);
+        Assert.Equal(1, await _db.Projects.IgnoreQueryFilters()
+            .LongCountAsync(project => project.OrgId == orgId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CreateProject_QuotaServiceFailure_FailsClosed()
+    {
+        var (actor, firstProjectId) = await CreateOwnedProject();
+        var orgId = await _db.Projects.IgnoreQueryFilters()
+            .Where(project => project.Id == firstProjectId)
+            .Select(project => project.OrgId)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var evaluator = new ProjectLimitEvaluator(limit: 1, fail: true);
+        var handler = new CreateProjectHandler(
+            HandlerSqlite.Factory(_connection),
+            _auth,
+            new TenantContext(),
+            entitlements: evaluator);
+
+        var second = await handler.HandleAsync(
+            new CreateProjectCommand(new CreateProjectRequest("Must not be created", null, orgId), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(second.Success);
+        Assert.Equal(ErrorKind.Unavailable, second.Kind);
+        Assert.Equal(1, await _db.Projects.IgnoreQueryFilters()
+            .LongCountAsync(project => project.OrgId == orgId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Delete_RemovesProject()
     {
         var (actor, projectId) = await CreateOwnedProject();
@@ -56,7 +110,7 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.False(await _db.Projects.IgnoreQueryFilters().AnyAsync(p => p.Id == projectId, TestContext.Current.CancellationToken));
     }
 
-    private async Task<(ActorContext Actor, Guid ProjectId)> CreateOwnedProject()
+    private async Task<(ActorContext Actor, Guid ProjectId)> CreateOwnedProject(IEntitlementEvaluator? evaluator = null)
     {
         var user = User.Create("owner", "owner@example.com", "hash");
         _db.Users.Add(user);
@@ -65,8 +119,41 @@ public sealed class ProjectLifecycleTests : IDisposable
         var tenant = new TenantContext();
         var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection), tenant).HandleAsync(
             new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor));
-        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), _auth, tenant).HandleAsync(
-            new CreateProjectCommand(new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor));
+        var project = await new CreateProjectHandler(
+            HandlerSqlite.Factory(_connection),
+            _auth,
+            tenant,
+            entitlements: evaluator).HandleAsync(
+                new CreateProjectCommand(new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor),
+                TestContext.Current.CancellationToken);
         return (actor, project.Value!.Id);
+    }
+
+    private sealed class ProjectLimitEvaluator(long? limit, bool fail = false) : IEntitlementEvaluator
+    {
+        public EntitlementRequirement? LastRequirement { get; private set; }
+
+        public Task<Result<EntitlementDecision>> EvaluateAsync(
+            Guid orgId,
+            EntitlementRequirement requirement,
+            CancellationToken ct = default)
+        {
+            LastRequirement = requirement;
+            if (fail)
+                return Task.FromResult(Result.Failure<EntitlementDecision>(
+                    "Entitlement store is unavailable.", ErrorKind.Unavailable));
+
+            if (limit is null)
+                return Task.FromResult(Result.Ok(new EntitlementDecision(
+                    true, CurrentUsage: requirement.CurrentUsage)));
+
+            var allowed = requirement.CurrentUsage <= limit.Value
+                && requirement.RequestedUnits <= limit.Value - requirement.CurrentUsage;
+            return Task.FromResult(Result.Ok(new EntitlementDecision(
+                allowed,
+                allowed ? null : "limit_exceeded",
+                requirement.CurrentUsage,
+                limit.Value)));
+        }
     }
 }
