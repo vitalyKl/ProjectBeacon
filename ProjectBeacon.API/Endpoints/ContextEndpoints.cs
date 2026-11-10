@@ -267,17 +267,19 @@ public static class ContextEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, ActivateConstraintHandler handler)
+    private static async Task<IResult> ActivateConstraint(
+        Guid projectId, Guid constraintId, HttpContext context, ActivateConstraintHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, RejectConstraintHandler handler)
+    private static async Task<IResult> RejectConstraint(
+        Guid projectId, Guid constraintId, HttpContext context, RejectConstraintHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
