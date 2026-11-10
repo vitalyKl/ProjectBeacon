@@ -95,7 +95,10 @@ public sealed class OrganizationEntitlementMiddleware(RequestDelegate next)
         problem.Extensions["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier;
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        await context.Response.WriteAsJsonAsync(
-            problem, "application/problem+json", cancellationToken: context.RequestAborted);
+        await System.Text.Json.JsonSerializer.SerializeAsync(
+            context.Response.Body,
+            problem,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web),
+            context.RequestAborted);
     }
 }
