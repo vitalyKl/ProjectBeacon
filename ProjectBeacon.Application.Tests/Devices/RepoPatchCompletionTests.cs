@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Devices;
 using Domain.Entities.Content;
+using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
