@@ -7,6 +7,7 @@ using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Application.Tasks;
+using Domain.Common;
 using Domain.Entities.Content;
 using Domain.Entities.Devices;
 using Domain.Enums;
