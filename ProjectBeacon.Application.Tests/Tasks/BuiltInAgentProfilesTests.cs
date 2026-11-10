@@ -58,7 +58,6 @@ public sealed class BuiltInAgentProfilesTests
         Assert.DoesNotContain(McpToolNames.KnowledgeProposals, verifier.Tools);
         Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, verifier.Tools);
 
-        var explorer = AssertProfile("explorer");
         Assert.DoesNotContain(McpToolNames.KnowledgePropose, explorer.Tools);
         Assert.DoesNotContain(McpToolNames.KnowledgeProposals, explorer.Tools);
         Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, explorer.Tools);
