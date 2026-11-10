@@ -5,11 +5,13 @@ using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
 using Application.Proposals;
+using Application.Tasks;
 using Domain.Entities.Content;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Context;
 using Domain.Enums;
+using Domain.Common;
 using Infrastructure.Audit;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -251,6 +253,90 @@ public sealed class ProposalHandlerTests : IDisposable
             .Where(item => item.ProjectId == _projectId)
             .Select(item => item.Action)
             .ToListAsync(TestContext.Current.CancellationToken), action => action == "proposal.accepted");
+    }
+
+    [Fact]
+    public async Task ActorOwnProposalList_IsBoundToCurrentSubtaskSessionAndToken()
+    {
+        var projectTask = TaskItem.Create("Review project context.", _projectId);
+        _db.Tasks.Add(projectTask);
+        _db.SaveChanges();
+
+        var grants = new[]
+        {
+            McpToolNames.KnowledgePropose,
+            McpToolNames.KnowledgeProposals,
+            McpToolNames.KnowledgeWithdraw
+        };
+        var subtask = Subtask.Create(
+            "Review the project description and suggest a precise update.",
+            projectTask.Id,
+            _projectId,
+            allowedMcpTools: grants,
+            profileKey: "knowledge-curator");
+        subtask.Start();
+        _db.Subtasks.Add(subtask);
+        var session = PipelineSession.Create(
+            projectTask.Id, _projectId, PipelineRole.Actor, "Actor test session.", subtask.Id);
+        session.Launch();
+        _db.PipelineSessions.Add(session);
+        _db.SaveChanges();
+
+        var tokenId = Guid.NewGuid();
+        var actor = new ActorContext(
+            ActorType.ApiToken, _userId, false, tokenId, null,
+            _projectId, _orgId, ApiTokenCapability.ContextRead);
+        var command = new CreateProposalCommand(
+            _projectId,
+            Request(),
+            actor,
+            projectTask.Id,
+            subtask.Id,
+            session.Id,
+            PipelineRole.Actor.ToString());
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(command, TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var handler = new ListOwnProposalsHandler(
+            HandlerSqlite.Factory(_connection), new EfAuditWriter());
+        var listed = await handler.HandleAsync(
+            _projectId, actor, projectTask.Id, subtask.Id, session.Id,
+            PipelineRole.Actor.ToString(), ct: TestContext.Current.CancellationToken);
+
+        Assert.True(listed.Success, listed.Error);
+        var ownProposal = Assert.Single(listed.Value!);
+        Assert.Equal(created.Value!.Id, ownProposal.Id);
+        Assert.Equal(ProposalStatus.Pending, ownProposal.Status);
+        Assert.Equal(created.Value.TargetKind, ownProposal.TargetKind);
+
+        var otherToken = actor with { TokenId = Guid.NewGuid() };
+        var otherTokenList = await handler.HandleAsync(
+            _projectId, otherToken, projectTask.Id, subtask.Id, session.Id,
+            PipelineRole.Actor.ToString(), ct: TestContext.Current.CancellationToken);
+        Assert.True(otherTokenList.Success, otherTokenList.Error);
+        Assert.Empty(otherTokenList.Value!);
+
+        var noListGrant = Subtask.Create(
+            "No proposal inbox grant.",
+            projectTask.Id,
+            _projectId,
+            allowedMcpTools: [McpToolNames.KnowledgePropose, McpToolNames.KnowledgeWithdraw],
+            profileKey: "knowledge-curator");
+        noListGrant.Start();
+        _db.Subtasks.Add(noListGrant);
+        var noListSession = PipelineSession.Create(
+            projectTask.Id, _projectId, PipelineRole.Actor, "Actor without list grant.", noListGrant.Id);
+        noListSession.Launch();
+        _db.PipelineSessions.Add(noListSession);
+        _db.SaveChanges();
+
+        var denied = await handler.HandleAsync(
+            _projectId, actor, projectTask.Id, noListGrant.Id, noListSession.Id,
+            PipelineRole.Actor.ToString(), ct: TestContext.Current.CancellationToken);
+        Assert.False(denied.Success);
+        Assert.Equal(ErrorKind.Forbidden, denied.Kind);
     }
 
     [Fact]
