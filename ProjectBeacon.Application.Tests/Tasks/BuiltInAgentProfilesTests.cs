@@ -54,11 +54,22 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.ListConstraints, verifier.Tools);
         Assert.Contains(McpToolNames.GetConstraint, verifier.Tools);
         Assert.DoesNotContain(McpToolNames.ContextCreateDraft, verifier.Tools);
+        Assert.DoesNotContain(McpToolNames.KnowledgePropose, verifier.Tools);
+        Assert.DoesNotContain(McpToolNames.KnowledgeProposals, verifier.Tools);
+        Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, verifier.Tools);
+
+        var explorer = AssertProfile("explorer");
+        Assert.DoesNotContain(McpToolNames.KnowledgePropose, explorer.Tools);
+        Assert.DoesNotContain(McpToolNames.KnowledgeProposals, explorer.Tools);
+        Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, explorer.Tools);
 
         var knowledge = AssertProfile("knowledge-curator");
         Assert.Contains(McpToolNames.ContextCreateDraft, knowledge.Tools);
         Assert.Contains(McpToolNames.ConstraintPropose, knowledge.Tools);
         Assert.Contains(McpToolNames.DecisionPropose, knowledge.Tools);
+        Assert.Contains(McpToolNames.KnowledgePropose, knowledge.Tools);
+        Assert.Contains(McpToolNames.KnowledgeProposals, knowledge.Tools);
+        Assert.Contains(McpToolNames.KnowledgeWithdraw, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.UpsertContextNode, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.ActivateConstraint, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.AcceptDecision, knowledge.Tools);
@@ -68,6 +79,9 @@ public sealed class BuiltInAgentProfilesTests
         var docs = AssertProfile("docs-writer");
         Assert.False(docs.CommandsEnabled);
         Assert.Equal(AgentProfilePathPolicy.Defaults, docs.PathPolicy);
+        Assert.Contains(McpToolNames.KnowledgePropose, docs.Tools);
+        Assert.Contains(McpToolNames.KnowledgeProposals, docs.Tools);
+        Assert.Contains(McpToolNames.KnowledgeWithdraw, docs.Tools);
         Assert.True(BuiltInAgentProfiles.IsWithinDefaults("docs/architecture.md", docs.DefaultPaths));
         Assert.True(BuiltInAgentProfiles.IsWithinDefaults("README.md", docs.DefaultPaths));
         Assert.False(BuiltInAgentProfiles.IsWithinDefaults("../secrets.txt", docs.DefaultPaths));
