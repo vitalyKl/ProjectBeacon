@@ -578,12 +578,11 @@ public sealed class EfOrganizationDataExportService(
         if (output.Length > MaximumArchiveBytes)
             return TooLarge();
 
+        // AuditEvent accepts short allowlisted codes and integer counters only.
         var details = JsonSerializer.Serialize(new
         {
-            projectCount = projects.Count,
-            taskCount = tasks.Count,
-            attachmentCount = attachmentRows.Count,
-            archiveBytes = output.Length
+            scope = "org_export",
+            count = totalRows
         }, JsonOptions);
         auditWriter.Stage(db, AuditEventFactory.ForActor(
             actor,
