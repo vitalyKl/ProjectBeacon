@@ -3,6 +3,9 @@ namespace ProjectBeacon.Application.Projects;
 using Application.Authorization;
 using Application.Audit;
 using Application.Common;
+using Application.Entitlements;
+using System.Data;
+using Microsoft.EntityFrameworkCore.Storage;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -20,13 +23,20 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private readonly IAuthorizationService? _auth;
     private readonly ITenantContext _tenant;
     private readonly IAuditWriter? _auditWriter;
+    private readonly IEntitlementEvaluator? _entitlements;
 
-    public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant, IAuditWriter? auditWriter = null)
+    public CreateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService? auth,
+        ITenantContext tenant,
+        IAuditWriter? auditWriter = null,
+        IEntitlementEvaluator? entitlements = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _tenant = tenant;
         _auditWriter = auditWriter;
+        _entitlements = entitlements;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -52,6 +62,61 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
 
         window.Assign(project.Id, orgId, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
+        await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
+
+        // Serialize project creation per organization so two concurrent requests cannot both
+        // pass the same configured capacity check before either project is committed.
+        if (string.Equals(
+                writeDb.Database.ProviderName,
+                "Npgsql.EntityFrameworkCore.PostgreSQL",
+                StringComparison.Ordinal))
+        {
+            await using var lockCommand = writeDb.Database.GetDbConnection().CreateCommand();
+            lockCommand.Transaction = transaction.GetDbTransaction();
+            lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
+            var lockParameter = lockCommand.CreateParameter();
+            lockParameter.ParameterName = "lock_key";
+            lockParameter.DbType = DbType.String;
+            lockParameter.Value = $"organization-project-capacity:{orgId:N}";
+            lockCommand.Parameters.Add(lockParameter);
+            await lockCommand.ExecuteNonQueryAsync(ct);
+        }
+
+        if (_entitlements is not null)
+        {
+            var currentUsage = await writeDb.Projects
+                .LongCountAsync(existing => existing.OrgId == orgId, ct);
+            var evaluation = await _entitlements.EvaluateAsync(
+                orgId,
+                new EntitlementRequirement(
+                    EntitlementFeatureKeys.Core,
+                    EntitlementLimitKeys.Projects,
+                    RequestedUnits: 1,
+                    CurrentUsage: currentUsage),
+                ct);
+            if (!evaluation.Success)
+                return Result.Failure<ProjectDto>(
+                    "Organization project capacity could not be verified.",
+                    ErrorKind.Unavailable);
+            if (evaluation.Value is not { Allowed: true } decision)
+            {
+                if (decision?.ReasonCode == "limit_exceeded")
+                {
+                    var usage = decision.CurrentUsage ?? currentUsage;
+                    var limit = decision.Limit is { } maximum ? $" of {maximum}" : string.Empty;
+                    return Result.Failure<ProjectDto>(
+                        $"The organization project limit has been reached ({usage}{limit}).",
+                        "entitlement_limit_exceeded",
+                        ErrorKind.Conflict);
+                }
+
+                return Result.Failure<ProjectDto>(
+                    "The organization is not entitled to create projects.",
+                    "entitlement_feature_required",
+                    ErrorKind.Forbidden);
+            }
+        }
+
         writeDb.Projects.Add(project);
         if (command.Actor.UserId is { } ownerId)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
@@ -60,6 +125,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
             command.Actor, "project.created", "Project", project.Id.ToString(), orgId, project.Id,
             detailsJson: """{"newState":"Created"}"""));
         await writeDb.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return Result.Ok(MapToDto(project));
     }
