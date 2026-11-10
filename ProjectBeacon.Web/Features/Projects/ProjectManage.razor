@@ -8,6 +8,8 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Proposals
+@using ProjectBeacon.Application.Persistence
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject GetCurrentProjectHandler CurrentProject
@@ -17,6 +19,10 @@
 @inject AttachRuntimeHandler AttachRuntime
 @inject ListMyProjectsHandler MyProjects
 @inject UpdateProjectHandler UpdateProject
+@inject ListProposalPoliciesHandler ListProposalPolicies
+@inject SetProposalPolicyHandler SetProposalPolicy
+@inject IAuthorizationService Authorization
+@inject IBeaconDbFactory DbFactory
 @inject DeleteProjectHandler DeleteProject
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
 @inject GetProjectGitSyncCommandHandler GetGitSyncCommand
@@ -84,6 +90,65 @@ else
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>
             </div>
         </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProposalPoliciesTitle"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ProposalPoliciesHelp"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_proposalPolicies.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ProposalPoliciesUnavailable"]</MudText>
+        }
+        else
+        {
+            <MudTable Items="_proposalPolicies" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>@L["TargetKind"]</MudTh>
+                    <MudTh>@L["Operation"]</MudTh>
+                    <MudTh>@L["DecisionMode"]</MudTh>
+                    <MudTh>@L["PolicyRestriction"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="@L["TargetKind"]">@context.TargetKind</MudTd>
+                    <MudTd DataLabel="@L["Operation"]">@context.Operation</MudTd>
+                    <MudTd DataLabel="@L["DecisionMode"]">
+                        <MudSelect T="ProposalDecisionMode"
+                                   Value="@GetProposalPolicyMode(context)"
+                                   ValueChanged="@(mode => SetProposalPolicyMode(context, mode))"
+                                   Disabled="@(!_canEditProposalPolicies || !context.AutoAllowed || _proposalPolicyBusy)"
+                                   Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined">
+                            <MudSelectItem T="ProposalDecisionMode" Value="ProposalDecisionMode.Manual">@L["Manual"]</MudSelectItem>
+                            @if (context.AutoAllowed)
+                            {
+                                <MudSelectItem T="ProposalDecisionMode" Value="ProposalDecisionMode.Auto">@L["Auto"]</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd DataLabel="@L["PolicyRestriction"]">
+                        @if (!string.IsNullOrWhiteSpace(context.RestrictionReason))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.RestrictionReason</MudText>
+                        }
+                        else if (!_canEditProposalPolicies)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@L["GovernanceOwnerAdminOnly"]</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   Disabled="@(!_canEditProposalPolicies || !context.Supported || !context.AutoAllowed || _proposalPolicyBusy || GetProposalPolicyMode(context) == context.Mode)"
+                                   OnClick="@(() => SaveProposalPolicy(context))">
+                            @L["Save"]
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            @if (!_canEditProposalPolicies)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">@L["ProposalPoliciesOwnerAdminHint"]</MudText>
+            }
+        }
     </MudPaper>
 
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectFolder"]</MudText>
@@ -181,6 +246,10 @@ else
     private bool _isAdmin;
     private ActorContext _actor = ActorContext.Anonymous;
     private bool _busy;
+    private bool _canEditProposalPolicies;
+    private bool _proposalPolicyBusy;
+    private List<ProposalPolicyDto> _proposalPolicies = [];
+    private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
     private string _projectDescription = string.Empty;
@@ -236,6 +305,73 @@ else
         _projectDescription = current.Value.Description ?? string.Empty;
         _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
+        await ReloadProposalPolicies();
+    }
+
+    private async Task ReloadProposalPolicies()
+    {
+        _proposalPolicies = [];
+        _proposalPolicyEdits.Clear();
+        _canEditProposalPolicies = false;
+        if (_projectId is not { } projectId)
+            return;
+
+        var result = await ListProposalPolicies.HandleAsync(projectId, _actor);
+        if (!result.Success || result.Value is null)
+        {
+            Snackbar.Add(result.Error ?? L[\"ProposalPoliciesUnavailable\"].Value, Severity.Warning);
+            return;
+        }
+
+        _proposalPolicies = result.Value.ToList();
+        foreach (var policy in _proposalPolicies)
+            _proposalPolicyEdits[ProposalPolicyKey(policy)] = policy.Mode;
+
+        await using var db = DbFactory.CreateDbContext();
+        var permission = await Authorization.CanAsync(
+            db, _actor, ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        _canEditProposalPolicies = permission.Success;
+    }
+
+    private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
+        $\"{policy.TargetKind}:{policy.Operation}\";
+
+    private ProposalDecisionMode GetProposalPolicyMode(ProposalPolicyDto policy) =>
+        _proposalPolicyEdits.TryGetValue(ProposalPolicyKey(policy), out var mode) ? mode : policy.Mode;
+
+    private void SetProposalPolicyMode(ProposalPolicyDto policy, ProposalDecisionMode mode)
+    {
+        if (policy.AutoAllowed && _canEditProposalPolicies)
+            _proposalPolicyEdits[ProposalPolicyKey(policy)] = mode;
+    }
+
+    private async Task SaveProposalPolicy(ProposalPolicyDto policy)
+    {
+        if (_projectId is not { } projectId || !_canEditProposalPolicies || _proposalPolicyBusy)
+            return;
+        var selected = GetProposalPolicyMode(policy);
+        if (selected == policy.Mode)
+            return;
+
+        _proposalPolicyBusy = true;
+        try
+        {
+            var saved = await SetProposalPolicy.HandleAsync(new SetProposalPolicyCommand(
+                projectId, policy.TargetKind, policy.Operation, selected, policy.PolicyRevision, _actor));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L[\"Error\"].Value, Severity.Error);
+                await ReloadProposalPolicies();
+                return;
+            }
+
+            Snackbar.Add(L[\"ProposalPolicySaved\"].Value, Severity.Success);
+            await ReloadProposalPolicies();
+        }
+        finally
+        {
+            _proposalPolicyBusy = false;
+        }
     }
 
     private async Task ReloadProjects()
