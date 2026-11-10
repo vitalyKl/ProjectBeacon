@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Common;
 using Application.Mcp;
+using System.Security.Cryptography;
 
 public sealed class WorkspacePathTests
 {
@@ -279,6 +280,35 @@ public sealed class WorkspacePathTests
                 Directory.Delete(link);
             Directory.Delete(root, true);
             Directory.Delete(outside, true);
+        }
+    }
+
+    [Fact]
+    public void HashFile_ReturnsSha256OfExactBytes_AndRejectsOutsidePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-ws-hash-" + Guid.NewGuid().ToString("N"));
+        var workspace = new FileWorkspace(root);
+        const string relativePath = "docs/guide.md";
+        var bytes = new byte[] { 0xEF, 0xBB, 0xBF, 0x23, 0x20, 0x47, 0x75, 0x69, 0x64, 0x65, 0x0D, 0x0A };
+        try
+        {
+            var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, bytes);
+
+            var result = workspace.HashFile(relativePath);
+            Assert.True(result.Success, result.Error);
+            Assert.Equal(
+                Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                result.Value);
+
+            Assert.False(workspace.HashFile("../outside.txt").Success);
+            Assert.False(workspace.HashFile("docs/missing.md").Success);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, true);
         }
     }
 
