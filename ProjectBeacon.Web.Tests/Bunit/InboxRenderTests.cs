@@ -100,7 +100,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
-    public void Inbox_AcceptedProposal_RendersAppliedRevisionAndAcceptedPayload()
+    public async Task Inbox_AcceptedProposal_RendersAppliedRevisionAndAcceptedPayload()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
         var now = DateTime.UtcNow;
@@ -126,6 +126,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
         DbContext.SaveChanges();
 
         var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        await cut.FindComponents<MudBlazor.MudSelect<string>>()[0].Instance.ValueChanged.InvokeAsync(string.Empty);
 
         Assert.Contains("Accepted", cut.Markup);
         Assert.Contains("Applied revision: 2", cut.Markup);
