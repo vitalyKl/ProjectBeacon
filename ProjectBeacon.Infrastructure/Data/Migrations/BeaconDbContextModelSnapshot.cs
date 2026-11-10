@@ -114,6 +114,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("AcceptedPayloadJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<Guid?>("ApplyCommandId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("AuthorTokenId")
                         .HasColumnType("uuid");
 
@@ -219,6 +222,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ApplyCommandId")
                         .IsUnique();
 
                     b.HasIndex("ProjectId", "Status", "CreatedAt");
