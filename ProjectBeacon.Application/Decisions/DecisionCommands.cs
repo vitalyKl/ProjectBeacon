@@ -6,6 +6,7 @@ using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Proposals;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// A decision, its status, and the decision that superseded it when one did.
@@ -48,7 +49,13 @@ public class CreateDecisionHandler
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<DecisionDto>("Title and body are required.");
 
+        if (request.Actor is not { } actor)
+            return Result.Forbidden<DecisionDto>("A verified actor is required to propose a decision.");
+
         await using var db = _dbFactory.CreateDbContext();
+        if (!await ProposalProjectAuthorization.CanSubmitAsync(db, actor, request.ProjectId, ct))
+            return Result.Forbidden<DecisionDto>("Project membership is required to propose a decision.");
+
         var decision = Decision.Create(
             request.Title.Trim(),
             request.Context.Trim(),
@@ -68,7 +75,13 @@ public class CreateDecisionHandler
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<DecisionDto>("Title and body are required.");
 
+        if (request.Actor is not { } actor)
+            return Result.Forbidden<DecisionDto>("A verified actor is required to propose a decision.");
+
         await using var db = _dbFactory.CreateDbContext();
+        if (!await ProposalProjectAuthorization.CanSubmitAsync(db, actor, request.ProjectId, ct))
+            return Result.Forbidden<DecisionDto>("Project membership is required to propose a decision.");
+
         var title = request.Title.Trim();
         var context = request.Context?.Trim() ?? string.Empty;
         var body = request.Body.Trim();
