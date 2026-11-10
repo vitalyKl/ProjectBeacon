@@ -9,5 +9,6 @@ public enum ProposalStatus
     Conflicted = 3,
     Superseded = 4,
     Withdrawn = 5,
-    Expired = 6
+    Expired = 6,
+    Applying = 7
 }
