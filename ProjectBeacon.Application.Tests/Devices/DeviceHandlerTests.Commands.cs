@@ -18,6 +18,24 @@ using Microsoft.EntityFrameworkCore;
 public sealed partial class DeviceHandlerTests
 {
     [Fact]
+    public async Task GenericCommandQueue_RejectsProposalPatchOutsideReviewWorkflow()
+    {
+        var user = await SeedUserAsync("repo-patch-generic-enqueue");
+        var result = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                Guid.NewGuid(),
+                user.Id,
+                WorkstationCommandKind.ApplyProposalPatch,
+                "{}",
+                null)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal("Proposal patches can only be queued by the proposal review workflow.", result.Error);
+        Assert.Empty(await _db.WorkstationCommands.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ForeignUser_CannotSeeCommand()
     {
         var owner = await SeedUserAsync("owner");
