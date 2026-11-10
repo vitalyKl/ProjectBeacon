@@ -70,10 +70,14 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         Assert.True(initial.Success, initial.Error);
         Assert.Equal(18, initial.Value!.Count);
         Assert.All(initial.Value!, item =>
-        {
-            Assert.Equal(ProposalDecisionMode.Manual, item.Mode);
-            Assert.False(item.AutoAllowed);
-        });
+            Assert.Equal(ProposalDecisionMode.Manual, item.Mode));
+
+        var repoPatch = Assert.Single(initial.Value!, item =>
+            item.TargetKind == ContentTargetKind.RepoPatch
+            && item.Operation == ProposalOperation.Update);
+        Assert.True(repoPatch.AutoAllowed);
+        Assert.Null(repoPatch.RestrictionReason);
+        Assert.All(initial.Value!.Where(item => item != repoPatch), item => Assert.False(item.AutoAllowed));
 
         var projectDescription = Assert.Single(initial.Value!, item =>
             item.TargetKind == ContentTargetKind.ProjectDescription
@@ -178,4 +182,42 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         Assert.Equal(1, project.ProposalPolicyRevision);
         Assert.Equal("{}", project.ProposalPoliciesJson);
     }
+    [Fact]
+    public async Task RepoPatchAutoMode_CanOnlyBeEnabledByOwnerAdmin()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var list = new ListProposalPoliciesHandler(factory);
+        var initial = await list.HandleAsync(_projectId, OwnerActor(), TestContext.Current.CancellationToken);
+        Assert.True(initial.Success, initial.Error);
+
+        var repoPatch = Assert.Single(initial.Value!, item =>
+            item.TargetKind == ContentTargetKind.RepoPatch
+            && item.Operation == ProposalOperation.Update);
+        Assert.True(repoPatch.AutoAllowed);
+        Assert.Equal(ProposalDecisionMode.Manual, repoPatch.Mode);
+
+        var setter = new SetProposalPolicyHandler(factory, new AuthorizationService(), new EfAuditWriter());
+        var enabled = await setter.HandleAsync(new SetProposalPolicyCommand(
+            _projectId,
+            ContentTargetKind.RepoPatch,
+            ProposalOperation.Update,
+            ProposalDecisionMode.Auto,
+            repoPatch.PolicyRevision,
+            OwnerActor()), TestContext.Current.CancellationToken);
+
+        Assert.True(enabled.Success, enabled.Error);
+        Assert.Equal(ProposalDecisionMode.Auto, enabled.Value!.Mode);
+        Assert.True(enabled.Value.AutoAllowed);
+        Assert.Equal(repoPatch.PolicyRevision + 1, enabled.Value.PolicyRevision);
+
+        var refreshed = await list.HandleAsync(_projectId, OwnerActor(), TestContext.Current.CancellationToken);
+        Assert.True(refreshed.Success, refreshed.Error);
+        var refreshedRepoPatch = Assert.Single(refreshed.Value!, item =>
+            item.TargetKind == ContentTargetKind.RepoPatch
+            && item.Operation == ProposalOperation.Update);
+        Assert.Equal(ProposalDecisionMode.Auto, refreshedRepoPatch.Mode);
+        Assert.Contains(await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
+            action => action == "proposal.policy.updated");
+    }
+
 }
