@@ -1,7 +1,5 @@
 namespace ProjectBeacon.Application.Billing;
 
-public sealed record CustomerBillingInvoice(BillingInvoice Invoice, string OrganizationName);
-
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -9,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Enums;
+
+public sealed record CustomerBillingInvoice(BillingInvoice Invoice, string OrganizationName);
 
 /// <summary>
 /// Read-only customer billing view. Invoices are visible only to an active organization's
