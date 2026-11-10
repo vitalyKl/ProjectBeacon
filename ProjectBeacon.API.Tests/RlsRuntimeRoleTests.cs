@@ -2,6 +2,7 @@ namespace ProjectBeacon.API.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Domain.Entities.Billing;
 using Domain.Entities.Context;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -11,6 +12,11 @@ using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.API.Auth;
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Authorization;
+using ProjectBeacon.Application.Billing;
+using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Entitlements;
 using Npgsql;
 
 /// <summary>
@@ -226,20 +232,149 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     }
 
     [Fact]
+    public async Task ConvertAlphaToProduction_IsAtomicAndIdempotent()
+    {
+        _postgres.RequirePostgres();
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var planKey = $"convert-{suffix}";
+        var now = DateTimeOffset.UtcNow;
+        var operatorUser = User.Create(
+            $"conversion-operator-{suffix}",
+            $"conversion-operator-{suffix}@example.test",
+            "test-password-hash",
+            isAdmin: true);
+        operatorUser.AssignOperatorRole(OperatorRole.SystemAdministrator.ToString());
+        operatorUser.BeginTotp("conversion-test-totp-secret");
+        operatorUser.ConfirmTotp();
+
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: false);
+        var factory = new BeaconDbFactory(NewAppOptions(_appConn), tenant);
+        Guid orgId;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var seed = new BeaconDbContext(NewAppOptions(_appConn));
+            var org = Org.Create($"Conversion Org {suffix}");
+            var plan = BillingPlan.Create(
+                planKey,
+                "Conversion test plan",
+                (short)BillingCadence.Monthly,
+                priceMinor: null,
+                currency: null,
+                limitsJson: """{"seats":5}""",
+                featuresJson: """["core","chat"]""",
+                isActive: true,
+                nowUtc: now);
+            seed.Orgs.Add(org);
+            seed.Users.Add(operatorUser);
+            seed.BillingPlans.Add(plan);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            orgId = org.Id;
+        }
+
+        await using (var seedConnection = new NpgsqlConnection(_appConn))
+        {
+            await seedConnection.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await SetOrgScopeAsync(seedConnection, Guid.Empty, "true");
+            await InsertEntitlementRawAsync(seedConnection, Guid.NewGuid(), orgId);
+        }
+
+        var gate = new DatabaseAdminGate(factory);
+        var actorContext = new ActorContext(
+            ActorType.Human,
+            operatorUser.Id,
+            IsAdmin: true,
+            null,
+            null,
+            null,
+            null,
+            ApiTokenCapability.None,
+            DateTimeOffset.UtcNow.AddMinutes(5));
+        Result<AdminActor> gateResult;
+        using (TenantScope.EnterUnscoped())
+        {
+            gateResult = await gate.RequireAsync(
+                actorContext,
+                OperatorPermission.EntitlementsManage,
+                requireElevation: true,
+                ct: TestContext.Current.CancellationToken);
+        }
+        Assert.True(gateResult.Success, gateResult.Error);
+
+        var service = new PostgresEntitlementService(factory, new EfAuditWriter(), TimeProvider.System);
+        var request = new ConvertAlphaToProductionRequest(
+            orgId,
+            planKey,
+            $"manual-invoice-{suffix}",
+            now.AddMinutes(-1),
+            now.AddDays(30),
+            "verified_manual_invoice",
+            $"alpha-conversion-{suffix}");
+
+        var converted = await service.ConvertAlphaToProductionAsync(
+            request, gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.True(converted.Success, converted.Error);
+        Assert.Equal(EntitlementSource.Subscription, converted.Value!.Source);
+        Assert.Contains("core", converted.Value.Features);
+        Assert.Contains("chat", converted.Value.Features);
+        Assert.Equal(5, converted.Value.Limits["seats"]);
+
+        var replay = await service.ConvertAlphaToProductionAsync(
+            request, gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.True(replay.Success, replay.Error);
+        Assert.Equal(converted.Value.Id, replay.Value!.Id);
+
+        var conflictingReplay = await service.ConvertAlphaToProductionAsync(
+            request with { PlanKey = "different-plan" },
+            gateResult.Value!,
+            TestContext.Current.CancellationToken);
+        Assert.False(conflictingReplay.Success);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var effective = await service.GetEffectiveAsync(orgId, TestContext.Current.CancellationToken);
+            Assert.True(effective.Success, effective.Error);
+            Assert.Equal(converted.Value.Id, effective.Value!.Id);
+            Assert.Equal(EntitlementSource.Subscription, effective.Value.Source);
+        }
+
+        await using var verify = new NpgsqlConnection(_appConn);
+        await verify.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(verify, Guid.Empty, "true");
+
+        Assert.Equal(1, await CountForOrgRawAsync(
+            verify, "OrganizationSubscriptions", orgId));
+        Assert.Equal(1, await CountForOrgRawAsync(
+            verify, "BillingLedgerEntries", orgId));
+        Assert.Equal(1, await CountForOrgRawAsync(
+            verify, "OrganizationEntitlements",
+            orgId,
+            """("Source" = 0 AND "Status" = 4) OR ("Source" = 1 AND "Status" = 1)"""));
+        Assert.Equal(3, await CountForOrgRawAsync(
+            verify, "AuditEvents", orgId,
+            """"Action" IN ('organization.entitlement.replaced',
+                'organization.entitlement.converted',
+                'organization.subscription.activated')"""));
+    }
+
+    [Fact]
     public async Task Rls_RuntimeRole_BillingPlans_AreVisibleOnlyInOperatorScope()
     {
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var planKey = $"rls-plan-visible-{Guid.NewGuid():N}";
         await SetOrgScopeAsync(conn, Guid.Empty, "true");
-        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), "rls-plan-visible");
+        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), planKey);
 
         await SetOrgScopeAsync(conn, s_orgA, "false");
-        Assert.Equal(0, await CountBillingPlansRawAsync(conn));
+        Assert.Equal(0, await CountBillingPlansRawAsync(conn, planKey));
 
         await SetOrgScopeAsync(conn, Guid.Empty, "true");
-        Assert.Equal(1, await CountBillingPlansRawAsync(conn));
+        Assert.Equal(1, await CountBillingPlansRawAsync(conn, planKey));
 
         await SetOrgScopeAsync(conn, s_orgA, "false");
         var denied = await Assert.ThrowsAsync<PostgresException>(() =>
@@ -299,8 +434,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(0, await CountBillingLedgerRawAsync(conn));
 
         await SetOrgScopeAsync(conn, Guid.Empty, "true");
-        Assert.Equal(2, await CountBillingSubscriptionsRawAsync(conn));
-        Assert.Equal(2, await CountBillingLedgerRawAsync(conn));
+        Assert.Equal(2, await CountBillingSubscriptionsForOrgsRawAsync(conn, s_orgA, s_orgB));
+        Assert.Equal(2, await CountBillingLedgerForOrgsRawAsync(conn, s_orgA, s_orgB));
     }
 
     [Fact]
@@ -859,11 +994,54 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
     }
 
-    private static async Task<int> CountBillingPlansRawAsync(NpgsqlConnection conn)
+    private static async Task<int> CountBillingPlansRawAsync(NpgsqlConnection conn, string planKey)
     {
-        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"BillingPlans\"", conn);
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingPlans\" WHERE \"Key\" = @key", conn);
+        command.Parameters.AddWithValue("key", planKey);
         return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
     }
+
+    private static async Task<int> CountBillingSubscriptionsForOrgsRawAsync(
+        NpgsqlConnection conn, Guid orgA, Guid orgB)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"OrganizationSubscriptions\" WHERE \"OrgId\" IN (@a, @b)", conn);
+        command.Parameters.AddWithValue("a", orgA);
+        command.Parameters.AddWithValue("b", orgB);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingLedgerForOrgsRawAsync(
+        NpgsqlConnection conn, Guid orgA, Guid orgB)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingLedgerEntries\" WHERE \"OrgId\" IN (@a, @b)", conn);
+        command.Parameters.AddWithValue("a", orgA);
+        command.Parameters.AddWithValue("b", orgB);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountForOrgRawAsync(
+        NpgsqlConnection conn, string table, Guid orgId, string? predicate = null)
+    {
+        var allowedTables = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "OrganizationSubscriptions",
+            "BillingLedgerEntries",
+            "OrganizationEntitlements",
+            "AuditEvents"
+        };
+        if (!allowedTables.Contains(table))
+            throw new ArgumentException("Unsupported verification table.", nameof(table));
+
+        var filter = predicate is null ? string.Empty : $" AND ({predicate})";
+        await using var command = new NpgsqlCommand(
+            $"SELECT count(*) FROM \"{table}\" WHERE \"OrgId\" = @org_id{filter}", conn);
+        command.Parameters.AddWithValue("org_id", orgId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
 
     private static async Task<int> CountEntitlementsRawAsync(NpgsqlConnection conn)
     {
