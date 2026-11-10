@@ -938,7 +938,7 @@ internal static class ProposalMapper
     public static ProposalDto Map(Proposal proposal) => new(
         proposal.Id, proposal.ProjectId, proposal.TaskId, proposal.SubtaskId, proposal.SessionId,
         proposal.TargetKind, proposal.TargetId, proposal.Operation, proposal.BaseRevision, proposal.BaseHash,
-        proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status.ToString(),
+        proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status,
         proposal.AuthorKind.ToString(), proposal.AuthorUserId, proposal.AuthorTokenId,
         proposal.AuthorProfileKey, proposal.AuthorRole, proposal.CreatedAt, proposal.ExpiresAt,
         proposal.DecidedAt, proposal.DecidedByUserId, proposal.DecisionNote, proposal.AcceptedPayloadJson,
