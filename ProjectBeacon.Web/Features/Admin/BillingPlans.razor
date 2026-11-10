@@ -11,7 +11,7 @@
 @inject IConfiguration Configuration
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
-@inject BillingPlanAdminService BillingPlans
+@inject BillingPlanAdminService BillingPlanCatalog
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -230,7 +230,7 @@
         _busy = true;
         try
         {
-            _plans = (await BillingPlans.ListAsync(access.Value)).ToList();
+            _plans = (await BillingPlanCatalog.ListAsync(access.Value)).ToList();
         }
         catch
         {
@@ -309,7 +309,7 @@
                 limits,
                 features,
                 _isActive);
-            await BillingPlans.SaveAsync(request, access.Value);
+            await BillingPlanCatalog.SaveAsync(request, access.Value);
             Snackbar.Add("Billing plan saved.", Severity.Success);
             _editing = false;
             await Reload();
