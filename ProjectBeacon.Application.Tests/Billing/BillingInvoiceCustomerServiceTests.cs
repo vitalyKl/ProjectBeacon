@@ -20,6 +20,9 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
     private readonly Org _orgB;
     private readonly User _ownerA;
     private readonly User _memberA;
+    private readonly User _ownerB;
+    private readonly Guid _invoiceA;
+    private readonly Guid _invoiceB;
     private readonly TenantContext _tenant;
     private readonly BillingInvoiceCustomerService _service;
 
@@ -31,15 +34,15 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
         _orgB = Org.Create("Billing B");
         _ownerA = User.Create("billing-owner-a", "billing-owner-a@example.test", "hash");
         _memberA = User.Create("billing-member-a", "billing-member-a@example.test", "hash");
-        var ownerB = User.Create("billing-owner-b", "billing-owner-b@example.test", "hash");
+        _ownerB = User.Create("billing-owner-b", "billing-owner-b@example.test", "hash");
         _seedDb.Orgs.AddRange(_orgA, _orgB);
-        _seedDb.Users.AddRange(_ownerA, _memberA, ownerB);
+        _seedDb.Users.AddRange(_ownerA, _memberA, _ownerB);
         _seedDb.SaveChanges();
 
         _seedDb.OrgMembers.AddRange(
             OrgMember.Create(_orgA.Id, _ownerA.Id, MemberRole.Owner),
             OrgMember.Create(_orgA.Id, _memberA.Id, MemberRole.Member),
-            OrgMember.Create(_orgB.Id, ownerB.Id, MemberRole.Owner));
+            OrgMember.Create(_orgB.Id, _ownerB.Id, MemberRole.Owner));
         _seedDb.SaveChanges();
 
         _seedDb.Database.ExecuteSqlRaw("""
@@ -59,8 +62,8 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
                 "ExternalInvoiceReference" TEXT NULL
             )
             """);
-        InsertInvoice(_orgA.Id, "PB-2026-000001");
-        InsertInvoice(_orgB.Id, "PB-2026-000002");
+        _invoiceA = InsertInvoice(_orgA.Id, "PB-2026-000001");
+        _invoiceB = InsertInvoice(_orgB.Id, "PB-2026-000002");
 
         _tenant = new TenantContext();
         _tenant.Assign(null, _orgA.Id, unscoped: false);
@@ -90,6 +93,22 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
         Assert.Equal(_orgA.Id, invoice.OrgId);
         Assert.Equal(12500, invoice.AmountMinor);
         Assert.Equal("EUR", invoice.Currency);
+
+        var details = await _service.GetAsync(_invoiceA, actor, TestContext.Current.CancellationToken);
+        Assert.Equal("Billing A", details.OrganizationName);
+        Assert.Equal(invoice.Id, details.Invoice.Id);
+    }
+
+    [Fact]
+    public async Task CustomerInvoiceDetails_CannotBeReadAcrossOrganizationBoundary()
+    {
+        var currentOrgOwner = Actor(_ownerA, _orgA.Id);
+        var otherOrgOwner = Actor(_ownerB, _orgB.Id);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _service.GetAsync(_invoiceB, currentOrgOwner, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            _service.GetAsync(_invoiceA, otherOrgOwner, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -114,7 +133,7 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
             _service.ListAsync(actor, ct: TestContext.Current.CancellationToken));
     }
 
-    private void InsertInvoice(Guid orgId, string number)
+    private Guid InsertInvoice(Guid orgId, string number)
     {
         var now = DateTimeOffset.UtcNow;
         using var command = _connection.CreateCommand();
@@ -137,6 +156,7 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
         Add(command, "due", DbType.String, now.AddDays(14).ToString("O", CultureInfo.InvariantCulture));
         Add(command, "status", DbType.Int32, (int)BillingInvoiceStatus.Open);
         command.ExecuteNonQuery();
+        return (Guid)command.Parameters["@id"].Value;
     }
 
     private static ActorContext Actor(User user, Guid orgId) =>
