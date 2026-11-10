@@ -57,7 +57,7 @@ public static class BuiltInAgentProfiles
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one structural change", "medium"),
         Profile("docs-writer", "Write or update documentation, API comments or changelog.",
             "Write only what code and existing docs support. Verify every statement against source. Follow neighbouring language, tone and structure. Keep examples short and runnable. When code and docs disagree, describe actual code behaviour and report the mismatch. Do not execute commands.",
-            AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.Defaults, ["docs", "README.md", "CHANGELOG.md"], false, true, "one document or section", "low"),
+            AgentProfileMode.Act, DocumentationWritable(), AgentProfilePathPolicy.Defaults, ["docs", "README.md", "CHANGELOG.md"], false, true, "one document or section", "low"),
         Profile("build-config", "Change build manifests, CI workflows or dependency configuration.",
             "Call suggest_command_prefixes before changes to inspect actual build and test commands. After changing a manifest or workflow, call it again before using changed commands. Never add secrets or absolute local paths. Pin versions consistently. Verify with the project's own build command.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one configuration change", "medium"),
@@ -165,4 +165,8 @@ public static class BuiltInAgentProfiles
     private static IReadOnlyList<string> KnowledgeWritable() =>
         Array.AsReadOnly(Read.Concat(Context).Concat(PipelineToolPolicy.AgentProfileKnowledgeWriteTools)
             .Concat(Always).Distinct(StringComparer.Ordinal).ToArray());
+
+    private static IReadOnlyList<string> DocumentationWritable() =>
+        Array.AsReadOnly(Writable().Concat(PipelineToolPolicy.AgentProfileKnowledgeWriteTools)
+            .Distinct(StringComparer.Ordinal).ToArray());
 }
