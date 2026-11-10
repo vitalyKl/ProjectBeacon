@@ -28,6 +28,20 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(McpToolNames.GetContextNode, actor);
         Assert.Contains(McpToolNames.ListContextNodes, actor);
         Assert.DoesNotContain(McpToolNames.PipelineApprove, actor);
+        Assert.Contains(McpToolNames.KnowledgePropose, actor);
+        Assert.Contains(McpToolNames.KnowledgeProposals, actor);
+        Assert.Contains(McpToolNames.KnowledgeWithdraw, actor);
+        Assert.DoesNotContain(McpToolNames.KnowledgePropose, PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.DoesNotContain(McpToolNames.KnowledgeProposals, PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.DoesNotContain(McpToolNames.KnowledgePropose, PipelineToolPolicy.ToolsForRole("Review"));
+        Assert.DoesNotContain(McpToolNames.KnowledgeProposals, PipelineToolPolicy.ToolsForRole("Review"));
+        Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.ToolsForRole("Review"));
+        Assert.Contains(McpToolNames.KnowledgePropose, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
+        Assert.Contains(McpToolNames.KnowledgeProposals, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
+        Assert.Contains(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.AgentProfileKnowledgeWriteTools);
+        Assert.Contains(McpToolNames.KnowledgePropose, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.Contains(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Empty(PipelineToolPolicy.ToolsForRole("Unknown"));
     }
 }
