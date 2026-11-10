@@ -78,9 +78,12 @@
         {
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)" Label="@(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)" />
-                <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
                 <MudText Typo="Typo.caption"><LocalTime Value="verdict.CreatedAt" Format="d" /></MudText>
             </MudStack>
+            @if (!string.IsNullOrWhiteSpace(verdict.Note))
+            {
+                <MarkdownView Text="@verdict.Note" MaxHeight="120" Class="mt-1" />
+            }
         }
     }
 </MudPaper>
