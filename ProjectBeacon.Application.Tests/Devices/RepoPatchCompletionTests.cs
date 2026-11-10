@@ -83,13 +83,12 @@ public sealed class RepoPatchCompletionTests : IDisposable
             PipelineRole.Actor.ToString(),
             "repo-patch-completion-" + Guid.NewGuid().ToString("N"),
             now);
-        var commandId = Guid.NewGuid();
-        proposal.StartApply(commandId, reviewerId, now);
         var command = WorkstationCommand.Create(
             Guid.NewGuid(),
             WorkstationCommandKind.ApplyProposalPatch,
             JsonSerializer.Serialize(new { projectId = project.Id, proposalId = proposal.Id }),
             project.Id);
+        proposal.StartApply(command.Id, reviewerId, now);
 
         using (TenantScope.EnterUnscoped())
         {
