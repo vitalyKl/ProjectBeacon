@@ -135,6 +135,7 @@ public class User : Entity
 
         IsAdmin = false;
         OperatorRole = null;
+        TotpRecoveryCodeHashesJson = null;
         BumpSessionVersion();
     }
 
