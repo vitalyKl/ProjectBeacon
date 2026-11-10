@@ -247,6 +247,10 @@ public sealed class RepoPatchApplyServiceTests
             await File.WriteAllTextAsync(path, proposedContent);
             var patch = await Git(RepositoryRoot, "diff", "--no-ext-diff", "--", GitPrefix + projectRelativePath);
             Assert.False(string.IsNullOrWhiteSpace(patch));
+
+            // Build the proposal from the diff, but leave the fixture at the immutable
+            // base revision. The apply service must verify BaseHash before running git apply.
+            await Git(RepositoryRoot, "checkout", "--", GitPrefix + projectRelativePath);
             return patch + "\n";
         }
 
