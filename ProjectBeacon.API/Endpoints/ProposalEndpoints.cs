@@ -86,8 +86,9 @@ public static class ProposalEndpoints
         AcceptProposalHandler handler,
         CancellationToken ct)
     {
-        var acceptedPayload = body.AcceptedPayload is { ValueKind: JsonValueKind.Object } payload
-            ? payload.GetRawText()
+        var acceptedPayload = body.AcceptedPayload.HasValue
+            && body.AcceptedPayload.Value.ValueKind == JsonValueKind.Object
+            ? body.AcceptedPayload.Value.GetRawText()
             : null;
         var result = await handler.HandleAsync(
             new AcceptProposalCommand(projectId, proposalId, context.GetActor(), acceptedPayload), ct);
