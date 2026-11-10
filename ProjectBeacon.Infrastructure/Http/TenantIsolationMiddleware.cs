@@ -77,12 +77,19 @@ public sealed class TenantIsolationMiddleware
         {
             var bound = FromClaim(ctx, "project_id") ?? Guid.Empty;
             var overridden = fromRoute ?? fromHeader;
-            if (overridden is { } ov && ov != bound)
-            {
+            if (bound == Guid.Empty || (overridden is { } requestedProject && requestedProject != bound))
                 return (Guid.Empty, Guid.Empty);
-            }
-            var org = await GetProjectOrgIdAsync(db, bound);
-            return (bound, fromOrgRoute ?? fromOrgHeader ?? org);
+
+            // API tokens are project-bound. An org header must not move their RLS scope
+            // away from the organization that owns the token's bound project.
+            var boundOrg = await GetProjectOrgIdAsync(db, bound);
+            if (boundOrg is null)
+                return (Guid.Empty, Guid.Empty);
+            var requestedOrg = fromOrgRoute ?? fromOrgHeader;
+            if (requestedOrg is { } orgOverride && orgOverride != boundOrg)
+                return (Guid.Empty, Guid.Empty);
+
+            return (bound, boundOrg);
         }
 
         if (ctx.User.Identity?.IsAuthenticated == true && TryGetUserId(ctx, out var userId))
