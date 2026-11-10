@@ -2814,4 +2814,19 @@ orthstar</value>
   <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
     <value>Auto（应用文档补丁）</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>已应用修订版</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>子任务 ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>任务 ID</value>
+  </data>
 </root>
