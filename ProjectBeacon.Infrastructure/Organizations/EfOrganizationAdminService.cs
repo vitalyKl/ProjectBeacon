@@ -495,7 +495,7 @@ public sealed class EfOrganizationAdminService(
         var user = await db.Users.FirstOrDefaultAsync(x => x.Id == userId, ct);
         if (user is null)
             return Result.Failure("User not found.", ErrorKind.NotFound);
-        if (user.IsAdmin)
+        if (user.IsAdmin || !string.IsNullOrWhiteSpace(user.OperatorRole))
             return Result.Failure("Platform operator accounts cannot be managed as customer accounts.", ErrorKind.Conflict);
         if (user.IsDisabled == disabled)
             return Result.Ok();
