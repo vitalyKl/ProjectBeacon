@@ -1,0 +1,151 @@
+@page "/billing"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Billing
+@inject AuthenticationStateProvider Auth
+@inject BillingInvoiceCustomerService InvoiceService
+@inject TimeProvider Clock
+
+<PageTitle>Billing</PageTitle>
+
+<PageHeader Title="Billing" />
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Invoices and payment references for the current organization. Billing information is available only to organization owners and administrators.
+</MudText>
+
+@if (_loading)
+{
+    <LoadingState />
+}
+else if (_forbidden)
+{
+    <MudAlert Severity="Severity.Warning">
+        Billing information is restricted to owners and administrators of the active organization.
+    </MudAlert>
+}
+else if (_error)
+{
+    <MudAlert Severity="Severity.Error">
+        Billing information could not be loaded. Refresh the page or contact support.
+    </MudAlert>
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+        These are manual invoice records. Payment is handled outside ProjectBeacon. A Paid status means an operator recorded an external receipt reference; ProjectBeacon does not collect payment details or verify funds.
+    </MudAlert>
+
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+            <MudText Typo="Typo.h6">Organization invoices</MudText>
+            <MudButton Variant="Variant.Text" OnClick="Reload" Disabled="_loading">Refresh</MudButton>
+        </div>
+
+        @if (_invoices.Count == 0)
+        {
+            <EmptyState>No invoices have been issued for this organization.</EmptyState>
+        }
+        else
+        {
+            <MudTable Items="_invoices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Invoice</MudTh>
+                    <MudTh>Description</MudTh>
+                    <MudTh>Amount</MudTh>
+                    <MudTh>Issued</MudTh>
+                    <MudTh>Due</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Invoice">
+                        <MudText Typo="Typo.body2" Class="font-monospace">@context.Number</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Description">@context.Description</MudTd>
+                    <MudTd DataLabel="Amount">@FormatAmount(context)</MudTd>
+                    <MudTd DataLabel="Issued">@context.IssuedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</MudTd>
+                    <MudTd DataLabel="Due">@context.DueAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(context.Status == BillingInvoiceStatus.Paid ? Color.Success
+                                     : context.Status == BillingInvoiceStatus.Open && context.DueAtUtc < Clock.GetUtcNow() ? Color.Warning
+                                     : context.Status is BillingInvoiceStatus.Void or BillingInvoiceStatus.Uncollectible ? Color.Default
+                                     : Color.Info)">
+                            @StatusLabel(context)
+                        </MudChip>
+                        @if (context.PaymentReference is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Receipt: @context.PaymentReference
+                            </MudText>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            @if (_invoices.Count == 100)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                    Showing the 100 most recent invoices.
+                </MudText>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _forbidden;
+    private bool _error;
+    private List<BillingInvoice> _invoices = [];
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _loading = true;
+        _forbidden = false;
+        _error = false;
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            var actor = ActorContextFactory.FromPrincipal(principal);
+            _invoices = (await InvoiceService.ListAsync(
+                actor,
+                limit: 100,
+                ct: CancellationToken.None)).ToList();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+            _invoices.Clear();
+        }
+        catch
+        {
+            _error = true;
+            _invoices.Clear();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string FormatAmount(BillingInvoice invoice) =>
+        $"{invoice.Currency} {invoice.AmountMinor.ToString("N0", CultureInfo.InvariantCulture)} minor units";
+
+    private string StatusLabel(BillingInvoice invoice) =>
+        invoice.Status == BillingInvoiceStatus.Open && invoice.DueAtUtc < Clock.GetUtcNow()
+            ? "Overdue"
+            : invoice.Status switch
+            {
+                BillingInvoiceStatus.Draft => "Draft",
+                BillingInvoiceStatus.Open => "Open",
+                BillingInvoiceStatus.Paid => "Paid",
+                BillingInvoiceStatus.Void => "Void",
+                BillingInvoiceStatus.Uncollectible => "Uncollectible",
+                _ => "Unknown"
+            };
+}
