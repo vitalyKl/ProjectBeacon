@@ -121,7 +121,7 @@ public sealed class BillingInvoiceCustomerService(
                     ? DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
                     : timestamp).ToUniversalTime(),
             string text => DateTimeOffset.Parse(
-                text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime(),
+                text, CultureInfo.InvariantCulture, DateTimeStyles.None).ToUniversalTime(),
             _ => throw new InvalidDataException($"Unsupported invoice timestamp type at column {ordinal}.")
         };
     }
