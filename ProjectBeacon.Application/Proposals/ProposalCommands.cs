@@ -8,6 +8,7 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Application.Tasks;
 using Domain.Common;
 using Domain.Entities.Content;
 using Domain.Entities.Context;
@@ -673,6 +674,20 @@ public sealed class AcceptProposalHandler
                     await db.SaveChangesAsync(ct);
                     await transaction.CommitAsync(ct);
                     return Result.Failure<ProposalDto>("Proposal has expired.");
+                }
+
+                if (proposal.TargetKind == ContentTargetKind.RepoPatch)
+                {
+                    var queued = await RepoPatchProposalWorkflow.QueueAsync(
+                        db, proposal, command.Actor.UserId, command.Actor, _auditWriter, now,
+                        requireProfileAuto: false, ct);
+                    if (!queued.Success)
+                        return Result.Failure<ProposalDto>(
+                            queued.Error ?? "RepoPatch could not be queued.",
+                            queued.Kind);
+                    await db.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
+                    return Result.Ok(ProposalMapper.Map(proposal));
                 }
 
                 var payload = command.AcceptedPayloadJson ?? proposal.PayloadJson;
