@@ -227,7 +227,7 @@ public sealed class AuditApiTests
             Assert.Equal(AuditOutcome.Success, recoveryEvent.Outcome);
             Assert.Equal("User", recoveryEvent.TargetType);
             Assert.Equal(adminId.ToString(), recoveryEvent.TargetId);
-            Assert.Contains("password_reset", recoveryEvent.DetailsJson);
+            Assert.Contains("credentials_reset", recoveryEvent.DetailsJson);
             Assert.DoesNotContain(recoveredPassword, recoveryEvent.DetailsJson ?? string.Empty);
             Assert.DoesNotContain(AuthApiFactory.BootstrapToken, recoveryEvent.DetailsJson ?? string.Empty);
             Assert.DoesNotContain("password_reset", deniedRecoveryEvent.DetailsJson);
