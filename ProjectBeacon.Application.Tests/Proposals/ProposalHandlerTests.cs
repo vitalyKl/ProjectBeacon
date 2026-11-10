@@ -732,6 +732,126 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Contains("context.draft.rejected", auditActions);
     }
 
+    [Fact]
+    public async Task AutoPolicy_AppliesProposalAndCommitsVersionStatusAndAuditTogether()
+    {
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        project.SetProposalPoliciesJson(ProposalPolicyCatalog.Serialize(
+            new Dictionary<string, string>
+            {
+                [ProposalPolicyCatalog.Key(ContentTargetKind.ProjectDescription, ProposalOperation.Update)] =
+                    ProposalDecisionMode.Auto.ToString()
+            }));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, Request(), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Accepted, result.Value!.Status);
+        Assert.Null(result.Value.DecidedByUserId);
+        Assert.Equal(2, result.Value.AppliedRevision);
+
+        await _db.Entry(project).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Updated project description", project.Description);
+        Assert.Equal(2, project.Revision);
+
+        var appliedVersion = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ProjectDescription
+                && item.TargetId == _projectId
+                && item.Revision == 2,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(result.Value.Id, appliedVersion.ProposalId);
+        Assert.Equal("Human", appliedVersion.ChangedByType);
+        Assert.Equal(_userId.ToString("D"), appliedVersion.ChangedById);
+
+        var actions = await _db.AuditEvents
+            .Where(item => item.TargetId == result.Value.Id.ToString("D"))
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("proposal.created", actions);
+        Assert.Contains("proposal.auto_accepted", actions);
+    }
+
+    [Fact]
+    public async Task AutoPolicy_DoesNotBypassManualGovernanceForDecision()
+    {
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        // Even a corrupted/manual database value cannot turn governance into Auto.
+        project.SetProposalPoliciesJson("""{"Decision:Update":"Auto"}""");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var decision = Decision.Create(
+            "Existing decision", "Context", "Accepted content", _projectId);
+        decision.Accept();
+        _db.Decisions.Add(decision);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        new ContentWriter().AddVersion(_db, decision, "Human", _userId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var request = new CreateProposalRequest(
+            ContentTargetKind.Decision,
+            decision.Id,
+            ProposalOperation.Update,
+            1,
+            """{"title":"Updated decision","context":"Updated context","decisionBody":"Updated body","consequences":null}""",
+            "Proposes a governance change.",
+            "auto-policy-governance-manual");
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Pending, result.Value!.Status);
+        Assert.Null(result.Value.AppliedRevision);
+
+        await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Accepted content", decision.DecisionBody);
+        Assert.Equal(1, decision.Revision);
+    }
+
+    [Fact]
+    public async Task AutoPolicy_StaleBaseRevisionProducesConflictWithoutApplyingTarget()
+    {
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        project.SetProposalPoliciesJson(ProposalPolicyCatalog.Serialize(
+            new Dictionary<string, string>
+            {
+                [ProposalPolicyCatalog.Key(ContentTargetKind.ProjectDescription, ProposalOperation.Update)] =
+                    ProposalDecisionMode.Auto.ToString()
+            }));
+        project.Update(description: "Changed before proposal");
+        var saved = await new ContentWriter().SaveAsync(
+            _db, project, "Human", _userId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(saved.Success, saved.Error);
+        Assert.Equal(2, saved.Value);
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, Request(), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Conflicted, result.Value!.Status);
+        Assert.Equal(2, result.Value.ConflictRevision);
+        Assert.Null(result.Value.AppliedRevision);
+
+        await _db.Entry(project).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Changed before proposal", project.Description);
+        Assert.Equal(2, project.Revision);
+        Assert.DoesNotContain(await _db.ContentVersions.ToListAsync(TestContext.Current.CancellationToken),
+            item => item.ProposalId == result.Value.Id);
+    }
+
     private ActorContext HumanActor() =>
         new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
