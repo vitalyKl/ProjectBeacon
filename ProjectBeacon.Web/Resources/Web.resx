@@ -3005,4 +3005,19 @@ No Beacon-hosted coding agent.</value>
   <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
     <value>Auto (apply documentation patch)</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>Applied revision</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>Operation</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>Subtask ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>Task ID</value>
+  </data>
 </root>
