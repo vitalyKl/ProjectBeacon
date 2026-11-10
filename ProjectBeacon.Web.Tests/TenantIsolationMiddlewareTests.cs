@@ -161,6 +161,40 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task ApiToken_CannotOverrideBoundProjectOrganization()
+    {
+        var boundOrg = Org.Create("API token bound organization");
+        var foreignOrg = Org.Create("API token foreign organization");
+        var boundProject = Project.Create("API token project", null, boundOrg.Id);
+        _db.Orgs.AddRange(boundOrg, foreignOrg);
+        _db.Projects.Add(boundProject);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scopedProject = null;
+        Guid? scopedOrg = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scopedProject = TenantScope.CurrentProjectId;
+            scopedOrg = TenantScope.CurrentOrgId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim("project_id", boundProject.Id.ToString()),
+                new Claim("token_id", Guid.NewGuid().ToString())
+            ], ActorContextFactory.ApiTokenAuthType))
+        };
+        http.Request.Headers["X-Org-Id"] = foreignOrg.Id.ToString();
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(Guid.Empty, scopedProject);
+        Assert.Equal(Guid.Empty, scopedOrg);
+    }
+
+    [Fact]
     public async Task DeviceToken_WithProjectHeader_ScopesToHeaderProject()
     {
         var org = Org.Create("Org", null);
