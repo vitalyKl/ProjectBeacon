@@ -96,7 +96,7 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
             item => item.Id == PlatformEmailSettings.SingletonId,
             TestContext.Current.CancellationToken);
         Assert.Equal(string.Empty, cleared.PasswordCipher);
-        Assert.False((await service.GetAsync()).HasPassword);
+        Assert.False((await service.GetAsync(AdminActor())).HasPassword);
     }
 
     [Fact]
