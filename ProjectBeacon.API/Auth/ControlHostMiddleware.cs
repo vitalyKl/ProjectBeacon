@@ -85,6 +85,7 @@ public sealed class ControlHostMiddleware(RequestDelegate next, IConfiguration c
             || string.Equals(path.Value, "/control/elevate", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/admin/audit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/admin/operations", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.Value, "/admin/billing/plans", StringComparison.OrdinalIgnoreCase)
             || string.Equals(path.Value, "/admin/email", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/admin/organizations")
             || string.Equals(path.Value, "/admin/operators", StringComparison.OrdinalIgnoreCase)

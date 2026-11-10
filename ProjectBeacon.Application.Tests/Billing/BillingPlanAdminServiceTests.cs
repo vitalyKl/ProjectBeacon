@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Application.Tests.Billing;
 
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Authorization;
@@ -75,7 +74,14 @@ public sealed class BillingPlanAdminServiceTests : IDisposable
             await ResolveActorAsync(_billing, OperatorPermission.BillingRead, elevated: false),
             TestContext.Current.CancellationToken);
         var listed = Assert.Single(plans);
-        Assert.Equal(saved, listed);
+        Assert.Equal(saved.Key, listed.Key);
+        Assert.Equal(saved.Name, listed.Name);
+        Assert.Equal(saved.Cadence, listed.Cadence);
+        Assert.Equal(saved.PriceMinor, listed.PriceMinor);
+        Assert.Equal(saved.Currency, listed.Currency);
+        Assert.Equal(saved.IsActive, listed.IsActive);
+        Assert.Equal(saved.Limits["seats"], listed.Limits["seats"]);
+        Assert.True(saved.Features.SetEquals(listed.Features));
 
         var audit = await _seedDb.AuditEvents.IgnoreQueryFilters()
             .SingleAsync(item => item.Action == "platform.billing_plan.created",

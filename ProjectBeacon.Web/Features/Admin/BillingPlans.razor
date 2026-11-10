@@ -1,0 +1,377 @@
+@page "/admin/billing/plans"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Billing
+@using ProjectBeacon.Web.Authentication
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject BillingPlanAdminService BillingPlans
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Control — Billing plans</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Billing plans" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Provider-neutral product catalog. Plans define product features and optional limits; they do not create subscriptions or charge customers.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">BillingRead permission is required to view the plan catalog.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            Prices and currencies may remain unset during alpha. No payment provider, provider price ID, billing unit or subscription lifecycle is selected here. When a price is configured, it is stored as integer minor units with an ISO 4217 currency code.
+        </MudAlert>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+                <MudText Typo="Typo.h6">Product plans</MudText>
+                <div class="d-flex gap-2">
+                    <MudButton Variant="Variant.Text" OnClick="Reload" Disabled="_busy">Refresh</MudButton>
+                    @if (_canManage)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="NewPlan" Disabled="_busy">
+                            New plan
+                        </MudButton>
+                    }
+                </div>
+            </div>
+
+            @if (_busy && _plans.Count == 0)
+            {
+                <LoadingState />
+            }
+            else if (_plans.Count == 0)
+            {
+                <EmptyState>No billing plans have been created.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="_plans" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Key</MudTh>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Cadence</MudTh>
+                        <MudTh>Price</MudTh>
+                        <MudTh>Features</MudTh>
+                        <MudTh>Limits</MudTh>
+                        <MudTh>Status</MudTh>
+                        @if (_canManage)
+                        {
+                            <MudTh></MudTh>
+                        }
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Key">
+                            <MudText Typo="Typo.body2" Class="font-monospace">@context.Key</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Name">@context.Name</MudTd>
+                        <MudTd DataLabel="Cadence">@context.Cadence</MudTd>
+                        <MudTd DataLabel="Price">@FormatPrice(context)</MudTd>
+                        <MudTd DataLabel="Features">@string.Join(", ", context.Features.OrderBy(x => x, StringComparer.Ordinal))</MudTd>
+                        <MudTd DataLabel="Limits">@context.Limits.Count</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                @(context.IsActive ? "Active" : "Inactive")
+                            </MudChip>
+                        </MudTd>
+                        @if (_canManage)
+                        {
+                            <MudTd>
+                                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => EditPlan(context))">
+                                    Edit
+                                </MudButton>
+                            </MudTd>
+                        }
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        @if (_editing)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+                <div class="d-flex align-center justify-space-between mb-3">
+                    <MudText Typo="Typo.h6">@(_isNew ? "Create plan" : "Edit plan")</MudText>
+                    <MudButton Variant="Variant.Text" OnClick="CancelEdit" Disabled="_saving">Close</MudButton>
+                </div>
+
+                @if (!_canManage)
+                {
+                    <MudAlert Severity="Severity.Warning">BillingManage permission is required to change plans.</MudAlert>
+                }
+                else
+                {
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" @bind-Value="_key" Label="Stable plan key"
+                                          HelperText="Lowercase slug; cannot be renamed after creation."
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Disabled="@(!_isNew || _saving)" />
+                        </MudItem>
+                        <MudItem xs="12" md="8">
+                            <MudTextField T="string" @bind-Value="_name" Label="Display name"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="BillingCadence" @bind-Value="_cadence" Label="Cadence"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving">
+                                <MudSelectItem T="BillingCadence" Value="BillingCadence.OneTime">One time</MudSelectItem>
+                                <MudSelectItem T="BillingCadence" Value="BillingCadence.Monthly">Monthly</MudSelectItem>
+                                <MudSelectItem T="BillingCadence" Value="BillingCadence.Annual">Annual</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" @bind-Value="_priceMinor" Label="Price (minor units)"
+                                          Placeholder="Leave blank during alpha"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField T="string" @bind-Value="_currency" Label="Currency (ISO 4217)"
+                                          Placeholder="EUR" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField T="string" @bind-Value="_features" Label="Feature keys"
+                                          HelperText="Comma-separated product keys. The core feature is required."
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField T="string" @bind-Value="_limitsJson" Label="Limits (JSON object)"
+                                          HelperText="Example: {&quot;seats&quot;: 5}. Leave as {} when no limit is defined."
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Lines="4" Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudCheckBox T="bool" @bind-Value="_isActive" Label="Plan is active" Disabled="_saving" />
+                        </MudItem>
+                        <MudItem xs="12" Class="d-flex flex-wrap gap-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@(_saving || !_canManage)">
+                                @(_saving ? "Saving…" : "Save plan")
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="CancelEdit" Disabled="_saving">Cancel</MudButton>
+                        </MudItem>
+                    </MudGrid>
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
+                        Saving requires BillingManage and an active ten-minute TOTP unlock. Editing a catalog plan does not change existing subscriptions or customer entitlements.
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _canManage;
+    private bool _busy;
+    private bool _editing;
+    private bool _isNew;
+    private bool _saving;
+    private string _key = string.Empty;
+    private string _name = string.Empty;
+    private string _priceMinor = string.Empty;
+    private string _currency = string.Empty;
+    private string _features = "core";
+    private string _limitsJson = "{}";
+    private BillingCadence _cadence = BillingCadence.Monthly;
+    private bool _isActive = true;
+    private List<PlanDefinition> _plans = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await EnsureControlSessionAsync())
+            return;
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var read = await AdminGate.RequireAsync(actor, OperatorPermission.BillingRead);
+        if (!read.Success)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _authorized = true;
+        var manage = await AdminGate.RequireAsync(actor, OperatorPermission.BillingManage);
+        _canManage = manage.Success;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (!await EnsureControlSessionAsync())
+            return;
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var access = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal),
+            OperatorPermission.BillingRead);
+        if (!access.Success || access.Value is null)
+        {
+            _authorized = false;
+            _plans.Clear();
+            Snackbar.Add("BillingRead permission is no longer available.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _plans = (await BillingPlans.ListAsync(access.Value)).ToList();
+        }
+        catch
+        {
+            Snackbar.Add("Could not load the billing plan catalog.", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void NewPlan()
+    {
+        ResetForm();
+        _editing = true;
+        _isNew = true;
+    }
+
+    private void EditPlan(PlanDefinition plan)
+    {
+        _key = plan.Key;
+        _name = plan.Name;
+        _cadence = plan.Cadence;
+        _priceMinor = plan.PriceMinor?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _currency = plan.Currency ?? string.Empty;
+        _features = string.Join(", ", plan.Features.OrderBy(x => x, StringComparer.Ordinal));
+        _limitsJson = JsonSerializer.Serialize(plan.Limits);
+        _isActive = plan.IsActive;
+        _isNew = false;
+        _editing = true;
+    }
+
+    private async Task Save()
+    {
+        if (!await EnsureControlSessionAsync())
+            return;
+
+        if (!_canManage)
+            return;
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var access = await AdminGate.RequireAsync(
+            actor,
+            OperatorPermission.BillingManage,
+            requireElevation: true);
+        if (!access.Success || access.Value is null)
+        {
+            Snackbar.Add("Plan changes require BillingManage and a current TOTP unlock.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            long? priceMinor = null;
+            if (!string.IsNullOrWhiteSpace(_priceMinor))
+            {
+                if (!long.TryParse(_priceMinor.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                    throw new ArgumentException("Price must be a whole integer in minor currency units.");
+                priceMinor = parsed;
+            }
+
+            var limits = JsonSerializer.Deserialize<Dictionary<string, long>>(_limitsJson)
+                ?? throw new ArgumentException("Limits must be a JSON object.");
+            var features = _features
+                .Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            var request = new SaveBillingPlanRequest(
+                _key,
+                _name,
+                _cadence,
+                priceMinor,
+                string.IsNullOrWhiteSpace(_currency) ? null : _currency.Trim(),
+                limits,
+                features,
+                _isActive);
+            await BillingPlans.SaveAsync(request, access.Value);
+            Snackbar.Add("Billing plan saved.", Severity.Success);
+            _editing = false;
+            await Reload();
+        }
+        catch (JsonException)
+        {
+            Snackbar.Add("Limits must be a valid JSON object.", Severity.Warning);
+        }
+        catch (ArgumentException exception)
+        {
+            Snackbar.Add(exception.Message, Severity.Warning);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Snackbar.Add("Billing plan management is not authorized.", Severity.Warning);
+        }
+        catch
+        {
+            Snackbar.Add("Could not save the billing plan.", Severity.Error);
+        }
+    }
+
+    private async Task<bool> EnsureControlSessionAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ResetForm()
+    {
+        _key = string.Empty;
+        _name = string.Empty;
+        _priceMinor = string.Empty;
+        _currency = string.Empty;
+        _features = "core";
+        _limitsJson = "{}";
+        _cadence = BillingCadence.Monthly;
+        _isActive = true;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        ResetForm();
+    }
+
+    private static string FormatPrice(PlanDefinition plan) =>
+        plan.PriceMinor is null || plan.Currency is null
+            ? "Not configured"
+            : $"{plan.PriceMinor.Value.ToString("N0", CultureInfo.InvariantCulture)} {plan.Currency} minor units";
+}
