@@ -398,7 +398,8 @@ public sealed class EfOrganizationAdminService(
                     """;
             Add(rowLock, "invite_id", DbType.Guid, inviteId);
             Add(rowLock, "org_id", DbType.Guid, orgId);
-            if (await rowLock.ExecuteScalarAsync(ct) is not Guid)
+            var lockedInviteId = await rowLock.ExecuteScalarAsync(ct);
+            if (lockedInviteId is null || lockedInviteId is DBNull)
                 return Result.Failure("Invitation not found.", ErrorKind.NotFound);
         }
 
@@ -614,7 +615,7 @@ public sealed class EfOrganizationAdminService(
         {
             previousState = previous.ToString(),
             newState = target.ToString(),
-            reason
+            reasonCode = "operator_supplied"
         });
         auditWriter.Stage(db, Audit(actor, action, "Org", org.Id, org.Id,
             timeProvider.GetUtcNow().UtcDateTime, details));

@@ -118,8 +118,8 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.True(await _seedDb.OrgMembers.IgnoreQueryFilters().AnyAsync(
             x => x.OrgId == created.Value.OrgId && x.UserId == registered.Value!.UserId && x.Role == MemberRole.Owner,
             TestContext.Current.CancellationToken));
-        Assert.Equal(InviteStatus.Accepted, (await _seedDb.OrgInvites.IgnoreQueryFilters()
-            .SingleAsync(x => x.Id == created.Value.InviteId, TestContext.Current.CancellationToken)).Status);
+        await _seedDb.Entry(invite).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(InviteStatus.Accepted, invite.Status);
     }
 
     [Fact]
@@ -247,6 +247,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
         var target = User.Create("operator-target", "operator-target@example.test", "hash");
         target.AssignOperatorRole(role.ToString());
+        var initialSessionVersion = target.SessionVersion;
         var org = Org.Create("Operator account protection");
         _seedDb.Users.AddRange(_admin, target);
         _seedDb.Orgs.Add(org);
@@ -263,7 +264,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.Equal(ErrorKind.Conflict, disabled.Kind);
         await _seedDb.Entry(target).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.False(target.IsDisabled);
-        Assert.Equal(0, target.SessionVersion);
+        Assert.Equal(initialSessionVersion, target.SessionVersion);
         Assert.Empty(cache.Invalidated);
         Assert.False(await _seedDb.AuditEvents.IgnoreQueryFilters().AnyAsync(
             item => item.TargetType == "User" && item.TargetId == target.Id.ToString()
@@ -490,6 +491,10 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
         await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // HandlerSqlite.Open keeps the seed context explicitly unscoped for fixture setup.
+        // End that bypass before asserting the lifecycle-aware tenant query filters.
+        _unscoped.Dispose();
 
         var tenant = new TenantContext();
         tenant.Assign(project.Id, org.Id, unscoped: false);

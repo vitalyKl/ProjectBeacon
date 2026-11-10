@@ -21,14 +21,14 @@ public sealed class AuthorizationService : IAuthorizationService
         if (actor.IsWorker)
             return Result.Forbidden();
 
-        // System administrators are the explicit platform-wide bypass. API tokens and devices
-        // remain subject to their own actor boundary and the organization's lifecycle gate.
-        if (actor.IsHuman && actor.IsAdmin)
-            return Result.Ok();
-
+        // Tenant lifecycle restrictions apply to every actor, including system administrators.
+        // The administrator bypass below skips membership checks, not inactive-tenant policy.
         var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, orgId, ct);
         if (!lifecycle.Success)
             return lifecycle;
+
+        if (actor.IsHuman && actor.IsAdmin)
+            return Result.Ok();
 
         if (actor.IsDevice)
             return resource is ResourceType.Device or ResourceType.WorkstationCommand
