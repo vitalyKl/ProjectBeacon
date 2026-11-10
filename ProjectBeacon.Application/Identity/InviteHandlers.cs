@@ -104,7 +104,8 @@ public class CreateOrgInviteHandler
                 return Result.Failure<InviteCreatedDto>(
                     "Organization member capacity could not be verified.",
                     ErrorKind.Unavailable);
-            if (evaluation.Value is not { Allowed: true } decision)
+            var decision = evaluation.Value;
+            if (decision is null || !decision.Allowed)
             {
                 if (decision?.ReasonCode == "limit_exceeded")
                     return Result.Failure<InviteCreatedDto>(
@@ -348,17 +349,23 @@ public class AcceptInviteHandler
                         ct);
                 if (evaluation is { Success: false })
                     return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
-                if (evaluation?.Value is { Allowed: false } denied)
+                if (evaluation is not null)
                 {
-                    if (denied.ReasonCode == "limit_exceeded")
+                    var decision = evaluation.Value;
+                    if (decision is null)
+                        return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
+                    if (!decision.Allowed)
+                    {
+                        if (decision.ReasonCode == "limit_exceeded")
+                            return Result.Failure(
+                                "The organization member limit has been reached.",
+                                "entitlement_limit_exceeded",
+                                ErrorKind.Conflict);
                         return Result.Failure(
-                            "The organization member limit has been reached.",
-                            "entitlement_limit_exceeded",
-                            ErrorKind.Conflict);
-                    return Result.Failure(
-                        "The organization is not entitled to add members.",
-                        "entitlement_feature_required",
-                        ErrorKind.Forbidden);
+                            "The organization is not entitled to add members.",
+                            "entitlement_feature_required",
+                            ErrorKind.Forbidden);
+                    }
                 }
 
                 writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
@@ -437,17 +444,23 @@ public class AcceptInviteHandler
                     ct);
             if (evaluation is { Success: false })
                 return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
-            if (evaluation?.Value is { Allowed: false } denied)
+            if (evaluation is not null)
             {
-                if (denied.ReasonCode == "limit_exceeded")
+                var decision = evaluation.Value;
+                if (decision is null)
+                    return Result.Failure("Organization member capacity could not be verified.", ErrorKind.Unavailable);
+                if (!decision.Allowed)
+                {
+                    if (decision.ReasonCode == "limit_exceeded")
+                        return Result.Failure(
+                            "The organization member limit has been reached.",
+                            "entitlement_limit_exceeded",
+                            ErrorKind.Conflict);
                     return Result.Failure(
-                        "The organization member limit has been reached.",
-                        "entitlement_limit_exceeded",
-                        ErrorKind.Conflict);
-                return Result.Failure(
-                    "The organization is not entitled to add members.",
-                    "entitlement_feature_required",
-                    ErrorKind.Forbidden);
+                        "The organization is not entitled to add members.",
+                        "entitlement_feature_required",
+                        ErrorKind.Forbidden);
+                }
             }
 
             // A project invitation may supersede a separate pending org invitation for the
