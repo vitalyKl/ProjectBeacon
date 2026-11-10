@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -1368,6 +1369,43 @@ public sealed class McpStdioServerTests
 
             var overflow = frames[3].ToJsonString();
             Assert.Contains("\"isError\":true", overflow, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task HashFileAndHashText_AreListedAndReturnExactUtf8Sha256()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-hash-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "docs"));
+        const string text = "# Proposed document\nExact UTF-8 bytes.\n";
+        var bytes = Encoding.UTF8.GetBytes(text);
+        File.WriteAllBytes(Path.Combine(root, "docs", "guide.md"), bytes);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hash_file","arguments":{"path":"docs/guide.md"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hash_text","arguments":{"content":"# Proposed document\\nExact UTF-8 bytes.\\n"}}}""");
+            input.Position = 0;
+
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(3, frames.Count);
+            var advertised = frames[0]!.ToJsonString();
+            Assert.Contains("hash_file", advertised, StringComparison.Ordinal);
+            Assert.Contains("hash_text", advertised, StringComparison.Ordinal);
+
+            var expected = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var fileHash = frames[1]!["result"]!["content"]![0]!["text"]!.GetValue<string>();
+            var textHash = frames[2]!["result"]!["content"]![0]!["text"]!.GetValue<string>();
+            Assert.Equal(expected, fileHash);
+            Assert.Equal(expected, textHash);
         }
         finally
         {
