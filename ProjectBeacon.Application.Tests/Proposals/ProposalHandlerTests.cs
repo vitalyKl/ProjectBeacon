@@ -176,9 +176,9 @@ public sealed class ProposalHandlerTests : IDisposable
     private ActorContext HumanActor() =>
         new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
-    private static CreateProposalRequest Request() => new(
+    private CreateProposalRequest Request() => new(
         ContentTargetKind.ProjectDescription,
-        Guid.Empty,
+        _projectId,
         ProposalOperation.Update,
         1,
         """{"description":"Updated project description"}""",
