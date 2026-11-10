@@ -129,7 +129,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity store and assignable operator-role administration; the alpha still maps `User.IsAdmin` to SystemAdministrator. Lost-authenticator recovery and organization suspension/closure are not exposed.
+- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. Lost-authenticator recovery and organization suspension/closure are not exposed.
 - Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. More granular product-feature gates and usage-counter enforcement are still future work; generic numeric limits are not yet enforced.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
