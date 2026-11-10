@@ -137,7 +137,9 @@ public sealed class RepoPatchApplyServiceTests
         {
             projectId = repo.ProjectId,
             proposalId = repo.ProposalId,
-            patch = firstPatch + secondPatch,
+            // Simulate a workstation/editor that supplied Windows line endings in the
+            // unified diff. Partial retry must still filter sections by exact Git path.
+            patch = (firstPatch + secondPatch).Replace("\n", "\r\n", StringComparison.Ordinal),
             files = new[]
             {
                 new
