@@ -103,12 +103,13 @@ public class BeaconDbContext : DbContext, IBeaconDb
 
         // A tenant-bound Web circuit must not continue reading an organization after it is
         // suspended or closed. Explicit operator/unscoped flows continue to see all records.
+        // Show active organizations so a customer can switch away from a suspended tenant.
+        // The inactive current tenant itself stays hidden, while operator/unscoped paths
+        // can inspect every lifecycle state.
         modelBuilder.Entity<Org>().HasQueryFilter(e =>
             FilterUnscoped
             || !(_tenant != null && _tenant.LifecycleEnforced)
-            || (FilterOrgId != null
-                && e.Id == FilterOrgId
-                && FilterOrganizationLifecycleAllowsAccess));
+            || e.LifecycleStatus == OrganizationLifecycleStatus.Active);
         modelBuilder.Entity<Project>().HasQueryFilter(e =>
             FilterUnscoped
             || !(_tenant != null && _tenant.LifecycleEnforced)

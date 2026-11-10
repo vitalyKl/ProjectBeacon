@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Security;
 
@@ -65,7 +66,21 @@ public static class CircuitTenantRevalidation
                     return currentProjectId is null;
 
                 if (!tenant.Unscoped)
+                {
                     tenant.Assign(projectId, orgId, unscoped: false);
+                    OrganizationLifecycleStatus? lifecycleStatus = null;
+                    if (orgId is { } resolvedOrgId && resolvedOrgId != Guid.Empty)
+                    {
+                        lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+                            .AsNoTracking()
+                            .Where(org => org.Id == resolvedOrgId)
+                            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                            .FirstOrDefaultAsync(ct);
+                    }
+                    tenant.SetLifecycleStatus(
+                        lifecycleStatus,
+                        enforced: orgId is { } tenantOrgId && tenantOrgId != Guid.Empty);
+                }
             }
         }
         catch (Exception ex)

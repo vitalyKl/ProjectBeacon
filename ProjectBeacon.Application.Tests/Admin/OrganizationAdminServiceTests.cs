@@ -462,6 +462,40 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.Single(await operatorDb.OrgMembers.ToListAsync(TestContext.Current.CancellationToken));
     }
 
+
+    [Fact]
+    public async Task SuspendedTenantCanSeeAlternativeActiveOrganizationForSwitching()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var owner = User.Create("tenant-owner", "tenant-owner@example.test", "hash");
+        var suspendedOrg = Org.Create("Suspended tenant");
+        var activeOrg = Org.Create("Alternative active tenant");
+        var project = Project.Create("Suspended project", null, suspendedOrg.Id);
+        var activeProject = Project.Create("Active project", null, activeOrg.Id);
+        _seedDb.Users.AddRange(_admin, owner);
+        _seedDb.Orgs.AddRange(suspendedOrg, activeOrg);
+        _seedDb.Projects.AddRange(project, activeProject);
+        _seedDb.OrgMembers.AddRange(
+            OrgMember.Create(suspendedOrg.Id, owner.Id, MemberRole.Owner),
+            OrgMember.Create(activeOrg.Id, owner.Id, MemberRole.Member));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        suspendedOrg.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        tenant.Assign(project.Id, suspendedOrg.Id, unscoped: false);
+        tenant.SetLifecycleStatus(OrganizationLifecycleStatus.Suspended, enforced: true);
+        await using var tenantDb = _factory.CreateDbContext(tenant);
+
+        var availableOrganizations = await tenantDb.Orgs
+            .OrderBy(org => org.Name)
+            .Select(org => org.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { activeOrg.Id }, availableOrganizations);
+        Assert.Empty(await tenantDb.Projects.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task OrganizationDetails_ExposeProjectAndSafeMemberDeviceInventory_RespectingUsersRead()
     {

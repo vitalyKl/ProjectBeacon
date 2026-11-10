@@ -9,6 +9,7 @@ using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Audit;
+using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
@@ -35,7 +36,7 @@ public static class EndpointExtensions
         app.MapGet("/culture", SetCulture).AllowAnonymous();
         app.MapBeaconApi();
 
-        app.MapPost("/v1/auth/cookie-login", async (HttpContext ctx, LoginHandler handler, BeaconDbContext db) =>
+        app.MapPost("/v1/auth/cookie-login", async (HttpContext ctx, LoginHandler handler, IBeaconDbFactory dbFactory) =>
         {
             var form = await ctx.Request.ReadFormAsync();
             var login = form["login"].ToString();
@@ -49,8 +50,11 @@ public static class EndpointExtensions
             if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//") || returnUrl.Contains('\\'))
                 returnUrl = "/dashboard";
 
+            var lookupTenant = new TenantContext();
+            lookupTenant.Assign(null, null, unscoped: true);
+            await using var lookupDb = dbFactory.CreateDbContext(lookupTenant);
             var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
-                db, result.Value!.UserId, result.Value!.IsAdmin);
+                lookupDb, result.Value!.UserId, result.Value!.IsAdmin);
 
             var claims = new List<Claim>
             {
@@ -227,7 +231,7 @@ public static class EndpointExtensions
             return Results.Redirect("/control/login");
         }).RequireAuthorization().DisableAntiforgery();
 
-        app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
+        app.MapGet("/project/switch", async (HttpContext ctx, IBeaconDbFactory dbFactory) =>
         {
             var actor = ActorContextFactory.FromPrincipal(ctx.User);
             if (ctx.User.Identity?.IsAuthenticated != true
@@ -236,9 +240,20 @@ public static class EndpointExtensions
                 return Results.Redirect("/dashboard");
 
             var isAdmin = actor.IsAdmin;
-            var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, uid, isAdmin, target);
-            if (projectId != target)
+            var lookupTenant = new TenantContext();
+            lookupTenant.Assign(null, null, unscoped: true);
+            await using var lookupDb = dbFactory.CreateDbContext(lookupTenant);
+            var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
+                lookupDb, uid, isAdmin, target);
+            if (projectId != target || orgId is not { } targetOrgId)
                 return Results.Redirect("/dashboard");
+
+            var targetStatus = await lookupDb.Orgs.IgnoreQueryFilters()
+                .Where(org => org.Id == targetOrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ctx.RequestAborted);
+            if (targetStatus != OrganizationLifecycleStatus.Active)
+                return Results.Redirect("/dashboard?organizationInactive=1");
 
             var identity = new ClaimsIdentity(
                 ctx.User.Claims.Where(c => c.Type != "project_id" && c.Type != "org_id"),
