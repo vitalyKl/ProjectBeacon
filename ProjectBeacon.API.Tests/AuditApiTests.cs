@@ -95,7 +95,20 @@ public sealed class AuditApiTests
                     "22222222-2222-2222-2222-222222222222",
                     null,
                     null,
-                    AuditOutcome.Success));
+                    AuditOutcome.Success),
+                AuditEvent.Create(
+                    DateTime.UtcNow,
+                    AuditActorKind.System,
+                    null,
+                    null,
+                    null,
+                    "audit.filter.trace",
+                    "Trace",
+                    "trace-control-plane-9876",
+                    null,
+                    null,
+                    AuditOutcome.Success,
+                    traceId: "trace-control-plane-9876"));
             await exportDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -120,6 +133,15 @@ public sealed class AuditApiTests
             "/v1/admin/audit?actorDeviceId=22222222-2222-2222-2222-222222222222",
             TestContext.Current.CancellationToken);
         Assert.Equal(1, deviceFilter.GetProperty("items").GetArrayLength());
+        var traceFilter = await client.GetFromJsonAsync<JsonElement>(
+            "/v1/admin/audit?traceId=trace-control-plane-9876",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, traceFilter.GetProperty("items").GetArrayLength());
+        var traceExport = await client.GetStringAsync(
+            "/v1/admin/audit/export.csv?traceId=trace-control-plane-9876",
+            TestContext.Current.CancellationToken);
+        Assert.Contains("audit.filter.trace", traceExport);
+        Assert.DoesNotContain("audit.filter.device", traceExport);
 
         var member = User.Create(
             "audit-member",
