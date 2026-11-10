@@ -14,6 +14,8 @@
 @inject GetTotpStatusHandler TotpStatus
 @inject BeginTotpHandler BeginTotp
 @inject ConfirmTotpHandler ConfirmTotp
+@inject RotateOperatorTotpRecoveryCodesHandler RotateRecoveryCodes
+@inject RecoverOperatorTotpHandler RecoverTotp
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -32,11 +34,46 @@
     }
     else if (_enabled)
     {
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             <MudChip T="string" Color="Color.Success" Size="Size.Small">Authenticator enabled</MudChip>
             <MudText Typo="Typo.body2" Class="mt-3">
                 The authenticator is active. Enter its current six-digit code in the Control Plane top bar to unlock sensitive operations for ten minutes.
             </MudText>
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle1">Recovery codes</MudText>
+            @if (_recoveryCodes.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">
+                    These codes are shown only once. Save them in a secure place. Each code can be used once and all remaining codes are revoked after recovery.
+                </MudAlert>
+                <MudTextField T="string" Value="@string.Join(Environment.NewLine, _recoveryCodes)"
+                              ReadOnly="true" Lines="10" Variant="Variant.Outlined"
+                              Class="font-monospace" />
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @_recoveryCodeCount recovery codes remain. Generate a new set to replace all existing codes.
+                </MudText>
+            }
+            <MudTextField T="string" @bind-Value="_rotateCode" Label="Current six-digit authenticator code"
+                          InputMode="InputMode.numeric" MaxLength="6" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mt-2" />
+            <MudButton Variant="Variant.Outlined" OnClick="RotateRecoveryCodes" Disabled="_busy">
+                Replace recovery codes
+            </MudButton>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <MudText Typo="Typo.subtitle1">Lost access to the authenticator?</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary my-2">
+                Use one saved recovery code to disable this authenticator. All other recovery codes and every active session will be revoked. Sign in again and set up a new authenticator.
+            </MudText>
+            <MudTextField T="string" @bind-Value="_recoveryCode" Label="One-time recovery code"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Color="Color.Warning" Variant="Variant.Outlined" OnClick="RecoverAuthenticator" Disabled="_busy">
+                Use recovery code and sign out
+            </MudButton>
         </MudPaper>
     }
     else if (_pending)
@@ -89,6 +126,11 @@
     private string _otpUri = string.Empty;
     private string _secret = string.Empty;
     private string _code = string.Empty;
+    private string _rotateCode = string.Empty;
+    private string _recoveryCode = string.Empty;
+    private int _recoveryCodeCount;
+    private List<string> _recoveryCodes = [];
+    private AdminActor? _operatorActor;
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,6 +159,7 @@
         }
 
         _authorized = true;
+        _operatorActor = access.Value;
         _userId = userId;
         await Reload();
     }
@@ -134,6 +177,7 @@
 
             _enabled = result.Value.Enabled;
             _pending = result.Value.Pending;
+            _recoveryCodeCount = result.Value.RecoveryCodeCount;
             _otpUri = result.Value.OtpAuthUri ?? string.Empty;
             _secret = result.Value.Secret ?? string.Empty;
             if (_enabled)
@@ -195,12 +239,78 @@
         try
         {
             var result = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(userId, _code)));
-            if (!result.Success)
+            if (!result.Success || result.Value is null)
                 throw new InvalidOperationException(result.Error ?? "Authenticator code was not accepted.");
 
             _code = string.Empty;
-            Snackbar.Add("Operator authenticator enabled.", Severity.Success);
+            _recoveryCodes = result.Value.RecoveryCodes.ToList();
+            Snackbar.Add("Authenticator enabled. Save the recovery codes now; they will not be shown again.", Severity.Success);
             await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RotateRecoveryCodes()
+    {
+        if (_operatorActor is null || !await RecheckOperatorAsync() || _operatorActor is null)
+            return;
+        if (_rotateCode.Length != 6 || _rotateCode.Any(character => !char.IsAsciiDigit(character)))
+        {
+            Snackbar.Add("Enter the current six-digit authenticator code.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await RotateRecoveryCodes.HandleAsync(
+                new RotateOperatorTotpRecoveryCodesCommand(_operatorActor, _rotateCode));
+            if (!result.Success || result.Value is null)
+                throw new InvalidOperationException(result.Error ?? "Could not replace recovery codes.");
+
+            _rotateCode = string.Empty;
+            _recoveryCodes = result.Value.RecoveryCodes.ToList();
+            _recoveryCodeCount = _recoveryCodes.Count;
+            Snackbar.Add("Recovery codes replaced. Save this new set now.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RecoverAuthenticator()
+    {
+        if (_operatorActor is null || !await RecheckOperatorAsync() || _operatorActor is null)
+            return;
+        if (string.IsNullOrWhiteSpace(_recoveryCode))
+        {
+            Snackbar.Add("Enter one of your saved recovery codes.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await RecoverTotp.HandleAsync(
+                new RecoverOperatorTotpCommand(_operatorActor, _recoveryCode));
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error ?? "Recovery code was not accepted.");
+
+            _recoveryCode = string.Empty;
+            Snackbar.Add("Authenticator disabled and sessions revoked. Sign in again to enroll a new authenticator.", Severity.Success);
+            Navigation.NavigateTo("/control/login", forceLoad: true);
         }
         catch (Exception ex)
         {
@@ -226,8 +336,11 @@
         var result = await AdminGate.RequireAsync(actor, OperatorPermission.OrganizationsRead);
         if (principal.Identity?.IsAuthenticated == true
             && string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal)
-            && result.Success && actor.UserId == _userId)
+            && result.Success && result.Value is not null && actor.UserId == _userId)
+        {
+            _operatorActor = result.Value;
             return true;
+        }
 
         _authorized = false;
         Snackbar.Add("Operator access is no longer available. Sign in again.", Severity.Error);
