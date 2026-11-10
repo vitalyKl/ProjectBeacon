@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Domain.Common;
 using Domain.Entities.Audit;
-using Domain.Entities.Email;
+using Domain.Entities.Billing;
 using Domain.Entities.Email;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -61,7 +61,9 @@ public sealed class TenantFilterTests : IDisposable
                 || typeof(IOrgScoped).IsAssignableFrom(clr);
             var isSpecialTenantFiltered = clr == typeof(AuditEvent)
                 || clr == typeof(ProjectBeacon.Domain.Entities.Identity.Org);
-            var isGlobalOperatorOnly = clr == typeof(PlatformEmailSettings) || clr == typeof(EmailDeliveryLog);
+            var isGlobalOperatorOnly = clr == typeof(PlatformEmailSettings)
+                || clr == typeof(EmailDeliveryLog)
+                || clr == typeof(BillingPlan);
             var hasFilter = entityType.GetQueryFilter() is not null;
             var expectsFilter = isScoped || isSpecialTenantFiltered || isGlobalOperatorOnly;
             Assert.True(expectsFilter == hasFilter,
@@ -70,7 +72,7 @@ public sealed class TenantFilterTests : IDisposable
                 scoped.Add(clr.Name);
         }
 
-        // Frozen baseline: 26 project-scoped + 3 org-scoped + Org lifecycle + AuditEvent + 2 operator-only globals.
-        Assert.Equal(33, scoped.Count);
+        // Frozen baseline: 26 project-scoped + 3 org-scoped + Org lifecycle + AuditEvent + 3 operator-only globals.
+        Assert.Equal(34, scoped.Count);
     }
 }
