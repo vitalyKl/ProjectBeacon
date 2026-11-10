@@ -37,15 +37,41 @@ internal static class RepoPatchProposalWorkflow
             || proposal.AuthorTokenId is not { } authorTokenId
             || proposal.SubtaskId is not { } subtaskId
             || proposal.TaskId is not { } taskId
-            || proposal.SessionId is null)
+            || proposal.SessionId is not { } sessionId
+            || !string.Equals(proposal.AuthorRole, PipelineRole.Actor.ToString(), StringComparison.Ordinal)
+            || !string.Equals(proposal.AuthorProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
             return Result.Forbidden<WorkstationCommand>("RepoPatch must be authored by a task-bound docs-writer Actor.");
 
         var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
             item.Id == subtaskId
             && item.TaskId == taskId
             && item.ProjectId == proposal.ProjectId, ct);
-        if (subtask is null || !string.Equals(subtask.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
-            return Result.Forbidden<WorkstationCommand>("Only the built-in docs-writer profile can apply RepoPatch.");
+        if (subtask is null
+            || !string.Equals(subtask.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase)
+            || !subtask.AllowedMcpTools.Contains(McpToolNames.KnowledgePropose, StringComparer.Ordinal))
+            return Result.Forbidden<WorkstationCommand>("Only an authorized docs-writer subtask can apply RepoPatch.");
+
+        var actorSession = await db.PipelineSessions.FirstOrDefaultAsync(session =>
+            session.Id == sessionId
+            && session.ProjectId == proposal.ProjectId
+            && session.TaskId == taskId
+            && session.SubtaskId == subtaskId
+            && session.Role == PipelineRole.Actor, ct);
+        if (actorSession is null)
+            return Result.Failure<WorkstationCommand>("The original Actor session no longer exists.", ErrorKind.Conflict);
+        if (requireProfileAuto)
+        {
+            if (subtask.Status is not (SubtaskStatus.InProgress or SubtaskStatus.Done)
+                || actorSession.Status is not (SessionStatus.Active or SessionStatus.Closed))
+                return Result.Failure<WorkstationCommand>(
+                    "The Auto RepoPatch session is no longer in an applicable state.", ErrorKind.Conflict);
+        }
+        else if (subtask.Status is not (SubtaskStatus.Done or SubtaskStatus.Failed)
+            || actorSession.Status != SessionStatus.Closed)
+        {
+            return Result.Failure<WorkstationCommand>(
+                "The docs-writer Actor must finish before a human-approved patch can be applied.", ErrorKind.Conflict);
+        }
 
         var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
         if (profile is null
