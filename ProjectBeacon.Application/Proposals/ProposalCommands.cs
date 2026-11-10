@@ -469,19 +469,22 @@ public sealed class AcceptProposalHandler
     private readonly IAuditWriter _auditWriter;
     private readonly ContentWriter _contentWriter;
     private readonly TimeProvider _timeProvider;
+    private readonly PipelineActorQueueDispatcher? _plannerDispatcher;
 
     public AcceptProposalHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService authorization,
         IAuditWriter auditWriter,
         ContentWriter contentWriter,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        PipelineActorQueueDispatcher? plannerDispatcher = null)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
         _auditWriter = auditWriter;
         _contentWriter = contentWriter;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _plannerDispatcher = plannerDispatcher;
     }
 
     public async Task<Result<ProposalDto>> HandleAsync(AcceptProposalCommand command, CancellationToken ct = default)
@@ -491,10 +494,16 @@ public sealed class AcceptProposalHandler
 
         await using var db = _dbFactory.CreateDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
+        var decisionTaskId = (Guid?)null;
+        var decisionCommitted = false;
         try
         {
-            return await strategy.ExecuteAsync(async () =>
+            var result = await strategy.ExecuteAsync(async () =>
             {
+                // Reset captured state on every execution-strategy retry. Only a newly
+                // committed transition may trigger a Planner wake-up.
+                decisionTaskId = null;
+                decisionCommitted = false;
                 db.ChangeTracker.Clear();
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
                 var proposal = await db.Proposals.FirstOrDefaultAsync(
@@ -587,8 +596,14 @@ public sealed class AcceptProposalHandler
                 StageAudit(db, command.Actor, proposal, orgId.Value, "proposal.accepted", ProposalStatus.Accepted);
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
+                decisionTaskId = proposal.TaskId;
+                decisionCommitted = true;
                 return Result.Ok(ProposalMapper.Map(proposal));
             });
+
+            if (decisionCommitted && decisionTaskId is { } taskId && _plannerDispatcher is not null)
+                await _plannerDispatcher.DispatchNextAsync(taskId, ct);
+            return result;
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -645,17 +660,20 @@ public sealed class RejectProposalHandler
     private readonly IAuthorizationService _authorization;
     private readonly IAuditWriter _auditWriter;
     private readonly TimeProvider _timeProvider;
+    private readonly PipelineActorQueueDispatcher? _plannerDispatcher;
 
     public RejectProposalHandler(
         IBeaconDbFactory dbFactory,
         IAuthorizationService authorization,
         IAuditWriter auditWriter,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        PipelineActorQueueDispatcher? plannerDispatcher = null)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
         _auditWriter = auditWriter;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _plannerDispatcher = plannerDispatcher;
     }
 
     public async Task<Result<ProposalDto>> HandleAsync(RejectProposalCommand command, CancellationToken ct = default)
@@ -710,6 +728,8 @@ public sealed class RejectProposalHandler
         try
         {
             await db.SaveChangesAsync(ct);
+            if (proposal.TaskId is { } taskId && _plannerDispatcher is not null)
+                await _plannerDispatcher.DispatchNextAsync(taskId, ct);
             return Result.Ok(ProposalMapper.Map(proposal));
         }
         catch (DbUpdateConcurrencyException)
