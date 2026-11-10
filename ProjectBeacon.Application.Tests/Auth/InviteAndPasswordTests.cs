@@ -213,7 +213,7 @@ public sealed class InviteAndPasswordTests : IDisposable
             item => item.OrgId == org.Id && item.UserId == owner.Id,
             TestContext.Current.CancellationToken));
         Assert.Equal(InviteStatus.Pending, (await _db.OrgInvites.IgnoreQueryFilters()
-            .SingleAsync(item => item.Id == created.Value.InviteId, TestContext.Current.CancellationToken)).Status);
+            .SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
     }
 
     [Fact]
