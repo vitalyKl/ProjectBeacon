@@ -629,6 +629,8 @@ public sealed class EfOrganizationDataExportService(
         secrets and recovery-code hashes, API-token hashes or raw credentials, device tokens
         and fingerprints, encrypted provider/MCP credentials, local workspace roots and
         external daemon session identifiers, and platform audit/security internals.
+        Customer-authored text, chat messages and attachments are included as stored and may
+        themselves contain sensitive values that users previously placed in that content.
 
         This is an application data export, not a deletion or retention request.
         """;
