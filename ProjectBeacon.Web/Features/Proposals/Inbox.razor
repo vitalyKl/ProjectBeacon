@@ -31,7 +31,7 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["ProposalInbox"]</PageTitle>
-<PageHeader Title="@L["ProposalInbox"]">
+<PageHeader Title="@L["ProposalInbox"]" ShowTitle="true">
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Reload" Disabled="_busy">
         @L["Refresh"]
     </MudButton>
@@ -125,7 +125,7 @@ else
                             <MudText Typo="Typo.caption">@L["TaskId"]: <a href="@($"/task/{taskId:D}")">@taskId</a></MudText>
                         }
                         <MudText Typo="Typo.caption">
-                            @L["ProposalAuthor"]: @proposal.AuthorKind · @proposal.AuthorRole · @proposal.AuthorProfileKey · @(proposal.AuthorUserId?.ToString("D") ?? proposal.AuthorTokenId?.ToString("D") ?? "—")
+                            @L["ProposalAuthor"]: @proposal.AuthorKind · @(proposal.AuthorRole ?? "—") · @(proposal.AuthorProfileKey ?? "—") · @(proposal.AuthorUserId?.ToString("D") ?? proposal.AuthorTokenId?.ToString("D") ?? "—")
                         </MudText>
                         @if (proposal.SubtaskId is Guid subtaskId)
                         {
