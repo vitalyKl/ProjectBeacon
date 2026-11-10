@@ -2754,4 +2754,10 @@
   <data name="ProposalPolicySaved" xml:space="preserve">
     <value>Политика предложений сохранена.</value>
   </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>Построчное сравнение содержимого</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>Текстовых изменений нет.</value>
+  </data>
 </root>
