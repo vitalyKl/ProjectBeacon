@@ -11,6 +11,7 @@ using Application.Runtime;
 using Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.LlamaSwap;
@@ -29,6 +30,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddMemoryCache();
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null))
