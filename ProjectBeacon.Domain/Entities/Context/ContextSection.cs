@@ -88,6 +88,20 @@ public class ContextSection : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Marks a NeedsReview section as approved by a human reviewer.</summary>
+    public void MarkReviewed(string reviewerUserId)
+    {
+        if (ReviewState != ContextReviewState.NeedsReview)
+            throw new InvalidOperationException("Only a context draft awaiting review can be approved.");
+        if (string.IsNullOrWhiteSpace(reviewerUserId))
+            throw new ArgumentException("A reviewer identity is required.", nameof(reviewerUserId));
+
+        ReviewState = ContextReviewState.Reviewed;
+        UpdatedByType = "user";
+        UpdatedById = reviewerUserId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Delete() => Revision++;
 
     /// <summary>Updates only a NeedsReview draft; agent-authored content remains unreviewed.</summary>
