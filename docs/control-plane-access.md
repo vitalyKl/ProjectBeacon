@@ -76,6 +76,8 @@ privileged operation. The Control Plane ticket marks an authenticated operator, 
 semantics. Role changes increment `SessionVersion`, so older sessions cannot retain their previous
 permissions. Role changes require a fresh TOTP step-up and are audited.
 
+Customer owners can be invited into an organization before any project exists. In that state, tenant resolution binds the user to an organization-only scope (`OrgId` set, `ProjectId` null) after verifying the persisted `OrgMember` record. This permits organization-level onboarding and billing without granting project access. HTTP tenant isolation and long-lived circuit revalidation apply the same membership check; explicit organization headers cannot select an organization the user does not belong to. Suspended/closed lifecycle status is preserved and continues to block tenant data access.
+
 ## Bootstrap and recovery
 
 The initial administrator bootstrap and break-glass password recovery are Control Plane functions:
