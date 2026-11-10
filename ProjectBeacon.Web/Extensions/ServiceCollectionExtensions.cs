@@ -19,6 +19,7 @@ using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Application.Operations;
 using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
@@ -221,6 +222,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CircuitHandler, CircuitTenantRebindHandler>();
         services.AddLocalization();
         services.AddInfrastructure(connectionString);
+        if (!string.Equals(environmentName, "Testing", StringComparison.OrdinalIgnoreCase))
+            services.AddPlatformHeartbeat(PlatformServiceKind.Web, environmentName);
         services.AddApplicationHandlers();
         // Postgres-backed hosts persist the Data Protection key ring in the database;
         // other hosts (in-memory test databases) keep the framework's default ring.
