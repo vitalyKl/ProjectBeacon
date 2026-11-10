@@ -104,6 +104,52 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         Assert.Equal(oldest.Id, scoped);
     }
 
+
+    [Fact]
+    public async Task DeviceToken_WithoutProjectHeader_PrefersActiveMembershipToOlderSuspendedTenant()
+    {
+        var suspendedOrg = Org.Create("Old suspended org");
+        suspendedOrg.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        var activeOrg = Org.Create("New active org");
+        _db.Orgs.AddRange(suspendedOrg, activeOrg);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var oldProject = Project.Create("Suspended A", null, suspendedOrg.Id);
+        var activeProject = Project.Create("Active B", null, activeOrg.Id);
+        _db.Projects.AddRange(oldProject, activeProject);
+        var user = User.Create("multi-org-device", "multi-org-device@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var oldMembership = ProjectMember.Create(oldProject.Id, user.Id, MemberRole.Owner);
+        SetJoinedAt(oldMembership, DateTime.UtcNow.AddDays(-10));
+        var activeMembership = ProjectMember.Create(activeProject.Id, user.Id, MemberRole.Member);
+        SetJoinedAt(activeMembership, DateTime.UtcNow.AddDays(-1));
+        _db.ProjectMembers.AddRange(oldMembership, activeMembership);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scoped = null;
+        OrganizationLifecycleStatus? lifecycle = null;
+        var tenant = new TenantContext();
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = tenant.ProjectId ?? TenantScope.CurrentProjectId;
+            lifecycle = tenant.LifecycleStatus;
+            return Task.CompletedTask;
+        });
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddScoped<ITenantContext>(_ => tenant);
+        var provider = services.BuildServiceProvider();
+        var http = new DefaultHttpContext
+        {
+            User = DevicePrincipal(Guid.NewGuid(), user.Id),
+            RequestServices = provider
+        };
+
+        await middleware.InvokeAsync(http, _db);
+        Assert.Equal(activeProject.Id, scoped);
+        Assert.Equal(OrganizationLifecycleStatus.Active, lifecycle);
+        provider.Dispose();
+    }
+
     [Fact]
     public async Task StaleCookieProjectId_ReplacedByMembership()
     {

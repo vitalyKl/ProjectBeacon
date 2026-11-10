@@ -187,8 +187,10 @@ public sealed class TenantIsolationMiddleware
     internal static Task<List<ProjectMember>> LoadMembershipsAsync(BeaconDbContext db, Guid userId)
         => db.ProjectMembers.IgnoreQueryFilters()
             .Include(m => m.Project)
+                .ThenInclude(project => project.Org)
             .Where(m => m.UserId == userId)
-            .OrderBy(m => m.JoinedAt)
+            .OrderBy(m => m.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active ? 0 : 1)
+            .ThenBy(m => m.JoinedAt)
             .ToListAsync();
 
     internal static bool IsMemberOf(IReadOnlyList<ProjectMember> members, Guid projectId)

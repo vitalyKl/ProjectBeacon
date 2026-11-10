@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Persistence;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 /// <summary>
@@ -24,8 +25,25 @@ public sealed class TenantContextBinder
         if (actor.UserId is null)
             return;
 
-        await using var db = _dbFactory.CreateDbContext();
-        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
+        var lookupTenant = new TenantContext();
+        lookupTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(lookupTenant);
+        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
+            db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
+
+        OrganizationLifecycleStatus? lifecycleStatus = null;
+        if (orgId is { } resolvedOrgId && resolvedOrgId != Guid.Empty)
+        {
+            lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(org => org.Id == resolvedOrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+        }
+
         _tenant.Assign(projectId, orgId, unscoped: false);
+        _tenant.SetLifecycleStatus(
+            lifecycleStatus,
+            enforced: orgId is { } tenantOrgId && tenantOrgId != Guid.Empty);
     }
 }
