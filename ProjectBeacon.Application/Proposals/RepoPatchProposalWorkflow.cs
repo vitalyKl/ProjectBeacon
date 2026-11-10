@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Proposals;
 
 using System.Text.Json;
 using Application.Audit;
+using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Application.Persistence;
