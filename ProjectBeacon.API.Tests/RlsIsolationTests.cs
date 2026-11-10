@@ -152,6 +152,79 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     }
 
     [Fact]
+    public async Task Rls_Proposals_AreProjectScoped_ViaRawSql()
+    {
+        _postgres.RequirePostgres();
+
+        var (projectA, _) = await SeedTestDataAsync("ProposalA");
+        var (projectB, _) = await SeedTestDataAsync("ProposalB");
+        var now = DateTime.UtcNow;
+        var proposalA = Proposal.Create(
+            projectA,
+            null,
+            null,
+            null,
+            ContentTargetKind.ProjectDescription,
+            projectA,
+            ProposalOperation.Update,
+            1,
+            new string('a', 64),
+            """{"description":"Proposal for project A"}""",
+            "Updates project A.",
+            ProposalAuthorKind.Human,
+            Guid.NewGuid(),
+            null,
+            null,
+            "Human",
+            "rls-proposal-a-" + Guid.NewGuid().ToString("N"),
+            now);
+        var proposalB = Proposal.Create(
+            projectB,
+            null,
+            null,
+            null,
+            ContentTargetKind.ProjectDescription,
+            projectB,
+            ProposalOperation.Update,
+            1,
+            new string('b', 64),
+            """{"description":"Proposal for project B"}""",
+            "Updates project B.",
+            ProposalAuthorKind.Human,
+            Guid.NewGuid(),
+            null,
+            null,
+            "Human",
+            "rls-proposal-b-" + Guid.NewGuid().ToString("N"),
+            now);
+
+        await using (var seed = NewAdminContext())
+        {
+            seed.Proposals.AddRange(proposalA, proposalB);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var conn = await OpenRlsConnectionAsync();
+        await using (var setCmd = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_project_id', @pid, false)," +
+            "       set_config('app.tenant_unscoped', 'false', false)", conn))
+        {
+            setCmd.Parameters.AddWithValue("@pid", projectA.ToString());
+            await setCmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        await using var listCmd = new NpgsqlCommand(
+            "SELECT \"Id\" FROM \"Proposals\"", conn);
+        using var reader = await listCmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var ids = new List<Guid>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+            ids.Add(reader.GetGuid(0));
+
+        Assert.Contains(proposalA.Id, ids);
+        Assert.DoesNotContain(proposalB.Id, ids);
+    }
+
+    [Fact]
     public async Task Rls_ContentVersions_AreProjectScoped_AndAppendOnly()
     {
         _postgres.RequirePostgres();
