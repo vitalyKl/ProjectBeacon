@@ -526,7 +526,7 @@ public sealed class EfOrganizationDataExportService(
                 await AddJsonEntryAsync(archive, "constraints.json", constraints, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "chat-sessions.json", chatSessions, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "chat-parts.json", chatParts, jsonBudget, ct);
-    
+
                 var attachmentManifest = new List<object>(attachmentRows.Count);
                 foreach (var attachment in attachmentRows)
                 {
@@ -560,17 +560,17 @@ public sealed class EfOrganizationDataExportService(
                         content = legacy.Value.Content;
                         detectedContentType = legacy.Value.Attachment.ContentType;
                     }
-    
+
                     if (content.LongLength != attachment.Length || content.LongLength > MaximumAttachmentLength)
                         return Result.Failure<OrganizationDataExport>(
                             "An attachment failed the archive integrity or size check; no partial archive was produced.",
                             ErrorKind.Unavailable);
-    
+
                     var archivePath = $"attachments/{attachment.Id:N}-{SafeFileName(attachment.FileName)}";
                     var entry = archive.CreateEntry(archivePath, CompressionLevel.Fastest);
                     await using (var entryStream = entry.Open())
                         await entryStream.WriteAsync(content.AsMemory(), ct);
-    
+
                     attachmentManifest.Add(new
                     {
                         attachment.Id,
@@ -585,9 +585,9 @@ public sealed class EfOrganizationDataExportService(
                         ArchivePath = archivePath
                     });
                 }
-    
+
                 await AddJsonEntryAsync(archive, "task-attachments.json", attachmentManifest, jsonBudget, ct);
-                }
+            }
         }
         catch (ExportPayloadTooLargeException)
         {
