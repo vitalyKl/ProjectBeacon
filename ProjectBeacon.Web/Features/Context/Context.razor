@@ -16,6 +16,8 @@
 @inject ListContextNodesHandler ListNodes
 @inject CompileBriefHandler CompileBrief
 @inject ListContextRevisionsHandler ListRevisions
+@inject ListContentVersionsHandler ContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject ExportAgentsMdHandler ExportAgents
 @inject CreateConstraintHandler CreateConstraint
 @inject ListConstraintsHandler ListConstraints
@@ -90,6 +92,31 @@ else
                 <MarkdownEditor @bind-Value="_body" Label="@L["Content"]" Lines="8" Class="mt-2" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="Save">@L["Save"]</MudButton>
             </MudPaper>
+            @if (_selectedNode is not null)
+            {
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
+                    <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_sectionHistory.Count})")">
+                        @if (_sectionHistory.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
+                        }
+                        @foreach (var version in _sectionHistory)
+                        {
+                            <MudPaper @key="version.Id" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">rev. @version.Revision</MudText>
+                                    <MudText Typo="Typo.caption"><LocalTime Value="version.At" Format="g" /></MudText>
+                                    <MudSpacer />
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy || version.Revision == _selectedNode.Revision"
+                                               OnClick="() => RestoreSectionVersion(version)">@L["RestoreRevision"]</MudButton>
+                                </MudStack>
+                                <MudText Typo="Typo.caption">@version.ChangedByType · @version.ChangedById</MudText>
+                                <MarkdownView Text="@ContextSnapshotMarkdown(version.ContentJson)" MaxHeight="120" />
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
         </div>
         <div>
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
@@ -164,6 +191,8 @@ else
     private string _sectionId = "goals";
     private string _body = string.Empty;
     private int? _sectionRevision;
+    private ContextSectionDto? _selectedNode;
+    private List<ContentVersionDto> _sectionHistory = [];
     private string? _preview;
     private int _tokens;
     private string? _revisionId;
@@ -202,10 +231,10 @@ else
         _revisions = revisions.Success ? revisions.Value!.ToList() : [];
     }
 
-    private void OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)
+    private async Task OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)
     {
         if (e.Key is "Enter" or " ")
-            LoadSection(node);
+            await LoadSection(node);
     }
 
     private static string ShortHash(string hash) => hash.Length > 12 ? hash[..12] : hash;
@@ -228,12 +257,74 @@ else
         await Reload();
     }
 
-    private void LoadSection(ContextSectionDto node)
+    private async Task LoadSection(ContextSectionDto node)
     {
+        _selectedNode = node;
         _title = node.Title;
         _sectionId = node.SectionId;
         _body = node.BodyMarkdown;
         _sectionRevision = node.Revision;
+        if (_project is null)
+        {
+            _sectionHistory = [];
+            return;
+        }
+
+        var history = await ContentVersions.HandleAsync(
+            _project.Id, ContentTargetKind.ContextSection, node.Id, 50);
+        _sectionHistory = history.Success ? history.Value!.ToList() : [];
+        if (!history.Success)
+            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreSectionVersion(ContentVersionDto version)
+    {
+        if (_project is null || _selectedNode is null || _sectionRevision is null)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _project.Id, version.Id, _sectionRevision.Value, _actor,
+                ContentTargetKind.ContextSection, _selectedNode.Id));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            var selected = _nodes.FirstOrDefault(node => node.Id == _selectedNode.Id);
+            if (selected is not null)
+                await LoadSection(selected);
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string ContextSnapshotMarkdown(string json)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var title = root.TryGetProperty("title", out var titleValue) && titleValue.ValueKind == System.Text.Json.JsonValueKind.String
+                ? titleValue.GetString()
+                : null;
+            var body = root.TryGetProperty("bodyMarkdown", out var bodyValue) && bodyValue.ValueKind == System.Text.Json.JsonValueKind.String
+                ? bodyValue.GetString()
+                : null;
+            return string.Join(Environment.NewLine + Environment.NewLine,
+                new[] { title, body }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private async Task Compile()
