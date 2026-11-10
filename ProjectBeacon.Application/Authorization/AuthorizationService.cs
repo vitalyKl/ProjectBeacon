@@ -21,6 +21,10 @@ public sealed class AuthorizationService : IAuthorizationService
         if (actor.IsWorker)
             return Result.Forbidden();
 
+        var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, orgId, ct);
+        if (!lifecycle.Success)
+            return lifecycle;
+
         if (actor.IsDevice)
             return resource is ResourceType.Device or ResourceType.WorkstationCommand
                 ? Result.Ok()
@@ -130,6 +134,39 @@ public sealed class AuthorizationService : IAuthorizationService
         if (!actor.IsApiToken)
             return true;
         return actor.Capabilities.HasFlag(required);
+    }
+
+
+    private static async Task<Result> EnsureOrganizationActiveAsync(
+        IBeaconDb db, Guid? projectId, Guid? orgId, CancellationToken ct)
+    {
+        var targetOrgId = orgId;
+        if (targetOrgId is null && projectId is { } requestedProject)
+        {
+            targetOrgId = await db.Projects.IgnoreQueryFilters()
+                .Where(project => project.Id == requestedProject)
+                .Select(project => (Guid?)project.OrgId)
+                .FirstOrDefaultAsync(ct);
+            if (targetOrgId is null)
+                return Result.Failure("Project not found.", ErrorKind.NotFound);
+        }
+
+        if (targetOrgId is not { } resolvedOrgId)
+            return Result.Ok();
+
+        var status = await db.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == resolvedOrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (status is null)
+            return Result.Failure("Organization not found.", ErrorKind.NotFound);
+        return status == OrganizationLifecycleStatus.Active
+            ? Result.Ok()
+            : Result.Failure(
+                status == OrganizationLifecycleStatus.Suspended
+                    ? "Organization access is suspended."
+                    : "Organization is closed.",
+                ErrorKind.Forbidden);
     }
 
     private async Task<Result> HumanCanAccessAsync(

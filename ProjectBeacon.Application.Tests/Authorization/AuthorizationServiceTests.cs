@@ -42,6 +42,35 @@ public sealed partial class AuthorizationServiceTests : IDisposable
     private static ActorContext Token(ApiTokenCapability caps = ApiTokenCapability.None, Guid? projectId = null) =>
         new(ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null, caps);
 
+    [Fact]
+    public async Task InactiveOrganizationBlocksProjectAndOrgAdminAccess_IncludingSystemAdmin()
+    {
+        var org = Org.Create("Suspended org");
+        var project = Domain.Entities.Projects.Project.Create("Suspended project", null, org.Id);
+        var owner = User.Create("owner", "owner@example.test", "hash");
+        var systemAdmin = User.Create("system-admin", "admin@example.test", "hash", isAdmin: true);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.Users.AddRange(owner, systemAdmin);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var ownerProject = await _auth.CanAsync(_db, Human(owner.Id),
+            ResourceType.Project, AuthAction.Administer, projectId: project.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(ownerProject.Success);
+        Assert.Equal(ErrorKind.Forbidden, ownerProject.Kind);
+
+        var adminOrg = await _auth.CanAsync(_db, Admin(systemAdmin.Id),
+            ResourceType.Org, AuthAction.Administer, orgId: org.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(adminOrg.Success);
+        Assert.Equal(ErrorKind.Forbidden, adminOrg.Kind);
+    }
+
 
 
 }
