@@ -503,6 +503,15 @@ public sealed class AcceptProposalHandler
                 if (!await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
                     return Result.Forbidden<ProposalDto>("Project membership is required to accept a proposal.");
 
+                if (proposal.TargetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
+                {
+                    var governance = await _authorization.CanAsync(
+                        db, command.Actor, ResourceType.Project, AuthAction.Administer,
+                        projectId: proposal.ProjectId, ct: ct);
+                    if (!governance.Success)
+                        return Result.Forbidden<ProposalDto>("Only a project or organization Owner/Admin can accept Decision or Constraint proposals.");
+                }
+
                 if (proposal.Status == ProposalStatus.Accepted)
                 {
                     await transaction.CommitAsync(ct);
@@ -515,15 +524,6 @@ public sealed class AcceptProposalHandler
                 var orgId = await GetOrgIdAsync(db, proposal.ProjectId, ct);
                 if (orgId is null)
                     return Result.Failure<ProposalDto>("Project not found.");
-
-                if (proposal.TargetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
-                {
-                    var governance = await _authorization.CanAsync(
-                        db, command.Actor, ResourceType.Project, AuthAction.Administer,
-                        projectId: proposal.ProjectId, ct: ct);
-                    if (!governance.Success)
-                        return Result.Forbidden<ProposalDto>("Only a project or organization Owner/Admin can accept Decision or Constraint proposals.");
-                }
 
                 if (proposal.Expire(now))
                 {
@@ -668,11 +668,6 @@ public sealed class RejectProposalHandler
             return Result.Failure<ProposalDto>("Proposal not found.");
         if (!await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
             return Result.Forbidden<ProposalDto>("Project membership is required to reject a proposal.");
-        if (proposal.Status == ProposalStatus.Rejected)
-            return Result.Ok(ProposalMapper.Map(proposal));
-        if (proposal.Status != ProposalStatus.Pending)
-            return Result.Failure<ProposalDto>($"Proposal cannot be rejected in status {proposal.Status}.");
-
         if (proposal.TargetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
         {
             var governance = await _authorization.CanAsync(
@@ -681,6 +676,11 @@ public sealed class RejectProposalHandler
             if (!governance.Success)
                 return Result.Forbidden<ProposalDto>("Only a project or organization Owner/Admin can reject Decision or Constraint proposals.");
         }
+
+        if (proposal.Status == ProposalStatus.Rejected)
+            return Result.Ok(ProposalMapper.Map(proposal));
+        if (proposal.Status != ProposalStatus.Pending)
+            return Result.Failure<ProposalDto>($"Proposal cannot be rejected in status {proposal.Status}.");
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (proposal.Expire(now))
