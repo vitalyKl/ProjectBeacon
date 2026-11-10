@@ -10,6 +10,7 @@ using Application.Devices;
 using Application.Evals;
 using Application.Identity;
 using Application.Projects;
+using Application.Proposals;
 using Application.Persistence;
 using Application.Tasks;
 using Application.Milestones;
