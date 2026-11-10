@@ -304,7 +304,7 @@ else
 
     private async Task RejectConstraint(ConstraintDto constraint)
     {
-        var result = await RejectConstraintHandler.HandleAsync(constraint.Id);
+        var result = await RejectConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
