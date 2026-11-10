@@ -95,9 +95,10 @@ public sealed class PostgresEntitlementService(
         Guid orgId, EntitlementRequirement requirement, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(requirement.FeatureKey)
+            || (requirement.LimitKey is not null && string.IsNullOrWhiteSpace(requirement.LimitKey))
             || requirement.RequestedUnits < 1
             || requirement.CurrentUsage < 0)
-            return Result.Failure<EntitlementDecision>("A feature key, non-negative current usage, and positive requested units are required.");
+            return Result.Failure<EntitlementDecision>("A feature key, valid optional limit key, non-negative current usage, and positive requested units are required.");
 
         if (orgId == Guid.Empty)
             return Result.Ok(new EntitlementDecision(false, "organization_not_found"));
