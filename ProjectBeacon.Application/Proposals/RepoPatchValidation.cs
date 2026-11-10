@@ -146,37 +146,90 @@ public static class RepoPatchValidation
 
     private static void ValidatePatchFileHeaders(string patch, IReadOnlyList<RepoPatchFile> files)
     {
-        var headers = new List<(string Git, string Project)>();
-        foreach (var line in patch.Split('\n'))
+        var sections = new List<(string GitPath, string? OldPath, string? NewPath)>();
+        string? currentGitPath = null;
+        string? oldPath = null;
+        string? newPath = null;
+
+        void CompleteSection()
         {
-            if (!line.StartsWith("diff --git a/", StringComparison.Ordinal))
-                continue;
-            var separator = line.IndexOf(" b/", "diff --git a/".Length, StringComparison.Ordinal);
-            if (separator < 0)
-                throw new ArgumentException("RepoPatch contains a malformed diff header.");
-            var gitPath = line["diff --git a/".Length..separator];
-            var rightPath = line[(separator + 3)..];
-            ValidateRelativePath(gitPath);
-            ValidateRelativePath(rightPath);
-            if (!string.Equals(gitPath, rightPath, StringComparison.Ordinal))
-                throw new ArgumentException("RepoPatch cannot rename files.");
-            headers.Add((gitPath, gitPath));
+            if (currentGitPath is null)
+                return;
+            if (oldPath is null && newPath is null)
+                throw new ArgumentException($"RepoPatch section for '{currentGitPath}' has no unified file headers.");
+            sections.Add((currentGitPath, oldPath, newPath));
+            currentGitPath = null;
+            oldPath = null;
+            newPath = null;
         }
 
-        if (headers.Count != files.Count)
+        foreach (var line in patch.Split('\n'))
+        {
+            if (line.StartsWith("diff --git a/", StringComparison.Ordinal))
+            {
+                CompleteSection();
+                var separator = line.IndexOf(" b/", "diff --git a/".Length, StringComparison.Ordinal);
+                if (separator < 0)
+                    throw new ArgumentException("RepoPatch contains a malformed diff header.");
+                var oldGitPath = line["diff --git a/".Length..separator];
+                var newGitPath = line[(separator + 3)..];
+                ValidateRelativePath(oldGitPath);
+                ValidateRelativePath(newGitPath);
+                if (!string.Equals(oldGitPath, newGitPath, StringComparison.Ordinal))
+                    throw new ArgumentException("RepoPatch cannot rename files.");
+                currentGitPath = oldGitPath;
+                continue;
+            }
+
+            if (line.StartsWith("--- ", StringComparison.Ordinal))
+            {
+                if (currentGitPath is null || oldPath is not null)
+                    throw new ArgumentException("RepoPatch contains an unexpected or duplicate old-file header.");
+                oldPath = ParseUnifiedPath(line[4..], "a/", currentGitPath);
+            }
+            else if (line.StartsWith("+++ ", StringComparison.Ordinal))
+            {
+                if (currentGitPath is null || newPath is not null)
+                    throw new ArgumentException("RepoPatch contains an unexpected or duplicate new-file header.");
+                newPath = ParseUnifiedPath(line[4..], "b/", currentGitPath);
+            }
+        }
+        CompleteSection();
+
+        if (sections.Count != files.Count)
             throw new ArgumentException("RepoPatch file manifest does not match the patch file sections.");
 
         foreach (var file in files)
         {
-            if (headers.Count(header => string.Equals(header.Git, file.GitPath, StringComparison.Ordinal)) != 1)
+            var matches = sections.Where(section =>
+                string.Equals(section.GitPath, file.GitPath, StringComparison.Ordinal)).ToArray();
+            if (matches.Length != 1)
                 throw new ArgumentException($"RepoPatch patch section for '{file.GitPath}' is missing or duplicated.");
-        }
 
-        var hasPathTraversal = patch.Split('\n').Any(line =>
-            (line.StartsWith("--- ", StringComparison.Ordinal) || line.StartsWith("+++ ", StringComparison.Ordinal))
-            && line.Contains("/../", StringComparison.Ordinal));
-        if (hasPathTraversal)
-            throw new ArgumentException("RepoPatch contains a parent path segment.");
+            var section = matches[0];
+            if (file.BaseHash is null ? section.OldPath is not null
+                : !string.Equals(section.OldPath, file.GitPath, StringComparison.Ordinal))
+                throw new ArgumentException($"RepoPatch old-file header does not match the manifest for '{file.GitPath}'.");
+            if (file.ResultHash is null ? section.NewPath is not null
+                : !string.Equals(section.NewPath, file.GitPath, StringComparison.Ordinal))
+                throw new ArgumentException($"RepoPatch new-file header does not match the manifest for '{file.GitPath}'.");
+        }
+    }
+
+    private static string? ParseUnifiedPath(string rawPath, string expectedPrefix, string expectedGitPath)
+    {
+        // Git appends tab-separated timestamps to unified headers. Paths containing
+        // tabs or quoted Git path syntax are intentionally unsupported and fail closed.
+        var path = rawPath.Split('\t', 2)[0];
+        if (string.Equals(path, "/dev/null", StringComparison.Ordinal))
+            return null;
+        if (!path.StartsWith(expectedPrefix, StringComparison.Ordinal))
+            throw new ArgumentException("RepoPatch unified file header has an unsupported path prefix.");
+        var relative = path[expectedPrefix.Length..];
+        ValidateRelativePath(relative);
+        if (!string.Equals(relative, expectedGitPath, StringComparison.Ordinal))
+            throw new ArgumentException("RepoPatch unified file header does not match its diff section path.");
+        return relative;
     }
 
     private static bool GitPathEndsWithProjectPath(string gitPath, string projectPath) =>
