@@ -152,6 +152,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<WithdrawProposalHandler>();
         services.AddTransient<ListProposalsHandler>();
         services.AddTransient<ListOwnProposalsHandler>();
+        services.AddTransient<GetProposalInboxSummaryHandler>();
+        services.AddTransient<ReviewContextDraftHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
