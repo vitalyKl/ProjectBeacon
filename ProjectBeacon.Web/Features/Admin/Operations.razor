@@ -1,0 +1,178 @@
+@page "/admin/operations"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Operations
+@using ProjectBeacon.Web.Authentication
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject IPlatformOperationsService Operations
+@inject NavigationManager Navigation
+
+<PageTitle>Control — Operations</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Operations" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        First-party Web, API and Worker process heartbeats. Instances report every 30 seconds and are marked stale after 90 seconds without an update.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">@(_error ?? "OperationsRead permission is required.")</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center flex-wrap gap-2">
+                <MudText Typo="Typo.subtitle1">Service instances</MudText>
+                <MudSpacer />
+                @if (_snapshot is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">@HealthyCount healthy</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error">@StaleCount stale</MudChip>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Observed @_snapshot.ObservedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+                    </MudText>
+                }
+                <MudButton Variant="Variant.Outlined" OnClick="Refresh" Disabled="_busy">
+                    @(_busy ? "Refreshing…" : "Refresh")
+                </MudButton>
+            </div>
+        </MudPaper>
+
+        @if (_busy && _snapshot is null)
+        {
+            <LoadingState />
+        }
+        else if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_snapshot is null || _snapshot.Instances.Count == 0)
+        {
+            <EmptyState>No service heartbeats have been recorded yet. Confirm that the Web, API and Worker processes have started with the platform heartbeat service enabled.</EmptyState>
+        }
+        else
+        {
+            <MudTable Items="_snapshot.Instances" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Service</MudTh>
+                    <MudTh>Environment</MudTh>
+                    <MudTh>Version</MudTh>
+                    <MudTh>Instance</MudTh>
+                    <MudTh>Started</MudTh>
+                    <MudTh>Last heartbeat</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Service">
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Service</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Environment">@context.EnvironmentName</MudTd>
+                    <MudTd DataLabel="Version">
+                        <MudText Typo="Typo.body2" Class="font-monospace">@context.Version</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Instance">
+                        <MudText Typo="Typo.caption" Class="font-monospace">@context.InstanceId</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Started">@context.StartedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</MudTd>
+                    <MudTd DataLabel="Last heartbeat">@context.LastHeartbeatAtUtc.ToLocalTime().ToString("T", CultureInfo.CurrentCulture)</MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(context)">@StatusText(context)</MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+            This page contains bounded process metadata only. Container logs, hostnames, environment variables and secret values are not collected or exposed here; container-log access requires the separate restricted operations boundary.
+        </MudAlert>
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _busy;
+    private string? _error;
+    private PlatformOperationsSnapshot? _snapshot;
+
+    private int HealthyCount => _snapshot?.Instances.Count(instance =>
+        !instance.IsStale && instance.Health == PlatformServiceHealth.Healthy) ?? 0;
+
+    private int StaleCount => _snapshot?.Instances.Count(instance => instance.IsStale) ?? 0;
+
+    protected override async Task OnInitializedAsync() => await LoadSnapshotAsync();
+
+    private Task Refresh() => LoadSnapshotAsync();
+
+    private async Task LoadSnapshotAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return;
+        }
+
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var access = await AdminGate.RequireAsync(actor, OperatorPermission.OperationsRead);
+        if (!access.Success || access.Value is null)
+        {
+            _authorized = false;
+            _snapshot = null;
+            _error = "OperationsRead permission is required for the operations overview.";
+            return;
+        }
+
+        _authorized = true;
+        _busy = true;
+        _error = null;
+        try
+        {
+            // The service accepts only an AdminActor created by the current database-backed gate.
+            // It independently checks OperationsRead before reading the platform-only heartbeat table.
+            _snapshot = await Operations.GetSnapshotAsync(access.Value);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _authorized = false;
+            _snapshot = null;
+            _error = "OperationsRead permission is no longer available. Reload the Control Plane session.";
+        }
+        catch
+        {
+            _error = "Could not load platform service status.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string StatusText(PlatformServiceInstance instance) =>
+        instance.IsStale ? "Stale" : instance.Health.ToString();
+
+    private static Color StatusColor(PlatformServiceInstance instance) =>
+        instance.IsStale
+            ? Color.Error
+            : instance.Health == PlatformServiceHealth.Healthy
+                ? Color.Success
+                : Color.Warning;
+}

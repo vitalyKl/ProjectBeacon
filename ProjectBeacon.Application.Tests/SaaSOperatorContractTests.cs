@@ -79,7 +79,8 @@ public sealed class SaaSOperatorContractTests
             | OperatorPermission.AuditExport
             | OperatorPermission.SystemMaintenance
             | OperatorPermission.EmailSettingsRead
-            | OperatorPermission.EmailSettingsManage;
+            | OperatorPermission.EmailSettingsManage
+            | OperatorPermission.OperatorRolesManage;
 
         Assert.True(OperatorPermissionSets.Includes(
             OperatorPermissionSets.CurrentSystemAdministrator, all));
@@ -97,13 +98,16 @@ public sealed class SaaSOperatorContractTests
         Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.OrganizationsManage));
         Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.UsersManage));
         Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.EntitlementsRead));
+        Assert.True(OperatorPermissionSets.Includes(support, OperatorPermission.OperationsRead));
         Assert.False(OperatorPermissionSets.Includes(support, OperatorPermission.EntitlementsManage));
         Assert.False(OperatorPermissionSets.Includes(support, OperatorPermission.BillingManage));
         Assert.True(OperatorPermissionSets.Includes(billing, OperatorPermission.EntitlementsManage));
         Assert.True(OperatorPermissionSets.Includes(billing, OperatorPermission.BillingManage));
+        Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.OperationsRead));
         Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.OrganizationsManage));
         Assert.False(OperatorPermissionSets.Includes(billing, OperatorPermission.UsersManage));
         Assert.True(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditExport));
+        Assert.True(OperatorPermissionSets.Includes(auditor, OperatorPermission.OperationsRead));
         Assert.False(OperatorPermissionSets.Includes(auditor, OperatorPermission.AuditRead | OperatorPermission.UsersManage));
         Assert.Equal(OperatorPermission.None, OperatorRolePermissionSets.For((OperatorRole)999));
     }

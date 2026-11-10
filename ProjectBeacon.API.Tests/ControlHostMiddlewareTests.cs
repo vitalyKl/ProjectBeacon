@@ -14,6 +14,7 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/admin/audit")]
     [InlineData("/admin/email")]
     [InlineData("/admin/operators")]
+    [InlineData("/admin/operations")]
     [InlineData("/admin/organizations")]
     [InlineData("/admin/organizations/11111111-1111-1111-1111-111111111111")]
     [InlineData("/control/login")]
@@ -46,6 +47,7 @@ public sealed class ControlHostMiddlewareTests
 
     [Theory]
     [InlineData("/v1/admin/audit")]
+    [InlineData("/admin/operations")]
     [InlineData("/admin/email")]
     [InlineData("/admin/organizations")]
     [InlineData("/admin/organizations/11111111-1111-1111-1111-111111111111")]
