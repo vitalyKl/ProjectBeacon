@@ -127,10 +127,16 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
     public async Task ReadingSettingsAndDeliveryHistory_RequiresPersistedOperatorPermission()
     {
         var service = CreateService();
-        var nonOperator = AdminActor() with { IsAdmin = false };
+        var nonOperator = User.Create("plain-user", "plain-user@example.test", "hash");
+        _seedDb.Users.Add(nonOperator);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetAsync(nonOperator));
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListRecentAsync(nonOperator));
+        // A forged ticket claim is not enough: the current persisted account must still be an operator.
+        var forgedAdminActor = new ActorContext(
+            ActorType.Human, nonOperator.Id, true, null, null, null, null, ApiTokenCapability.None);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetAsync(forgedAdminActor));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListRecentAsync(forgedAdminActor));
     }
 
     [Fact]
