@@ -152,7 +152,7 @@ public sealed class TenantIsolationMiddleware
             var requestedMember = members.FirstOrDefault(member => member.ProjectId == rid);
             if (requestedMember is null
                 || (orgExplicit && requestedMember.Project.OrgId != orgId))
-                return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
+                return (Guid.Empty, Guid.Empty);
         }
 
         if (requested is null && orgExplicit)
