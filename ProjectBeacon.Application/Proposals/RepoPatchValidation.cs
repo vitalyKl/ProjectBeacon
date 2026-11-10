@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Domain.Enums;
+using Domain.Entities.Content;
 using ProjectBeacon.Application.Tasks;
 
 public sealed record RepoPatchFile(
