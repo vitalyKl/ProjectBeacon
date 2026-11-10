@@ -101,6 +101,18 @@ else
             </MudStack>
         </MudPaper>
 
+        @if (_batchResults.Count > 0)
+        {
+            <MudAlert Severity="@BatchResultsSeverity" Dense="true" Class="mb-2">
+                <MudStack Spacing="1">
+                    @foreach (var item in _batchResults)
+                    {
+                        <MudText Typo="Typo.caption">@item.Text</MudText>
+                    }
+                </MudStack>
+            </MudAlert>
+        }
+
         <MudText Typo="Typo.h6">@L["RevisionBoundProposals"]</MudText>
         @if (_filteredProposals.Count == 0)
         {
@@ -311,6 +323,7 @@ else
     private readonly HashSet<Guid> _selectedIds = [];
     private readonly Dictionary<Guid, string> _editedPayloads = [];
     private readonly Dictionary<Guid, string> _baseSnapshots = [];
+    private readonly List<BatchAcceptResult> _batchResults = [];
     private string _statusFilter = ProposalStatus.Pending.ToString();
     private string _targetFilter = string.Empty;
     private string _taskFilter = string.Empty;
@@ -346,6 +359,7 @@ else
     private async Task Reload()
     {
         if (_project is null) return;
+        _batchResults.Clear();
         _busy = true;
         try
         {
@@ -571,6 +585,13 @@ else
         _ => Color.Default
     };
 
+    private sealed record BatchAcceptResult(string Text, Severity Severity);
+
+    private Severity BatchResultsSeverity =>
+        _batchResults.Any(item => item.Severity is Severity.Error or Severity.Warning)
+            ? Severity.Warning
+            : Severity.Success;
+
     private async Task AcceptOne(ProposalDto proposal)
     {
         if (_project is null || proposal.Status != ProposalStatus.Pending) return;
@@ -581,7 +602,10 @@ else
                 _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Snackbar.Add(result.Error ?? L["Error"].Value,
+                    result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
+                if (result.Kind == ErrorKind.Conflict)
+                    await Reload();
                 return;
             }
             Snackbar.Add(result.Value?.Status == ProposalStatus.Applying
@@ -620,18 +644,39 @@ else
         var succeeded = 0;
         var queued = 0;
         var failed = 0;
+        var batchResults = new List<BatchAcceptResult>();
         try
         {
             foreach (var proposal in _proposals.Where(item => _selectedIds.Contains(item.Id) && item.Status == ProposalStatus.Pending))
             {
                 var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
                     _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
-                if (!result.Success) failed++;
-                else if (result.Value?.Status == ProposalStatus.Applying) queued++;
-                else succeeded++;
+                var itemName = $"{proposal.TargetKind} {proposal.Id.ToString("N")[..8]}";
+                if (!result.Success)
+                {
+                    failed++;
+                    var conflict = result.Kind == ErrorKind.Conflict;
+                    var status = conflict ? L["Conflicted"].Value : L["Error"].Value;
+                    batchResults.Add(new BatchAcceptResult(
+                        $"{itemName}: {status} — {result.Error ?? L["Error"].Value}",
+                        conflict ? Severity.Warning : Severity.Error));
+                }
+                else if (result.Value?.Status == ProposalStatus.Applying)
+                {
+                    queued++;
+                    batchResults.Add(new BatchAcceptResult(
+                        $"{itemName}: {L["ProposalApplyQueued"].Value}", Severity.Info));
+                }
+                else
+                {
+                    succeeded++;
+                    batchResults.Add(new BatchAcceptResult(
+                        $"{itemName}: {L["ProposalAccepted"].Value}", Severity.Success));
+                }
             }
             _selectedIds.Clear();
             await Reload();
+            _batchResults.AddRange(batchResults);
             Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded + queued, failed),
                 failed == 0 ? (queued > 0 ? Severity.Info : Severity.Success) : Severity.Warning);
             if (queued > 0)
