@@ -10,7 +10,6 @@ using Application.Common;
 using Application.Persistence;
 using Domain.Entities.Content;
 using Domain.Entities.Context;
-using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
