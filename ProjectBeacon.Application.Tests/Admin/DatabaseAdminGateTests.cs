@@ -80,6 +80,30 @@ public sealed class DatabaseAdminGateTests : IDisposable
         Assert.Equal(ErrorKind.Forbidden, deniedMaintenance.Kind);
     }
 
+    [Theory]
+    [InlineData(OperatorRole.Support, OperatorPermission.OrganizationsManage, OperatorPermission.BillingManage)]
+    [InlineData(OperatorRole.Billing, OperatorPermission.BillingManage, OperatorPermission.UsersManage)]
+    [InlineData(OperatorRole.Auditor, OperatorPermission.AuditExport, OperatorPermission.BillingManage)]
+    public async Task RequireAsync_AdmitsLeastPrivilegeRolesWithoutLegacyAdminMarker(
+        OperatorRole role, OperatorPermission allowed, OperatorPermission denied)
+    {
+        _admin.AssignOperatorRole(role.ToString());
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var access = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true), allowed,
+            ct: TestContext.Current.CancellationToken);
+        var deniedAccess = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true), denied,
+            ct: TestContext.Current.CancellationToken);
+
+        Assert.True(access.Success, access.Error);
+        Assert.False(_admin.IsAdmin, "Least-privilege roles must not receive the legacy customer-admin marker.");
+        Assert.Equal(role.ToString(), _admin.OperatorRole);
+        Assert.False(deniedAccess.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedAccess.Kind);
+    }
+
     [Fact]
     public async Task RequireAsync_RejectsApiTokenEvenWhenItClaimsAdminCapability()
     {
