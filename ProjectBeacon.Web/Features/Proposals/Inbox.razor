@@ -7,6 +7,8 @@
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Decisions
 @using ProjectBeacon.Application.Proposals
+@using ProjectBeacon.Application.Common
+@using ProjectBeacon.Application.Persistence
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
@@ -381,7 +383,7 @@ else
             var root = document.RootElement;
             var fields = new[] { "description", "bodyMarkdown", "body", "decisionBody", "context", "consequences", "name", "title" };
             var values = fields
-                .Where(root.TryGetProperty)
+                .Where(field => root.TryGetProperty(field, out _))
                 .Select(key => root.GetProperty(key).ValueKind == JsonValueKind.String
                     ? root.GetProperty(key).GetString()
                     : null)
