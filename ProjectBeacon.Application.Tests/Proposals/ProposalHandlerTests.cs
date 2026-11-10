@@ -7,6 +7,7 @@ using Application.Persistence;
 using Application.Proposals;
 using Application.Tasks;
 using Domain.Entities.Content;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Context;
@@ -848,8 +849,15 @@ public sealed class ProposalHandlerTests : IDisposable
             "Human",
             "repo-patch-accept-retry-" + Guid.NewGuid().ToString("N"),
             now);
-        var command = Domain.Entities.Devices.WorkstationCommand.Create(
-            Guid.NewGuid(),
+        var device = DaemonDevice.Create(
+            "proposal-test-device",
+            _userId,
+            "proposal-test-fingerprint",
+            "proposal-test-token-hash",
+            "proposal-test");
+        _db.DaemonDevices.Add(device);
+        var command = WorkstationCommand.Create(
+            device.Id,
             WorkstationCommandKind.ApplyProposalPatch,
             System.Text.Json.JsonSerializer.Serialize(new { projectId = _projectId, proposalId = proposal.Id }),
             _projectId,
