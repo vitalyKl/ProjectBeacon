@@ -2713,4 +2713,28 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Für diesen Posteingang ist eine Projektmitgliedschaft erforderlich.</value>
   </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>Inhaltsverlauf</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>Für dieses Element ist kein Verlauf verfügbar.</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>Diese Revision wiederherstellen</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>Aus dem ausgewählten Snapshot wurde eine neue Revision erstellt.</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>Vorschläge</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>Von Agents während dieser Aufgabe eingereichte Vorschläge prüfen.</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>Für diese Aufgabe gibt es keine Vorschläge.</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>Vorschlagseingang öffnen</value>
+  </data>
 </root>
