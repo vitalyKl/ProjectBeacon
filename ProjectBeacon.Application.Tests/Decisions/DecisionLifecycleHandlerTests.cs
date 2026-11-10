@@ -67,6 +67,46 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecisionProposals_RequireProjectMemberOrBoundContextReadToken()
+    {
+        var handler = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var outsiderResult = await handler.HandleProposalAsync(
+            new CreateDecisionRequest(_projectId, "Outsider", "ctx", "body", null, outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(outsiderResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, outsiderResult.Kind);
+
+        var unboundToken = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            Guid.NewGuid(), null, ApiTokenCapability.ContextRead);
+        var unboundResult = await handler.HandleProposalAsync(
+            new CreateDecisionRequest(_projectId, "Unbound", "ctx", "body", null, unboundToken),
+            TestContext.Current.CancellationToken);
+        Assert.False(unboundResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, unboundResult.Kind);
+
+        var tokenWithoutCapability = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.TaskRead);
+        var capabilityResult = await handler.HandleProposalAsync(
+            new CreateDecisionRequest(_projectId, "Wrong capability", "ctx", "body", null, tokenWithoutCapability),
+            TestContext.Current.CancellationToken);
+        Assert.False(capabilityResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, capabilityResult.Kind);
+
+        var agent = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.ContextRead);
+        var accepted = await handler.HandleProposalAsync(
+            new CreateDecisionRequest(_projectId, "Bound Actor", "ctx", "body", null, agent),
+            TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(DecisionStatus.Proposed, accepted.Value!.Status);
+    }
+
+    [Fact]
     public async Task Accept_Then_Supersede_And_Deprecate()
     {
         var create = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
