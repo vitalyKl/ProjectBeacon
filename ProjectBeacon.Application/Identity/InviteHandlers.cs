@@ -54,6 +54,9 @@ public class CreateOrgInviteHandler
         var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
         if (org is null)
             return Result.Failure<InviteCreatedDto>("Org not found.");
+        if (org.LifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<InviteCreatedDto>(
+                "Invitations can only be created for active organizations.", ErrorKind.Conflict);
 
         var pending = await db.OrgInvites.IgnoreQueryFilters()
             .Where(i => i.OrgId == request.OrgId && i.Email == email && i.Status == InviteStatus.Pending)
@@ -137,6 +140,13 @@ public class CreateProjectInviteHandler
         var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
         if (project is null)
             return Result.Failure<InviteCreatedDto>("Project not found.");
+        var organizationStatus = await db.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == project.OrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (organizationStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<InviteCreatedDto>(
+                "Invitations can only be created for active organizations.", ErrorKind.Conflict);
 
         var pending = await db.ProjectInvites.IgnoreQueryFilters()
             .Where(i => i.ProjectId == request.ProjectId && i.Email == email && i.Status == InviteStatus.Pending)
@@ -250,6 +260,13 @@ public class AcceptInviteHandler
 
         if (orgInviteSnapshot is not null)
         {
+            var orgStatus = await lookupDb.Orgs.IgnoreQueryFilters()
+                .Where(org => org.Id == orgInviteSnapshot.OrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+            if (orgStatus != OrganizationLifecycleStatus.Active)
+                return Result.Failure("Invite is no longer valid.");
+
             if (!string.Equals(orgInviteSnapshot.Email, user.Email, StringComparison.Ordinal))
                 return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
 
@@ -288,6 +305,12 @@ public class AcceptInviteHandler
             .FirstOrDefaultAsync(p => p.Id == projectInviteSnapshot.ProjectId, ct);
         if (projectSnapshot is null)
             return Result.Failure("Project not found.");
+        var projectOrgStatus = await lookupDb.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == projectSnapshot.OrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (projectOrgStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure("Invite is no longer valid.");
 
         var projectTenant = new TenantContext();
         projectTenant.Assign(projectSnapshot.Id, projectSnapshot.OrgId, unscoped: false);
@@ -479,17 +502,20 @@ internal static class InviteLookup
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
         if (orgInvite is not null)
         {
-            if (orgInvite.Status != InviteStatus.Pending || orgInvite.ExpiredAt < now)
+            if (orgInvite.Status != InviteStatus.Pending || orgInvite.ExpiredAt < now
+                || orgInvite.Org.LifecycleStatus != OrganizationLifecycleStatus.Active)
                 return null;
             return new InvitePreviewDto("org", orgInvite.OrgId, orgInvite.Org.Name, orgInvite.Email, orgInvite.Role, orgInvite.ExpiredAt);
         }
 
         var projectInvite = await db.ProjectInvites.IgnoreQueryFilters()
             .Include(i => i.Project)
+            .ThenInclude(project => project.Org)
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
         if (projectInvite is null)
             return null;
-        if (projectInvite.Status != InviteStatus.Pending || projectInvite.ExpiredAt < now)
+        if (projectInvite.Status != InviteStatus.Pending || projectInvite.ExpiredAt < now
+            || projectInvite.Project.Org.LifecycleStatus != OrganizationLifecycleStatus.Active)
             return null;
         return new InvitePreviewDto(
             "project", projectInvite.ProjectId, projectInvite.Project.Name,

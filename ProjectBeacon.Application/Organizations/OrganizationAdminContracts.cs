@@ -6,7 +6,8 @@ using ProjectBeacon.Domain.Enums;
 
 public sealed record OrganizationAdminListItem(
     Guid Id, string Name, string? Description, DateTime CreatedAt, DateTime? UpdatedAt,
-    string? OwnerEmail, int MemberCount, int ProjectCount, int PendingInviteCount);
+    string? OwnerEmail, int MemberCount, int ProjectCount, int PendingInviteCount,
+    OrganizationLifecycleStatus LifecycleStatus = OrganizationLifecycleStatus.Active);
 
 public sealed record OrganizationAdminPage(
     IReadOnlyList<OrganizationAdminListItem> Items, long TotalCount, int Page, int PageSize);
@@ -71,4 +72,8 @@ public interface IOrganizationAdminService
     /// </summary>
     Task<Result> SetAccountDisabledAsync(
         AdminActor actor, Guid orgId, Guid userId, bool disabled, CancellationToken ct = default);
+
+    Task<Result> SetLifecycleStatusAsync(
+        AdminActor actor, Guid orgId, OrganizationLifecycleStatus target, string reason,
+        CancellationToken ct = default);
 }

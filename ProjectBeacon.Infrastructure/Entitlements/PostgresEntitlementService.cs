@@ -11,6 +11,7 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Audit;
+using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Data;
 
 public sealed class PostgresEntitlementService(
@@ -94,6 +95,28 @@ public sealed class PostgresEntitlementService(
     {
         if (string.IsNullOrWhiteSpace(requirement.FeatureKey) || requirement.RequestedUnits < 1)
             return Result.Failure<EntitlementDecision>("A feature key and positive requested units are required.");
+
+        if (orgId == Guid.Empty)
+            return Result.Ok(new EntitlementDecision(false, "organization_not_found"));
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var lifecycleDb = dbFactory.CreateDbContext();
+            var lifecycleStatus = await lifecycleDb.Orgs.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(org => org.Id == orgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+
+            if (lifecycleStatus is null)
+                return Result.Ok(new EntitlementDecision(false, "organization_not_found"));
+            if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+                return Result.Ok(new EntitlementDecision(false,
+                    lifecycleStatus == OrganizationLifecycleStatus.Suspended
+                        ? "organization_suspended"
+                        : "organization_closed"));
+        }
+
         var result = await GetEffectiveAsync(orgId, ct);
         if (!result.Success)
             return Result.Failure<EntitlementDecision>(result);

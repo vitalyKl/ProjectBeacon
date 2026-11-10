@@ -43,12 +43,22 @@ public sealed class OrganizationEntitlementMiddleware(RequestDelegate next)
 
         if (evaluation.Value is not { Allowed: true })
         {
+            var reasonCode = evaluation.Value?.ReasonCode ?? "entitlement_required";
+            var (title, detail) = reasonCode switch
+            {
+                "organization_suspended" =>
+                    ("Organization suspended", "This organization is temporarily suspended. Contact the platform operator."),
+                "organization_closed" =>
+                    ("Organization closed", "This organization is closed and can no longer be accessed."),
+                _ =>
+                    ("Organization access required", "This organization does not have an active ProjectBeacon entitlement. Contact the platform operator.")
+            };
             await WriteProblemAsync(
                 context,
                 StatusCodes.Status403Forbidden,
-                "Organization access required",
-                "This organization does not have an active ProjectBeacon entitlement. Contact the platform operator.",
-                evaluation.Value?.ReasonCode ?? "entitlement_required");
+                title,
+                detail,
+                reasonCode);
             return;
         }
 

@@ -77,7 +77,7 @@ public sealed class EfOrganizationAdminService(
             .ThenBy(org => org.Id)
             .Skip(checked((page - 1) * pageSize))
             .Take(pageSize)
-            .Select(org => new { org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt })
+            .Select(org => new { org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt, org.LifecycleStatus })
             .ToListAsync(ct);
 
         var ids = orgRows.Select(x => x.Id).ToArray();
@@ -145,7 +145,7 @@ public sealed class EfOrganizationAdminService(
             pendingOwnerByOrg.TryGetValue(org.Id, out var pendingOwnerEmail);
             return new OrganizationAdminListItem(org.Id, org.Name, org.Description,
                 org.CreatedAt, org.UpdatedAt, members?.OwnerEmail ?? pendingOwnerEmail,
-                members?.Count ?? 0, projects, invites);
+                members?.Count ?? 0, projects, invites, org.LifecycleStatus);
         }).ToArray();
 
         return Result.Ok(new OrganizationAdminPage(items, total, page, pageSize));
@@ -321,6 +321,9 @@ public sealed class EfOrganizationAdminService(
         var org = await db.Orgs.FirstOrDefaultAsync(x => x.Id == orgId, ct);
         if (org is null)
             return Result.Failure<OperatorInviteCreated>("Organization not found.", ErrorKind.NotFound);
+        if (org.LifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<OperatorInviteCreated>(
+                "Invitations can only be issued for active organizations.", ErrorKind.Conflict);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (db.Database.IsNpgsql())
@@ -553,6 +556,67 @@ public sealed class EfOrganizationAdminService(
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         sessionVersions?.Invalidate(userId);
+        return Result.Ok();
+    }
+
+
+    public async Task<Result> SetLifecycleStatusAsync(
+        AdminActor actor, Guid orgId, OrganizationLifecycleStatus target, string reason,
+        CancellationToken ct = default)
+    {
+        if (!CanManage(actor))
+            return Result.Forbidden("Organization and user management permissions are required.");
+        if (!actor.IsElevatedAt(timeProvider.GetUtcNow()))
+            return Result.Forbidden("Recent Control Plane authenticator verification is required.");
+        if (orgId == Guid.Empty)
+            return Result.Failure("Organization id is required.");
+        if (!Enum.IsDefined(target))
+            return Result.Failure("Organization lifecycle status is invalid.", ErrorKind.Validation);
+
+        reason = reason?.Trim() ?? string.Empty;
+        if (reason.Length is < 3 or > 500)
+            return Result.Failure("A reason between 3 and 500 characters is required.", ErrorKind.Validation);
+
+        using var unscoped = TenantScope.EnterUnscoped();
+        await using var db = dbFactory.CreateDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await LockOrganizationAsync(db, transaction, orgId, ct))
+            return Result.Failure("Organization not found.", ErrorKind.NotFound);
+
+        var org = await db.Orgs.FirstOrDefaultAsync(item => item.Id == orgId, ct);
+        if (org is null)
+            return Result.Failure("Organization not found.", ErrorKind.NotFound);
+
+        var previous = org.LifecycleStatus;
+        try
+        {
+            org.ChangeLifecycleStatus(target, timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(ex.Message, ErrorKind.Conflict);
+        }
+
+        if (previous == org.LifecycleStatus)
+            return Result.Ok();
+
+        var action = target switch
+        {
+            OrganizationLifecycleStatus.Suspended => "platform.organization.suspended",
+            OrganizationLifecycleStatus.Active => "platform.organization.reactivated",
+            OrganizationLifecycleStatus.Closed => "platform.organization.closed",
+            _ => throw new ArgumentOutOfRangeException(nameof(target))
+        };
+        var details = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            previousState = previous.ToString(),
+            newState = target.ToString(),
+            reason
+        });
+        auditWriter.Stage(db, Audit(actor, action, "Org", org.Id, org.Id,
+            timeProvider.GetUtcNow().UtcDateTime, details));
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Result.Ok();
     }
 
