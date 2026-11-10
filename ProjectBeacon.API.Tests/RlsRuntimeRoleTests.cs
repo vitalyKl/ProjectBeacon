@@ -274,7 +274,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(1, await CountBillingLedgerRawAsync(conn));
 
         var crossOrgInsert = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertBillingSubscriptionRawAsync(conn, Guid.NewGuid(), s_orgB, planKey, now));
+            InsertBillingSubscriptionRawAsync(conn, Guid.NewGuid(), s_orgB, planKey, now, status: 4));
         Assert.Equal("42501", crossOrgInsert.SqlState);
 
         await using (var update = new NpgsqlCommand(
@@ -803,7 +803,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     }
 
     private static async Task InsertBillingSubscriptionRawAsync(
-        NpgsqlConnection conn, Guid id, Guid orgId, string planKey, DateTimeOffset now)
+        NpgsqlConnection conn, Guid id, Guid orgId, string planKey, DateTimeOffset now, short status = 1)
     {
         await using var command = new NpgsqlCommand(
             """
@@ -813,12 +813,13 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                  "GraceUntilUtc", "ProviderKey", "ExternalCustomerReference",
                  "ExternalSubscriptionReference", "CreatedAtUtc", "UpdatedAtUtc")
             VALUES
-                (@id, @org_id, @plan_key, 1, 0, NULL, @now, @period_end, FALSE,
+                (@id, @org_id, @plan_key, @status, 0, NULL, @now, @period_end, FALSE,
                  NULL, NULL, NULL, NULL, @now, @now)
             """, conn);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("org_id", orgId);
         command.Parameters.AddWithValue("plan_key", planKey);
+        command.Parameters.AddWithValue("status", status);
         command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("period_end", now.AddDays(30));
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
