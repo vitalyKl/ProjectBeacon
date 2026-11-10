@@ -20,7 +20,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.Property(e => e.ProposalPoliciesJson)
             .IsRequired()
             .HasColumnType("jsonb")
-            .HasDefaultValueSql("'{}'::jsonb");
+            .HasDefaultValue("{}");
         entity.Property(e => e.ProposalPolicyRevision)
             .IsRequired()
             .IsConcurrencyToken()
