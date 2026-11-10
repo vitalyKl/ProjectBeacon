@@ -128,14 +128,17 @@ public sealed class EfOrganizationDataExportService(
             await db.Tasks.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.TaskComments.LongCountAsync(item => taskIds.Contains(item.TaskId), ct),
             await db.TaskDependencies.LongCountAsync(item =>
-                taskIds.Contains(item.TaskId) || taskIds.Contains(item.DependentTaskId), ct),
-            await db.TaskSteps.LongCountAsync(item => taskIds.Contains(item.TaskId), ct),
-            await db.Subtasks.LongCountAsync(item => taskIds.Contains(item.TaskId), ct),
+                taskIds.Contains(item.TaskId) && taskIds.Contains(item.DependentTaskId), ct),
+            await db.TaskSteps.LongCountAsync(item =>
+                projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
+            await db.Subtasks.LongCountAsync(item =>
+                projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId), ct),
             await db.Reports.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ContextSections.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ContextRevisions.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.Decisions.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
-            await db.DecisionTasks.LongCountAsync(item => decisionIds.Contains(item.DecisionId), ct),
+            await db.DecisionTasks.LongCountAsync(item =>
+                decisionIds.Contains(item.DecisionId) && taskIds.Contains(item.TaskId), ct),
             await db.Constraints.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ChatSessions.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ChatParts.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
