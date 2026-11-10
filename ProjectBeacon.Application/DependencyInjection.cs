@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlatformEmailAdminService>();
         services.AddScoped<BillingPlanAdminService>();
         services.AddScoped<BillingInvoiceAdminService>();
+        services.AddScoped<BillingInvoiceCustomerService>();
         services.AddScoped<OperatorRoleAdminService>();
 
         services.AddTransient<BootstrapHandler>();
