@@ -2806,4 +2806,19 @@ orthstar</value>
   <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
     <value>Auto (Dokumentationspatch anwenden)</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>Alle</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>Angewendete Revision</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>Vorgang</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>Unteraufgaben-ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>Aufgaben-ID</value>
+  </data>
 </root>
