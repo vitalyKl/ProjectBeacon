@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, TOTP step-up protection and one-time recovery codes for operator MFA are implemented in the current development stack. Billing persistence/provider adapters, granular feature/usage entitlement enforcement, production operations telemetry/log access and data export/deletion remain incomplete. The primary SystemAdministrator also retains deployment-token-protected break-glass recovery.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor roles, TOTP step-up and one-time recovery codes for every operator role are implemented in the current development stack. B4 metadata-only Web/API/Worker heartbeats and the OperationsRead dashboard are implemented; restricted external container-log access remains incomplete. Billing persistence/provider adapters, granular feature/usage entitlement enforcement and data export/deletion remain incomplete. The primary SystemAdministrator also retains deployment-token-protected break-glass recovery.
 
 ## Product boundary
 
@@ -105,7 +105,7 @@ RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing 
 2. **A1 — audit core:** append-only AuditEvents, transactional Stage writes, redaction and security-event coverage.
 3. **A2 — operator gate:** database-backed IAdminGate, AdminActor creation, TOTP/elevation, admin-only navigation and the system overview.
 4. **B1 — alpha onboarding:** organization creation, owner invitation, customer search/card, alpha grant/renew/revoke. This is the first operator-console acceptance milestone.
-5. **B4 — operations and support:** error events, service heartbeats, container-log access through a restricted external ops boundary, and traceId search.
+5. **B4 — operations and support:** audit/error-event and traceId search plus metadata-only service heartbeats and the `/admin/operations` overview are implemented. Container-log access through a restricted external ops boundary remains future work.
 6. **B2/B3 — commercial conversion:** plans, subscriptions, invoices, billing event ledger, entitlement enforcement, owner billing page and a one-action alpha-to-production transition.
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
 8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
@@ -125,6 +125,7 @@ Implemented in the foundation branch:
 - Operator organization management: paginated/searchable customer list, organization detail, member/invitation metadata, organization creation with owner invitation, invite reissue/revocation, member-role changes, and global account disable/enable with owner-protection and session invalidation.
 - Organization lifecycle transitions (Active/Suspended/Closed) with a reason, TOTP step-up, row locking and atomic audit records. Suspended and closed tenants are blocked across API entitlement checks, ordinary EF tenant filters, shared Application authorization checks, and invite preview/redemption. Existing global user sessions remain valid; a user can switch to another active organization. Permanent closure is terminal and reserved for SystemAdministrators.
 - Persisted organization entitlements with operator list/grant/renew/revoke, replacement history, transactionally staged audit events, tenant RLS and an active-grant uniqueness constraint.
+- First-party Web/API/Worker processes publish metadata-only heartbeats every 30 seconds. The `/admin/operations` overview is permission-gated by `OperationsRead` and marks instances stale after 90 seconds; it exposes no hostnames or log content.
 - Sensitive organization, user and entitlement mutations require TOTP step-up and are independently checked by the Application services.
 - SaaS-only product boundary documented in README and AGENTS.
 

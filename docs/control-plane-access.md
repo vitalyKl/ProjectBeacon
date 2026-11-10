@@ -28,7 +28,7 @@ Plane in its own Web deployment without changing the application-level audit con
   `/v1/auth/recover-admin` return `404`.
 - On the control hostname, only the Control Plane pages and supporting routes are allowed:
   `/control/login`, `/control/bootstrap`, `/control/recover`, `/control/logout`,
-  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
+  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/operations`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
   and static/Blazor framework assets. Customer application pages are not served from this origin.
 - The control hostname root redirects to `/admin/audit`; an unauthenticated browser is challenged
   to `/control/login`.
@@ -135,9 +135,12 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   verification places a signed ten-minute elevation claim in the Control Plane cookie. Organization
   creation, owner invitations, invitation revocation, Alpha entitlement changes, operator role changes,
   and SMTP mutations require this elevation and recheck it in the server-side service/gate path.
-  Operators without TOTP enabled cannot perform these sensitive changes. The active
-  SystemAdministrator can recover a lost authenticator through the deployment-token-protected
-  `/control/recover` break-glass path; other operator roles do not yet have self-service recovery.
+  Operators without TOTP enabled cannot perform these sensitive changes. Every active operator
+  role receives one-time recovery codes during authenticator setup; a saved code at
+  `/control/security` disables the lost authenticator, consumes that code, revokes all remaining
+  recovery codes, increments the session version and invalidates active sessions. The operator
+  must sign in again and enroll a new authenticator. The active SystemAdministrator additionally
+  retains the deployment-token-protected `/control/recover` break-glass path.
 - Organization/customer onboarding and Alpha entitlement management are available under
   `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
   member/invitation visibility, owner invitation creation/revocation, member-role changes, global
@@ -153,6 +156,9 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   affected organization has another active owner. The last active owner also cannot be demoted.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
-- Billing persistence/provider integration, self-service lost-authenticator recovery for
-  non-SystemAdministrator operators, production operations telemetry/log access, data export/deletion,
-  and granular feature/usage entitlement enforcement remain future work.
+- Metadata-only Web/API/Worker heartbeats are written every 30 seconds and visible to operators
+  with `OperationsRead` at `/admin/operations`; instances become stale after 90 seconds without an
+  update. Container log access is not exposed: it still requires a restricted external ops-agent
+  or log stack and the `ContainerLogsRead` boundary.
+- Billing persistence/provider integration, data export/deletion, and granular feature/usage
+  entitlement enforcement remain future work.
