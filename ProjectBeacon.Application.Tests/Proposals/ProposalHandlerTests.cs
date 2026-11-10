@@ -825,6 +825,68 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Accept_WhenRepoPatchIsAlreadyApplying_ReturnsExistingCommandWithoutQueueingDuplicate()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var now = DateTime.UtcNow;
+        var proposal = Proposal.Create(
+            _projectId,
+            null,
+            null,
+            null,
+            ContentTargetKind.RepoPatch,
+            _projectId,
+            ProposalOperation.Update,
+            1,
+            new string('a', 64),
+            "{}",
+            "Applies the reviewed documentation update.",
+            ProposalAuthorKind.Human,
+            _userId,
+            null,
+            null,
+            "Human",
+            "repo-patch-accept-retry-" + Guid.NewGuid().ToString("N"),
+            now);
+        var command = Domain.Entities.Devices.WorkstationCommand.Create(
+            Guid.NewGuid(),
+            WorkstationCommandKind.ApplyProposalPatch,
+            System.Text.Json.JsonSerializer.Serialize(new { projectId = _projectId, proposalId = proposal.Id }),
+            _projectId,
+            _userId);
+        proposal.StartApply(command.Id, _userId, now);
+        _db.Proposals.Add(proposal);
+        _db.WorkstationCommands.Add(command);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new AcceptProposalHandler(
+            factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter());
+        var retry = await handler.HandleAsync(
+            new AcceptProposalCommand(_projectId, proposal.Id, HumanActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(retry.Success, retry.Error);
+        Assert.Equal(ProposalStatus.Applying, retry.Value!.Status);
+
+        var queuedCommands = await _db.WorkstationCommands
+            .Where(item => item.ProjectId == _projectId
+                && item.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        var singleCommand = Assert.Single(queuedCommands);
+        Assert.Equal(command.Id, singleCommand.Id);
+        Assert.Equal(WorkstationCommandStatus.Pending, singleCommand.Status);
+
+        // A terminal command must not be mistaken for a live idempotent retry.
+        command.Fail("The workstation rejected the command.");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var staleRetry = await handler.HandleAsync(
+            new AcceptProposalCommand(_projectId, proposal.Id, HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.False(staleRetry.Success);
+        Assert.Equal(ErrorKind.Conflict, staleRetry.Kind);
+    }
+
+    [Fact]
     public async Task StaleBaseRevisionAtSubmission_MarksProposalConflictedWithoutApplyingTarget()
     {
         var project = await _db.Projects.SingleAsync(
