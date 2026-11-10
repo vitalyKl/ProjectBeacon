@@ -125,7 +125,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("Only Update proposals are currently supported.");
         if (!Enum.IsDefined(command.Request.TargetKind))
             return Result.Failure<ProposalDto>("Unknown proposal target kind.");
-        if (!TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
+        if (!ProposalContentValidation.TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
             return Result.Failure<ProposalDto>(validationError!);
         if (SecretPattern.IsMatch(command.Request.PayloadJson)
             || SecretPattern.IsMatch(command.Request.RationaleMarkdown ?? string.Empty))
@@ -155,7 +155,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("IdempotencyKey has already been used for a different proposal.", ErrorKind.Conflict);
         }
 
-        var target = await LoadTargetAsync(db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
+        var target = await ProposalContentValidation.LoadTargetAsync(db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
         if (target is null)
             return Result.Failure<ProposalDto>("The requested content target was not found.");
         if (!target.Reviewable)
@@ -222,8 +222,6 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         if (target.Revision != command.Request.BaseRevision)
             proposal.MarkConflicted(target.Revision, "BaseRevisionChanged", now);
-        else if (!target.Reviewable)
-            proposal.MarkConflicted(target.Revision, "TargetNoLongerReviewable", now);
 
         var strategy = db.Database.CreateExecutionStrategy();
         try
@@ -260,13 +258,13 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 return Result.Ok(Map(proposal));
             });
         }
-        catch (DbUpdateException)
-        {
-            return Result.Failure<ProposalDto>("The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.", ErrorKind.Conflict);
-        }
         catch (DbUpdateConcurrencyException)
         {
             return Result.Failure<ProposalDto>("A pending proposal changed while this proposal was being submitted. Refresh and retry.", ErrorKind.Conflict);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<ProposalDto>("The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.", ErrorKind.Conflict);
         }
     }
 
@@ -920,7 +918,7 @@ public sealed class ListProposalsHandler
             .Select(proposal => new ProposalDto(
                 proposal.Id, proposal.ProjectId, proposal.TaskId, proposal.SubtaskId, proposal.SessionId,
                 proposal.TargetKind, proposal.TargetId, proposal.Operation, proposal.BaseRevision, proposal.BaseHash,
-                proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status.ToString(),
+                proposal.PayloadJson, proposal.RationaleMarkdown, proposal.Status,
                 proposal.AuthorUserId, proposal.AuthorTokenId, proposal.AuthorProfileKey, proposal.AuthorRole,
                 proposal.CreatedAt, proposal.ExpiresAt, proposal.DecidedAt, proposal.DecidedByUserId,
                 proposal.DecisionNote, proposal.AcceptedPayloadJson, proposal.AppliedRevision,
