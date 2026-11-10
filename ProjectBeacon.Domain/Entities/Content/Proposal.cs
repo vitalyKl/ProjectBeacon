@@ -138,6 +138,26 @@ public sealed class Proposal : Entity, IProjectScoped
         StateRevision++;
     }
 
+    /// <summary>Accepts a proposal under an explicitly configured project Auto policy.</summary>
+    public void AutoAccept(int appliedRevision, string? acceptedPayloadJson, DateTime decidedAtUtc)
+    {
+        EnsurePending();
+        if (appliedRevision < 1)
+            throw new ArgumentOutOfRangeException(nameof(appliedRevision));
+        if (decidedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Decision time must be UTC.", nameof(decidedAtUtc));
+        if (acceptedPayloadJson is not null)
+            ValidatePayload(acceptedPayloadJson);
+
+        Status = ProposalStatus.Accepted;
+        DecidedAt = decidedAtUtc;
+        DecidedByUserId = null;
+        AcceptedPayloadJson = acceptedPayloadJson;
+        AppliedRevision = appliedRevision;
+        DecisionNote = null;
+        StateRevision++;
+    }
+
     public void Reject(Guid humanUserId, string? note, DateTime decidedAtUtc)
     {
         EnsurePending();
