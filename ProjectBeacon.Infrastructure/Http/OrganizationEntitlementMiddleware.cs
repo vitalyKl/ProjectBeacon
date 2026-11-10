@@ -93,6 +93,9 @@ public sealed class OrganizationEntitlementMiddleware(RequestDelegate next)
         };
         problem.Extensions["code"] = code;
         problem.Extensions["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier;
-        await Results.Problem(problem).ExecuteAsync(context);
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/problem+json";
+        await context.Response.WriteAsJsonAsync(
+            problem, "application/problem+json", cancellationToken: context.RequestAborted);
     }
 }
