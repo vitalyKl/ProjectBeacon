@@ -142,7 +142,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         var author = await ResolveAuthorAsync(db, command, ct);
         if (!author.Success)
-            return Result.Failure<ProposalDto>(author.Error ?? "The proposal author is not authorized.");
+            return Result.Forbidden<ProposalDto>(author.Error ?? "The proposal author is not authorized.");
 
         var existingByKey = await db.Proposals.FirstOrDefaultAsync(
             proposal => proposal.ProjectId == command.ProjectId
@@ -150,7 +150,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             ct);
         if (existingByKey is not null)
         {
-            if (SameRequest(existingByKey, command.Request, author.TaskId, author.SubtaskId, author.SessionId))
+            if (SameRequest(existingByKey, command.Request, command.Actor, author.TaskId, author.SubtaskId, author.SessionId))
                 return Result.Ok(Map(existingByKey));
             return Result.Failure<ProposalDto>("IdempotencyKey has already been used for a different proposal.", ErrorKind.Conflict);
         }
@@ -320,6 +320,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
     private static bool SameRequest(
         Proposal existing,
         CreateProposalRequest request,
+        ActorContext actor,
         Guid? taskId,
         Guid? subtaskId,
         Guid? sessionId) =>
@@ -329,6 +330,9 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         && existing.BaseRevision == request.BaseRevision
         && existing.PayloadJson == request.PayloadJson
         && existing.RationaleMarkdown == request.RationaleMarkdown
+        && existing.AuthorKind == (actor.IsHuman ? ProposalAuthorKind.Human : ProposalAuthorKind.Agent)
+        && existing.AuthorUserId == (actor.IsHuman ? actor.UserId : null)
+        && existing.AuthorTokenId == (actor.IsApiToken ? actor.TokenId : null)
         && existing.TaskId == taskId
         && existing.SubtaskId == subtaskId
         && existing.SessionId == sessionId;
