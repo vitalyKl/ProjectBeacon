@@ -2658,6 +2658,12 @@
 <data name="AuditTargetId" xml:space="preserve">
     <value>ID объекта</value>
   </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>Идентификатор трассировки</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>Планирование</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>Выполнение</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>Модель</value></data>
