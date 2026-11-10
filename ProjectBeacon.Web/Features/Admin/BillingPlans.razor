@@ -283,6 +283,7 @@
             return;
         }
 
+        _saving = true;
         try
         {
             long? priceMinor = null;
@@ -328,6 +329,10 @@
         catch
         {
             Snackbar.Add("Could not save the billing plan.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 
