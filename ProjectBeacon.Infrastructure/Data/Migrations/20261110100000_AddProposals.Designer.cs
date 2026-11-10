@@ -11,7 +11,7 @@ using ProjectBeacon.Infrastructure.Data;
 
 namespace ProjectBeacon.Infrastructure.Data.Migrations
 {
-    partial class AddProposals
+    public sealed partial class AddProposals
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
