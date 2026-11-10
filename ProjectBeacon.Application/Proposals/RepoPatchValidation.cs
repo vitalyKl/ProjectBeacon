@@ -168,8 +168,11 @@ public static class RepoPatchValidation
             hasNewHeader = false;
         }
 
-        foreach (var line in patch.Split('\n'))
+        foreach (var rawLine in patch.Split('\n'))
         {
+            // Git emits CRLF on Windows. Ignore only the line terminator so the
+            // manifest/header comparison stays byte-for-byte meaningful on all hosts.
+            var line = rawLine.TrimEnd('\r');
             if (line.StartsWith("diff --git a/", StringComparison.Ordinal))
             {
                 CompleteSection();
