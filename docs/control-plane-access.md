@@ -48,7 +48,8 @@ operator session.
 - Control Plane sign-in is `/control/login`, submitted to
   `POST /v1/auth/control-cookie-login`.
 - The endpoint verifies the credentials using the shared account service and issues a separate
-  host-only `BeaconControlAuth` cookie only when the persisted account is a platform administrator.
+  host-only `BeaconControlAuth` cookie only when the persisted account has one of the valid
+  platform-operator roles. Customer accounts without an operator role are refused.
 - The control cookie is HttpOnly, SameSite=Strict, Secure in Production, and has an eight-hour
   absolute ticket lifetime. No cookie Domain attribute is set, so the browser does not send it
   to the customer hostname.
@@ -66,13 +67,14 @@ operator session.
   `/_blazor/*`, `/brand/*`, `/app.css` and its seven imported `app-*.css` stylesheets,
   `/shell.js`, `/timezone.js`, `/chat.js`, and `/favicon.ico`).
 
-The Control Plane reuses the existing `User` account and credentials, but operator authority is
-a persisted role key (`SystemAdministrator`, `Support`, `Billing`, or `Auditor`) resolved by
-`IAdminGate` on every privileged operation. The legacy `User.IsAdmin` flag remains a compatibility
-marker for SystemAdministrator only; other operator roles never receive customer-side administrator
-bypasses. Role changes increment `SessionVersion`, so older sessions cannot retain their previous
-permissions. Only SystemAdministrator can assign or remove operator roles; those changes require a
-fresh TOTP step-up and are audited. A separate operator credential store is outside the current alpha scope.
+The Control Plane reuses the existing `User` account and credentials; a separate operator identity
+and credential store is deferred. Operator roles are persisted as a key on the user account and can
+be assigned or removed at `/admin/operators` by an elevated SystemAdministrator. The four roles
+(`SystemAdministrator`, `Support`, `Billing`, and `Auditor`) are resolved by `IAdminGate` on every
+privileged operation. The Control Plane ticket marks an authenticated operator, while the legacy
+`User.IsAdmin` flag remains true only for SystemAdministrator and preserves customer-side admin
+semantics. Role changes increment `SessionVersion`, so older sessions cannot retain their previous
+permissions. Role changes require a fresh TOTP step-up and are audited.
 
 ## Bootstrap and recovery
 
@@ -126,8 +128,11 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
 
 ## Explicitly not complete yet
 
-- Operator identities and assignable SystemAdministrator/Support/Billing/Auditor role membership
-  are not separate persisted records yet; current admission uses `User.IsAdmin`.
+- Operator identities do not yet have a separate credential/account store; they reuse customer
+  `User` accounts. Persisted SystemAdministrator/Support/Billing/Auditor roles can be assigned
+  and removed at `/admin/operators`. The role is stored on the user account, and the legacy
+  `User.IsAdmin` marker is true only for SystemAdministrator; `IAdminGate` derives the effective
+  permissions from the persisted role.
 - Operator TOTP enrollment is available at `/control/security`. A successful `/control/elevate`
   verification places a signed ten-minute elevation claim in the Control Plane cookie. Organization
   creation, owner invitations, invitation revocation, Alpha entitlement changes, and SMTP mutations
@@ -142,6 +147,6 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   another active owner. The last active owner also cannot be demoted.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
-- Billing persistence/provider integration, full operator-role administration, lost-authenticator
-  recovery, organization suspension/closure, production operations telemetry/log access, data
-  export/deletion, and end-to-end entitlement enforcement remain future work.
+- Billing persistence/provider integration, lost-authenticator recovery, organization
+  suspension/closure, production operations telemetry/log access, data export/deletion, and
+  granular feature/usage entitlement enforcement remain future work.
