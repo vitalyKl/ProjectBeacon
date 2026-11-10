@@ -353,6 +353,31 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task RevokeOrgInvite_ReleasesPendingMemberReservation()
+    {
+        var owner = User.Create("owner-revoke", "owner-revoke@example.test", "hash");
+        var org = Org.Create("Revoke invite organization");
+        _db.Users.Add(owner);
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var created = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(
+                org.Id, "reserved-seat@example.test", MemberRole.Member, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var revoked = await new RevokeOrgInviteHandler(Factory(), _auth).HandleAsync(
+            new RevokeInviteRequest(created.Value!.Id, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(revoked.Success, revoked.Error);
+        Assert.Equal(InviteStatus.Revoked, (await _db.OrgInvites.IgnoreQueryFilters()
+            .SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task DuplicatePendingInvite_Fails()
     {
         var admin = await SeedAdminAsync();
