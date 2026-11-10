@@ -292,8 +292,11 @@ internal sealed class RepoPatchApplyService
         var includeSection = false;
         var sawSection = false;
 
-        foreach (var line in patch.Split('\n'))
+        foreach (var rawLine in patch.Split('\n'))
         {
+            // A CRLF patch line keeps its trailing carriage return in Split('\n').
+            // Strip it before reading paths and emit a normalized LF patch for git apply.
+            var line = rawLine.TrimEnd('\r');
             if (line.StartsWith("diff --git a/", StringComparison.Ordinal))
             {
                 var separator = line.IndexOf(" b/", "diff --git a/".Length, StringComparison.Ordinal);
