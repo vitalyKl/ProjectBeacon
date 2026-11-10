@@ -107,7 +107,8 @@ public sealed partial class PipelineHandlerTests
         Assert.True(closed.Success, closed.Error);
         Assert.Equal(TaskPipelineStage.Closed, closed.Value!.Stage);
         Assert.Equal(TaskItemStatus.Done, closed.Value.Status);
-        Assert.Equal("Looks solid", closed.Value.ReviewNotes);
+        Assert.StartsWith("Looks solid", closed.Value.ReviewNotes);
+        Assert.Contains("Proposal Inbox at pipeline close", closed.Value.ReviewNotes);
 
         var state = await new GetPipelineHandler(factory)
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
