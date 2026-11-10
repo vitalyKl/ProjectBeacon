@@ -44,6 +44,7 @@ public sealed class Proposal : Entity, IProjectScoped
     public int? ConflictRevision { get; private set; }
     public string? ConflictReason { get; private set; }
     public Guid? SupersededById { get; private set; }
+    public Guid? ApplyCommandId { get; private set; }
 
     /// <summary>Optimistic-concurrency token for proposal lifecycle transitions.</summary>
     public int StateRevision { get; private set; } = 1;
@@ -158,6 +159,50 @@ public sealed class Proposal : Entity, IProjectScoped
         StateRevision++;
     }
 
+    /// <summary>Records that an approved RepoPatch has been queued for the workstation.</summary>
+    public void StartApply(Guid commandId, Guid? reviewerUserId, DateTime queuedAtUtc)
+    {
+        EnsurePending();
+        if (commandId == Guid.Empty)
+            throw new ArgumentException("An apply command id is required.", nameof(commandId));
+        if (reviewerUserId == Guid.Empty)
+            throw new ArgumentException("Reviewer id cannot be empty.", nameof(reviewerUserId));
+        if (queuedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Apply time must be UTC.", nameof(queuedAtUtc));
+
+        Status = ProposalStatus.Applying;
+        ApplyCommandId = commandId;
+        DecidedAt = queuedAtUtc;
+        DecidedByUserId = reviewerUserId;
+        DecisionNote = null;
+        StateRevision++;
+    }
+
+    /// <summary>Marks the RepoPatch accepted only after the workstation confirms it was applied.</summary>
+    public void CompleteApply(DateTime appliedAtUtc)
+    {
+        EnsureApplying();
+        if (appliedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Apply time must be UTC.", nameof(appliedAtUtc));
+        Status = ProposalStatus.Accepted;
+        DecidedAt = appliedAtUtc;
+        StateRevision++;
+    }
+
+    /// <summary>Records a client-side path, base-hash or patch conflict without changing repository files.</summary>
+    public void ConflictApply(string reason, DateTime conflictAtUtc)
+    {
+        EnsureApplying();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 200)
+            throw new ArgumentException("A short apply conflict reason is required.", nameof(reason));
+        if (conflictAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Conflict time must be UTC.", nameof(conflictAtUtc));
+        Status = ProposalStatus.Conflicted;
+        ConflictReason = reason;
+        DecidedAt = conflictAtUtc;
+        StateRevision++;
+    }
+
     public void Reject(Guid humanUserId, string? note, DateTime decidedAtUtc)
     {
         EnsurePending();
@@ -265,6 +310,12 @@ public sealed class Proposal : Entity, IProjectScoped
 
     private static string? NormalizeNote(string? note)
         => string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+    private void EnsureApplying()
+    {
+        if (Status != ProposalStatus.Applying)
+            throw new InvalidOperationException($"Cannot complete a RepoPatch in status {Status}.");
+    }
 
     private void EnsurePending()
     {
