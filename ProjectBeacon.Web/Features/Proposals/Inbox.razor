@@ -490,7 +490,7 @@ else
     private async Task AcceptLegacyDecision(DecisionDto decision)
     {
         if (!_canGovernance) return;
-        var result = await AcceptDecision.HandleAsync(decision.Id);
+        var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
         else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
@@ -498,7 +498,7 @@ else
     private async Task RejectLegacyDecision(DecisionDto decision)
     {
         if (!_canGovernance) return;
-        var result = await DeprecateDecision.HandleAsync(decision.Id);
+        var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
         else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
@@ -506,7 +506,7 @@ else
     private async Task ActivateLegacyConstraint(ConstraintDto constraint)
     {
         if (!_canGovernance) return;
-        var result = await ActivateConstraint.HandleAsync(constraint.Id);
+        var result = await ActivateConstraint.HandleAsync(constraint.Id, _actor);
         if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
         else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
@@ -514,7 +514,7 @@ else
     private async Task RejectLegacyConstraint(ConstraintDto constraint)
     {
         if (!_canGovernance) return;
-        var result = await RejectConstraint.HandleAsync(constraint.Id);
+        var result = await RejectConstraint.HandleAsync(constraint.Id, _actor);
         if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
         else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
