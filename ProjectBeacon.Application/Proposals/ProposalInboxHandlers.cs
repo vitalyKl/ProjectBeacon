@@ -1,9 +1,11 @@
 namespace ProjectBeacon.Application.Proposals;
 
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
 using Application.Persistence;
 using Domain.Enums;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>Counts all human-reviewable content in one project's Inbox.</summary>
@@ -65,11 +67,16 @@ public sealed class ReviewContextDraftHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+    private readonly IAuditWriter _auditWriter;
 
-    public ReviewContextDraftHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    public ReviewContextDraftHandler(
+        IBeaconDbFactory dbFactory,
+        ContentWriter contentWriter,
+        IAuditWriter auditWriter)
     {
         _dbFactory = dbFactory;
         _contentWriter = contentWriter;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ContextDraftReviewResult>> HandleAsync(
@@ -94,19 +101,42 @@ public sealed class ReviewContextDraftHandler
         if (section.Revision != command.ExpectedRevision)
             return Result.Failure<ContextDraftReviewResult>("Context draft changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
 
+        var orgId = await db.Projects
+            .Where(project => project.Id == command.ProjectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is null)
+            return Result.Failure<ContextDraftReviewResult>("Project not found.");
+
+        var now = DateTime.UtcNow;
         if (command.Accept)
         {
-            var updated = await db.ContextSections
-                .Where(item => item.Id == command.ContextSectionId
-                    && item.ProjectId == command.ProjectId
-                    && item.ReviewState == ContextReviewState.NeedsReview
-                    && item.Revision == command.ExpectedRevision)
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(item => item.ReviewState, ContextReviewState.Reviewed)
-                    .SetProperty(item => item.UpdatedAt, DateTime.UtcNow), ct);
-            if (updated == 0)
+            try
+            {
+                section.MarkReviewed(command.Actor.UserId.Value.ToString("D"));
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Result.Failure<ContextDraftReviewResult>(exception.Message, ErrorKind.Conflict);
+            }
+
+            _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                command.Actor,
+                "context.draft.approved",
+                "ContextSection",
+                section.Id.ToString("D"),
+                orgId,
+                command.ProjectId,
+                detailsJson: JsonSerializer.Serialize(new { newState = ContextReviewState.Reviewed.ToString() })));
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
                 return Result.Failure<ContextDraftReviewResult>(
                     "Context draft changed while it was being approved. Refresh and retry.", ErrorKind.Conflict);
+            }
 
             return Result.Ok(new ContextDraftReviewResult(
                 command.ContextSectionId, ContextReviewState.Reviewed, Deleted: false));
@@ -114,6 +144,14 @@ public sealed class ReviewContextDraftHandler
 
         section.Delete();
         db.ContextSections.Remove(section);
+        _auditWriter.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "context.draft.rejected",
+            "ContextSection",
+            section.Id.ToString("D"),
+            orgId,
+            command.ProjectId,
+            detailsJson: JsonSerializer.Serialize(new { newState = "Deleted" })));
         var saved = await _contentWriter.SaveAsync(
             db,
             section,
