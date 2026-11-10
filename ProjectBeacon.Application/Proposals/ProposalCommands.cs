@@ -333,151 +333,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         && existing.SubtaskId == subtaskId
         && existing.SessionId == sessionId;
 
-    private static bool TryValidatePayload(ContentTargetKind kind, string? payload, out string? error)
-    {
-        error = null;
-        try
-        {
-            Proposal.ValidatePayload(payload);
-            using var document = JsonDocument.Parse(payload!);
-            var root = document.RootElement;
-            switch (kind)
-            {
-                case ContentTargetKind.ContextSection:
-                    ExactProperties(root, "title", "bodyMarkdown");
-                    RequiredText(root, "title", 500);
-                    RequiredText(root, "bodyMarkdown", 30_000);
-                    break;
-                case ContentTargetKind.Decision:
-                    ExactProperties(root, "title", "context", "decisionBody", "consequences");
-                    RequiredText(root, "title", 200);
-                    RequiredText(root, "context", 5_000);
-                    RequiredText(root, "decisionBody", 20_000);
-                    OptionalText(root, "consequences", 5_000);
-                    break;
-                case ContentTargetKind.Constraint:
-                    ExactProperties(root, "body", "scopePath");
-                    RequiredText(root, "body", 5_000);
-                    OptionalText(root, "scopePath", 1_000);
-                    break;
-                case ContentTargetKind.Milestone:
-                    ExactProperties(root, "name", "description", "order");
-                    RequiredText(root, "name", 200);
-                    OptionalText(root, "description", 5_000);
-                    if (!root.GetProperty("order").TryGetInt32(out _))
-                        throw new ArgumentException("Milestone order must be an integer.");
-                    break;
-                case ContentTargetKind.ProjectDescription:
-                    ExactProperties(root, "description");
-                    OptionalText(root, "description", 20_000);
-                    break;
-                case ContentTargetKind.TaskDescription:
-                    ExactProperties(root, "description", "reviewNotes");
-                    OptionalText(root, "description", 20_000);
-                    OptionalText(root, "reviewNotes", 20_000);
-                    break;
-                default:
-                    throw new ArgumentException("This target kind does not support content proposals.");
-            }
-            return true;
-        }
-        catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
-        {
-            error = exception.Message;
-            return false;
-        }
-    }
-
-    private static void ExactProperties(JsonElement root, params string[] names)
-    {
-        if (root.ValueKind != JsonValueKind.Object)
-            throw new ArgumentException("Proposal payload must be a JSON object.");
-        var actual = root.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
-        if (actual.Count != names.Length || names.Any(name => !actual.Contains(name)))
-            throw new ArgumentException("Proposal payload contains missing or unsupported fields.");
-    }
-
-    private static string RequiredText(JsonElement root, string name, int maximumLength)
-    {
-        var value = root.GetProperty(name);
-        if (value.ValueKind != JsonValueKind.String)
-            throw new ArgumentException($"'{name}' must be a string.");
-        var text = value.GetString()!;
-        if (string.IsNullOrWhiteSpace(text) || text.Length > maximumLength)
-            throw new ArgumentException($"'{name}' must contain 1-{maximumLength} characters.");
-        return text;
-    }
-
-    private static string? OptionalText(JsonElement root, string name, int maximumLength)
-    {
-        var value = root.GetProperty(name);
-        if (value.ValueKind == JsonValueKind.Null)
-            return null;
-        if (value.ValueKind != JsonValueKind.String)
-            throw new ArgumentException($"'{name}' must be a string or null.");
-        var text = value.GetString();
-        if (text?.Length > maximumLength)
-            throw new ArgumentException($"'{name}' must not exceed {maximumLength} characters.");
-        return text;
-    }
-
-    private static async Task<ProposalTarget?> LoadTargetAsync(
+    private void StageAudit(
         IBeaconDb db,
-        Guid projectId,
-        ContentTargetKind kind,
-        Guid targetId,
-        CancellationToken ct)
-    {
-        switch (kind)
-        {
-            case ContentTargetKind.ContextSection:
-            {
-                var target = await db.ContextSections.FirstOrDefaultAsync(
-                    item => item.Id == targetId && item.ProjectId == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.Revision,
-                    target.ReviewState == ContextReviewState.Reviewed);
-            }
-            case ContentTargetKind.Decision:
-            {
-                var target = await db.Decisions.FirstOrDefaultAsync(
-                    item => item.Id == targetId && item.ProjectId == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.Revision,
-                    target.Status == DecisionStatus.Accepted);
-            }
-            case ContentTargetKind.Constraint:
-            {
-                var target = await db.Constraints.FirstOrDefaultAsync(
-                    item => item.Id == targetId && item.ProjectId == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.Revision,
-                    target.Status == ConstraintStatus.Active);
-            }
-            case ContentTargetKind.Milestone:
-            {
-                var target = await db.Milestones.FirstOrDefaultAsync(
-                    item => item.Id == targetId && item.ProjectId == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.Revision, true);
-            }
-            case ContentTargetKind.ProjectDescription:
-            {
-                if (targetId != projectId)
-                    return null;
-                var target = await db.Projects.FirstOrDefaultAsync(item => item.Id == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.Revision, true);
-            }
-            case ContentTargetKind.TaskDescription:
-            {
-                var target = await db.Tasks.FirstOrDefaultAsync(
-                    item => item.Id == targetId && item.ProjectId == projectId, ct);
-                return target is null ? null : new ProposalTarget(target, target.ContentRevision, true);
-            }
-            default:
-                return null;
-        }
-    }
-
-    private static void StageAudit(
-        IBeaconDb db,
-        IAuditWriter auditWriter,
         ActorContext actor,
         Proposal proposal,
         Guid orgId,
@@ -492,19 +349,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             orgId,
             proposal.ProjectId,
             detailsJson: JsonSerializer.Serialize(new { newState = status.ToString() }));
-        auditWriter.Stage(db, audit);
+        _auditWriter.Stage(db, audit);
     }
-
-    private void StageAudit(
-        IBeaconDb db,
-        ActorContext actor,
-        Proposal proposal,
-        Guid orgId,
-        string action,
-        ProposalStatus status) =>
-        StageAudit(db, _auditWriter, actor, proposal, orgId, action, status);
-
-    private sealed record ProposalTarget(object Entity, int Revision, bool Reviewable);
 
     private sealed record ProposalAuthorScope(
         bool Success,
