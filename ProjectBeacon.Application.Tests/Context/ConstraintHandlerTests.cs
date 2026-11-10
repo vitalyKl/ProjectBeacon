@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Context;
 using Application.Authorization;
+using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
