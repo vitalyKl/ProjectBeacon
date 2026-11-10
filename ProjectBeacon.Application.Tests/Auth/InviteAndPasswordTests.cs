@@ -11,6 +11,7 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.Audit;
 using Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
