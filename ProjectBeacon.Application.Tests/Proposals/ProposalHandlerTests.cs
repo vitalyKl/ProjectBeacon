@@ -204,6 +204,48 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task NewSubmissionMaterializesExpiredPendingRowsAndAuditsExpiry()
+    {
+        var expired = Proposal.Create(
+            _projectId,
+            null,
+            null,
+            null,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            ProposalOperation.Update,
+            1,
+            new string('a', 64),
+            """{"description":"old proposal"}""",
+            "No longer current.",
+            ProposalAuthorKind.Human,
+            _userId,
+            null,
+            null,
+            "Human",
+            "expired-proposal-key",
+            DateTime.UtcNow.AddDays(-31));
+        _db.Proposals.Add(expired);
+        _db.SaveChanges();
+        var expiredId = expired.Id;
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, Request(), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        await _db.Entry(expired).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Expired, expired.Status);
+
+        var expiryAudit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "proposal.expired" && item.TargetId == expiredId.ToString("D"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Proposal", expiryAudit.TargetType);
+    }
+
+    [Fact]
     public async Task ProjectMemberCanCreateListAndAcceptOrdinaryProposal()
     {
         var member = User.Create("proposal-member", "proposal-member@beacon.local", "hash");
