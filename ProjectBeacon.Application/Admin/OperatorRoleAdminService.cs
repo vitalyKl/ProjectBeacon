@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Enums;
 
@@ -15,7 +16,8 @@ public sealed record OperatorAccountDto(
 public sealed class OperatorRoleAdminService(
     IBeaconDbFactory dbFactory,
     IAuditWriter auditWriter,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IUserSessionVersionCache? sessionVersions = null)
 {
     public async Task<Result<IReadOnlyList<OperatorAccountDto>>> ListAsync(
         AdminActor actor, CancellationToken ct = default)
@@ -66,6 +68,7 @@ public sealed class OperatorRoleAdminService(
             previousRole?.ToString() ?? "None", role.ToString());
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
     }
 
@@ -96,6 +99,7 @@ public sealed class OperatorRoleAdminService(
             previousRole.Value.ToString(), "None");
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        sessionVersions?.Invalidate(user.Id);
         return Result.Ok();
     }
 
