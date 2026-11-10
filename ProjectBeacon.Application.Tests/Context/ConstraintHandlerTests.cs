@@ -50,7 +50,7 @@ public sealed class ConstraintHandlerTests : IDisposable
     public async Task Propose_IsIdempotentAndNeverActivatesConstraint()
     {
         var handler = new CreateConstraintHandler(HandlerSqlite.Factory(_connection));
-        var request = new CreateConstraintRequest(_projectId, "Agents may only propose constraints", ConstraintKind.Must);
+        var request = new CreateConstraintRequest(_projectId, "Agents may only propose constraints", ConstraintKind.Must, HumanActor());
 
         var first = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
         var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
@@ -74,12 +74,12 @@ public sealed class ConstraintHandlerTests : IDisposable
         _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
         _db.SaveChanges();
 
-        var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new CreateConstraintRequest(_projectId, "Owner approval required.", ConstraintKind.Must),
-            TestContext.Current.CancellationToken);
-        Assert.True(created.Success, created.Error);
         var actor = new ActorContext(
             ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
+            new CreateConstraintRequest(_projectId, "Owner approval required.", ConstraintKind.Must, actor),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
         var factory = HandlerSqlite.Factory(_connection);
 
         var activate = await new ActivateConstraintHandler(factory, new AuthorizationService())
@@ -100,7 +100,7 @@ public sealed class ConstraintHandlerTests : IDisposable
     public async Task Activate_ThenReject_UpdatesStatus()
     {
         var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new CreateConstraintRequest(_projectId, "must ship tests", ConstraintKind.Must), TestContext.Current.CancellationToken);
+            new CreateConstraintRequest(_projectId, "must ship tests", ConstraintKind.Must, HumanActor()), TestContext.Current.CancellationToken);
         Assert.True(created.Success);
         Assert.Equal(ConstraintStatus.Proposed, created.Value!.Status);
 
