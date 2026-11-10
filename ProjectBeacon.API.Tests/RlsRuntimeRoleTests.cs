@@ -238,7 +238,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
-        Assert.True(result.Value?.Allowed);
+        Assert.True(result.Value?.Allowed == true);
         Assert.Equal(0L, result.Value?.CurrentUsage);
         Assert.Equal(1L, result.Value?.Limit);
     }
