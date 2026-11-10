@@ -2816,4 +2816,100 @@ No Beacon-hosted coding agent.</value>
   <data name="MarkdownExpand" xml:space="preserve"><value>Show more</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>Show less</value></data>
   <data name="Characters" xml:space="preserve"><value>characters</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>Proposal inbox</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>Review proposed project knowledge and revisions.</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>Members can review ordinary content. Decision and Constraint transitions require an Owner or Admin.</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>Conflicted</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>Target type</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>Showing {0} matching proposals.</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>Accept selected</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>No proposals match these filters.</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>Revision-bound proposals</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>The proposal is based on an older revision.</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>Current revision</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>Proposal details</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>Payload to apply when accepted (JSON)</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>Compare with base snapshot</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>Base snapshot</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>The base snapshot is no longer available.</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>Proposed content</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>Decision note</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>Proposal accepted and applied.</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>Proposal rejected.</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>Batch accept: {0} succeeded, {1} failed.</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>Existing review items</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>Context drafts awaiting review</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>No existing review items.</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>Proposed decisions</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>Proposed constraints</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>Only a project or organization Owner/Admin may decide governance items.</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>Context draft approved.</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>Context draft rejected and archived.</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>Project membership is required to view this inbox.</value>
+  </data>
 </root>
