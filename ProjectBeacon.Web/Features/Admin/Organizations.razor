@@ -15,7 +15,7 @@
 @inject IConfiguration Configuration
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
-@inject IOrganizationAdminService Organizations
+@inject IOrganizationAdminService OrganizationAdmin
 @inject IEntitlementService Entitlements
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -568,7 +568,7 @@
 
         if (OrganizationId is { } orgId)
         {
-            var result = await Organizations.GetAsync(await CurrentAdminActor(), orgId);
+            var result = await OrganizationAdmin.GetAsync(await CurrentAdminActor(), orgId);
             if (!result.Success)
             {
                 _detail = null;
@@ -606,7 +606,7 @@
         _loading = true;
         try
         {
-            var result = await Organizations.ListAsync(await CurrentAdminActor(), _search, _page, PageSize);
+            var result = await OrganizationAdmin.ListAsync(await CurrentAdminActor(), _search, _page, PageSize);
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not load organizations.");
             _organizations = result.Value!.Items.ToList();
             _totalCount = result.Value.TotalCount;
@@ -621,7 +621,7 @@
         _saving = true;
         try
         {
-            var result = await Organizations.CreateAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true),
+            var result = await OrganizationAdmin.CreateAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true),
                 new CreateOrganizationWithOwnerRequest(_newName, _newDescription, _ownerEmail));
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not create organization.");
             _createdInvite = result.Value;
@@ -640,7 +640,7 @@
         _saving = true;
         try
         {
-            var result = await Organizations.InviteOwnerAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, _inviteEmail);
+            var result = await OrganizationAdmin.InviteOwnerAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, _inviteEmail);
             if (!result.Success) throw new InvalidOperationException(result.Error ?? "Could not invite owner.");
             _createdInvite = result.Value;
             _inviteEmail = string.Empty;
@@ -655,7 +655,7 @@
     {
         if (OrganizationId is not { } orgId
             || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true)) return;
-        var result = await Organizations.RevokeInviteAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, inviteId);
+        var result = await OrganizationAdmin.RevokeInviteAsync(await CurrentAdminActor(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true), orgId, inviteId);
         if (!result.Success) Snackbar.Add(result.Error ?? "Could not revoke invitation.", Severity.Error);
         else { Snackbar.Add("Invitation revoked.", Severity.Success); await ReloadDetail(); }
     }
@@ -684,7 +684,7 @@
         {
             var actor = await CurrentAdminActor(
                 OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true);
-            var result = await Organizations.ChangeMemberRoleAsync(actor, orgId, userId, role);
+            var result = await OrganizationAdmin.ChangeMemberRoleAsync(actor, orgId, userId, role);
             if (!result.Success)
                 throw new InvalidOperationException(result.Error ?? "Could not change member role.");
             Snackbar.Add("Organization member role updated.", Severity.Success);
@@ -716,7 +716,7 @@
         {
             var actor = await CurrentAdminActor(
                 OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true);
-            var result = await Organizations.SetAccountDisabledAsync(actor, orgId, userId, disabled);
+            var result = await OrganizationAdmin.SetAccountDisabledAsync(actor, orgId, userId, disabled);
             if (!result.Success)
                 throw new InvalidOperationException(result.Error ?? $"Could not {action} account.");
             Snackbar.Add(disabled ? "Global account disabled." : "Global account enabled.", Severity.Success);
@@ -764,7 +764,7 @@
         {
             var actor = await CurrentAdminActor(
                 OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true);
-            var result = await Organizations.SetLifecycleStatusAsync(actor, orgId, target, reason);
+            var result = await OrganizationAdmin.SetLifecycleStatusAsync(actor, orgId, target, reason);
             if (!result.Success)
                 throw new InvalidOperationException(result.Error ?? "Could not change organization lifecycle.");
             _lifecycleReason = string.Empty;
@@ -830,7 +830,7 @@
     private async Task ReloadDetail()
     {
         if (OrganizationId is not { } orgId) return;
-        var result = await Organizations.GetAsync(await CurrentAdminActor(), orgId);
+        var result = await OrganizationAdmin.GetAsync(await CurrentAdminActor(), orgId);
         if (result.Success)
         {
             _detail = result.Value;
