@@ -192,7 +192,7 @@ public sealed class Proposal : Entity, IProjectScoped
     public void MarkConflicted(int? actualRevision, string reason, DateTime decidedAtUtc)
     {
         EnsurePending();
-        if (actualRevision < 1)
+        if (actualRevision is < 1)
             throw new ArgumentOutOfRangeException(nameof(actualRevision));
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > 200)
             throw new ArgumentException("A short conflict reason is required.", nameof(reason));
