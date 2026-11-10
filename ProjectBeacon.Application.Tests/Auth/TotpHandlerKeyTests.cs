@@ -95,6 +95,12 @@ public sealed class TotpHandlerKeyTests : IDisposable
     public async Task ConfirmTotp_GeneratesTenOneTimeRecoveryCodes_AndPersistsOnlyHashes()
     {
         var user = await AddUser("recovery-confirm");
+        await using (var setupDb = _dbFactory.CreateDbContext())
+        {
+            var setupUser = await setupDb.Users.SingleAsync(item => item.Id == user.Id, TestContext.Current.CancellationToken);
+            setupUser.AssignOperatorRole(nameof(OperatorRole.Support));
+            await setupDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
         var protector = TestProtectors.Dev(TestProtectors.LegacyKey);
         var code = CurrentCode(await PendingSecret(user.Id, protector));
 
