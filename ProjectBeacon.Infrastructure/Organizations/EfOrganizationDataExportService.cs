@@ -503,7 +503,7 @@ public sealed class EfOrganizationDataExportService(
                 taskCount = tasks.Count,
                 attachmentCount = attachmentRows.Count,
                 rowCount = totalRows
-            }, ct);
+            }, jsonBudget, ct);
             await AddJsonEntryAsync(archive, "organization.json", organization, jsonBudget, ct);
             await AddJsonEntryAsync(archive, "members.json", members, jsonBudget, ct);
             await AddJsonEntryAsync(archive, "organization-invites.json", orgInvites, jsonBudget, ct);
@@ -654,7 +654,7 @@ public sealed class EfOrganizationDataExportService(
         }
     }
 
-    private sealed class ExportPayloadTooLargeException : Exception;
+    private sealed class ExportPayloadTooLargeException : Exception { }
 
     private sealed class BudgetWriteStream(
         Stream inner,
