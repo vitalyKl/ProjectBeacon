@@ -98,4 +98,42 @@ public sealed class InboxRenderTests : BUnitRenderBase
             cut.Find(".proposal-diff-line.is-added code").TextContent.Trim());
         Assert.Contains("Line-by-line content diff", cut.Markup);
     }
+
+    [Fact]
+    public void Inbox_AcceptedProposal_RendersAppliedRevisionAndAcceptedPayload()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var now = DateTime.UtcNow;
+        const string acceptedPayload = """{"description":"The accepted project goal"}""";
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId,
+            ContentTargetKind.ProjectDescription,
+            projectId,
+            1,
+            """{"description":"The previous project goal"}""",
+            "Human",
+            userId.ToString("D")));
+        var accepted = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.ProjectDescription, projectId,
+            ProposalOperation.Update, 1, new string('c', 64),
+            acceptedPayload,
+            "Clarifies the agreed project goal.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-render-accepted", now);
+        accepted.AutoAccept(2, acceptedPayload, now);
+        DbContext.Proposals.Add(accepted);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+
+        Assert.Contains("Accepted", cut.Markup);
+        Assert.Contains("Applied revision: 2", cut.Markup);
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        Assert.Contains("The accepted project goal", cut.Markup);
+        Assert.Contains("Clarifies the agreed project goal.", cut.Markup);
+        Assert.DoesNotContain("Payload to apply when accepted", cut.Markup);
+    }
+
 }
