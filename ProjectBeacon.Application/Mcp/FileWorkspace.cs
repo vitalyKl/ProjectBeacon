@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Mcp;
 
-using Application.Common;
 using System.Security.Cryptography;
+using Application.Common;
 /// <summary>A bounded character page from a workspace file.</summary>
 public sealed record FileReadPage(string Content, int Offset, int Limit, int TotalCharacters, int NextOffset)
 {
