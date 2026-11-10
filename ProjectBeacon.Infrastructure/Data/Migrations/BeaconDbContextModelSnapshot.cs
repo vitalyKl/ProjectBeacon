@@ -31,6 +31,15 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Content.Proposal", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
@@ -94,6 +103,133 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ContentVersions");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Content.Proposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcceptedPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("AuthorTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorKind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AuthorProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AuthorRole")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("AuthorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaseHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("BaseRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("AppliedRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ConflictRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ConflictReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RationaleMarkdown")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StateRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SubtaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SupersededById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "Status", "CreatedAt");
+
+                    b.HasIndex("ProjectId", "SubtaskId", "TargetKind", "TargetId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending' AND \"SubtaskId\" IS NOT NULL");
+
+                    b.HasIndex("ProjectId", "TaskId", "CreatedAt");
+
+                    b.ToTable("Proposals");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Audit.AuditEvent", b =>
