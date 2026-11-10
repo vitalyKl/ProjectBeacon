@@ -205,6 +205,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<BeginTotpHandler>();
         services.AddTransient<ConfirmTotpHandler>();
         services.AddTransient<DisableTotpHandler>();
+        services.AddTransient<RotateOperatorTotpRecoveryCodesHandler>();
+        services.AddTransient<RecoverOperatorTotpHandler>();
         services.AddTransient<ListTaskKindsHandler>();
         services.AddTransient<SaveTaskKindHandler>();
         services.AddTransient<DeleteTaskKindHandler>();
