@@ -22,7 +22,7 @@ public sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         entity.Property(proposal => proposal.IdempotencyKey).HasMaxLength(Proposal.MaxIdempotencyKeyLength).IsRequired();
         entity.Property(proposal => proposal.DecisionNote).HasMaxLength(Proposal.MaxRationaleLength);
         entity.Property(proposal => proposal.AcceptedPayloadJson).HasColumnType("jsonb");
-        entity.Property(proposal => proposal.StateRevision).IsConcurrencyToken();
+        entity.Property(proposal => proposal.StateRevision).HasDefaultValue(1).IsConcurrencyToken();
 
         entity.HasOne<Project>()
             .WithMany()
