@@ -65,6 +65,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         // Share the organization capacity lock with seat reservation/acceptance flows.
         await EntitlementCapacityLock.AcquireOrganizationAsync(
             writeDb.Database, transaction, orgId, ct);
+        var lifecycleStatus = await writeDb.Orgs.AsNoTracking()
+            .Where(org => org.Id == orgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<ProjectDto>(
+                "Projects can only be created for active organizations.",
+                ErrorKind.Conflict);
 
         if (_entitlements is not null)
         {
