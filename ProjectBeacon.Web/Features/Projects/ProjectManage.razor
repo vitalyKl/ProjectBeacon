@@ -21,7 +21,7 @@
 @inject UpdateProjectHandler UpdateProject
 @inject ListProposalPoliciesHandler ListProposalPolicies
 @inject SetProposalPolicyHandler SetProposalPolicy
-@inject IAuthorizationService Authorization
+@inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
 @inject IBeaconDbFactory DbFactory
 @inject DeleteProjectHandler DeleteProject
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
@@ -365,7 +365,7 @@ else
                 return;
             }
 
-            Snackbar.Add(L[\"ProposalPolicySaved\"].Value, Severity.Success);
+            Snackbar.Add(L["ProposalPolicySaved"].Value, Severity.Success);
             await ReloadProposalPolicies();
         }
         finally
