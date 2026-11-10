@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Devices;
 
+using Domain.Common;
 using Application.Agents;
 using Application.Auth;
 using Application.Audit;
@@ -82,7 +83,8 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 
     internal static RuntimeSummary MapSummary(ProjectRuntime runtime, DaemonDevice device, DateTime utcNow) =>
         new(runtime.Id, runtime.ProjectId, runtime.DeviceId, device.Name, device.IsOnline(utcNow),
-            runtime.CreatedAt, runtime.UpdatedAt);
+            runtime.CreatedAt, runtime.UpdatedAt,
+            WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1));
 
     internal static RuntimeDiagnostics MapDiagnostics(ProjectRuntime runtime, DaemonDevice device, DateTime utcNow) =>
         new(runtime.Id, runtime.ProjectId, runtime.DeviceId, device.Name, device.IsOnline(utcNow),

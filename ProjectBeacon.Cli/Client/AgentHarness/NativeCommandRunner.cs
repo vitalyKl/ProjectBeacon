@@ -262,6 +262,32 @@ internal static class NativeCommandRunner
         var fullWorkingDirectory = Path.GetFullPath(workingDirectory);
         var safePath = BuildSafePath(pathOverride ?? Environment.GetEnvironmentVariable("PATH"), fullWorkingDirectory);
         var executablePath = ResolveExecutable(argv[0], safePath, fullWorkingDirectory);
+        var isGitCommand = string.Equals(
+            Path.GetFileNameWithoutExtension(executablePath), "git", StringComparison.OrdinalIgnoreCase);
+        var gitHooksPath = isGitCommand
+            ? Path.Combine(isolatedHome, "git-hooks-empty")
+            : null;
+        if (gitHooksPath is not null)
+            Directory.CreateDirectory(gitHooksPath);
+
+        var effectiveArguments = new List<string>();
+        if (isGitCommand)
+        {
+            // Keep read-only Git inspection from invoking repository-configured helpers.
+            // These global options precede the agent's allowlisted subcommand and cannot be
+            // overridden through run_command because user-supplied Git -c is rejected.
+            effectiveArguments.Add("--no-pager");
+            effectiveArguments.Add("-c");
+            effectiveArguments.Add("core.fsmonitor=false");
+            effectiveArguments.Add("-c");
+            effectiveArguments.Add("core.hooksPath=" + gitHooksPath);
+            effectiveArguments.Add("-c");
+            effectiveArguments.Add("diff.external=");
+            effectiveArguments.Add("-c");
+            effectiveArguments.Add("core.pager=cat");
+        }
+        effectiveArguments.AddRange(argv.Skip(1));
+
         var isBatchShim = OperatingSystem.IsWindows()
             && (Path.GetExtension(executablePath).Equals(".cmd", StringComparison.OrdinalIgnoreCase)
                 || Path.GetExtension(executablePath).Equals(".bat", StringComparison.OrdinalIgnoreCase));
@@ -286,14 +312,14 @@ internal static class NativeCommandRunner
                 throw new FileNotFoundException("Windows command interpreter was not found.", cmdPath);
 
             var command = QuoteBatchToken(executablePath)
-                + string.Concat(argv.Skip(1).Select(argument => " " + QuoteBatchToken(argument)));
+                + string.Concat(effectiveArguments.Select(argument => " " + QuoteBatchToken(argument)));
             startInfo.FileName = cmdPath;
             startInfo.Arguments = "/d /v:off /s /c \"" + command + "\"";
         }
         else
         {
             startInfo.FileName = executablePath;
-            foreach (var argument in argv.Skip(1))
+            foreach (var argument in effectiveArguments)
                 startInfo.ArgumentList.Add(argument);
         }
 
@@ -341,6 +367,11 @@ internal static class NativeCommandRunner
         startInfo.Environment["GIT_PAGER"] = "cat";
         startInfo.Environment["GH_PAGER"] = "cat";
         startInfo.Environment["PAGER"] = "cat";
+        if (isGitCommand)
+        {
+            startInfo.Environment.Remove("GIT_EXTERNAL_DIFF");
+            startInfo.Environment.Remove("GIT_CONFIG_PARAMETERS");
+        }
         return startInfo;
     }
 

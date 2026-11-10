@@ -28,9 +28,9 @@ else
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
         <MudTextField @bind-Value="_title" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudTextField @bind-Value="_context" Label="@L["Context"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_consequences" Label="@L["Consequences"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MarkdownEditor @bind-Value="_context" Label="@L["Context"]" Lines="3" Class="mt-2" />
+        <MarkdownEditor @bind-Value="_body" Label="@L["Content"]" Lines="5" Class="mt-2" />
+        <MarkdownEditor @bind-Value="_consequences" Label="@L["Consequences"]" Lines="3" Class="mt-2" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
     </MudPaper>
 
@@ -58,10 +58,10 @@ else
                     <StatusChip Color="@ChipPalette.ForDecisionStatus(context.Status)" Label="@ChromeLabels.Decision(L, context.Status)" />
                 </MudTd>
                 <MudTd DataLabel="@L["Context"]">
-                    <MudText Typo="Typo.caption" Class="beacon-table-cell-clamp" title="@context.Context">@context.Context</MudText>
+                    <div class="beacon-table-cell-clamp"><MarkdownView Text="@context.Context" Inline="true" /></div>
                 </MudTd>
                 <MudTd DataLabel="@L["Consequences"]">
-                    <MudText Typo="Typo.caption" Class="beacon-table-cell-clamp" title="@context.Consequences">@context.Consequences</MudText>
+                    <div class="beacon-table-cell-clamp"><MarkdownView Text="@context.Consequences" Inline="true" /></div>
                 </MudTd>
                 <MudTd DataLabel="@L["Actions"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Select(context)">@L["Open"]</MudButton>
@@ -83,13 +83,13 @@ else
                 {
                 @if (!string.IsNullOrWhiteSpace(_selected.Context))
                 {
-                    <MudText Typo="Typo.caption" Class="mt-2">@_selected.Context</MudText>
+                    <MarkdownView Text="@_selected.Context" MaxHeight="160" Class="mt-2" />
                 }
-                <MudText Typo="Typo.body2" Class="mt-3 beacon-pre">@_selected.DecisionBody</MudText>
+                <MarkdownView Text="@_selected.DecisionBody" MaxHeight="320" Class="mt-3" />
                 @if (!string.IsNullOrWhiteSpace(_selected.Consequences))
                 {
                     <MudText Typo="Typo.subtitle2" Class="mt-3">@L["Consequences"]</MudText>
-                    <MudText Typo="Typo.body2">@_selected.Consequences</MudText>
+                    <MarkdownView Text="@_selected.Consequences" MaxHeight="220" />
                 }
                 @if (_selected.SupersededById is Guid replacementId)
                 {

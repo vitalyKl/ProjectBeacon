@@ -13,7 +13,7 @@ ProjectBeacon is being developed as a hosted multi-tenant SaaS. Customer self-ho
 3. `dotnet run --project ProjectBeacon.Web --launch-profile http` — Web loads `.env` from the repo root.
 4. Open the customer application at `http://localhost:5083/` and sign in at `/login`. Open the separate Control Plane at `http://control.localhost:5083/control/login`; create the first administrator at `/control/bootstrap` when required. Break-glass recovery is `/control/recover` and is unavailable on the customer host.
 5. Users: `/register` requires an operator-issued organization or project invitation. Public self-service registration is disabled for the SaaS alpha. Invitation links use `bci_` tokens and are emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`.
-6. Product version is `0.6.0` in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows `Beacon v` plus that version.
+6. Product version is centrally defined in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows `Beacon v` plus that version.
 
 **Postgres roles.** The application connects as `beacon_app` (`NOSUPERUSER NOBYPASSRLS`); migrations run as the superuser `beacon`. At Web startup (and in the k8s migrate Job) `EnsureAppRoleAsync` idempotently creates the runtime role and grants privileges. A fail-closed role guard then verifies the **actual** connected role via `pg_roles`/`current_user`: in **Production** the Web host, the Worker, and the migrate Job refuse to start (the Job fails) if the application role has `SUPERUSER` or `BYPASSRLS`, or if the role cannot be verified. In Development/Testing the guard logs a warning and continues.
 

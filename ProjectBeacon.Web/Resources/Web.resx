@@ -2872,4 +2872,33 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>The selected model must have a context size greater than zero. Configure its context window before launching this session.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Response token reserve (0 = automatic)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Compaction starts when prompt usage exceeds the lower of 82% of the context window and the window minus this reserve. Zero reserves 25% automatically.</value></data>
+<data name="GitSyncTitle" xml:space="preserve"><value>Git repository</value></data>
+<data name="GitSyncHelp" xml:space="preserve"><value>Check the configured repository or fast-forward the current branch. Synchronization runs on the attached workstation and never overwrites local changes.</value></data>
+<data name="GitSyncCheck" xml:space="preserve"><value>Check status</value></data>
+<data name="GitSyncNow" xml:space="preserve"><value>Synchronize</value></data>
+<data name="GitSyncWorking" xml:space="preserve"><value>Waiting for the workstation to complete the Git operation…</value></data>
+<data name="GitSyncStillRunning" xml:space="preserve"><value>The Git operation is still running. Refresh this page and check the repository status again.</value></data>
+<data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>No online workstation with GitSync support is attached to this project.</value></data>
+<data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
+<data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+<data name="GitSyncAhead" xml:space="preserve"><value>Ahead</value></data>
+<data name="GitSyncBehind" xml:space="preserve"><value>Behind</value></data>
+<data name="GitSyncClean" xml:space="preserve"><value>Working tree is clean</value></data>
+<data name="GitSyncDirty" xml:space="preserve"><value>Working tree has local changes</value></data>
+<data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Repository status checked.</value></data>
+<data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Repository fast-forwarded successfully.</value></data>
+<data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Synchronization refused; no working-tree changes were made.</value></data>
+<data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git synchronization failed.</value></data>
+<data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Commit or stash local changes before synchronizing.</value></data>
+<data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>A native agent session is active. Wait for it to finish before synchronizing.</value></data>
+<data name="GitSyncReasonDiverged" xml:space="preserve"><value>The local and upstream branches have diverged. Fast-forward is not possible.</value></data>
+<data name="GitSyncReasonDetached" xml:space="preserve"><value>The repository is in detached HEAD state.</value></data>
+<data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>The current branch has no configured upstream.</value></data>
+<data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Could not fetch the tracked upstream. Check the remote and credentials on the workstation.</value></data>
+<data name="GitSyncReasonTimeout" xml:space="preserve"><value>The Git operation timed out.</value></data>
+<data name="MarkdownEdit" xml:space="preserve"><value>Edit</value></data>
+<data name="MarkdownPreview" xml:space="preserve"><value>Preview</value></data>
+<data name="MarkdownExpand" xml:space="preserve"><value>Show more</value></data>
+<data name="MarkdownCollapse" xml:space="preserve"><value>Show less</value></data>
+<data name="Characters" xml:space="preserve"><value>characters</value></data>
 </root>

@@ -20,6 +20,9 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(McpToolNames.SubtaskReportResult, actor);
         Assert.Contains(McpToolNames.PipelineFailSubtask, actor);
         Assert.Contains(McpToolNames.TaskPipelineStatus, actor);
+        Assert.Contains("repo_status", actor);
+        Assert.Contains("repo_status", PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.DoesNotContain("repo_status", PipelineToolPolicy.ToolsForRole("Review"));
         Assert.Contains(McpToolNames.TaskListAttachments, actor);
         Assert.Contains(McpToolNames.TaskReadAttachment, actor);
         Assert.Contains(McpToolNames.GetContextNode, actor);

@@ -149,6 +149,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         public WorkstationCommandKind Kind { get; set; }
         public int Version { get; set; }
         public int Generation { get; set; }
+        public Guid? ProjectId { get; set; }
         public string? PayloadJson { get; set; }
         public string? LocalRoot { get; set; }
     }

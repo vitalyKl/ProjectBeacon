@@ -423,6 +423,10 @@ These are places where the three enforcement layers disagree or are applied unev
 
 ---
 
+### GitSync route
+
+`POST /v1/projects/{projectId}/git-sync` and `GET /v1/projects/{projectId}/git-sync/{commandId}` — `RequireHuman`; both handlers require a human actor with project `Administer` permission (Owner/Admin membership or system admin). The POST queues the command to an attached online workstation; the GET reads only a GitSync command bound to that same project. API tokens, devices, workers, and ordinary project non-members are rejected; system administrators retain the explicit bypass. Neither human-facing response discloses the workstation's local filesystem path. Both routes appear in the generated route-policy inventory.
+
 ## 6. Route inventory cross-check
 
 The route inventory is generated from the mapped `EndpointDataSource`, rather than maintained as an independent route count. This catches routes added after the manual resource-level review above and reports each HTTP method, route template, and route actor policy. The generated inventory is exercised by `EndpointAuthorizationInventoryTests`; any `/v1` route without explicit anonymous, authenticated, or typed actor metadata fails the test.

@@ -1,5 +1,28 @@
 /* Text overflow, preformatted content, chat primitives, forms, inputs and popovers. */
 
+.beacon-markdown-inline {
+    display: inline;
+}
+
+.beacon-markdown-inline p {
+    display: inline;
+    margin: 0;
+}
+
+.beacon-markdown-editor {
+    width: 100%;
+}
+
+.beacon-section-preview {
+    padding: 0 var(--space-2) var(--space-2);
+    color: var(--color-text-secondary);
+}
+
+.beacon-task-subtask-instructions {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
 .beacon-ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;

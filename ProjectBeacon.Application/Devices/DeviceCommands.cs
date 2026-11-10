@@ -51,7 +51,8 @@ public record RuntimeSummary(
     string DeviceName,
     bool DeviceOnline,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    bool GitSyncSupported = false);
 /// <summary>
 /// Runtime diagnostics for privileged viewers (owner/admin, system admin, or device owner): adds the local root.
 /// </summary>
@@ -217,3 +218,48 @@ public record ListHostSamplesRequest(Guid UserId, Guid? DeviceId = null);
 /// Command for list host samples.
 /// </summary>
 public record ListHostSamplesCommand(ListHostSamplesRequest Request) : ICommand<Result<IList<DeviceHostSampleDto>>>;
+
+
+/// <summary>Supported repository synchronization operation.</summary>
+public enum GitSyncMode
+{
+    Status = 0,
+    PullFastForward = 1
+}
+
+/// <summary>Outcome returned by a GitSync command.</summary>
+public enum GitSyncOutcome
+{
+    UpToDate = 0,
+    FastForwarded = 1,
+    Refused = 2,
+    Failed = 3
+}
+
+/// <summary>Machine-readable refusal or failure reason for GitSync.</summary>
+public enum GitSyncRefusalCode
+{
+    DirtyWorkingTree = 0,
+    ActiveSessions = 1,
+    Diverged = 2,
+    Detached = 3,
+    NoUpstream = 4,
+    FetchFailed = 5,
+    Timeout = 6
+}
+
+/// <summary>Bounded repository state returned by the workstation. Stderr is sanitized.</summary>
+public sealed record GitSyncResultDto(
+    string? Branch,
+    string? Upstream,
+    int Ahead,
+    int Behind,
+    bool Clean,
+    bool Detached,
+    bool HasUpstream,
+    bool Diverged,
+    string? HeadBefore,
+    string? HeadAfter,
+    GitSyncOutcome Outcome,
+    GitSyncRefusalCode? ReasonCode,
+    string? Stderr);

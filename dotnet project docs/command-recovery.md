@@ -250,6 +250,10 @@ ACK от первой попытки не может задублировать 
 (atomic claim) — без изменений; H4.2 (delivery contract) — расширен
 только ссылкой на recovery; H4.3 (envelope) — без изменений.
 
+## GitSync
+
+`GitSync` is registered as idempotent in the command catalog. If a claimed command becomes stale, the standard idempotent recovery path may requeue it once. Repeating `Status` or `PullFastForward` converges: a completed fast-forward is reported as `UpToDate` on redelivery. The workstation serializes GitSync against snapshot creation and refuses `PullFastForward` while a native project session is active.
+
 ## Миграция
 
 `20261013090525_AddCommandRecoveryFields`: `WorkstationCommands.Attempts`

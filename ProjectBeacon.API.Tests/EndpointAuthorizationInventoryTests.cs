@@ -32,6 +32,11 @@ public sealed class EndpointAuthorizationInventoryTests
             route.Method == "POST" && route.Route == "/v1/chat/sessions/{id:guid}/parts" && route.Policy == "Device");
         Assert.Contains(routes, route =>
             route.Method == "GET" && route.Route == "/v1/devices/me/provider-connections" && route.Policy == "Device");
+
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/git-sync" && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/git-sync/{commandId:guid}" && route.Policy == "Human");
     }
 
     [Fact]
