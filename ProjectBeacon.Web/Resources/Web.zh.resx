@@ -2745,4 +2745,31 @@ orthstar</value>
   <data name="OpenProposalInbox" xml:space="preserve">
     <value>打开提案收件箱</value>
   </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>提案策略</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>选择哪些受支持的内容更新可以自动应用。默认采用人工审核；Decision 和 Constraint 始终需要 Owner/Admin 审批。</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>无法加载提案策略设置。</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>决策模式</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>限制</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>手动</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>自动</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>只有项目或组织的 Owner/Admin 可以更改这些策略。</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>提案策略已保存。</value>
+  </data>
 </root>
