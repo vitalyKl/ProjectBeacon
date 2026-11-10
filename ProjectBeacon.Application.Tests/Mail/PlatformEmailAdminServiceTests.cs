@@ -115,12 +115,22 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
         var service = new PlatformEmailAdminService(
             _dbFactory, _protector, _email, configuration);
 
-        var settings = await service.GetAsync();
+        var settings = await service.GetAsync(AdminActor());
 
         Assert.Equal("environment", settings.Source);
         Assert.True(settings.Enabled);
         Assert.True(settings.UseStartTls);
         Assert.True(settings.HasPassword);
+    }
+
+    [Fact]
+    public async Task ReadingSettingsAndDeliveryHistory_RequiresPersistedOperatorPermission()
+    {
+        var service = CreateService();
+        var nonOperator = AdminActor() with { IsAdmin = false };
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetAsync(nonOperator));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListRecentAsync(nonOperator));
     }
 
     [Fact]
@@ -158,7 +168,7 @@ public sealed class PlatformEmailAdminServiceTests : IDisposable
             DateTime.UtcNow, "operator@example.test", "smtp_test", "Sent"));
         await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var history = await service.ListRecentAsync();
+        var history = await service.ListRecentAsync(AdminActor());
         Assert.Single(history);
         Assert.Equal("operator@example.test", history[0].Recipient);
         Assert.Equal("smtp_test", history[0].Purpose);

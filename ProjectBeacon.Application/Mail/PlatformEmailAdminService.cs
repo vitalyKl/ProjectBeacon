@@ -69,7 +69,13 @@ public sealed class PlatformEmailAdminService
         _time = timeProvider ?? TimeProvider.System;
     }
 
-    public async Task<PlatformEmailSettingsDto> GetAsync(CancellationToken ct = default)
+    public async Task<PlatformEmailSettingsDto> GetAsync(ActorContext actor, CancellationToken ct = default)
+    {
+        await EnsurePermissionAsync(actor, OperatorPermission.EmailSettingsRead, ct);
+        return await ReadSettingsAsync(ct);
+    }
+
+    private async Task<PlatformEmailSettingsDto> ReadSettingsAsync(CancellationToken ct = default)
     {
         var tenant = GlobalTenant();
         await using var db = _dbFactory.CreateDbContext(tenant);
@@ -200,13 +206,13 @@ public sealed class PlatformEmailAdminService
             detailsJson: """{"resultCode":"settings_updated"}"""));
 
         await db.SaveChangesAsync(ct);
-        return await GetAsync(ct);
+        return await ReadSettingsAsync(ct);
     }
 
     public async Task TestConnectionAsync(ActorContext actor, CancellationToken ct = default)
     {
         await EnsureElevatedAsync(actor, ct);
-        var settings = await GetAsync(ct);
+        var settings = await ReadSettingsAsync(ct);
         if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Host))
             throw new InvalidOperationException("Configure and enable SMTP before testing the connection.");
 
@@ -239,7 +245,7 @@ public sealed class PlatformEmailAdminService
             throw new ArgumentException("A valid recipient address is required.");
         }
 
-        var settings = await GetAsync(ct);
+        var settings = await ReadSettingsAsync(ct);
         if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Host) || string.IsNullOrWhiteSpace(settings.FromAddress))
             throw new InvalidOperationException("Configure and enable SMTP before sending a test message.");
 
@@ -260,8 +266,11 @@ public sealed class PlatformEmailAdminService
         }
     }
 
-    public async Task<IReadOnlyList<EmailDeliveryLogDto>> ListRecentAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<EmailDeliveryLogDto>> ListRecentAsync(
+        ActorContext actor,
+        CancellationToken ct = default)
     {
+        await EnsurePermissionAsync(actor, OperatorPermission.EmailSettingsRead, ct);
         var tenant = GlobalTenant();
         await using var db = _dbFactory.CreateDbContext(tenant);
         return await db.EmailDeliveryLogs
@@ -295,6 +304,16 @@ public sealed class PlatformEmailAdminService
             outcome: outcome,
             detailsJson: $$"""{"resultCode":"{{resultCode}}"}"""));
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task EnsurePermissionAsync(
+        ActorContext actor,
+        OperatorPermission permission,
+        CancellationToken ct)
+    {
+        var access = await new DatabaseAdminGate(_dbFactory).RequireAsync(actor, permission, ct: ct);
+        if (!access.Success)
+            throw new UnauthorizedAccessException(access.Error ?? "The required Control Plane permission is missing.");
     }
 
     private async Task EnsureElevatedAsync(ActorContext actor, CancellationToken ct)

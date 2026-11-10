@@ -210,7 +210,8 @@
 
         try
         {
-            var settings = await EmailAdmin.GetAsync();
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            var settings = await EmailAdmin.GetAsync(ActorContextFactory.FromPrincipal(principal));
             _enabled = settings.Enabled;
             _host = settings.Host;
             _port = settings.Port;
@@ -358,7 +359,8 @@
         _loadingLogs = true;
         try
         {
-            _logs = (await EmailAdmin.ListRecentAsync()).ToList();
+                        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            _logs = (await EmailAdmin.ListRecentAsync(ActorContextFactory.FromPrincipal(principal))).ToList();
         }
         catch
         {
