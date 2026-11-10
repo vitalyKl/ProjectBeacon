@@ -61,7 +61,7 @@ else
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
                 <MudText Typo="Typo.h6">@_open.Title</MudText>
                 <MudText Typo="Typo.caption">@ScopeLabel(_open) · @StatusLabel(_open)</MudText>
-                <div class="mt-3"><ChatMarkdown Text="@_open.BodyMarkdown" /></div>
+                <div class="mt-3"><MarkdownView Text="@_open.BodyMarkdown" /></div>
                 <ContextCostReport ProjectId="_project.Id" />
             </MudPaper>
         }
