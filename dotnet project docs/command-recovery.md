@@ -254,6 +254,29 @@ ACK от первой попытки не может задублировать 
 
 `GitSync` is registered as idempotent in the command catalog. If a claimed command becomes stale, the standard idempotent recovery path may requeue it once. Repeating `Status` or `PullFastForward` converges: a completed fast-forward is reported as `UpToDate` on redelivery. The workstation serializes GitSync against snapshot creation and refuses `PullFastForward` while a native project session is active.
 
+## ApplyProposalPatch
+
+`ApplyProposalPatch` is an idempotent project-runtime command with a 30-minute lease.
+The workstation does not assume that a previous attempt either applied nothing or applied
+everything. Under the repository operation gate it checks every manifest entry against
+its exact SHA-256 states:
+
+- exact `baseHash` (or absent for a newly created file): this section still needs applying;
+- exact `resultHash` (or absent for a deletion): this section is already applied and is skipped;
+- any other state: return a conflict without treating the command as successful.
+
+The client filters the unified diff to only the remaining base-state files, runs
+`git apply --check`, applies those sections, then verifies the result hashes for the
+entire manifest. This supports recovery after a process restart in the middle of a
+multi-file patch as well as a lost completion ACK after a fully successful apply. A
+replay where every file already matches the result manifest returns a verified
+`alreadyApplied` result without writing again. A third-party edit is never overwritten.
+
+If an Actor worktree is active, the command waits without holding the repository gate,
+publishes progress, and renews its command lease. It then acquires the gate and rechecks
+the active-session count before reading or modifying any file. The command is not
+re-executed concurrently with snapshot creation or another RepoPatch.
+
 ## Миграция
 
 `20261013090525_AddCommandRecoveryFields`: `WorkstationCommands.Attempts`
