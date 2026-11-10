@@ -33,44 +33,21 @@ public partial class AddBillingPlanCatalog : Migration
                 CONSTRAINT "CK_BillingPlans_PriceMinor"
                     CHECK ("PriceMinor" IS NULL OR "PriceMinor" >= 0),
                 CONSTRAINT "CK_BillingPlans_PriceCurrency"
-                    CHECK (("PriceMinor" IS NULL AND "Currency" IS NULL)
-                        OR ("PriceMinor" IS NOT NULL AND "Currency" IS NOT NULL
-                            AND "Currency" ~ '^[A-Z]{3}
+                    CHECK (
+                        ("PriceMinor" IS NULL AND "Currency" IS NULL)
+                        OR (
+                            "PriceMinor" IS NOT NULL
+                            AND "Currency" IS NOT NULL
+                            AND "Currency" ~ '^[A-Z]{3}$'
+                        )
+                    ),
                 CONSTRAINT "CK_BillingPlans_LimitsJson"
                     CHECK (jsonb_typeof("LimitsJson") = 'object'),
                 CONSTRAINT "CK_BillingPlans_FeaturesJson"
-                    CHECK (jsonb_typeof("FeaturesJson") = 'array'
-                        AND "FeaturesJson" @> '["core"]'::jsonb)
-            );
-
-            CREATE UNIQUE INDEX "IX_BillingPlans_Key" ON "BillingPlans" ("Key");
-            CREATE INDEX "IX_BillingPlans_IsActive" ON "BillingPlans" ("IsActive");
-
-            ALTER TABLE "BillingPlans" ENABLE ROW LEVEL SECURITY;
-            ALTER TABLE "BillingPlans" FORCE ROW LEVEL SECURITY;
-            CREATE POLICY billing_plans_operator_only ON "BillingPlans"
-                FOR ALL
-                USING (current_setting('app.tenant_unscoped', true) = 'true')
-                WITH CHECK (current_setting('app.tenant_unscoped', true) = 'true');
-            """);
-    }
-
-    protected override void Down(MigrationBuilder migrationBuilder)
-    {
-        migrationBuilder.Sql("""
-            DROP POLICY IF EXISTS billing_plans_operator_only ON "BillingPlans";
-            ALTER TABLE "BillingPlans" NO FORCE ROW LEVEL SECURITY;
-            ALTER TABLE "BillingPlans" DISABLE ROW LEVEL SECURITY;
-            DROP TABLE IF EXISTS "BillingPlans";
-            """);
-    }
-}
-)),
-                CONSTRAINT "CK_BillingPlans_LimitsJson"
-                    CHECK (jsonb_typeof("LimitsJson") = 'object'),
-                CONSTRAINT "CK_BillingPlans_FeaturesJson"
-                    CHECK (jsonb_typeof("FeaturesJson") = 'array'
-                        AND "FeaturesJson" @> '["core"]'::jsonb)
+                    CHECK (
+                        jsonb_typeof("FeaturesJson") = 'array'
+                        AND "FeaturesJson" @> '["core"]'::jsonb
+                    )
             );
 
             CREATE UNIQUE INDEX "IX_BillingPlans_Key" ON "BillingPlans" ("Key");
