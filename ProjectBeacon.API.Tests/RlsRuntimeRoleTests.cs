@@ -248,6 +248,62 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     }
 
     [Fact]
+    public async Task Rls_RuntimeRole_SubscriptionsAndLedger_AreTenantScopedAndLedgerIsAppendOnly()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+
+        var planKey = $"rls-subscription-{Guid.NewGuid():N}";
+        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), planKey);
+        var subscriptionA = Guid.NewGuid();
+        var subscriptionB = Guid.NewGuid();
+        var ledgerA = Guid.NewGuid();
+        var ledgerB = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await InsertBillingSubscriptionRawAsync(conn, subscriptionA, s_orgA, planKey, now);
+        await InsertBillingSubscriptionRawAsync(conn, subscriptionB, s_orgB, planKey, now);
+        await InsertBillingLedgerRawAsync(conn, ledgerA, s_orgA, subscriptionA, "rls-a");
+        await InsertBillingLedgerRawAsync(conn, ledgerB, s_orgB, subscriptionB, "rls-b");
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(1, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(1, await CountBillingLedgerRawAsync(conn));
+
+        var crossOrgInsert = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertBillingSubscriptionRawAsync(conn, Guid.NewGuid(), s_orgB, planKey, now));
+        Assert.Equal("42501", crossOrgInsert.SqlState);
+
+        await using (var update = new NpgsqlCommand(
+            """
+            UPDATE "BillingLedgerEntries"
+            SET "Note" = 'tampered'
+            WHERE "Id" = @id
+            """, conn))
+        {
+            update.Parameters.AddWithValue("id", ledgerA);
+            var immutable = await Assert.ThrowsAsync<PostgresException>(() =>
+                update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            Assert.Equal("55000", immutable.SqlState);
+        }
+
+        await SetOrgScopeAsync(conn, s_orgB, "false");
+        Assert.Equal(1, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(1, await CountBillingLedgerRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "false");
+        Assert.Equal(0, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(0, await CountBillingLedgerRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(2, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(2, await CountBillingLedgerRawAsync(conn));
+    }
+
+    [Fact]
     public async Task Rls_RuntimeRole_FreshSession_FailClosed_ViaRawSql()
     {
         _postgres.RequirePostgres();
@@ -744,6 +800,62 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         command.Parameters.AddWithValue("key", key);
         command.Parameters.AddWithValue("now", now);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingSubscriptionRawAsync(
+        NpgsqlConnection conn, Guid id, Guid orgId, string planKey, DateTimeOffset now)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "OrganizationSubscriptions"
+                ("Id", "OrgId", "PlanKey", "Status", "Source", "TrialEndsAtUtc",
+                 "CurrentPeriodStartsAtUtc", "CurrentPeriodEndsAtUtc", "CancelAtPeriodEnd",
+                 "GraceUntilUtc", "ProviderKey", "ExternalCustomerReference",
+                 "ExternalSubscriptionReference", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @org_id, @plan_key, 1, 0, NULL, @now, @period_end, FALSE,
+                 NULL, NULL, NULL, NULL, @now, @now)
+            """, conn);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("plan_key", planKey);
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("period_end", now.AddDays(30));
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingLedgerRawAsync(
+        NpgsqlConnection conn, Guid id, Guid orgId, Guid subscriptionId, string suffix)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingLedgerEntries"
+                ("Id", "OccurredAtUtc", "OrgId", "EventType", "Source",
+                 "AmountMinor", "Currency", "ProviderKey", "ProviderEventId",
+                 "Reference", "ActorUserId", "Note", "IdempotencyKey", "SubscriptionId")
+            VALUES
+                (@id, @occurred, @org_id, 4, 0, NULL, NULL, NULL, NULL,
+                 @reference, NULL, 'rls_test', @idempotency, @subscription_id)
+            """, conn);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("occurred", DateTimeOffset.UtcNow);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("reference", $"manual-{suffix}");
+        command.Parameters.AddWithValue("idempotency", $"idempotency-{suffix}");
+        command.Parameters.AddWithValue("subscription_id", subscriptionId);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> CountBillingSubscriptionsRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"OrganizationSubscriptions\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingLedgerRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"BillingLedgerEntries\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
     }
 
     private static async Task<int> CountBillingPlansRawAsync(NpgsqlConnection conn)

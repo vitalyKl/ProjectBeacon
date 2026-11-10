@@ -79,7 +79,7 @@ public sealed record OrganizationSubscription(
     SubscriptionSource Source,
     DateTimeOffset? TrialEndsAtUtc,
     DateTimeOffset CurrentPeriodStartsAtUtc,
-    DateTimeOffset CurrentPeriodEndsAtUtc,
+    DateTimeOffset? CurrentPeriodEndsAtUtc,
     bool CancelAtPeriodEnd,
     DateTimeOffset? GraceUntilUtc,
     string? ProviderKey,
@@ -122,4 +122,6 @@ public sealed record BillingLedgerEntry(
     string? ProviderEventId,
     string? Reference,
     Guid? ActorUserId,
-    string? Note);
+    string? Note,
+    Guid? SubscriptionId = null,
+    string? IdempotencyKey = null);
