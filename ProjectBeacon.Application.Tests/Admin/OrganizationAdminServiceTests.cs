@@ -7,6 +7,7 @@ using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
+using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
@@ -319,6 +320,146 @@ public sealed class OrganizationAdminServiceTests : IDisposable
             .CountAsync(x => x.TargetType == "User" && x.TargetId == customerOwner.Id.ToString()
                 && (x.Action == "platform.user.account_disabled" || x.Action == "platform.user.account_enabled"),
                 TestContext.Current.CancellationToken));
+    }
+
+
+    [Fact]
+    public async Task OrganizationLifecycle_RequiresSafeTransitionsAndAuditsEachChange()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var org = Org.Create("Lifecycle customer");
+        _seedDb.Users.Add(_admin);
+        _seedDb.Orgs.Add(org);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var service = CreateService();
+
+        var directClose = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Closed, "close without suspension");
+        Assert.False(directClose.Success);
+        Assert.Equal(ErrorKind.Conflict, directClose.Kind);
+
+        var suspended = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Suspended, "customer requested pause");
+        Assert.True(suspended.Success, suspended.Error);
+        await _seedDb.Entry(org).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, org.LifecycleStatus);
+
+        var invitation = await service.InviteOwnerAsync(actor, org.Id, "owner@paused.example");
+        Assert.False(invitation.Success);
+        Assert.Equal(ErrorKind.Conflict, invitation.Kind);
+
+        var resumed = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Active, "access restored");
+        Assert.True(resumed.Success, resumed.Error);
+        await _seedDb.Entry(org).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(OrganizationLifecycleStatus.Active, org.LifecycleStatus);
+
+        var suspendedAgain = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Suspended, "closure preparation");
+        Assert.True(suspendedAgain.Success, suspendedAgain.Error);
+        var closed = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Closed, "customer contract terminated");
+        Assert.True(closed.Success, closed.Error);
+        await _seedDb.Entry(org).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(OrganizationLifecycleStatus.Closed, org.LifecycleStatus);
+
+        var reopen = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Active, "attempted reopen");
+        Assert.False(reopen.Success);
+        Assert.Equal(ErrorKind.Conflict, reopen.Kind);
+
+        var actions = await _seedDb.AuditEvents.IgnoreQueryFilters()
+            .Where(item => item.OrgId == org.Id)
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, actions.Count(item => item == "platform.organization.suspended"));
+        Assert.Single(actions, item => item == "platform.organization.reactivated");
+        Assert.Single(actions, item => item == "platform.organization.closed");
+
+        var reader = await AdminActorAsync(OperatorPermission.OrganizationsRead);
+        var page = await service.ListAsync(reader);
+        var listed = Assert.Single(page.Value!.Items);
+        Assert.Equal(OrganizationLifecycleStatus.Closed, listed.LifecycleStatus);
+        var details = await service.GetAsync(reader, org.Id);
+        Assert.Equal(OrganizationLifecycleStatus.Closed, details.Value!.Organization.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task OrganizationLifecycle_RejectsMissingReason()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var org = Org.Create("Invalid lifecycle customer");
+        _seedDb.Users.Add(_admin);
+        _seedDb.Orgs.Add(org);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+
+        var missingReason = await CreateService().SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Suspended, "  ");
+        Assert.False(missingReason.Success);
+        Assert.Equal(ErrorKind.Validation, missingReason.Kind);
+        Assert.Equal(OrganizationLifecycleStatus.Active, org.LifecycleStatus);
+    }
+
+    [Theory]
+    [InlineData(OrganizationLifecycleStatus.Suspended, "organization_suspended")]
+    [InlineData(OrganizationLifecycleStatus.Closed, "organization_closed")]
+    public async Task EntitlementEvaluation_DeniesInactiveOrganizationBeforeGrantLookup(
+        OrganizationLifecycleStatus status, string reasonCode)
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var org = Org.Create("Inactive entitlement customer");
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        if (status == OrganizationLifecycleStatus.Closed)
+            org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Closed, DateTime.UtcNow);
+        _seedDb.Users.Add(_admin);
+        _seedDb.Orgs.Add(org);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var entitlements = new ProjectBeacon.Infrastructure.Entitlements.PostgresEntitlementService(
+            _factory, new EfAuditWriter(), TimeProvider.System);
+        var decision = await entitlements.EvaluateAsync(
+            org.Id, new EntitlementRequirement(EntitlementFeatureKeys.Core),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(decision.Success, decision.Error);
+        Assert.False(decision.Value!.Allowed);
+        Assert.Equal(reasonCode, decision.Value.ReasonCode);
+    }
+
+    [Fact]
+    public async Task SuspendedTenantFiltersHideOrgProjectAndOrgScopedRows_ButOperatorUnscopedReadsRemainAvailable()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var owner = User.Create("tenant-owner", "tenant-owner@example.test", "hash");
+        var org = Org.Create("Suspended tenant");
+        var project = Project.Create("Tenant project", null, org.Id);
+        var membership = OrgMember.Create(org.Id, owner.Id, MemberRole.Owner);
+        _seedDb.Users.AddRange(_admin, owner);
+        _seedDb.Orgs.Add(org);
+        _seedDb.Projects.Add(project);
+        _seedDb.OrgMembers.Add(membership);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        tenant.Assign(project.Id, org.Id, unscoped: false);
+        tenant.SetLifecycleStatus(OrganizationLifecycleStatus.Suspended, enforced: true);
+        await using var tenantDb = _factory.CreateDbContext(tenant);
+        Assert.Empty(await tenantDb.Projects.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await tenantDb.Orgs.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await tenantDb.OrgMembers.ToListAsync(TestContext.Current.CancellationToken));
+
+        var operatorTenant = new TenantContext();
+        operatorTenant.Assign(null, null, unscoped: true);
+        await using var operatorDb = _factory.CreateDbContext(operatorTenant);
+        Assert.Single(await operatorDb.Projects.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await operatorDb.Orgs.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await operatorDb.OrgMembers.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

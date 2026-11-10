@@ -103,6 +103,7 @@
                             <MudTh>Members</MudTh>
                             <MudTh>Projects</MudTh>
                             <MudTh>Pending invites</MudTh>
+                            <MudTh>Lifecycle</MudTh>
                             <MudTh>Created</MudTh>
                             <MudTh></MudTh>
                         </HeaderContent>
@@ -121,6 +122,12 @@
                             <MudTd DataLabel="Members">@context.MemberCount</MudTd>
                             <MudTd DataLabel="Projects">@context.ProjectCount</MudTd>
                             <MudTd DataLabel="Pending invites">@context.PendingInviteCount</MudTd>
+                            <MudTd DataLabel="Lifecycle">
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(context.LifecycleStatus == OrganizationLifecycleStatus.Active ? Color.Success : context.LifecycleStatus == OrganizationLifecycleStatus.Suspended ? Color.Warning : Color.Error)">
+                                    @context.LifecycleStatus
+                                </MudChip>
+                            </MudTd>
                             <MudTd DataLabel="Created"><LocalTime Value="context.CreatedAt" Format="d" /></MudTd>
                             <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/admin/organizations/{context.Id}")">Open</MudButton></MudTd>
                         </RowTemplate>
@@ -152,6 +159,56 @@
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
             Customer information, owner invitations, and Alpha access.
         </MudText>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudText Typo="Typo.subtitle1">Lifecycle</MudText>
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(_detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Active ? Color.Success : _detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Suspended ? Color.Warning : Color.Error)">
+                    @_detail.Organization.LifecycleStatus
+                </MudChip>
+            </MudStack>
+            @if (_detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Suspended)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                    Tenant access and invitation redemption are blocked. Customer data is retained. This organization can be reactivated or closed.
+                </MudAlert>
+            }
+            else if (_detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Closed)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                    This organization is permanently closed. Its projects, memberships, devices and data are retained; reactivation is not permitted.
+                </MudAlert>
+            }
+            @if (_canManageOrganizations && _detail.Organization.LifecycleStatus != OrganizationLifecycleStatus.Closed)
+            {
+                <MudTextField T="string" @bind-Value="_lifecycleReason" Label="Reason for lifecycle change"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    @if (_detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Active)
+                    {
+                        <MudButton Color="Color.Warning" Variant="Variant.Outlined"
+                                   Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended))">
+                            Suspend access
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Color="Color.Success" Variant="Variant.Outlined"
+                                   Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Active))">
+                            Reactivate
+                        </MudButton>
+                        <MudButton Color="Color.Error" Variant="Variant.Outlined"
+                                   Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Closed))">
+                            Close permanently
+                        </MudButton>
+                    }
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                    Every transition requires a current TOTP unlock. Closing is terminal and requires prior suspension.
+                </MudText>
+            }
+        </MudPaper>
 
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
             <MudGrid Spacing="2">
@@ -481,6 +538,7 @@
     private string _newDescription = string.Empty;
     private string _ownerEmail = string.Empty;
     private string _inviteEmail = string.Empty;
+    private string _lifecycleReason = string.Empty;
     private string _features = EntitlementFeatureKeys.Core;
     private string _limitsJson = "{}";
     private string _reason = "alpha_access";
@@ -656,6 +714,56 @@
                 throw new InvalidOperationException(result.Error ?? $"Could not {action} account.");
             Snackbar.Add(disabled ? "Global account disabled." : "Global account enabled.", Severity.Success);
             await ReloadDetail();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { _saving = false; }
+    }
+
+
+    private async Task ChangeLifecycleStatus(OrganizationLifecycleStatus target)
+    {
+        if (OrganizationId is not { } orgId
+            || !await EnsurePermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true))
+            return;
+
+        var action = target switch
+        {
+            OrganizationLifecycleStatus.Suspended => "suspend",
+            OrganizationLifecycleStatus.Active => "reactivate",
+            OrganizationLifecycleStatus.Closed => "close permanently",
+            _ => "change"
+        };
+        var reason = _lifecycleReason.Trim();
+        if (reason.Length is < 3 or > 500)
+        {
+            Snackbar.Add("Enter a reason between 3 and 500 characters.", Severity.Warning);
+            return;
+        }
+
+        var warning = target == OrganizationLifecycleStatus.Closed
+            ? "Closing is permanent. The organization and its customer data will be retained, but access cannot be restored."
+            : target == OrganizationLifecycleStatus.Suspended
+                ? "All tenant API and application data access will be blocked. Other organizations belonging to the same users are not affected."
+                : "Tenant access and invitation redemption will be restored.";
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Change organization lifecycle",
+            $"Are you sure you want to {action} this organization?\n\n{warning}\n\nReason: {reason}",
+            yesText: target == OrganizationLifecycleStatus.Closed ? "Close permanently" : action,
+            cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        _saving = true;
+        try
+        {
+            var actor = await CurrentAdminActor(
+                OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage, requireElevation: true);
+            var result = await Organizations.SetLifecycleStatusAsync(actor, orgId, target, reason);
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error ?? "Could not change organization lifecycle.");
+            _lifecycleReason = string.Empty;
+            Snackbar.Add($"Organization lifecycle changed to {target}.", Severity.Success);
+            await ReloadDetail();
+            await LoadList();
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
         finally { _saving = false; }

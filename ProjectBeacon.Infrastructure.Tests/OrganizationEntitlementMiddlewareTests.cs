@@ -66,6 +66,24 @@ public sealed class OrganizationEntitlementMiddlewareTests
         Assert.False(service.Called);
     }
 
+    [Theory]
+    [InlineData("organization_suspended")]
+    [InlineData("organization_closed")]
+    public async Task InactiveOrganizationEntitlementDecision_IsDenied(string reasonCode)
+    {
+        var tenant = Tenant(Guid.NewGuid());
+        var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(false, reasonCode)));
+        var (context, next) = NewContext("/v1/tasks");
+
+        await new OrganizationEntitlementMiddleware(next).InvokeAsync(context, tenant, service);
+
+        Assert.False(next.Called);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        var body = await ReadBodyAsync(context);
+        Assert.Contains(reasonCode, body, StringComparison.Ordinal);
+        Assert.Contains(reasonCode == "organization_suspended" ? "suspended" : "closed", body, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task EntitlementServiceFailure_FailsClosedWith503()
     {

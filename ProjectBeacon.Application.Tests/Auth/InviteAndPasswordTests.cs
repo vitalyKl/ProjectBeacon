@@ -184,6 +184,39 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task SuspendedOrganizationInvite_CannotBePreviewedOrAccepted()
+    {
+        var admin = await SeedAdminAsync();
+        var org = Org.Create("Suspended invite target");
+        var owner = User.Create("invited-owner", "owner@suspended.example", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(owner);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var created = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(org.Id, owner.Email, MemberRole.Owner, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var preview = await new GetInviteHandler(Factory()).HandleAsync(
+            created.Value!.Token, TestContext.Current.CancellationToken);
+        Assert.False(preview.Success);
+
+        var accepted = await new AcceptInviteHandler(Factory()).HandleAsync(
+            new AcceptInviteRequest(created.Value.Token, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+        Assert.False(accepted.Success);
+        Assert.False(await _db.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            item => item.OrgId == org.Id && item.UserId == owner.Id,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(InviteStatus.Pending, (await _db.OrgInvites.IgnoreQueryFilters()
+            .SingleAsync(item => item.Id == created.Value.InviteId, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task DuplicatePendingInvite_Fails()
     {
         var admin = await SeedAdminAsync();

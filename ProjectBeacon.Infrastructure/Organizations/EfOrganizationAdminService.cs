@@ -258,7 +258,7 @@ public sealed class EfOrganizationAdminService(
                 .OrderBy(x => x.CreatedAt).Select(x => x.Email).FirstOrDefault();
         var summary = new OrganizationAdminListItem(
             org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt,
-            ownerEmail, memberCount, projectCount, pendingInviteCount);
+            ownerEmail, memberCount, projectCount, pendingInviteCount, org.LifecycleStatus);
 
         return Result.Ok(new OrganizationAdminDetails(
             summary, members, invites, projectCount, projectRows, deviceCount, devices));
