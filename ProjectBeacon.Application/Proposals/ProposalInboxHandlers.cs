@@ -3,9 +3,9 @@ namespace ProjectBeacon.Application.Proposals;
 using Application.Authorization;
 using Application.Audit;
 using Application.Common;
+using System.Text.Json;
 using Application.Persistence;
 using Domain.Enums;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>Counts all human-reviewable content in one project's Inbox.</summary>
@@ -108,7 +108,6 @@ public sealed class ReviewContextDraftHandler
         if (orgId is null)
             return Result.Failure<ContextDraftReviewResult>("Project not found.");
 
-        var now = DateTime.UtcNow;
         if (command.Accept)
         {
             try
