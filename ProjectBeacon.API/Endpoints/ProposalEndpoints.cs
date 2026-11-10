@@ -86,6 +86,10 @@ public static class ProposalEndpoints
         AcceptProposalHandler handler,
         CancellationToken ct)
     {
+        if (body.AcceptedPayload.HasValue
+            && body.AcceptedPayload.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Null))
+            return Results.BadRequest(new { error = "AcceptedPayload must be a JSON object or null." });
+
         var acceptedPayload = body.AcceptedPayload.HasValue
             && body.AcceptedPayload.Value.ValueKind == JsonValueKind.Object
             ? body.AcceptedPayload.Value.GetRawText()
