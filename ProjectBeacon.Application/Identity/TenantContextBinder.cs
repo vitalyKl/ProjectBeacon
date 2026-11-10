@@ -5,7 +5,7 @@ using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 /// <summary>
-/// Sets the request tenant from the actor's current project. Does nothing when a project is already bound or the scope is unscoped.
+/// Sets the request tenant from the actor's current project or organization membership. Does nothing when a tenant is already bound or the scope is unscoped.
 /// </summary>
 public sealed class TenantContextBinder
 {
