@@ -2963,4 +2963,10 @@ No Beacon-hosted coding agent.</value>
   <data name="ProposalPolicySaved" xml:space="preserve">
     <value>Proposal policy saved.</value>
   </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>Line-by-line content diff</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>No textual changes.</value>
+  </data>
 </root>
