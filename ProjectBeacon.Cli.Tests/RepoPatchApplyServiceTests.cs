@@ -183,7 +183,8 @@ public sealed class RepoPatchApplyServiceTests
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
         var payload = Payload(repo.ProjectId, patch, path, before, after);
-        var session = GitRepositoryOperationGate.RegisterSession(repo.RepositoryRoot);
+        var actualRepositoryRoot = (await Git(repo.ProjectRoot, "rev-parse", "--show-toplevel")).Trim();
+        var session = GitRepositoryOperationGate.RegisterSession(actualRepositoryRoot);
         var waiting = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var progressReports = 0;
 
@@ -300,6 +301,9 @@ public sealed class RepoPatchApplyServiceTests
             try
             {
                 await Git(repositoryRoot, "init");
+                // Keep fixture bytes stable on Windows; production hashes still cover exact checkout bytes.
+                await Git(repositoryRoot, "config", "core.autocrlf", "false");
+                await Git(repositoryRoot, "config", "core.eol", "lf");
                 await Git(repositoryRoot, "config", "user.name", "ProjectBeacon Tests");
                 await Git(repositoryRoot, "config", "user.email", "tests@projectbeacon.local");
                 await Git(repositoryRoot, "config", "commit.gpgsign", "false");
