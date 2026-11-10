@@ -378,6 +378,34 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task RevokeProjectInvite_SerializesWithMembershipAcceptance()
+    {
+        var owner = User.Create("project-invite-owner", "project-invite-owner@example.test", "hash");
+        var org = Org.Create("Project invite revoke organization");
+        var project = Project.Create("Project", null, org.Id);
+        _db.Users.Add(owner);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        _db.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var created = await new CreateProjectInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateProjectInviteRequest(
+                project.Id, "project-reserved@example.test", MemberRole.Member, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var revoked = await new RevokeProjectInviteHandler(Factory(), _auth).HandleAsync(
+            new RevokeInviteRequest(created.Value!.Id, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(revoked.Success, revoked.Error);
+        Assert.Equal(InviteStatus.Revoked, (await _db.ProjectInvites.IgnoreQueryFilters()
+            .SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task DuplicatePendingInvite_Fails()
     {
         var admin = await SeedAdminAsync();
