@@ -238,7 +238,7 @@ else
     {
         if (_superseding is null || _replacementId is null)
             return;
-        var result = await SupersedeDecision.HandleAsync(_superseding.Id, _replacementId.Value);
+        var result = await SupersedeDecision.HandleAsync(_superseding.Id, _replacementId.Value, _actor);
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
