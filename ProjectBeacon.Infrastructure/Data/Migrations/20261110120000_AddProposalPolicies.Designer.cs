@@ -1720,7 +1720,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("ProposalPoliciesJson")
                         .IsRequired()
                         .HasColumnType("jsonb")
-                        .HasDefaultValueSql("'{}'::jsonb");
+                        .HasDefaultValue("{}");
 
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
