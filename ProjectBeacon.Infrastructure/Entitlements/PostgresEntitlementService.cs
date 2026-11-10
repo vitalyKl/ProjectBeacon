@@ -129,22 +129,7 @@ public sealed class PostgresEntitlementService(
         var grant = result.Value;
         if (!grant.Features.Contains(requirement.FeatureKey.Trim().ToLowerInvariant()))
             return Result.Ok(new EntitlementDecision(false, "feature_not_granted", requirement.CurrentUsage));
-        if (requirement.LimitKey is null)
-            return Result.Ok(new EntitlementDecision(true, CurrentUsage: requirement.CurrentUsage));
-
-        var key = requirement.LimitKey.Trim().ToLowerInvariant();
-        // An omitted capacity key means this grant has no configured cap for that resource.
-        // Explicit zero remains a real zero-capacity limit.
-        if (!grant.Limits.TryGetValue(key, out var limit))
-            return Result.Ok(new EntitlementDecision(true, CurrentUsage: requirement.CurrentUsage));
-
-        var allowed = requirement.CurrentUsage <= limit
-            && requirement.RequestedUnits <= limit - requirement.CurrentUsage;
-        return Result.Ok(new EntitlementDecision(
-            allowed,
-            allowed ? null : "limit_exceeded",
-            requirement.CurrentUsage,
-            limit));
+        return Result.Ok(EntitlementLimitEvaluator.EvaluateCapacity(grant.Limits, requirement));
     }
 
     public async Task<Result<OrganizationEntitlement>> GrantAsync(
