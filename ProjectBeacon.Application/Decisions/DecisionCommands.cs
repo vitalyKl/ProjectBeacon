@@ -118,15 +118,30 @@ public class ListDecisionsHandler
 public class AcceptDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public AcceptDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
+    public AcceptDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
     {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<DecisionDto>> HandleAsync(
+        Guid decisionId, ActorContext actor, CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<DecisionDto>("Only a human Owner/Admin can accept a decision.");
+
         await using var db = _dbFactory.CreateDbContext();
         var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<DecisionDto>("Only a project or organization Owner/Admin can accept decisions.");
+
         decision.Accept();
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
@@ -140,15 +155,30 @@ public class AcceptDecisionHandler
 public class DeprecateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public DeprecateDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
+    public DeprecateDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
     {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<DecisionDto>> HandleAsync(
+        Guid decisionId, ActorContext actor, CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<DecisionDto>("Only a human Owner/Admin can deprecate a decision.");
+
         await using var db = _dbFactory.CreateDbContext();
         var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<DecisionDto>("Only a project or organization Owner/Admin can deprecate decisions.");
+
         decision.Deprecate();
         await db.SaveChangesAsync(ct);
         return Result.Ok(Map(decision));
@@ -163,11 +193,19 @@ public class DeprecateDecisionHandler
 public class SupersedeDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public SupersedeDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, Guid replacementId, CancellationToken ct = default)
+    public SupersedeDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
     {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<DecisionDto>> HandleAsync(
+        Guid decisionId, Guid replacementId, ActorContext actor, CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<DecisionDto>("Only a human Owner/Admin can supersede a decision.");
         if (decisionId == replacementId)
             return Result.Failure<DecisionDto>("Replacement must be a different decision.");
 
@@ -175,6 +213,12 @@ public class SupersedeDecisionHandler
         var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<DecisionDto>("Only a project or organization Owner/Admin can supersede decisions.");
+
         var replacement = await db.Decisions.FindAsync([replacementId], ct);
         if (replacement is null || replacement.ProjectId != decision.ProjectId)
             return Result.Failure<DecisionDto>("Replacement not found.");
