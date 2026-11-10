@@ -61,6 +61,19 @@ jobs:
         run: dotnet restore ProjectBeacon.sln
       - name: Build
         run: dotnet build ProjectBeacon.sln --no-restore
+      - name: Diagnose EF model drift (temporary)
+        continue-on-error: true
+        run: |
+          dotnet build-server shutdown
+          dotnet tool restore
+          dotnet ef migrations add PendingModelChangesDiagnostic --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure --output-dir Data/Migrations
+          echo "::group::Generated model drift migration"
+          migration="$(find ProjectBeacon.Infrastructure/Data/Migrations -maxdepth 1 -type f -name '*_PendingModelChangesDiagnostic.cs' ! -name '*.Designer.cs' | head -n 1)"
+          if [ -n "$migration" ]; then cat "$migration"; fi
+          echo "::endgroup::"
+          echo "::group::Generated model snapshot diff"
+          git diff -- ProjectBeacon.Infrastructure/Data/Migrations/BeaconDbContextModelSnapshot.cs
+          echo "::endgroup::"
       - name: No pending model changes
         run: |
           # Release compiler/MSBuild server memory before starting EF design-time services.
