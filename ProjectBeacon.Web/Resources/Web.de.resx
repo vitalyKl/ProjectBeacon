@@ -2686,6 +2686,30 @@ orthstar</value>
   <data name="BatchAcceptResults" xml:space="preserve">
     <value>Sammelannahme: {0} erfolgreich, {1} fehlgeschlagen.</value>
   </data>
+  <data name="Applying" xml:space="preserve">
+    <value>Wird angewendet</value>
+  </data>
+  <data name="ProposalApplyQueued" xml:space="preserve">
+    <value>Dokumentationspatch wurde auf der Workstation eingereiht; die Annahme wartet auf die Verifizierung.</value>
+  </data>
+  <data name="ProposalPatchQueuedCount" xml:space="preserve">
+    <value>Eingereihte Dokumentationspatches: {0}.</value>
+  </data>
+  <data name="ProposalPatchApplying" xml:space="preserve">
+    <value>Der Dokumentationspatch wird auf der Workstation angewendet und verifiziert.</value>
+  </data>
+  <data name="ProposalPatchApplied" xml:space="preserve">
+    <value>Der Dokumentationspatch wurde angewendet und verifiziert.</value>
+  </data>
+  <data name="RepoPatchDocumentationOnly" xml:space="preserve">
+    <value>Dieses Review enthält ausschließlich einen Dokumentationspatch. Er kann hier nicht bearbeitet werden; zum Ändern ablehnen und neu einreichen.</value>
+  </data>
+  <data name="DocumentationPatch" xml:space="preserve">
+    <value>Dokumentationspatch</value>
+  </data>
+  <data name="WorkstationCommand" xml:space="preserve">
+    <value>Workstation-Befehl</value>
+  </data>
   <data name="LegacyReviewItems" xml:space="preserve">
     <value>Bestehende Prüfeinträge</value>
   </data>
