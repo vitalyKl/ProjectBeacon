@@ -202,6 +202,89 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ProjectMemberCanCreateListAndAcceptOrdinaryProposal()
+    {
+        var member = User.Create("proposal-member", "proposal-member@beacon.local", "hash");
+        _db.Users.Add(member);
+        _db.SaveChanges();
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
+        _db.SaveChanges();
+
+        var actor = new ActorContext(
+            ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var factory = HandlerSqlite.Factory(_connection);
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), actor), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var listed = await new ListProposalsHandler(factory, new EfAuditWriter())
+            .HandleAsync(new ListProposalsQuery(_projectId), actor, TestContext.Current.CancellationToken);
+        Assert.True(listed.Success, listed.Error);
+        Assert.Single(listed.Value!);
+
+        var accepted = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value!.Id, actor), TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(2, accepted.Value.AppliedRevision);
+    }
+
+    [Fact]
+    public async Task ProjectMemberCannotAcceptOrRejectGovernanceProposal()
+    {
+        var member = User.Create("governance-member", "governance-member@beacon.local", "hash");
+        _db.Users.Add(member);
+        _db.SaveChanges();
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
+        _db.SaveChanges();
+
+        var decision = Decision.Create(
+            "Existing decision", "Current context", "Accepted decision body", _projectId, null);
+        decision.Accept();
+        _db.Decisions.Add(decision);
+        _db.SaveChanges();
+        new ContentWriter().AddVersion(_db, decision, "Human", _userId.ToString("D"));
+        _db.SaveChanges();
+
+        var actor = new ActorContext(
+            ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var request = new CreateProposalRequest(
+            ContentTargetKind.Decision,
+            decision.Id,
+            ProposalOperation.Update,
+            1,
+            """{"title":"Revised decision","context":"Updated context","decisionBody":"Updated decision","consequences":null}""",
+            "Clarifies the decision.",
+            "governance-decision-update-v1");
+        var factory = HandlerSqlite.Factory(_connection);
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, request, actor), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accept = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value!.Id, actor), TestContext.Current.CancellationToken);
+        Assert.False(accept.Success);
+        Assert.Equal(ErrorKind.Forbidden, accept.Kind);
+
+        var reject = await new RejectProposalHandler(factory, new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new RejectProposalCommand(_projectId, created.Value.Id, actor), TestContext.Current.CancellationToken);
+        Assert.False(reject.Success);
+        Assert.Equal(ErrorKind.Forbidden, reject.Kind);
+
+        var stillPending = await _db.Proposals.SingleAsync(
+            item => item.Id == created.Value.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Pending, stillPending.Status);
+
+        var ownerAccept = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value.Id, HumanActor()), TestContext.Current.CancellationToken);
+        Assert.True(ownerAccept.Success, ownerAccept.Error);
+        Assert.Equal(ProposalStatus.Accepted, ownerAccept.Value!.Status);
+    }
+
+    [Fact]
     public async Task NonMemberCannotCreateOrListProjectProposals()
     {
         var factory = HandlerSqlite.Factory(_connection);
