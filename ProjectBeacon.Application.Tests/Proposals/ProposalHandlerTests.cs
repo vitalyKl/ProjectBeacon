@@ -681,27 +681,29 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.False(deniedSummary.Success);
         Assert.Equal(ErrorKind.Forbidden, deniedSummary.Kind);
 
-        var deniedReview = await new ReviewContextDraftHandler(factory, new ContentWriter())
+        var deniedReview = await new ReviewContextDraftHandler(factory, new ContentWriter(), new EfAuditWriter())
             .HandleAsync(new ReviewContextDraftCommand(
                 _projectId, context.Id, context.Revision, true, outsider),
                 TestContext.Current.CancellationToken);
         Assert.False(deniedReview.Success);
         Assert.Equal(ErrorKind.Forbidden, deniedReview.Kind);
 
-        var staleReview = await new ReviewContextDraftHandler(factory, new ContentWriter())
+        var staleReview = await new ReviewContextDraftHandler(factory, new ContentWriter(), new EfAuditWriter())
             .HandleAsync(new ReviewContextDraftCommand(
                 _projectId, context.Id, context.Revision + 1, true, HumanActor()),
                 TestContext.Current.CancellationToken);
         Assert.False(staleReview.Success);
         Assert.Equal(ErrorKind.Conflict, staleReview.Kind);
 
-        var approved = await new ReviewContextDraftHandler(factory, new ContentWriter())
+        var approved = await new ReviewContextDraftHandler(factory, new ContentWriter(), new EfAuditWriter())
             .HandleAsync(new ReviewContextDraftCommand(
                 _projectId, context.Id, context.Revision, true, HumanActor()),
                 TestContext.Current.CancellationToken);
         Assert.True(approved.Success, approved.Error);
         Assert.Equal(ContextReviewState.Reviewed, approved.Value!.ReviewState);
         Assert.False(approved.Value.Deleted);
+        Assert.Contains(await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
+            action => action == "context.draft.approved");
 
         var rejectedContext = ContextSection.Create(
             "testing", "Testing", "Draft testing rules.", _projectId,
@@ -710,7 +712,7 @@ public sealed class ProposalHandlerTests : IDisposable
         new ContentWriter().AddVersion(_db, rejectedContext, "Agent", "other-agent");
         _db.SaveChanges();
 
-        var rejected = await new ReviewContextDraftHandler(factory, new ContentWriter())
+        var rejected = await new ReviewContextDraftHandler(factory, new ContentWriter(), new EfAuditWriter())
             .HandleAsync(new ReviewContextDraftCommand(
                 _projectId, rejectedContext.Id, rejectedContext.Revision, false, HumanActor()),
                 TestContext.Current.CancellationToken);
@@ -726,6 +728,8 @@ public sealed class ProposalHandlerTests : IDisposable
             .FirstAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, tombstone.Revision);
         Assert.Contains("\"deleted\":true", tombstone.ContentJson, StringComparison.OrdinalIgnoreCase);
+        var auditActions = await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("context.draft.rejected", auditActions);
     }
 
     private ActorContext HumanActor() =>
