@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application;
 
 using Application.Agents;
 using Application.Admin;
+using Application.Billing;
 using Application.Common;
 using Application.Auth;
 using Application.Authorization;
