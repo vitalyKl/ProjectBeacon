@@ -2,6 +2,8 @@ namespace ProjectBeacon.Infrastructure;
 
 using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Organizations;
+using ProjectBeacon.Application.Operations;
+using ProjectBeacon.Infrastructure.Operations;
 using Application.Mail;
 using Application.Audit;
 using Application.Persistence;
@@ -39,6 +41,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IEntitlementService, PostgresEntitlementService>();
         services.AddScoped<IOrganizationAdminService, EfOrganizationAdminService>();
+        services.AddScoped<IPlatformOperationsService, PlatformOperationsService>();
 
         return services;
     }
