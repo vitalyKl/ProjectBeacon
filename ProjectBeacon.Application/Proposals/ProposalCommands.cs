@@ -10,6 +10,7 @@ using Application.Common;
 using Application.Persistence;
 using Domain.Entities.Content;
 using Domain.Entities.Context;
+using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
@@ -142,6 +143,10 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         await using var db = _dbFactory.CreateDbContext();
+
+        if (command.Actor.IsHuman
+            && !await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, command.ProjectId, ct))
+            return Result.Forbidden<ProposalDto>("Project membership is required to create a proposal.");
 
         if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
             return Result.Forbidden<ProposalDto>();
@@ -446,6 +451,8 @@ public sealed class AcceptProposalHandler
                     item => item.Id == command.ProposalId && item.ProjectId == command.ProjectId, ct);
                 if (proposal is null)
                     return Result.Failure<ProposalDto>("Proposal not found.");
+                if (!await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
+                    return Result.Forbidden<ProposalDto>("Project membership is required to accept a proposal.");
 
                 if (proposal.Status == ProposalStatus.Accepted)
                 {
@@ -610,6 +617,8 @@ public sealed class RejectProposalHandler
             item => item.Id == command.ProposalId && item.ProjectId == command.ProjectId, ct);
         if (proposal is null)
             return Result.Failure<ProposalDto>("Proposal not found.");
+        if (!await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
+            return Result.Forbidden<ProposalDto>("Project membership is required to reject a proposal.");
         if (proposal.Status == ProposalStatus.Rejected)
             return Result.Ok(ProposalMapper.Map(proposal));
         if (proposal.Status != ProposalStatus.Pending)
@@ -710,6 +719,11 @@ public sealed class WithdrawProposalHandler
             && string.Equals(command.PipelineRole, PipelineRole.Actor.ToString(), StringComparison.Ordinal);
         if (!isOriginalHuman && !isOriginalAgent)
             return Result.Forbidden<ProposalDto>("Only the original author can withdraw this proposal.");
+        if (isOriginalHuman
+            && !await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
+            return Result.Forbidden<ProposalDto>("Project membership is required to withdraw this proposal.");
+        if (isOriginalAgent && command.Actor.ProjectId != command.ProjectId)
+            return Result.Forbidden<ProposalDto>("The API token is not bound to this project.");
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (proposal.Expire(now))
@@ -770,6 +784,9 @@ public sealed class ListProposalsHandler
             return Result.Forbidden<IReadOnlyList<ProposalDto>>("The proposal Inbox is human-only.");
 
         await using var db = _dbFactory.CreateDbContext();
+        if (!await ProposalProjectAuthorization.CanWriteAsync(db, actor, query.ProjectId, ct))
+            return Result.Forbidden<IReadOnlyList<ProposalDto>>("Project membership is required to view proposals.");
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var orgId = await AcceptProposalHandler.GetOrgIdAsync(db, query.ProjectId, ct);
         if (orgId is null)
@@ -814,6 +831,42 @@ public sealed class ListProposalsHandler
                 proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision))
             .ToListAsync(ct);
         return Result.Ok((IReadOnlyList<ProposalDto>)items);
+    }
+}
+
+internal static class ProposalProjectAuthorization
+{
+    /// <summary>
+    /// Ordinary proposal access follows project membership. Org Owner/Admin and system
+    /// administrators inherit access; an org Member without project membership does not.
+    /// </summary>
+    public static async Task<bool> CanWriteAsync(
+        IBeaconDb db,
+        ActorContext actor,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        if (!actor.IsHuman || actor.UserId is not { } userId)
+            return false;
+        if (actor.IsAdmin)
+            return true;
+
+        var orgId = await db.Projects.IgnoreQueryFilters()
+            .Where(project => project.Id == projectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is null)
+            return false;
+
+        var isProjectMember = await db.ProjectMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.ProjectId == projectId && member.UserId == userId, ct);
+        if (isProjectMember)
+            return true;
+
+        return await db.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.OrgId == orgId.Value
+                && member.UserId == userId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin), ct);
     }
 }
 
