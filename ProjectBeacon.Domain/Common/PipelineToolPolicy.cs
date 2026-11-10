@@ -19,8 +19,7 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> AgentProfileKnowledgeWriteTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
-        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw,
-        McpToolNames.HashFile, McpToolNames.HashText
+        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw
     });
     public static IReadOnlyList<string> PlannerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
