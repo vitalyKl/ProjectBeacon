@@ -1057,6 +1057,25 @@ public sealed class ListOwnProposalsHandler
 internal static class ProposalProjectAuthorization
 {
     /// <summary>
+    /// Human writes require project membership or inherited Owner/Admin rights. Agent proposals
+    /// require a project-bound ContextRead token; the HTTP harness independently enforces the
+    /// live Actor session and per-profile MCP grant before reaching these handlers.
+    /// </summary>
+    public static async Task<bool> CanSubmitAsync(
+        IBeaconDb db,
+        ActorContext actor,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        if (actor.IsHuman)
+            return await CanWriteAsync(db, actor, projectId, ct);
+
+        return actor.IsApiToken
+            && actor.ProjectId == projectId
+            && actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead);
+    }
+
+    /// <summary>
     /// Ordinary proposal access follows project membership. Org Owner/Admin and system
     /// administrators inherit access; an org Member without project membership does not.
     /// </summary>
