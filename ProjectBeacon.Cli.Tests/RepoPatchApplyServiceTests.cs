@@ -119,6 +119,61 @@ public sealed class RepoPatchApplyServiceTests
     }
 
     [Fact]
+    public async Task Execute_RetryWithPartiallyAppliedFiles_AppliesOnlyRemainingSections()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
+        const string firstPath = "docs/a-guide.md";
+        const string secondPath = "docs/b-guide.md";
+        const string firstBefore = "First base.\n";
+        const string firstAfter = "First approved.\n";
+        const string secondBefore = "Second base.\n";
+        const string secondAfter = "Second approved.\n";
+        await repo.WriteCommittedAsync(firstPath, firstBefore);
+        await repo.WriteCommittedAsync(secondPath, secondBefore);
+
+        var firstPatch = await repo.CreatePatchAsync(firstPath, firstAfter);
+        var secondPatch = await repo.CreatePatchAsync(secondPath, secondAfter);
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = repo.ProjectId,
+            proposalId = repo.ProposalId,
+            patch = firstPatch + secondPatch,
+            files = new[]
+            {
+                new
+                {
+                    gitPath = firstPath,
+                    projectPath = firstPath,
+                    baseHash = Hash(firstBefore),
+                    resultHash = Hash(firstAfter)
+                },
+                new
+                {
+                    gitPath = secondPath,
+                    projectPath = secondPath,
+                    baseHash = Hash(secondBefore),
+                    resultHash = Hash(secondAfter)
+                }
+            },
+            allowedPaths = new[] { "docs" }
+        });
+
+        // Simulate a restart after the first file was written but before completion was acknowledged.
+        await File.WriteAllTextAsync(Path.Combine(repo.ProjectRoot, firstPath), firstAfter);
+
+        var result = await _service.ExecuteAsync(repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Equal(firstAfter, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, firstPath)));
+        Assert.Equal(secondAfter, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, secondPath)));
+        using var response = JsonDocument.Parse(result.Result!);
+        Assert.False(response.RootElement.GetProperty("alreadyApplied").GetBoolean());
+        Assert.Equal(2, response.RootElement.GetProperty("files").GetArrayLength());
+        Assert.Equal(Hash(firstAfter), response.RootElement.GetProperty("files")[0].GetProperty("resultHash").GetString());
+        Assert.Equal(Hash(secondAfter), response.RootElement.GetProperty("files")[1].GetProperty("resultHash").GetString());
+    }
+
+    [Fact]
     public async Task Execute_WaitsForActiveAgentSessionThenAppliesApprovedPatch()
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
