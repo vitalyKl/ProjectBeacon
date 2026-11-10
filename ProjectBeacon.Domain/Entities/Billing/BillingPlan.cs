@@ -84,8 +84,11 @@ public sealed class BillingPlan : Entity
     private static string ValidateKey(string? key)
     {
         var value = key?.Trim() ?? string.Empty;
+        var first = value.Length == 0 ? '\0' : value[0];
+        var firstIsLetter = first is >= 'a' and <= 'z';
+        var firstIsDigit = first is >= '0' and <= '9';
         if (value.Length is < 1 or > 64
-            || value[0] is < 'a' or > 'z' && value[0] is < '0' or > '9'
+            || (!firstIsLetter && !firstIsDigit)
             || value.Any(character => !(character is >= 'a' and <= 'z'
                 or >= '0' and <= '9' or '.' or '_' or '-')))
             throw new ArgumentException("Plan key must be a lowercase slug of 1 to 64 characters.", nameof(key));

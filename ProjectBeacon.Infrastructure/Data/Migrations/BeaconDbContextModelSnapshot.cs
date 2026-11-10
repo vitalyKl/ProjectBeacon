@@ -982,6 +982,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Billing.BillingPlan", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedNever()
                         .HasColumnType("uuid");
 
                     b.Property<short>("Cadence")
