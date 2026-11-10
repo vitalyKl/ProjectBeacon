@@ -13,7 +13,6 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
-using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Audit;
