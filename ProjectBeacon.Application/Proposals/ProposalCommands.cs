@@ -678,6 +678,12 @@ public sealed class AcceptProposalHandler
 
                 if (proposal.TargetKind == ContentTargetKind.RepoPatch)
                 {
+                    if (command.AcceptedPayloadJson is not null
+                        && !string.Equals(command.AcceptedPayloadJson, proposal.PayloadJson, StringComparison.Ordinal))
+                        return Result.Failure<ProposalDto>(
+                            "RepoPatch payloads are immutable during approval. Reject and resubmit a corrected patch.",
+                            ErrorKind.Validation);
+
                     var queued = await RepoPatchProposalWorkflow.QueueAsync(
                         db, proposal, command.Actor.UserId, command.Actor, _auditWriter, now,
                         requireProfileAuto: false, ct);
