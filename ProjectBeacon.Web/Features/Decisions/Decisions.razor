@@ -194,7 +194,7 @@ else
 
     private async Task Accept(DecisionDto decision)
     {
-        var result = await AcceptDecision.HandleAsync(decision.Id);
+        var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
