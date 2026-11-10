@@ -149,6 +149,52 @@ public sealed class TenantContextBinderTests : IDisposable
     }
 
     [Fact]
+    public async Task BindUserAsync_UsesOrganizationMembershipWhenNoProjectMembershipExists()
+    {
+        var org = Org.Create("Org-only owner");
+        var user = User.Create("org-only-owner", "org-only-owner@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Null(tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.False(tenant.Unscoped);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Active, tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_PreservesSuspendedOrganizationOnlyMembership()
+    {
+        var org = Org.Create("Suspended org-only member");
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        var user = User.Create("org-only-suspended", "org-only-suspended@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Null(tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, tenant.LifecycleStatus);
+    }
+
+    [Fact]
     public async Task BindUserAsync_NonAdminWithoutMembership_StaysFailClosed()
     {
         var user = User.Create("bob", "bob@example.com", "hash");
