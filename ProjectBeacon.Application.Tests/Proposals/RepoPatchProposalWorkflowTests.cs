@@ -196,6 +196,7 @@ public sealed class RepoPatchProposalWorkflowTests : IDisposable
         var persistedProposal = await _db.Proposals.SingleAsync(
             item => item.Id == proposal.Id,
             TestContext.Current.CancellationToken);
+        await _db.Entry(persistedProposal).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(ProposalStatus.Applying, persistedProposal.Status);
         Assert.Equal(queued.Id, persistedProposal.ApplyCommandId);
         Assert.Equal(_userId, persistedProposal.DecidedByUserId);
