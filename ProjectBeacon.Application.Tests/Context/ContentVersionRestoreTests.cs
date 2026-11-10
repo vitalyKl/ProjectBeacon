@@ -21,7 +21,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
     private readonly Guid _projectId;
-    private readonly Guid _actorId = Guid.NewGuid();
+    private Guid _actorId;
 
     public ContentVersionRestoreTests()
     {
@@ -35,6 +35,13 @@ public sealed class ContentVersionRestoreTests : IDisposable
         _db.Projects.Add(project);
         _db.SaveChanges();
         _projectId = project.Id;
+
+        var user = User.Create("restore-owner", "restore-owner@beacon.local", "hash");
+        _db.Users.Add(user);
+        _db.SaveChanges();
+        _actorId = user.Id;
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, _actorId, MemberRole.Owner));
+        _db.SaveChanges();
     }
 
     public void Dispose()
