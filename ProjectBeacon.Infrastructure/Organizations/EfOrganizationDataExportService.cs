@@ -27,6 +27,7 @@ public sealed class EfOrganizationDataExportService(
     private const long MaximumRows = 100_000;
     private const long MaximumAttachmentBytes = 128L * 1024 * 1024;
     private const long MaximumArchiveBytes = 160L * 1024 * 1024;
+    private const long MaximumJsonPayloadBytes = 32L * 1024 * 1024;
     private const long MaximumAttachmentLength = 10L * 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -486,9 +487,12 @@ public sealed class EfOrganizationDataExportService(
             return TooLarge();
 
         var exportedAt = timeProvider.GetUtcNow();
+        var jsonBudget = new ExportPayloadBudget(MaximumJsonPayloadBytes);
         await using var output = new MemoryStream();
-        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        try
         {
+            using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+            {
             await AddTextEntryAsync(archive, "README.txt", BuildReadme(exportedAt), ct);
             await AddJsonEntryAsync(archive, "manifest.json", new
             {
@@ -500,28 +504,28 @@ public sealed class EfOrganizationDataExportService(
                 attachmentCount = attachmentRows.Count,
                 rowCount = totalRows
             }, ct);
-            await AddJsonEntryAsync(archive, "organization.json", organization, ct);
-            await AddJsonEntryAsync(archive, "members.json", members, ct);
-            await AddJsonEntryAsync(archive, "organization-invites.json", orgInvites, ct);
-            await AddJsonEntryAsync(archive, "projects.json", projects, ct);
-            await AddJsonEntryAsync(archive, "project-members.json", projectMembers, ct);
-            await AddJsonEntryAsync(archive, "project-invites.json", projectInvites, ct);
-            await AddJsonEntryAsync(archive, "labels.json", labels, ct);
-            await AddJsonEntryAsync(archive, "label-paths.json", labelPaths, ct);
-            await AddJsonEntryAsync(archive, "milestones.json", milestones, ct);
-            await AddJsonEntryAsync(archive, "tasks.json", tasks, ct);
-            await AddJsonEntryAsync(archive, "task-comments.json", taskComments, ct);
-            await AddJsonEntryAsync(archive, "task-dependencies.json", taskDependencies, ct);
-            await AddJsonEntryAsync(archive, "task-steps.json", taskSteps, ct);
-            await AddJsonEntryAsync(archive, "subtasks.json", subtasks, ct);
-            await AddJsonEntryAsync(archive, "reports.json", reports, ct);
-            await AddJsonEntryAsync(archive, "context-sections.json", contextSections, ct);
-            await AddJsonEntryAsync(archive, "context-revisions.json", contextRevisions, ct);
-            await AddJsonEntryAsync(archive, "decisions.json", decisions, ct);
-            await AddJsonEntryAsync(archive, "decision-tasks.json", decisionTasks, ct);
-            await AddJsonEntryAsync(archive, "constraints.json", constraints, ct);
-            await AddJsonEntryAsync(archive, "chat-sessions.json", chatSessions, ct);
-            await AddJsonEntryAsync(archive, "chat-parts.json", chatParts, ct);
+            await AddJsonEntryAsync(archive, "organization.json", organization, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "members.json", members, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "organization-invites.json", orgInvites, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "projects.json", projects, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "project-members.json", projectMembers, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "project-invites.json", projectInvites, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "labels.json", labels, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "label-paths.json", labelPaths, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "milestones.json", milestones, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "tasks.json", tasks, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "task-comments.json", taskComments, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "task-dependencies.json", taskDependencies, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "task-steps.json", taskSteps, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "subtasks.json", subtasks, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "reports.json", reports, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "context-sections.json", contextSections, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "context-revisions.json", contextRevisions, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "decisions.json", decisions, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "decision-tasks.json", decisionTasks, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "constraints.json", constraints, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "chat-sessions.json", chatSessions, jsonBudget, ct);
+            await AddJsonEntryAsync(archive, "chat-parts.json", chatParts, jsonBudget, ct);
 
             var attachmentManifest = new List<object>(attachmentRows.Count);
             foreach (var attachment in attachmentRows)
@@ -582,7 +586,12 @@ public sealed class EfOrganizationDataExportService(
                 });
             }
 
-            await AddJsonEntryAsync(archive, "task-attachments.json", attachmentManifest, ct);
+            await AddJsonEntryAsync(archive, "task-attachments.json", attachmentManifest, jsonBudget, ct);
+            }
+        }
+        catch (ExportPayloadTooLargeException)
+        {
+            return TooLarge();
         }
 
         if (output.Length > MaximumArchiveBytes)
@@ -624,11 +633,107 @@ public sealed class EfOrganizationDataExportService(
         ZipArchive archive,
         string name,
         T data,
+        ExportPayloadBudget budget,
         CancellationToken ct)
     {
         var entry = archive.CreateEntry(name, CompressionLevel.Fastest);
-        await using var stream = entry.Open();
-        await JsonSerializer.SerializeAsync(stream, data, JsonOptions, ct);
+        await using var entryStream = entry.Open();
+        await using var boundedStream = new BudgetWriteStream(entryStream, budget, leaveOpen: true);
+        await JsonSerializer.SerializeAsync(boundedStream, data, JsonOptions, ct);
+    }
+
+    private sealed class ExportPayloadBudget(long maximumBytes)
+    {
+        private long _remaining = maximumBytes;
+
+        public void Consume(int bytes)
+        {
+            if (bytes < 0 || bytes > _remaining)
+                throw new ExportPayloadTooLargeException();
+            _remaining -= bytes;
+        }
+    }
+
+    private sealed class ExportPayloadTooLargeException : Exception;
+
+    private sealed class BudgetWriteStream(
+        Stream inner,
+        ExportPayloadBudget budget,
+        bool leaveOpen) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => inner.Flush();
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            inner.FlushAsync(cancellationToken);
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            budget.Consume(count);
+            inner.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            budget.Consume(buffer.Length);
+            inner.Write(buffer);
+        }
+
+        public override void WriteByte(byte value)
+        {
+            budget.Consume(1);
+            inner.WriteByte(value);
+        }
+
+        public override Task WriteAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            budget.Consume(count);
+            return inner.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public override ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            budget.Consume(buffer.Length);
+            return inner.WriteAsync(buffer, cancellationToken);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && !leaveOpen)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            if (!leaveOpen)
+                await inner.DisposeAsync();
+            GC.SuppressFinalize(this);
+        }
     }
 
     private static async Task AddTextEntryAsync(
