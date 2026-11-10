@@ -255,6 +255,9 @@ else
         _sectionRevision = result.Value!.Revision;
         Snackbar.Add(L["Saved"].Value, Severity.Success);
         await Reload();
+        var savedNode = _nodes.FirstOrDefault(node => node.Id == result.Value.Id);
+        if (savedNode is not null)
+            await LoadSection(savedNode);
     }
 
     private async Task LoadSection(ContextSectionDto node)
