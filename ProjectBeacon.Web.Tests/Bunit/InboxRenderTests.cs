@@ -90,8 +90,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
 
         cut.FindAll(".mud-expand-panel-header").First(header =>
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
-        cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Compare base revision", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.Find("[data-testid='compare-base-revision']").Click();
 
         Assert.Contains("- The old project goal", cut.Markup);
         Assert.Contains("+ A clearer project goal", cut.Markup);
