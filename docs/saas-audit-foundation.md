@@ -41,12 +41,13 @@ referenced record is deleted without retaining the referenced record itself.
 - `IAuditReader` accepts a non-forgeable `AdminActor`, requires `AuditRead`, and returns
   bounded, deterministic pages. The reader uses an explicit unscoped scope only after that
   authorization object has been supplied.
-- `IAdminGate` resolves platform-operator authority from persisted `User.IsAdmin` state and
-  returns the non-forgeable `AdminActor`. Caller-supplied roles or permissions are not trusted.
+- `IAdminGate` resolves platform-operator authority from persisted operator-role assignments and
+  returns the non-forgeable `AdminActor`. The legacy `User.IsAdmin` marker remains true only for
+  `SystemAdministrator`; caller-supplied roles or permissions are not trusted.
 
-The current alpha operator console uses the existing `SystemAdministrator` role. Read and export
-are separate permissions (`AuditRead` and `AuditExport`). Step-up authentication remains
-fail-closed until an elevation provider is added.
+The Control Plane resolves the persisted `SystemAdministrator`, `Support`, `Billing`, and
+`Auditor` roles through `IAdminGate`. Read and export are separate permissions (`AuditRead` and
+`AuditExport`). High-risk mutations require a current ten-minute TOTP step-up elevation.
 
 ## Instrumented operations
 
@@ -91,9 +92,10 @@ operations use explicit global scopes rather than relying on an ambient tenant s
 The platform-operator HTTP API exposes:
 
 - `GET /v1/admin/audit` — filtered, bounded pages (up to 200 rows) with organization, project,
-  UTC time range, action, actor kind/user/token/device id, target type/id, and outcome filters.
-- `GET /v1/admin/audit/export.csv` — CSV using the same filters, separately gated by
-  `AuditExport`. If more than 10,000 events match, the endpoint returns `413 Payload Too Large`
+  UTC time range, action, actor kind/user/token/device id, target type/id, exact trace ID, and
+  outcome filters.
+- `GET /v1/admin/audit/export.csv` — CSV using the same filters, including exact trace ID,
+  separately gated by `AuditExport`. If more than 10,000 events match, the endpoint returns `413 Payload Too Large`
   and requires narrower filters; it never silently exports a partial result. CSV fields are
   quoted, formula-prefixed values are neutralized, and the response is marked `no-store` and
   `nosniff`.
@@ -111,8 +113,10 @@ Operators sign in on `/control/login` through the separate
 authentication selector does not accept the customer application's `BeaconAuth` cookie or a
 customer JWT as an alternate operator session. The audit page is explicitly bound to that cookie
 scheme and each API operation rechecks persisted operator rights through `IAdminGate`.
-The first slice reuses `User.IsAdmin` as the operator eligibility source; separate persisted
-operator accounts/role assignment and MFA remain follow-up authorization work.
+Operator sessions use the separate host-only `BeaconControlAuth` cookie. All admitted operator
+roles are resolved from persisted role assignment; the customer `BeaconAuth` cookie and customer
+JWT are not accepted as Control Plane sessions. TOTP enrollment, one-time recovery codes, and
+step-up elevation are implemented independently of the customer login session.
 
 Audit events are written by server-side application handlers, not through a public client-writable
 audit endpoint. Bootstrap and administrator recovery are also Control Plane-only operations.
@@ -139,4 +143,5 @@ security lifecycle are implemented. Deliberately not included in this slice:
 - Full event capture for every task, chat, context, pipeline and read operation. High-volume
   content events are not audit records; any new action must be explicitly selected and use the
   fixed metadata allowlist.
-- Step-up authentication for sensitive operator actions. Elevated actions remain fail-closed.
+- Full operations telemetry and restricted container-log access remain in the B4 operations
+  phase; this audit journal is deliberately not a high-volume diagnostic log.
