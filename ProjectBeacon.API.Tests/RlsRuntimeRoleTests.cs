@@ -17,6 +17,7 @@ using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Billing;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Entitlements;
 using Npgsql;
