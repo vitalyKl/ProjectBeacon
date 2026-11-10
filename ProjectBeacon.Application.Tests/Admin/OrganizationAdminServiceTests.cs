@@ -18,6 +18,8 @@ using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Organizations;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using ProjectBeacon.Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 
 public sealed class OrganizationAdminServiceTests : IDisposable
