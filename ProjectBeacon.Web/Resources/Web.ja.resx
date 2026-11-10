@@ -2814,4 +2814,19 @@ orthstar</value>
   <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
     <value>Auto（ドキュメントパッチを適用）</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>適用済みリビジョン</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>サブタスク ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>タスク ID</value>
+  </data>
 </root>
