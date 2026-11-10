@@ -13,6 +13,8 @@ using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Organizations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
+using ProjectBeacon.Application.Common;
 
 public sealed class OrganizationDataExportTests : IDisposable
 {
