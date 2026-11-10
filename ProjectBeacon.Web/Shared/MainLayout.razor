@@ -112,6 +112,9 @@
                 <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
                     @L["Projects"]
                 </MudNavLink>
+                <MudNavLink Href="/billing" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.ReceiptLong">
+                    Billing
+                </MudNavLink>
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
@@ -395,6 +398,7 @@
             "chat" => (L["AgentChat"].Value, L["ShellHintChat"].Value),
             "reports" => (L["Reports"].Value, L["ShellHintReports"].Value),
             "admin" => (L["AuditLog"].Value, L["AuditLead"].Value),
+            "billing" => ("Billing", "Invoices and payment history"),
             "settings" => (L["Settings"].Value, L["ShellHintSettings"].Value),
             "task" => (L["TaskDetail"].Value, L["ShellHintTask"].Value),
             "projects" => (L["CreateProject"].Value, L["ShellHintNewProject"].Value),
