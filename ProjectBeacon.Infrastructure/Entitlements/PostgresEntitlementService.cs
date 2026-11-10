@@ -94,8 +94,10 @@ public sealed class PostgresEntitlementService(
     public async Task<Result<EntitlementDecision>> EvaluateAsync(
         Guid orgId, EntitlementRequirement requirement, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(requirement.FeatureKey) || requirement.RequestedUnits < 1)
-            return Result.Failure<EntitlementDecision>("A feature key and positive requested units are required.");
+        if (string.IsNullOrWhiteSpace(requirement.FeatureKey)
+            || requirement.RequestedUnits < 1
+            || requirement.CurrentUsage < 0)
+            return Result.Failure<EntitlementDecision>("A feature key, non-negative current usage, and positive requested units are required.");
 
         if (orgId == Guid.Empty)
             return Result.Ok(new EntitlementDecision(false, "organization_not_found"));
@@ -126,16 +128,23 @@ public sealed class PostgresEntitlementService(
 
         var grant = result.Value;
         if (!grant.Features.Contains(requirement.FeatureKey.Trim().ToLowerInvariant()))
-            return Result.Ok(new EntitlementDecision(false, "feature_not_granted"));
+            return Result.Ok(new EntitlementDecision(false, "feature_not_granted", requirement.CurrentUsage));
         if (requirement.LimitKey is null)
-            return Result.Ok(new EntitlementDecision(true));
+            return Result.Ok(new EntitlementDecision(true, CurrentUsage: requirement.CurrentUsage));
+
         var key = requirement.LimitKey.Trim().ToLowerInvariant();
+        // An omitted capacity key means this grant has no configured cap for that resource.
+        // Explicit zero remains a real zero-capacity limit.
         if (!grant.Limits.TryGetValue(key, out var limit))
-            return Result.Ok(new EntitlementDecision(false, "limit_not_granted"));
+            return Result.Ok(new EntitlementDecision(true, CurrentUsage: requirement.CurrentUsage));
+
+        var allowed = requirement.CurrentUsage <= limit
+            && requirement.RequestedUnits <= limit - requirement.CurrentUsage;
         return Result.Ok(new EntitlementDecision(
-            requirement.RequestedUnits <= limit,
-            requirement.RequestedUnits <= limit ? null : "limit_exceeded",
-            null, limit));
+            allowed,
+            allowed ? null : "limit_exceeded",
+            requirement.CurrentUsage,
+            limit));
     }
 
     public async Task<Result<OrganizationEntitlement>> GrantAsync(
