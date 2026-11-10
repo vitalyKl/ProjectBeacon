@@ -28,7 +28,7 @@ Plane in its own Web deployment without changing the application-level audit con
   `/v1/auth/recover-admin` return `404`.
 - On the control hostname, only the Control Plane pages and supporting routes are allowed:
   `/control/login`, `/control/bootstrap`, `/control/recover`, `/control/logout`,
-  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/operations`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
+  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/operations`, `/admin/billing/plans`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
   and static/Blazor framework assets. Customer application pages are not served from this origin.
 - The control hostname root redirects to `/admin/audit`; an unauthenticated browser is challenged
   to `/control/login`.
@@ -160,5 +160,9 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   with `OperationsRead` at `/admin/operations`; instances become stale after 90 seconds without an
   update. Container log access is not exposed: it still requires a restricted external ops-agent
   or log stack and the `ContainerLogsRead` boundary.
+- The provider-neutral plan catalog is available at `/admin/billing/plans`. `BillingRead` operators
+  can inspect plans; create/update operations require `BillingManage` and ten-minute TOTP step-up.
+  Plan price and currency may both remain unset. The catalog does not create subscriptions or call
+  a payment provider.
 - Billing persistence/provider integration, data export/deletion, and granular feature/usage
   entitlement enforcement remain future work.

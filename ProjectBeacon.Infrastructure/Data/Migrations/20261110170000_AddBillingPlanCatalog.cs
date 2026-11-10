@@ -38,7 +38,8 @@ public partial class AddBillingPlanCatalog : Migration
                 CONSTRAINT "CK_BillingPlans_LimitsJson"
                     CHECK (jsonb_typeof("LimitsJson") = 'object'),
                 CONSTRAINT "CK_BillingPlans_FeaturesJson"
-                    CHECK (jsonb_typeof("FeaturesJson") = 'array')
+                    CHECK (jsonb_typeof("FeaturesJson") = 'array'
+                        AND "FeaturesJson" @> '["core"]'::jsonb)
             );
 
             CREATE UNIQUE INDEX "IX_BillingPlans_Key" ON "BillingPlans" ("Key");
