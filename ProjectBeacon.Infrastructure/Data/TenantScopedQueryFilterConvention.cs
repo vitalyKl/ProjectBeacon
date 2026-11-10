@@ -103,7 +103,9 @@ internal static class TenantScopedQueryFilterConvention
     {
         modelBuilder.Entity<T>().HasQueryFilter(e =>
             context.FilterUnscoped
-            || (context.FilterProjectId != null && e.ProjectId == context.FilterProjectId));
+            || (context.FilterProjectId != null
+                && e.ProjectId == context.FilterProjectId
+                && context.FilterOrganizationLifecycleAllowsAccess));
     }
 
     private static void SetOrgFilter<T>(ModelBuilder modelBuilder, BeaconDbContext context)
@@ -111,6 +113,8 @@ internal static class TenantScopedQueryFilterConvention
     {
         modelBuilder.Entity<T>().HasQueryFilter(e =>
             context.FilterUnscoped
-            || (context.FilterOrgId != null && e.OrgId == context.FilterOrgId));
+            || (context.FilterOrgId != null
+                && e.OrgId == context.FilterOrgId
+                && context.FilterOrganizationLifecycleAllowsAccess));
     }
 }

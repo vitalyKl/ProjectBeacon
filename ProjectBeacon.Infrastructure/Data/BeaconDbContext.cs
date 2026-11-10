@@ -84,6 +84,9 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public Guid? FilterProjectId => _tenant?.ProjectId ?? TenantScope.CurrentProjectId;
     public Guid? FilterOrgId => _tenant?.OrgId ?? TenantScope.CurrentOrgId;
     public bool FilterUnscoped => (_tenant?.Unscoped ?? false) || TenantScope.IsUnscoped;
+    public bool FilterOrganizationLifecycleAllowsAccess =>
+        _tenant?.LifecycleEnforced != true
+        || _tenant.LifecycleStatus == OrganizationLifecycleStatus.Active;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -97,6 +100,21 @@ public class BeaconDbContext : DbContext, IBeaconDb
             || (FilterOrgId != null
                 && e.OrgId == FilterOrgId
                 && (FilterProjectId == null || e.ProjectId == FilterProjectId)));
+
+        // A tenant-bound Web circuit must not continue reading an organization after it is
+        // suspended or closed. Explicit operator/unscoped flows continue to see all records.
+        modelBuilder.Entity<Org>().HasQueryFilter(e =>
+            FilterUnscoped
+            || !(_tenant != null && _tenant.LifecycleEnforced)
+            || (FilterOrgId != null
+                && e.Id == FilterOrgId
+                && FilterOrganizationLifecycleAllowsAccess));
+        modelBuilder.Entity<Project>().HasQueryFilter(e =>
+            FilterUnscoped
+            || !(_tenant != null && _tenant.LifecycleEnforced)
+            || (FilterOrgId != null
+                && e.OrgId == FilterOrgId
+                && FilterOrganizationLifecycleAllowsAccess));
 
         // Platform configuration and outgoing mail metadata are global records.
         modelBuilder.Entity<PlatformEmailSettings>().HasQueryFilter(e => FilterUnscoped);

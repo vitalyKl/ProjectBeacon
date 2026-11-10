@@ -3,6 +3,7 @@ namespace ProjectBeacon.Infrastructure.Http;
 using System.Security.Claims;
 using Application.Authorization;
 using Application.Persistence;
+using ProjectBeacon.Domain.Enums;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
@@ -22,15 +23,25 @@ public sealed class TenantIsolationMiddleware
     {
         Guid? projectId;
         Guid? orgId;
+        var tenantContext = ctx.RequestServices?.GetService<ITenantContext>();
 
         using (TenantScope.EnterUnscoped())
         {
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
             (projectId, orgId) = await ResolveTenantScopeAsync(ctx, db);
-        }
+            tenantContext?.Assign(projectId, orgId, unscoped: false);
 
-        ctx.RequestServices?.GetService<ITenantContext>()
-            ?.Assign(projectId, orgId, unscoped: false);
+            OrganizationLifecycleStatus? lifecycleStatus = null;
+            if (orgId is { } resolvedOrgId && resolvedOrgId != Guid.Empty)
+            {
+                lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(org => org.Id == resolvedOrgId)
+                    .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                    .FirstOrDefaultAsync(ctx.RequestAborted);
+            }
+            tenantContext?.SetLifecycleStatus(lifecycleStatus, enforced: orgId is { } oid && oid != Guid.Empty);
+        }
 
         await TenantRlsSession.ApplyAsync(db, projectId, orgId, unscoped: false);
 

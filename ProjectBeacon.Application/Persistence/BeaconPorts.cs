@@ -15,6 +15,7 @@ using Domain.Entities.Projects;
 using Domain.Entities.Reports;
 using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
+using Domain.Enums;
 
 // Owned by Application so handlers do not reference the Infrastructure assembly.
 // The EF context in Infrastructure implements this port.
@@ -101,7 +102,10 @@ public interface ITenantContext
     Guid? ProjectId { get; }
     Guid? OrgId { get; }
     bool Unscoped { get; }
+    OrganizationLifecycleStatus? LifecycleStatus { get; }
+    bool LifecycleEnforced { get; }
     void Assign(Guid? projectId, Guid? orgId, bool unscoped);
+    void SetLifecycleStatus(OrganizationLifecycleStatus? status, bool enforced);
 }
 
 /// <summary>Mutable <see cref="ITenantContext"/> whose <c>Assign</c> replaces the project, org, and unscoped flag.</summary>
@@ -110,11 +114,21 @@ public sealed class TenantContext : ITenantContext
     public Guid? ProjectId { get; private set; }
     public Guid? OrgId { get; private set; }
     public bool Unscoped { get; private set; }
+    public OrganizationLifecycleStatus? LifecycleStatus { get; private set; }
+    public bool LifecycleEnforced { get; private set; }
 
     public void Assign(Guid? projectId, Guid? orgId, bool unscoped)
     {
         ProjectId = projectId;
         OrgId = orgId;
         Unscoped = unscoped;
+        LifecycleStatus = null;
+        LifecycleEnforced = false;
+    }
+
+    public void SetLifecycleStatus(OrganizationLifecycleStatus? status, bool enforced)
+    {
+        LifecycleStatus = status;
+        LifecycleEnforced = enforced;
     }
 }
