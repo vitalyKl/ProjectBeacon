@@ -348,7 +348,15 @@
         var state = await AuthState;
         var actor = ActorContextFactory.FromPrincipal(state.User);
         await TenantBinder.BindUserAsync(actor);
-        _canViewBilling = await InvoiceBilling.CanViewAsync(actor);
+        try
+        {
+            _canViewBilling = await InvoiceBilling.CanViewAsync(actor);
+        }
+        catch
+        {
+            // A billing visibility check must never prevent the rest of the customer shell from loading.
+            _canViewBilling = false;
+        }
         await LoadProfile(state);
         if (actor.UserId is not Guid userId)
             return;
