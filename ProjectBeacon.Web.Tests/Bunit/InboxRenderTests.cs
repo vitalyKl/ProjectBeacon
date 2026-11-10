@@ -163,9 +163,11 @@ public sealed class InboxRenderTests : BUnitRenderBase
 
         var savedConflict = await DbContext.Proposals.SingleAsync(
             proposal => proposal.Id == conflicted.Id, CancellationToken.None);
+        await DbContext.Entry(savedConflict).ReloadAsync(CancellationToken.None);
         Assert.Equal(ProposalStatus.Conflicted, savedConflict.Status);
         var savedAcceptance = await DbContext.Proposals.SingleAsync(
             proposal => proposal.Id == accepted.Id, CancellationToken.None);
+        await DbContext.Entry(savedAcceptance).ReloadAsync(CancellationToken.None);
         Assert.Equal(ProposalStatus.Accepted, savedAcceptance.Status);
     }
 
