@@ -21,6 +21,7 @@ public sealed class ProposalHandlerTests : IDisposable
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
     private Guid _userId;
+    private Guid _orgId;
     private readonly Guid _projectId;
 
     public ProposalHandlerTests()
@@ -30,6 +31,7 @@ public sealed class ProposalHandlerTests : IDisposable
         var org = Org.Create("Proposal Org");
         _db.Orgs.Add(org);
         _db.SaveChanges();
+        _orgId = org.Id;
 
         var project = Project.Create("Proposal Project", "Original description", org.Id);
         _db.Projects.Add(project);
@@ -282,6 +284,41 @@ public sealed class ProposalHandlerTests : IDisposable
             .HandleAsync(new AcceptProposalCommand(_projectId, created.Value.Id, HumanActor()), TestContext.Current.CancellationToken);
         Assert.True(ownerAccept.Success, ownerAccept.Error);
         Assert.Equal(ProposalStatus.Accepted, ownerAccept.Value!.Status);
+    }
+
+    [Fact]
+    public async Task OrganizationMemberWithoutProjectMembershipCannotViewInbox()
+    {
+        var orgMember = User.Create("proposal-org-member", "proposal-org-member@beacon.local", "hash");
+        _db.Users.Add(orgMember);
+        _db.SaveChanges();
+        _db.OrgMembers.Add(OrgMember.Create(_orgId, orgMember.Id, MemberRole.Member));
+        _db.SaveChanges();
+
+        var actor = new ActorContext(
+            ActorType.Human, orgMember.Id, false, null, null, _projectId, _orgId, ApiTokenCapability.None);
+        var listed = await new ListProposalsHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(new ListProposalsQuery(_projectId), actor, TestContext.Current.CancellationToken);
+
+        Assert.False(listed.Success);
+        Assert.Equal(ErrorKind.Forbidden, listed.Kind);
+    }
+
+    [Fact]
+    public async Task ApiTokenWithoutContextReadCannotCreateProposal()
+    {
+        var tokenActor = new ActorContext(
+            ActorType.ApiToken, _userId, false, Guid.NewGuid(), null,
+            _projectId, _orgId, ApiTokenCapability.TaskRead);
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), tokenActor), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Empty(await _db.Proposals.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
