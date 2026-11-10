@@ -468,7 +468,7 @@ public sealed class EfOrganizationAdminService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         auditWriter.Stage(db, Audit(actor, "platform.organization.member_role_changed",
             "OrgMember", member.Id, orgId, now,
-            $"""{"previousRole":"{{previousRole}}","newRole":"{{role}}"}"""));
+            $$"""{"previousRole":"{{previousRole}}","newRole":"{{role}}"}"""));
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return Result.Ok();
