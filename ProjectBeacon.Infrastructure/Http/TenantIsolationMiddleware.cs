@@ -40,7 +40,7 @@ public sealed class TenantIsolationMiddleware
                     .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
                     .FirstOrDefaultAsync(ctx.RequestAborted);
             }
-            tenantContext?.SetLifecycleStatus(lifecycleStatus, enforced: orgId is { } oid && oid != Guid.Empty);
+            tenantContext?.SetLifecycleStatus(lifecycleStatus, enforced: orgId is { } lifecycleOrgId && lifecycleOrgId != Guid.Empty);
         }
 
         await TenantRlsSession.ApplyAsync(db, projectId, orgId, unscoped: false);
