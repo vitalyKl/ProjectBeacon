@@ -1,4 +1,5 @@
 using ProjectBeacon.Application;
+using ProjectBeacon.Application.Operations;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Http;
@@ -28,6 +29,8 @@ var jwtSecret = JwtSecretPolicy.EnsureConfigured(
 DataKeyPolicy.ResolveDataKeys(builder.Configuration, builder.Environment.EnvironmentName);
 
 builder.Services.AddInfrastructure(connectionString);
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddPlatformHeartbeat(PlatformServiceKind.Api, builder.Environment.EnvironmentName);
 builder.Services.AddApplicationHandlers();
 
 builder.Services.AddAuthentication(options =>
