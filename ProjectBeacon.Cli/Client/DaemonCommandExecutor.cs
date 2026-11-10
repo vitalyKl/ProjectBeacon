@@ -102,7 +102,28 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 if (kind == WorkstationCommandKind.GitSync)
                     return await _gitSync.ExecuteAsync(command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
                 if (kind == WorkstationCommandKind.ApplyProposalPatch)
-                    return await _repoPatchApply.ExecuteAsync(command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
+                {
+                    async Task ReportPatchProgressAsync(string activity, CancellationToken token)
+                    {
+                        var snapshot = JsonSerializer.Serialize(new
+                        {
+                            state = "running",
+                            activity,
+                            updatedAt = _timing.TimeProvider.GetUtcNow(),
+                            forms = Array.Empty<object>()
+                        }, DaemonJson.Camel);
+                        using var response = await _http.PostAsJsonAsync(
+                            ApiRoutes.CommandProgress(command.Id),
+                            new CommandProgressRequest(command.Generation, snapshot),
+                            token);
+                        if (!response.IsSuccessStatusCode)
+                            throw new InvalidOperationException(
+                                $"The server no longer accepts RepoPatch progress (HTTP {(int)response.StatusCode}).");
+                    }
+
+                    return await _repoPatchApply.ExecuteAsync(
+                        command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct, ReportPatchProgressAsync);
+                }
                 if (kind == WorkstationCommandKind.ChatEnsureSession || kind == WorkstationCommandKind.ChatPrompt)
                 {
                     var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, DaemonPayload.ReadPath(payload), relativeOnly: true);
