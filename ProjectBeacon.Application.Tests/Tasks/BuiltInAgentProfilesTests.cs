@@ -121,6 +121,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.ContextCreateDraft, PipelineToolPolicy.ActorWorkspaceTools);
         Assert.Contains(McpToolNames.ConstraintPropose, PipelineToolPolicy.ActorWorkspaceTools);
         Assert.Contains(McpToolNames.DecisionPropose, PipelineToolPolicy.ActorWorkspaceTools);
+        Assert.Contains(McpToolNames.HashFile, PipelineToolPolicy.ActorWorkspaceTools);
+        Assert.Contains(McpToolNames.HashText, PipelineToolPolicy.ActorWorkspaceTools);
         Assert.Contains(McpToolNames.TaskPipelineStatus, PipelineToolPolicy.AgentProfileContextTools);
         Assert.Contains(McpToolNames.ListContextNodes, PipelineToolPolicy.AgentProfileContextTools);
         Assert.Contains(McpToolNames.GetContextNode, PipelineToolPolicy.AgentProfileContextTools);
