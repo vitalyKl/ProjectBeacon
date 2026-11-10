@@ -509,6 +509,53 @@ public sealed class P2AuthorizationHttpTests
             $"Context-node read returned {(int)nodesResponse.StatusCode}: {await nodesResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
     }
 
+    [Fact]
+    public async Task ProposalInbox_NonMember_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Access Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Access Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(client, "proposal-outsider", "proposal-outsider@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProposalInbox_ProjectOwner_Returns200()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Owner Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Owner Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
