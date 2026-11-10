@@ -23,7 +23,7 @@ using Microsoft.EntityFrameworkCore;
 public static class OrgEndpoints
 {
     /// <summary>
-    /// Maps every route in this method with <c>RequireHuman</c>: <c>POST /v1/orgs</c>, <c>PUT /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs</c>, <c>POST /v1/orgs/{orgId:guid}/invites</c>, <c>GET /v1/orgs/{orgId:guid}/invites</c>, and <c>DELETE /v1/orgs/{orgId:guid}/invites/{inviteId:guid}</c>.
+    /// Maps every route in this method with <c>RequireHuman</c>, including the owner-only data archive download at <c>GET /v1/orgs/{orgId:guid}/export.zip</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapOrgEndpoints(this IEndpointRouteBuilder app)
     {
@@ -32,7 +32,7 @@ public static class OrgEndpoints
         app.MapGet("/v1/orgs/{orgId:guid}", GetOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs", ListOrgs).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/export.zip", ExportOrganizationData)
-            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+            .RequireAuthorization().DisableAntiforgery().RequireHuman().RequireRateLimiting("auth-read");
         app.MapPost("/v1/orgs/{orgId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/orgs/{orgId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
