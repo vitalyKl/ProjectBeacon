@@ -616,6 +616,118 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Equal(ErrorKind.Forbidden, replay.Kind);
     }
 
+    [Fact]
+    public async Task InboxSummaryCountsAllLegacyAndRevisionBoundReviewItemsForProjectMember()
+    {
+        var pending = Proposal.Create(
+            _projectId, null, null, null, ContentTargetKind.ProjectDescription, _projectId,
+            ProposalOperation.Update, 1, new string('a', 64),
+            """{"description":"pending"}""", "A pending change.",
+            ProposalAuthorKind.Human, _userId, null, null, "Human",
+            "inbox-summary-pending", DateTime.UtcNow);
+        var conflicted = Proposal.Create(
+            _projectId, null, null, null, ContentTargetKind.ProjectDescription, _projectId,
+            ProposalOperation.Update, 1, new string('b', 64),
+            """{"description":"conflicted"}""", "A stale change.",
+            ProposalAuthorKind.Human, _userId, null, null, "Human",
+            "inbox-summary-conflicted", DateTime.UtcNow);
+        conflicted.MarkConflicted(2, "BaseRevisionChanged", DateTime.UtcNow.AddSeconds(1));
+        var expired = Proposal.Create(
+            _projectId, null, null, null, ContentTargetKind.ProjectDescription, _projectId,
+            ProposalOperation.Update, 1, new string('c', 64),
+            """{"description":"expired"}""", "An obsolete change.",
+            ProposalAuthorKind.Human, _userId, null, null, "Human",
+            "inbox-summary-expired", DateTime.UtcNow.AddDays(-31));
+        var decision = Decision.Create("Proposed decision", "Context", "Body", _projectId);
+        var constraint = Constraint.Create("A proposed rule.", ConstraintKind.Must, _projectId);
+        var context = ContextSection.Create(
+            "security", "Security", "Draft security policy.", _projectId,
+            ContextScopeType.Project, updatedByType: "agent", updatedById: "agent-session");
+
+        _db.Proposals.AddRange(pending, conflicted, expired);
+        _db.Decisions.Add(decision);
+        _db.Constraints.Add(constraint);
+        _db.ContextSections.Add(context);
+        _db.SaveChanges();
+
+        var result = await new GetProposalInboxSummaryHandler(
+                HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.Value!.PendingProposals);
+        Assert.Equal(1, result.Value.ConflictedProposals);
+        Assert.Equal(1, result.Value.ProposedDecisions);
+        Assert.Equal(1, result.Value.ProposedConstraints);
+        Assert.Equal(1, result.Value.NeedsReviewContextSections);
+        Assert.Equal(4, result.Value.TotalPending);
+    }
+
+    [Fact]
+    public async Task InboxSummaryAndContextDraftReview_RequireProjectMembershipAndExpectedRevision()
+    {
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var context = ContextSection.Create(
+            "architecture", "Architecture", "Draft architecture note.", _projectId,
+            ContextScopeType.Project, updatedByType: "agent", updatedById: "source-agent");
+        _db.ContextSections.Add(context);
+        new ContentWriter().AddVersion(_db, context, "Agent", "source-agent");
+        _db.SaveChanges();
+
+        var factory = HandlerSqlite.Factory(_connection);
+        var deniedSummary = await new GetProposalInboxSummaryHandler(factory)
+            .HandleAsync(_projectId, outsider, TestContext.Current.CancellationToken);
+        Assert.False(deniedSummary.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedSummary.Kind);
+
+        var deniedReview = await new ReviewContextDraftHandler(factory, new ContentWriter())
+            .HandleAsync(new ReviewContextDraftCommand(
+                _projectId, context.Id, context.Revision, true, outsider),
+                TestContext.Current.CancellationToken);
+        Assert.False(deniedReview.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedReview.Kind);
+
+        var staleReview = await new ReviewContextDraftHandler(factory, new ContentWriter())
+            .HandleAsync(new ReviewContextDraftCommand(
+                _projectId, context.Id, context.Revision + 1, true, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(staleReview.Success);
+        Assert.Equal(ErrorKind.Conflict, staleReview.Kind);
+
+        var approved = await new ReviewContextDraftHandler(factory, new ContentWriter())
+            .HandleAsync(new ReviewContextDraftCommand(
+                _projectId, context.Id, context.Revision, true, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(approved.Success, approved.Error);
+        Assert.Equal(ContextReviewState.Reviewed, approved.Value!.ReviewState);
+        Assert.False(approved.Value.Deleted);
+
+        var rejectedContext = ContextSection.Create(
+            "testing", "Testing", "Draft testing rules.", _projectId,
+            ContextScopeType.Project, updatedByType: "agent", updatedById: "other-agent");
+        _db.ContextSections.Add(rejectedContext);
+        new ContentWriter().AddVersion(_db, rejectedContext, "Agent", "other-agent");
+        _db.SaveChanges();
+
+        var rejected = await new ReviewContextDraftHandler(factory, new ContentWriter())
+            .HandleAsync(new ReviewContextDraftCommand(
+                _projectId, rejectedContext.Id, rejectedContext.Revision, false, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(rejected.Success, rejected.Error);
+        Assert.True(rejected.Value!.Deleted);
+        Assert.Null(await _db.ContextSections.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == rejectedContext.Id, TestContext.Current.CancellationToken));
+
+        var tombstone = await _db.ContentVersions
+            .Where(version => version.TargetId == rejectedContext.Id
+                && version.TargetKind == ContentTargetKind.ContextSection)
+            .OrderByDescending(version => version.Revision)
+            .FirstAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, tombstone.Revision);
+        Assert.Contains("\"deleted\":true", tombstone.ContentJson, StringComparison.OrdinalIgnoreCase);
+    }
+
     private ActorContext HumanActor() =>
         new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
