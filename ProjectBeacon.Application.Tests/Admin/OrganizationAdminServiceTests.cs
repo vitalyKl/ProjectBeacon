@@ -589,7 +589,7 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         var billingGate = new DatabaseAdminGate(_factory);
         var billingActor = new ActorContext(
-            ActorType.Human, billingOperator.Id, isAdmin: true,
+            ActorType.Human, billingOperator.Id, IsAdmin: true,
             null, null, null, null, ApiTokenCapability.None);
         var billingResult = await billingGate.RequireAsync(
             billingActor, OperatorPermission.OrganizationsRead,
