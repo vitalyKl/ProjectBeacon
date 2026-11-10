@@ -487,14 +487,39 @@ else
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            var fields = new[] { "description", "bodyMarkdown", "body", "decisionBody", "context", "consequences", "name", "title" };
+            var fields = new[]
+            {
+                "description", "bodyMarkdown", "body", "decisionBody", "context",
+                "consequences", "reviewNotes", "scopePath", "name", "title", "order"
+            };
             var values = fields
                 .Where(field => root.TryGetProperty(field, out _))
-                .Select(key => root.GetProperty(key).ValueKind == JsonValueKind.String
-                    ? root.GetProperty(key).GetString()
-                    : null)
-                .Where(value => !string.IsNullOrWhiteSpace(value));
-            return string.Join(Environment.NewLine + Environment.NewLine, values!);
+                .Select(field => (Name: field, Value: root.GetProperty(field)))
+                .ToArray();
+
+            // Preserve the existing uncluttered preview for a single Markdown field.
+            // Structured targets get labelled values so reviewers can see every field,
+            // including numeric metadata and fields explicitly cleared with JSON null.
+            if (values.Length == 1
+                && values[0].Value.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(values[0].Value.GetString()))
+                return values[0].Value.GetString()!;
+
+            return string.Join(Environment.NewLine + Environment.NewLine, values.Select(field =>
+            {
+                var value = field.Value.ValueKind switch
+                {
+                    JsonValueKind.String when !string.IsNullOrWhiteSpace(field.Value.GetString())
+                        => field.Value.GetString()!,
+                    JsonValueKind.String => "(empty)",
+                    JsonValueKind.Null => "(cleared)",
+                    JsonValueKind.Number => field.Value.GetRawText(),
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    _ => field.Value.GetRawText()
+                };
+                return $"**{field.Name}**{Environment.NewLine}{Environment.NewLine}{value}";
+            }));
         }
         catch (JsonException)
         {
