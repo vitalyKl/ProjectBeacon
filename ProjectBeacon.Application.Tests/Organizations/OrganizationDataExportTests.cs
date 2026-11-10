@@ -51,12 +51,21 @@ public sealed class OrganizationDataExportTests : IDisposable
         var task = TaskItem.Create("Export task", project.Id);
         task.Update(description: "Task description");
         task.SetReviewNotes("Review notes belong in the archive.");
+        var phaseTemplate = TaskKindPhase.Create(
+            Guid.NewGuid(), 0, "plan", "Planning", "Plan the task before execution.", false, null);
+        var phase = TaskPhase.CopyFrom(phaseTemplate, task.Id, project.Id, null);
+        var workspaceSection = TaskWorkspaceSection.Create(
+            task.Id, project.Id, "implementation-notes", "Implementation notes",
+            "A concise summary", "Notes", "Customer-owned workspace content.",
+            "Human", owner.Id.ToString("D"));
         _db.Users.AddRange(owner, foreignOwner);
         _db.Orgs.AddRange(org, foreignOrg);
         _db.Projects.AddRange(project, foreignProject);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
         _db.OrgMembers.Add(OrgMember.Create(foreignOrg.Id, foreignOwner.Id, MemberRole.Owner));
         _db.Tasks.AddRange(task, foreignTask);
+        _db.TaskPhases.Add(phase);
+        _db.TaskWorkspaceSections.Add(workspaceSection);
         _db.TaskComments.Add(TaskComment.Create("Task comment", task.Id, owner.Id));
 
         var orgInvite = OrgInvite.Create(
@@ -116,6 +125,9 @@ public sealed class OrganizationDataExportTests : IDisposable
         Assert.Contains("organization-invites.json", names);
         Assert.Contains("projects.json", names);
         Assert.Contains("tasks.json", names);
+        Assert.Contains("task-phases.json", names);
+        Assert.Contains("task-workspace-sections.json", names);
+        Assert.Contains("role-bindings.json", names);
         Assert.Contains("task-comments.json", names);
         Assert.Contains("task-attachments.json", names);
         Assert.Contains("README.txt", names);
@@ -128,6 +140,11 @@ public sealed class OrganizationDataExportTests : IDisposable
         var taskJson = await ReadEntryAsync(archive, "tasks.json");
         Assert.Contains("Export task", taskJson, StringComparison.Ordinal);
         Assert.DoesNotContain("FOREIGN TASK MUST NOT EXPORT", taskJson, StringComparison.Ordinal);
+
+        var taskPhasesJson = await ReadEntryAsync(archive, "task-phases.json");
+        Assert.Contains("Plan the task before execution.", taskPhasesJson, StringComparison.Ordinal);
+        var workspaceJson = await ReadEntryAsync(archive, "task-workspace-sections.json");
+        Assert.Contains("Customer-owned workspace content.", workspaceJson, StringComparison.Ordinal);
 
         var manifestJson = await ReadEntryAsync(archive, "manifest.json");
         using (var manifestDoc = JsonDocument.Parse(manifestJson))
