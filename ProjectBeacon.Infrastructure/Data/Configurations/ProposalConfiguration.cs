@@ -22,6 +22,7 @@ public sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         entity.Property(proposal => proposal.IdempotencyKey).HasMaxLength(Proposal.MaxIdempotencyKeyLength).IsRequired();
         entity.Property(proposal => proposal.DecisionNote).HasMaxLength(Proposal.MaxRationaleLength);
         entity.Property(proposal => proposal.AcceptedPayloadJson).HasColumnType("jsonb");
+        entity.Property(proposal => proposal.ApplyCommandId);
         entity.Property(proposal => proposal.StateRevision).HasDefaultValue(1).IsConcurrencyToken();
 
         entity.HasOne<Project>()
@@ -32,6 +33,7 @@ public sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         entity.HasIndex(proposal => new { proposal.ProjectId, proposal.Status, proposal.CreatedAt });
         entity.HasIndex(proposal => new { proposal.ProjectId, proposal.TaskId, proposal.CreatedAt });
         entity.HasIndex(proposal => new { proposal.ProjectId, proposal.IdempotencyKey }).IsUnique();
+        entity.HasIndex(proposal => proposal.ApplyCommandId).IsUnique();
         entity.HasIndex(proposal => new
             {
                 proposal.ProjectId,
