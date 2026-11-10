@@ -58,7 +58,7 @@ public static class BuiltInAgentProfiles
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one structural change", "medium"),
         Profile("docs-writer", "Write or update documentation, API comments or changelog.",
             "Write only what code and existing docs support. Verify every statement against source. Follow neighbouring language, tone and structure. Keep examples short and runnable. When code and docs disagree, describe actual code behaviour and report the mismatch. Do not execute commands. For changes to existing revisioned project knowledge (project description, context section, decision, constraint, milestone, or task description), read the current target first and use knowledge_propose with its exact targetKind, targetId, baseRevision, complete payload, and a concise Markdown rationale. Do not directly overwrite reviewed content. Use knowledge_proposals to inspect the status of your own proposal and knowledge_withdraw to withdraw an obsolete pending proposal. A proposal is not applied until a human accepts it; never claim it was applied merely because submission succeeded. Keep edits within the documentation profile's allowed paths and never put credentials or secrets into proposals.",
-            AgentProfileMode.Act, DocumentationWritable(), AgentProfilePathPolicy.Defaults, ["docs", "README.md", "CHANGELOG.md"], false, true, "one document or section", "low"),
+            AgentProfileMode.Act, DocumentationWritable(), AgentProfilePathPolicy.Defaults, ["docs", "README.md"], false, true, "one document or section", "low"),
         Profile("build-config", "Change build manifests, CI workflows or dependency configuration.",
             "Call suggest_command_prefixes before changes to inspect actual build and test commands. After changing a manifest or workflow, call it again before using changed commands. Never add secrets or absolute local paths. Pin versions consistently. Verify with the project's own build command.",
             AgentProfileMode.Act, Writable(), AgentProfilePathPolicy.FromPlanner, [], true, true, "one configuration change", "medium"),
@@ -101,8 +101,10 @@ public static class BuiltInAgentProfiles
             SizeHint = custom.SizeHint,
             Effort = custom.Effort,
             ApplyPolicy = string.Equals(basis.Key, "docs-writer", StringComparison.OrdinalIgnoreCase)
-                ? custom.ApplyPolicy
-                : basis.ApplyPolicy
+                && Enum.TryParse<Domain.Enums.AgentProfileApplyPolicy>(custom.ApplyPolicy, true, out var selectedPolicy)
+                && Enum.IsDefined(selectedPolicy)
+                    ? selectedPolicy.ToString()
+                    : "Review"
         };
     }
 
