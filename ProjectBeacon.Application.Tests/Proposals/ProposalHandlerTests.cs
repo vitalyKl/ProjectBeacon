@@ -93,6 +93,25 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var firstActor = HumanActor();
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), firstActor), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var otherActor = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var replay = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), otherActor), TestContext.Current.CancellationToken);
+
+        Assert.False(replay.Success);
+        Assert.Equal(ErrorKind.Conflict, replay.Kind);
+        Assert.Equal(created.Value!.Id, (await _db.Proposals.SingleAsync(TestContext.Current.CancellationToken)).Id);
+    }
+
+    [Fact]
     public async Task StaleBaseRevision_MarksProposalConflictedWithoutChangingTarget()
     {
         var actor = HumanActor();
