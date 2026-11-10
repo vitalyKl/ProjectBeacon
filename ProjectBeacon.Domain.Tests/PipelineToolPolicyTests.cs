@@ -31,6 +31,8 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(McpToolNames.KnowledgePropose, actor);
         Assert.Contains(McpToolNames.KnowledgeProposals, actor);
         Assert.Contains(McpToolNames.KnowledgeWithdraw, actor);
+        Assert.Contains(McpToolNames.HashFile, actor);
+        Assert.Contains(McpToolNames.HashText, actor);
         Assert.DoesNotContain(McpToolNames.KnowledgePropose, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.DoesNotContain(McpToolNames.KnowledgeProposals, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.DoesNotContain(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.ToolsForRole("Planner"));
