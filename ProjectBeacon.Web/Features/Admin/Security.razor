@@ -14,7 +14,7 @@
 @inject GetTotpStatusHandler TotpStatus
 @inject BeginTotpHandler BeginTotp
 @inject ConfirmTotpHandler ConfirmTotp
-@inject RotateOperatorTotpRecoveryCodesHandler RotateRecoveryCodes
+@inject RotateOperatorTotpRecoveryCodesHandler RecoveryCodeService
 @inject RecoverOperatorTotpHandler RecoverTotp
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -270,7 +270,7 @@
         _busy = true;
         try
         {
-            var result = await RotateRecoveryCodes.HandleAsync(
+            var result = await RecoveryCodeService.HandleAsync(
                 new RotateOperatorTotpRecoveryCodesCommand(_operatorActor, _rotateCode));
             if (!result.Success || result.Value is null)
                 throw new InvalidOperationException(result.Error ?? "Could not replace recovery codes.");
