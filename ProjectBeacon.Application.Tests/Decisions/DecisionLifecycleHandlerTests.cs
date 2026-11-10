@@ -51,7 +51,7 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     {
         var handler = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
         var request = new CreateDecisionRequest(
-            _projectId, "Use a review gate", "Human-owned knowledge", "Keep Proposed until reviewed", null);
+            _projectId, "Use a review gate", "Human-owned knowledge", "Keep Proposed until reviewed", null, HumanActor());
 
         var first = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
         var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
@@ -70,8 +70,8 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     public async Task Accept_Then_Supersede_And_Deprecate()
     {
         var create = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
-        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", "c"), TestContext.Current.CancellationToken);
-        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestContext.Current.CancellationToken);
+        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", "c", HumanActor()), TestContext.Current.CancellationToken);
+        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null, HumanActor()), TestContext.Current.CancellationToken);
         Assert.True(first.Success);
         Assert.True(second.Success);
 
@@ -98,12 +98,12 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         _db.SaveChanges();
         _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
         _db.SaveChanges();
-        var decision = await new CreateDecisionHandler(HandlerSqlite.Factory(_connection))
-            .HandleAsync(new CreateDecisionRequest(_projectId, "Member proposal", "ctx", "body", null),
-                TestContext.Current.CancellationToken);
-        Assert.True(decision.Success, decision.Error);
         var actor = new ActorContext(
             ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var decision = await new CreateDecisionHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new CreateDecisionRequest(_projectId, "Member proposal", "ctx", "body", null, actor),
+                TestContext.Current.CancellationToken);
+        Assert.True(decision.Success, decision.Error);
         var factory = HandlerSqlite.Factory(_connection);
 
         var accept = await new AcceptDecisionHandler(factory, new AuthorizationService())
