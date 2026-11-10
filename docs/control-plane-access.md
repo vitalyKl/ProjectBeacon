@@ -28,7 +28,7 @@ Plane in its own Web deployment without changing the application-level audit con
   `/v1/auth/recover-admin` return `404`.
 - On the control hostname, only the Control Plane pages and supporting routes are allowed:
   `/control/login`, `/control/bootstrap`, `/control/recover`, `/control/logout`,
-  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/operations`, `/admin/billing/plans`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
+  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/operations`, `/admin/billing/plans`, `/admin/billing/invoices`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
   and static/Blazor framework assets. Customer application pages are not served from this origin.
 - The control hostname root redirects to `/admin/audit`; an unauthenticated browser is challenged
   to `/control/login`.
