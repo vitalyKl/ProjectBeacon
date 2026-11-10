@@ -50,6 +50,16 @@ public sealed class InboxRenderTests : BUnitRenderBase
     public void Inbox_PendingAndConflictedProposals_RendersAttentionCountsAndPendingCard()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId,
+            ContentTargetKind.ProjectDescription,
+            projectId,
+            1,
+            """{"description":"The old project goal"}""",
+            "Human",
+            userId.ToString("D")));
+        DbContext.SaveChanges();
+
         var pending = Proposal.Create(
             projectId, null, null, null,
             ContentTargetKind.ProjectDescription, projectId,
@@ -78,5 +88,16 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains("ProjectDescription", cut.Markup);
         Assert.Contains("Clarifies the primary project goal.", cut.Markup);
         Assert.Contains("Payload to apply when accepted", cut.Markup);
+        Assert.Contains("Human", cut.Markup);
+        Assert.Contains("—", cut.Markup);
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Compare base revision", StringComparison.OrdinalIgnoreCase)).Click();
+
+        Assert.Contains("- The old project goal", cut.Markup);
+        Assert.Contains("+ A clearer project goal", cut.Markup);
+        Assert.Contains("Line-by-line content diff", cut.Markup);
     }
 }
