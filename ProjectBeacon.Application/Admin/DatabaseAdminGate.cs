@@ -38,11 +38,9 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         if (account is null || account.IsDisabled)
             return Result.Failure<AdminActor>("The operator account is not available.", ErrorKind.Unauthorized);
 
-        // The ActorContext is resolved from the authenticated ticket. A mismatch indicates
-        // stale or forged authority; do not upgrade it from the database inside this request.
-        if (!account.IsAdmin)
-            return Result.Failure<AdminActor>("The account is not a platform operator.", ErrorKind.Forbidden);
-
+        // The Control Plane ticket marks every admitted operator as an operator. The
+        // persisted legacy IsAdmin bit is intentionally true only for SystemAdministrator;
+        // requiring it here would make Support, Billing and Auditor unusable.
         if (!Enum.TryParse<OperatorRole>(account.Role, ignoreCase: false, out var role)
             || !Enum.IsDefined(role))
             return Result.Failure<AdminActor>("The account has no valid persisted operator role.", ErrorKind.Forbidden);
