@@ -66,6 +66,46 @@ public sealed class ConstraintHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ConstraintProposals_RequireProjectMemberOrBoundContextReadToken()
+    {
+        var handler = new CreateConstraintHandler(HandlerSqlite.Factory(_connection));
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var outsiderResult = await handler.HandleProposalAsync(
+            new CreateConstraintRequest(_projectId, "Outsider rule", ConstraintKind.Must, outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(outsiderResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, outsiderResult.Kind);
+
+        var unboundToken = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            Guid.NewGuid(), null, ApiTokenCapability.ContextRead);
+        var unboundResult = await handler.HandleProposalAsync(
+            new CreateConstraintRequest(_projectId, "Unbound rule", ConstraintKind.Must, unboundToken),
+            TestContext.Current.CancellationToken);
+        Assert.False(unboundResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, unboundResult.Kind);
+
+        var tokenWithoutCapability = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.TaskRead);
+        var capabilityResult = await handler.HandleProposalAsync(
+            new CreateConstraintRequest(_projectId, "Wrong capability rule", ConstraintKind.Must, tokenWithoutCapability),
+            TestContext.Current.CancellationToken);
+        Assert.False(capabilityResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, capabilityResult.Kind);
+
+        var agent = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.ContextRead);
+        var accepted = await handler.HandleProposalAsync(
+            new CreateConstraintRequest(_projectId, "Bound Actor rule", ConstraintKind.Must, agent),
+            TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ConstraintStatus.Proposed, accepted.Value!.Status);
+    }
+
+    [Fact]
     public async Task ProjectMemberCannotActivateOrRejectProposedConstraint()
     {
         var member = User.Create("constraint-member", "constraint-member@beacon.local", "hash");
