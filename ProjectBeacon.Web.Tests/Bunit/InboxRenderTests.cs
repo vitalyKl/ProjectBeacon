@@ -92,8 +92,10 @@ public sealed class InboxRenderTests : BUnitRenderBase
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
         cut.Find("[data-testid='compare-base-revision'] button").Click();
 
-        Assert.Contains("- The old project goal", cut.Markup);
-        Assert.Contains("+ A clearer project goal", cut.Markup);
+        Assert.Equal("The old project goal",
+            cut.Find(".proposal-diff-line.is-removed code").TextContent.Trim());
+        Assert.Equal("A clearer project goal",
+            cut.Find(".proposal-diff-line.is-added code").TextContent.Trim());
         Assert.Contains("Line-by-line content diff", cut.Markup);
     }
 }
