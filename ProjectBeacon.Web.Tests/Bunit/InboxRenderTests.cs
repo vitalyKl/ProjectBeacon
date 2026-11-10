@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
+using MudBlazor.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Enums;
