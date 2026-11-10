@@ -42,15 +42,20 @@ public sealed class OrganizationDataExportTests : IDisposable
         var owner = User.Create("owner", "owner@example.test", "password-hash-must-not-export");
         var org = Org.Create("Export Org", "Customer-owned description");
         var project = Project.Create("Export Project", "Project description", org.Id);
+        var foreignOwner = User.Create("foreign-owner", "foreign-owner@example.test", "foreign-password-hash");
+        var foreignOrg = Org.Create("Foreign Org");
+        var foreignProject = Project.Create("FOREIGN PROJECT MUST NOT EXPORT", null, foreignOrg.Id);
+        var foreignTask = TaskItem.Create("FOREIGN TASK MUST NOT EXPORT", foreignProject.Id);
         project.SetMcpServersCipher("encrypted-mcp-credential-must-not-export");
         var task = TaskItem.Create("Export task", project.Id);
         task.Update(description: "Task description");
         task.SetReviewNotes("Review notes belong in the archive.");
-        _db.Users.Add(owner);
-        _db.Orgs.Add(org);
-        _db.Projects.Add(project);
+        _db.Users.AddRange(owner, foreignOwner);
+        _db.Orgs.AddRange(org, foreignOrg);
+        _db.Projects.AddRange(project, foreignProject);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
-        _db.Tasks.Add(task);
+        _db.OrgMembers.Add(OrgMember.Create(foreignOrg.Id, foreignOwner.Id, MemberRole.Owner));
+        _db.Tasks.AddRange(task, foreignTask);
         _db.TaskComments.Add(TaskComment.Create("Task comment", task.Id, owner.Id));
 
         var orgInvite = OrgInvite.Create(
@@ -103,6 +108,7 @@ public sealed class OrganizationDataExportTests : IDisposable
         using var archiveStream = new MemoryStream(result.Value.Content);
         using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
         var names = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("manifest.json", names);
         Assert.Contains("organization.json", names);
         Assert.Contains("members.json", names);
         Assert.Contains("organization-invites.json", names);
@@ -114,7 +120,16 @@ public sealed class OrganizationDataExportTests : IDisposable
 
         var projectsJson = await ReadEntryAsync(archive, "projects.json");
         Assert.Contains("Export Project", projectsJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("FOREIGN PROJECT MUST NOT EXPORT", projectsJson, StringComparison.Ordinal);
         Assert.DoesNotContain("encrypted-mcp-credential-must-not-export", projectsJson, StringComparison.Ordinal);
+
+        var taskJson = await ReadEntryAsync(archive, "tasks.json");
+        Assert.Contains("Export task", taskJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("FOREIGN TASK MUST NOT EXPORT", taskJson, StringComparison.Ordinal);
+
+        var manifestJson = await ReadEntryAsync(archive, "manifest.json");
+        using (var manifestDoc = JsonDocument.Parse(manifestJson))
+            Assert.Equal(1, manifestDoc.RootElement.GetProperty("schemaVersion").GetInt32());
 
         var memberJson = await ReadEntryAsync(archive, "members.json");
         Assert.Contains("owner@example.test", memberJson, StringComparison.Ordinal);
