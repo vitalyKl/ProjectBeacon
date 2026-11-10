@@ -12,7 +12,7 @@
 @inject IConfiguration Configuration
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
-@inject BillingInvoiceAdminService BillingInvoices
+@inject BillingInvoiceAdminService InvoiceAdmin
 @inject IOrganizationAdminService OrganizationAdmin
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -258,7 +258,7 @@
         _busy = true;
         try
         {
-            _invoices = (await BillingInvoices.ListAsync(read.Value, limit: 100)).ToList();
+            _invoices = (await InvoiceAdmin.ListAsync(read.Value, limit: 100)).ToList();
             if (_selected is not null)
                 _selected = _invoices.FirstOrDefault(invoice => invoice.Id == _selected.Id);
         }
@@ -337,7 +337,7 @@
         try
         {
             var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
-            var invoice = await BillingInvoices.IssueAsync(
+            var invoice = await InvoiceAdmin.IssueAsync(
                 new IssueBillingInvoiceRequest(_orgId, _description, amount, _currency, dueAt),
                 actor);
             Snackbar.Add($"Invoice {invoice.Number} issued.", Severity.Success);
@@ -370,7 +370,7 @@
         try
         {
             var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
-            _selected = await BillingInvoices.MarkPaidAsync(_selected.Id, _paymentReference, actor);
+            _selected = await InvoiceAdmin.MarkPaidAsync(_selected.Id, _paymentReference, actor);
             _paymentReference = string.Empty;
             Snackbar.Add("Invoice marked paid with the supplied receipt reference.", Severity.Success);
             await Reload();
@@ -396,7 +396,7 @@
             cancelText: "Cancel");
         if (confirmed != true) return;
         var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
-        await ChangeTerminalState(() => BillingInvoices.VoidAsync(
+        await ChangeTerminalState(() => InvoiceAdmin.VoidAsync(
             _selected!.Id, "operator_voided", actor));
     }
 
@@ -411,7 +411,7 @@
             cancelText: "Cancel");
         if (confirmed != true) return;
         var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
-        await ChangeTerminalState(() => BillingInvoices.MarkUncollectibleAsync(
+        await ChangeTerminalState(() => InvoiceAdmin.MarkUncollectibleAsync(
             _selected!.Id, "operator_uncollectible", actor));
     }
 

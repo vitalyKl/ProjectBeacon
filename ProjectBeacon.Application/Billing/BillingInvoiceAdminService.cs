@@ -169,12 +169,11 @@ public sealed class BillingInvoiceAdminService(
         RequireElevated(actor, timeProvider.GetUtcNow());
         if (invoiceId == Guid.Empty)
             throw new ArgumentException("Invoice id is required.", nameof(invoiceId));
-        if (!ReferencePattern.IsMatch(paymentReference ?? string.Empty))
+        var reference = paymentReference?.Trim() ?? string.Empty;
+        if (!ReferencePattern.IsMatch(reference))
             throw new ArgumentException(
                 "Receipt reference must be 1 to 128 letters, digits, '.', '_', ':', '/' or '-' characters.",
                 nameof(paymentReference));
-
-        var reference = paymentReference.Trim();
         var now = timeProvider.GetUtcNow();
         await using var db = dbFactory.CreateDbContext(GlobalTenant());
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
