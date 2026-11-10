@@ -298,7 +298,7 @@ public sealed class PostgresEntitlementService(
             return Result.Failure<OrganizationEntitlement>("A valid product plan key is required.");
         if (!SafeBillingReference(request.BillingReference, 128))
             return Result.Failure<OrganizationEntitlement>(
-                "A verified manual invoice or external billing reference is required.");
+                "A manual invoice or receipt reference is required.");
         if (!SafeBillingReference(request.IdempotencyKey, 128))
             return Result.Failure<OrganizationEntitlement>(
                 "A valid idempotency key containing only letters, digits, '.', '_', ':' or '-' is required.");

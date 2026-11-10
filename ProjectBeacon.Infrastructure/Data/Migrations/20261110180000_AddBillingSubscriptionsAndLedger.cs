@@ -30,6 +30,7 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
                 "CreatedAtUtc" timestamp with time zone NOT NULL,
                 "UpdatedAtUtc" timestamp with time zone NOT NULL,
                 CONSTRAINT "PK_OrganizationSubscriptions" PRIMARY KEY ("Id"),
+                CONSTRAINT "UQ_OrganizationSubscriptions_Id_OrgId" UNIQUE ("Id", "OrgId"),
                 CONSTRAINT "FK_OrganizationSubscriptions_Orgs_OrgId"
                     FOREIGN KEY ("OrgId") REFERENCES "Orgs" ("Id") ON DELETE RESTRICT,
                 CONSTRAINT "FK_OrganizationSubscriptions_BillingPlans_PlanKey"
@@ -43,8 +44,14 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
                         OR "CurrentPeriodEndsAtUtc" > "CurrentPeriodStartsAtUtc"),
                 CONSTRAINT "CK_OrganizationSubscriptions_ProviderReferences"
                     CHECK (
-                        ("ProviderKey" IS NULL AND "ExternalSubscriptionReference" IS NULL)
-                        OR ("ProviderKey" IS NOT NULL AND "ExternalSubscriptionReference" IS NOT NULL)
+                        ("Source" = 1
+                            AND "ProviderKey" IS NOT NULL
+                            AND "ExternalCustomerReference" IS NOT NULL
+                            AND "ExternalSubscriptionReference" IS NOT NULL)
+                        OR ("Source" <> 1
+                            AND "ProviderKey" IS NULL
+                            AND "ExternalCustomerReference" IS NULL
+                            AND "ExternalSubscriptionReference" IS NULL)
                     )
             );
 
@@ -89,8 +96,9 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
                 CONSTRAINT "PK_BillingLedgerEntries" PRIMARY KEY ("Id"),
                 CONSTRAINT "FK_BillingLedgerEntries_Orgs_OrgId"
                     FOREIGN KEY ("OrgId") REFERENCES "Orgs" ("Id") ON DELETE RESTRICT,
-                CONSTRAINT "FK_BillingLedgerEntries_OrganizationSubscriptions_SubscriptionId"
-                    FOREIGN KEY ("SubscriptionId") REFERENCES "OrganizationSubscriptions" ("Id") ON DELETE RESTRICT,
+                CONSTRAINT "FK_BillingLedgerEntries_OrganizationSubscriptions_SubscriptionId_OrgId"
+                    FOREIGN KEY ("SubscriptionId", "OrgId")
+                    REFERENCES "OrganizationSubscriptions" ("Id", "OrgId") ON DELETE RESTRICT,
                 CONSTRAINT "CK_BillingLedgerEntries_EventType"
                     CHECK ("EventType" BETWEEN 0 AND 10),
                 CONSTRAINT "CK_BillingLedgerEntries_Source"
