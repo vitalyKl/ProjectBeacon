@@ -77,7 +77,8 @@ public static class WorkstationCommandCatalog
             Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}", startsControlLane: true, leaseDuration: TimeSpan.FromMinutes(CommandLease.PipelineMinutes)),
             Device(WorkstationCommandKind.CheckClientUpdate, "device.check-client-update", "Check the latest signed-off workstation client release.", OperationRetrySemantics.ReadOnly, "{}"),
             Device(WorkstationCommandKind.UpdateClient, "device.update-client", "Download, verify, and install the latest workstation client release.", OperationRetrySemantics.AtMostOnce, "{}"),
-            Project(WorkstationCommandKind.GitSync, "repository.git-sync", "Inspect or fast-forward the configured project repository.", OperationRetrySemantics.Idempotent, "{projectId:guid,mode:Status|PullFastForward}")
+            Project(WorkstationCommandKind.GitSync, "repository.git-sync", "Inspect or fast-forward the configured project repository.", OperationRetrySemantics.Idempotent, "{projectId:guid,mode:Status|PullFastForward}"),
+            Project(WorkstationCommandKind.ApplyProposalPatch, "repository.apply-proposal-patch", "Apply an approved documentation-only proposal patch.", OperationRetrySemantics.Idempotent, "{projectId:guid,proposalId:guid,patch:string,files:array,allowedPaths:array}", leaseDuration: TimeSpan.FromMinutes(30))
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);
