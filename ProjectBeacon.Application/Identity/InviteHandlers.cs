@@ -469,28 +469,30 @@ public class AcceptInviteHandler
                 }
             }
 
-            // A project invitation may supersede a separate pending org invitation for the
-            // same email. Expire those duplicates so they no longer reserve a second seat.
-            var duplicateOrgInvites = await projectWriteDb.OrgInvites.IgnoreQueryFilters()
-                .Where(pending => pending.OrgId == project.OrgId
-                    && pending.Email == user.Email
-                    && pending.Status == InviteStatus.Pending)
-                .ToListAsync(ct);
-            foreach (var duplicate in duplicateOrgInvites)
-            {
-                duplicate.Expire();
-                _auditWriter?.Stage(projectWriteDb, AuditEventFactory.ForActor(
-                    request.Actor,
-                    "org.invite.expired",
-                    "OrgInvite",
-                    duplicate.Id.ToString(),
-                    project.OrgId,
-                    null,
-                    detailsJson: """{"reason":"project_invite_accepted"}"""));
-            }
-
             projectWriteDb.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, MemberRole.Member));
         }
+
+        // A project invitation may supersede a separate pending org invitation for the
+        // same email, whether or not the user was already an organization member.
+        // Expire duplicates so they no longer reserve a second seat.
+        var duplicateOrgInvites = await projectWriteDb.OrgInvites.IgnoreQueryFilters()
+            .Where(pending => pending.OrgId == project.OrgId
+                && pending.Email == user.Email
+                && pending.Status == InviteStatus.Pending)
+            .ToListAsync(ct);
+        foreach (var duplicate in duplicateOrgInvites)
+        {
+            duplicate.Expire();
+            _auditWriter?.Stage(projectWriteDb, AuditEventFactory.ForActor(
+                request.Actor,
+                "org.invite.expired",
+                "OrgInvite",
+                duplicate.Id.ToString(),
+                project.OrgId,
+                null,
+                detailsJson: """{"reason":"project_invite_accepted"}"""));
+        }
+
         if (!await projectWriteDb.ProjectMembers.IgnoreQueryFilters()
                 .AnyAsync(member => member.ProjectId == projectInvite.ProjectId && member.UserId == user.Id, ct))
             projectWriteDb.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
