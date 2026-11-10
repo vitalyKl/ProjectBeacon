@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using ProjectBeacon.Application.Authorization;
+using ProjectBeacon.Application.Tests;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Entities.Tasks;
@@ -103,7 +104,7 @@ public sealed class OrganizationDataExportTests : IDisposable
         Assert.NotNull(result.Value);
         Assert.Equal(1, result.Value.ProjectCount);
         Assert.Equal(1, result.Value.AttachmentCount);
-        Assert.StartsWith($"projectbeacon-org-{org.Id:N}-export-", result.Value.FileName, StringComparison.Ordinal);
+        Assert.StartsWith($"projectbeacon-org-{org.Id:N}-export-", result.Value.FileName);
 
         using var archiveStream = new MemoryStream(result.Value.Content);
         using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
