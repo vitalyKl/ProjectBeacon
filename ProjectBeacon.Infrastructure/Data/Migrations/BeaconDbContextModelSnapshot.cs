@@ -354,6 +354,12 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("ApplyPolicy")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasDefaultValue("Review")
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("PathPolicy")
                         .IsRequired()
                         .HasMaxLength(24)
