@@ -3,55 +3,101 @@ namespace ProjectBeacon.Application.Identity;
 using Application.Persistence;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+
 /// <summary>
-/// Picks the user's current project and org. An admin may use a preferred project id that ignores membership.
+/// Resolves a user's current tenant. Project memberships take precedence; an organization
+/// membership without a project still establishes a valid organization-only tenant scope.
 /// </summary>
 public static class CurrentProjectLookup
 {
     public static async Task<(Guid? ProjectId, Guid? OrgId)> ForUserAsync(
-        IBeaconDb db, Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
+        IBeaconDb db,
+        Guid userId,
+        bool isAdmin,
+        Guid? preferredProjectId = null,
+        CancellationToken ct = default,
+        Guid? preferredOrgId = null)
     {
-        if (preferredProjectId is { } preferred)
+        if (preferredProjectId is { } preferredProject)
         {
-            Guid? orgId = null;
+            Guid? preferredOrg = null;
             if (isAdmin)
             {
-                orgId = await db.Projects.IgnoreQueryFilters()
-                    .Where(p => p.Id == preferred)
-                    .Select(p => (Guid?)p.OrgId)
+                preferredOrg = await db.Projects.IgnoreQueryFilters()
+                    .Where(project => project.Id == preferredProject)
+                    .Select(project => (Guid?)project.OrgId)
                     .FirstOrDefaultAsync(ct);
             }
             else
             {
-                orgId = await db.ProjectMembers.IgnoreQueryFilters()
-                    .Where(m => m.UserId == userId && m.ProjectId == preferred
-                        && m.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
-                    .Select(m => (Guid?)m.Project.OrgId)
+                preferredOrg = await db.ProjectMembers.IgnoreQueryFilters()
+                    .Where(member => member.UserId == userId
+                        && member.ProjectId == preferredProject
+                        && member.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
+                    .Select(member => (Guid?)member.Project.OrgId)
                     .FirstOrDefaultAsync(ct);
             }
-            if (orgId is { } claimedOrg)
-                return (preferred, claimedOrg);
+
+            if (preferredOrg is { } claimedOrg)
+                return (preferredProject, claimedOrg);
         }
 
-        // Prefer an active organization for a fresh login or a tenantless account. If the
-        // user has only suspended/closed memberships, retain one as the selected tenant so
-        // the session remains valid but lifecycle-aware tenant filters block its data.
-        var activeMember = await db.ProjectMembers.IgnoreQueryFilters()
-            .Include(m => m.Project)
-            .Where(m => m.UserId == userId
-                && m.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
-            .OrderBy(m => m.JoinedAt)
-            .FirstOrDefaultAsync(ct);
-        if (activeMember is not null)
-            return (activeMember.ProjectId, activeMember.Project.OrgId);
+        if (preferredOrgId is { } preferredOrganization && preferredOrganization != Guid.Empty)
+        {
+            var preferredProject = await db.ProjectMembers.IgnoreQueryFilters()
+                .Where(member => member.UserId == userId
+                    && member.Project.OrgId == preferredOrganization
+                    && member.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
+                .OrderBy(member => member.JoinedAt)
+                .Select(member => new { member.ProjectId, member.Project.OrgId })
+                .FirstOrDefaultAsync(ct);
+            if (preferredProject is not null)
+                return (preferredProject.ProjectId, preferredProject.OrgId);
 
-        var existingMember = await db.ProjectMembers.IgnoreQueryFilters()
-            .Include(m => m.Project)
-            .Where(m => m.UserId == userId)
-            .OrderBy(m => m.JoinedAt)
+            var stillOrganizationMember = await db.OrgMembers.IgnoreQueryFilters()
+                .AnyAsync(member => member.UserId == userId && member.OrgId == preferredOrganization, ct);
+            if (stillOrganizationMember)
+                return (null, preferredOrganization);
+        }
+
+        // Prefer an active project membership for users who can work in projects.
+        var activeProjectMember = await db.ProjectMembers.IgnoreQueryFilters()
+            .Where(member => member.UserId == userId
+                && member.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
+            .OrderBy(member => member.JoinedAt)
+            .Select(member => new { member.ProjectId, member.Project.OrgId })
             .FirstOrDefaultAsync(ct);
-        if (existingMember is not null)
-            return (existingMember.ProjectId, existingMember.Project.OrgId);
+        if (activeProjectMember is not null)
+            return (activeProjectMember.ProjectId, activeProjectMember.OrgId);
+
+        // An organization owner/admin may be invited before any project membership exists.
+        // Such a user still needs an org-scoped tenant for onboarding, billing and invitations.
+        var activeOrgMember = await db.OrgMembers.IgnoreQueryFilters()
+            .Where(member => member.UserId == userId
+                && member.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
+            .OrderBy(member => member.JoinedAt)
+            .Select(member => (Guid?)member.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (activeOrgMember is { } activeOrgId)
+            return (null, activeOrgId);
+
+        // Preserve a suspended/closed membership as the selected tenant so lifecycle-aware
+        // filters can deny data access without invalidating the user's global login session.
+        var existingProjectMember = await db.ProjectMembers.IgnoreQueryFilters()
+            .Where(member => member.UserId == userId)
+            .OrderBy(member => member.JoinedAt)
+            .Select(member => new { member.ProjectId, member.Project.OrgId })
+            .FirstOrDefaultAsync(ct);
+        if (existingProjectMember is not null)
+            return (existingProjectMember.ProjectId, existingProjectMember.OrgId);
+
+        var existingOrgMember = await db.OrgMembers.IgnoreQueryFilters()
+            .Where(member => member.UserId == userId)
+            .OrderBy(member => member.JoinedAt)
+            .Select(member => (Guid?)member.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (existingOrgMember is { } existingOrgId)
+            return (null, existingOrgId);
 
         if (!isAdmin)
             return (null, null);
