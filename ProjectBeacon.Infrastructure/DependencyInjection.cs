@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Infrastructure;
 
+using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Organizations;
 using Application.Mail;
 using Application.Audit;
 using Application.Persistence;
