@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ProjectBeacon.Application.Proposals;
 using ProjectBeacon.Application.Tasks;
@@ -91,6 +92,7 @@ internal sealed class RepoPatchApplyService
         using (operationLock)
         {
             var snapshots = new List<FileSnapshot>(request.Files.Count);
+            var filesToApply = new List<RepoPatchFile>(request.Files.Count);
             foreach (var file in request.Files)
             {
                 var resolved = ResolveSafeFile(root, file.ProjectPath);
@@ -109,33 +111,45 @@ internal sealed class RepoPatchApplyService
                     return (false, null, "RepoPatchConflict: TargetIsDirectory");
                 }
 
-                if (file.BaseHash is null)
+                // Preserve the exact pre-attempt state for rollback. A retry can arrive after
+                // the previous attempt applied some or all files but lost its completion ACK.
+                snapshots.Add(new FileSnapshot(file.ProjectPath, resolved, bytes));
+
+                if (MatchesResultState(file, bytes))
+                    continue;
+
+                if (!MatchesBaseState(file, bytes))
                 {
-                    if (bytes is not null)
-                        return (false, null, "RepoPatchConflict: TargetAlreadyExists");
-                }
-                else if (bytes is null || !FixedEquals(Hash(bytes), file.BaseHash))
-                {
-                    return (false, null, "RepoPatchConflict: BaseHashMismatch");
+                    var reason = file.BaseHash is null && bytes is not null
+                        ? "TargetAlreadyExists"
+                        : "BaseHashMismatch";
+                    return (false, null, $"RepoPatchConflict: {reason}");
                 }
 
-                snapshots.Add(new FileSnapshot(file.ProjectPath, resolved, bytes));
+                filesToApply.Add(file);
             }
 
-            var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], request.Patch, ct);
-            if (check.TimedOut)
-                return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
-            if (check.ExitCode != 0)
-                return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
-
-            var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], request.Patch, ct);
-            if (applied.TimedOut || applied.ExitCode != 0)
+            if (filesToApply.Count > 0)
             {
-                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
-                return (false, null, restored
-                    ? $"RepoPatchConflict: {reason}"
-                    : $"RepoPatchConflict: {reason}:RollbackFailed");
+                var patchToApply = FilterPatch(request.Patch, filesToApply);
+                if (string.IsNullOrWhiteSpace(patchToApply))
+                    return (false, null, "RepoPatchConflict: InvalidPatchManifest");
+
+                var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], patchToApply, ct);
+                if (check.TimedOut)
+                    return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
+                if (check.ExitCode != 0)
+                    return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
+
+                var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], patchToApply, ct);
+                if (applied.TimedOut || applied.ExitCode != 0)
+                {
+                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                    var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
+                    return (false, null, restored
+                        ? $"RepoPatchConflict: {reason}"
+                        : $"RepoPatchConflict: {reason}:RollbackFailed");
+                }
             }
 
             var results = new List<object>(request.Files.Count);
@@ -187,6 +201,7 @@ internal sealed class RepoPatchApplyService
                 projectId = request.ProjectId,
                 proposalId = request.ProposalId,
                 applied = true,
+                alreadyApplied = filesToApply.Count == 0,
                 files = results
             });
             return (true, resultJson, null);
@@ -251,6 +266,46 @@ internal sealed class RepoPatchApplyService
         {
             return false;
         }
+    }
+
+    private static bool MatchesBaseState(RepoPatchFile file, byte[]? bytes) =>
+        file.BaseHash is null
+            ? bytes is null
+            : bytes is not null && FixedEquals(Hash(bytes), file.BaseHash);
+
+    private static bool MatchesResultState(RepoPatchFile file, byte[]? bytes) =>
+        file.ResultHash is null
+            ? bytes is null
+            : bytes is not null && FixedEquals(Hash(bytes), file.ResultHash);
+
+    /// <summary>
+    /// Removes diff sections that have already reached their manifest result hash. This makes
+    /// recovery safe after a process restart between file application and command completion.
+    /// </summary>
+    private static string FilterPatch(string patch, IReadOnlyCollection<RepoPatchFile> files)
+    {
+        var allowed = files.Select(file => file.GitPath).ToHashSet(StringComparer.Ordinal);
+        var builder = new StringBuilder(patch.Length);
+        var includeSection = false;
+        var sawSection = false;
+
+        foreach (var line in patch.Split('\\n'))
+        {
+            if (line.StartsWith("diff --git a/", StringComparison.Ordinal))
+            {
+                var separator = line.IndexOf(" b/", "diff --git a/".Length, StringComparison.Ordinal);
+                if (separator < 0)
+                    return string.Empty;
+                var gitPath = line["diff --git a/".Length..separator];
+                includeSection = allowed.Contains(gitPath);
+                sawSection = true;
+            }
+
+            if (sawSection && includeSection)
+                builder.Append(line).Append('\\n');
+        }
+
+        return builder.ToString();
     }
 
     private static string? ResolveSafeFile(string root, string relativePath)
