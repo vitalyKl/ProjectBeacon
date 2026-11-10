@@ -91,7 +91,7 @@ public sealed class RepoPatchApplyServiceTests
     }
 
     [Fact]
-    public async Task Execute_RefusesWhileRepositoryHasAnActiveAgentSession()
+    public async Task Execute_WaitsForActiveAgentSessionThenAppliesApprovedPatch()
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
         const string path = "docs/guide.md";
@@ -100,13 +100,39 @@ public sealed class RepoPatchApplyServiceTests
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
         var payload = Payload(repo.ProjectId, patch, path, before, after);
-        using var session = GitRepositoryOperationGate.RegisterSession(repo.RepositoryRoot);
+        var session = GitRepositoryOperationGate.RegisterSession(repo.RepositoryRoot);
+        var waiting = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var progressReports = 0;
 
-        var result = await _service.ExecuteAsync(repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+        var execution = _service.ExecuteAsync(
+            repo.ProjectRoot,
+            repo.ProjectId,
+            payload,
+            CancellationToken.None,
+            (activity, _) =>
+            {
+                Assert.Contains("Waiting for the current agent session", activity, StringComparison.Ordinal);
+                Interlocked.Increment(ref progressReports);
+                waiting.TrySetResult(true);
+                return Task.CompletedTask;
+            });
 
-        Assert.False(result.Ok);
-        Assert.Contains("ActiveRepositorySessions", result.Error);
-        Assert.Equal(before, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
+        try
+        {
+            await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(execution.IsCompleted);
+            Assert.Equal(before, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
+        }
+        finally
+        {
+            session.Dispose();
+        }
+
+        var result = await execution.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(result.Ok, result.Error);
+        Assert.True(progressReports >= 1);
+        Assert.Equal(after, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
     }
 
     [Fact]
