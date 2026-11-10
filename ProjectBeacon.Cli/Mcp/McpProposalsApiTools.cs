@@ -11,7 +11,7 @@ internal static partial class McpApiTools
     private static IEnumerable<McpTool> ProposalTools() =>
     [
         new(McpToolNames.KnowledgePropose,
-            "Submit a revision-bound content proposal for human review. Only Update is supported in P2. The proposal is scoped to the current Actor subtask and is never applied by this tool.",
+            "Submit a revision-bound content proposal for human review. Only Update is supported. For RepoPatch, submit a valid unified diff and a files manifest containing gitPath, projectPath, baseHash and resultHash; use hash_file/hash_text to calculate exact SHA-256 digests. The proposal is scoped to the current Actor subtask and this tool never applies it.",
             () => Props(
                 ("targetKind", "string", true),
                 ("targetId", "string", true),
