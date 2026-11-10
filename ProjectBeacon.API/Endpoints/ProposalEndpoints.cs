@@ -29,6 +29,10 @@ public static class ProposalEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/withdraw", Withdraw)
             .RequireAuthorization().DisableAntiforgery()
             .RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapGet("/v1/projects/{projectId:guid}/proposal-policies", ListPolicies)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPut("/v1/projects/{projectId:guid}/proposal-policies", SetPolicy)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 
@@ -154,6 +158,33 @@ public static class ProposalEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
+    private static async Task<IResult> ListPolicies(
+        Guid projectId,
+        HttpContext context,
+        ListProposalPoliciesHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, context.GetActor(), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> SetPolicy(
+        Guid projectId,
+        [FromBody] SetProposalPolicyBody body,
+        HttpContext context,
+        SetProposalPolicyHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new SetProposalPolicyCommand(
+            projectId,
+            body.TargetKind,
+            body.Operation,
+            body.Mode,
+            body.ExpectedPolicyRevision,
+            context.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
     private static Guid? ReadGuid(ClaimsPrincipal principal, string claim)
         => Guid.TryParse(principal.FindFirst(claim)?.Value, out var value) && value != Guid.Empty
             ? value
@@ -170,4 +201,9 @@ public static class ProposalEndpoints
 
     public sealed record AcceptProposalBody(JsonElement? AcceptedPayload = null);
     public sealed record RejectProposalBody(string? Note = null);
+    public sealed record SetProposalPolicyBody(
+        ContentTargetKind TargetKind,
+        ProposalOperation Operation,
+        ProposalDecisionMode Mode,
+        int ExpectedPolicyRevision);
 }
