@@ -29,7 +29,8 @@ internal sealed class RepoPatchApplyService
         string projectRoot,
         Guid expectedProjectId,
         string payloadJson,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<string, CancellationToken, Task>? reportProgress = null)
     {
         if (string.IsNullOrWhiteSpace(projectRoot) || !Directory.Exists(projectRoot))
             return (false, null, "RepoPatchConflict: ProjectRuntimeMissing");
@@ -58,10 +59,37 @@ internal sealed class RepoPatchApplyService
                 return (false, null, "RepoPatchConflict: GitPathMappingMismatch");
         }
 
-        using var operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
-        if (GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
-            return (false, null, "RepoPatchConflict: ActiveRepositorySessions");
+        IDisposable operationLock;
+        while (true)
+        {
+            var idle = GitRepositoryOperationGate.WaitForNoSessionsAsync(repositoryRoot, ct);
+            if (!idle.IsCompleted && reportProgress is not null)
+                await reportProgress(
+                    "Waiting for the current agent session to finish before applying the approved documentation patch.",
+                    ct);
 
+            if (!idle.IsCompleted)
+            {
+                var progressInterval = Task.Delay(TimeSpan.FromSeconds(10), ct);
+                await Task.WhenAny(idle, progressInterval);
+                ct.ThrowIfCancellationRequested();
+                if (!idle.IsCompleted)
+                    continue;
+            }
+            await idle;
+
+            operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+            if (!GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
+                break;
+
+            // A new session can register between the idle signal and acquiring the operation
+            // gate. Release and wait again; never hold the gate while waiting for session leases,
+            // because a worktree needs the same gate to dispose and release its lease.
+            operationLock.Dispose();
+        }
+
+        using (operationLock)
+        {
         var snapshots = new List<FileSnapshot>(request.Files.Count);
         foreach (var file in request.Files)
         {
@@ -162,6 +190,7 @@ internal sealed class RepoPatchApplyService
             files = results
         });
         return (true, resultJson, null);
+        }
     }
 
     private static bool TryReadRequest(
