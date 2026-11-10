@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Infrastructure.Operations;
 
-using System.Data;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Admin;
