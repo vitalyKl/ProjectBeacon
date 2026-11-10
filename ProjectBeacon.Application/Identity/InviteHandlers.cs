@@ -90,8 +90,14 @@ public class CreateOrgInviteHandler
         {
             var memberCount = await db.OrgMembers.IgnoreQueryFilters()
                 .LongCountAsync(member => member.OrgId == request.OrgId, ct);
-            var pendingReservations = pending.LongCount(invite =>
+            var otherPendingReservations = await db.OrgInvites.IgnoreQueryFilters()
+                .LongCountAsync(invite => invite.OrgId == request.OrgId
+                    && invite.Email != email
+                    && invite.Status == InviteStatus.Pending
+                    && invite.ExpiredAt >= now, ct);
+            var sameEmailReservations = pending.LongCount(invite =>
                 invite.Status == InviteStatus.Pending && invite.ExpiredAt >= now);
+            var pendingReservations = otherPendingReservations + sameEmailReservations;
             var evaluation = await _entitlements.EvaluateAsync(
                 request.OrgId,
                 new EntitlementRequirement(
