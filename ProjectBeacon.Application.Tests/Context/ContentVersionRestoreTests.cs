@@ -108,6 +108,27 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreHistory_RequiresProjectMembership()
+    {
+        var project = await _db.Projects.SingleAsync(item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        new ContentWriter().AddVersion(_db, project, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var version = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ProjectDescription && item.TargetId == _projectId,
+            TestContext.Current.CancellationToken);
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+
+        var result = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new RestoreContentVersionCommand(
+                _projectId, version.Id, project.Revision, outsider),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
     public async Task RestoreTaskDescription_RestoresNullableReviewNotes()
     {
         var task = TaskItem.Create("Task", _projectId, description: "Original task description");
