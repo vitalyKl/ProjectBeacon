@@ -13,6 +13,7 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
+using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Audit;
@@ -26,7 +27,8 @@ public sealed class EfOrganizationAdminService(
     IConfiguration configuration,
     IAuditWriter auditWriter,
     TimeProvider timeProvider,
-    IUserSessionVersionCache? sessionVersions = null) : IOrganizationAdminService
+    IUserSessionVersionCache? sessionVersions = null,
+    IEntitlementEvaluator? entitlements = null) : IOrganizationAdminService
 {
     public async Task<Result<OrganizationAdminPage>> ListAsync(
         AdminActor actor, string? search = null, int page = 1, int pageSize = 25,
@@ -327,6 +329,10 @@ public sealed class EfOrganizationAdminService(
                 "Invitations can only be issued for active organizations.", ErrorKind.Conflict);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Operator-issued owner invitations reserve customer member seats too. Acquire
+        // the same lock before the per-email duplicate lock used by this control-plane flow.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, orgId, ct);
         if (db.Database.IsNpgsql())
         {
             await using var lockCommand = db.Database.GetDbConnection().CreateCommand();
@@ -335,6 +341,13 @@ public sealed class EfOrganizationAdminService(
             Add(lockCommand, "lock_key", DbType.String, $"organization-owner-invite:{orgId:N}:{email}");
             await lockCommand.ExecuteNonQueryAsync(ct);
         }
+
+        org = await db.Orgs.FirstOrDefaultAsync(x => x.Id == orgId, ct);
+        if (org is null)
+            return Result.Failure<OperatorInviteCreated>("Organization not found.", ErrorKind.NotFound);
+        if (org.LifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<OperatorInviteCreated>(
+                "Invitations can only be issued for active organizations.", ErrorKind.Conflict);
 
         var alreadyMember = await (
             from member in db.OrgMembers.IgnoreQueryFilters()
@@ -355,6 +368,41 @@ public sealed class EfOrganizationAdminService(
             existing.Expire();
             auditWriter.Stage(db, Audit(actor, "platform.organization.invite_expired", "OrgInvite",
                 existing.Id, orgId, now, """{"previousState":"Pending","newState":"Expired"}"""));
+        }
+
+        if (entitlements is not null)
+        {
+            var memberCount = await db.OrgMembers.IgnoreQueryFilters()
+                .LongCountAsync(member => member.OrgId == orgId, ct);
+            var pendingInviteCount = await db.OrgInvites.IgnoreQueryFilters()
+                .LongCountAsync(item => item.OrgId == orgId
+                    && item.Status == InviteStatus.Pending
+                    && item.ExpiredAt >= now, ct);
+            var evaluation = await entitlements.EvaluateAsync(
+                orgId,
+                new EntitlementRequirement(
+                    EntitlementFeatureKeys.Core,
+                    EntitlementLimitKeys.Members,
+                    RequestedUnits: 1,
+                    CurrentUsage: memberCount + pendingInviteCount),
+                ct);
+            if (!evaluation.Success)
+                return Result.Failure<OperatorInviteCreated>(
+                    "Organization member capacity could not be verified.",
+                    ErrorKind.Unavailable);
+            var decision = evaluation.Value;
+            if (decision is null || !decision.Allowed)
+            {
+                if (decision?.ReasonCode == "limit_exceeded")
+                    return Result.Failure<OperatorInviteCreated>(
+                        "The organization member limit has been reached.",
+                        "entitlement_limit_exceeded",
+                        ErrorKind.Conflict);
+                return Result.Failure<OperatorInviteCreated>(
+                    "The organization is not entitled to add members.",
+                    "entitlement_feature_required",
+                    ErrorKind.Forbidden);
+            }
         }
 
         var rawToken = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
@@ -382,8 +430,14 @@ public sealed class EfOrganizationAdminService(
             return Result.Failure("Organization and invitation ids are required.");
 
         using var unscoped = TenantScope.EnterUnscoped();
+        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Match acceptance's lock order (organization capacity first, invite row second).
+        // This keeps operator revocation and customer acceptance from deadlocking or
+        // changing a seat reservation concurrently.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, orgId, ct);
         await using (var rowLock = db.Database.GetDbConnection().CreateCommand())
         {
             rowLock.Transaction = transaction.GetDbTransaction();
