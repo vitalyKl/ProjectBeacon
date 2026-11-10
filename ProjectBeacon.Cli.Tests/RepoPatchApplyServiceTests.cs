@@ -34,6 +34,34 @@ public sealed class RepoPatchApplyServiceTests
     }
 
     [Fact]
+    public async Task Execute_RetryAfterSuccessfulApply_IsIdempotentlyConfirmed()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
+        const string path = "docs/guide.md";
+        const string before = "# Guide\nOriginal instructions.\n";
+        const string after = "# Guide\nApproved instructions.\n";
+        await repo.WriteCommittedAsync(path, before);
+        var patch = await repo.CreatePatchAsync(path, after);
+        var payload = Payload(repo.ProjectId, patch, path, before, after, proposalId: repo.ProposalId);
+
+        var first = await _service.ExecuteAsync(repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+        Assert.True(first.Ok, first.Error);
+        Assert.Equal(after, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
+
+        // Simulate a lost device completion ACK: the same idempotent command is delivered again.
+        var retry = await _service.ExecuteAsync(repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+
+        Assert.True(retry.Ok, retry.Error);
+        Assert.Equal(after, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
+        using var response = JsonDocument.Parse(retry.Result!);
+        Assert.Equal(repo.ProjectId, response.RootElement.GetProperty("projectId").GetGuid());
+        Assert.Equal(repo.ProposalId, response.RootElement.GetProperty("proposalId").GetGuid());
+        Assert.True(response.RootElement.GetProperty("applied").GetBoolean());
+        Assert.True(response.RootElement.GetProperty("alreadyApplied").GetBoolean());
+        Assert.Equal(Hash(after), response.RootElement.GetProperty("files")[0].GetProperty("resultHash").GetString());
+    }
+
+    [Fact]
     public async Task Execute_RefusesChangedBaseHash_WithoutChangingWorkingTree()
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
