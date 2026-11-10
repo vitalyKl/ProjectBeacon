@@ -116,9 +116,9 @@ public sealed class RepoPatchCompletionTests : IDisposable
             await new RepoPatchCompletion().ApplyAsync(
                 _db,
                 command,
-                success: true,
+                true,
                 resultJson,
-                error: null,
+                null,
                 TestContext.Current.CancellationToken);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
