@@ -140,7 +140,7 @@ public sealed class OperatorRoleAdminService(
     private static async Task AcquireMutationLockAsync(
         IBeaconDb db, IDbContextTransaction transaction, CancellationToken ct)
     {
-        if (!db.Database.IsNpgsql())
+        if (!string.Equals(db.Database.ProviderName, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal))
             return;
         await using var command = db.Database.GetDbConnection().CreateCommand();
         command.Transaction = transaction.GetDbTransaction();
