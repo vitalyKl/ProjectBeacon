@@ -282,6 +282,18 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 db.ChangeTracker.Clear();
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+                if (proposal.Status == ProposalStatus.Pending)
+                {
+                    var latestTarget = await ProposalContentValidation.LoadTargetAsync(
+                        db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
+                    if (latestTarget is null)
+                        proposal.MarkConflicted(null, "TargetMissing", now);
+                    else if (!latestTarget.Reviewable)
+                        proposal.MarkConflicted(latestTarget.Revision, "TargetNoLongerReviewable", now);
+                    else if (latestTarget.Revision != proposal.BaseRevision)
+                        proposal.MarkConflicted(latestTarget.Revision, "BaseRevisionChanged", now);
+                }
+
                 if (proposal.Status == ProposalStatus.Pending && author.SubtaskId is { } sourceSubtask)
                 {
                     var previous = await db.Proposals
