@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
 /// <summary>
-/// Serializes capacity-consuming mutations for one organization. PostgreSQL holds this
+/// Serializes entitlement changes and capacity-consuming mutations for one organization. PostgreSQL holds this
 /// transaction-scoped advisory lock until commit/rollback; other providers rely on their
 /// normal transaction behavior for tests and local development.
 /// </summary>
@@ -35,7 +35,7 @@ public static class EntitlementCapacityLock
         var parameter = command.CreateParameter();
         parameter.ParameterName = "lock_key";
         parameter.DbType = DbType.String;
-        parameter.Value = $"organization-capacity:{orgId:N}";
+        parameter.Value = $"organization-entitlement:{orgId:N}";
         command.Parameters.Add(parameter);
         await command.ExecuteNonQueryAsync(ct);
     }
