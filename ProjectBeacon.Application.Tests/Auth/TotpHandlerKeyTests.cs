@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Auth;
+using Application.Admin;
 using Application.Persistence;
 using Application.Security;
 using Domain.Entities.Identity;
@@ -88,6 +89,117 @@ public sealed class TotpHandlerKeyTests : IDisposable
         Assert.Contains(events, e => e.Action == "account.mfa.disabled"
             && e.DetailsJson == """{"newState":"Disabled"}""");
         Assert.All(events, e => Assert.DoesNotContain(secret, e.DetailsJson ?? string.Empty));
+    }
+
+    [Fact]
+    public async Task ConfirmTotp_GeneratesTenOneTimeRecoveryCodes_AndPersistsOnlyHashes()
+    {
+        var user = await AddUser("recovery-confirm");
+        var protector = TestProtectors.Dev(TestProtectors.LegacyKey);
+        var code = CurrentCode(await PendingSecret(user.Id, protector));
+
+        var result = await new ConfirmTotpHandler(_dbFactory, protector, new RfcTotp())
+            .HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(user.Id, code)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Value);
+        Assert.Equal(10, result.Value.RecoveryCodes.Count);
+        Assert.All(result.Value.RecoveryCodes, recoveryCode =>
+        {
+            Assert.Equal(29, recoveryCode.Length);
+            Assert.Equal(5, recoveryCode.Count(character => character == '-'));
+        });
+
+        await using var db = _dbFactory.CreateDbContext();
+        var row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id,
+            TestContext.Current.CancellationToken);
+        Assert.True(row.TotpEnabled);
+        Assert.Equal(10, row.TotpRecoveryCodeCount);
+        Assert.DoesNotContain(result.Value.RecoveryCodes[0].Replace("-", string.Empty, StringComparison.Ordinal),
+            row.TotpRecoveryCodeHashesJson ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RecoveryCode_CanBeUsedOnce_BySupportOperator_AndRevokesSessionsAndRemainingCodes()
+    {
+        var user = await AddEnabledUser("support-recovery");
+        var recoveryCodes = TotpRecoveryCodeGenerator.GenerateCodes();
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var row = await db.Users.SingleAsync(item => item.Id == user.Id, TestContext.Current.CancellationToken);
+            row.AssignOperatorRole(nameof(OperatorRole.Support));
+            row.SetTotpRecoveryCodeHashes(recoveryCodes.Select(TotpRecoveryCodeGenerator.HashCode));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var beforeDb = _dbFactory.CreateDbContext();
+        var before = await beforeDb.Users.AsNoTracking().SingleAsync(item => item.Id == user.Id,
+            TestContext.Current.CancellationToken);
+        var originalSessionVersion = before.SessionVersion;
+        var actor = new AdminActor(user.Id, OperatorRolePermissionSets.For(OperatorRole.Support), null);
+        var auditWriter = new EfAuditWriter();
+        var handler = new RecoverOperatorTotpHandler(_dbFactory, auditWriter);
+
+        var recovered = await handler.HandleAsync(
+            new RecoverOperatorTotpCommand(actor, recoveryCodes[0]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(recovered.Success, recovered.Error);
+        await using var afterDb = _dbFactory.CreateDbContext();
+        var after = await afterDb.Users.AsNoTracking().SingleAsync(item => item.Id == user.Id,
+            TestContext.Current.CancellationToken);
+        Assert.False(after.TotpEnabled);
+        Assert.Equal(string.Empty, after.TotpSecretCipher);
+        Assert.Null(after.TotpRecoveryCodeHashesJson);
+        Assert.Equal(originalSessionVersion + 1, after.SessionVersion);
+
+        var reused = await handler.HandleAsync(
+            new RecoverOperatorTotpCommand(actor, recoveryCodes[0]),
+            TestContext.Current.CancellationToken);
+        Assert.False(reused.Success);
+
+        await using var auditDb = _dbFactory.CreateDbContext();
+        var audit = await auditDb.AuditEvents.SingleAsync(
+            item => item.Action == "account.mfa.recovery_code_used" && item.ActorUserId == user.Id,
+            TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(recoveryCodes[0], audit.DetailsJson ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task RecoveryCodeRotation_RequiresCurrentTotp_AndReplacesExistingCodes()
+    {
+        var user = await AddEnabledUser("support-rotate");
+        var protector = TestProtectors.Dev(TestProtectors.LegacyKey);
+        var oldCodes = TotpRecoveryCodeGenerator.GenerateCodes();
+        var secret = await PendingSecret(user.Id, protector);
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var row = await db.Users.SingleAsync(item => item.Id == user.Id, TestContext.Current.CancellationToken);
+            row.AssignOperatorRole(nameof(OperatorRole.Support));
+            row.SetTotpRecoveryCodeHashes(oldCodes.Select(TotpRecoveryCodeGenerator.HashCode));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actor = new AdminActor(user.Id, OperatorRolePermissionSets.For(OperatorRole.Support), null);
+        var handler = new RotateOperatorTotpRecoveryCodesHandler(_dbFactory, protector, new RfcTotp());
+        var denied = await handler.HandleAsync(
+            new RotateOperatorTotpRecoveryCodesCommand(actor, "000000"),
+            TestContext.Current.CancellationToken);
+        Assert.False(denied.Success);
+
+        var rotated = await handler.HandleAsync(
+            new RotateOperatorTotpRecoveryCodesCommand(actor, CurrentCode(secret)),
+            TestContext.Current.CancellationToken);
+        Assert.True(rotated.Success, rotated.Error);
+        Assert.Equal(10, rotated.Value!.RecoveryCodes.Count);
+        Assert.DoesNotContain(oldCodes[0], rotated.Value.RecoveryCodes);
+
+        await using var dbAfter = _dbFactory.CreateDbContext();
+        var rowAfter = await dbAfter.Users.SingleAsync(item => item.Id == user.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(10, rowAfter.TotpRecoveryCodeCount);
+        Assert.False(rowAfter.TryConsumeTotpRecoveryCodeHash(TotpRecoveryCodeGenerator.HashCode(oldCodes[0])));
+        Assert.True(rowAfter.TryConsumeTotpRecoveryCodeHash(TotpRecoveryCodeGenerator.HashCode(rotated.Value.RecoveryCodes[0])));
     }
 
     [Fact]
