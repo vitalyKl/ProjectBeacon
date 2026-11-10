@@ -4,6 +4,7 @@ using System.Data;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Authorization;
@@ -31,7 +32,8 @@ public sealed class EfOrganizationDataExportService(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
-        MaxDepth = 48
+        MaxDepth = 48,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     public async Task<Result<OrganizationDataExport>> ExportAsync(
@@ -274,13 +276,13 @@ public sealed class EfOrganizationDataExportService(
             }).ToListAsync(ct);
 
         var taskDependencies = await db.TaskDependencies.AsNoTracking()
-            .Where(item => taskIds.Contains(item.TaskId) || taskIds.Contains(item.DependentTaskId))
+            .Where(item => taskIds.Contains(item.TaskId) && taskIds.Contains(item.DependentTaskId))
             .OrderBy(item => item.CreatedAt)
             .Select(item => new { item.Id, item.TaskId, item.DependentTaskId, item.CreatedAt })
             .ToListAsync(ct);
 
         var taskSteps = await db.TaskSteps.AsNoTracking()
-            .Where(item => taskIds.Contains(item.TaskId))
+            .Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId))
             .OrderBy(item => item.TaskId)
             .ThenBy(item => item.SortOrder)
             .Select(item => new
@@ -295,7 +297,7 @@ public sealed class EfOrganizationDataExportService(
             }).ToListAsync(ct);
 
         var subtasks = await db.Subtasks.AsNoTracking()
-            .Where(item => taskIds.Contains(item.TaskId))
+            .Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId))
             .OrderBy(item => item.CreatedAt)
             .Select(item => new
             {
@@ -336,7 +338,7 @@ public sealed class EfOrganizationDataExportService(
             {
                 item.Id,
                 item.ProjectId,
-                item.RepoId,
+                RepoId = item.RepoId != null && projectIds.Contains(item.RepoId.Value) ? item.RepoId : null,
                 item.TaskId,
                 item.SectionId,
                 item.Key,
@@ -389,7 +391,7 @@ public sealed class EfOrganizationDataExportService(
             }).ToListAsync(ct);
 
         var decisionTasks = await db.DecisionTasks.AsNoTracking()
-            .Where(item => decisionIds.Contains(item.DecisionId))
+            .Where(item => decisionIds.Contains(item.DecisionId) && taskIds.Contains(item.TaskId))
             .Select(item => new { item.DecisionId, item.TaskId })
             .ToListAsync(ct);
 
@@ -478,6 +480,16 @@ public sealed class EfOrganizationDataExportService(
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
             await AddTextEntryAsync(archive, "README.txt", BuildReadme(exportedAt), ct);
+            await AddJsonEntryAsync(archive, "manifest.json", new
+            {
+                schemaVersion = 1,
+                exportedAtUtc = exportedAt,
+                organizationId = orgId,
+                projectCount = projects.Count,
+                taskCount = tasks.Count,
+                attachmentCount = attachmentRows.Count,
+                rowCount = totalRows
+            }, ct);
             await AddJsonEntryAsync(archive, "organization.json", organization, ct);
             await AddJsonEntryAsync(archive, "members.json", members, ct);
             await AddJsonEntryAsync(archive, "organization-invites.json", orgInvites, ct);
