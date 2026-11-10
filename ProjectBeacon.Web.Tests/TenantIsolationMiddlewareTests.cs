@@ -122,6 +122,45 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task OwnedOrganizationHeader_CannotDowngradeForeignProjectRequestToOrgScope()
+    {
+        var ownedOrg = Org.Create("Owned org with a foreign project request");
+        var foreignOrg = Org.Create("Foreign project organization");
+        var foreignProject = Project.Create("Foreign project", null, foreignOrg.Id);
+        var user = User.Create("org-project-header", "org-project-header@example.com", "hash");
+        _db.Orgs.AddRange(ownedOrg, foreignOrg);
+        _db.Users.Add(user);
+        _db.Projects.Add(foreignProject);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(ownedOrg.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scopedProject = null;
+        Guid? scopedOrg = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scopedProject = TenantScope.CurrentProjectId;
+            scopedOrg = TenantScope.CurrentOrgId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.Headers["X-Org-Id"] = ownedOrg.Id.ToString();
+        http.Request.Headers["X-Project-Id"] = foreignProject.Id.ToString();
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(Guid.Empty, scopedProject);
+        Assert.Equal(Guid.Empty, scopedOrg);
+    }
+
+    [Fact]
     public async Task DeviceToken_WithProjectHeader_ScopesToHeaderProject()
     {
         var org = Org.Create("Org", null);
