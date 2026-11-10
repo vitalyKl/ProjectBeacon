@@ -289,7 +289,7 @@ internal sealed class RepoPatchApplyService
         var includeSection = false;
         var sawSection = false;
 
-        foreach (var line in patch.Split('\\n'))
+        foreach (var line in patch.Split('\n'))
         {
             if (line.StartsWith("diff --git a/", StringComparison.Ordinal))
             {
@@ -302,7 +302,7 @@ internal sealed class RepoPatchApplyService
             }
 
             if (sawSection && includeSection)
-                builder.Append(line).Append('\\n');
+                builder.Append(line).Append('\n');
         }
 
         return builder.ToString();
