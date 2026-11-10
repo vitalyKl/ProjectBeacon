@@ -35,6 +35,28 @@ public sealed class RepoPatchValidationTests
     }
 
     [Fact]
+    public void TryValidate_AcceptsWindowsLineEndings()
+    {
+        var patch = """
+            diff --git a/docs/guide.md b/docs/guide.md
+            index 9d3f98b..f5a8c3d 100644
+            --- a/docs/guide.md
+            +++ b/docs/guide.md
+            @@ -1 +1 @@
+            -before
+            +after
+            """.Replace("\n", "\r\n", StringComparison.Ordinal);
+        var payload = Payload(patch, new { gitPath = "docs/guide.md", projectPath = "docs/guide.md", baseHash = BaseHash, resultHash = ResultHash });
+
+        var valid = RepoPatchValidation.TryValidate(
+            payload, ["docs"], ["docs", "README.md"], out var result, out var error);
+
+        Assert.True(valid, error);
+        Assert.NotNull(result);
+        Assert.Equal("docs/guide.md", Assert.Single(result.Files).GitPath);
+    }
+
+    [Fact]
     public void TryValidate_AcceptsNewDocumentationFileOnlyWithDevNullOldHeader()
     {
         var patch = """
