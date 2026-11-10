@@ -2936,4 +2936,31 @@ No Beacon-hosted coding agent.</value>
   <data name="OpenProposalInbox" xml:space="preserve">
     <value>Open proposal inbox</value>
   </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>Proposal decision policies</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>Choose which supported content updates may be applied automatically. Manual is the default; Decision and Constraint always require an Owner/Admin.</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>Proposal policy settings could not be loaded.</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>Decision mode</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>Restriction</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>Manual</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>Only a project or organization Owner/Admin can change these policies.</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>Proposal policy saved.</value>
+  </data>
 </root>
