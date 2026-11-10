@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Mcp;
 
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -40,7 +41,11 @@ public static partial class McpStdioServer
         Tool(McpToolNames.GetCallers, "Find single-hop incoming references (callers) for a symbol at a given file/line.",
             Props(("path", "string", true), ("symbolName", "string", true), ("line", "integer", true))),
         Tool(McpToolNames.HashRange, "SHA-256 of an inclusive 1-based line range of a file, as a bare lowercase hex string. For content-staleness comparison.",
-            Props(("path", "string", true), ("startLine", "integer", true), ("endLine", "integer", true)))
+            Props(("path", "string", true), ("startLine", "integer", true), ("endLine", "integer", true))),
+        Tool(McpToolNames.HashFile, "SHA-256 of the exact bytes of one file under the project root. Returns only a bare lowercase hex digest; it never returns file content.",
+            Props(("path", "string", true))),
+        Tool(McpToolNames.HashText, "SHA-256 of the supplied UTF-8 text encoded without a byte-order mark. Use this to calculate the expected hash of proposed text content.",
+            Props(("content", "string", true)))
     ];
 
     private static IReadOnlyList<string> SplitPrefixes(string? path)
@@ -146,6 +151,9 @@ public static partial class McpStdioServer
 
     private static string? OptArg(JsonObject? arguments, string key)
         => arguments?[key]?.GetValue<string>();
+
+    private static string HashText(string content) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 
     private static int? OptInt(JsonObject? arguments, string key)
     {
