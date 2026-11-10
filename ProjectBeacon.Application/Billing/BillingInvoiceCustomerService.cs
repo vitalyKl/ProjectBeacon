@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Billing;
 
+public sealed record CustomerBillingInvoice(BillingInvoice Invoice, string OrganizationName);
+
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -76,6 +78,59 @@ public sealed class BillingInvoiceCustomerService(
         while (await reader.ReadAsync(ct))
             invoices.Add(Read(reader));
         return invoices;
+    }
+
+    public async Task<CustomerBillingInvoice> GetAsync(
+        Guid invoiceId,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        if (invoiceId == Guid.Empty)
+            throw new ArgumentException("Invoice id is required.", nameof(invoiceId));
+        if (!TryGetOrganization(actor, out var orgId))
+            throw new UnauthorizedAccessException("Billing is available only to owners and administrators of an active organization.");
+
+        await using var db = dbFactory.CreateDbContext(tenant);
+        var allowed = await db.OrgMembers
+            .AsNoTracking()
+            .AnyAsync(member =>
+                member.OrgId == orgId
+                && member.UserId == actor.UserId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin),
+                ct);
+        if (!allowed)
+            throw new UnauthorizedAccessException("Billing is available only to owners and administrators of an active organization.");
+
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = """
+            SELECT "Id", "OrgId", "Number", "Description", "AmountMinor", "Currency",
+                   "IssuedAtUtc", "DueAtUtc", "Status", "PaidAtUtc", "PaymentReference",
+                   "ProviderKey", "ExternalInvoiceReference"
+            FROM "BillingInvoices"
+            WHERE "OrgId" = @org_id AND "Id" = @invoice_id
+            LIMIT 1
+            """;
+        Add(command, "org_id", DbType.Guid, orgId);
+        Add(command, "invoice_id", DbType.Guid, invoiceId);
+
+        BillingInvoice invoice;
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct))
+                throw new KeyNotFoundException("Billing invoice not found.");
+            invoice = Read(reader);
+        }
+
+        var organizationName = await db.Orgs
+            .AsNoTracking()
+            .Where(org => org.Id == orgId)
+            .Select(org => org.Name)
+            .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(organizationName))
+            throw new KeyNotFoundException("Organization not found.");
+
+        return new CustomerBillingInvoice(invoice, organizationName);
     }
 
     private bool TryGetOrganization(ActorContext actor, out Guid orgId)
