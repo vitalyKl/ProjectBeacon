@@ -2969,4 +2969,16 @@ No Beacon-hosted coding agent.</value>
   <data name="NoTextualChanges" xml:space="preserve">
     <value>No textual changes.</value>
   </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>Documentation patch handling</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review keeps documentation changes pending for human approval. Auto applies documentation-only patches from this profile, limited to its allowed paths.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review (human approval)</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto (apply documentation patch)</value>
+  </data>
 </root>
