@@ -428,6 +428,101 @@ public sealed class McpApiToolsTests
         }
     }
 
+    [Fact]
+    public async Task KnowledgePropose_UsesStableSubtaskBoundIdempotencyKey()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var targetId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ProjectDescription",
+            ["targetId"] = targetId.ToString("D"),
+            ["baseRevision"] = 3,
+            ["payload"] = new JsonObject { ["description"] = "Proposed Markdown description" },
+            ["rationaleMarkdown"] = "Clarifies the project purpose."
+        };
+
+        var first = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        var second = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+
+        Assert.False(first.IsError, first.Text);
+        Assert.False(second.IsError, second.Text);
+        var calls = handler.Calls.Where(call => call.Path == $"/v1/projects/{projectId:D}/proposals").ToArray();
+        Assert.Equal(2, calls.Length);
+        Assert.All(calls, call => Assert.Equal("POST", call.Method));
+        var firstBody = JsonNode.Parse(calls[0].Body)!.AsObject();
+        var secondBody = JsonNode.Parse(calls[1].Body)!.AsObject();
+        Assert.Equal(firstBody["idempotencyKey"]!.GetValue<string>(), secondBody["idempotencyKey"]!.GetValue<string>());
+        Assert.StartsWith("knowledge-propose:", firstBody["idempotencyKey"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("Update", firstBody["operation"]!.GetValue<string>());
+        Assert.Equal(3, firstBody["baseRevision"]!.GetValue<int>());
+        Assert.Equal("Proposed Markdown description", firstBody["payload"]!["description"]!.GetValue<string>());
+        Assert.Equal(projectId.ToString("D"), calls[0].ProjectHeader);
+    }
+
+    [Fact]
+    public async Task KnowledgePropose_RequiresActorSubtaskAndRejectsUnsupportedOperations()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ProjectDescription",
+            ["targetId"] = "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            ["baseRevision"] = 1,
+            ["payload"] = new JsonObject { ["description"] = "Updated" },
+            ["rationaleMarkdown"] = "A valid reason."
+        };
+
+        var missingScope = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.True(missingScope.IsError);
+        Assert.Contains("BEACON_SUBTASK_ID", missingScope.Text, StringComparison.Ordinal);
+
+        env.Set("BEACON_SUBTASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        args["operation"] = "Delete";
+        var unsupported = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.True(unsupported.IsError);
+        Assert.Contains("only operation 'Update'", unsupported.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task KnowledgeProposalsAndWithdraw_UseActorScopedRoutes()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var proposalId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var listed = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgeProposals,
+            new JsonObject { ["status"] = "Rejected" }, api, env);
+        var withdrawn = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgeWithdraw,
+            new JsonObject { ["proposalId"] = proposalId.ToString("D") }, api, env);
+
+        Assert.False(listed.IsError, listed.Text);
+        Assert.False(withdrawn.IsError, withdrawn.Text);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "GET" && call.Path == $"/v1/projects/{projectId:D}/proposals/mine?status=Rejected");
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/proposals/{proposalId:D}/withdraw");
+    }
+
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
