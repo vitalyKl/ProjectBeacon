@@ -20,7 +20,7 @@ public sealed class RepoPatchApplyServiceTests
         const string after = "# Guide\nApproved instructions.\n";
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
-        var payload = Payload(repo.ProjectId, patch, path, before, after);
+        var payload = Payload(repo.ProjectId, patch, path, before, after, proposalId: repo.ProposalId);
 
         var result = await _service.ExecuteAsync(repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
 
@@ -134,11 +134,12 @@ public sealed class RepoPatchApplyServiceTests
         string before,
         string after,
         string? gitPath = null,
-        string[]? allowedPaths = null) =>
+        string[]? allowedPaths = null,
+        Guid? proposalId = null) =>
         JsonSerializer.Serialize(new
         {
             projectId,
-            proposalId = Guid.NewGuid(),
+            proposalId = proposalId ?? Guid.NewGuid(),
             patch,
             files = new[]
             {
