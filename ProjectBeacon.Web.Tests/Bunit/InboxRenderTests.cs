@@ -157,15 +157,15 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains("Proposal accepted", cut.Markup, StringComparison.OrdinalIgnoreCase);
 
         var savedProject = await DbContext.Projects.SingleAsync(
-            project => project.Id == projectId, TestContext.Current.CancellationToken);
-        await DbContext.Entry(savedProject).ReloadAsync(TestContext.Current.CancellationToken);
+            project => project.Id == projectId, CancellationToken.None);
+        await DbContext.Entry(savedProject).ReloadAsync(CancellationToken.None);
         Assert.Equal("The accepted project goal", savedProject.Description);
 
         var savedConflict = await DbContext.Proposals.SingleAsync(
-            proposal => proposal.Id == conflicted.Id, TestContext.Current.CancellationToken);
+            proposal => proposal.Id == conflicted.Id, CancellationToken.None);
         Assert.Equal(ProposalStatus.Conflicted, savedConflict.Status);
         var savedAcceptance = await DbContext.Proposals.SingleAsync(
-            proposal => proposal.Id == accepted.Id, TestContext.Current.CancellationToken);
+            proposal => proposal.Id == accepted.Id, CancellationToken.None);
         Assert.Equal(ProposalStatus.Accepted, savedAcceptance.Status);
     }
 
