@@ -61,29 +61,31 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         new(ActorType.Human, _memberId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
     [Fact]
-    public async Task MatrixDefaultsToManual_AndOwnerCanEnableAutoForOrdinaryUpdate()
+    public async Task MatrixDefaultsToManual_AndAcceptedContentUpdatesCannotBeAutoApplied()
     {
         var factory = HandlerSqlite.Factory(_connection);
         var list = new ListProposalPoliciesHandler(factory);
         var initial = await list.HandleAsync(_projectId, MemberActor(), TestContext.Current.CancellationToken);
 
         Assert.True(initial.Success, initial.Error);
+        Assert.Equal(18, initial.Value!.Count);
+        Assert.All(initial.Value!, item =>
+        {
+            Assert.Equal(ProposalDecisionMode.Manual, item.Mode);
+            Assert.False(item.AutoAllowed);
+        });
+
         var projectDescription = Assert.Single(initial.Value!, item =>
             item.TargetKind == ContentTargetKind.ProjectDescription
             && item.Operation == ProposalOperation.Update);
-        Assert.Equal(ProposalDecisionMode.Manual, projectDescription.Mode);
-        Assert.True(projectDescription.AutoAllowed);
-
-        var governance = Assert.Single(initial.Value!, item =>
-            item.TargetKind == ContentTargetKind.Decision
+        var taskDescription = Assert.Single(initial.Value!, item =>
+            item.TargetKind == ContentTargetKind.TaskDescription
             && item.Operation == ProposalOperation.Update);
-        Assert.Equal(ProposalDecisionMode.Manual, governance.Mode);
-        Assert.False(governance.AutoAllowed);
-        Assert.Equal(18, initial.Value!.Count);
-        Assert.All(initial.Value!, item => Assert.Equal(ProposalDecisionMode.Manual, item.Mode));
+        Assert.Contains("manual human review", projectDescription.RestrictionReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("manual human review", taskDescription.RestrictionReason, StringComparison.OrdinalIgnoreCase);
 
-        var set = new SetProposalPolicyHandler(factory, new AuthorizationService(), new EfAuditWriter());
-        var enabled = await set.HandleAsync(new SetProposalPolicyCommand(
+        var setter = new SetProposalPolicyHandler(factory, new AuthorizationService(), new EfAuditWriter());
+        var attempt = await setter.HandleAsync(new SetProposalPolicyCommand(
             _projectId,
             ContentTargetKind.ProjectDescription,
             ProposalOperation.Update,
@@ -91,52 +93,45 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
             projectDescription.PolicyRevision,
             OwnerActor()), TestContext.Current.CancellationToken);
 
-        Assert.True(enabled.Success, enabled.Error);
-        Assert.Equal(ProposalDecisionMode.Auto, enabled.Value!.Mode);
-        Assert.Equal(projectDescription.PolicyRevision + 1, enabled.Value.PolicyRevision);
+        Assert.False(attempt.Success);
+        Assert.Equal(ErrorKind.Validation, attempt.Kind);
 
         var refreshed = await list.HandleAsync(_projectId, OwnerActor(), TestContext.Current.CancellationToken);
         Assert.True(refreshed.Success, refreshed.Error);
-        Assert.Equal(ProposalDecisionMode.Auto, Assert.Single(refreshed.Value!, item =>
-            item.TargetKind == ContentTargetKind.ProjectDescription
-            && item.Operation == ProposalOperation.Update).Mode);
+        Assert.All(refreshed.Value!, item => Assert.Equal(ProposalDecisionMode.Manual, item.Mode));
+        Assert.Empty(await _db.AuditEvents.Where(item => item.Action == "proposal.policy.updated")
+            .ToListAsync(TestContext.Current.CancellationToken));
 
-        var audit = await _db.AuditEvents.SingleAsync(
-            item => item.Action == "proposal.policy.updated",
-            TestContext.Current.CancellationToken);
-        Assert.Equal("ProposalPolicy", audit.TargetType);
-        Assert.Equal(_projectId, audit.ProjectId);
-        Assert.Contains("Auto", audit.DetailsJson, StringComparison.Ordinal);
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        Assert.Equal(1, project.ProposalPolicyRevision);
+        Assert.Equal("{}", project.ProposalPoliciesJson);
     }
 
     [Fact]
-    public async Task PolicyChangesRequireOwnerAdminAndExpectedPolicyRevision()
+    public async Task PolicyChangesRequireOwnerAdmin_AndStaleRevisionIsRejected()
     {
         var factory = HandlerSqlite.Factory(_connection);
         var setter = new SetProposalPolicyHandler(factory, new AuthorizationService(), new EfAuditWriter());
 
         var memberAttempt = await setter.HandleAsync(new SetProposalPolicyCommand(
             _projectId,
-            ContentTargetKind.TaskDescription,
+            ContentTargetKind.ProjectDescription,
             ProposalOperation.Update,
-            ProposalDecisionMode.Auto,
+            ProposalDecisionMode.Manual,
             1,
             MemberActor()), TestContext.Current.CancellationToken);
         Assert.False(memberAttempt.Success);
         Assert.Equal(ErrorKind.Forbidden, memberAttempt.Kind);
 
-        var ownerAttempt = await setter.HandleAsync(new SetProposalPolicyCommand(
-            _projectId,
-            ContentTargetKind.TaskDescription,
-            ProposalOperation.Update,
-            ProposalDecisionMode.Auto,
-            1,
-            OwnerActor()), TestContext.Current.CancellationToken);
-        Assert.True(ownerAttempt.Success, ownerAttempt.Error);
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        project.SetProposalPoliciesJson("""{"ProjectDescription:Update":"Manual"}""");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var stale = await setter.HandleAsync(new SetProposalPolicyCommand(
             _projectId,
-            ContentTargetKind.TaskDescription,
+            ContentTargetKind.ProjectDescription,
             ProposalOperation.Update,
             ProposalDecisionMode.Manual,
             1,
@@ -160,14 +155,14 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
             OwnerActor()), TestContext.Current.CancellationToken);
         Assert.False(governance.Success);
 
-        var create = await setter.HandleAsync(new SetProposalPolicyCommand(
+        var acceptedContentUpdate = await setter.HandleAsync(new SetProposalPolicyCommand(
             _projectId,
             ContentTargetKind.ProjectDescription,
-            ProposalOperation.Create,
+            ProposalOperation.Update,
             ProposalDecisionMode.Auto,
             1,
             OwnerActor()), TestContext.Current.CancellationToken);
-        Assert.False(create.Success);
+        Assert.False(acceptedContentUpdate.Success);
 
         var delete = await setter.HandleAsync(new SetProposalPolicyCommand(
             _projectId,
