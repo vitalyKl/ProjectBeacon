@@ -16,6 +16,10 @@ public class Project : Entity, IOrgScoped
     public string? ReviewCheckCommand { get; private set; }
     /// <summary>Encrypted JSON containing this project's MCP server definitions and credentials.</summary>
     public string McpServersCipher { get; private set; } = string.Empty;
+    /// <summary>JSON map of target/operation proposal decisions; missing entries are Manual.</summary>
+    public string ProposalPoliciesJson { get; private set; } = "{}";
+    /// <summary>Optimistic-concurrency token for proposal policy edits, independent of content revision.</summary>
+    public int ProposalPolicyRevision { get; private set; } = 1;
     public Guid OrgId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -42,6 +46,15 @@ public class Project : Entity, IOrgScoped
     {
         ArgumentNullException.ThrowIfNull(cipher);
         McpServersCipher = cipher;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Replaces the project proposal policy map without changing the project description revision.</summary>
+    public void SetProposalPoliciesJson(string policiesJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policiesJson);
+        ProposalPoliciesJson = policiesJson;
+        ProposalPolicyRevision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
