@@ -70,7 +70,7 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.False(second.Success);
         Assert.Equal("entitlement_limit_exceeded", second.ErrorCode);
         Assert.Equal(ErrorKind.Conflict, second.Kind);
-        Assert.Equal(1, evaluator.LastRequirement?.CurrentUsage);
+        Assert.Equal(1L, evaluator.LastRequirement?.CurrentUsage);
         Assert.Equal(1, await _db.Projects.IgnoreQueryFilters()
             .LongCountAsync(project => project.OrgId == orgId, TestContext.Current.CancellationToken));
     }
