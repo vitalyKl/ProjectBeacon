@@ -88,8 +88,8 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains("Human", cut.Markup);
         Assert.Contains("—", cut.Markup);
 
-        cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
         cut.FindAll("button").First(button =>
             button.TextContent.Contains("Compare base revision", StringComparison.OrdinalIgnoreCase)).Click();
 
