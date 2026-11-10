@@ -2721,4 +2721,28 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>このインボックスを表示するにはプロジェクトへの参加が必要です。</value>
   </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>コンテンツ履歴</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>この項目の履歴はありません。</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>このリビジョンを復元</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>選択したスナップショットから新しいリビジョンを作成しました。</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>提案</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>このタスクの作業中にエージェントが送信した提案を確認します。</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>このタスクに提案はありません。</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>提案インボックスを開く</value>
+  </data>
 </root>
