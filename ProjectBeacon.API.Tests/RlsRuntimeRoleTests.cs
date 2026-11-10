@@ -226,6 +226,28 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     }
 
     [Fact]
+    public async Task Rls_RuntimeRole_BillingPlans_AreVisibleOnlyInOperatorScope()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), "rls-plan-visible");
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(0, await CountBillingPlansRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(1, await CountBillingPlansRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        var denied = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertBillingPlanRawAsync(conn, Guid.NewGuid(), "rls-plan-denied"));
+        Assert.Equal("42501", denied.SqlState);
+    }
+
+    [Fact]
     public async Task Rls_RuntimeRole_FreshSession_FailClosed_ViaRawSql()
     {
         _postgres.RequirePostgres();
@@ -704,6 +726,30 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         command.Parameters.AddWithValue("org_id", orgId);
         command.Parameters.AddWithValue("now", now);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingPlanRawAsync(NpgsqlConnection conn, Guid id, string key)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingPlans"
+                ("Id", "Key", "Name", "Cadence", "PriceMinor", "Currency",
+                 "LimitsJson", "FeaturesJson", "IsActive", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @key, 'RLS test plan', 1, NULL, NULL,
+                 '{}'::jsonb, '["core"]'::jsonb, TRUE, @now, @now)
+            """, conn);
+        var now = DateTimeOffset.UtcNow;
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("key", key);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> CountBillingPlansRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"BillingPlans\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
     }
 
     private static async Task<int> CountEntitlementsRawAsync(NpgsqlConnection conn)
