@@ -46,10 +46,24 @@ public sealed class EfOrganizationDataExportService(
                 "A signed-in organization owner or administrator is required.",
                 ErrorKind.Forbidden);
 
+        // First prove access in the organization's normal tenant scope. Project-scoped
+        // entities cannot be queried with a null project id, so the actual archive read
+        // uses a short-lived operator-style unscoped context below. Every query in that
+        // context is then constrained by this explicitly authorized OrgId/projectId set.
         var tenant = new TenantContext();
         tenant.Assign(null, orgId, unscoped: false);
-        await using var db = dbFactory.CreateDbContext(tenant);
+        await using (var authorizationDb = dbFactory.CreateDbContext(tenant))
+        {
+            var permission = await authorization.CanAsync(
+                authorizationDb, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct);
+            if (!permission.Success)
+                return Result.Failure<OrganizationDataExport>(
+                    "Only an organization owner or administrator can export its data.",
+                    ErrorKind.Forbidden);
+        }
 
+        using var unscoped = TenantScope.EnterUnscoped();
+        await using var db = dbFactory.CreateDbContext();
         var isolation = string.Equals(
             db.Database.ProviderName,
             "Npgsql.EntityFrameworkCore.PostgreSQL",
@@ -58,14 +72,16 @@ public sealed class EfOrganizationDataExportService(
             : IsolationLevel.Serializable;
         await using var transaction = await db.Database.BeginTransactionAsync(isolation, ct);
 
-        var permission = await authorization.CanAsync(
+        // Repeat authorization inside the export snapshot to close the membership-revocation
+        // race between the scoped preflight and the unscoped, explicitly constrained reads.
+        var permissionInsideSnapshot = await authorization.CanAsync(
             db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct);
-        if (!permission.Success)
+        if (!permissionInsideSnapshot.Success)
             return Result.Failure<OrganizationDataExport>(
                 "Only an organization owner or administrator can export its data.",
                 ErrorKind.Forbidden);
 
-        var organization = await db.Orgs.AsNoTracking()
+        var organization = await db.Orgs.IgnoreQueryFilters().AsNoTracking()
             .Where(org => org.Id == orgId)
             .Select(org => new
             {
@@ -80,11 +96,12 @@ public sealed class EfOrganizationDataExportService(
         if (organization is null)
             return Result.Failure<OrganizationDataExport>("Organization not found.", ErrorKind.NotFound);
 
-        var projectCount = await db.Projects.LongCountAsync(project => project.OrgId == orgId, ct);
+        var projectCount = await db.Projects.IgnoreQueryFilters()
+            .LongCountAsync(project => project.OrgId == orgId, ct);
         if (projectCount > MaximumRows)
             return TooLarge();
 
-        var projectIds = await db.Projects.AsNoTracking()
+        var projectIds = await db.Projects.IgnoreQueryFilters().AsNoTracking()
             .Where(project => project.OrgId == orgId)
             .OrderBy(project => project.CreatedAt)
             .Select(project => project.Id)
