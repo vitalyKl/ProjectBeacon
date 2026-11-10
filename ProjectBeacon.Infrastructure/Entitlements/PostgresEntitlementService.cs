@@ -163,13 +163,8 @@ public sealed class PostgresEntitlementService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var connection = db.Database.GetDbConnection();
-        await using (var lockCommand = connection.CreateCommand())
-        {
-            lockCommand.Transaction = transaction.GetDbTransaction();
-            lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
-            Add(lockCommand, "lock_key", DbType.String, $"organization-entitlement:{request.OrgId:N}");
-            await lockCommand.ExecuteNonQueryAsync(ct);
-        }
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, request.OrgId, ct);
 
         var replacedEntitlementIds = new List<Guid>();
         await using (var revoke = connection.CreateCommand())
@@ -251,7 +246,27 @@ public sealed class PostgresEntitlementService(
         using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using var command = db.Database.GetDbConnection().CreateCommand();
+        var connection = db.Database.GetDbConnection();
+        await using (var lookup = connection.CreateCommand())
+        {
+            lookup.Transaction = transaction.GetDbTransaction();
+            lookup.CommandText = """
+                SELECT "OrgId"
+                FROM "OrganizationEntitlements"
+                WHERE "Id" = @id AND "Status" IN (@active, @scheduled)
+                """;
+            Add(lookup, "id", DbType.Guid, entitlementId);
+            Add(lookup, "active", DbType.Int16, (short)EntitlementStatus.Active);
+            Add(lookup, "scheduled", DbType.Int16, (short)EntitlementStatus.Scheduled);
+            var value = await lookup.ExecuteScalarAsync(ct);
+            if (value is not Guid orgId)
+                return Result.Failure("Active or scheduled entitlement not found.", ErrorKind.NotFound);
+
+            await EntitlementCapacityLock.AcquireOrganizationAsync(
+                db.Database, transaction, orgId, ct);
+        }
+
+        await using var command = connection.CreateCommand();
         command.Transaction = transaction.GetDbTransaction();
         command.CommandText = """
             UPDATE "OrganizationEntitlements"
@@ -350,6 +365,11 @@ public sealed class PostgresEntitlementService(
                     "Only an active organization can be converted to production.", ErrorKind.Forbidden);
         }
 
+        // Serialize entitlement replacement with project/member capacity consumption.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, request.OrgId, ct);
+
+        // Billing has a separate lock for billing lifecycle operations on the same org.
         await using (var lockCommand = connection.CreateCommand())
         {
             lockCommand.Transaction = dbTransaction;
