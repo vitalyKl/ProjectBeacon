@@ -12,7 +12,7 @@ public sealed class EntitlementLimitEvaluatorTests
             new EntitlementRequirement("core", "projects", RequestedUnits: 1, CurrentUsage: 250));
 
         Assert.True(decision.Allowed);
-        Assert.Equal(250, decision.CurrentUsage);
+        Assert.Equal(250L, decision.CurrentUsage);
         Assert.Null(decision.Limit);
         Assert.Null(decision.ReasonCode);
     }
@@ -25,7 +25,7 @@ public sealed class EntitlementLimitEvaluatorTests
             new EntitlementRequirement("core"));
 
         Assert.True(decision.Allowed);
-        Assert.Equal(0, decision.CurrentUsage);
+        Assert.Equal(0L, decision.CurrentUsage);
         Assert.Null(decision.Limit);
     }
 
@@ -37,8 +37,8 @@ public sealed class EntitlementLimitEvaluatorTests
             new EntitlementRequirement("core", "projects", RequestedUnits: 1, CurrentUsage: 2));
 
         Assert.True(decision.Allowed);
-        Assert.Equal(2, decision.CurrentUsage);
-        Assert.Equal(3, decision.Limit);
+        Assert.Equal(2L, decision.CurrentUsage);
+        Assert.Equal(3L, decision.Limit);
     }
 
     [Theory]
