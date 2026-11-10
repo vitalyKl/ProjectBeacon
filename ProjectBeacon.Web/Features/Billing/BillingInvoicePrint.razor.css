@@ -1,0 +1,172 @@
+.billing-print-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0 0 1rem;
+}
+
+.billing-print-document {
+    max-width: 820px;
+    margin: 0 auto 2rem;
+    padding: 2.5rem;
+    color: #17212b;
+    background: #fff;
+    border-color: #d8dee6;
+}
+
+.billing-print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+}
+
+.billing-print-brand {
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+}
+
+.billing-print-caption {
+    color: #627080;
+    font-size: 0.82rem;
+}
+
+.billing-print-number {
+    text-align: right;
+}
+
+.billing-print-number strong {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1.15rem;
+}
+
+.billing-print-rule {
+    height: 1px;
+    margin: 1.5rem 0;
+    background: #d8dee6;
+}
+
+.billing-print-section {
+    margin: 1.25rem 0;
+}
+
+.billing-print-section > strong {
+    display: block;
+    margin-top: 0.2rem;
+}
+
+.billing-print-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.billing-print-grid strong {
+    display: block;
+    margin-top: 0.25rem;
+}
+
+.billing-print-description {
+    margin-top: 0.4rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.billing-print-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    margin-top: 2rem;
+    padding: 1rem 0;
+    border-top: 1px solid #d8dee6;
+    border-bottom: 1px solid #d8dee6;
+}
+
+.billing-print-total strong {
+    font-size: 1.3rem;
+    text-align: right;
+}
+
+.billing-print-notice {
+    margin-top: 2rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid #d8dee6;
+    border-radius: 0.5rem;
+    color: #536170;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.billing-print-footer {
+    margin-top: 2rem;
+    color: #748191;
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+@media (max-width: 600px) {
+    .billing-print-document {
+        padding: 1.25rem;
+    }
+
+    .billing-print-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .billing-print-header {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .billing-print-number {
+        text-align: left;
+    }
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 16mm;
+    }
+
+    :global(body) {
+        color: #17212b !important;
+        background: #fff !important;
+    }
+
+    :global(.mud-main-content),
+    :global(.beacon-main),
+    :global(.beacon-content-max) {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    :global(.beacon-appbar),
+    :global(.beacon-drawer),
+    :global(.beacon-mobile-nav),
+    :global(.mud-overlay),
+    :global(.mud-snackbar-provider),
+    .no-print {
+        display: none !important;
+    }
+
+    .billing-print-document {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+
+    .billing-print-notice {
+        break-inside: avoid;
+    }
+}
