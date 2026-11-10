@@ -204,6 +204,56 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Accept_WhenContentVersionInsertFails_RollsBackTargetProposalAndAudit()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var actor = HumanActor();
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), actor), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        await _db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TRIGGER fail_proposal_content_version
+            BEFORE INSERT ON "ContentVersions"
+            WHEN NEW."ProposalId" IS NOT NULL
+            BEGIN
+                SELECT RAISE(ABORT, 'forced proposal content version failure');
+            END;
+            """,
+            TestContext.Current.CancellationToken);
+
+        var accepted = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value!.Id, actor), TestContext.Current.CancellationToken);
+
+        Assert.False(accepted.Success);
+        Assert.Equal(ErrorKind.Conflict, accepted.Kind);
+
+        await using var verify = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var project = await verify.Projects.SingleAsync(item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        Assert.Equal("Original description", project.Description);
+        Assert.Equal(1, project.Revision);
+
+        var proposal = await verify.Proposals.SingleAsync(
+            item => item.Id == created.Value.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Pending, proposal.Status);
+        Assert.Null(proposal.AppliedRevision);
+
+        var versions = await verify.ContentVersions
+            .Where(version => version.TargetKind == ContentTargetKind.ProjectDescription
+                && version.TargetId == _projectId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Single(versions);
+        Assert.Null(versions[0].ProposalId);
+
+        Assert.DoesNotContain(await verify.AuditEvents
+            .Where(item => item.ProjectId == _projectId)
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken), action => action == "proposal.accepted");
+    }
+
+    [Fact]
     public async Task NewSubmissionMaterializesExpiredPendingRowsAndAuditsExpiry()
     {
         var expired = Proposal.Create(
