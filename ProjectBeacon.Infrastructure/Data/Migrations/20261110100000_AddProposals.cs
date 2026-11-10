@@ -8,7 +8,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations;
 
 [DbContext(typeof(BeaconDbContext))]
 [Migration("20261110100000_AddProposals")]
-public sealed class AddProposals : Migration
+public sealed partial class AddProposals : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
