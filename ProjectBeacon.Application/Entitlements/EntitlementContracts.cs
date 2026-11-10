@@ -10,6 +10,13 @@ public static class EntitlementFeatureKeys
     public const string Core = "core";
 }
 
+/// <summary>Product-owned capacity keys understood by runtime enforcement.</summary>
+public static class EntitlementLimitKeys
+{
+    /// <summary>Maximum number of projects an organization may own.</summary>
+    public const string Projects = "projects";
+}
+
 
 /// <summary>The origin of an organization's effective access grant.</summary>
 public enum EntitlementSource
@@ -74,7 +81,8 @@ public sealed record OrganizationEntitlement(
 public sealed record EntitlementRequirement(
     string FeatureKey,
     string? LimitKey = null,
-    long RequestedUnits = 1);
+    long RequestedUnits = 1,
+    long CurrentUsage = 0);
 
 public sealed record EntitlementDecision(
     bool Allowed,
@@ -114,7 +122,17 @@ public sealed record ConvertAlphaToProductionRequest(
 /// revoke and source-transition writes auditable and transactional. Conversion to a paid
 /// plan is one operation so alpha access cannot be dropped before production access exists.
 /// </summary>
-public interface IEntitlementService
+/// <summary>Read-only evaluator used by product mutations before consuming a capability or capacity.</summary>
+public interface IEntitlementEvaluator
+{
+    Task<Result<EntitlementDecision>> EvaluateAsync(
+        Guid orgId,
+        EntitlementRequirement requirement,
+        CancellationToken ct = default);
+}
+
+/// <summary>Full effective-access and operator grant lifecycle.</summary>
+public interface IEntitlementService : IEntitlementEvaluator
 {
     Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(
         Guid orgId,
@@ -128,11 +146,6 @@ public interface IEntitlementService
     Task<Result<IReadOnlyList<OrganizationEntitlement>>> ListForOperatorAsync(
         AdminActor actor,
         Guid orgId,
-        CancellationToken ct = default);
-
-    Task<Result<EntitlementDecision>> EvaluateAsync(
-        Guid orgId,
-        EntitlementRequirement requirement,
         CancellationToken ct = default);
 
     Task<Result<OrganizationEntitlement>> GrantAsync(
