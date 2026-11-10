@@ -670,6 +670,8 @@ public sealed class EfOrganizationDataExportService(
         Customer-authored text, chat messages and attachments are included as stored and may
         themselves contain sensitive values that users previously placed in that content.
 
+        Pipeline orchestration lifecycle, review/evaluation runs, operational telemetry and platform audit/security history are not part of this first workspace export version.
+
         This is an application data export, not a deletion or retention request.
         """;
 }
