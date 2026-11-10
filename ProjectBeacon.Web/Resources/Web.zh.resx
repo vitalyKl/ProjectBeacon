@@ -2676,6 +2676,12 @@ orthstar</value>
 <data name="AuditTargetId" xml:space="preserve">
     <value>目标 ID</value>
   </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>跟踪 ID</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>规划</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>执行</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>模型</value></data>
