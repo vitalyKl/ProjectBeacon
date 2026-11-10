@@ -200,6 +200,44 @@ public sealed class OrganizationDataExportTests : IDisposable
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task Export_DoesNotUsePlatformAdministratorMembershipBypass()
+    {
+        var platformAdmin = User.Create(
+            "platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var org = Org.Create("Customer org without operator membership");
+        _db.Users.Add(platformAdmin);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _unscoped.Dispose();
+        _scopeDisposed = true;
+
+        var factory = HandlerSqlite.Factory(_connection);
+        var exporter = new EfOrganizationDataExportService(
+            factory,
+            new AuthorizationService(),
+            new EfAuditWriter(),
+            new DatabaseAttachmentService(factory),
+            TimeProvider.System);
+
+        var denied = await exporter.ExportAsync(
+            org.Id,
+            new ActorContext(
+                ActorType.Human,
+                platformAdmin.Id,
+                IsAdmin: true,
+                null,
+                null,
+                null,
+                null,
+                ApiTokenCapability.None),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(denied.Success);
+        Assert.Equal(ErrorKind.Forbidden, denied.Kind);
+        Assert.Null(denied.Value);
+    }
+
     private static ActorContext Human(Guid userId) =>
         new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
 
