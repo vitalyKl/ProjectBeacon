@@ -6,6 +6,7 @@ using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Application.Proposals;
+using Application.Persistence;
 using Application.Tasks;
 using Domain.Entities.Content;
 using Domain.Entities.Devices;
