@@ -173,10 +173,12 @@ else
                                     {
                                         <MudTextField T="string" Value="@GetEditedPayload(proposal)" ValueChanged="value => SetEditedPayload(proposal.Id, value)"
                                                       Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8" ReadOnly="@(proposal.Status != ProposalStatus.Pending)" />
-                                        <MudButton data-testid="compare-base-revision" Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
+                                        <div data-testid="compare-base-revision">
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
                                                    OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
                                             @L["CompareBaseRevision"] (@proposal.BaseRevision)
                                         </MudButton>
+                                        </div>
                                         @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
                                         {
                                             <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
