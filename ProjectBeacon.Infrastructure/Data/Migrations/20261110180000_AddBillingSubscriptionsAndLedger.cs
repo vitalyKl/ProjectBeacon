@@ -13,6 +13,10 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.Sql("""
+            CREATE UNIQUE INDEX "IX_OrganizationEntitlements_SubscriptionSourceReference"
+                ON "OrganizationEntitlements" ("SourceReference")
+                WHERE "Source" = 1 AND "SourceReference" IS NOT NULL;
+
             CREATE TABLE "OrganizationSubscriptions" (
                 "Id" uuid NOT NULL,
                 "OrgId" uuid NOT NULL,
@@ -170,6 +174,7 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
             ALTER TABLE "OrganizationSubscriptions" NO FORCE ROW LEVEL SECURITY;
             ALTER TABLE "OrganizationSubscriptions" DISABLE ROW LEVEL SECURITY;
             DROP TABLE IF EXISTS "OrganizationSubscriptions";
+            DROP INDEX IF EXISTS "IX_OrganizationEntitlements_SubscriptionSourceReference";
             """);
     }
 }

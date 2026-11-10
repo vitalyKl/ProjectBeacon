@@ -399,7 +399,7 @@ public sealed class PostgresEntitlementService(
         if (replaySubscriptionId is { } existingSubscriptionId)
         {
             var existingEntitlementId = await FindConversionEntitlementIdAsync(
-                connection, dbTransaction, existingSubscriptionId, ct);
+                connection, dbTransaction, existingSubscriptionId, request.OrgId, ct);
             if (existingEntitlementId is null)
                 return Result.Failure<OrganizationEntitlement>(
                     "The prior conversion ledger entry exists but its entitlement record is missing.",
@@ -658,6 +658,7 @@ public sealed class PostgresEntitlementService(
         DbConnection connection,
         DbTransaction transaction,
         Guid subscriptionId,
+        Guid orgId,
         CancellationToken ct)
     {
         await using var command = connection.CreateCommand();
@@ -665,11 +666,13 @@ public sealed class PostgresEntitlementService(
         command.CommandText = """
             SELECT "Id" FROM "OrganizationEntitlements"
             WHERE "Source" = @source AND "SourceReference" = @source_reference
+              AND "OrgId" = @org_id
             ORDER BY "CreatedAtUtc" DESC
             LIMIT 1
             """;
         Add(command, "source", DbType.Int16, (short)EntitlementSource.Subscription);
         Add(command, "source_reference", DbType.String, subscriptionId.ToString("D"));
+        Add(command, "org_id", DbType.Guid, orgId);
         var value = await command.ExecuteScalarAsync(ct);
         return value is Guid id ? id : null;
     }
