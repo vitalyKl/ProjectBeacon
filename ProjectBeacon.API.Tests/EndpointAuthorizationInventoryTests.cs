@@ -40,6 +40,9 @@ public sealed class EndpointAuthorizationInventoryTests
             route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/proposals"
             && route.Policy == "Human");
         Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/proposals/mine"
+            && route.Policy == "API token (ContextRead)");
+        Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/accept"
             && route.Policy == "Human");
         Assert.Contains(routes, route =>
