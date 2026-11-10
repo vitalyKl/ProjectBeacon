@@ -18,13 +18,13 @@ public static class CurrentProjectLookup
         CancellationToken ct = default,
         Guid? preferredOrgId = null)
     {
-        if (preferredProjectId is { } preferredProject)
+        if (preferredProjectId is { } preferredProjectIdValue)
         {
             Guid? preferredOrg = null;
             if (isAdmin)
             {
                 preferredOrg = await db.Projects.IgnoreQueryFilters()
-                    .Where(project => project.Id == preferredProject)
+                    .Where(project => project.Id == preferredProjectIdValue)
                     .Select(project => (Guid?)project.OrgId)
                     .FirstOrDefaultAsync(ct);
             }
@@ -39,20 +39,20 @@ public static class CurrentProjectLookup
             }
 
             if (preferredOrg is { } claimedOrg)
-                return (preferredProject, claimedOrg);
+                return (preferredProjectIdValue, claimedOrg);
         }
 
         if (preferredOrgId is { } preferredOrganization && preferredOrganization != Guid.Empty)
         {
-            var preferredProject = await db.ProjectMembers.IgnoreQueryFilters()
+            var preferredProjectRow = await db.ProjectMembers.IgnoreQueryFilters()
                 .Where(member => member.UserId == userId
                     && member.Project.OrgId == preferredOrganization
                     && member.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active)
                 .OrderBy(member => member.JoinedAt)
                 .Select(member => new { member.ProjectId, member.Project.OrgId })
                 .FirstOrDefaultAsync(ct);
-            if (preferredProject is not null)
-                return (preferredProject.ProjectId, preferredProject.OrgId);
+            if (preferredProjectRow is not null)
+                return (preferredProjectRow.ProjectId, preferredProjectRow.OrgId);
 
             var stillOrganizationMember = await db.OrgMembers.IgnoreQueryFilters()
                 .AnyAsync(member => member.UserId == userId && member.OrgId == preferredOrganization, ct);
