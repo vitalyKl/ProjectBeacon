@@ -28,7 +28,7 @@
     }
     @if (!string.IsNullOrEmpty(_markdown))
     {
-        <ChatMarkdown Text="@(_markdown ?? string.Empty)" />
+        <MarkdownView Text="@(_markdown ?? string.Empty)" />
     }
 </MudPaper>
 
