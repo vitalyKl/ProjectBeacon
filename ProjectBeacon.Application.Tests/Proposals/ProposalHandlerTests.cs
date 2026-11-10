@@ -10,6 +10,7 @@ using Domain.Entities.Content;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Context;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Domain.Common;
 using Infrastructure.Audit;
