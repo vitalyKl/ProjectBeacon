@@ -137,7 +137,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
         var acceptedPayloadField = cut.FindComponents<MudBlazor.MudTextField<string>>()
             .Single(field => field.Instance.Label == "Payload to apply when accepted (JSON)");
         Assert.True(acceptedPayloadField.Instance.ReadOnly);
-        Assert.Equal(acceptedPayload, acceptedPayloadField.Instance.Value);
+        Assert.Equal(acceptedPayload, acceptedPayloadField.Instance.GetState(state => state.Value));
     }
 
 }
