@@ -119,7 +119,7 @@ public sealed class PostgresEntitlementService(
 
         var result = await GetEffectiveAsync(orgId, ct);
         if (!result.Success)
-            return Result.Failure<EntitlementDecision>(result);
+            return Result.Failure<EntitlementDecision>(result.Error ?? "Could not read the effective organization entitlement.");
         if (result.Value is null)
             return Result.Ok(new EntitlementDecision(false, "entitlement_missing"));
 
