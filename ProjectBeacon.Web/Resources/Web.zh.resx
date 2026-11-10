@@ -2778,4 +2778,16 @@ orthstar</value>
   <data name="NoTextualChanges" xml:space="preserve">
     <value>没有文本更改。</value>
   </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>文档补丁应用方式</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review 会等待人工审批。Auto 只会应用此配置文件在允许路径内的文档补丁。</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review（人工审批）</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto（应用文档补丁）</value>
+  </data>
 </root>
