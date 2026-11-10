@@ -556,6 +556,57 @@ public sealed class P2AuthorizationHttpTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task AcceptProposal_InvalidAcceptedPayload_Returns400WithoutApplyingProposal()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Payload Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Payload Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var created = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals",
+            new
+            {
+                targetKind = "ProjectDescription",
+                targetId = projectId,
+                operation = "Update",
+                baseRevision = 1,
+                payload = new { description = "Proposed description" },
+                rationaleMarkdown = "Clarifies the project purpose.",
+                idempotencyKey = "invalid-accepted-payload-http-test"
+            },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var proposal = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var proposalId = proposal.GetProperty("id").GetGuid();
+
+        var invalid = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals/{proposalId}/accept",
+            new { acceptedPayload = new[] { "not", "an", "object" } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var projectResponse = await client.GetAsync(
+            $"/v1/projects/{projectId}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, projectResponse.StatusCode);
+        var projectJson = await projectResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.NotEqual("Proposed description", projectJson.GetProperty("description").GetString());
+
+        var inbox = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, inbox.StatusCode);
+        var proposals = await inbox.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Pending", proposals[0].GetProperty("status").GetString());
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
