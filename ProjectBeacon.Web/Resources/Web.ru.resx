@@ -2607,4 +2607,100 @@
   <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
   <data name="Characters" xml:space="preserve"><value>символов</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>Входящие предложения</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>Проверка предложений и изменений проектной базы знаний.</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>Участники могут рассматривать обычные изменения. Решения и ограничения утверждают только владельцы и администраторы.</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>Конфликт</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>Тип цели</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>Автор</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>Подходящих предложений: {0}.</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>Принять выбранные</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>Снять выделение</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>По выбранным фильтрам предложений нет.</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>Предложения с привязкой к ревизии</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>Предложение основано на устаревшей ревизии.</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>Текущая ревизия</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>Подробности предложения</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>Содержимое для применения при принятии (JSON)</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>Сравнить с исходным снимком</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>Исходный снимок</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>Исходный снимок больше недоступен.</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>Предлагаемое содержимое</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>Комментарий к решению</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>Предложение принято и применено.</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>Предложение отклонено.</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>Пакетное принятие: успешно — {0}, ошибок — {1}.</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>Ранее существовавшие элементы на проверке</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>Черновики контекста, ожидающие проверки</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>Элементов на проверке нет.</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>Предлагаемые решения</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>Предлагаемые ограничения</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>Решения по управленческим элементам принимают только владельцы и администраторы проекта или организации.</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>Черновик контекста утверждён.</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>Черновик контекста отклонён и сохранён в истории.</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>Для просмотра входящих предложений требуется членство в проекте.</value>
+  </data>
 </root>
