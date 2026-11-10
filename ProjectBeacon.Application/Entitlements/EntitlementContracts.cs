@@ -1,3 +1,6 @@
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Common;
+
 namespace ProjectBeacon.Application.Entitlements;
 
 /// <summary>Stable product-owned capability keys required by the runtime access boundary.</summary>
@@ -7,8 +10,6 @@ public static class EntitlementFeatureKeys
     public const string Core = "core";
 }
 
-using ProjectBeacon.Application.Admin;
-using ProjectBeacon.Application.Common;
 
 /// <summary>The origin of an organization's effective access grant.</summary>
 public enum EntitlementSource
