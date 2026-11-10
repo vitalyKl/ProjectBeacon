@@ -157,6 +157,7 @@
     {
         <a href="@_pipelineHref" class="@MobileActive("pipeline")"><MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" /><span>@L["Pipeline"]</span></a>
     }
+    <a href="/inbox" class="@MobileActive("inbox")"><MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Small" /><span>@L["ProposalInbox"]</span>@if (_inboxAttentionCount > 0) { <span class="beacon-mobile-badge">@_inboxAttentionCount</span> }</a>
     <a href="/chat" class="@MobileActive("chat")"><MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Small" /><span>@L["Chat"]</span></a>
     <a href="/settings" class="@MobileActive("settings")"><MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" /><span>@L["Settings"]</span></a>
 </nav>
@@ -391,8 +392,46 @@
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        RebuildChrome();
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            RebuildChrome();
+            await RefreshInboxAttentionAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshInboxAttentionAsync()
+    {
+        if (AuthState is null)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        var state = await AuthState;
+        var actor = ActorContextFactory.FromPrincipal(state.User);
+        if (actor.UserId is null)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        await TenantBinder.BindUserAsync(actor);
+        var project = await CurrentProject.HandleAsync(actor);
+        if (project.Value?.Id is not Guid projectId)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        var inbox = await InboxSummary.HandleAsync(projectId, actor);
+        _inboxAttentionCount = inbox.Success && inbox.Value is not null
+            ? inbox.Value.PendingProposals
+                + inbox.Value.ConflictedProposals
+                + inbox.Value.ProposedDecisions
+                + inbox.Value.ProposedConstraints
+                + inbox.Value.NeedsReviewContextSections
+            : 0;
     }
 
     private void RebuildChrome()
@@ -455,6 +494,7 @@
             "board" => segment is "board" or "task",
             "pipeline" => segment == "task" && _pipelineHref.Contains(path, StringComparison.OrdinalIgnoreCase),
             "chat" => segment == "chat",
+            "inbox" => segment == "inbox",
             "settings" => segment == "settings" && !path.StartsWith("settings/agents", StringComparison.OrdinalIgnoreCase)
                 && !path.StartsWith("settings/workstations", StringComparison.OrdinalIgnoreCase),
             _ => false
