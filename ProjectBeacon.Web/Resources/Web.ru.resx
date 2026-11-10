@@ -2703,4 +2703,28 @@
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Для просмотра входящих предложений требуется членство в проекте.</value>
   </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>История содержимого</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>История для этого элемента пока отсутствует.</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>Восстановить эту ревизию</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>Из выбранного снимка создана новая ревизия.</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>Предложения</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>Просмотр предложений, отправленных агентами при работе над задачей.</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>У этой задачи нет предложений.</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>Открыть входящие предложения</value>
+  </data>
 </root>
