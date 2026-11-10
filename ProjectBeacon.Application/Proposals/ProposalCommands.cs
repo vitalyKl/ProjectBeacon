@@ -106,16 +106,19 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuditWriter _auditWriter;
+    private readonly ContentWriter _contentWriter;
     private readonly TimeProvider _timeProvider;
 
     public CreateProposalHandler(
         IBeaconDbFactory dbFactory,
         IAuditWriter auditWriter,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ContentWriter? contentWriter = null)
     {
         _dbFactory = dbFactory;
         _auditWriter = auditWriter;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _contentWriter = contentWriter ?? new ContentWriter();
     }
 
     public async Task<Result<ProposalDto>> HandleAsync(CreateProposalCommand command, CancellationToken ct = default)
