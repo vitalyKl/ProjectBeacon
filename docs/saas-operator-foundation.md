@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, recovery for non-SystemAdministrator operators, end-to-end feature/usage entitlement enforcement, and the broader operations console remain incomplete. The primary SystemAdministrator's lost-authenticator break-glass recovery is implemented on the isolated Control Plane origin.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, TOTP step-up protection and one-time recovery codes for operator MFA are implemented in the current development stack. Billing persistence/provider adapters, granular feature/usage entitlement enforcement, production operations telemetry/log access and data export/deletion remain incomplete. The primary SystemAdministrator also retains deployment-token-protected break-glass recovery.
 
 ## Product boundary
 
