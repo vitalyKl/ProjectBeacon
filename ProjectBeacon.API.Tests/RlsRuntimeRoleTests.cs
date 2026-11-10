@@ -578,7 +578,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "DeviceHostSamples",    // device-scoped host metrics
             "DataProtectionKeys",   // sealed key ring; rows are sealed blobs, no tenant scope
             "PlatformEmailSettings", // global operator SMTP configuration; policy requires unscoped
-            "EmailDeliveryLogs"      // global operator delivery metadata; policy requires unscoped
+            "EmailDeliveryLogs",      // global operator delivery metadata; policy requires unscoped
+            "PlatformServiceHeartbeats" // global service liveness metadata; migration FORCE-RLS policy permits only unscoped platform access
         };
 
         // Carries a ProjectId column but is device-scoped: the ProjectId is optional
