@@ -10,6 +10,7 @@ using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Auth;
 using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Application.Organizations;
 using ProjectBeacon.Application.Persistence;
@@ -586,6 +587,12 @@ public sealed class EfOrganizationAdminService(
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (!await LockOrganizationAsync(db, transaction, orgId, ct))
             return Result.Failure("Organization not found.", ErrorKind.NotFound);
+
+        // Coordinate lifecycle transitions with quota checks and entitlement replacement.
+        // The Org row lock is acquired first; capacity consumers hold only the shared
+        // entitlement lock and perform non-locking lifecycle reads, so neither path deadlocks.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, orgId, ct);
 
         var org = await db.Orgs.FirstOrDefaultAsync(item => item.Id == orgId, ct);
         if (org is null)
