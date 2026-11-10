@@ -86,7 +86,8 @@ public sealed class BillingInvoiceCustomerService(
             || tenant.Unscoped
             || tenant.OrgId is not { } currentOrgId
             || currentOrgId == Guid.Empty
-            || (tenant.LifecycleEnforced && tenant.LifecycleStatus != OrganizationLifecycleStatus.Active))
+            || !tenant.LifecycleEnforced
+            || tenant.LifecycleStatus != OrganizationLifecycleStatus.Active)
             return false;
 
         orgId = currentOrgId;
