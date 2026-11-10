@@ -83,8 +83,22 @@ public sealed class FileWorkspace
         if (!File.Exists(resolved.Value))
             return Result.Failure<string>("file not found");
 
-        var hash = SHA256.HashData(File.ReadAllBytes(resolved.Value));
-        return Result.Ok(Convert.ToHexString(hash).ToLowerInvariant());
+        try
+        {
+            using var stream = new FileStream(
+                resolved.Value,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 64 * 1024,
+                options: FileOptions.SequentialScan);
+            var hash = SHA256.HashData(stream);
+            return Result.Ok(Convert.ToHexString(hash).ToLowerInvariant());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return Result.Failure<string>("file could not be hashed safely");
+        }
     }
 
     public Result WriteFile(string relativePath, string content)
