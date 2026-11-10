@@ -7,6 +7,7 @@ using Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
+using Application.Organizations;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
 using Domain.Enums;
@@ -30,6 +31,8 @@ public static class OrgEndpoints
         app.MapPut("/v1/orgs/{orgId:guid}", UpdateOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}", GetOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs", ListOrgs).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs/{orgId:guid}/export.zip", ExportOrganizationData)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/orgs/{orgId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/orgs/{orgId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -88,6 +91,20 @@ public static class OrgEndpoints
 
     private static OrgDto MapOrgResponse(OrgDto dto) =>
         new(dto.Id, dto.Name, dto.Description, dto.CreatedAt, dto.UpdatedAt);
+
+    private static async Task<IResult> ExportOrganizationData(
+        Guid orgId,
+        HttpContext ctx,
+        IOrganizationDataExportService exportService,
+        CancellationToken ct)
+    {
+        ctx.Response.Headers.CacheControl = "no-store";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        var result = await exportService.ExportAsync(orgId, ctx.GetActor(), ct);
+        return result.Success
+            ? Results.File(result.Value!.Content, "application/zip", result.Value.FileName)
+            : result.FromResult();
+    }
 
     private static async Task<IResult> CreateInvite(
         Guid orgId, [FromBody] CreateInviteBody body, CreateOrgInviteHandler handler, HttpContext ctx)
