@@ -83,17 +83,19 @@ public static class DecisionEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> Accept(Guid projectId, Guid decisionId, AcceptDecisionHandler handler)
+    private static async Task<IResult> Accept(
+        Guid projectId, Guid decisionId, HttpContext context, AcceptDecisionHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(decisionId);
+        var result = await handler.HandleAsync(decisionId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> Deprecate(Guid projectId, Guid decisionId, DeprecateDecisionHandler handler)
+    private static async Task<IResult> Deprecate(
+        Guid projectId, Guid decisionId, HttpContext context, DeprecateDecisionHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(decisionId);
+        var result = await handler.HandleAsync(decisionId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
@@ -103,9 +105,11 @@ public static class DecisionEndpoints
         Guid projectId,
         Guid decisionId,
         [FromBody] SupersedeBody body,
-        SupersedeDecisionHandler handler)
+        HttpContext context,
+        SupersedeDecisionHandler handler,
+        CancellationToken ct)
     {
-        var result = await handler.HandleAsync(decisionId, body.ReplacementId);
+        var result = await handler.HandleAsync(decisionId, body.ReplacementId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
