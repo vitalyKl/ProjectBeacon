@@ -54,6 +54,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         var builder = new StringBuilder();
         builder.AppendLine("## Isolated worktree environment");
         builder.AppendLine("This session runs in a Git snapshot under a temporary worktree. It is not the original project directory.");
+        var projectPrefix = Path.GetRelativePath(_repositoryRoot, _originalWorkingDirectory)
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+        builder.AppendLine("Repository-relative project root: " + (projectPrefix == "." ? "." : projectPrefix));
         builder.AppendLine("Git-ignored files and directories are absent unless explicitly listed in .beacon/worktree-include.");
         if (MissingIgnoredPaths.Count > 0)
             builder.AppendLine("Ignored paths not present in this snapshot: " + string.Join(", ", MissingIgnoredPaths.Take(30)));
