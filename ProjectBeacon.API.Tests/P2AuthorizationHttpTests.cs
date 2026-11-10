@@ -510,6 +510,22 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
+    public async Task ProposalMine_HumanActor_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var projectId = Guid.NewGuid();
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals/mine",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ProposalInbox_NonMember_Returns403()
     {
         await using var factory = new AuthApiFactory();
