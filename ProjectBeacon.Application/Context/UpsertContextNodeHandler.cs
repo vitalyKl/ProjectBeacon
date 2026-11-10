@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
+using Application.Proposals;
 using Domain.Entities.Context;
 using Domain.Enums;
 using Application.Persistence;
@@ -38,6 +40,23 @@ public class UpsertContextNodeHandler
             return Result.Failure<ContextSectionDto>("Title and bodyMarkdown are required.");
 
         await using var db = _dbFactory.CreateDbContext();
+        if (isDraft)
+        {
+            if (command.Actor is not { } draftActor
+                || !await ProposalProjectAuthorization.CanSubmitAsync(
+                    db, draftActor, command.Request.ProjectId, ct))
+                return Result.Forbidden<ContextSectionDto>(
+                    "Project membership or a project-bound ContextRead Actor token is required to create a context draft.");
+        }
+        else if (command.Actor is { } humanActor
+            && (!humanActor.IsHuman
+                || !await ProposalProjectAuthorization.CanWriteAsync(
+                    db, humanActor, command.Request.ProjectId, ct)))
+        {
+            return Result.Forbidden<ContextSectionDto>(
+                "Project membership is required to edit reviewed context.");
+        }
+
         var path = command.Request.Path ?? string.Empty;
         var sectionId = command.Request.SectionId
             ?? command.Request.Title.ToLowerInvariant().Replace(" ", "_");
