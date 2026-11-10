@@ -72,12 +72,14 @@ internal static partial class McpApiTools
 
         // The same Actor retrying the same target/base/payload gets the same key. A changed
         // payload or base revision gets a new key; the server still verifies the author/session.
+        var normalizedRationale = rationale.Trim();
         var canonical = string.Join("\n",
             subtaskId.ToString("D"),
             kind.ToString(),
             targetId.ToString("D"),
             parsedOperation.ToString(),
             baseRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            normalizedRationale,
             payload.ToJsonString());
         var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
         var body = new JsonObject
@@ -87,7 +89,7 @@ internal static partial class McpApiTools
             ["operation"] = parsedOperation.ToString(),
             ["baseRevision"] = baseRevision.Value,
             ["payload"] = payload.DeepClone(),
-            ["rationaleMarkdown"] = rationale.Trim(),
+            ["rationaleMarkdown"] = normalizedRationale,
             ["idempotencyKey"] = "knowledge-propose:" + digest
         };
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/proposals", body, ct);
