@@ -34,6 +34,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         if (command.Request.Kind == WorkstationCommandKind.GitSync)
             return Result.Forbidden<WorkstationCommandDto>(
                 "GitSync must be requested through the project GitSync endpoint.");
+        if (command.Request.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            return Result.Forbidden<WorkstationCommandDto>(
+                "Proposal patches can only be queued by the proposal review workflow.");
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
