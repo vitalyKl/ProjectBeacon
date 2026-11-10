@@ -124,7 +124,13 @@ else
                         {
                             <MudText Typo="Typo.caption">@L["TaskId"]: <a href="@($"/task/{taskId:D}")">@taskId</a></MudText>
                         }
-                        <MudText Typo="Typo.caption">@L["ProposalAuthor"]: @proposal.AuthorKind · @(proposal.AuthorUserId?.ToString("D") ?? proposal.AuthorTokenId?.ToString("D") ?? "—")</MudText>
+                        <MudText Typo="Typo.caption">
+                            @L["ProposalAuthor"]: @proposal.AuthorKind · @proposal.AuthorRole · @proposal.AuthorProfileKey · @(proposal.AuthorUserId?.ToString("D") ?? proposal.AuthorTokenId?.ToString("D") ?? "—")
+                        </MudText>
+                        @if (proposal.SubtaskId is Guid subtaskId)
+                        {
+                            <MudText Typo="Typo.caption">@L["SubtaskId"]: @subtaskId</MudText>
+                        }
                         <MarkdownView Text="@proposal.RationaleMarkdown" />
                         @if (proposal.Status == ProposalStatus.Conflicted)
                         {
@@ -147,14 +153,35 @@ else
                                     </MudButton>
                                     @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
                                     {
+                                        <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
+                                        <MudPaper Elevation="0" Outlined="true" Class="pa-2 proposal-diff">
+                                            @{
+                                                var diff = BuildProposalDiff(
+                                                    ExtractMarkdown(baseSnapshot),
+                                                    ExtractMarkdown(GetEditedPayload(proposal)));
+                                            }
+                                            @if (diff.Count == 0)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@L["NoTextualChanges"]</MudText>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var line in diff)
+                                                {
+                                                    <div class="proposal-diff-line @DiffLineClass(line.Kind)">
+                                                        <span class="proposal-diff-prefix">@line.Prefix</span><code>@line.Text</code>
+                                                    </div>
+                                                }
+                                            }
+                                        </MudPaper>
                                         <MudGrid Spacing="2">
                                             <MudItem xs="12" md="6">
                                                 <MudText Typo="Typo.subtitle2">@L["BaseRevision"]</MudText>
-                                                <MudTextField T="string" Value="@baseSnapshot" ReadOnly="true" Lines="8" Variant="Variant.Outlined" />
+                                                <MarkdownView Text="@ExtractMarkdown(baseSnapshot)" MaxHeight="220" />
                                             </MudItem>
                                             <MudItem xs="12" md="6">
                                                 <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
-                                                <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" />
+                                                <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" MaxHeight="220" />
                                             </MudItem>
                                         </MudGrid>
                                     }
@@ -272,7 +299,9 @@ else
         .Where(item => string.IsNullOrWhiteSpace(_authorFilter)
             || item.AuthorUserId?.ToString("D").Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true
             || item.AuthorTokenId?.ToString("D").Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true
-            || item.AuthorKind.ToString().Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase))
+            || item.AuthorKind.ToString().Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase)
+            || item.AuthorRole?.Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true
+            || item.AuthorProfileKey?.Contains(_authorFilter.Trim(), StringComparison.OrdinalIgnoreCase) == true)
         .ToList();
 
     protected override async Task OnInitializedAsync()
@@ -395,6 +424,73 @@ else
             return string.Empty;
         }
     }
+
+    private sealed record ProposalDiffLine(char Prefix, string Kind, string Text);
+
+    private static string DiffLineClass(string kind) => kind switch
+    {
+        "added" => "is-added",
+        "removed" => "is-removed",
+        _ => "is-context"
+    };
+
+    private static IReadOnlyList<ProposalDiffLine> BuildProposalDiff(string before, string after)
+    {
+        var oldLines = NormalizeDiffLines(before);
+        var newLines = NormalizeDiffLines(after);
+        if (oldLines.SequenceEqual(newLines, StringComparer.Ordinal))
+            return [];
+
+        // Bound CPU and memory for large Markdown targets. These targets are still fully
+        // previewable in the two panes; only the line-by-line LCS rendering is abbreviated.
+        if ((long)oldLines.Length * newLines.Length > 1_000_000)
+            return
+            [
+                new ProposalDiffLine('-', "removed", "[Base text omitted from inline diff: target exceeds the comparison limit.]"),
+                new ProposalDiffLine('+', "added", "[Proposed text omitted from inline diff: target exceeds the comparison limit.]")
+            ];
+
+        var lcs = new int[oldLines.Length + 1, newLines.Length + 1];
+        for (var i = oldLines.Length - 1; i >= 0; i--)
+        {
+            for (var j = newLines.Length - 1; j >= 0; j--)
+                lcs[i, j] = string.Equals(oldLines[i], newLines[j], StringComparison.Ordinal)
+                    ? lcs[i + 1, j + 1] + 1
+                    : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+        }
+
+        var result = new List<ProposalDiffLine>(oldLines.Length + newLines.Length);
+        var oldIndex = 0;
+        var newIndex = 0;
+        while (oldIndex < oldLines.Length || newIndex < newLines.Length)
+        {
+            if (oldIndex < oldLines.Length && newIndex < newLines.Length
+                && string.Equals(oldLines[oldIndex], newLines[newIndex], StringComparison.Ordinal))
+            {
+                result.Add(new ProposalDiffLine(' ', "context", oldLines[oldIndex]));
+                oldIndex++;
+                newIndex++;
+            }
+            else if (oldIndex < oldLines.Length
+                && (newIndex >= newLines.Length || lcs[oldIndex + 1, newIndex] >= lcs[oldIndex, newIndex + 1]))
+            {
+                result.Add(new ProposalDiffLine('-', "removed", oldLines[oldIndex]));
+                oldIndex++;
+            }
+            else
+            {
+                result.Add(new ProposalDiffLine('+', "added", newLines[newIndex]));
+                newIndex++;
+            }
+        }
+
+        return result;
+    }
+
+    private static string[] NormalizeDiffLines(string value) =>
+        (value ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n');
 
     private string ProposalStatusLabel(ProposalStatus status) =>
         status == ProposalStatus.Conflicted ? L["Conflicted"].Value : L[status.ToString()].Value;
