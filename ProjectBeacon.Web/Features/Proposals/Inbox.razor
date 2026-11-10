@@ -212,7 +212,7 @@ else
                 {
                     <MudStack Row="true" Spacing="2">
                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy" OnClick="() => AcceptLegacyDecision(decision)">@L["Accept"]</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => RejectLegacyDecision(decision)">@L["Reject"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Disabled="_busy" OnClick="() => DeprecateLegacyDecision(decision)">@L["Deprecate"]</MudButton>
                     </MudStack>
                 }
                 else
@@ -495,7 +495,7 @@ else
         else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
-    private async Task RejectLegacyDecision(DecisionDto decision)
+    private async Task DeprecateLegacyDecision(DecisionDto decision)
     {
         if (!_canGovernance) return;
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
