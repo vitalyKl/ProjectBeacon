@@ -102,11 +102,12 @@ public sealed class OrganizationDataExportTests : IDisposable
 
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Value);
-        Assert.Equal(1, result.Value.ProjectCount);
-        Assert.Equal(1, result.Value.AttachmentCount);
-        Assert.StartsWith($"projectbeacon-org-{org.Id:N}-export-", result.Value.FileName);
+        var exported = result.Value!;
+        Assert.Equal(1, exported.ProjectCount);
+        Assert.Equal(1, exported.AttachmentCount);
+        Assert.StartsWith($"projectbeacon-org-{org.Id:N}-export-", exported.FileName);
 
-        using var archiveStream = new MemoryStream(result.Value.Content);
+        using var archiveStream = new MemoryStream(exported.Content);
         using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
         var names = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
         Assert.Contains("manifest.json", names);
