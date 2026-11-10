@@ -27,7 +27,11 @@ public sealed class PostgresEntitlementService(
         if (orgId == Guid.Empty)
             return Result.Failure<OrganizationEntitlement?>("Organization id is required.");
 
-        await using var db = dbFactory.CreateDbContext();
+        // Bind the connection to the requested organization explicitly. Do not inherit a
+        // different organization from the current HTTP request or Blazor circuit.
+        var tenant = new TenantContext();
+        tenant.Assign(null, orgId, unscoped: false);
+        await using var db = dbFactory.CreateDbContext(tenant);
         await db.Database.OpenConnectionAsync(ct);
         await using var command = db.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
@@ -103,9 +107,10 @@ public sealed class PostgresEntitlementService(
         if (orgId == Guid.Empty)
             return Result.Ok(new EntitlementDecision(false, "organization_not_found"));
 
-        using (TenantScope.EnterUnscoped())
+        var lifecycleTenant = new TenantContext();
+        lifecycleTenant.Assign(null, orgId, unscoped: false);
+        await using (var lifecycleDb = dbFactory.CreateDbContext(lifecycleTenant))
         {
-            await using var lifecycleDb = dbFactory.CreateDbContext();
             var lifecycleStatus = await lifecycleDb.Orgs.IgnoreQueryFilters()
                 .AsNoTracking()
                 .Where(org => org.Id == orgId)
