@@ -39,12 +39,15 @@ internal sealed class RepoPatchApplyService
         if (!TryReadRequest(payloadJson, expectedProjectId, out var request, out var error))
             return (false, null, error);
 
-        var root = Path.GetFullPath(projectRoot);
+        if (!TryResolvePhysicalDirectory(projectRoot, out var root))
+            return (false, null, "RepoPatchConflict: ProjectRuntimeMissing");
+
         var gitRootResult = await RunGitAsync(root, ["rev-parse", "--show-toplevel"], null, ct);
         if (gitRootResult.ExitCode != 0 || gitRootResult.TimedOut || string.IsNullOrWhiteSpace(gitRootResult.StdOut))
             return (false, null, "RepoPatchConflict: GitRepositoryMissing");
 
-        var repositoryRoot = Path.GetFullPath(gitRootResult.StdOut.Trim());
+        if (!TryResolvePhysicalDirectory(gitRootResult.StdOut.Trim(), out var repositoryRoot))
+            return (false, null, "RepoPatchConflict: GitRepositoryMissing");
         var rootPrefix = Path.GetRelativePath(repositoryRoot, root);
         if (rootPrefix == ".." || rootPrefix.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || Path.IsPathRooted(rootPrefix))
@@ -306,6 +309,50 @@ internal sealed class RepoPatchApplyService
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Resolves every directory segment, not only the leaf. On macOS, for example,
+    /// the temporary directory may be reached through /var while Git reports its
+    /// physical location under /private/var. Comparing lexical paths would reject
+    /// a valid repository as an escape.
+    /// </summary>
+    private static bool TryResolvePhysicalDirectory(string path, out string resolved)
+    {
+        resolved = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var current = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(current))
+                return false;
+
+            var remainder = fullPath[current.Length..];
+            var segments = remainder.Split(
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+            foreach (var segment in segments)
+            {
+                var candidate = Path.Combine(current, segment);
+                var directory = new DirectoryInfo(candidate);
+                var target = directory.ResolveLinkTarget(returnFinalTarget: true);
+                current = Path.GetFullPath(target?.FullName ?? candidate);
+            }
+
+            if (!Directory.Exists(current))
+                return false;
+
+            resolved = Path.TrimEndingDirectorySeparator(current);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static string? ResolveSafeFile(string root, string relativePath)
