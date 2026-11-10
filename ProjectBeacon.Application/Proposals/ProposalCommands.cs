@@ -193,6 +193,41 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         if (projectOrgId is null)
             return Result.Failure<ProposalDto>("Project not found.");
 
+        // Expire overdue rows before applying pending limits. Expiration is a durable
+        // state transition with its own audit event, not merely a read-time filter.
+        var overdue = await db.Proposals
+            .Where(proposal => proposal.ProjectId == command.ProjectId
+                && proposal.Status == ProposalStatus.Pending
+                && proposal.ExpiresAt <= now)
+            .OrderBy(proposal => proposal.ExpiresAt)
+            .Take(500)
+            .ToListAsync(ct);
+        if (overdue.Count > 0)
+        {
+            var expiryActor = new ActorContext(ActorType.Worker, null, false, null, null,
+                command.ProjectId, projectOrgId, ApiTokenCapability.None);
+            foreach (var item in overdue)
+            {
+                if (!item.Expire(now))
+                    continue;
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    expiryActor, "proposal.expired", "Proposal", item.Id.ToString("D"),
+                    projectOrgId, command.ProjectId,
+                    detailsJson: JsonSerializer.Serialize(new { newState = ProposalStatus.Expired.ToString() })));
+            }
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure<ProposalDto>(
+                    "An overdue proposal changed while it was being expired. Retry the submission.",
+                    ErrorKind.Conflict);
+            }
+        }
+
         var pendingInProject = await db.Proposals.CountAsync(
             proposal => proposal.ProjectId == command.ProjectId && proposal.Status == ProposalStatus.Pending, ct);
         if (pendingInProject >= 200)
