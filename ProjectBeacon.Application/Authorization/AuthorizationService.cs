@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 public sealed class AuthorizationService : IAuthorizationService
 {
     /// <summary>
-    /// Workers are forbidden. Devices may only access <see cref="ResourceType.Device"/> and <see cref="ResourceType.WorkstationCommand"/>. Admins are allowed.
+    /// Workers are forbidden. Devices may only access <see cref="ResourceType.Device"/> and <see cref="ResourceType.WorkstationCommand"/>.
+    /// System administrators bypass membership checks only after the target organization is confirmed active.
     /// API tokens may read or write tasks, task steps, and pipeline, or read context, when the capability flag (or Admin) is set. Humans are checked only for project or org administer; other human actions are allowed here.
     /// </summary>
     public async Task<Result> CanAsync(

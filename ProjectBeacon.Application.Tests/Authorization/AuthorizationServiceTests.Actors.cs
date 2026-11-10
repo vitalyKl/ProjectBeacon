@@ -57,19 +57,31 @@ public sealed partial class AuthorizationServiceTests
         Assert.False(r.Success);
     }
 
-    // ── Admin bypass ──────────────────────────────────────────────────────
+    // ── Admin membership bypass (organization lifecycle still applies) ────
 
     [Fact]
     public async Task Admin_ProjectAdminister_ReturnsOk()
     {
-        var r = await _auth.CanAsync(_db, Admin(Guid.NewGuid()), ResourceType.Project, AuthAction.Administer, projectId: Guid.NewGuid(), ct: TestContext.Current.CancellationToken);
+        var org = Org.Create("Active administrator organization");
+        var project = Project.Create("Active administrator project", null, org.Id);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var r = await _auth.CanAsync(_db, Admin(Guid.NewGuid()), ResourceType.Project, AuthAction.Administer,
+            projectId: project.Id, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
     [Fact]
     public async Task Admin_OrgAdminister_ReturnsOk()
     {
-        var r = await _auth.CanAsync(_db, Admin(Guid.NewGuid()), ResourceType.Org, AuthAction.Administer, orgId: Guid.NewGuid(), ct: TestContext.Current.CancellationToken);
+        var org = Org.Create("Active administrator organization");
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var r = await _auth.CanAsync(_db, Admin(Guid.NewGuid()), ResourceType.Org, AuthAction.Administer,
+            orgId: org.Id, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 

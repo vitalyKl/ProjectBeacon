@@ -69,6 +69,12 @@ public sealed partial class AuthorizationServiceTests : IDisposable
             ct: TestContext.Current.CancellationToken);
         Assert.False(adminOrg.Success);
         Assert.Equal(ErrorKind.Forbidden, adminOrg.Kind);
+
+        var adminProject = await _auth.CanAsync(_db, Admin(systemAdmin.Id),
+            ResourceType.Project, AuthAction.Administer, projectId: project.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(adminProject.Success);
+        Assert.Equal(ErrorKind.Forbidden, adminProject.Kind);
     }
 
 
