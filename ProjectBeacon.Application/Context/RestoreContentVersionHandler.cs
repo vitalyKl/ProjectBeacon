@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Application.Proposals;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
@@ -43,6 +44,12 @@ public sealed class RestoreContentVersionHandler
             return Result.Failure<RestoreContentVersionDto>("ExpectedRevision must be greater than zero.");
 
         await using var db = _dbFactory.CreateDbContext();
+        if (!command.Actor.IsHuman
+            || command.Actor.UserId is null
+            || !await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, command.ProjectId, ct))
+            return Result.Forbidden<RestoreContentVersionDto>(
+                "Project membership is required to restore content history.");
+
         var source = await db.ContentVersions.FirstOrDefaultAsync(
             v => v.Id == command.ContentVersionId && v.ProjectId == command.ProjectId, ct);
         if (source is null)
