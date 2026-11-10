@@ -55,6 +55,9 @@ else
                 <MudTextField @bind-Value="_targetId" Label="@L["AuditTargetId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_traceId" Label="@L["AuditTraceId"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
                 <MudTextField @bind-Value="_actorKind" Label="@L["AuditActorKind"]" Placeholder="Human / ApiToken / Device / Worker / System" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" md="3">
@@ -178,6 +181,7 @@ else
     private string _actorDeviceId = string.Empty;
     private string _targetType = string.Empty;
     private string _targetId = string.Empty;
+    private string _traceId = string.Empty;
     private string _actorKind = string.Empty;
     private string _outcome = string.Empty;
     private string _fromUtc = string.Empty;
@@ -228,7 +232,7 @@ else
 
     private async Task ClearFilters()
     {
-        _action = _orgId = _projectId = _actorUserId = _actorTokenId = _actorDeviceId = _targetType = _targetId = _actorKind = _outcome = _fromUtc = _toUtc = string.Empty;
+        _action = _orgId = _projectId = _actorUserId = _actorTokenId = _actorDeviceId = _targetType = _targetId = _traceId = _actorKind = _outcome = _fromUtc = _toUtc = string.Empty;
         _pageNumber = 1;
         await LoadPage();
     }
@@ -280,7 +284,8 @@ else
                 actorKind, actorUserId, outcome, _pageNumber, PageSize,
                 actorTokenId, actorDeviceId,
                 string.IsNullOrWhiteSpace(_targetType) ? null : _targetType.Trim(),
-                string.IsNullOrWhiteSpace(_targetId) ? null : _targetId.Trim()));
+                string.IsNullOrWhiteSpace(_targetId) ? null : _targetId.Trim(),
+                TraceId: string.IsNullOrWhiteSpace(_traceId) ? null : _traceId.Trim()));
         }
         catch (ArgumentException ex)
         {
@@ -307,6 +312,7 @@ else
         AddQuery(query, "actorDeviceId", _actorDeviceId);
         AddQuery(query, "targetType", _targetType);
         AddQuery(query, "targetId", _targetId);
+        AddQuery(query, "traceId", _traceId);
         AddQuery(query, "actorKind", _actorKind);
         AddQuery(query, "outcome", _outcome);
         AddQuery(query, "fromUtc", _fromUtc);
