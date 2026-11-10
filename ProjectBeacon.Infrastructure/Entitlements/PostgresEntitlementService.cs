@@ -259,11 +259,11 @@ public sealed class PostgresEntitlementService(
             Add(lookup, "active", DbType.Int16, (short)EntitlementStatus.Active);
             Add(lookup, "scheduled", DbType.Int16, (short)EntitlementStatus.Scheduled);
             var value = await lookup.ExecuteScalarAsync(ct);
-            if (value is not Guid orgId)
+            if (value is not Guid targetOrgId)
                 return Result.Failure("Active or scheduled entitlement not found.", ErrorKind.NotFound);
 
             await EntitlementCapacityLock.AcquireOrganizationAsync(
-                db.Database, transaction, orgId, ct);
+                db.Database, transaction, targetOrgId, ct);
         }
 
         await using var command = connection.CreateCommand();
