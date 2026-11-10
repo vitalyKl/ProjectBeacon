@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Auth;
 using Application.Common;
 using Application.Authorization;
+using Application.Entitlements;
 using Application.Identity;
 using Application.Persistence;
 using Application.Projects;
@@ -184,6 +185,101 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateOrgInvite_ReservesConfiguredMemberCapacity()
+    {
+        var admin = await SeedAdminAsync();
+        var org = Org.Create("Seat limited org");
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var evaluator = new MemberLimitEvaluator(2);
+        var handler = new CreateOrgInviteHandler(
+            Factory(), _mail, _auth, _open, entitlements: evaluator);
+
+        var first = await handler.HandleAsync(
+            new CreateOrgInviteRequest(org.Id, "first@test.com", MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+
+        var second = await handler.HandleAsync(
+            new CreateOrgInviteRequest(org.Id, "second@test.com", MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(second.Success);
+        Assert.Equal("entitlement_limit_exceeded", second.ErrorCode);
+        Assert.Equal(2L, evaluator.LastRequirement?.CurrentUsage);
+        Assert.Equal(1, await _db.OrgInvites.IgnoreQueryFilters()
+            .CountAsync(invite => invite.OrgId == org.Id && invite.Status == InviteStatus.Pending,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AcceptOrgInvite_RechecksMemberCapacityAndLeavesInvitePendingWhenFull()
+    {
+        var admin = await SeedAdminAsync();
+        var invitedUser = User.Create("member", "member@seat-limited.test", "hash");
+        var org = Org.Create("Full org");
+        _db.Users.Add(invitedUser);
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var created = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(org.Id, invitedUser.Email, MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accepted = await new AcceptInviteHandler(
+            Factory(), entitlements: new MemberLimitEvaluator(1)).HandleAsync(
+                new AcceptInviteRequest(created.Value!.Token, Human(invitedUser.Id, false)),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(accepted.Success);
+        Assert.Equal("entitlement_limit_exceeded", accepted.ErrorCode);
+        Assert.False(await _db.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == org.Id && member.UserId == invitedUser.Id,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(InviteStatus.Pending, (await _db.OrgInvites.IgnoreQueryFilters()
+            .SingleAsync(invite => invite.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
+    public async Task AcceptProjectInvite_CannotBypassOrganizationMemberCapacity()
+    {
+        var admin = await SeedAdminAsync();
+        var invitedUser = User.Create("project-member", "project-member@seat-limited.test", "hash");
+        var org = Org.Create("Project invite full org");
+        var project = Project.Create("Project", null, org.Id);
+        _db.Users.Add(invitedUser);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        _db.ProjectMembers.Add(ProjectMember.Create(project.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var created = await new CreateProjectInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateProjectInviteRequest(project.Id, invitedUser.Email, MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accepted = await new AcceptInviteHandler(
+            Factory(), entitlements: new MemberLimitEvaluator(1)).HandleAsync(
+                new AcceptInviteRequest(created.Value!.Token, Human(invitedUser.Id, false)),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(accepted.Success);
+        Assert.Equal("entitlement_limit_exceeded", accepted.ErrorCode);
+        Assert.False(await _db.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == org.Id && member.UserId == invitedUser.Id,
+            TestContext.Current.CancellationToken));
+        Assert.False(await _db.ProjectMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.ProjectId == project.Id && member.UserId == invitedUser.Id,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(InviteStatus.Pending, (await _db.ProjectInvites.IgnoreQueryFilters()
+            .SingleAsync(invite => invite.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task SuspendedOrganizationInvite_CannotBePreviewedOrAccepted()
     {
         var admin = await SeedAdminAsync();
@@ -233,4 +329,25 @@ public sealed class InviteAndPasswordTests : IDisposable
         Assert.False(second.Success);
         Assert.Equal("Invite already pending.", second.Error);
     }
+
+    private sealed class MemberLimitEvaluator(long limit) : IEntitlementEvaluator
+    {
+        public EntitlementRequirement? LastRequirement { get; private set; }
+
+        public Task<Result<EntitlementDecision>> EvaluateAsync(
+            Guid orgId,
+            EntitlementRequirement requirement,
+            CancellationToken ct = default)
+        {
+            LastRequirement = requirement;
+            var allowed = requirement.CurrentUsage <= limit
+                && requirement.RequestedUnits <= limit - requirement.CurrentUsage;
+            return Task.FromResult(Result.Ok(new EntitlementDecision(
+                allowed,
+                allowed ? null : "limit_exceeded",
+                requirement.CurrentUsage,
+                limit)));
+        }
+    }
+
 }
