@@ -216,6 +216,33 @@ public sealed class DatabaseAdminGateTests : IDisposable
         Assert.Contains("authenticator verification", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData(OperatorRole.Support, true)]
+    [InlineData(OperatorRole.Billing, false)]
+    [InlineData(OperatorRole.Auditor, true)]
+    public async Task RequireAsync_EnforcesOperationsReadForPersistedRoles(
+        OperatorRole role, bool expected)
+    {
+        _admin.AssignOperatorRole(role.ToString());
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var access = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true),
+            OperatorPermission.OperationsRead,
+            ct: TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, access.Success);
+        if (expected)
+        {
+            Assert.NotNull(access.Value);
+            Assert.True(access.Value.HasPermission(OperatorPermission.OperationsRead));
+        }
+        else
+        {
+            Assert.Equal(ErrorKind.Forbidden, access.Kind);
+        }
+    }
+
     private static ActorContext Human(Guid userId, bool isAdmin) =>
         new(ActorType.Human, userId, isAdmin, null, null, null, null, ApiTokenCapability.None);
 }
