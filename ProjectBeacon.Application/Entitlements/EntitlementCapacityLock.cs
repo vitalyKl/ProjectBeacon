@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Entitlements;
 
 using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
