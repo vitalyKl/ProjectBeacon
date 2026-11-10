@@ -116,11 +116,8 @@ public static class ProposalPolicyCatalog
                 var supported = IsSupported(target, operation);
                 var autoAllowed = CanAutoApply(target, operation);
                 var mode = valid
-                    && policies.TryGetValue(Key(target, operation), out var configured)
-                    && Enum.TryParse<ProposalDecisionMode>(configured, true, out var parsed)
-                    && Enum.IsDefined(parsed)
-                        ? parsed
-                        : ProposalDecisionMode.Manual;
+                    ? GetMode(project.ProposalPoliciesJson, target, operation)
+                    : ProposalDecisionMode.Manual;
                 if (!autoAllowed)
                     mode = ProposalDecisionMode.Manual;
 
