@@ -20,7 +20,7 @@ public sealed class TenantContextBinder
 
     public async Task BindUserAsync(ActorContext actor, CancellationToken ct = default)
     {
-        if (_tenant.ProjectId is not null || _tenant.Unscoped)
+        if (_tenant.ProjectId is not null || _tenant.OrgId is not null || _tenant.Unscoped)
             return;
         if (actor.UserId is null)
             return;
