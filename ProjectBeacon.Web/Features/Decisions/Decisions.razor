@@ -4,6 +4,8 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Decisions
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Persistence
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
@@ -15,6 +17,8 @@
 @inject AcceptDecisionHandler AcceptDecision
 @inject DeprecateDecisionHandler DeprecateDecision
 @inject SupersedeDecisionHandler SupersedeDecision
+@inject ListContentVersionsHandler ContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Decisions"]</PageTitle>
@@ -104,6 +108,29 @@ else
                         @L["Supersede"]: @earlier.Title
                     </MudButton>
                 }
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
+                    <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_selectedHistory.Count})")">
+                        @if (_selectedHistory.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
+                        }
+                        @foreach (var version in _selectedHistory)
+                        {
+                            <MudPaper @key="version.Id" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">rev. @version.Revision</MudText>
+                                    <MudText Typo="Typo.caption"><LocalTime Value="version.At" Format="g" /></MudText>
+                                    <MudSpacer />
+                                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                                               Disabled="_busy || version.Revision == _selected.Revision"
+                                               OnClick="() => RestoreSelectedVersion(version)">@L["RestoreRevision"]</MudButton>
+                                </MudStack>
+                                <MudText Typo="Typo.caption">@version.ChangedByType · @version.ChangedById</MudText>
+                                <MarkdownView Text="@DecisionSnapshotMarkdown(version.ContentJson)" MaxHeight="140" />
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
                 <MudStack Row="true" Spacing="1" Class="mt-3">
                     @if (_selected.Status == DecisionStatus.Proposed)
                     {
@@ -149,6 +176,7 @@ else
     private string _body = string.Empty;
     private string _consequences = string.Empty;
     private DecisionDto? _selected;
+    private List<ContentVersionDto> _selectedHistory = [];
     private DecisionDto? _superseding;
     private Guid? _replacementId;
     private bool _loading = true;
@@ -216,10 +244,67 @@ else
         await Reload();
     }
 
-    private void Select(DecisionDto? decision)
+    private async Task Select(DecisionDto? decision)
     {
         _selected = decision;
         _detailOpen = decision is not null;
+        await LoadSelectedHistory();
+    }
+
+    private async Task LoadSelectedHistory()
+    {
+        if (_project is null || _selected is null)
+        {
+            _selectedHistory = [];
+            return;
+        }
+
+        var history = await ContentVersions.HandleAsync(
+            _project.Id, ContentTargetKind.Decision, _selected.Id, 50);
+        _selectedHistory = history.Success ? history.Value!.ToList() : [];
+        if (!history.Success)
+            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreSelectedVersion(ContentVersionDto version)
+    {
+        if (_project is null || _selected is null)
+            return;
+
+        var decisionId = _selected.Id;
+        var result = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+            _project.Id, version.Id, _selected.Revision, _actor,
+            ContentTargetKind.Decision, decisionId));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+
+        await Reload();
+        _selected = _decisions.FirstOrDefault(item => item.Id == decisionId);
+        await LoadSelectedHistory();
+        Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+    }
+
+    private static string DecisionSnapshotMarkdown(string json)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var fields = new[] { "title", "context", "decisionBody", "consequences" };
+            return string.Join(Environment.NewLine + Environment.NewLine,
+                fields.Where(field => root.TryGetProperty(field, out _))
+                    .Select(field => root.GetProperty(field).ValueKind == System.Text.Json.JsonValueKind.String
+                        ? root.GetProperty(field).GetString()
+                        : null)
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private void StartSupersede(DecisionDto decision)
