@@ -1435,6 +1435,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<bool>("TotpEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("TotpRecoveryCodeHashesJson")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<string>("TotpSecretCipher")
                         .IsRequired()
                         .HasMaxLength(500)
