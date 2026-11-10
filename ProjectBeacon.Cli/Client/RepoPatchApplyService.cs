@@ -223,12 +223,14 @@ internal sealed class RepoPatchApplyService
             || !BuiltInAgentProfiles.IsWithinDefaults(relativePath, DocumentationDefaults))
             return null;
 
-        var fullRoot = Path.GetFullPath(root)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullRoot = Path.GetFullPath(root);
         var candidate = Path.GetFullPath(Path.Combine(
             fullRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!candidate.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison))
+        var relative = Path.GetRelativePath(fullRoot, candidate);
+        if (Path.IsPathRooted(relative)
+            || relative == ".."
+            || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
             return null;
 
         var current = fullRoot;
@@ -308,15 +310,12 @@ internal sealed class RepoPatchApplyService
             RedirectStandardError = true,
             CreateNoWindow = true
         };
-        start.ArgumentList.Add("--no-pager");
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add("core.hooksPath=" + Path.Combine(Path.GetTempPath(), "projectbeacon-empty-hooks"));
-        start.ArgumentList.Add("apply");
-        // The caller supplies subcommands as argument[0]; discard the sentinel above for rev-parse.
-        start.ArgumentList.Clear();
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        start.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
+        start.Environment.Remove("GIT_CONFIG_COUNT");
+        start.Environment.Remove("GIT_CONFIG_PARAMETERS");
         start.Environment["GIT_PAGER"] = "cat";
         start.Environment["PAGER"] = "cat";
         start.Environment.Remove("GIT_DIR");
