@@ -6,6 +6,7 @@ using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
@@ -20,6 +21,7 @@ public sealed class OperatorRoleAdminServiceTests : IDisposable
     private readonly IBeaconDbFactory _factory;
     private readonly User _admin;
     private readonly User _candidate;
+    private readonly CapturingSessionVersionCache _sessionVersions = new();
     private readonly OperatorRoleAdminService _service;
 
     public OperatorRoleAdminServiceTests()
@@ -32,7 +34,7 @@ public sealed class OperatorRoleAdminServiceTests : IDisposable
         _candidate = User.Create("support-user", "support@example.test", "hash");
         _seedDb.Users.AddRange(_admin, _candidate);
         _seedDb.SaveChanges();
-        _service = new OperatorRoleAdminService(_factory, new EfAuditWriter(), TimeProvider.System);
+        _service = new OperatorRoleAdminService(_factory, new EfAuditWriter(), TimeProvider.System, _sessionVersions);
     }
 
     public void Dispose()
@@ -53,6 +55,7 @@ public sealed class OperatorRoleAdminServiceTests : IDisposable
         Assert.False(_candidate.IsAdmin, "Support must not inherit the legacy customer-admin bypass.");
         Assert.Equal(nameof(OperatorRole.Support), _candidate.OperatorRole);
         Assert.Equal(1, _candidate.SessionVersion);
+        Assert.Equal(new[] { _candidate.Id }, _sessionVersions.Invalidated);
 
         var gate = new DatabaseAdminGate(_factory);
         var supportControlContext = Human(_candidate.Id, isAdmin: true);
@@ -77,6 +80,7 @@ public sealed class OperatorRoleAdminServiceTests : IDisposable
         Assert.False(_candidate.IsAdmin);
         Assert.Null(_candidate.OperatorRole);
         Assert.Equal(2, _candidate.SessionVersion);
+        Assert.Equal(new[] { _candidate.Id, _candidate.Id }, _sessionVersions.Invalidated);
 
         var revoked = await gate.RequireAsync(supportControlContext, OperatorPermission.OrganizationsRead);
         Assert.False(revoked.Success);
@@ -109,6 +113,21 @@ public sealed class OperatorRoleAdminServiceTests : IDisposable
         Assert.Contains(result.Value!, item => item.UserId == _candidate.Id
             && item.OperatorRole is null && item.Email == _candidate.Email);
         Assert.DoesNotContain("test-secret-cipher", System.Text.Json.JsonSerializer.Serialize(result.Value));
+    }
+
+    private sealed class CapturingSessionVersionCache : IUserSessionVersionCache
+    {
+        public List<Guid> Invalidated { get; } = [];
+
+        public bool TryGet(Guid userId, out UserSessionVersionSnapshot? snapshot)
+        {
+            snapshot = null;
+            return false;
+        }
+
+        public void Set(Guid userId, UserSessionVersionSnapshot snapshot) { }
+
+        public void Invalidate(Guid userId) => Invalidated.Add(userId);
     }
 
     private async Task<AdminActor> SystemAdminAsync()
