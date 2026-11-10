@@ -164,8 +164,10 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     public async Task Supersede_Proposed_Fails()
     {
         var create = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
-        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", null), TestContext.Current.CancellationToken);
-        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestContext.Current.CancellationToken);
+        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", null, HumanActor()), TestContext.Current.CancellationToken);
+        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null, HumanActor()), TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+        Assert.True(second.Success, second.Error);
         var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var result = await supersede.HandleAsync(first.Value!.Id, second.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
