@@ -10,7 +10,6 @@ using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Enums;
-using ProjectBeacon.Infrastructure.Data;
 
 public sealed record IssueBillingInvoiceRequest(
     Guid OrgId,
@@ -48,7 +47,6 @@ public sealed class BillingInvoiceAdminService(
         if (limit is < 1 or > MaximumListSize)
             throw new ArgumentOutOfRangeException(nameof(limit), $"Limit must be between 1 and {MaximumListSize}.");
 
-        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext(GlobalTenant());
         await db.Database.OpenConnectionAsync(ct);
         await using var command = db.Database.GetDbConnection().CreateCommand();
@@ -81,7 +79,6 @@ public sealed class BillingInvoiceAdminService(
         var now = timeProvider.GetUtcNow();
         ValidateIssueRequest(request, now);
 
-        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext(GlobalTenant());
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var connection = db.Database.GetDbConnection();
@@ -179,7 +176,6 @@ public sealed class BillingInvoiceAdminService(
 
         var reference = paymentReference.Trim();
         var now = timeProvider.GetUtcNow();
-        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext(GlobalTenant());
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var connection = db.Database.GetDbConnection();
@@ -266,7 +262,6 @@ public sealed class BillingInvoiceAdminService(
 
         var now = timeProvider.GetUtcNow();
         var reason = reasonCode.Trim();
-        using var unscoped = TenantScope.EnterUnscoped();
         await using var db = dbFactory.CreateDbContext(GlobalTenant());
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var connection = db.Database.GetDbConnection();
