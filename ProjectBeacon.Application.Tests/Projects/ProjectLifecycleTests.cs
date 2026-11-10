@@ -96,7 +96,7 @@ public sealed class ProjectLifecycleTests : IDisposable
 
         Assert.False(second.Success);
         Assert.Equal(ErrorKind.Unavailable, second.Kind);
-        Assert.Equal(1, await _db.Projects.IgnoreQueryFilters()
+        Assert.Equal(1L, await _db.Projects.IgnoreQueryFilters()
             .LongCountAsync(project => project.OrgId == orgId, TestContext.Current.CancellationToken));
     }
 
