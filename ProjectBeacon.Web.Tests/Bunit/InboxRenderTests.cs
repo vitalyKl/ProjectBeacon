@@ -134,7 +134,10 @@ public sealed class InboxRenderTests : BUnitRenderBase
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
         Assert.Contains("The accepted project goal", cut.Markup);
         Assert.Contains("Clarifies the agreed project goal.", cut.Markup);
-        Assert.DoesNotContain("Payload to apply when accepted", cut.Markup);
+        var acceptedPayloadField = cut.FindComponents<MudBlazor.MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Payload to apply when accepted");
+        Assert.True(acceptedPayloadField.Instance.ReadOnly);
+        Assert.Equal(acceptedPayload, acceptedPayloadField.Instance.Value);
     }
 
 }
