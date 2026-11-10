@@ -34,7 +34,8 @@ public sealed record AuditQuery(
     Guid? ActorTokenId = null,
     Guid? ActorDeviceId = null,
     string? TargetType = null,
-    string? TargetId = null);
+    string? TargetId = null,
+    string? TraceId = null);
 
 public sealed record AuditEntry(
     Guid Id,
