@@ -1342,41 +1342,41 @@ internal static class ProposalContentValidation
     {
         switch (kind)
         {
-                case ContentTargetKind.ContextSection:
+            case ContentTargetKind.ContextSection:
                 {
                     var target = await db.ContextSections.FirstOrDefaultAsync(
                         item => item.Id == targetId && item.ProjectId == projectId, ct);
                     return target is null ? null : new ProposalTarget(target, target.Revision,
                         target.ReviewState == ContextReviewState.Reviewed);
                 }
-                case ContentTargetKind.Decision:
+            case ContentTargetKind.Decision:
                 {
                     var target = await db.Decisions.FirstOrDefaultAsync(
                         item => item.Id == targetId && item.ProjectId == projectId, ct);
                     return target is null ? null : new ProposalTarget(target, target.Revision,
                         target.Status == DecisionStatus.Accepted);
                 }
-                case ContentTargetKind.Constraint:
+            case ContentTargetKind.Constraint:
                 {
                     var target = await db.Constraints.FirstOrDefaultAsync(
                         item => item.Id == targetId && item.ProjectId == projectId, ct);
                     return target is null ? null : new ProposalTarget(target, target.Revision,
                         target.Status == ConstraintStatus.Active);
                 }
-                case ContentTargetKind.Milestone:
+            case ContentTargetKind.Milestone:
                 {
                     var target = await db.Milestones.FirstOrDefaultAsync(
                         item => item.Id == targetId && item.ProjectId == projectId, ct);
                     return target is null ? null : new ProposalTarget(target, target.Revision, true);
                 }
-                case ContentTargetKind.ProjectDescription:
+            case ContentTargetKind.ProjectDescription:
                 {
                     if (targetId != projectId)
                         return null;
                     var target = await db.Projects.FirstOrDefaultAsync(item => item.Id == projectId, ct);
                     return target is null ? null : new ProposalTarget(target, target.Revision, true);
                 }
-                case ContentTargetKind.TaskDescription:
+            case ContentTargetKind.TaskDescription:
                 {
                     var target = await db.Tasks.FirstOrDefaultAsync(
                         item => item.Id == targetId && item.ProjectId == projectId, ct);
