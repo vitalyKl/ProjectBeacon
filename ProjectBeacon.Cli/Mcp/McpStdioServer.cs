@@ -204,6 +204,8 @@ public static partial class McpStdioServer
                     Arg(arguments, "path"),
                     Arg(arguments, "symbolName"),
                     OptInt(arguments, "line") ?? 1), FormatCallers),
+                McpToolNames.HashFile => TextResult(id, workspace.HashFile(Arg(arguments, "path")), hash => hash),
+                McpToolNames.HashText => Result(id, Content(HashText(Arg(arguments, "content")))),
                 McpToolNames.HashRange => TextResult(id, index.HashRange(
                     Arg(arguments, "path"),
                     OptInt(arguments, "startLine") ?? 0,
