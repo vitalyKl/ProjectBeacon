@@ -5,6 +5,7 @@
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Milestones
+@using ProjectBeacon.Application.Proposals
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
@@ -15,6 +16,7 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
+@inject ListProposalsHandler ListProposals
 @inject WorkspaceIndexHandler WorkspaceIndex
 @inject WorkspaceReadHandler WorkspaceRead
 @inject WorkspaceWriteHandler WorkspaceWrite
@@ -230,6 +232,47 @@ else
     <MudTabPanel Text="@L["Context"]">
         <TaskContextPanel Task="_task" />
     </MudTabPanel>
+    <MudTabPanel Text="@($"{L["TaskProposals"]} ({_taskProposals.Count})")">
+        <MudStack Spacing="2" Class="pa-2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.body2">@L["TaskProposalsHint"]</MudText>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ReloadTaskProposals" Disabled="_busy">
+                    @L["Refresh"]
+                </MudButton>
+            </MudStack>
+            @if (_taskProposals.Count == 0)
+            {
+                <EmptyState>@L["NoTaskProposals"]</EmptyState>
+            }
+            @foreach (var proposal in _taskProposals)
+            {
+                <MudPaper @key="proposal.Id" Elevation="0" Outlined="true" Class="pa-3">
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.subtitle2">@proposal.TargetKind</MudText>
+                            <StatusChip Color="@TaskProposalColor(proposal.Status)" Label="@TaskProposalStatus(proposal.Status)" />
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption">rev. @proposal.BaseRevision</MudText>
+                        </MudStack>
+                        <MarkdownView Text="@proposal.RationaleMarkdown" />
+                        @if (proposal.Status == ProposalStatus.Conflicted)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">
+                                @L["ProposalConflict"]: @proposal.ConflictReason
+                            </MudAlert>
+                        }
+                        @if (proposal.Status == ProposalStatus.Accepted)
+                        {
+                            <MudText Typo="Typo.caption">@L["AppliedRevision"]: @(proposal.AppliedRevision?.ToString() ?? "—")</MudText>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+            <MudButton Href="/inbox" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inbox">
+                @L["OpenProposalInbox"]
+            </MudButton>
+        </MudStack>
+    </MudTabPanel>
     <MudTabPanel Text="@L["TaskWorkspace"]">
         <MudStack Spacing="3" Class="pa-2">
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
@@ -304,6 +347,7 @@ else
     private bool _busy;
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
+    private List<ProposalDto> _taskProposals = [];
     private List<TaskWorkspaceSectionSummaryDto> _workspaceSections = [];
     private TaskWorkspaceSectionDto? _selectedWorkspace;
     private string _workspaceKey = "notes/human-input";
@@ -455,8 +499,38 @@ else
             _labels = labels.Success ? labels.Value!.ToList() : [];
             var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId)));
             _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+            await ReloadTaskProposals();
         }
     }
+
+    private async Task ReloadTaskProposals()
+    {
+        if (_task is null || !_actorContext.IsHuman)
+        {
+            _taskProposals = [];
+            return;
+        }
+
+        var proposals = await ListProposals.HandleAsync(
+            new ListProposalsQuery(_task.ProjectId, TaskId: TaskId, Limit: 100),
+            _actorContext);
+        _taskProposals = proposals.Success ? proposals.Value!.ToList() : [];
+    }
+
+    private string TaskProposalStatus(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Pending => L["Pending"].Value,
+        ProposalStatus.Conflicted => L["Conflicted"].Value,
+        _ => L[status.ToString()].Value
+    };
+
+    private static Color TaskProposalColor(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Pending => Color.Warning,
+        ProposalStatus.Conflicted => Color.Error,
+        ProposalStatus.Accepted => Color.Success,
+        _ => Color.Default
+    };
 
     private async Task OnStatusChanged(TaskItemStatus status)
     {
