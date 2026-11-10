@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Auth;
 using Application.Persistence;
+using Application.Security;
 using Domain.Entities.Identity;
 using Infrastructure.Data;
 using Infrastructure.Security;
@@ -39,7 +40,8 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var initialSessionVersion = admin.SessionVersion;
 
-        var result = await CreateHandler().HandleAsync("deployment-break-glass-token",
+        var sessionVersions = new RecordingSessionVersionCache();
+        var result = await CreateHandler(sessionVersions).HandleAsync("deployment-break-glass-token",
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
@@ -47,6 +49,7 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         Assert.Equal(admin.Id, result.Value.UserId);
         Assert.True(result.Value.AuthenticatorReset);
         Assert.Equal(32, result.Value.Password.Length);
+        Assert.Equal(admin.Id, sessionVersions.InvalidatedUserId);
 
         await _db.Entry(admin).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(initialSessionVersion + 1, admin.SessionVersion);
@@ -94,7 +97,7 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         Assert.Equal("protected-totp-secret", admin.TotpSecretCipher);
     }
 
-    private RecoverAdminHandler CreateHandler()
+    private RecoverAdminHandler CreateHandler(IUserSessionVersionCache? sessionVersions = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -102,6 +105,22 @@ public sealed class RecoverAdminHandlerTests : IDisposable
                 ["BOOTSTRAP_ADMIN_TOKEN"] = "deployment-break-glass-token"
             })
             .Build();
-        return new RecoverAdminHandler(_factory, _passwords, configuration);
+        return new RecoverAdminHandler(_factory, _passwords, configuration,
+            sessionVersions: sessionVersions);
+    }
+
+    private sealed class RecordingSessionVersionCache : IUserSessionVersionCache
+    {
+        public Guid? InvalidatedUserId { get; private set; }
+
+        public bool TryGet(Guid userId, out UserSessionVersionSnapshot? snapshot)
+        {
+            snapshot = null;
+            return false;
+        }
+
+        public void Set(Guid userId, UserSessionVersionSnapshot snapshot) { }
+
+        public void Invalidate(Guid userId) => InvalidatedUserId = userId;
     }
 }
