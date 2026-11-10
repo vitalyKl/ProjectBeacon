@@ -119,6 +119,8 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
         Assert.False(await _service.CanViewAsync(actor, TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             _service.ListAsync(actor, ct: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            _service.GetAsync(_invoiceA, actor, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -136,6 +138,7 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
     private Guid InsertInvoice(Guid orgId, string number)
     {
         var now = DateTimeOffset.UtcNow;
+        var invoiceId = Guid.NewGuid();
         using var command = _connection.CreateCommand();
         command.CommandText = """
             INSERT INTO "BillingInvoices"
@@ -146,7 +149,7 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
                 (@id, @org_id, @number, @description, @amount, @currency,
                  @issued, @due, @status, NULL, NULL, NULL, NULL)
             """;
-        Add(command, "id", DbType.Guid, Guid.NewGuid());
+        Add(command, "id", DbType.Guid, invoiceId);
         Add(command, "org_id", DbType.Guid, orgId);
         Add(command, "number", DbType.String, number);
         Add(command, "description", DbType.String, "Manual invoice");
@@ -156,7 +159,7 @@ public sealed class BillingInvoiceCustomerServiceTests : IDisposable
         Add(command, "due", DbType.String, now.AddDays(14).ToString("O", CultureInfo.InvariantCulture));
         Add(command, "status", DbType.Int32, (int)BillingInvoiceStatus.Open);
         command.ExecuteNonQuery();
-        return (Guid)command.Parameters["@id"].Value;
+        return invoiceId;
     }
 
     private static ActorContext Actor(User user, Guid orgId) =>
