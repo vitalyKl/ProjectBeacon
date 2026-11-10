@@ -68,7 +68,7 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         var initial = await list.HandleAsync(_projectId, MemberActor(), TestContext.Current.CancellationToken);
 
         Assert.True(initial.Success, initial.Error);
-        Assert.Equal(18, initial.Value!.Count);
+        Assert.Equal(21, initial.Value!.Count);
         Assert.All(initial.Value!, item =>
             Assert.Equal(ProposalDecisionMode.Manual, item.Mode));
 
@@ -182,6 +182,7 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         Assert.Equal(1, project.ProposalPolicyRevision);
         Assert.Equal("{}", project.ProposalPoliciesJson);
     }
+
     [Fact]
     public async Task RepoPatchAutoMode_CanOnlyBeEnabledByOwnerAdmin()
     {
