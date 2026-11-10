@@ -46,6 +46,82 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
             ], ActorContextFactory.DeviceTokenAuthType));
 
     [Fact]
+    public async Task OrganizationOwnerWithoutProjectMembership_ScopesToOrganizationOnly()
+    {
+        var org = Org.Create("Org-only tenant");
+        var user = User.Create("org-only-http", "org-only-http@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        Guid? scopedProject = Guid.Empty;
+        Guid? scopedOrg = Guid.Empty;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scopedProject = TenantScope.CurrentProjectId;
+            scopedOrg = TenantScope.CurrentOrgId;
+            return Task.CompletedTask;
+        });
+        var services = new ServiceCollection();
+        services.AddScoped<ITenantContext>(_ => tenant);
+        using var provider = services.BuildServiceProvider();
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "false")
+            ], "Cookies")),
+            RequestServices = provider
+        };
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Null(scopedProject);
+        Assert.Equal(org.Id, scopedOrg);
+        Assert.Null(tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Active, tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task OrganizationHeader_CannotSelectOrganizationWithoutMembership()
+    {
+        var ownedOrg = Org.Create("Owned org");
+        var foreignOrg = Org.Create("Foreign org");
+        var user = User.Create("org-header-http", "org-header-http@example.com", "hash");
+        _db.Orgs.AddRange(ownedOrg, foreignOrg);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(ownedOrg.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scopedOrg = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scopedOrg = TenantScope.CurrentOrgId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.Headers["X-Org-Id"] = foreignOrg.Id.ToString();
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(Guid.Empty, scopedOrg);
+    }
+
+    [Fact]
     public async Task DeviceToken_WithProjectHeader_ScopesToHeaderProject()
     {
         var org = Org.Create("Org", null);
