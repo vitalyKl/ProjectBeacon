@@ -5,6 +5,7 @@ using Bunit;
 using Bunit.TestDoubles;
 using MudBlazor.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Enums;
 
