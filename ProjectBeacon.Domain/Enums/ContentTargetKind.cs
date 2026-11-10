@@ -7,5 +7,6 @@ public enum ContentTargetKind
     Constraint,
     Milestone,
     ProjectDescription,
-    TaskDescription
+    TaskDescription,
+    RepoPatch
 }
