@@ -21,6 +21,11 @@ public sealed class AuthorizationService : IAuthorizationService
         if (actor.IsWorker)
             return Result.Forbidden();
 
+        // System administrators are the explicit platform-wide bypass. Customer actors,
+        // API tokens, and devices remain subject to the organization's lifecycle gate.
+        if (actor.IsAdmin)
+            return Result.Ok();
+
         var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, orgId, ct);
         if (!lifecycle.Success)
             return lifecycle;
@@ -29,9 +34,6 @@ public sealed class AuthorizationService : IAuthorizationService
             return resource is ResourceType.Device or ResourceType.WorkstationCommand
                 ? Result.Ok()
                 : Result.Forbidden();
-
-        if (actor.IsAdmin)
-            return Result.Ok();
 
         if (actor.IsApiToken)
             return TokenCanAccess(actor, resource, action);
