@@ -299,7 +299,7 @@ public sealed class PostgresEntitlementService(
         if (!SafeBillingReference(request.BillingReference, 128))
             return Result.Failure<OrganizationEntitlement>(
                 "A manual invoice or receipt reference is required.");
-        if (!SafeBillingReference(request.IdempotencyKey, 128))
+        if (!SafeIdempotencyKey(request.IdempotencyKey, 128))
             return Result.Failure<OrganizationEntitlement>(
                 "A valid idempotency key containing only letters, digits, '.', '_', ':' or '-' is required.");
         if (request.StartsAtUtc.Offset != TimeSpan.Zero
@@ -346,6 +346,18 @@ public sealed class PostgresEntitlementService(
             lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
             Add(lockCommand, "lock_key", DbType.String, $"organization-billing:{request.OrgId:N}");
             await lockCommand.ExecuteNonQueryAsync(ct);
+        }
+
+        // Idempotency keys are global, not organization-local. This second lock ensures
+        // that simultaneous use of the same key by two organizations is returned as a
+        // deterministic conflict instead of racing into the unique index.
+        await using (var idempotencyLock = connection.CreateCommand())
+        {
+            idempotencyLock.Transaction = dbTransaction;
+            idempotencyLock.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
+            Add(idempotencyLock, "lock_key", DbType.String,
+                $"billing-idempotency:{request.IdempotencyKey.Trim()}");
+            await idempotencyLock.ExecuteNonQueryAsync(ct);
         }
 
         // Idempotent replay returns the original entitlement. Reusing a key for another
@@ -668,6 +680,13 @@ public sealed class PostgresEntitlementService(
         && value == value.Trim()
         && value.All(character => char.IsAsciiLetterOrDigit(character)
             || character is '.' or '_' or ':' or '-' or '/');
+
+    private static bool SafeIdempotencyKey(string? value, int maximumLength) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length <= maximumLength
+        && value == value.Trim()
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+            || character is '.' or '_' or ':' or '-');
 
 
     private static string? Validate(GrantOrganizationEntitlementRequest request, DateTimeOffset now)
