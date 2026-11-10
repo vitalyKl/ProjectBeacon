@@ -26,6 +26,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
     private readonly GitSyncService _gitSync;
+    private readonly RepoPatchApplyService _repoPatchApply = new();
 
     public DaemonCommandExecutor(
         DaemonDependencies deps,
@@ -100,6 +101,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return (false, null, CommandSandbox.RuntimeRequired);
                 if (kind == WorkstationCommandKind.GitSync)
                     return await _gitSync.ExecuteAsync(command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
+                if (kind == WorkstationCommandKind.ApplyProposalPatch)
+                    return await _repoPatchApply.ExecuteAsync(command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
                 if (kind == WorkstationCommandKind.ChatEnsureSession || kind == WorkstationCommandKind.ChatPrompt)
                 {
                     var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, DaemonPayload.ReadPath(payload), relativeOnly: true);
