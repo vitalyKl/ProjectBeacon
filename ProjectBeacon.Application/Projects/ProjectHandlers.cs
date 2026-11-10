@@ -98,7 +98,8 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
                 return Result.Failure<ProjectDto>(
                     "Organization project capacity could not be verified.",
                     ErrorKind.Unavailable);
-            if (evaluation.Value is not { Allowed: true } decision)
+            var decision = evaluation.Value;
+            if (decision is null || !decision.Allowed)
             {
                 if (decision?.ReasonCode == "limit_exceeded")
                 {
