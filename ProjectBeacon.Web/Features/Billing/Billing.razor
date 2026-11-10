@@ -62,7 +62,8 @@ else
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Invoice">
-                        <MudText Typo="Typo.body2" Class="font-monospace">@context.Number</MudText>
+                        <MudLink Href="@($"/billing/invoices/{context.Id}")" Underline="Underline.Hover"
+                                 Class="font-monospace">@context.Number</MudLink>
                     </MudTd>
                     <MudTd DataLabel="Description">@context.Description</MudTd>
                     <MudTd DataLabel="Amount">@FormatAmount(context)</MudTd>
