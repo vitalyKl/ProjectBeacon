@@ -23,7 +23,7 @@ internal sealed class RepoPatchApplyService
         IReadOnlyList<RepoPatchFile> Files,
         IReadOnlyList<string> AllowedPaths);
 
-    private sealed record FileSnapshot(string Path, byte[]? Bytes);
+    private sealed record FileSnapshot(string RelativePath, string Path, byte[]? Bytes);
 
     public async Task<(bool Ok, string? Result, string? Error)> ExecuteAsync(
         string projectRoot,
@@ -70,11 +70,10 @@ internal sealed class RepoPatchApplyService
                 return (false, null, "RepoPatchConflict: UnsafeDocumentationPath");
 
             byte[]? bytes = null;
+            if (IsLinkOrReparsePoint(resolved))
+                return (false, null, "RepoPatchConflict: SymbolicLinkOrDirectory");
             if (File.Exists(resolved))
             {
-                if ((File.GetAttributes(resolved) & FileAttributes.ReparsePoint) != 0
-                    || Directory.Exists(resolved))
-                    return (false, null, "RepoPatchConflict: SymbolicLinkOrDirectory");
                 bytes = await File.ReadAllBytesAsync(resolved, ct);
             }
             else if (Directory.Exists(resolved))
@@ -92,7 +91,7 @@ internal sealed class RepoPatchApplyService
                 return (false, null, "RepoPatchConflict: BaseHashMismatch");
             }
 
-            snapshots.Add(new FileSnapshot(resolved, bytes));
+            snapshots.Add(new FileSnapshot(file.ProjectPath, resolved, bytes));
         }
 
         var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], request.Patch, ct);
@@ -104,10 +103,11 @@ internal sealed class RepoPatchApplyService
         var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], request.Patch, ct);
         if (applied.TimedOut || applied.ExitCode != 0)
         {
-            await RestoreAsync(snapshots, CancellationToken.None);
-            return (false, null, applied.TimedOut
-                ? "RepoPatchConflict: GitApplyTimeout"
-                : "RepoPatchConflict: GitApplyFailed");
+            var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+            var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
+            return (false, null, restored
+                ? $"RepoPatchConflict: {reason}"
+                : $"RepoPatchConflict: {reason}:RollbackFailed");
         }
 
         var results = new List<object>(request.Files.Count);
@@ -116,33 +116,40 @@ internal sealed class RepoPatchApplyService
             var resolved = ResolveSafeFile(root, file.ProjectPath);
             if (resolved is null)
             {
-                await RestoreAsync(snapshots, CancellationToken.None);
-                return (false, null, "RepoPatchConflict: PostApplyPathInvalid");
+                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                return (false, null, restored
+                    ? "RepoPatchConflict: PostApplyPathInvalid"
+                    : "RepoPatchConflict: PostApplyPathInvalid:RollbackFailed");
             }
 
             if (file.ResultHash is null)
             {
                 if (File.Exists(resolved) || Directory.Exists(resolved))
                 {
-                    await RestoreAsync(snapshots, CancellationToken.None);
-                    return (false, null, "RepoPatchConflict: DeleteVerificationFailed");
+                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                    return (false, null, restored
+                        ? "RepoPatchConflict: DeleteVerificationFailed"
+                        : "RepoPatchConflict: DeleteVerificationFailed:RollbackFailed");
                 }
                 results.Add(new { projectPath = file.ProjectPath, deleted = true });
                 continue;
             }
 
-            if (!File.Exists(resolved)
-                || (File.GetAttributes(resolved) & FileAttributes.ReparsePoint) != 0)
+            if (!File.Exists(resolved) || IsLinkOrReparsePoint(resolved))
             {
-                await RestoreAsync(snapshots, CancellationToken.None);
-                return (false, null, "RepoPatchConflict: ResultFileMissing");
+                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                return (false, null, restored
+                    ? "RepoPatchConflict: ResultFileMissing"
+                    : "RepoPatchConflict: ResultFileMissing:RollbackFailed");
             }
 
             var resultHash = Hash(await File.ReadAllBytesAsync(resolved, ct));
             if (!FixedEquals(resultHash, file.ResultHash))
             {
-                await RestoreAsync(snapshots, CancellationToken.None);
-                return (false, null, "RepoPatchConflict: ResultHashMismatch");
+                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                return (false, null, restored
+                    ? "RepoPatchConflict: ResultHashMismatch"
+                    : "RepoPatchConflict: ResultHashMismatch:RollbackFailed");
             }
             results.Add(new { projectPath = file.ProjectPath, resultHash });
         }
@@ -238,41 +245,100 @@ internal sealed class RepoPatchApplyService
         for (var index = 0; index < segments.Length; index++)
         {
             current = Path.Combine(current, segments[index]);
+            if (IsLinkOrReparsePoint(current))
+                return null;
             if (!File.Exists(current) && !Directory.Exists(current))
                 continue;
-            var attributes = File.GetAttributes(current);
-            if ((attributes & FileAttributes.ReparsePoint) != 0)
-                return null;
             if (index < segments.Length - 1 && !Directory.Exists(current))
                 return null;
         }
         return candidate;
     }
 
-    private static async Task RestoreAsync(IReadOnlyList<FileSnapshot> snapshots, CancellationToken ct)
+    private static bool IsLinkOrReparsePoint(string path)
     {
+        try
+        {
+            if (new FileInfo(path).LinkTarget is not null
+                || new DirectoryInfo(path).LinkTarget is not null)
+                return true;
+            if (File.Exists(path) || Directory.Exists(path))
+                return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+            return false;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch
+        {
+            // Unreadable path metadata is not safe to follow.
+            return true;
+        }
+    }
+
+    private static async Task<bool> RestoreAsync(
+        string root,
+        IReadOnlyList<FileSnapshot> snapshots,
+        CancellationToken ct)
+    {
+        var restored = true;
         foreach (var snapshot in snapshots)
         {
+            string? temporary = null;
             try
             {
-                if (snapshot.Bytes is null)
+                var safe = ResolveSafeFile(root, snapshot.RelativePath);
+                if (safe is null || !string.Equals(safe, snapshot.Path,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 {
-                    if (File.Exists(snapshot.Path))
-                        File.Delete(snapshot.Path);
+                    restored = false;
                     continue;
                 }
 
-                var directory = Path.GetDirectoryName(snapshot.Path)!;
+                if (snapshot.Bytes is null)
+                {
+                    if (File.Exists(safe))
+                    {
+                        if (IsLinkOrReparsePoint(safe))
+                        {
+                            restored = false;
+                            continue;
+                        }
+                        File.Delete(safe);
+                    }
+                    continue;
+                }
+
+                var directory = Path.GetDirectoryName(safe)!;
                 Directory.CreateDirectory(directory);
-                var temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".restore");
+                if (IsLinkOrReparsePoint(directory))
+                {
+                    restored = false;
+                    continue;
+                }
+                temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".restore");
                 await File.WriteAllBytesAsync(temporary, snapshot.Bytes, ct);
-                File.Move(temporary, snapshot.Path, overwrite: true);
+                File.Move(temporary, safe, overwrite: true);
+                temporary = null;
             }
             catch
             {
-                // A later manual review will see the failed command; never hide the original error.
+                restored = false;
+            }
+            finally
+            {
+                if (temporary is not null)
+                {
+                    try { File.Delete(temporary); } catch { }
+                }
             }
         }
+        return restored;
     }
 
     private static string Hash(byte[] bytes) =>
@@ -314,6 +380,7 @@ internal sealed class RepoPatchApplyService
             start.ArgumentList.Add(argument);
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
         start.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
+        start.Environment["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
         start.Environment.Remove("GIT_CONFIG_COUNT");
         start.Environment.Remove("GIT_CONFIG_PARAMETERS");
         start.Environment["GIT_PAGER"] = "cat";
@@ -338,9 +405,20 @@ internal sealed class RepoPatchApplyService
         var stderrTask = ReadBoundedAsync(process.StandardError);
         if (standardInput is not null)
         {
-            await process.StandardInput.WriteAsync(standardInput.AsMemory(), ct);
-            await process.StandardInput.FlushAsync(ct);
-            process.StandardInput.Close();
+            try
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), ct);
+                await process.StandardInput.FlushAsync(ct);
+                process.StandardInput.Close();
+            }
+            catch
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                try { process.StandardInput.Close(); } catch { }
+                try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+                try { await Task.WhenAll(stdoutTask, stderrTask); } catch { }
+                throw;
+            }
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
