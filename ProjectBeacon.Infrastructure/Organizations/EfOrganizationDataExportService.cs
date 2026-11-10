@@ -851,7 +851,7 @@ public sealed class EfOrganizationDataExportService(
         This archive is a read-only snapshot. It does not delete or change source data.
 
         Included: organization and membership metadata, invitations (without token hashes),
-        projects, memberships, tasks, task phases, task workspace sections, role bindings,
+        projects, memberships, tasks, task phases, task workspace sections, project review commands and role bindings,
         comments, dependencies, checklists, subtasks, milestones, labels, reports, context,
         decisions, constraints, chat content, and task attachments.
 
