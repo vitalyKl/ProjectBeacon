@@ -138,52 +138,79 @@ else
                                 @L["ProposalConflict"]: @proposal.ConflictReason · @L["CurrentRevision"]: @(proposal.ConflictRevision?.ToString() ?? "—")
                             </MudAlert>
                         }
+                        @if (proposal.Status == ProposalStatus.Applying)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                @L["ProposalPatchApplying"]
+                                @if (proposal.ApplyCommandId is { } applyCommandId)
+                                {
+                                    <MudText Typo="Typo.caption">@L["WorkstationCommand"]: @applyCommandId</MudText>
+                                }
+                            </MudAlert>
+                        }
                         @if (proposal.Status == ProposalStatus.Accepted)
                         {
-                            <MudText Typo="Typo.caption">@L["AppliedRevision"]: @(proposal.AppliedRevision?.ToString() ?? "—")</MudText>
+                            @if (proposal.TargetKind == ContentTargetKind.RepoPatch)
+                            {
+                                <MudText Typo="Typo.caption">@L["ProposalPatchApplied"]</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption">@L["AppliedRevision"]: @(proposal.AppliedRevision?.ToString() ?? "—")</MudText>
+                            }
                         }
                         <MudExpansionPanels Elevation="0" Outlined="true">
                             <MudExpansionPanel Text="@L["ProposalDetails"]">
                                 <MudStack Spacing="2">
-                                    <MudTextField T="string" Value="@GetEditedPayload(proposal)" ValueChanged="value => SetEditedPayload(proposal.Id, value)"
-                                                  Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8" ReadOnly="@(proposal.Status != ProposalStatus.Pending)" />
-                                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
-                                               OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
-                                        @L["CompareBaseRevision"] (@proposal.BaseRevision)
-                                    </MudButton>
-                                    @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
+                                    @if (proposal.TargetKind == ContentTargetKind.RepoPatch)
                                     {
-                                        <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
-                                        <MudPaper Elevation="0" Outlined="true" Class="pa-2 proposal-diff">
-                                            @{
-                                                var diff = BuildProposalDiff(
-                                                    ExtractMarkdown(baseSnapshot),
-                                                    ExtractMarkdown(GetEditedPayload(proposal)));
-                                            }
-                                            @if (diff.Count == 0)
-                                            {
-                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@L["NoTextualChanges"]</MudText>
-                                            }
-                                            else
-                                            {
-                                                @foreach (var line in diff)
-                                                {
-                                                    <div class="proposal-diff-line @DiffLineClass(line.Kind)">
-                                                        <span class="proposal-diff-prefix">@line.Prefix</span><code>@line.Text</code>
-                                                    </div>
+                                        <MudAlert Severity="Severity.Info" Dense="true">@L["RepoPatchDocumentationOnly"]</MudAlert>
+                                        <MudTextField T="string" Value="@GetRepoPatchPreview(proposal)"
+                                                      Label="@L["DocumentationPatch"]" Variant="Variant.Outlined"
+                                                      Lines="18" ReadOnly="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudTextField T="string" Value="@GetEditedPayload(proposal)" ValueChanged="value => SetEditedPayload(proposal.Id, value)"
+                                                      Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8" ReadOnly="@(proposal.Status != ProposalStatus.Pending)" />
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
+                                                   OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
+                                            @L["CompareBaseRevision"] (@proposal.BaseRevision)
+                                        </MudButton>
+                                        @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
+                                        {
+                                            <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
+                                            <MudPaper Elevation="0" Outlined="true" Class="pa-2 proposal-diff">
+                                                @{
+                                                    var diff = BuildProposalDiff(
+                                                        ExtractMarkdown(baseSnapshot),
+                                                        ExtractMarkdown(GetEditedPayload(proposal)));
                                                 }
-                                            }
-                                        </MudPaper>
-                                        <MudGrid Spacing="2">
-                                            <MudItem xs="12" md="6">
-                                                <MudText Typo="Typo.subtitle2">@L["BaseRevision"]</MudText>
-                                                <MarkdownView Text="@ExtractMarkdown(baseSnapshot)" MaxHeight="220" />
-                                            </MudItem>
-                                            <MudItem xs="12" md="6">
-                                                <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
-                                                <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" MaxHeight="220" />
-                                            </MudItem>
-                                        </MudGrid>
+                                                @if (diff.Count == 0)
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["NoTextualChanges"]</MudText>
+                                                }
+                                                else
+                                                {
+                                                    @foreach (var line in diff)
+                                                    {
+                                                        <div class="proposal-diff-line @DiffLineClass(line.Kind)">
+                                                            <span class="proposal-diff-prefix">@line.Prefix</span><code>@line.Text</code>
+                                                        </div>
+                                                    }
+                                                }
+                                            </MudPaper>
+                                            <MudGrid Spacing="2">
+                                                <MudItem xs="12" md="6">
+                                                    <MudText Typo="Typo.subtitle2">@L["BaseRevision"]</MudText>
+                                                    <MarkdownView Text="@ExtractMarkdown(baseSnapshot)" MaxHeight="220" />
+                                                </MudItem>
+                                                <MudItem xs="12" md="6">
+                                                    <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
+                                                    <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" MaxHeight="220" />
+                                                </MudItem>
+                                            </MudGrid>
+                                        }
                                     }
                                     @if (proposal.Status == ProposalStatus.Pending)
                                     {
@@ -388,9 +415,43 @@ else
     private void SetEditedPayload(Guid proposalId, string? value) =>
         _editedPayloads[proposalId] = value ?? string.Empty;
 
+    private static string GetRepoPatchPreview(ProposalDto proposal)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(proposal.PayloadJson);
+            var root = document.RootElement;
+            var builder = new System.Text.StringBuilder();
+            if (root.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var file in files.EnumerateArray())
+                {
+                    var path = file.TryGetProperty("projectPath", out var pathValue) ? pathValue.GetString() : null;
+                    var baseHash = file.TryGetProperty("baseHash", out var baseValue) ? baseValue.GetString() : null;
+                    var resultHash = file.TryGetProperty("resultHash", out var resultValue) ? resultValue.GetString() : null;
+                    builder.Append(path ?? "unknown");
+                    builder.Append("  ");
+                    builder.Append(baseHash is null ? "new file" : baseHash);
+                    builder.Append(" -> ");
+                    builder.Append(resultHash is null ? "deleted" : resultHash);
+                    builder.AppendLine();
+                }
+            }
+            builder.AppendLine();
+            builder.AppendLine("Unified diff");
+            if (root.TryGetProperty("patch", out var patch) && patch.ValueKind == JsonValueKind.String)
+                builder.Append(patch.GetString());
+            return builder.ToString();
+        }
+        catch (JsonException)
+        {
+            return "Invalid RepoPatch payload.";
+        }
+    }
+
     private async Task LoadBaseSnapshot(ProposalDto proposal)
     {
-        if (_project is null) return;
+        if (_project is null || proposal.TargetKind == ContentTargetKind.RepoPatch) return;
         var versions = await ListContentVersions.HandleAsync(
             _project.Id, proposal.TargetKind, proposal.TargetId, 100);
         var version = versions.Success
@@ -492,13 +553,18 @@ else
             .Replace('\r', '\n')
             .Split('\n');
 
-    private string ProposalStatusLabel(ProposalStatus status) =>
-        status == ProposalStatus.Conflicted ? L["Conflicted"].Value : L[status.ToString()].Value;
+    private string ProposalStatusLabel(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Conflicted => L["Conflicted"].Value,
+        ProposalStatus.Applying => L["Applying"].Value,
+        _ => L[status.ToString()].Value
+    };
 
     private static Color ProposalStatusColor(ProposalStatus status) => status switch
     {
         ProposalStatus.Pending => Color.Warning,
         ProposalStatus.Conflicted => Color.Error,
+        ProposalStatus.Applying => Color.Info,
         ProposalStatus.Accepted => Color.Success,
         _ => Color.Default
     };
@@ -516,7 +582,10 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["ProposalAccepted"].Value, Severity.Success);
+            Snackbar.Add(result.Value?.Status == ProposalStatus.Applying
+                ? L["ProposalApplyQueued"].Value
+                : L["ProposalAccepted"].Value,
+                result.Value?.Status == ProposalStatus.Applying ? Severity.Info : Severity.Success);
             await Reload();
         }
         finally { _busy = false; }
@@ -547,6 +616,7 @@ else
         if (_project is null || _selectedIds.Count == 0) return;
         _busy = true;
         var succeeded = 0;
+        var queued = 0;
         var failed = 0;
         try
         {
@@ -554,12 +624,16 @@ else
             {
                 var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
                     _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
-                if (result.Success) succeeded++; else failed++;
+                if (!result.Success) failed++;
+                else if (result.Value?.Status == ProposalStatus.Applying) queued++;
+                else succeeded++;
             }
             _selectedIds.Clear();
             await Reload();
-            Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded, failed),
-                failed == 0 ? Severity.Success : Severity.Warning);
+            Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded + queued, failed),
+                failed == 0 ? (queued > 0 ? Severity.Info : Severity.Success) : Severity.Warning);
+            if (queued > 0)
+                Snackbar.Add(string.Format(L["ProposalPatchQueuedCount"].Value, queued), Severity.Info);
         }
         finally { _busy = false; }
     }
