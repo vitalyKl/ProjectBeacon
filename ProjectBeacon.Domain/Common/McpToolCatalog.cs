@@ -124,6 +124,8 @@ public static class McpToolNames
     public const string GetSignatures = "get_signatures";
     public const string GetCallers = "get_callers";
     public const string HashRange = "hash_range";
+    public const string HashFile = "hash_file";
+    public const string HashText = "hash_text";
     public const string ModelBind = "model_bind";
     public const string ModelStatus = "model_status";
     public const string TaskCreateSubtask = "task_create_subtask";
@@ -232,7 +234,7 @@ public static class McpToolCatalog
             ..Workspace(McpToolScope.Read,
                 McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode,
                 McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers,
-                McpToolNames.HashRange),
+                McpToolNames.HashRange, McpToolNames.HashFile, McpToolNames.HashText),
             ..Workspace(McpToolScope.Write, McpToolNames.WriteFile, McpToolNames.ApplyPatch),
 
             // Session tools are dispatched by the MCP server's session handlers.
