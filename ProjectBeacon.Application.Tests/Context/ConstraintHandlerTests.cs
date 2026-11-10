@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Context;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -14,6 +15,7 @@ public sealed class ConstraintHandlerTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly IDisposable _unscoped;
     private readonly Guid _projectId;
+    private readonly Guid _userId;
 
     public ConstraintHandlerTests()
     {
@@ -25,7 +27,16 @@ public sealed class ConstraintHandlerTests : IDisposable
         _db.Projects.Add(project);
         _db.SaveChanges();
         _projectId = project.Id;
+        var user = User.Create("constraint-owner", "constraint-owner@beacon.local", "hash");
+        _db.Users.Add(user);
+        _db.SaveChanges();
+        _userId = user.Id;
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, _userId, MemberRole.Owner));
+        _db.SaveChanges();
     }
+
+    private ActorContext HumanActor() =>
+        new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
     public void Dispose()
     {
@@ -54,6 +65,37 @@ public sealed class ConstraintHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ProjectMemberCannotActivateOrRejectProposedConstraint()
+    {
+        var member = User.Create("constraint-member", "constraint-member@beacon.local", "hash");
+        _db.Users.Add(member);
+        _db.SaveChanges();
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
+        _db.SaveChanges();
+
+        var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
+            new CreateConstraintRequest(_projectId, "Owner approval required.", ConstraintKind.Must),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+        var actor = new ActorContext(
+            ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var factory = HandlerSqlite.Factory(_connection);
+
+        var activate = await new ActivateConstraintHandler(factory, new AuthorizationService())
+            .HandleAsync(created.Value!.Id, actor, TestContext.Current.CancellationToken);
+        Assert.False(activate.Success);
+        Assert.Equal(ErrorKind.Forbidden, activate.Kind);
+
+        var reject = await new RejectConstraintHandler(factory, new AuthorizationService())
+            .HandleAsync(created.Value.Id, actor, TestContext.Current.CancellationToken);
+        Assert.False(reject.Success);
+        Assert.Equal(ErrorKind.Forbidden, reject.Kind);
+
+        Assert.Equal(ConstraintStatus.Proposed,
+            (await _db.Constraints.SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task Activate_ThenReject_UpdatesStatus()
     {
         var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
@@ -61,11 +103,11 @@ public sealed class ConstraintHandlerTests : IDisposable
         Assert.True(created.Success);
         Assert.Equal(ConstraintStatus.Proposed, created.Value!.Status);
 
-        var activated = await new ActivateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id, TestContext.Current.CancellationToken);
+        var activated = await new ActivateConstraintHandler(HandlerSqlite.Factory(_connection), new AuthorizationService()).HandleAsync(created.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(activated.Success);
         Assert.Equal(ConstraintStatus.Active, activated.Value!.Status);
 
-        var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id, TestContext.Current.CancellationToken);
+        var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection), new AuthorizationService()).HandleAsync(created.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(rejected.Success);
         Assert.Equal(ConstraintStatus.Rejected, rejected.Value!.Status);
     }
