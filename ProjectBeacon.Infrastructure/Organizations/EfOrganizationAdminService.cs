@@ -342,10 +342,13 @@ public sealed class EfOrganizationAdminService(
             await lockCommand.ExecuteNonQueryAsync(ct);
         }
 
-        org = await db.Orgs.FirstOrDefaultAsync(x => x.Id == orgId, ct);
-        if (org is null)
+        var confirmedLifecycleStatus = await db.Orgs.AsNoTracking()
+            .Where(item => item.Id == orgId)
+            .Select(item => (OrganizationLifecycleStatus?)item.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (confirmedLifecycleStatus is null)
             return Result.Failure<OperatorInviteCreated>("Organization not found.", ErrorKind.NotFound);
-        if (org.LifecycleStatus != OrganizationLifecycleStatus.Active)
+        if (confirmedLifecycleStatus != OrganizationLifecycleStatus.Active)
             return Result.Failure<OperatorInviteCreated>(
                 "Invitations can only be issued for active organizations.", ErrorKind.Conflict);
 
