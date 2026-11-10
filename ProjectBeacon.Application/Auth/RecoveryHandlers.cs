@@ -21,19 +21,22 @@ public class RecoverAdminHandler
     private readonly string _bootstrapToken;
     private readonly IAuditWriter? _auditWriter;
     private readonly ILogger<RecoverAdminHandler>? _logger;
+    private readonly IUserSessionVersionCache? _sessionVersions;
 
     public RecoverAdminHandler(
         IBeaconDbFactory dbFactory,
         IPasswordHasher passwords,
         IConfiguration? configuration,
         IAuditWriter? auditWriter = null,
-        ILogger<RecoverAdminHandler>? logger = null)
+        ILogger<RecoverAdminHandler>? logger = null,
+        IUserSessionVersionCache? sessionVersions = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _bootstrapToken = configuration?["BOOTSTRAP_ADMIN_TOKEN"] ?? string.Empty;
         _auditWriter = auditWriter;
         _logger = logger;
+        _sessionVersions = sessionVersions;
     }
 
     public async Task<Result<RecoverAdminResponse>> HandleAsync(string providedToken, CancellationToken ct = default)
@@ -55,8 +58,14 @@ public class RecoverAdminHandler
         globalTenant.Assign(null, null, unscoped: true);
         await using var db = _dbFactory.CreateDbContext(globalTenant);
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Login == "admin", ct)
-            ?? await db.Users.FirstOrDefaultAsync(u => u.IsAdmin, ct);
+        // Recovery is restricted to an active platform SystemAdministrator. A legacy
+        // login named "admin" is not sufficient to claim the break-glass recovery path.
+        var user = await db.Users.FirstOrDefaultAsync(
+            u => u.Login == "admin" && u.IsAdmin && u.DisabledAt == null, ct)
+            ?? await db.Users
+                .Where(u => u.IsAdmin && u.DisabledAt == null)
+                .OrderBy(u => u.Login)
+                .FirstOrDefaultAsync(ct);
         if (user is null)
         {
             _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
@@ -70,16 +79,37 @@ public class RecoverAdminHandler
         }
 
         var password = _passwords.GenerateRandomPassword(32);
+        var authenticatorReset = user.TotpEnabled || !string.IsNullOrWhiteSpace(user.TotpSecretCipher);
+
+        // ResetPassword increments SessionVersion; clearing both an enabled and a pending
+        // TOTP enrollment in the same unit of work completes break-glass MFA recovery.
         user.ResetPassword(_passwords.Hash(password));
+        user.ClearTotp();
+
         _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
             "platform.admin_recovery.completed",
             "User",
             user.Id.ToString(),
             outcome: AuditOutcome.Success,
-            detailsJson: """{"resultCode":"password_reset"}"""));
+            detailsJson: System.Text.Json.JsonSerializer.Serialize(new
+            {
+                resultCode = "credentials_reset",
+                authenticatorReset
+            })));
+        if (authenticatorReset)
+        {
+            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+                "platform.admin_recovery.authenticator_reset",
+                "User",
+                user.Id.ToString(),
+                outcome: AuditOutcome.Success,
+                detailsJson: """{"reasonCode":"break_glass","newState":"Disabled"}"""));
+        }
         await db.SaveChangesAsync(ct);
+        _sessionVersions?.Invalidate(user.Id);
 
-        return Result.Ok(new RecoverAdminResponse(user.Id, user.Login, user.Email, user.IsAdmin, password));
+        return Result.Ok(new RecoverAdminResponse(
+            user.Id, user.Login, user.Email, user.IsAdmin, password, authenticatorReset));
     }
 
     private async Task RecordDeniedAttemptAsync(string reasonCode, CancellationToken ct)

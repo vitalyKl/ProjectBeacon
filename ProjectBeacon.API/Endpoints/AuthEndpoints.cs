@@ -82,7 +82,8 @@ public static class AuthEndpoints
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
-                result.Value.Password
+                result.Value.Password,
+                result.Value.AuthenticatorReset
             });
 
         return result.FromResult();

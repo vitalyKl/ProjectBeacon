@@ -85,9 +85,7 @@ The initial administrator bootstrap and break-glass password recovery are Contro
 
 Both are unavailable on the customer and standalone API hosts. Bootstrap and recovery pages also
 check the current browser origin and recheck it immediately before submitting their action. The
-recovery handler records denied,
-failed, and successful attempts without storing the bootstrap token or generated password.
-A successful password reset and its audit event are staged in the same database unit of work.
+recovery handler records denied, failed, and successful attempts without storing the bootstrap token or generated password. A successful break-glass recovery selects only an active SystemAdministrator, resets the password, clears enabled or pending TOTP enrollment, increments SessionVersion, and invalidates the local session-version cache. If an authenticator was cleared, a dedicated audit event is committed with the recovery event. The generated password is returned once; the operator must sign in and enroll a new authenticator before using elevated actions.
 Bootstrap remains protected by the configured secret and rate limit; it can create the first
 administrator only.
 
@@ -135,9 +133,11 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   permissions from the persisted role.
 - Operator TOTP enrollment is available at `/control/security`. A successful `/control/elevate`
   verification places a signed ten-minute elevation claim in the Control Plane cookie. Organization
-  creation, owner invitations, invitation revocation, Alpha entitlement changes, and SMTP mutations
-  require this elevation and recheck it in the server-side service/gate path. Operators without TOTP
-  enabled cannot perform these sensitive changes. Lost-authenticator recovery is not yet exposed.
+  creation, owner invitations, invitation revocation, Alpha entitlement changes, operator role changes,
+  and SMTP mutations require this elevation and recheck it in the server-side service/gate path.
+  Operators without TOTP enabled cannot perform these sensitive changes. The active
+  SystemAdministrator can recover a lost authenticator through the deployment-token-protected
+  `/control/recover` break-glass path; other operator roles do not yet have self-service recovery.
 - Organization/customer onboarding and Alpha entitlement management are available under
   `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
   member/invitation visibility, owner invitation creation/revocation, member-role changes, global

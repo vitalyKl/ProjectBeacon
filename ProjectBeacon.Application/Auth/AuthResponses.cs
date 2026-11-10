@@ -14,4 +14,6 @@ public record BootstrapResponse(Guid UserId, string Login, string Email, bool Is
 /// <summary>
 /// Admin after break-glass reset. Password is the new generated password.
 /// </summary>
-public record RecoverAdminResponse(Guid UserId, string Login, string Email, bool IsAdmin, string Password);
+public record RecoverAdminResponse(
+    Guid UserId, string Login, string Email, bool IsAdmin, string Password,
+    bool AuthenticatorReset = false);

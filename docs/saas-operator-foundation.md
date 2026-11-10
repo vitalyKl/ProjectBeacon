@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, MFA recovery, end-to-end entitlement enforcement, and the broader operations console remain incomplete.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, recovery for non-SystemAdministrator operators, end-to-end feature/usage entitlement enforcement, and the broader operations console remain incomplete. The primary SystemAdministrator's lost-authenticator break-glass recovery is implemented on the isolated Control Plane origin.
 
 ## Product boundary
 
@@ -129,7 +129,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. Lost-authenticator recovery and organization suspension/closure are not exposed.
+- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. The primary SystemAdministrator can recover a lost authenticator through the deployment-token-protected Control Plane break-glass flow; self-service recovery for Support, Billing and Auditor is not implemented. Organization suspension/closure are not exposed.
 - Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. More granular product-feature gates and usage-counter enforcement are still future work; generic numeric limits are not yet enforced.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.

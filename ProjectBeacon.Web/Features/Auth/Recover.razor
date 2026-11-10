@@ -22,6 +22,9 @@
     <MudText Typo="Typo.body1" Class="mb-4">
         @L["RecoverDescription"]
     </MudText>
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+        Break-glass recovery resets the active SystemAdministrator password, clears any enabled or pending authenticator enrollment, and invalidates all existing sessions. Use only when normal operator recovery is unavailable.
+    </MudAlert>
 
     @if (_success)
     {
@@ -29,6 +32,12 @@
             <MudText Typo="Typo.body2">
                 @L["RecoverSuccess"]
             </MudText>
+            @if (_authenticatorReset)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2">
+                    The previous authenticator enrollment was cleared. After signing in, configure a new authenticator before performing sensitive Control Plane actions.
+                </MudText>
+            }
             <MudTextField @bind-Value="_password" T="string" ReadOnly="true" Label="@L["NewPassword"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         </MudAlert>
 
@@ -65,6 +74,7 @@
 @code {
     private bool _success;
     private bool _blocked;
+    private bool _authenticatorReset;
 
     protected override void OnInitialized()
     {
@@ -118,6 +128,7 @@
 
             _success = true;
             _password = result.Password;
+            _authenticatorReset = result.AuthenticatorReset;
         }
         catch (Exception ex)
         {
@@ -132,6 +143,7 @@
     public void Dispose()
     {
         _success = false;
+        _authenticatorReset = false;
         _password = string.Empty;
         _token = string.Empty;
         _error = null;
@@ -144,6 +156,7 @@
         public string Email { get; set; } = string.Empty;
         public bool IsAdmin { get; set; }
         public string Password { get; set; } = string.Empty;
+        public bool AuthenticatorReset { get; set; }
     }
 
     public class ErrorResult
