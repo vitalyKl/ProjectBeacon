@@ -20,7 +20,7 @@ public sealed class ProposalHandlerTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
-    private readonly Guid _userId = Guid.NewGuid();
+    private Guid _userId;
     private readonly Guid _projectId;
 
     public ProposalHandlerTests()
@@ -35,6 +35,13 @@ public sealed class ProposalHandlerTests : IDisposable
         _db.Projects.Add(project);
         _db.SaveChanges();
         _projectId = project.Id;
+
+        var author = User.Create("proposal-author", "proposal-author@beacon.local", "hash");
+        _db.Users.Add(author);
+        _db.SaveChanges();
+        _userId = author.Id;
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, _userId, MemberRole.Owner));
+        _db.SaveChanges();
 
         var writer = new ContentWriter();
         writer.AddVersion(_db, project, "Human", _userId.ToString("D"));
@@ -192,6 +199,41 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Forbidden, result.Kind);
         Assert.Empty(await _db.Proposals.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task NonMemberCannotCreateOrListProjectProposals()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), outsider), TestContext.Current.CancellationToken);
+        Assert.False(created.Success);
+        Assert.Equal(ErrorKind.Forbidden, created.Kind);
+
+        var listed = await new ListProposalsHandler(factory, new EfAuditWriter())
+            .HandleAsync(new ListProposalsQuery(_projectId), outsider, TestContext.Current.CancellationToken);
+        Assert.False(listed.Success);
+        Assert.Equal(ErrorKind.Forbidden, listed.Kind);
+    }
+
+    [Fact]
+    public async Task ProjectMemberCanListProjectProposals()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var actor = HumanActor();
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), actor), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var listed = await new ListProposalsHandler(factory, new EfAuditWriter())
+            .HandleAsync(new ListProposalsQuery(_projectId), actor, TestContext.Current.CancellationToken);
+
+        Assert.True(listed.Success, listed.Error);
+        Assert.Single(listed.Value!);
+        Assert.Equal(created.Value!.Id, listed.Value![0].Id);
     }
 
     private ActorContext HumanActor() =>
