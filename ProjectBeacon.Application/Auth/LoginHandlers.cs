@@ -436,7 +436,6 @@ public class RegisterHandler
         {
             var registeredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
-            writeDb.Users.Add(user);
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
                 registeredActor,
                 "account.registered",
