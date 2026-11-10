@@ -436,6 +436,73 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AcceptExpiredProposal_PersistsExpiryAndReturnsConflict()
+    {
+        var expired = Proposal.Create(
+            _projectId, null, null, null,
+            ContentTargetKind.ProjectDescription, _projectId,
+            ProposalOperation.Update, 1, new string('a', 64),
+            """{"description":"Expired content"}""",
+            "This proposal has passed its review window.",
+            ProposalAuthorKind.Human, _userId, null, null, "Human",
+            "accept-expired-" + Guid.NewGuid().ToString("N"),
+            DateTime.UtcNow.AddDays(-31));
+        _db.Proposals.Add(expired);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                new ContentWriter())
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, expired.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        await _db.Entry(expired).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Expired, expired.Status);
+        Assert.Contains(await _db.AuditEvents
+            .Where(item => item.TargetId == expired.Id.ToString("D"))
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken), action => action == "proposal.expired");
+    }
+
+    [Fact]
+    public async Task RejectExpiredProposal_PersistsExpiryAndReturnsConflict()
+    {
+        var expired = Proposal.Create(
+            _projectId, null, null, null,
+            ContentTargetKind.ProjectDescription, _projectId,
+            ProposalOperation.Update, 1, new string('b', 64),
+            """{"description":"Expired content"}""",
+            "This proposal has passed its review window.",
+            ProposalAuthorKind.Human, _userId, null, null, "Human",
+            "reject-expired-" + Guid.NewGuid().ToString("N"),
+            DateTime.UtcNow.AddDays(-31));
+        _db.Proposals.Add(expired);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new RejectProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter())
+            .HandleAsync(
+                new RejectProposalCommand(_projectId, expired.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        await _db.Entry(expired).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Expired, expired.Status);
+        Assert.Contains(await _db.AuditEvents
+            .Where(item => item.TargetId == expired.Id.ToString("D"))
+            .Select(item => item.Action)
+            .ToListAsync(TestContext.Current.CancellationToken), action => action == "proposal.expired");
+    }
+
+    [Fact]
     public async Task ProjectMemberCanCreateListAndAcceptOrdinaryProposal()
     {
         var member = User.Create("proposal-member", "proposal-member@beacon.local", "hash");
