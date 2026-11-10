@@ -90,106 +90,106 @@ internal sealed class RepoPatchApplyService
 
         using (operationLock)
         {
-        var snapshots = new List<FileSnapshot>(request.Files.Count);
-        foreach (var file in request.Files)
-        {
-            var resolved = ResolveSafeFile(root, file.ProjectPath);
-            if (resolved is null)
-                return (false, null, "RepoPatchConflict: UnsafeDocumentationPath");
-
-            byte[]? bytes = null;
-            if (IsLinkOrReparsePoint(resolved))
-                return (false, null, "RepoPatchConflict: SymbolicLinkOrDirectory");
-            if (File.Exists(resolved))
+            var snapshots = new List<FileSnapshot>(request.Files.Count);
+            foreach (var file in request.Files)
             {
-                bytes = await File.ReadAllBytesAsync(resolved, ct);
+                var resolved = ResolveSafeFile(root, file.ProjectPath);
+                if (resolved is null)
+                    return (false, null, "RepoPatchConflict: UnsafeDocumentationPath");
+
+                byte[]? bytes = null;
+                if (IsLinkOrReparsePoint(resolved))
+                    return (false, null, "RepoPatchConflict: SymbolicLinkOrDirectory");
+                if (File.Exists(resolved))
+                {
+                    bytes = await File.ReadAllBytesAsync(resolved, ct);
+                }
+                else if (Directory.Exists(resolved))
+                {
+                    return (false, null, "RepoPatchConflict: TargetIsDirectory");
+                }
+
+                if (file.BaseHash is null)
+                {
+                    if (bytes is not null)
+                        return (false, null, "RepoPatchConflict: TargetAlreadyExists");
+                }
+                else if (bytes is null || !FixedEquals(Hash(bytes), file.BaseHash))
+                {
+                    return (false, null, "RepoPatchConflict: BaseHashMismatch");
+                }
+
+                snapshots.Add(new FileSnapshot(file.ProjectPath, resolved, bytes));
             }
-            else if (Directory.Exists(resolved))
-            {
-                return (false, null, "RepoPatchConflict: TargetIsDirectory");
-            }
 
-            if (file.BaseHash is null)
-            {
-                if (bytes is not null)
-                    return (false, null, "RepoPatchConflict: TargetAlreadyExists");
-            }
-            else if (bytes is null || !FixedEquals(Hash(bytes), file.BaseHash))
-            {
-                return (false, null, "RepoPatchConflict: BaseHashMismatch");
-            }
+            var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], request.Patch, ct);
+            if (check.TimedOut)
+                return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
+            if (check.ExitCode != 0)
+                return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
 
-            snapshots.Add(new FileSnapshot(file.ProjectPath, resolved, bytes));
-        }
-
-        var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], request.Patch, ct);
-        if (check.TimedOut)
-            return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
-        if (check.ExitCode != 0)
-            return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
-
-        var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], request.Patch, ct);
-        if (applied.TimedOut || applied.ExitCode != 0)
-        {
-            var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-            var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
-            return (false, null, restored
-                ? $"RepoPatchConflict: {reason}"
-                : $"RepoPatchConflict: {reason}:RollbackFailed");
-        }
-
-        var results = new List<object>(request.Files.Count);
-        foreach (var file in request.Files)
-        {
-            var resolved = ResolveSafeFile(root, file.ProjectPath);
-            if (resolved is null)
+            var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], request.Patch, ct);
+            if (applied.TimedOut || applied.ExitCode != 0)
             {
                 var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
                 return (false, null, restored
-                    ? "RepoPatchConflict: PostApplyPathInvalid"
-                    : "RepoPatchConflict: PostApplyPathInvalid:RollbackFailed");
+                    ? $"RepoPatchConflict: {reason}"
+                    : $"RepoPatchConflict: {reason}:RollbackFailed");
             }
 
-            if (file.ResultHash is null)
+            var results = new List<object>(request.Files.Count);
+            foreach (var file in request.Files)
             {
-                if (File.Exists(resolved) || Directory.Exists(resolved))
+                var resolved = ResolveSafeFile(root, file.ProjectPath);
+                if (resolved is null)
                 {
                     var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
                     return (false, null, restored
-                        ? "RepoPatchConflict: DeleteVerificationFailed"
-                        : "RepoPatchConflict: DeleteVerificationFailed:RollbackFailed");
+                        ? "RepoPatchConflict: PostApplyPathInvalid"
+                        : "RepoPatchConflict: PostApplyPathInvalid:RollbackFailed");
                 }
-                results.Add(new { projectPath = file.ProjectPath, deleted = true });
-                continue;
+
+                if (file.ResultHash is null)
+                {
+                    if (File.Exists(resolved) || Directory.Exists(resolved))
+                    {
+                        var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                        return (false, null, restored
+                            ? "RepoPatchConflict: DeleteVerificationFailed"
+                            : "RepoPatchConflict: DeleteVerificationFailed:RollbackFailed");
+                    }
+                    results.Add(new { projectPath = file.ProjectPath, deleted = true });
+                    continue;
+                }
+
+                if (!File.Exists(resolved) || IsLinkOrReparsePoint(resolved))
+                {
+                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                    return (false, null, restored
+                        ? "RepoPatchConflict: ResultFileMissing"
+                        : "RepoPatchConflict: ResultFileMissing:RollbackFailed");
+                }
+
+                var resultHash = Hash(await File.ReadAllBytesAsync(resolved, ct));
+                if (!FixedEquals(resultHash, file.ResultHash))
+                {
+                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                    return (false, null, restored
+                        ? "RepoPatchConflict: ResultHashMismatch"
+                        : "RepoPatchConflict: ResultHashMismatch:RollbackFailed");
+                }
+                results.Add(new { projectPath = file.ProjectPath, resultHash });
             }
 
-            if (!File.Exists(resolved) || IsLinkOrReparsePoint(resolved))
+            var resultJson = JsonSerializer.Serialize(new
             {
-                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                return (false, null, restored
-                    ? "RepoPatchConflict: ResultFileMissing"
-                    : "RepoPatchConflict: ResultFileMissing:RollbackFailed");
-            }
-
-            var resultHash = Hash(await File.ReadAllBytesAsync(resolved, ct));
-            if (!FixedEquals(resultHash, file.ResultHash))
-            {
-                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                return (false, null, restored
-                    ? "RepoPatchConflict: ResultHashMismatch"
-                    : "RepoPatchConflict: ResultHashMismatch:RollbackFailed");
-            }
-            results.Add(new { projectPath = file.ProjectPath, resultHash });
-        }
-
-        var resultJson = JsonSerializer.Serialize(new
-        {
-            projectId = request.ProjectId,
-            proposalId = request.ProposalId,
-            applied = true,
-            files = results
-        });
-        return (true, resultJson, null);
+                projectId = request.ProjectId,
+                proposalId = request.ProposalId,
+                applied = true,
+                files = results
+            });
+            return (true, resultJson, null);
         }
     }
 
