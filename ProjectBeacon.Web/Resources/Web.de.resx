@@ -2617,4 +2617,100 @@ orthstar</value>
   <data name="MarkdownExpand" xml:space="preserve"><value>Mehr anzeigen</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>Weniger anzeigen</value></data>
   <data name="Characters" xml:space="preserve"><value>Zeichen</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>Posteingang für Vorschläge</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>Vorgeschlagenes Projektwissen und Revisionen prüfen.</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>Mitglieder können normale Inhalte prüfen. Entscheidungen und Regeln dürfen nur Eigentümer oder Administratoren ändern.</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>Konflikt</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>Zieltyp</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>Autor</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>{0} passende Vorschläge werden angezeigt.</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>Ausgewählte annehmen</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>Auswahl aufheben</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>Keine Vorschläge entsprechen diesen Filtern.</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>Revisionsgebundene Vorschläge</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>Der Vorschlag basiert auf einer älteren Revision.</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>Aktuelle Revision</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>Vorschlagsdetails</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>Beim Annehmen anzuwendende Nutzdaten (JSON)</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>Mit Basissnapshot vergleichen</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>Basissnapshot</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>Der Basissnapshot ist nicht mehr verfügbar.</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>Vorgeschlagener Inhalt</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>Entscheidungsnotiz</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>Vorschlag angenommen und angewendet.</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>Vorschlag abgelehnt.</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>Sammelannahme: {0} erfolgreich, {1} fehlgeschlagen.</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>Bestehende Prüfeinträge</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>Kontextentwürfe zur Prüfung</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>Keine bestehenden Prüfeinträge.</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>Vorgeschlagene Entscheidungen</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>Vorgeschlagene Regeln</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>Governance-Einträge dürfen nur Projekt- oder Organisationsinhaber und -administratoren entscheiden.</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>Kontextentwurf angenommen.</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>Kontextentwurf abgelehnt und archiviert.</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>Für diesen Posteingang ist eine Projektmitgliedschaft erforderlich.</value>
+  </data>
 </root>
