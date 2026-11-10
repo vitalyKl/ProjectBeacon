@@ -36,12 +36,12 @@ public sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         entity.HasIndex(proposal => new { proposal.ProjectId, proposal.IdempotencyKey }).IsUnique();
         entity.HasIndex(proposal => proposal.ApplyCommandId).IsUnique();
         entity.HasIndex(proposal => new
-            {
-                proposal.ProjectId,
-                proposal.SubtaskId,
-                proposal.TargetKind,
-                proposal.TargetId
-            })
+        {
+            proposal.ProjectId,
+            proposal.SubtaskId,
+            proposal.TargetKind,
+            proposal.TargetId
+        })
             .IsUnique()
             .HasFilter("\"Status\" = 'Pending' AND \"SubtaskId\" IS NOT NULL");
     }
