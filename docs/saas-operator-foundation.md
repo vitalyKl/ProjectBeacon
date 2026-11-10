@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, assignable operator roles, MFA recovery, end-to-end entitlement enforcement, and the broader operations console remain incomplete.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor role assignment, and TOTP step-up protection for sensitive operator mutations are implemented in the current development stack. Billing persistence/provider adapters, MFA recovery, end-to-end entitlement enforcement, and the broader operations console remain incomplete.
 
 ## Product boundary
 
@@ -30,9 +30,9 @@ Application contracts live in ProjectBeacon.Application/Admin:
 - AdminActor is the verified operator identity passed to privileged handlers. Its constructor is internal; callers obtain it only from IAdminGate.
 - IAdminGate is responsible for resolving a human actor against current database state and checking requested permissions and elevation.
 
-For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.CurrentSystemAdministrator`. Stable role keys are reserved now: `SystemAdministrator`, `Support`, `Billing`, and `Auditor`. Their starter permission sets live in `OperatorRolePermissionSets`; Support has customer/account and operational support but no billing mutation, Billing has commercial/entitlement operations but no account administration, and Auditor is read-only. Only SystemAdministrator is assignable through the existing `IsAdmin` flag in the alpha; the other roles are not persisted or assignable yet.
+For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.CurrentSystemAdministrator`. Stable role keys are reserved now: `SystemAdministrator`, `Support`, `Billing`, and `Auditor`. Their starter permission sets live in `OperatorRolePermissionSets`; Support has customer/account and operational support but no billing mutation, Billing has commercial/entitlement operations but no account administration, and Auditor is read-only. All four roles are persisted on the user account and assignable through the Control Plane by an elevated SystemAdministrator. The legacy `IsAdmin` flag remains set only for SystemAdministrator; `IAdminGate` resolves the persisted role and derives the effective permission set on every request. Role changes invalidate the target account sessions. The last active SystemAdministrator cannot be removed or demoted, and an operator cannot change their own role.
 
-Future role assignment should be stored and changed in one authorization component. Handlers must continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
+Role assignment is stored on the user account and changed only through `OperatorRoleAdminService`. Handlers continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
 
 Sensitive mutations require an elevated AdminActor. The database-backed gate validates the current operator account, its persisted TOTP-enabled state, and the signed Control Plane elevation expiry on each invocation; a Blazor page authorization attribute is only a UI guard.
 

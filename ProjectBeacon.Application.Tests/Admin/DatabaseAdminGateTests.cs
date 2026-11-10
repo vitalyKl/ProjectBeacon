@@ -60,6 +60,27 @@ public sealed class DatabaseAdminGateTests : IDisposable
     }
 
     [Fact]
+    public async Task RequireAsync_UsesPersistedRolePermissionsInsteadOfGrantingEveryAdminFullAccess()
+    {
+        _admin.AssignOperatorRole(nameof(OperatorRole.Support));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var supportAccess = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true), OperatorPermission.OrganizationsManage);
+        var deniedMaintenance = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true), OperatorPermission.SystemMaintenance);
+        var deniedRoleManagement = await _gate.RequireAsync(
+            Human(_admin.Id, isAdmin: true), OperatorPermission.OperatorRolesManage);
+
+        Assert.True(supportAccess.Success, supportAccess.Error);
+        Assert.False(_admin.IsAdmin, "Support must not inherit the legacy customer-admin bypass.");
+        Assert.Equal(nameof(OperatorRole.Support), _admin.OperatorRole);
+        Assert.False(deniedMaintenance.Success);
+        Assert.False(deniedRoleManagement.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedMaintenance.Kind);
+    }
+
+    [Fact]
     public async Task RequireAsync_RejectsApiTokenEvenWhenItClaimsAdminCapability()
     {
         var actor = new ActorContext(

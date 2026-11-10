@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
+using Application.Admin;
 using Application.Audit;
 using Domain.Entities.Audit;
 using Application.Authorization;
@@ -99,7 +100,7 @@ public class LoginHandler
             return Result.Failure<LoginResponse>("Invalid credentials.", ErrorKind.Unauthorized);
         }
 
-        if (requireOperator && !user.IsAdmin)
+        if (requireOperator && !IsValidOperatorRole(user.OperatorRole))
         {
             _auditWriter?.Stage(db, AuditEventFactory.ForActor(
                 new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None),
@@ -130,8 +131,11 @@ public class LoginHandler
             ? null
             : _tokens.GenerateToken(user, secret, projectId: projectId, orgId: orgId);
 
-        return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, user.IsAdmin, token, user.SessionVersion));
+        return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, requireOperator || user.IsAdmin, token, user.SessionVersion));
     }
+
+    private static bool IsValidOperatorRole(string? value) =>
+        Enum.TryParse<OperatorRole>(value, ignoreCase: false, out var role) && Enum.IsDefined(role);
 }
 /// <summary>
 /// Creates a user. Password must be at least 8 characters. When invite-only is on, the invite must match the email and still be pending.

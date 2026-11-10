@@ -28,7 +28,7 @@ Plane in its own Web deployment without changing the application-level audit con
   `/v1/auth/recover-admin` return `404`.
 - On the control hostname, only the Control Plane pages and supporting routes are allowed:
   `/control/login`, `/control/bootstrap`, `/control/recover`, `/control/logout`,
-  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/email`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
+  `/control/security`, `/control/elevate`, `/admin/audit`, `/admin/email`, `/admin/operators`, `/admin/organizations` (including organization detail routes), the audit read/export endpoints, the control-login endpoint, health/culture,
   and static/Blazor framework assets. Customer application pages are not served from this origin.
 - The control hostname root redirects to `/admin/audit`; an unauthenticated browser is challenged
   to `/control/login`.
@@ -66,11 +66,13 @@ operator session.
   `/_blazor/*`, `/brand/*`, `/app.css` and its seven imported `app-*.css` stylesheets,
   `/shell.js`, `/timezone.js`, `/chat.js`, and `/favicon.ico`).
 
-The first slice deliberately reuses the existing `User` account and `User.IsAdmin` flag as the
-operator eligibility source. This is separate authentication and session handling, not yet a
-separate operator credential store or a persisted multi-role operator directory. The next
-authorization phase should introduce assignable operator roles and mandatory MFA/elevation without
-reintroducing customer-domain access.
+The Control Plane reuses the existing `User` account and credentials, but operator authority is
+a persisted role key (`SystemAdministrator`, `Support`, `Billing`, or `Auditor`) resolved by
+`IAdminGate` on every privileged operation. The legacy `User.IsAdmin` flag remains a compatibility
+marker for SystemAdministrator only; other operator roles never receive customer-side administrator
+bypasses. Role changes increment `SessionVersion`, so older sessions cannot retain their previous
+permissions. Only SystemAdministrator can assign or remove operator roles; those changes require a
+fresh TOTP step-up and are audited. A separate operator credential store is outside the current alpha scope.
 
 ## Bootstrap and recovery
 

@@ -14,6 +14,7 @@ public class User : Entity
     public string Email { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
     public bool IsAdmin { get; private set; }
+    public string? OperatorRole { get; private set; }
     public DateTime? DisabledAt { get; private set; }
     public int SessionVersion { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
@@ -32,6 +33,7 @@ public class User : Entity
         user.Email = email.Trim().ToLowerInvariant();
         user.PasswordHash = passwordHash;
         user.IsAdmin = isAdmin;
+        user.OperatorRole = isAdmin ? "SystemAdministrator" : null;
         return user;
     }
 
@@ -80,10 +82,41 @@ public class User : Entity
 
     public void SetAdmin(bool isAdmin)
     {
-        if (IsAdmin == isAdmin)
+        if (isAdmin)
+        {
+            AssignOperatorRole("SystemAdministrator");
+            return;
+        }
+
+        RemoveOperatorRole();
+    }
+
+    /// <summary>Assigns a persisted Control Plane role and invalidates all existing sessions.</summary>
+    public void AssignOperatorRole(string role)
+    {
+        var normalized = role?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 32)
+            throw new ArgumentException("A valid operator role key is required.", nameof(role));
+
+        var isSystemAdministrator = string.Equals(
+            normalized, "SystemAdministrator", StringComparison.Ordinal);
+        if (string.Equals(OperatorRole, normalized, StringComparison.Ordinal)
+            && IsAdmin == isSystemAdministrator)
             return;
 
-        IsAdmin = isAdmin;
+        OperatorRole = normalized;
+        IsAdmin = isSystemAdministrator;
+        BumpSessionVersion();
+    }
+
+    /// <summary>Removes platform-operator access and invalidates every existing session.</summary>
+    public void RemoveOperatorRole()
+    {
+        if (!IsAdmin && OperatorRole is null)
+            return;
+
+        IsAdmin = false;
+        OperatorRole = null;
         BumpSessionVersion();
     }
 

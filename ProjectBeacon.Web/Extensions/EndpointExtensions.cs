@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Localization;
 using ProjectBeacon.API.Endpoints;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Audit;
@@ -134,7 +135,10 @@ public static class EndpointExtensions
             tenant.Assign(null, null, unscoped: true);
             await using var db = dbFactory.CreateDbContext(tenant);
             var user = await db.Users.FirstOrDefaultAsync(item => item.Id == userId, ctx.RequestAborted);
-            if (user is null || !user.IsAdmin || user.IsDisabled || !user.TotpEnabled
+            if (user is null
+                || !Enum.TryParse<OperatorRole>(user.OperatorRole, ignoreCase: false, out var operatorRole)
+                || !Enum.IsDefined(operatorRole)
+                || user.IsDisabled || !user.TotpEnabled
                 || string.IsNullOrWhiteSpace(user.TotpSecretCipher))
             {
                 auditWriter.Stage(db, AuditEventFactory.ForActor(

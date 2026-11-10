@@ -1,0 +1,283 @@
+@page "/admin/operators"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Web.Authentication
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject OperatorRoleAdminService OperatorRoles
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Control — Operators</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Operator accounts" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Assign least-privilege Control Plane roles to existing ProjectBeacon accounts. Role changes invalidate the target account's existing sessions.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">Only an authorized SystemAdministrator can manage operator roles.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+            Saving or removing a role requires a current TOTP unlock. You cannot change your own role, demote the last active SystemAdministrator, or assign a role to a disabled account.
+        </MudAlert>
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <div class="d-flex align-center gap-2 mb-3">
+                <MudText Typo="Typo.h6">Accounts</MudText>
+                <MudSpacer />
+                <MudTextField T="string" @bind-Value="_search" Immediate="true" Placeholder="Search login or email"
+                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                <MudButton Variant="Variant.Text" OnClick="Reload" Disabled="_loading">Refresh</MudButton>
+            </div>
+            @if (_loading)
+            {
+                <LoadingState />
+            }
+            else if (FilteredAccounts.Count == 0)
+            {
+                <EmptyState>No matching accounts found.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="FilteredAccounts" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Account</MudTh><MudTh>Current role</MudTh><MudTh>Authenticator</MudTh>
+                        <MudTh>Account status</MudTh><MudTh>Assign role</MudTh><MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Account">
+                            <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Login</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Email</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Current role">
+                            @if (string.IsNullOrWhiteSpace(context.OperatorRole))
+                            {
+                                <MudChip T="string" Size="Size.Small">Customer account</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.OperatorRole</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Authenticator">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.TotpEnabled ? Color.Success : Color.Warning)">
+                                @(context.TotpEnabled ? "Enabled" : "Not enabled")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Account status">@(context.IsDisabled ? "Disabled" : "Active")</MudTd>
+                        <MudTd DataLabel="Assign role">
+                            <MudSelect T="OperatorRole" Dense="true" Margin="Margin.Dense"
+                                       Value="@SelectedRole(context)"
+                                       ValueChanged="@(role => SetSelectedRole(context.UserId, role))"
+                                       Disabled="@(context.IsDisabled || _busyUser is not null)">
+                                @foreach (var role in Enum.GetValues<OperatorRole>())
+                                {
+                                    <MudSelectItem Value="@role">@role</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudTd>
+                        <MudTd DataLabel="Actions">
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                           Disabled="@(context.IsDisabled || _busyUser is not null || IsUnchanged(context))"
+                                           OnClick="@(() => SaveRole(context.UserId))">
+                                    @(_busyUser == context.UserId ? "Saving…" : "Save")
+                                </MudButton>
+                                @if (!string.IsNullOrWhiteSpace(context.OperatorRole))
+                                {
+                                    <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                               Disabled="@(_busyUser is not null)"
+                                               OnClick="@(() => RemoveRole(context.UserId))">Remove</MudButton>
+                                }
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3">
+                    Showing up to 500 accounts. Newly promoted operators must configure TOTP at Security before using elevated functions.
+                </MudText>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _loading;
+    private Guid? _busyUser;
+    private string _search = string.Empty;
+    private List<OperatorAccountDto> _accounts = [];
+    private readonly Dictionary<Guid, OperatorRole> _selections = [];
+
+    private List<OperatorAccountDto> FilteredAccounts =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _accounts
+            : _accounts.Where(account =>
+                account.Login.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                || account.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var access = await GetOperatorAsync(requireElevation: false);
+        if (access is null)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _authorized = true;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        var access = await GetOperatorAsync(requireElevation: false);
+        if (access is null)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var result = await OperatorRoles.ListAsync(access);
+            if (!result.Success || result.Value is null)
+                throw new InvalidOperationException(result.Error ?? "Could not load operator accounts.");
+
+            _accounts = result.Value.ToList();
+            foreach (var account in _accounts)
+            {
+                if (Enum.TryParse<OperatorRole>(account.OperatorRole, ignoreCase: false, out var role)
+                    && Enum.IsDefined(role))
+                    _selections[account.UserId] = role;
+                else if (!_selections.ContainsKey(account.UserId))
+                    _selections[account.UserId] = OperatorRole.Support;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveRole(Guid userId)
+    {
+        var access = await GetOperatorAsync(requireElevation: true);
+        if (access is null)
+            return;
+
+        _busyUser = userId;
+        try
+        {
+            var role = _selections.GetValueOrDefault(userId, OperatorRole.Support);
+            var result = await OperatorRoles.AssignAsync(access, userId, role);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Could not assign operator role.", Severity.Warning);
+                return;
+            }
+
+            Snackbar.Add("Operator role saved. The account's previous sessions are invalidated.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busyUser = null;
+        }
+    }
+
+    private async Task RemoveRole(Guid userId)
+    {
+        var access = await GetOperatorAsync(requireElevation: true);
+        if (access is null)
+            return;
+
+        _busyUser = userId;
+        try
+        {
+            var result = await OperatorRoles.RemoveAsync(access, userId);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Could not remove operator role.", Severity.Warning);
+                return;
+            }
+
+            Snackbar.Add("Operator access removed. The account's previous sessions are invalidated.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busyUser = null;
+        }
+    }
+
+    private async Task<AdminActor?> GetOperatorAsync(bool requireElevation)
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return null;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return null;
+        }
+
+        var result = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal),
+            OperatorPermission.OperatorRolesManage,
+            requireElevation);
+        if (result.Success)
+            return result.Value;
+
+        Snackbar.Add(requireElevation
+            ? "Operator role changes require a current TOTP unlock."
+            : "Only SystemAdministrator can manage operator roles.", Severity.Warning);
+        return null;
+    }
+
+    private OperatorRole SelectedRole(OperatorAccountDto account) =>
+        _selections.GetValueOrDefault(account.UserId, OperatorRole.Support);
+
+    private void SetSelectedRole(Guid userId, OperatorRole role) => _selections[userId] = role;
+
+    private bool IsUnchanged(OperatorAccountDto account) =>
+        string.Equals(account.OperatorRole, SelectedRole(account).ToString(), StringComparison.Ordinal);
+}

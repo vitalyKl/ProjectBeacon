@@ -23,4 +23,5 @@ public enum OperatorPermission : ulong
     SystemMaintenance = 1UL << 12,
     EmailSettingsRead = 1UL << 13,
     EmailSettingsManage = 1UL << 14,
+    OperatorRolesManage = 1UL << 15,
 }

@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddScoped<IAdminGate, DatabaseAdminGate>();
         services.AddScoped<PlatformEmailAdminService>();
+        services.AddScoped<OperatorRoleAdminService>();
 
         services.AddTransient<BootstrapHandler>();
         services.AddTransient<RecoverAdminHandler>();

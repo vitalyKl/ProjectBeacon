@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Application.Admin;
 
 /// <summary>
-/// Reserved operator role keys. The alpha runtime assigns only SystemAdministrator
-/// through the existing User.IsAdmin flag; the other roles are not yet assignable.
+/// Stable Control Plane role keys persisted on the user account. Effective permissions
+/// are derived by OperatorRolePermissionSets and checked by DatabaseAdminGate.
 /// </summary>
 public enum OperatorRole
 {

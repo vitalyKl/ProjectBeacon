@@ -6,9 +6,9 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Persistence;
 
 /// <summary>
-/// Resolves current platform-operator authority from the persisted account, never from
-/// caller-supplied permissions. The only live role in alpha is SystemAdministrator,
-/// represented by the existing User.IsAdmin flag.
+/// Resolves current platform-operator authority from the persisted role assignment, never from
+/// caller-supplied permissions. User.IsAdmin remains true only for SystemAdministrator
+/// to preserve existing customer-side authorization semantics.
 /// </summary>
 public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
 {
@@ -32,7 +32,7 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         var account = await db.Users
             .AsNoTracking()
             .Where(user => user.Id == userId)
-            .Select(user => new OperatorAccountState(user.IsAdmin, user.DisabledAt != null, user.TotpEnabled))
+            .Select(user => new OperatorAccountState(user.IsAdmin, user.DisabledAt != null, user.TotpEnabled, user.OperatorRole))
             .FirstOrDefaultAsync(ct);
 
         if (account is null || account.IsDisabled)
@@ -43,7 +43,13 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         if (!account.IsAdmin)
             return Result.Failure<AdminActor>("The account is not a platform operator.", ErrorKind.Forbidden);
 
-        var permissions = OperatorRolePermissionSets.For(OperatorRole.SystemAdministrator);
+        if (!Enum.TryParse<OperatorRole>(account.Role, ignoreCase: false, out var role)
+            || !Enum.IsDefined(role))
+            return Result.Failure<AdminActor>("The account has no valid persisted operator role.", ErrorKind.Forbidden);
+        if (account.IsAdmin != (role == OperatorRole.SystemAdministrator))
+            return Result.Failure<AdminActor>("The operator role and legacy administrator marker are inconsistent.", ErrorKind.Forbidden);
+
+        var permissions = OperatorRolePermissionSets.For(role);
         if (!OperatorPermissionSets.Includes(permissions, required))
             return Result.Failure<AdminActor>("The operator does not have the required permission.", ErrorKind.Forbidden);
 
@@ -61,5 +67,5 @@ public sealed class DatabaseAdminGate(IBeaconDbFactory dbFactory) : IAdminGate
         return Result.Ok(new AdminActor(userId, permissions, elevatedUntil));
     }
 
-    private sealed record OperatorAccountState(bool IsAdmin, bool IsDisabled, bool TotpEnabled);
+    private sealed record OperatorAccountState(bool IsAdmin, bool IsDisabled, bool TotpEnabled, string? Role);
 }
