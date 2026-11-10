@@ -2,6 +2,8 @@ namespace ProjectBeacon.Web.Tests;
 
 using System.Security.Claims;
 using Application.Authorization;
+using Application.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
