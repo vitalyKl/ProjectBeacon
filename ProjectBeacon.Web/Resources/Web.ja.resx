@@ -2745,4 +2745,31 @@ orthstar</value>
   <data name="OpenProposalInbox" xml:space="preserve">
     <value>提案インボックスを開く</value>
   </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>提案ポリシー</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>自動適用できる対応済みコンテンツ更新を選択します。既定は手動です。Decision と Constraint は常に Owner/Admin の承認が必要です。</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>提案ポリシーを読み込めませんでした。</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>承認モード</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>制限</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>手動</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>自動</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>ポリシーを変更できるのはプロジェクトまたは組織の Owner/Admin のみです。</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>提案ポリシーを保存しました。</value>
+  </data>
 </root>
