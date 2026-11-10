@@ -39,6 +39,17 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void TaskDetail_ExposesTaskProposalsTab()
+    {
+        var task = DbContext.Tasks.First();
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
+            builder => builder.Add(component => component.TaskId, task.Id));
+
+        Assert.Contains("Proposals", cut.Markup);
+    }
+
+    [Fact]
     public void TaskDetail_RendersPageStructure()
     {
         // Arrange
