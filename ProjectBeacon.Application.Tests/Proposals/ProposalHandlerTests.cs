@@ -109,6 +109,44 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_RejectsCredentialLikePayloadBeforePersistence()
+    {
+        var request = Request() with
+        {
+            PayloadJson = """{"description":"ghp_123456789012345678901234567890"}"""
+        };
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("credential", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.Proposals.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Create_RejectsPrivateKeyInRationaleBeforePersistence()
+    {
+        var request = Request() with
+        {
+            RationaleMarkdown = "Accidentally included -----BEGIN PRIVATE KEY----- material."
+        };
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("credential", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.Proposals.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
     {
         var factory = HandlerSqlite.Factory(_connection);
