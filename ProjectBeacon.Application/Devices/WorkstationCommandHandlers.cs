@@ -355,6 +355,20 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
                         .FirstOrDefaultAsync(ct);
                 }
             }
+            else if (row.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            {
+                var proposalId = DevicePayloadReader.ReadGuid(row.PayloadJson, "proposalId");
+                if (proposalId is { } appliedProposalId)
+                {
+                    var proposalScope = await db.Proposals.IgnoreQueryFilters()
+                        .Where(proposal => proposal.Id == appliedProposalId
+                            && proposal.ProjectId == row.ProjectId)
+                        .Select(proposal => new { proposal.TaskId, proposal.SessionId })
+                        .FirstOrDefaultAsync(ct);
+                    dispatchTaskId = proposalScope?.TaskId;
+                    completedSessionId = proposalScope?.SessionId;
+                }
+            }
 
             try
             {
