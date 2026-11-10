@@ -6,6 +6,7 @@ using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Proposals;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// A project constraint and whether it is still proposed.
@@ -39,7 +40,13 @@ public class CreateConstraintHandler
         if (string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<ConstraintDto>("Constraint body is required.");
 
+        if (request.Actor is not { } actor)
+            return Result.Forbidden<ConstraintDto>("A verified actor is required to propose a constraint.");
+
         await using var db = _dbFactory.CreateDbContext();
+        if (!await ProposalProjectAuthorization.CanSubmitAsync(db, actor, request.ProjectId, ct))
+            return Result.Forbidden<ConstraintDto>("Project membership is required to propose a constraint.");
+
         var constraint = Constraint.Create(request.Body.Trim(), request.Kind, request.ProjectId);
         db.Constraints.Add(constraint);
         var attribution = ContentAttribution.FromActor(request.Actor, request.AgentId);
@@ -54,7 +61,13 @@ public class CreateConstraintHandler
         if (string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<ConstraintDto>("Constraint body is required.");
 
+        if (request.Actor is not { } actor)
+            return Result.Forbidden<ConstraintDto>("A verified actor is required to propose a constraint.");
+
         await using var db = _dbFactory.CreateDbContext();
+        if (!await ProposalProjectAuthorization.CanSubmitAsync(db, actor, request.ProjectId, ct))
+            return Result.Forbidden<ConstraintDto>("Project membership is required to propose a constraint.");
+
         var body = request.Body.Trim();
         var existing = await db.Constraints.FirstOrDefaultAsync(c =>
             c.ProjectId == request.ProjectId && c.Body == body && c.Kind == request.Kind
