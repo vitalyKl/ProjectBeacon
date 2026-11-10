@@ -120,6 +120,8 @@ operator routes. Smoke-test that `/login` and `/dashboard` work on the customer 
 `/admin/audit`, `/control/login`, `/bootstrap`, and `/recover` return `404` there. Verify that
 `/control/login` works only on the control host and that a non-operator account is refused.
 
+For billing, verify that `/admin/billing/invoices` loads only on the control host and returns `404` on the customer host. On the customer host, sign in as an organization Owner/Admin and verify `/billing` shows only that active organization's invoices. Sign in as an ordinary Member and verify invoice details are denied; also verify that a Suspended or Closed organization cannot view invoices. Manual payment status is operator-attested only and does not verify funds or contact a payment provider.
+
 For local development, add `CONTROL_HOST=control.localhost` to `.env`. Browse the customer app at
 `http://localhost:5083` and the Control Plane at `http://control.localhost:5083/control/login`.
 Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstrap`.
