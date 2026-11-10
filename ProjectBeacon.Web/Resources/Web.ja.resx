@@ -2778,4 +2778,16 @@ orthstar</value>
   <data name="NoTextualChanges" xml:space="preserve">
     <value>テキストの変更はありません。</value>
   </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>ドキュメント変更の適用</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review では人による承認を待ちます。Auto では、このプロファイルの許可されたパス内のドキュメント変更のみを適用します。</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review（人による承認）</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto（ドキュメントパッチを適用）</value>
+  </data>
 </root>
