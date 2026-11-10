@@ -51,6 +51,7 @@ public sealed class ControlHostMiddlewareTests
     [InlineData("/v1/admin/audit")]
     [InlineData("/admin/operations")]
     [InlineData("/admin/billing/plans")]
+    [InlineData("/admin/billing/invoices")]
     [InlineData("/admin/email")]
     [InlineData("/admin/organizations")]
     [InlineData("/admin/organizations/11111111-1111-1111-1111-111111111111")]
