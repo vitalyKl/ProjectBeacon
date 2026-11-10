@@ -93,6 +93,37 @@ public sealed class AgentProfileOverrideHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task OnlyDocsWriterCanEnableAutomaticDocumentationPatchApplication()
+    {
+        var docs = BuiltInAgentProfiles.Get("docs-writer")!;
+        var saved = await new SaveAgentProfileOverrideHandler(Factory()).HandleAsync(
+            new SaveAgentProfileOverrideCommand(new SaveAgentProfileOverrideRequest(
+                _userId, docs.Key, docs.Name, docs.Description, docs.Instruction,
+                docs.Tools, docs.CommandsEnabled, docs.ReportsDiff, docs.SizeHint, docs.Effort, "Auto")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(saved.Success, saved.Error);
+        Assert.Equal("Auto", saved.Value!.ApplyPolicy);
+
+        Domain.Entities.Agents.AgentProfile stored;
+        using (TenantScope.EnterUnscoped())
+            stored = _db.AgentProfiles.Single(profile => profile.UserId == _userId && profile.Key == docs.Key);
+        var effective = BuiltInAgentProfiles.ApplyOverride(docs, stored)!;
+        Assert.Equal("Auto", effective.ApplyPolicy);
+
+        var implementer = BuiltInAgentProfiles.Get("implementer")!;
+        var denied = await new SaveAgentProfileOverrideHandler(Factory()).HandleAsync(
+            new SaveAgentProfileOverrideCommand(new SaveAgentProfileOverrideRequest(
+                _userId, implementer.Key, implementer.Name, implementer.Description, implementer.Instruction,
+                implementer.Tools, implementer.CommandsEnabled, implementer.ReportsDiff,
+                implementer.SizeHint, implementer.Effort, "Auto")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(denied.Success);
+        Assert.Contains("docs-writer", denied.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Save_RejectsToolExpansionAndEnablingCommandsForReadOnlyProfile()
     {
         var handler = new SaveAgentProfileOverrideHandler(Factory());
