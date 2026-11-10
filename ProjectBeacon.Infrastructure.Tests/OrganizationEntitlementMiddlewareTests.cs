@@ -34,7 +34,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
         var tenant = Tenant(Guid.NewGuid());
         var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(false, "entitlement_missing")));
         var (context, next) = NewContext("/v1/tasks");
-        var middleware = new OrganizationEntitlementMiddleware(next);
+        var middleware = new OrganizationEntitlementMiddleware(next.Delegate);
 
         await middleware.InvokeAsync(context, tenant, service);
 
@@ -58,7 +58,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
         var tenant = Tenant(Guid.NewGuid());
         var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(false, "entitlement_missing")));
         var (context, next) = NewContext(path);
-        var middleware = new OrganizationEntitlementMiddleware(next);
+        var middleware = new OrganizationEntitlementMiddleware(next.Delegate);
 
         await middleware.InvokeAsync(context, tenant, service);
 
@@ -75,7 +75,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
         var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(false, reasonCode)));
         var (context, next) = NewContext("/v1/tasks");
 
-        await new OrganizationEntitlementMiddleware(next).InvokeAsync(context, tenant, service);
+        await new OrganizationEntitlementMiddleware(next.Delegate).InvokeAsync(context, tenant, service);
 
         Assert.False(next.Called);
         Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
@@ -108,7 +108,7 @@ public sealed class OrganizationEntitlementMiddlewareTests
         var service = new StubEntitlementService(Result.Ok(new EntitlementDecision(false, "entitlement_missing")));
         var (context, next) = NewContext("/v1/tasks");
 
-        await new OrganizationEntitlementMiddleware(next).InvokeAsync(context, tenant, service);
+        await new OrganizationEntitlementMiddleware(next.Delegate).InvokeAsync(context, tenant, service);
 
         Assert.True(next.Called);
         Assert.False(service.Called);
