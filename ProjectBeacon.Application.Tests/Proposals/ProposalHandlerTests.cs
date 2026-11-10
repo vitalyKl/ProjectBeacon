@@ -86,6 +86,7 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Equal(2, accepted.Value.AppliedRevision);
 
         var project = await _db.Projects.SingleAsync(item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        await _db.Entry(project).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Updated project description", project.Description);
         Assert.Equal(2, project.Revision);
 
@@ -115,8 +116,13 @@ public sealed class ProposalHandlerTests : IDisposable
             .HandleAsync(new CreateProposalCommand(_projectId, Request(), firstActor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
+        var otherUser = User.Create("proposal-second-author", "proposal-second-author@beacon.local", "hash");
+        _db.Users.Add(otherUser);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, otherUser.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var otherActor = new ActorContext(
-            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+            ActorType.Human, otherUser.Id, false, null, null, _projectId, _orgId, ApiTokenCapability.None);
         var replay = await new CreateProposalHandler(factory, new EfAuditWriter())
             .HandleAsync(new CreateProposalCommand(_projectId, Request(), otherActor), TestContext.Current.CancellationToken);
 
