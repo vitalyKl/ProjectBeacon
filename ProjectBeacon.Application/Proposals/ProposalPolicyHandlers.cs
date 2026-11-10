@@ -39,8 +39,8 @@ public static class ProposalPolicyCatalog
         && operation == ProposalOperation.Update;
 
     /// <summary>
-    /// Governance content always requires an explicit Owner/Admin decision. Other P2 Update
-    /// targets may be switched to Auto by a project or organization Owner/Admin.
+    /// Automatic proposal application is restricted to documentation RepoPatch updates.
+    /// Accepted content and governance updates always require human review.
     /// </summary>
     public static bool CanAutoApply(ContentTargetKind targetKind, ProposalOperation operation) =>
         targetKind == ContentTargetKind.RepoPatch && operation == ProposalOperation.Update;
