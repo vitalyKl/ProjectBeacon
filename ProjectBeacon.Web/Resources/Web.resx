@@ -2866,6 +2866,12 @@ No Beacon-hosted coding agent.</value>
 <data name="AuditTargetId" xml:space="preserve">
     <value>Target ID</value>
   </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>Trace ID</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>Plan</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>Act</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>Model</value></data>
