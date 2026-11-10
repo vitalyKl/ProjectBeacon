@@ -129,34 +129,6 @@
 }
 
 @media print {
-    @page {
-        size: A4 portrait;
-        margin: 16mm;
-    }
-
-    :global(body) {
-        color: #17212b !important;
-        background: #fff !important;
-    }
-
-    :global(.mud-main-content),
-    :global(.beacon-main),
-    :global(.beacon-content-max) {
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: none !important;
-        width: 100% !important;
-    }
-
-    :global(.beacon-appbar),
-    :global(.beacon-drawer),
-    :global(.beacon-mobile-nav),
-    :global(.mud-overlay),
-    :global(.mud-snackbar-provider),
-    .no-print {
-        display: none !important;
-    }
-
     .billing-print-document {
         max-width: none;
         margin: 0;
@@ -168,5 +140,9 @@
 
     .billing-print-notice {
         break-inside: avoid;
+    }
+
+    .no-print {
+        display: none !important;
     }
 }
