@@ -155,6 +155,33 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
 
     [Fact]
+    public async Task InviteOwner_ReservesAnOrganizationMemberSeat()
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var existingMember = User.Create("existing-owner", "existing-owner@example.test", "hash");
+        var org = Org.Create("Member capacity customer");
+        _seedDb.Users.AddRange(_admin, existingMember);
+        _seedDb.Orgs.Add(org);
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, existingMember.Id, MemberRole.Owner));
+        _seedDb.OrgInvites.Add(OrgInvite.Create(
+            org.Id, "already-invited@example.test", MemberRole.Owner, _admin.Id, "pending-token-hash"));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var service = CreateService(entitlements: new MemberLimitEvaluator(limit: 1));
+
+        var result = await service.InviteOwnerAsync(actor, org.Id, "another-owner@example.test");
+
+        Assert.False(result.Success);
+        Assert.Equal("entitlement_limit_exceeded", result.ErrorCode);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        Assert.False(await _seedDb.OrgInvites.IgnoreQueryFilters().AnyAsync(
+            invite => invite.OrgId == org.Id && invite.Email == "another-owner@example.test",
+            TestContext.Current.CancellationToken));
+        Assert.Empty(_email.Sent);
+    }
+
+    [Fact]
     public async Task InviteOwner_ExistingOrganization_CommitsInvitationBeforeSendingEmail()
     {
         _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
@@ -609,8 +636,28 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.Equal(0, limitedDetails.Value.DeviceCount);
     }
 
-    private EfOrganizationAdminService CreateService(IUserSessionVersionCache? sessionVersions = null) =>
-        new(_factory, _email, _configuration, new EfAuditWriter(), TimeProvider.System, sessionVersions);
+    private EfOrganizationAdminService CreateService(
+        IUserSessionVersionCache? sessionVersions = null,
+        IEntitlementEvaluator? entitlements = null) =>
+        new(_factory, _email, _configuration, new EfAuditWriter(), TimeProvider.System,
+            sessionVersions, entitlements);
+
+    private sealed class MemberLimitEvaluator(long limit) : IEntitlementEvaluator
+    {
+        public Task<Result<EntitlementDecision>> EvaluateAsync(
+            Guid orgId,
+            EntitlementRequirement requirement,
+            CancellationToken ct = default)
+        {
+            var allowed = requirement.CurrentUsage <= limit
+                && requirement.RequestedUnits <= limit - requirement.CurrentUsage;
+            return Task.FromResult(Result.Ok(new EntitlementDecision(
+                allowed,
+                allowed ? null : "limit_exceeded",
+                requirement.CurrentUsage,
+                limit)));
+        }
+    }
 
     private sealed class CapturingSessionVersionCache : IUserSessionVersionCache
     {
