@@ -280,6 +280,46 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task AcceptProjectInvite_ConsumesMatchingOrgInviteReservationOnce()
+    {
+        var admin = await SeedAdminAsync();
+        var invitedUser = User.Create("dual-invite", "dual-invite@seat-limited.test", "hash");
+        var org = Org.Create("Dual invite org");
+        var project = Project.Create("Project", null, org.Id);
+        _db.Users.Add(invitedUser);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        _db.ProjectMembers.Add(ProjectMember.Create(project.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var orgInvite = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(org.Id, invitedUser.Email, MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(orgInvite.Success, orgInvite.Error);
+
+        var projectInvite = await new CreateProjectInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateProjectInviteRequest(project.Id, invitedUser.Email, MemberRole.Member, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(projectInvite.Success, projectInvite.Error);
+
+        var accepted = await new AcceptInviteHandler(
+            Factory(), entitlements: new MemberLimitEvaluator(2)).HandleAsync(
+                new AcceptInviteRequest(projectInvite.Value!.Token, Human(invitedUser.Id, false)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.True(await _db.OrgMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.OrgId == org.Id && member.UserId == invitedUser.Id,
+            TestContext.Current.CancellationToken));
+        Assert.True(await _db.ProjectMembers.IgnoreQueryFilters().AnyAsync(
+            member => member.ProjectId == project.Id && member.UserId == invitedUser.Id,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(InviteStatus.Expired, (await _db.OrgInvites.IgnoreQueryFilters()
+            .SingleAsync(invite => invite.Id == orgInvite.Value!.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task SuspendedOrganizationInvite_CannotBePreviewedOrAccepted()
     {
         var admin = await SeedAdminAsync();
