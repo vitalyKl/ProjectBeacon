@@ -41,6 +41,7 @@ public static class AuditEndpoints
         [FromQuery] Guid? actorDeviceId,
         [FromQuery] string? targetType,
         [FromQuery] string? targetId,
+        [FromQuery] string? traceId,
         [FromQuery] AuditOutcome? outcome,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
@@ -53,7 +54,7 @@ public static class AuditEndpoints
 
         var query = new AuditQuery(orgId, projectId, fromUtc, toUtc, action, actorKind,
             actorUserId, outcome, page ?? 1, pageSize ?? 50,
-            actorTokenId, actorDeviceId, targetType, targetId);
+            actorTokenId, actorDeviceId, targetType, targetId, traceId);
         try
         {
             return Results.Ok(await reader.ListAsync(access.Value!, query, ct));
@@ -79,6 +80,7 @@ public static class AuditEndpoints
         [FromQuery] Guid? actorDeviceId,
         [FromQuery] string? targetType,
         [FromQuery] string? targetId,
+        [FromQuery] string? traceId,
         [FromQuery] AuditOutcome? outcome,
         CancellationToken ct)
     {
@@ -93,7 +95,8 @@ public static class AuditEndpoints
             ActorTokenId: actorTokenId,
             ActorDeviceId: actorDeviceId,
             TargetType: targetType,
-            TargetId: targetId);
+            TargetId: targetId,
+            TraceId: traceId);
         var rows = new List<AuditEntry>();
         long total;
         try
