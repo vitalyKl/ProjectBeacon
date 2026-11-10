@@ -979,6 +979,58 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("EmailDeliveryLogs");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Billing.BillingPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("Cadence")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FeaturesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("LimitsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<long?>("PriceMinor")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("BillingPlans");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Email.PlatformEmailSettings", b =>
                 {
                     b.Property<Guid>("Id")

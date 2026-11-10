@@ -3,6 +3,7 @@ namespace ProjectBeacon.Infrastructure.Data;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities.Agents;
+using Domain.Entities.Billing;
 using Domain.Entities.Audit;
 using Domain.Entities.Email;
 using Domain.Entities.Chat;
@@ -51,6 +52,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<PlatformEmailSettings> PlatformEmailSettings => Set<PlatformEmailSettings>();
     public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
+    public DbSet<BillingPlan> BillingPlans => Set<BillingPlan>();
     public DbSet<TaskKind> TaskKinds => Set<TaskKind>();
     public DbSet<TaskKindPhase> TaskKindPhases => Set<TaskKindPhase>();
     public DbSet<TaskPhase> TaskPhases => Set<TaskPhase>();
@@ -119,5 +121,6 @@ public class BeaconDbContext : DbContext, IBeaconDb
         // Platform configuration and outgoing mail metadata are global records.
         modelBuilder.Entity<PlatformEmailSettings>().HasQueryFilter(e => FilterUnscoped);
         modelBuilder.Entity<EmailDeliveryLog>().HasQueryFilter(e => FilterUnscoped);
+        modelBuilder.Entity<BillingPlan>().HasQueryFilter(plan => FilterUnscoped);
     }
 }
