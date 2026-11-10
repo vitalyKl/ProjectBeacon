@@ -620,12 +620,39 @@ public class RevokeOrgInviteHandler
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
-        if (invite is null)
+        var inviteSnapshot = await db.OrgInvites.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(item => item.Id == request.InviteId)
+            .Select(item => new { item.Id, item.OrgId })
+            .FirstOrDefaultAsync(ct);
+        if (inviteSnapshot is null)
             return Result.Failure("Invite not found.");
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: invite.OrgId, ct: ct);
+
+        var check = await _auth.CanAsync(
+            db, request.Actor, ResourceType.Org, AuthAction.Administer,
+            orgId: inviteSnapshot.OrgId, ct: ct);
         if (!check.Success)
             return Result.Forbidden();
+
+        // Revocation releases a reserved member seat. Serialize it with invite creation,
+        // invite acceptance and project-invite acceptance using the same org lock.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, inviteSnapshot.OrgId, ct);
+
+        var currentCheck = await _auth.CanAsync(
+            db, request.Actor, ResourceType.Org, AuthAction.Administer,
+            orgId: inviteSnapshot.OrgId, ct: ct);
+        if (!currentCheck.Success)
+            return Result.Forbidden();
+
+        var invite = await db.OrgInvites.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == inviteSnapshot.Id, ct);
+        if (invite is null)
+            return Result.Failure("Invite not found.");
+        if (invite.Status != InviteStatus.Pending)
+            return Result.Failure("Only pending invitations can be revoked.", ErrorKind.Conflict);
+
         invite.Revoke();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
             request.Actor,
@@ -636,6 +663,7 @@ public class RevokeOrgInviteHandler
             null,
             detailsJson: """{"previousState":"Pending","newState":"Revoked"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Result.Ok();
     }
 }
