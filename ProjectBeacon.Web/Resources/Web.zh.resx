@@ -2625,4 +2625,100 @@ orthstar</value>
   <data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>收起</value></data>
   <data name="Characters" xml:space="preserve"><value>字符</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>提案收件箱</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>审核项目知识提案和修订。</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>项目成员可以审核普通内容。Decision 和 Constraint 的状态变更仅限 Owner 或 Admin。</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>存在冲突</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>目标类型</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>作者</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>符合条件的提案：{0} 项。</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>接受所选项</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>清除选择</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>没有符合这些筛选条件的提案。</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>绑定修订版本的提案</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>该提案基于较旧的修订版本。</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>当前修订版本</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>提案详情</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>接受时要应用的内容（JSON）</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>与基础快照比较</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>基础快照</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>基础快照已不可用。</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>提议的内容</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>处理备注</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>提案已接受并应用。</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>提案已拒绝。</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>批量接受：成功 {0} 项，失败 {1} 项。</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>现有待审核项目</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>待审核的上下文草稿</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>没有现有待审核项目。</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>提议的决策</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>提议的约束</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>只有项目或组织的 Owner/Admin 可以处理治理类项目。</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>上下文草稿已批准。</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>上下文草稿已拒绝并归档。</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>需要加入该项目才能查看此收件箱。</value>
+  </data>
 </root>
