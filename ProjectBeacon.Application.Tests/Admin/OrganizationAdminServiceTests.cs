@@ -234,6 +234,40 @@ public sealed class OrganizationAdminServiceTests : IDisposable
                 TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData(OperatorRole.SystemAdministrator)]
+    [InlineData(OperatorRole.Support)]
+    [InlineData(OperatorRole.Billing)]
+    [InlineData(OperatorRole.Auditor)]
+    public async Task SetAccountDisabled_RejectsEveryPlatformOperatorRole(OperatorRole role)
+    {
+        _admin = User.Create("platform-admin", "platform-admin@example.test", "hash", isAdmin: true);
+        var target = User.Create("operator-target", "operator-target@example.test", "hash");
+        target.AssignOperatorRole(role.ToString());
+        var org = Org.Create("Operator account protection");
+        _seedDb.Users.AddRange(_admin, target);
+        _seedDb.Orgs.Add(org);
+        _seedDb.OrgMembers.Add(OrgMember.Create(org.Id, target.Id, MemberRole.Member));
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = await AdminActorAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        var cache = new CapturingSessionVersionCache();
+        var service = CreateService(cache);
+
+        var disabled = await service.SetAccountDisabledAsync(actor, org.Id, target.Id, disabled: true);
+
+        Assert.False(disabled.Success);
+        Assert.Equal(ErrorKind.Conflict, disabled.Kind);
+        await _seedDb.Entry(target).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.False(target.IsDisabled);
+        Assert.Equal(0, target.SessionVersion);
+        Assert.Empty(cache.Invalidated);
+        Assert.False(await _seedDb.AuditEvents.IgnoreQueryFilters().AnyAsync(
+            item => item.TargetType == "User" && item.TargetId == target.Id.ToString()
+                && item.Action == "platform.user.account_disabled",
+            TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task SetAccountDisabled_ProtectsLastOwnerAndInvalidatesSessionsOnDisableAndEnable()
     {
