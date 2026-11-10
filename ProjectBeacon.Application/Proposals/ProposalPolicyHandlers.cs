@@ -43,10 +43,7 @@ public static class ProposalPolicyCatalog
     /// targets may be switched to Auto by a project or organization Owner/Admin.
     /// </summary>
     public static bool CanAutoApply(ContentTargetKind targetKind, ProposalOperation operation) =>
-        // P2 Update proposals always modify existing accepted content. The project plan
-        // explicitly keeps those changes manual; only the P6 documentation RepoPatch flow
-        // may become eligible for Auto, after its profile/path/client guards are enforced.
-        false;
+        targetKind == ContentTargetKind.RepoPatch && operation == ProposalOperation.Update;
 
     public static string RestrictionReason(ContentTargetKind targetKind, ProposalOperation operation)
     {
@@ -54,6 +51,8 @@ public static class ProposalPolicyCatalog
             return "Create and Delete proposals are not implemented in P2.";
         if (targetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
             return "Decision and Constraint proposals always require an Owner/Admin decision.";
+        if (targetKind == ContentTargetKind.RepoPatch)
+            return "Repository patches require explicit documentation profile and path grants before Auto can be used.";
         if (operation == ProposalOperation.Update && IsSupported(targetKind, operation))
             return "Updates to existing accepted content always require manual human review.";
         return "This target/operation pair is not currently supported.";
