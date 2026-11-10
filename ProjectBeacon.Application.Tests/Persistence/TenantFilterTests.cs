@@ -59,7 +59,8 @@ public sealed class TenantFilterTests : IDisposable
             var clr = entityType.ClrType;
             var isScoped = typeof(IProjectScoped).IsAssignableFrom(clr)
                 || typeof(IOrgScoped).IsAssignableFrom(clr);
-            var isSpecialTenantFiltered = clr == typeof(AuditEvent);
+            var isSpecialTenantFiltered = clr == typeof(AuditEvent)
+                || clr == typeof(ProjectBeacon.Domain.Entities.Identity.Org);
             var isGlobalOperatorOnly = clr == typeof(PlatformEmailSettings) || clr == typeof(EmailDeliveryLog);
             var hasFilter = entityType.GetQueryFilter() is not null;
             var expectsFilter = isScoped || isSpecialTenantFiltered || isGlobalOperatorOnly;
@@ -69,7 +70,7 @@ public sealed class TenantFilterTests : IDisposable
                 scoped.Add(clr.Name);
         }
 
-        // Frozen baseline: 26 project-scoped + 3 org-scoped + AuditEvent + 2 operator-only globals.
-        Assert.Equal(32, scoped.Count);
+        // Frozen baseline: 26 project-scoped + 3 org-scoped + Org lifecycle + AuditEvent + 2 operator-only globals.
+        Assert.Equal(33, scoped.Count);
     }
 }
