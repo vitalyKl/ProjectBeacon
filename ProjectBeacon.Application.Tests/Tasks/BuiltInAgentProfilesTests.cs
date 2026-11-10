@@ -87,6 +87,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.KnowledgeWithdraw, docs.Tools);
         Assert.Contains(McpToolNames.HashFile, docs.Tools);
         Assert.Contains(McpToolNames.HashText, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.HashFile, knowledge.Tools);
+        Assert.DoesNotContain(McpToolNames.HashText, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.WriteFile, docs.Tools);
         Assert.DoesNotContain(McpToolNames.ApplyPatch, docs.Tools);
         Assert.Contains("must not enter the live working tree before approval", docs.Instruction, StringComparison.Ordinal);
