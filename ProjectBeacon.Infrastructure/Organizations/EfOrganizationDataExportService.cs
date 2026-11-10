@@ -198,6 +198,7 @@ public sealed class EfOrganizationDataExportService(
                 project.Id,
                 project.Name,
                 project.Description,
+                project.ReviewCheckCommand,
                 project.OrgId,
                 project.CreatedAt,
                 project.UpdatedAt
