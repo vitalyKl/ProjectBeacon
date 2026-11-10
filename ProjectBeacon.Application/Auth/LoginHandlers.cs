@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Auth;
 using Application.Common;
 using Application.Admin;
 using Application.Audit;
+using Application.Entitlements;
 using Domain.Entities.Audit;
 using Application.Authorization;
 using Application.Identity;
@@ -151,19 +152,22 @@ public class RegisterHandler
     private readonly IConfiguration? _configuration;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditWriter? _auditWriter;
+    private readonly IEntitlementEvaluator? _entitlements;
 
     public RegisterHandler(
         IBeaconDbFactory dbFactory,
         IPasswordHasher passwords,
         IConfiguration? configuration = null,
         TimeProvider? timeProvider = null,
-        IAuditWriter? auditWriter = null)
+        IAuditWriter? auditWriter = null,
+        IEntitlementEvaluator? entitlements = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _configuration = configuration;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _auditWriter = auditWriter;
+        _entitlements = entitlements;
     }
 
     public async Task<Result<RegisterResponse>> HandleAsync(RegisterCommand command, CancellationToken ct = default)
@@ -241,18 +245,65 @@ public class RegisterHandler
 
         var user = User.Create(login, email, _passwords.Hash(password));
         await using var writeDb = _dbFactory.CreateDbContext(window);
-        writeDb.Users.Add(user);
+        await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
 
         if (orgInvite is not null)
         {
+            await EntitlementCapacityLock.AcquireOrganizationAsync(
+                writeDb.Database, transaction, orgInvite.OrgId, ct);
+            var lifecycleStatus = await writeDb.Orgs.IgnoreQueryFilters()
+                .Where(org => org.Id == orgInvite.OrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+            if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+                return Result.Failure<RegisterResponse>("Invite is no longer valid.");
+
             var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(i => i.Id == orgInvite.Id, ct);
+                .FirstOrDefaultAsync(item => item.Id == orgInvite.Id, ct);
             if (invite is null || !invite.TryAccept(now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
-            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
-                writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
 
+            var alreadyMember = await writeDb.OrgMembers.IgnoreQueryFilters()
+                .AnyAsync(member => member.OrgId == invite.OrgId && member.UserId == user.Id, ct);
+            if (!alreadyMember)
+            {
+                var memberCount = await writeDb.OrgMembers.IgnoreQueryFilters()
+                    .LongCountAsync(member => member.OrgId == invite.OrgId, ct);
+                var otherPendingInvites = await writeDb.OrgInvites.IgnoreQueryFilters()
+                    .LongCountAsync(pending => pending.OrgId == invite.OrgId
+                        && pending.Id != invite.Id
+                        && pending.Status == Domain.Enums.InviteStatus.Pending
+                        && pending.ExpiredAt >= now, ct);
+                if (_entitlements is not null)
+                {
+                    var evaluation = await _entitlements.EvaluateAsync(
+                        invite.OrgId,
+                        new EntitlementRequirement(
+                            EntitlementFeatureKeys.Core,
+                            EntitlementLimitKeys.Members,
+                            RequestedUnits: 1,
+                            CurrentUsage: memberCount + otherPendingInvites),
+                        ct);
+                    if (!evaluation.Success)
+                        return Result.Failure<RegisterResponse>(
+                            "Organization member capacity could not be verified.", ErrorKind.Unavailable);
+                    var decision = evaluation.Value;
+                    if (decision is null || !decision.Allowed)
+                    {
+                        if (decision?.ReasonCode == "limit_exceeded")
+                            return Result.Failure<RegisterResponse>(
+                                "The organization member limit has been reached.",
+                                "entitlement_limit_exceeded", ErrorKind.Conflict);
+                        return Result.Failure<RegisterResponse>(
+                            "The organization is not entitled to add members.",
+                            "entitlement_feature_required", ErrorKind.Forbidden);
+                    }
+                }
+
+                writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
+            }
+
+            writeDb.Users.Add(user);
             var registeredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null, null, invite.OrgId, ApiTokenCapability.None);
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
@@ -275,27 +326,97 @@ public class RegisterHandler
 
         if (projectInvite is not null)
         {
+            await EntitlementCapacityLock.AcquireOrganizationAsync(
+                writeDb.Database, transaction, projectOrgId!.Value, ct);
+            var lifecycleStatus = await writeDb.Orgs.IgnoreQueryFilters()
+                .Where(org => org.Id == projectOrgId.Value)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+            if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+                return Result.Failure<RegisterResponse>("Invite is no longer valid.");
+
             var invite = await writeDb.ProjectInvites.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(i => i.Id == projectInvite.Id, ct);
+                .FirstOrDefaultAsync(item => item.Id == projectInvite.Id, ct);
             if (invite is null || !invite.TryAccept(now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             var project = await writeDb.Projects.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);
-            if (project is null)
+                .FirstOrDefaultAsync(item => item.Id == projectInvite.ProjectId, ct);
+            if (project is null || project.OrgId != projectOrgId.Value)
                 return Result.Failure<RegisterResponse>("Project not found.");
-            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.OrgId == project.OrgId && m.UserId == user.Id, ct))
-                writeDb.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, Domain.Enums.MemberRole.Member));
+
+            var alreadyOrganizationMember = await writeDb.OrgMembers.IgnoreQueryFilters()
+                .AnyAsync(member => member.OrgId == project.OrgId && member.UserId == user.Id, ct);
+            if (!alreadyOrganizationMember)
+            {
+                var memberCount = await writeDb.OrgMembers.IgnoreQueryFilters()
+                    .LongCountAsync(member => member.OrgId == project.OrgId, ct);
+                var pendingOrgInvites = await writeDb.OrgInvites.IgnoreQueryFilters()
+                    .LongCountAsync(pending => pending.OrgId == project.OrgId
+                        && pending.Status == Domain.Enums.InviteStatus.Pending
+                        && pending.ExpiredAt >= now
+                        && pending.Email != email, ct);
+                if (_entitlements is not null)
+                {
+                    var evaluation = await _entitlements.EvaluateAsync(
+                        project.OrgId,
+                        new EntitlementRequirement(
+                            EntitlementFeatureKeys.Core,
+                            EntitlementLimitKeys.Members,
+                            RequestedUnits: 1,
+                            CurrentUsage: memberCount + pendingOrgInvites),
+                        ct);
+                    if (!evaluation.Success)
+                        return Result.Failure<RegisterResponse>(
+                            "Organization member capacity could not be verified.", ErrorKind.Unavailable);
+                    var decision = evaluation.Value;
+                    if (decision is null || !decision.Allowed)
+                    {
+                        if (decision?.ReasonCode == "limit_exceeded")
+                            return Result.Failure<RegisterResponse>(
+                                "The organization member limit has been reached.",
+                                "entitlement_limit_exceeded", ErrorKind.Conflict);
+                        return Result.Failure<RegisterResponse>(
+                            "The organization is not entitled to add members.",
+                            "entitlement_feature_required", ErrorKind.Forbidden);
+                    }
+                }
+
+                writeDb.OrgMembers.Add(OrgMember.Create(
+                    project.OrgId, user.Id, Domain.Enums.MemberRole.Member));
+            }
+
+            var duplicateOrgInvites = await writeDb.OrgInvites.IgnoreQueryFilters()
+                .Where(pending => pending.OrgId == project.OrgId
+                    && pending.Email == email
+                    && pending.Status == Domain.Enums.InviteStatus.Pending)
+                .ToListAsync(ct);
+            foreach (var duplicate in duplicateOrgInvites)
+            {
+                duplicate.Expire();
+                var registeredActor = new ActorContext(
+                    ActorType.Human, user.Id, false, null, null,
+                    projectInvite.ProjectId, project.OrgId, ApiTokenCapability.None);
+                _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                    registeredActor,
+                    "org.invite.expired",
+                    "OrgInvite",
+                    duplicate.Id.ToString(),
+                    project.OrgId,
+                    null,
+                    detailsJson: """{"newState":"Expired","reasonCode":"project_invite_accepted"}"""));
+            }
+
             if (!await writeDb.ProjectMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
+                    .AnyAsync(member => member.ProjectId == projectInvite.ProjectId && member.UserId == user.Id, ct))
                 writeDb.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(
                     projectInvite.ProjectId, user.Id, invite.Role));
 
-            var registeredActor = new ActorContext(
+            writeDb.Users.Add(user);
+            var projectRegisteredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null,
                 projectInvite.ProjectId, project.OrgId, ApiTokenCapability.None);
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
-                registeredActor,
+                projectRegisteredActor,
                 "project.invite.accepted",
                 "ProjectInvite",
                 invite.Id.ToString(),
@@ -303,7 +424,7 @@ public class RegisterHandler
                 project.Id,
                 detailsJson: """{"newState":"Accepted"}"""));
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
-                registeredActor,
+                projectRegisteredActor,
                 "account.registered",
                 "User",
                 user.Id.ToString(),
@@ -316,6 +437,7 @@ public class RegisterHandler
         {
             var registeredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
+            writeDb.Users.Add(user);
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
                 registeredActor,
                 "account.registered",
@@ -327,6 +449,7 @@ public class RegisterHandler
         }
 
         await writeDb.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Result.Ok(new RegisterResponse(user.Id, user.Login, user.Email));
     }
 }
