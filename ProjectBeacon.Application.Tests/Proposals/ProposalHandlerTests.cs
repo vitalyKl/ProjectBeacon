@@ -326,6 +326,39 @@ public sealed class ProposalHandlerTests : IDisposable
             .HandleAsync(new AcceptProposalCommand(_projectId, created.Value.Id, HumanActor()), TestContext.Current.CancellationToken);
         Assert.True(ownerAccept.Success, ownerAccept.Error);
         Assert.Equal(ProposalStatus.Accepted, ownerAccept.Value!.Status);
+
+        var acceptedReplay = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value.Id, actor), TestContext.Current.CancellationToken);
+        Assert.False(acceptedReplay.Success);
+        Assert.Equal(ErrorKind.Forbidden, acceptedReplay.Kind);
+
+        var secondDecision = Decision.Create(
+            "Second decision", "Current context", "Second accepted decision", _projectId, null);
+        secondDecision.Accept();
+        _db.Decisions.Add(secondDecision);
+        _db.SaveChanges();
+        new ContentWriter().AddVersion(_db, secondDecision, "Human", _userId.ToString("D"));
+        _db.SaveChanges();
+
+        var secondRequest = request with
+        {
+            TargetId = secondDecision.Id,
+            IdempotencyKey = "governance-decision-update-v2"
+        };
+        var secondProposal = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, secondRequest, HumanActor()), TestContext.Current.CancellationToken);
+        Assert.True(secondProposal.Success, secondProposal.Error);
+
+        var ownerReject = await new RejectProposalHandler(factory, new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new RejectProposalCommand(_projectId, secondProposal.Value!.Id, HumanActor()), TestContext.Current.CancellationToken);
+        Assert.True(ownerReject.Success, ownerReject.Error);
+        Assert.Equal(ProposalStatus.Rejected, ownerReject.Value!.Status);
+
+        var rejectedReplay = await new RejectProposalHandler(factory, new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new RejectProposalCommand(_projectId, secondProposal.Value.Id, actor), TestContext.Current.CancellationToken);
+        Assert.False(rejectedReplay.Success);
+        Assert.Equal(ErrorKind.Forbidden, rejectedReplay.Kind);
     }
 
     [Fact]
