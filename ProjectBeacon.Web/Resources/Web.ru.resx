@@ -2796,4 +2796,19 @@
   <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
     <value>Auto (применять патч документации)</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>Все</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>Применённая ревизия</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>Операция</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>ID подзадачи</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>ID задачи</value>
+  </data>
 </root>
