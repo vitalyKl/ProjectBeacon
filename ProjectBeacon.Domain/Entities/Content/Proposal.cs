@@ -42,6 +42,7 @@ public sealed class Proposal : Entity, IProjectScoped
     public string? AcceptedPayloadJson { get; private set; }
     public int? AppliedRevision { get; private set; }
     public int? ConflictRevision { get; private set; }
+    public string? ConflictReason { get; private set; }
     public Guid? SupersededById { get; private set; }
 
     /// <summary>Optimistic-concurrency token for proposal lifecycle transitions.</summary>
@@ -188,15 +189,18 @@ public sealed class Proposal : Entity, IProjectScoped
         return true;
     }
 
-    public void MarkConflicted(int actualRevision, DateTime decidedAtUtc)
+    public void MarkConflicted(int? actualRevision, string reason, DateTime decidedAtUtc)
     {
         EnsurePending();
         if (actualRevision < 1)
             throw new ArgumentOutOfRangeException(nameof(actualRevision));
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 200)
+            throw new ArgumentException("A short conflict reason is required.", nameof(reason));
         if (decidedAtUtc.Kind != DateTimeKind.Utc)
             throw new ArgumentException("Decision time must be UTC.", nameof(decidedAtUtc));
         Status = ProposalStatus.Conflicted;
         ConflictRevision = actualRevision;
+        ConflictReason = reason;
         DecidedAt = decidedAtUtc;
         StateRevision++;
     }
