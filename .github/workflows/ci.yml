@@ -178,6 +178,31 @@ jobs:
               raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\\n" + "\\n".join(unexpected))
           print(f"OK: {total} results, {len(skipped)} platform-conditional skips, {len(paths)} modules, symlink gates Passed")
           PY
+      - name: Report failed test details from TRX
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          failures = 0
+          for path in sorted(glob.glob("TestResults/**/*.trx", recursive=True)):
+              root = ET.parse(path).getroot()
+              for result in root.iter():
+                  if not result.tag.endswith("UnitTestResult") or result.get("outcome") != "Failed":
+                      continue
+                  failures += 1
+                  name = result.get("testName", "<unknown test>")
+                  print(f"::group::FAILED TEST: {name} ({path})")
+                  for node in result.iter():
+                      tag = node.tag.rsplit("}", 1)[-1]
+                      if tag in ("Message", "StackTrace") and node.text:
+                          print(f"{tag}:\\n{node.text}")
+                  print("::endgroup::")
+          if failures == 0:
+              print("No failed tests found in TRX reports.")
+          PY
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
 
@@ -217,11 +242,11 @@ jobs:
       - name: Test — API
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
@@ -229,18 +254,18 @@ jobs:
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
