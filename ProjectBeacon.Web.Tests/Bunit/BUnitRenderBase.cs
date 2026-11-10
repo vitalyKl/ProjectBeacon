@@ -6,6 +6,8 @@ using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Infrastructure.Attachments;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Web;
@@ -63,6 +65,7 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>(_ => new BeaconDbFactory(_options, tenant));
         _bunit.Services.AddScoped<IBeaconDbFactory>(sp => (IBeaconDbFactory)sp.GetRequiredService<IDbContextFactory<BeaconDbContext>>());
         _bunit.Services.AddApplicationPorts();
+        _bunit.Services.AddScoped<IAuditWriter, EfAuditWriter>();
         _bunit.Services.AddScoped<IAttachmentService, FakeAttachmentService>();
         _bunit.Services.AddApplicationHandlers();
         _bunit.Services.AddMudServices();
