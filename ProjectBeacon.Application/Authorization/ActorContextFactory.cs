@@ -20,7 +20,8 @@ public static class ActorContextFactory
     private const string IsAdminClaim = "isAdmin";
     private const string DeviceOwnerClaim = "device_owner_id";
     private const string ControlElevatedUntilClaim = "control_elevated_until";
-    private const string ControlCookieAuthType = "ControlCookie";
+    /// <summary>Authentication type reserved for the isolated operator Control Plane cookie.</summary>
+    public const string ControlCookieAuthType = "ControlCookie";
 
     /// <summary>
     /// Maps authentication type and claims onto an actor. <see cref="ApiTokenAuthType"/> and <see cref="DeviceTokenAuthType"/> select those kinds; any other identity is a human.
