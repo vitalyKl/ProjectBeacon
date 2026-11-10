@@ -145,6 +145,7 @@ Legend for the actor columns:
 | **Model backends** | registry/proxy = H (registry) | upsert = H | bind/unbind/reload = A (no cap) | delete = H | proxy drive | — | `REVIEW REQUIRED`: bind/unbind/reload/proxy have **no capability and no role gate** |
 | **Eval** | — | run = H | — | — | — | — | Human-only (`UserId is null → 401`) |
 | **Work (finish_work)** | — | — | — | — | finish = H | — | `REVIEW REQUIRED`: `finish_work` needs only a human id — no task/project role check |
+| **Content proposals / policies** | list = H (project member); mine = T(ContextRead, own live Actor) | H (project member) / T(ContextRead, project-bound live Actor) | withdraw = original author only; policy = H-manage | — | accept/reject = H (project member); Decision/Constraint = H-manage | H-manage changes policy | List is human-only; token submission/withdrawal is bound to its active Actor task/subtask/session; RepoPatch is docs-writer-only and applies through a device command after approval. |
 | **Worker** | — | — | — | — | — | — | **Not an HTTP actor.** DB role + unscoped RLS, all projects. `BEACON_WORKER_TOKEN` is only an `ActorId` for finish-work / force-close (constant-time compare), never a bearer. |
 
 ---
@@ -404,6 +405,23 @@ Capability gate `TaskWrite`/`TaskRead` on the route. Registry/proxy reads are hu
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
 | POST | `/v1/work/finish_work` | WorkEndpoints.cs:15 | Human-only | — | `UserId is null → 401` (:27) | task | `REVIEW REQUIRED`: `finish_work` only needs a human id — **no** task/project role or capability check; completes any task by `TaskId` |
+
+---
+
+### 4.17 Proposals (`ProposalEndpoints.cs`)
+
+| Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
+|---|---|---|---|---|---|---|---|
+| POST | `/v1/projects/{projectId}/proposals` | ProposalEndpoints.cs | Any-auth | ContextRead | Human: project membership; token: project-bound ContextRead plus live Actor claims/profile grant | project | RepoPatch additionally requires the built-in docs-writer Actor profile and its documentation-only path grant. |
+| GET | `/v1/projects/{projectId}/proposals` | ProposalEndpoints.cs | Human-only | — | project membership / inherited org Owner/Admin / system admin | project | Lists proposals visible in the project; API tokens and devices are blocked. |
+| GET | `/v1/projects/{projectId}/proposals/mine` | ProposalEndpoints.cs | Human or ApiToken | ContextRead | Handler currently requires a project-bound token, matching live Actor task/subtask/session and profile grant; a Human passes the route filter but is rejected by the handler | task / subtask / session | Returns only the current token's proposals for its active Actor session. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/accept` | ProposalEndpoints.cs | Human-only | — | project membership; Decision/Constraint additionally require Project Administer (project/org Owner/Admin or system admin) | project | RepoPatch acceptance queues ApplyProposalPatch; workstation revalidates local paths and hashes. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/reject` | ProposalEndpoints.cs | Human-only | — | project membership; Decision/Constraint additionally require Project Administer | project | Only Pending proposals can be rejected. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/withdraw` | ProposalEndpoints.cs | Human or ApiToken | ContextRead | Original Human author with project access, or same project-bound token + original live Actor task/subtask/session | project / Actor session | Only the original author may withdraw its own Pending proposal. |
+| GET | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | project membership / inherited org Owner/Admin / system admin | project | Members may inspect the policy matrix. |
+| PUT | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | Project Administer; project/org Owner/Admin or system admin; optimistic policy revision | project | Auto is supported only for RepoPatch Update and still requires the documentation profile's explicit Auto setting. |
+
+> ApplyProposalPatch is a workstation command, not an HTTP endpoint. It is never available through generic device-command enqueue and is created only by a human acceptance or the explicitly enabled RepoPatch Auto policy.
 
 ---
 
