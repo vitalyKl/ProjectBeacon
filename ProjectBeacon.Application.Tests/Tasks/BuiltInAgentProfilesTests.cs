@@ -70,6 +70,10 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.KnowledgePropose, knowledge.Tools);
         Assert.Contains(McpToolNames.KnowledgeProposals, knowledge.Tools);
         Assert.Contains(McpToolNames.KnowledgeWithdraw, knowledge.Tools);
+        Assert.Contains("current baseRevision", knowledge.Instruction, StringComparison.Ordinal);
+        Assert.Contains("complete target-specific payload", knowledge.Instruction, StringComparison.Ordinal);
+        Assert.Contains("human accepts it", knowledge.Instruction, StringComparison.Ordinal);
+        Assert.Contains("never include secrets or credentials", knowledge.Instruction, StringComparison.Ordinal);
         Assert.DoesNotContain(McpToolNames.UpsertContextNode, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.ActivateConstraint, knowledge.Tools);
         Assert.DoesNotContain(McpToolNames.AcceptDecision, knowledge.Tools);
@@ -82,6 +86,9 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.KnowledgePropose, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeProposals, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeWithdraw, docs.Tools);
+        Assert.Contains("baseRevision", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("not applied until a human accepts", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("allowed paths", docs.Instruction, StringComparison.Ordinal);
         Assert.True(BuiltInAgentProfiles.IsWithinDefaults("docs/architecture.md", docs.DefaultPaths));
         Assert.True(BuiltInAgentProfiles.IsWithinDefaults("README.md", docs.DefaultPaths));
         Assert.False(BuiltInAgentProfiles.IsWithinDefaults("../secrets.txt", docs.DefaultPaths));
