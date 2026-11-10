@@ -57,7 +57,8 @@ public static class PipelineToolPolicy
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
         McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
         McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
-        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw
+        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw,
+        McpToolNames.HashFile, McpToolNames.HashText
     });
     public static IReadOnlyList<string> ActorForbiddenTools { get; } = Array.AsReadOnly(new[]
     {
