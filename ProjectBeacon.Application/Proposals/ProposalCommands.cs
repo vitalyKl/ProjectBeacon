@@ -123,6 +123,15 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("ProjectId and TargetId are required.");
         if (command.Request.Operation != ProposalOperation.Update)
             return Result.Failure<ProposalDto>("Only Update proposals are currently supported.");
+        var normalizedIdempotencyKey = command.Request.IdempotencyKey?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedIdempotencyKey)
+            || normalizedIdempotencyKey.Length > Proposal.MaxIdempotencyKeyLength
+            || normalizedIdempotencyKey.Any(char.IsControl))
+            return Result.Failure<ProposalDto>("IdempotencyKey must contain 1-128 printable characters.");
+        var normalizedRationale = command.Request.RationaleMarkdown?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedRationale)
+            || normalizedRationale.Length > Proposal.MaxRationaleLength)
+            return Result.Failure<ProposalDto>("RationaleMarkdown must contain 1-1000 characters.");
         if (!Enum.IsDefined(command.Request.TargetKind))
             return Result.Failure<ProposalDto>("Unknown proposal target kind.");
         if (!ProposalContentValidation.TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
@@ -146,11 +155,11 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         var existingByKey = await db.Proposals.FirstOrDefaultAsync(
             proposal => proposal.ProjectId == command.ProjectId
-                && proposal.IdempotencyKey == command.Request.IdempotencyKey,
+                && proposal.IdempotencyKey == normalizedIdempotencyKey,
             ct);
         if (existingByKey is not null)
         {
-            if (SameRequest(existingByKey, command.Request, command.Actor, author.TaskId, author.SubtaskId, author.SessionId))
+            if (SameRequest(existingByKey, command.Request with { RationaleMarkdown = normalizedRationale }, command.Actor, author.TaskId, author.SubtaskId, author.SessionId))
                 return Result.Ok(Map(existingByKey));
             return Result.Failure<ProposalDto>("IdempotencyKey has already been used for a different proposal.", ErrorKind.Conflict);
         }
@@ -206,13 +215,13 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 command.Request.BaseRevision,
                 baseHash,
                 command.Request.PayloadJson,
-                command.Request.RationaleMarkdown,
+                normalizedRationale,
                 command.Actor.IsHuman ? ProposalAuthorKind.Human : ProposalAuthorKind.Agent,
                 command.Actor.IsHuman ? command.Actor.UserId : null,
                 command.Actor.IsApiToken ? command.Actor.TokenId : null,
                 author.ProfileKey,
                 author.Role,
-                command.Request.IdempotencyKey,
+                normalizedIdempotencyKey,
                 now);
         }
         catch (ArgumentException exception)
