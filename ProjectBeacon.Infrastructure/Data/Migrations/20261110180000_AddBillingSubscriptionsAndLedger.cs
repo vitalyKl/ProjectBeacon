@@ -89,8 +89,6 @@ public partial class AddBillingSubscriptionsAndLedger : Migration
                 CONSTRAINT "PK_BillingLedgerEntries" PRIMARY KEY ("Id"),
                 CONSTRAINT "FK_BillingLedgerEntries_Orgs_OrgId"
                     FOREIGN KEY ("OrgId") REFERENCES "Orgs" ("Id") ON DELETE RESTRICT,
-                CONSTRAINT "FK_BillingLedgerEntries_Users_ActorUserId"
-                    FOREIGN KEY ("ActorUserId") REFERENCES "Users" ("Id") ON DELETE SET NULL,
                 CONSTRAINT "FK_BillingLedgerEntries_OrganizationSubscriptions_SubscriptionId"
                     FOREIGN KEY ("SubscriptionId") REFERENCES "OrganizationSubscriptions" ("Id") ON DELETE RESTRICT,
                 CONSTRAINT "CK_BillingLedgerEntries_EventType"

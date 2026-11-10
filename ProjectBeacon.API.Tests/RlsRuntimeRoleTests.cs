@@ -15,6 +15,8 @@ using ProjectBeacon.API.Auth;
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Billing;
+using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Entitlements;
 using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Entitlements;
 using Npgsql;
@@ -348,7 +350,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             verify, "OrganizationSubscriptions", orgId));
         Assert.Equal(1, await CountForOrgRawAsync(
             verify, "BillingLedgerEntries", orgId));
-        Assert.Equal(1, await CountForOrgRawAsync(
+        Assert.Equal(2, await CountForOrgRawAsync(
             verify, "OrganizationEntitlements",
             orgId,
             """("Source" = 0 AND "Status" = 4) OR ("Source" = 1 AND "Status" = 1)"""));
