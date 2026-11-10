@@ -1,13 +1,9 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using ProjectBeacon.Infrastructure.Data;
 
 #nullable disable
 
 namespace ProjectBeacon.Infrastructure.Data.Migrations;
 
-[DbContext(typeof(BeaconDbContext))]
-[Migration("20261110120000_AddProposalPolicies")]
 public sealed partial class AddProposalPolicies : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
