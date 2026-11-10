@@ -90,6 +90,7 @@ public sealed class ControlHostMiddlewareTests
 
     [Theory]
     [InlineData("/dashboard")]
+    [InlineData("/billing")]
     [InlineData("/login")]
     [InlineData("/v1/auth/login")]
     [InlineData("/v1/tasks")]
