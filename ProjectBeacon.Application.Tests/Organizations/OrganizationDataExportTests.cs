@@ -134,6 +134,7 @@ public sealed class OrganizationDataExportTests : IDisposable
 
         var projectsJson = await ReadEntryAsync(archive, "projects.json");
         Assert.Contains("Export Project", projectsJson, StringComparison.Ordinal);
+        Assert.Contains("dotnet test", projectsJson, StringComparison.Ordinal);
         Assert.DoesNotContain("FOREIGN PROJECT MUST NOT EXPORT", projectsJson, StringComparison.Ordinal);
         Assert.DoesNotContain("encrypted-mcp-credential-must-not-export", projectsJson, StringComparison.Ordinal);
 
