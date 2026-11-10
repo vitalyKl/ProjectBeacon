@@ -202,6 +202,48 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     }
 
     [Fact]
+    public async Task EntitlementEvaluation_BindsLifecycleAndGrantReadsToRequestedOrganization()
+    {
+        _postgres.RequirePostgres();
+
+        await using (var connection = new NpgsqlConnection(_appConn))
+        {
+            await connection.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await SetOrgScopeAsync(connection, Guid.Empty, "true");
+            await using var update = new NpgsqlCommand(
+                """
+                UPDATE "OrganizationEntitlements"
+                SET "FeaturesJson" = '["core"]'::jsonb,
+                    "LimitsJson" = '{"projects":1}'::jsonb
+                WHERE "OrgId" = @org_id
+                """, connection);
+            update.Parameters.AddWithValue("org_id", s_orgA);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+        }
+
+        // The factory's ambient tenant deliberately belongs to org B. Evaluating org A
+        // must create a target-bound context for both lifecycle and entitlement reads.
+        var currentTenant = new TenantContext();
+        currentTenant.Assign(null, s_orgB, unscoped: false);
+        var factory = new BeaconDbFactory(NewAppOptions(_appConn), currentTenant);
+        var service = new PostgresEntitlementService(factory, new EfAuditWriter(), TimeProvider.System);
+
+        var result = await service.EvaluateAsync(
+            s_orgA,
+            new EntitlementRequirement(
+                EntitlementFeatureKeys.Core,
+                EntitlementLimitKeys.Projects,
+                RequestedUnits: 1,
+                CurrentUsage: 0),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.Value?.Allowed);
+        Assert.Equal(0L, result.Value?.CurrentUsage);
+        Assert.Equal(1L, result.Value?.Limit);
+    }
+
+    [Fact]
     public async Task Rls_RuntimeRole_OrganizationEntitlements_RejectsCrossOrgInsertAndUpdate()
     {
         _postgres.RequirePostgres();
