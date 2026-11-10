@@ -128,6 +128,60 @@ public sealed class PipelineRoleAuthorizationTests
     }
 
     [Fact]
+    public void ActorProposalRoutesRequireTheMatchingKnowledgeToolGrant()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var subtaskId = Guid.NewGuid();
+        var proposalId = Guid.NewGuid();
+        var createPath = $"/v1/projects/{projectId:D}/proposals";
+        var minePath = createPath + "/mine";
+        var withdrawPath = createPath + $"/{proposalId:D}/withdraw";
+        var acceptPath = createPath + $"/{proposalId:D}/accept";
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, createPath, allowedMcpTools: [McpToolNames.KnowledgePropose]));
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Get, minePath, allowedMcpTools: [McpToolNames.KnowledgeProposals]));
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, withdrawPath, allowedMcpTools: [McpToolNames.KnowledgeWithdraw]));
+
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, createPath));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Get, minePath));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, withdrawPath));
+
+        // Proposal tools never grant human decision operations, nor Planner/Review access.
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, acceptPath,
+            allowedMcpTools: [McpToolNames.KnowledgePropose, McpToolNames.KnowledgeWithdraw]));
+        foreach (var role in new[] { PipelineRole.Planner, PipelineRole.Review })
+        {
+            Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+                WorkstationCommandKind.RunPipelineSession, role, projectId, taskId, null,
+                HttpMethods.Post, createPath,
+                allowedMcpTools: [McpToolNames.KnowledgePropose]));
+            Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+                WorkstationCommandKind.RunPipelineSession, role, projectId, taskId, null,
+                HttpMethods.Get, minePath,
+                allowedMcpTools: [McpToolNames.KnowledgeProposals]));
+            Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+                WorkstationCommandKind.RunPipelineSession, role, projectId, taskId, null,
+                HttpMethods.Post, withdrawPath,
+                allowedMcpTools: [McpToolNames.KnowledgeWithdraw]));
+        }
+    }
+
+    [Fact]
     public void PlannerCanStillCreateSubtasksAndStartReview()
     {
         var projectId = Guid.NewGuid();
