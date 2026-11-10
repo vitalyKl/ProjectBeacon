@@ -689,16 +689,53 @@ public class RevokeProjectInviteHandler
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
-        if (invite is null)
+        var inviteSnapshot = await db.ProjectInvites.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(item => item.Id == request.InviteId)
+            .Select(item => new { item.Id, item.ProjectId })
+            .FirstOrDefaultAsync(ct);
+        if (inviteSnapshot is null)
             return Result.Failure("Invite not found.");
-        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: invite.ProjectId, ct: ct);
+
+        var projectSnapshot = await db.Projects.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(project => project.Id == inviteSnapshot.ProjectId)
+            .Select(project => new { project.Id, project.OrgId })
+            .FirstOrDefaultAsync(ct);
+        if (projectSnapshot is null)
+            return Result.Failure("Project not found.");
+
+        var check = await _auth.CanAsync(
+            db, request.Actor, ResourceType.Project, AuthAction.Administer,
+            projectId: inviteSnapshot.ProjectId, ct: ct);
         if (!check.Success)
             return Result.Forbidden();
-        var project = await db.Projects
-            .FirstOrDefaultAsync(p => p.Id == invite.ProjectId, ct);
-        if (project is null)
-            return Result.Failure("Project not found.");
+
+        // Serialize invite revocation with acceptance so a stale accept cannot recreate
+        // a membership after the invite has been revoked.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            db.Database, transaction, projectSnapshot.OrgId, ct);
+
+        var lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == projectSnapshot.OrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure("Organization access is not active.", ErrorKind.Conflict);
+
+        var currentCheck = await _auth.CanAsync(
+            db, request.Actor, ResourceType.Project, AuthAction.Administer,
+            projectId: inviteSnapshot.ProjectId, ct: ct);
+        if (!currentCheck.Success)
+            return Result.Forbidden();
+
+        var invite = await db.ProjectInvites.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == inviteSnapshot.Id, ct);
+        if (invite is null)
+            return Result.Failure("Invite not found.");
+        if (invite.Status != InviteStatus.Pending)
+            return Result.Failure("Only pending invitations can be revoked.", ErrorKind.Conflict);
 
         invite.Revoke();
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
@@ -706,10 +743,11 @@ public class RevokeProjectInviteHandler
             "project.invite.revoked",
             "ProjectInvite",
             invite.Id.ToString(),
-            project.OrgId,
-            project.Id,
+            projectSnapshot.OrgId,
+            projectSnapshot.Id,
             detailsJson: """{"previousState":"Pending","newState":"Revoked"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Result.Ok();
     }
 }
