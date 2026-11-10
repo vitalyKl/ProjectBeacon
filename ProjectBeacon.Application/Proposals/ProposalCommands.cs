@@ -695,7 +695,7 @@ public sealed class AcceptProposalHandler
                     StageAudit(db, command.Actor, proposal, orgId.Value, "proposal.expired", ProposalStatus.Expired);
                     await db.SaveChangesAsync(ct);
                     await transaction.CommitAsync(ct);
-                    return Result.Failure<ProposalDto>("Proposal has expired.");
+                    return Result.Failure<ProposalDto>("Proposal has expired.", ErrorKind.Conflict);
                 }
 
                 if (proposal.TargetKind == ContentTargetKind.RepoPatch)
@@ -888,7 +888,7 @@ public sealed class RejectProposalHandler
                 return Result.Failure<ProposalDto>("Project not found.");
             StageAudit(db, command.Actor, proposal, expiredOrgId.Value, "proposal.expired", ProposalStatus.Expired);
             await db.SaveChangesAsync(ct);
-            return Result.Failure<ProposalDto>("Proposal has expired.");
+            return Result.Failure<ProposalDto>("Proposal has expired.", ErrorKind.Conflict);
         }
 
         var orgId = await AcceptProposalHandler.GetOrgIdAsync(db, proposal.ProjectId, ct);
@@ -1010,7 +1010,7 @@ public sealed class WithdrawProposalHandler
                 return Result.Failure<ProposalDto>("Project not found.");
             StageAudit(db, command.Actor, proposal, expiryOrg.Value, "proposal.expired", ProposalStatus.Expired);
             await db.SaveChangesAsync(ct);
-            return Result.Failure<ProposalDto>("Proposal has expired.");
+            return Result.Failure<ProposalDto>("Proposal has expired.", ErrorKind.Conflict);
         }
 
         var orgId = await AcceptProposalHandler.GetOrgIdAsync(db, proposal.ProjectId, ct);
