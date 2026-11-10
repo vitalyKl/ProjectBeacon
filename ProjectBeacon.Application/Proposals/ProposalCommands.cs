@@ -573,9 +573,13 @@ public sealed class AcceptProposalHandler
                     return await MarkConflictAsync(db, transaction, proposal, command.Actor, orgId.Value,
                         target.Revision, "BaseSnapshotChanged", now, ct);
 
+                var attribution = ContentAttribution.FromActor(command.Actor);
+                var changedByType = attribution.Type ?? "Human";
+                var changedById = attribution.Id ?? command.Actor.UserId.Value.ToString("D");
                 try
                 {
-                    ProposalContentValidation.Apply(target.Entity, proposal.TargetKind, payload, command.Actor.UserId.Value);
+                    ProposalContentValidation.Apply(
+                        target.Entity, proposal.TargetKind, payload, changedByType, changedById);
                 }
                 catch (ArgumentException exception)
                 {
@@ -588,7 +592,7 @@ public sealed class AcceptProposalHandler
 
                 var appliedRevision = ProposalContentValidation.GetRevision(target.Entity);
                 if (appliedRevision != target.Revision)
-                    _contentWriter.AddVersion(db, target.Entity, "Human", command.Actor.UserId.Value.ToString("D"),
+                    _contentWriter.AddVersion(db, target.Entity, changedByType, changedById,
                         proposalId: proposal.Id);
 
                 proposal.Accept(command.Actor.UserId.Value, appliedRevision,
