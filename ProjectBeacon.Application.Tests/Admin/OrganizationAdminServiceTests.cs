@@ -528,6 +528,10 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         suspendedOrg.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
         await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        // HandlerSqlite.Open keeps the seed context explicitly unscoped for fixture setup.
+        // End that bypass before asserting the lifecycle-aware tenant query filters.
+        _unscoped.Dispose();
+
         var tenant = new TenantContext();
         tenant.Assign(project.Id, suspendedOrg.Id, unscoped: false);
         tenant.SetLifecycleStatus(OrganizationLifecycleStatus.Suspended, enforced: true);
@@ -578,7 +582,20 @@ public sealed class OrganizationAdminServiceTests : IDisposable
 
         // The project inventory is operational metadata; personal workstation metadata is
         // limited to operators who also have UsersRead.
-        var limitedReader = await AdminActorAsync(OperatorPermission.OrganizationsRead);
+        var billingOperator = User.Create("platform-billing", "billing@example.test", "hash");
+        billingOperator.AssignOperatorRole(OperatorRole.Billing.ToString());
+        _seedDb.Users.Add(billingOperator);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var billingGate = new DatabaseAdminGate(_factory);
+        var billingActor = new ActorContext(
+            ActorType.Human, billingOperator.Id, isAdmin: true,
+            null, null, null, null, ApiTokenCapability.None);
+        var billingResult = await billingGate.RequireAsync(
+            billingActor, OperatorPermission.OrganizationsRead,
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(billingResult.Success, billingResult.Error);
+        var limitedReader = billingResult.Value!;
         var limitedDetails = await service.GetAsync(limitedReader, org.Id);
         Assert.True(limitedDetails.Success, limitedDetails.Error);
         Assert.Single(limitedDetails.Value!.Projects);
