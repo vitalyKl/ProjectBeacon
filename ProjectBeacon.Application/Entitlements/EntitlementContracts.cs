@@ -119,11 +119,6 @@ public sealed record ConvertAlphaToProductionRequest(
     string Reason,
     string IdempotencyKey);
 
-/// <summary>
-/// Central read/write boundary for organization access. Implementations must make grant,
-/// revoke and source-transition writes auditable and transactional. Conversion to a paid
-/// plan is one operation so alpha access cannot be dropped before production access exists.
-/// </summary>
 /// <summary>Read-only evaluator used by product mutations before consuming a capability or capacity.</summary>
 public interface IEntitlementEvaluator
 {
@@ -133,7 +128,11 @@ public interface IEntitlementEvaluator
         CancellationToken ct = default);
 }
 
-/// <summary>Full effective-access and operator grant lifecycle.</summary>
+/// <summary>
+/// Central read/write boundary for organization access. Implementations must make grant,
+/// revoke and source-transition writes auditable and transactional. Conversion to a paid
+/// plan is one operation so alpha access cannot be dropped before production access exists.
+/// </summary>
 public interface IEntitlementService : IEntitlementEvaluator
 {
     Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(
