@@ -319,7 +319,7 @@ else
         var result = await ListProposalPolicies.HandleAsync(projectId, _actor);
         if (!result.Success || result.Value is null)
         {
-            Snackbar.Add(result.Error ?? L[\"ProposalPoliciesUnavailable\"].Value, Severity.Warning);
+            Snackbar.Add(result.Error ?? L["ProposalPoliciesUnavailable"].Value, Severity.Warning);
             return;
         }
 
@@ -334,7 +334,7 @@ else
     }
 
     private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
-        $\"{policy.TargetKind}:{policy.Operation}\";
+        $"{policy.TargetKind}:{policy.Operation}";
 
     private ProposalDecisionMode GetProposalPolicyMode(ProposalPolicyDto policy) =>
         _proposalPolicyEdits.TryGetValue(ProposalPolicyKey(policy), out var mode) ? mode : policy.Mode;
@@ -360,7 +360,7 @@ else
                 projectId, policy.TargetKind, policy.Operation, selected, policy.PolicyRevision, _actor));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L[\"Error\"].Value, Severity.Error);
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
                 await ReloadProposalPolicies();
                 return;
             }
