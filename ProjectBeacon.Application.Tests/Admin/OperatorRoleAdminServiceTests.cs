@@ -8,6 +8,7 @@ using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Domain.Entities.Audit;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
