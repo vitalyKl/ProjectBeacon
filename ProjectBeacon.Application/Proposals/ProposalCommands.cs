@@ -269,12 +269,37 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Result.Failure<ProposalDto>("A pending proposal changed while this proposal was being submitted. Refresh and retry.", ErrorKind.Conflict);
+            return await ResolveConcurrentSubmissionAsync(command, author, normalizedRationale, normalizedIdempotencyKey, ct);
         }
         catch (DbUpdateException)
         {
-            return Result.Failure<ProposalDto>("The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.", ErrorKind.Conflict);
+            return await ResolveConcurrentSubmissionAsync(command, author, normalizedRationale, normalizedIdempotencyKey, ct);
         }
+    }
+
+    private async Task<Result<ProposalDto>> ResolveConcurrentSubmissionAsync(
+        CreateProposalCommand command,
+        ProposalAuthorScope author,
+        string normalizedRationale,
+        string normalizedIdempotencyKey,
+        CancellationToken ct)
+    {
+        await using var verify = _dbFactory.CreateDbContext();
+        var existing = await verify.Proposals.FirstOrDefaultAsync(proposal =>
+            proposal.ProjectId == command.ProjectId
+            && proposal.IdempotencyKey == normalizedIdempotencyKey, ct);
+        if (existing is not null
+            && SameRequest(existing,
+                command.Request with { RationaleMarkdown = normalizedRationale },
+                command.Actor,
+                author.TaskId,
+                author.SubtaskId,
+                author.SessionId))
+            return Result.Ok(Map(existing));
+
+        return Result.Failure<ProposalDto>(
+            "The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.",
+            ErrorKind.Conflict);
     }
 
     private async Task<ProposalAuthorScope> ResolveAuthorAsync(
