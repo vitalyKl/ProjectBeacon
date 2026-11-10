@@ -112,7 +112,6 @@ public class BeaconDbContext : DbContext, IBeaconDb
             || e.LifecycleStatus == OrganizationLifecycleStatus.Active);
         modelBuilder.Entity<Project>().HasQueryFilter(e =>
             FilterUnscoped
-            || !(_tenant != null && _tenant.LifecycleEnforced)
             || (FilterOrgId != null
                 && e.OrgId == FilterOrgId
                 && FilterOrganizationLifecycleAllowsAccess));
