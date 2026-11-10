@@ -130,7 +130,7 @@ Implemented in the foundation branch:
 
 Not implemented by this foundation:
 
-- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. The primary SystemAdministrator can recover a lost authenticator through the deployment-token-protected Control Plane break-glass flow; self-service recovery for Support, Billing and Auditor is not implemented.
+- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. All operator roles can rotate one-time recovery codes from `/control/security` while their authenticator is available and use a saved code to disable a lost authenticator; recovery consumes one code, revokes the remaining codes and invalidates active sessions. The primary SystemAdministrator also retains deployment-token-protected break-glass recovery.
 - Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. More granular product-feature gates and usage-counter enforcement are still future work; generic numeric limits are not yet enforced.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
