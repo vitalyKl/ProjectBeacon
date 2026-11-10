@@ -660,6 +660,28 @@ public sealed class AcceptProposalHandler
                     await transaction.CommitAsync(ct);
                     return Result.Ok(ProposalMapper.Map(proposal));
                 }
+                if (proposal.Status == ProposalStatus.Applying
+                    && proposal.TargetKind == ContentTargetKind.RepoPatch
+                    && proposal.ApplyCommandId is { } applyCommandId)
+                {
+                    var existingCommand = await db.WorkstationCommands.IgnoreQueryFilters()
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(item => item.Id == applyCommandId
+                            && item.ProjectId == proposal.ProjectId
+                            && item.Kind == WorkstationCommandKind.ApplyProposalPatch
+                            && (item.Status == WorkstationCommandStatus.Pending
+                                || item.Status == WorkstationCommandStatus.Running), ct);
+                    if (existingCommand is null)
+                        return Result.Failure<ProposalDto>(
+                            "The RepoPatch apply command is no longer pending or running. Refresh the proposal state.",
+                            ErrorKind.Conflict);
+
+                    // The first approval and command were committed in one transaction.
+                    // A retried approval must return that same Applying state, not enqueue
+                    // a second workstation command or report a false rejection.
+                    await transaction.CommitAsync(ct);
+                    return Result.Ok(ProposalMapper.Map(proposal));
+                }
                 if (proposal.Status != ProposalStatus.Pending)
                     return Result.Failure<ProposalDto>($"Proposal cannot be accepted in status {proposal.Status}.");
 
