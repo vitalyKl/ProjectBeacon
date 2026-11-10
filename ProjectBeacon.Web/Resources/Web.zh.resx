@@ -2772,4 +2772,10 @@ orthstar</value>
   <data name="ProposalPolicySaved" xml:space="preserve">
     <value>提案策略已保存。</value>
   </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>逐行内容差异</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>没有文本更改。</value>
+  </data>
 </root>
