@@ -10,7 +10,7 @@
 @inject IConfiguration Configuration
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
-@inject IPlatformOperationsService Operations
+@inject IPlatformOperationsService PlatformOperations
 @inject NavigationManager Navigation
 
 <PageTitle>Control — Operations</PageTitle>
@@ -147,7 +147,7 @@
         {
             // The service accepts only an AdminActor created by the current database-backed gate.
             // It independently checks OperationsRead before reading the platform-only heartbeat table.
-            _snapshot = await Operations.GetSnapshotAsync(access.Value);
+            _snapshot = await PlatformOperations.GetSnapshotAsync(access.Value);
         }
         catch (UnauthorizedAccessException)
         {
