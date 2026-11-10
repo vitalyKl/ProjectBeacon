@@ -292,7 +292,7 @@ else
 
     private async Task ActivateConstraint(ConstraintDto constraint)
     {
-        var result = await ActivateConstraintHandler.HandleAsync(constraint.Id);
+        var result = await ActivateConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
