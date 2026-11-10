@@ -99,6 +99,50 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task Register_InviteAcceptance_EnforcesReservedMemberCapacity()
+    {
+        var owner = User.Create("capacity-owner", "capacity-owner@example.test", "hash");
+        var org = Org.Create("Registration capacity organization");
+        _db.Users.Add(owner);
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var inviteHandler = new CreateOrgInviteHandler(Factory(), _mail, _auth, _open);
+        var existingReservation = await inviteHandler.HandleAsync(
+            new CreateOrgInviteRequest(
+                org.Id, "existing-reservation@example.test", MemberRole.Member, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+        var registrationInvite = await inviteHandler.HandleAsync(
+            new CreateOrgInviteRequest(
+                org.Id, "new-registrant@example.test", MemberRole.Member, Human(owner.Id, false)),
+            TestContext.Current.CancellationToken);
+        Assert.True(existingReservation.Success, existingReservation.Error);
+        Assert.True(registrationInvite.Success, registrationInvite.Error);
+
+        var registered = await new RegisterHandler(
+            Factory(),
+            new BcryptPasswordHasher(),
+            _open,
+            auditWriter: new EfAuditWriter(),
+            entitlements: new MemberLimitEvaluator(1)).HandleAsync(
+                new RegisterCommand(new RegisterRequest(
+                    "new-registrant", "new-registrant@example.test", "a-strong-password",
+                    registrationInvite.Value!.Token)),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(registered.Success);
+        Assert.Equal("entitlement_limit_exceeded", registered.ErrorCode);
+        Assert.Equal(ErrorKind.Conflict, registered.Kind);
+        Assert.False(await _db.Users.IgnoreQueryFilters().AnyAsync(
+            user => user.Email == "new-registrant@example.test",
+            TestContext.Current.CancellationToken));
+        Assert.Equal(InviteStatus.Pending, (await _db.OrgInvites.IgnoreQueryFilters()
+            .SingleAsync(item => item.Id == registrationInvite.Value.Id,
+                TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task Register_InviteEmailMismatch_Fails()
     {
         var admin = await SeedAdminAsync();
