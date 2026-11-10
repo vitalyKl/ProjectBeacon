@@ -64,6 +64,13 @@ public class CreateOrgInviteHandler
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await EntitlementCapacityLock.AcquireOrganizationAsync(db.Database, transaction, request.OrgId, ct);
+        var lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+            .Where(item => item.Id == request.OrgId)
+            .Select(item => (OrganizationLifecycleStatus?)item.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<InviteCreatedDto>(
+                "Invitations can only be created for active organizations.", ErrorKind.Conflict);
 
         var pending = await db.OrgInvites.IgnoreQueryFilters()
             .Where(i => i.OrgId == request.OrgId && i.Email == email && i.Status == InviteStatus.Pending)
@@ -195,6 +202,16 @@ public class CreateProjectInviteHandler
             return Result.Failure<InviteCreatedDto>(
                 "Invitations can only be created for active organizations.", ErrorKind.Conflict);
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await EntitlementCapacityLock.AcquireOrganizationAsync(db.Database, transaction, project.OrgId, ct);
+        var confirmedOrganizationStatus = await db.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == project.OrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (confirmedOrganizationStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<InviteCreatedDto>(
+                "Invitations can only be created for active organizations.", ErrorKind.Conflict);
+
         var pending = await db.ProjectInvites.IgnoreQueryFilters()
             .Where(i => i.ProjectId == request.ProjectId && i.Email == email && i.Status == InviteStatus.Pending)
             .ToListAsync(ct);
@@ -228,6 +245,7 @@ public class CreateProjectInviteHandler
             project.Id,
             detailsJson: """{"newState":"Pending"}"""));
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var url = InviteMail.Link(_configuration, raw);
         await InviteMail.TrySendAsync(_email, email, project.Name, url, "project_invite", ct);
@@ -326,6 +344,12 @@ public class AcceptInviteHandler
             await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
             await EntitlementCapacityLock.AcquireOrganizationAsync(
                 writeDb.Database, transaction, orgInviteSnapshot.OrgId, ct);
+            var acceptedOrgStatus = await writeDb.Orgs.IgnoreQueryFilters()
+                .Where(org => org.Id == orgInviteSnapshot.OrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+            if (acceptedOrgStatus != OrganizationLifecycleStatus.Active)
+                return Result.Failure("Invite is no longer valid.");
 
             var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.Id == orgInviteSnapshot.Id, ct);
@@ -414,6 +438,12 @@ public class AcceptInviteHandler
         await using var projectTransaction = await projectWriteDb.Database.BeginTransactionAsync(ct);
         await EntitlementCapacityLock.AcquireOrganizationAsync(
             projectWriteDb.Database, projectTransaction, projectSnapshot.OrgId, ct);
+        var acceptedProjectOrgStatus = await projectWriteDb.Orgs.IgnoreQueryFilters()
+            .Where(org => org.Id == projectSnapshot.OrgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (acceptedProjectOrgStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure("Invite is no longer valid.");
 
         var projectInvite = await projectWriteDb.ProjectInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.Id == projectInviteSnapshot.Id, ct);
