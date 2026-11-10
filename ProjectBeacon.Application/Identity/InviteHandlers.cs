@@ -520,7 +520,7 @@ public class AcceptInviteHandler
                 duplicate.Id.ToString(),
                 project.OrgId,
                 null,
-                detailsJson: """{"reason":"project_invite_accepted"}"""));
+                detailsJson: """{"newState":"Expired","reasonCode":"project_invite_accepted"}"""));
         }
 
         if (!await projectWriteDb.ProjectMembers.IgnoreQueryFilters()
