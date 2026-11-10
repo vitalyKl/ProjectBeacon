@@ -349,7 +349,6 @@
             return;
         var state = await AuthState;
         var actor = ActorContextFactory.FromPrincipal(state.User);
-        await TenantBinder.BindUserAsync(actor);
         await LoadProfile(state);
         if (actor.UserId is not Guid userId)
             return;
