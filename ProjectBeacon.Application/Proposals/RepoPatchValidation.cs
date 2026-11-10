@@ -186,7 +186,7 @@ public static class RepoPatchValidation
     private static void ValidateRelativePath(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Length > 512
-            || path.StartsWith('/', StringComparison.Ordinal)
+            || path.StartsWith("/", StringComparison.Ordinal)
             || path.Contains('\\') || path.Contains(':') || path.Contains('\0')
             || Path.IsPathRooted(path))
             throw new ArgumentException("RepoPatch paths must be safe relative paths.");
@@ -194,7 +194,7 @@ public static class RepoPatchValidation
         if (segments.Any(segment => segment.Length == 0 || segment is "." or "..")
             || segments.Any(segment => string.Equals(segment, ".git", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("RepoPatch paths cannot contain empty, dot, parent, or .git segments.");
-        if (segments.Any(segment => segment.EndsWith('.', StringComparison.Ordinal) || segment.EndsWith(' ', StringComparison.Ordinal)))
+        if (segments.Any(segment => segment.EndsWith(".", StringComparison.Ordinal) || segment.EndsWith(" ", StringComparison.Ordinal)))
             throw new ArgumentException("RepoPatch path segments cannot end with a dot or space.");
     }
 
