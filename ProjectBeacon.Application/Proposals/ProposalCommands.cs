@@ -718,8 +718,31 @@ public sealed class WithdrawProposalHandler
         if (isOriginalHuman
             && !await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, proposal.ProjectId, ct))
             return Result.Forbidden<ProposalDto>("Project membership is required to withdraw this proposal.");
-        if (isOriginalAgent && command.Actor.ProjectId != command.ProjectId)
-            return Result.Forbidden<ProposalDto>("The API token is not bound to this project.");
+        if (isOriginalAgent)
+        {
+            if (command.Actor.ProjectId != command.ProjectId)
+                return Result.Forbidden<ProposalDto>("The API token is not bound to this project.");
+
+            var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
+                item.Id == command.SubtaskId
+                && item.TaskId == command.PipelineTaskId
+                && item.ProjectId == command.ProjectId
+                && item.Status == SubtaskStatus.InProgress, ct);
+            if (subtask is null
+                || !string.Equals(subtask.ProfileKey, "knowledge-curator", StringComparison.Ordinal)
+                || !subtask.AllowedMcpTools.Contains("knowledge_propose", StringComparer.Ordinal))
+                return Result.Forbidden<ProposalDto>("The original Actor subtask is no longer active or authorized.");
+
+            var sessionIsActive = await db.PipelineSessions.AnyAsync(item =>
+                item.Id == command.SessionId
+                && item.ProjectId == command.ProjectId
+                && item.TaskId == command.PipelineTaskId
+                && item.SubtaskId == command.SubtaskId
+                && item.Role == PipelineRole.Actor
+                && item.Status == SessionStatus.Active, ct);
+            if (!sessionIsActive)
+                return Result.Forbidden<ProposalDto>("The original Actor pipeline session is no longer active.");
+        }
 
         if (proposal.Status == ProposalStatus.Withdrawn)
             return Result.Ok(ProposalMapper.Map(proposal));
