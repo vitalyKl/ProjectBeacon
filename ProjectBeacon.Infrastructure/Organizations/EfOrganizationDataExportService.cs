@@ -58,7 +58,11 @@ public sealed class EfOrganizationDataExportService(
         {
             var permission = await authorization.CanAsync(
                 authorizationDb, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct);
-            if (!permission.Success)
+            var isOrganizationAdmin = await authorizationDb.OrgMembers.AnyAsync(
+                member => member.OrgId == orgId && member.UserId == actor.UserId
+                    && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin),
+                ct);
+            if (!permission.Success || !isOrganizationAdmin)
                 return Result.Failure<OrganizationDataExport>(
                     "Only an organization owner or administrator can export its data.",
                     ErrorKind.Forbidden);
@@ -78,7 +82,10 @@ public sealed class EfOrganizationDataExportService(
         // race between the scoped preflight and the unscoped, explicitly constrained reads.
         var permissionInsideSnapshot = await authorization.CanAsync(
             db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct);
-        if (!permissionInsideSnapshot.Success)
+        var isOrganizationAdminInsideSnapshot = await db.OrgMembers.AsNoTracking()
+            .AnyAsync(member => member.OrgId == orgId && member.UserId == actor.UserId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin), ct);
+        if (!permissionInsideSnapshot.Success || !isOrganizationAdminInsideSnapshot)
             return Result.Failure<OrganizationDataExport>(
                 "Only an organization owner or administrator can export its data.",
                 ErrorKind.Forbidden);
