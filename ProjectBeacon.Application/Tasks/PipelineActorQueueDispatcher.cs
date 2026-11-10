@@ -239,6 +239,28 @@ public sealed class PipelineActorQueueDispatcher
                     return null;
                 }
 
+                var now = DateTime.UtcNow;
+                var pendingProposalCount = await db.Proposals.CountAsync(proposal =>
+                    proposal.ProjectId == task.ProjectId
+                    && proposal.TaskId == taskId
+                    && proposal.Status == ProposalStatus.Pending
+                    && proposal.ExpiresAt > now, ct);
+                var conflictedProposalCount = await db.Proposals.CountAsync(proposal =>
+                    proposal.ProjectId == task.ProjectId
+                    && proposal.TaskId == taskId
+                    && proposal.Status == ProposalStatus.Conflicted, ct);
+                var recentRejectedProposals = await db.Proposals.AsNoTracking()
+                    .Where(proposal => proposal.ProjectId == task.ProjectId
+                        && proposal.TaskId == taskId
+                        && proposal.Status == ProposalStatus.Rejected)
+                    .OrderByDescending(proposal => proposal.DecidedAt ?? proposal.CreatedAt)
+                    .Take(5)
+                    .Select(proposal => new ProposalWakeRejection(
+                        proposal.TargetKind, proposal.TargetId, proposal.DecisionNote))
+                    .ToListAsync(ct);
+                var proposalSummary = new ProposalWakeSummary(
+                    pendingProposalCount, conflictedProposalCount, recentRejectedProposals);
+
                 var workspace = await db.TaskWorkspaceSections.AsNoTracking()
                     .Where(section => section.TaskId == taskId)
                     .OrderBy(section => section.Key)
@@ -280,7 +302,7 @@ public sealed class PipelineActorQueueDispatcher
                 var plannerInstructions = await PipelineSupport.RoleInstructionsAsync(
                     db, task.ProjectId, PipelineRole.Planner, ct);
                 var prompt = SessionPrompts.PlannerWake(
-                    task, subtasks, workspace, wakeCount + 1, wakeLimit, plannerInstructions);
+                    task, subtasks, workspace, wakeCount + 1, wakeLimit, plannerInstructions, proposalSummary);
                 var session = PipelineSession.Create(task.Id, task.ProjectId, PipelineRole.Planner,
                     prompt, null, spawned.ModelBackendId, spawned.LaunchSpec);
                 db.PipelineSessions.Add(session);
