@@ -141,12 +141,18 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
 - Organization/customer onboarding and Alpha entitlement management are available under
   `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
   member/invitation visibility, owner invitation creation/revocation, member-role changes, global
-  customer-account enable/disable, and Alpha grant/renew/revoke. The account action is global across
-  every organization the user belongs to, increments the session version, invalidates the local
-  session-version cache, and refuses to disable an owner unless every affected organization has
-  another active owner. The last active owner also cannot be demoted.
+  customer-account enable/disable, Alpha grant/renew/revoke, and organization lifecycle controls.
+  Organizations can move Active → Suspended → Active or Suspended → Closed; Closed is terminal,
+  retains customer data, and is restricted to SystemAdministrators. Lifecycle transitions require
+  TOTP step-up, a reason and an atomic audit event. Suspended/closed organizations are denied by
+  API entitlement checks, ordinary tenant EF filters, shared Application authorization checks, and
+  invite preview/redemption checks. Existing circuits retain their global user session but their
+  inactive tenant data stays blocked; a customer with another active membership can switch to it.
+  Account disable is global across every organization the user belongs to, increments the session
+  version, invalidates the local session-version cache, and refuses to disable an owner unless every
+  affected organization has another active owner. The last active owner also cannot be demoted.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
-- Billing persistence/provider integration, lost-authenticator recovery, organization
-  suspension/closure, production operations telemetry/log access, data export/deletion, and
-  granular feature/usage entitlement enforcement remain future work.
+- Billing persistence/provider integration, self-service lost-authenticator recovery for
+  non-SystemAdministrator operators, production operations telemetry/log access, data export/deletion,
+  and granular feature/usage entitlement enforcement remain future work.

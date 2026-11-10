@@ -572,6 +572,9 @@ public sealed class EfOrganizationAdminService(
             return Result.Failure("Organization id is required.");
         if (!Enum.IsDefined(target))
             return Result.Failure("Organization lifecycle status is invalid.", ErrorKind.Validation);
+        if (target == OrganizationLifecycleStatus.Closed
+            && !actor.HasPermission(OperatorPermission.SystemMaintenance))
+            return Result.Forbidden("Only a SystemAdministrator can permanently close an organization.");
 
         reason = reason?.Trim() ?? string.Empty;
         if (reason.Length is < 3 or > 500)

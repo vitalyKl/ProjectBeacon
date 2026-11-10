@@ -198,10 +198,13 @@
                                    Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Active))">
                             Reactivate
                         </MudButton>
-                        <MudButton Color="Color.Error" Variant="Variant.Outlined"
-                                   Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Closed))">
-                            Close permanently
-                        </MudButton>
+                        @if (_canCloseOrganizations)
+                        {
+                            <MudButton Color="Color.Error" Variant="Variant.Outlined"
+                                       Disabled="_saving" OnClick="@(() => ChangeLifecycleStatus(OrganizationLifecycleStatus.Closed))">
+                                Close permanently
+                            </MudButton>
+                        }
                     }
                 </MudStack>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
@@ -309,10 +312,12 @@
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="8">
                         <MudTextField T="string" @bind-Value="_inviteEmail" Label="Owner email"
-                                      InputType="InputType.Email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                      InputType="InputType.Email" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Disabled="@(_detail.Organization.LifecycleStatus != OrganizationLifecycleStatus.Active)" />
                     </MudItem>
                     <MudItem xs="12" md="4">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="InviteOwner" Disabled="_saving">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="InviteOwner"
+                                   Disabled="@(_saving || _detail.Organization.LifecycleStatus != OrganizationLifecycleStatus.Active)">
                             Invite owner
                         </MudButton>
                     </MudItem>
@@ -521,6 +526,7 @@
     private bool _blocked;
     private bool _authorized;
     private bool _canManageOrganizations;
+    private bool _canCloseOrganizations;
     private bool _canReadUsers;
     private bool _canReadEntitlements;
     private bool _canManageEntitlements;
@@ -555,6 +561,7 @@
         _authorized = await EnsurePermissionAsync(OperatorPermission.OrganizationsRead);
         if (!_authorized) return;
         _canManageOrganizations = await HasPermissionAsync(OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage);
+        _canCloseOrganizations = await HasPermissionAsync(OperatorPermission.SystemMaintenance);
         _canReadUsers = await HasPermissionAsync(OperatorPermission.UsersRead);
         _canReadEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsRead);
         _canManageEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsManage);

@@ -386,6 +386,49 @@ public sealed class OrganizationAdminServiceTests : IDisposable
         Assert.Equal(OrganizationLifecycleStatus.Closed, details.Value!.Organization.LifecycleStatus);
     }
 
+
+    [Fact]
+    public async Task SupportCanSuspendAndReactivateButCannotPermanentlyCloseOrganization()
+    {
+        var support = User.Create("support-operator", "support@example.test", "hash");
+        support.AssignOperatorRole(OperatorRole.Support.ToString());
+        support.BeginTotp("test-secret-cipher");
+        support.ConfirmTotp();
+        var org = Org.Create("Support-managed customer");
+        _seedDb.Users.Add(support);
+        _seedDb.Orgs.Add(org);
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var gate = new DatabaseAdminGate(_factory);
+        var context = new ActorContext(ActorType.Human, support.Id, true, null, null, null, null,
+            ApiTokenCapability.None, DateTimeOffset.UtcNow.AddMinutes(5));
+        var actorResult = await gate.RequireAsync(
+            context,
+            OperatorPermission.OrganizationsManage | OperatorPermission.UsersManage,
+            requireElevation: true,
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(actorResult.Success, actorResult.Error);
+        var actor = actorResult.Value!;
+
+        var service = CreateService();
+        var suspended = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Suspended, "support hold");
+        Assert.True(suspended.Success, suspended.Error);
+
+        var closed = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Closed, "permanent closure");
+        Assert.False(closed.Success);
+        Assert.Equal(ErrorKind.Forbidden, closed.Kind);
+        await _seedDb.Entry(org).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, org.LifecycleStatus);
+
+        var resumed = await service.SetLifecycleStatusAsync(
+            actor, org.Id, OrganizationLifecycleStatus.Active, "support restored access");
+        Assert.True(resumed.Success, resumed.Error);
+        await _seedDb.Entry(org).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(OrganizationLifecycleStatus.Active, org.LifecycleStatus);
+    }
+
     [Fact]
     public async Task OrganizationLifecycle_RejectsMissingReason()
     {

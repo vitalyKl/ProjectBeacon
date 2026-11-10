@@ -123,13 +123,14 @@ Implemented in the foundation branch:
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
 - Operator organization management: paginated/searchable customer list, organization detail, member/invitation metadata, organization creation with owner invitation, invite reissue/revocation, member-role changes, and global account disable/enable with owner-protection and session invalidation.
+- Organization lifecycle transitions (Active/Suspended/Closed) with a reason, TOTP step-up, row locking and atomic audit records. Suspended and closed tenants are blocked across API entitlement checks, ordinary EF tenant filters, shared Application authorization checks, and invite preview/redemption. Existing global user sessions remain valid; a user can switch to another active organization. Permanent closure is terminal and reserved for SystemAdministrators.
 - Persisted organization entitlements with operator list/grant/renew/revoke, replacement history, transactionally staged audit events, tenant RLS and an active-grant uniqueness constraint.
 - Sensitive organization, user and entitlement mutations require TOTP step-up and are independently checked by the Application services.
 - SaaS-only product boundary documented in README and AGENTS.
 
 Not implemented by this foundation:
 
-- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. The primary SystemAdministrator can recover a lost authenticator through the deployment-token-protected Control Plane break-glass flow; self-service recovery for Support, Billing and Auditor is not implemented. Organization suspension/closure are not exposed.
+- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. The primary SystemAdministrator can recover a lost authenticator through the deployment-token-protected Control Plane break-glass flow; self-service recovery for Support, Billing and Auditor is not implemented.
 - Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. More granular product-feature gates and usage-counter enforcement are still future work; generic numeric limits are not yet enforced.
 - Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
 - Approval-request and verified-email registration handlers.
