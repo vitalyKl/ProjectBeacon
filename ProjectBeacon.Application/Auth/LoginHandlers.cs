@@ -245,6 +245,7 @@ public class RegisterHandler
 
         var user = User.Create(login, email, _passwords.Hash(password));
         await using var writeDb = _dbFactory.CreateDbContext(window);
+        writeDb.Users.Add(user);
         await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
 
         if (orgInvite is not null)
@@ -303,7 +304,6 @@ public class RegisterHandler
                 writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
             }
 
-            writeDb.Users.Add(user);
             var registeredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null, null, invite.OrgId, ApiTokenCapability.None);
             _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
@@ -411,7 +411,6 @@ public class RegisterHandler
                 writeDb.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(
                     projectInvite.ProjectId, user.Id, invite.Role));
 
-            writeDb.Users.Add(user);
             var projectRegisteredActor = new ActorContext(
                 ActorType.Human, user.Id, false, null, null,
                 projectInvite.ProjectId, project.OrgId, ApiTokenCapability.None);
