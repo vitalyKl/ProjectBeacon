@@ -101,6 +101,34 @@ public sealed class ProjectLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateProject_RejectsSuspendedOrganization()
+    {
+        var (actor, firstProjectId) = await CreateOwnedProject();
+        var orgId = await _db.Projects.IgnoreQueryFilters()
+            .Where(project => project.Id == firstProjectId)
+            .Select(project => project.OrgId)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var org = await _db.Orgs.IgnoreQueryFilters()
+            .SingleAsync(item => item.Id == orgId, TestContext.Current.CancellationToken);
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new CreateProjectHandler(
+            HandlerSqlite.Factory(_connection),
+            _auth,
+            new TenantContext(),
+            entitlements: new ProjectLimitEvaluator(limit: 10));
+        var result = await handler.HandleAsync(
+            new CreateProjectCommand(new CreateProjectRequest("Must not exist", null, orgId), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(1L, await _db.Projects.IgnoreQueryFilters()
+            .LongCountAsync(project => project.OrgId == orgId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Delete_RemovesProject()
     {
         var (actor, projectId) = await CreateOwnedProject();
