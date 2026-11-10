@@ -213,7 +213,7 @@ public sealed class DatabaseAdminGateTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Forbidden, result.Kind);
-        Assert.Contains("step-up", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authenticator verification", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ActorContext Human(Guid userId, bool isAdmin) =>
