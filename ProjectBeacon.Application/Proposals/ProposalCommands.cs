@@ -187,12 +187,10 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("The requested base revision does not exist.");
 
         var baseHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
-        var projectOrgId = await db.Projects
-            .Where(project => project.Id == command.ProjectId)
-            .Select(project => (Guid?)project.OrgId)
-            .FirstOrDefaultAsync(ct);
-        if (projectOrgId is null)
+        var project = await db.Projects.FirstOrDefaultAsync(project => project.Id == command.ProjectId, ct);
+        if (project is null)
             return Result.Failure<ProposalDto>("Project not found.");
+        var projectOrgId = project.OrgId;
 
         // Expire overdue rows before applying pending limits. Expiration is a durable
         // state transition with its own audit event, not merely a read-time filter.
@@ -283,6 +281,18 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 db.ChangeTracker.Clear();
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+                var currentProject = await db.Projects.FirstOrDefaultAsync(
+                    item => item.Id == command.ProjectId, ct);
+                if (currentProject is null)
+                    return Result.Failure<ProposalDto>("Project not found.");
+
+                var autoApply = proposal.Status == ProposalStatus.Pending
+                    && ProposalPolicyCatalog.CanAutoApply(proposal.TargetKind, proposal.Operation)
+                    && ProposalPolicyCatalog.GetMode(
+                        currentProject.ProposalPoliciesJson, proposal.TargetKind, proposal.Operation)
+                        == ProposalDecisionMode.Auto;
+                var autoAccepted = false;
+
                 if (proposal.Status == ProposalStatus.Pending)
                 {
                     var latestTarget = await ProposalContentValidation.LoadTargetAsync(
@@ -293,9 +303,48 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                         proposal.MarkConflicted(latestTarget.Revision, "TargetNoLongerReviewable", now);
                     else if (latestTarget.Revision != proposal.BaseRevision)
                         proposal.MarkConflicted(latestTarget.Revision, "BaseRevisionChanged", now);
+                    else if (autoApply)
+                    {
+                        var attribution = ContentAttribution.FromActor(
+                            command.Actor, author.SubtaskId?.ToString("D"));
+                        var changedByType = attribution.Type
+                            ?? (command.Actor.IsHuman ? "Human" : "ApiToken");
+                        var changedById = attribution.Id
+                            ?? command.Actor.UserId?.ToString("D")
+                            ?? command.Actor.TokenId?.ToString("D")
+                            ?? string.Empty;
+
+                        try
+                        {
+                            ProposalContentValidation.Apply(
+                                latestTarget.Entity, proposal.TargetKind,
+                                command.Request.PayloadJson, changedByType, changedById);
+                        }
+                        catch (ArgumentException exception)
+                        {
+                            return Result.Failure<ProposalDto>(exception.Message);
+                        }
+                        catch (InvalidOperationException exception)
+                        {
+                            return Result.Failure<ProposalDto>(exception.Message);
+                        }
+
+                        var appliedRevision = ProposalContentValidation.GetRevision(latestTarget.Entity);
+                        if (appliedRevision != latestTarget.Revision)
+                            _contentWriter.AddVersion(
+                                db, latestTarget.Entity, changedByType, changedById,
+                                proposalId: proposal.Id);
+
+                        proposal.AutoAccept(appliedRevision, command.Request.PayloadJson, now);
+                        StageAudit(db, command.Actor, proposal, projectOrgId, "proposal.auto_accepted", ProposalStatus.Accepted);
+                        autoAccepted = true;
+                    }
                 }
 
-                if (proposal.Status == ProposalStatus.Pending && author.SubtaskId is { } sourceSubtask)
+                // A newer proposal from the same Actor supersedes its previous pending
+                // proposal even when the new proposal was accepted by an Auto policy.
+                if ((proposal.Status == ProposalStatus.Pending || autoAccepted)
+                    && author.SubtaskId is { } sourceSubtask)
                 {
                     var previous = await db.Proposals
                         .Where(existing => existing.ProjectId == command.ProjectId
@@ -307,16 +356,16 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                     foreach (var item in previous)
                     {
                         item.Supersede(proposal.Id, now);
-                        StageAudit(db, command.Actor, item, projectOrgId.Value, "proposal.superseded", ProposalStatus.Superseded);
+                        StageAudit(db, command.Actor, item, projectOrgId, "proposal.superseded", ProposalStatus.Superseded);
                     }
                     if (previous.Count > 0)
                         await db.SaveChangesAsync(ct);
                 }
 
                 db.Proposals.Add(proposal);
-                StageAudit(db, command.Actor, proposal, projectOrgId.Value, "proposal.created", proposal.Status);
+                StageAudit(db, command.Actor, proposal, projectOrgId, "proposal.created", proposal.Status);
                 if (proposal.Status == ProposalStatus.Conflicted)
-                    StageAudit(db, command.Actor, proposal, projectOrgId.Value, "proposal.conflicted", ProposalStatus.Conflicted);
+                    StageAudit(db, command.Actor, proposal, projectOrgId, "proposal.conflicted", ProposalStatus.Conflicted);
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
                 return Result.Ok(Map(proposal));
