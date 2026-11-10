@@ -125,6 +125,10 @@ internal sealed class RepoPatchCompletion : ICommandCompletion
             using var document = JsonDocument.Parse(resultJson);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("projectId", out var projectElement)
+                || projectElement.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(projectElement.GetString(), out var resultProjectId)
+                || resultProjectId != proposal.ProjectId
                 || !root.TryGetProperty("proposalId", out var idElement)
                 || idElement.ValueKind != JsonValueKind.String
                 || !Guid.TryParse(idElement.GetString(), out var resultId)
