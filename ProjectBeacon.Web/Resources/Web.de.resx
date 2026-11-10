@@ -2764,4 +2764,10 @@ orthstar</value>
   <data name="ProposalPolicySaved" xml:space="preserve">
     <value>Vorschlagsrichtlinie gespeichert.</value>
   </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>Zeilenweiser Inhaltsvergleich</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>Keine Textänderungen.</value>
+  </data>
 </root>
