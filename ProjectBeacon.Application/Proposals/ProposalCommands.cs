@@ -139,7 +139,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("RationaleMarkdown must contain 1-1000 characters.");
         if (!Enum.IsDefined(command.Request.TargetKind))
             return Result.Failure<ProposalDto>("Unknown proposal target kind.");
-        if (!ProposalContentValidation.TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
+        if (command.Request.TargetKind != ContentTargetKind.RepoPatch
+            && !ProposalContentValidation.TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
             return Result.Failure<ProposalDto>(validationError!);
         if (SecretPattern.IsMatch(command.Request.PayloadJson)
             || SecretPattern.IsMatch(command.Request.RationaleMarkdown ?? string.Empty))
@@ -165,6 +166,28 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         if (!author.Success)
             return Result.Forbidden<ProposalDto>(author.Error ?? "The proposal author is not authorized.");
 
+        if (command.Request.TargetKind == ContentTargetKind.RepoPatch)
+        {
+            if (command.Actor.IsHuman || command.Request.TargetId != command.ProjectId
+                || !string.Equals(author.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
+                return Result.Forbidden<ProposalDto>("RepoPatch is restricted to the project-bound docs-writer Actor profile.");
+
+            var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
+                item.Id == author.SubtaskId && item.TaskId == author.TaskId
+                && item.ProjectId == command.ProjectId, ct);
+            if (subtask is null)
+                return Result.Forbidden<ProposalDto>("The docs-writer subtask no longer exists.");
+            var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
+            if (profile is null || profile.PathPolicy != AgentProfilePathPolicy.Defaults
+                || profile.DefaultPaths.Count == 0
+                || subtask.AllowedPaths.Any(path => !BuiltInAgentProfiles.IsWithinDefaults(path, profile.DefaultPaths)))
+                return Result.Forbidden<ProposalDto>("RepoPatch requires a valid docs-writer documentation-only path grant.");
+            if (!RepoPatchValidation.TryValidate(command.Request.PayloadJson,
+                    subtask.AllowedPaths.Count == 0 ? profile.DefaultPaths : subtask.AllowedPaths,
+                    profile.DefaultPaths, out _, out var patchError))
+                return Result.Failure<ProposalDto>(patchError ?? "RepoPatch failed validation.", ErrorKind.Validation);
+        }
+
         var existingByKey = await db.Proposals.FirstOrDefaultAsync(
             proposal => proposal.ProjectId == command.ProjectId
                 && proposal.IdempotencyKey == normalizedIdempotencyKey,
@@ -176,21 +199,45 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("IdempotencyKey has already been used for a different proposal.", ErrorKind.Conflict);
         }
 
-        var target = await ProposalContentValidation.LoadTargetAsync(db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
-        if (target is null)
-            return Result.Failure<ProposalDto>("The requested content target was not found.");
-        if (!target.Reviewable)
-            return Result.Failure<ProposalDto>("Only accepted or reviewed content can receive a new proposal.");
+        ProposalContentValidation.ProposalTarget? target = null;
+        string baseHash;
+        if (command.Request.TargetKind == ContentTargetKind.RepoPatch)
+        {
+            if (command.Request.TargetId != command.ProjectId)
+                return Result.Failure<ProposalDto>("RepoPatch TargetId must equal ProjectId.");
+            var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
+                item.Id == author.SubtaskId && item.ProjectId == command.ProjectId, ct);
+            if (subtask is null)
+                return Result.Forbidden<ProposalDto>("The docs-writer subtask no longer exists.");
+            var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
+            if (profile is null)
+                return Result.Forbidden<ProposalDto>("The docs-writer profile is unavailable.");
+            if (!RepoPatchValidation.TryValidate(command.Request.PayloadJson,
+                    subtask.AllowedPaths.Count == 0 ? profile.DefaultPaths : subtask.AllowedPaths,
+                    profile.DefaultPaths, out var validatedPatch, out var patchError)
+                || validatedPatch is null)
+                return Result.Failure<ProposalDto>(patchError ?? "RepoPatch failed validation.", ErrorKind.Validation);
+            baseHash = validatedPatch.BaseHash;
+        }
+        else
+        {
+            target = await ProposalContentValidation.LoadTargetAsync(
+                db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
+            if (target is null)
+                return Result.Failure<ProposalDto>("The requested content target was not found.");
+            if (!target.Reviewable)
+                return Result.Failure<ProposalDto>("Only accepted or reviewed content can receive a new proposal.");
 
-        var baseVersion = await db.ContentVersions.FirstOrDefaultAsync(version =>
-            version.ProjectId == command.ProjectId
-            && version.TargetKind == command.Request.TargetKind
-            && version.TargetId == command.Request.TargetId
-            && version.Revision == command.Request.BaseRevision, ct);
-        if (baseVersion is null)
-            return Result.Failure<ProposalDto>("The requested base revision does not exist.");
+            var baseVersion = await db.ContentVersions.FirstOrDefaultAsync(version =>
+                version.ProjectId == command.ProjectId
+                && version.TargetKind == command.Request.TargetKind
+                && version.TargetId == command.Request.TargetId
+                && version.Revision == command.Request.BaseRevision, ct);
+            if (baseVersion is null)
+                return Result.Failure<ProposalDto>("The requested base revision does not exist.");
 
-        var baseHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
+            baseHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
+        }
         var project = await db.Projects.FirstOrDefaultAsync(project => project.Id == command.ProjectId, ct);
         if (project is null)
             return Result.Failure<ProposalDto>("Project not found.");
@@ -274,7 +321,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>(exception.Message);
         }
 
-        if (target.Revision != command.Request.BaseRevision)
+        if (target is not null && target.Revision != command.Request.BaseRevision)
             proposal.MarkConflicted(target.Revision, "BaseRevisionChanged", now);
 
         var strategy = db.Database.CreateExecutionStrategy();
@@ -290,14 +337,35 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 if (currentProject is null)
                     return Result.Failure<ProposalDto>("Project not found.");
 
-                var autoApply = proposal.Status == ProposalStatus.Pending
+                var projectAutoApply = proposal.Status == ProposalStatus.Pending
                     && ProposalPolicyCatalog.CanAutoApply(proposal.TargetKind, proposal.Operation)
                     && ProposalPolicyCatalog.GetMode(
                         currentProject.ProposalPoliciesJson, proposal.TargetKind, proposal.Operation)
                         == ProposalDecisionMode.Auto;
                 var autoAccepted = false;
+                var autoApplyQueued = false;
 
-                if (proposal.Status == ProposalStatus.Pending)
+                if (proposal.Status == ProposalStatus.Pending && proposal.TargetKind == ContentTargetKind.RepoPatch)
+                {
+                    var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
+                        item.Id == proposal.SubtaskId && item.ProjectId == proposal.ProjectId, ct);
+                    var profile = subtask is null
+                        ? null
+                        : BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
+                    var profileAutoApply = profile is not null
+                        && Enum.TryParse<AgentProfileApplyPolicy>(profile.ApplyPolicy, true, out var applyPolicy)
+                        && applyPolicy == AgentProfileApplyPolicy.Auto;
+                    if (projectAutoApply && profileAutoApply)
+                    {
+                        var queued = await RepoPatchProposalWorkflow.QueueAsync(
+                            db, proposal, null, command.Actor, _auditWriter, now,
+                            requireProfileAuto: true, ct);
+                        if (!queued.Success)
+                            return Result.Failure<ProposalDto>(queued.Error ?? "RepoPatch could not be queued.", queued.Kind);
+                        autoApplyQueued = true;
+                    }
+                }
+                else if (proposal.Status == ProposalStatus.Pending)
                 {
                     var latestTarget = await ProposalContentValidation.LoadTargetAsync(
                         db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
@@ -307,7 +375,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                         proposal.MarkConflicted(latestTarget.Revision, "TargetNoLongerReviewable", now);
                     else if (latestTarget.Revision != proposal.BaseRevision)
                         proposal.MarkConflicted(latestTarget.Revision, "BaseRevisionChanged", now);
-                    else if (autoApply)
+                    else if (projectAutoApply)
                     {
                         var attribution = ContentAttribution.FromActor(
                             command.Actor, author.SubtaskId?.ToString("D"));
@@ -347,7 +415,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
                 // A newer proposal from the same Actor supersedes its previous pending
                 // proposal even when the new proposal was accepted by an Auto policy.
-                if ((proposal.Status == ProposalStatus.Pending || autoAccepted)
+                if ((proposal.Status == ProposalStatus.Pending || autoAccepted || autoApplyQueued)
                     && author.SubtaskId is { } sourceSubtask)
                 {
                     var previous = await db.Proposals
@@ -439,6 +507,17 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             || subtask.ProfileKey is not ("knowledge-curator" or "docs-writer")
             || !subtask.AllowedMcpTools.Contains(McpToolNames.KnowledgePropose, StringComparer.Ordinal))
             return ProposalAuthorScope.Forbidden("The active subtask profile is not granted knowledge proposal access.");
+
+        if (string.Equals(subtask.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
+        {
+            var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
+            if (profile is null || profile.PathPolicy != AgentProfilePathPolicy.Defaults
+                || profile.DefaultPaths.Count == 0)
+                return ProposalAuthorScope.Forbidden("The docs-writer profile has no safe documentation path grant.");
+            var paths = subtask.AllowedPaths.Count == 0 ? profile.DefaultPaths : subtask.AllowedPaths;
+            if (paths.Any(path => !BuiltInAgentProfiles.IsWithinDefaults(path, profile.DefaultPaths)))
+                return ProposalAuthorScope.Forbidden("The docs-writer subtask exceeds its documentation-only path grant.");
+        }
 
         var session = await db.PipelineSessions.FirstOrDefaultAsync(item =>
             item.Id == command.SessionId.Value
