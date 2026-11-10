@@ -100,15 +100,30 @@ public class ListConstraintsHandler
 public class ActivateConstraintHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ActivateConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<ConstraintDto>> HandleAsync(Guid constraintId, CancellationToken ct = default)
+    public ActivateConstraintHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
     {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<ConstraintDto>> HandleAsync(
+        Guid constraintId, ActorContext actor, CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<ConstraintDto>("Only a human Owner/Admin can activate a constraint.");
+
         await using var db = _dbFactory.CreateDbContext();
         var constraint = await db.Constraints.FindAsync([constraintId], ct);
         if (constraint is null)
             return Result.Failure<ConstraintDto>("Constraint not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: constraint.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<ConstraintDto>("Only a project or organization Owner/Admin can activate constraints.");
+
         constraint.Activate();
         await db.SaveChangesAsync(ct);
         return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
@@ -120,15 +135,30 @@ public class ActivateConstraintHandler
 public class RejectConstraintHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public RejectConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
-
-    public async Task<Result<ConstraintDto>> HandleAsync(Guid constraintId, CancellationToken ct = default)
+    public RejectConstraintHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
     {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
+
+    public async Task<Result<ConstraintDto>> HandleAsync(
+        Guid constraintId, ActorContext actor, CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<ConstraintDto>("Only a human Owner/Admin can reject a constraint.");
+
         await using var db = _dbFactory.CreateDbContext();
         var constraint = await db.Constraints.FindAsync([constraintId], ct);
         if (constraint is null)
             return Result.Failure<ConstraintDto>("Constraint not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: constraint.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<ConstraintDto>("Only a project or organization Owner/Admin can reject constraints.");
+
         constraint.Reject();
         await db.SaveChangesAsync(ct);
         return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
