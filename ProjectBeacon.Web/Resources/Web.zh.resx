@@ -2694,6 +2694,30 @@ orthstar</value>
   <data name="BatchAcceptResults" xml:space="preserve">
     <value>批量接受：成功 {0} 项，失败 {1} 项。</value>
   </data>
+  <data name="Applying" xml:space="preserve">
+    <value>正在应用</value>
+  </data>
+  <data name="ProposalApplyQueued" xml:space="preserve">
+    <value>文档补丁已加入工作站队列；验证完成前不会标记为已接受。</value>
+  </data>
+  <data name="ProposalPatchQueuedCount" xml:space="preserve">
+    <value>已排队的文档补丁：{0}。</value>
+  </data>
+  <data name="ProposalPatchApplying" xml:space="preserve">
+    <value>正在工作站上应用并验证文档补丁。</value>
+  </data>
+  <data name="ProposalPatchApplied" xml:space="preserve">
+    <value>文档补丁已应用并验证。</value>
+  </data>
+  <data name="RepoPatchDocumentationOnly" xml:space="preserve">
+    <value>此审查包含仅限文档的补丁。此处不能编辑其内容；如需更改，请拒绝后重新提交。</value>
+  </data>
+  <data name="DocumentationPatch" xml:space="preserve">
+    <value>文档补丁</value>
+  </data>
+  <data name="WorkstationCommand" xml:space="preserve">
+    <value>工作站命令</value>
+  </data>
   <data name="LegacyReviewItems" xml:space="preserve">
     <value>现有待审核项目</value>
   </data>
