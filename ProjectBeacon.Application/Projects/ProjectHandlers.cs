@@ -4,8 +4,6 @@ using Application.Authorization;
 using Application.Audit;
 using Application.Common;
 using Application.Entitlements;
-using System.Data;
-using Microsoft.EntityFrameworkCore.Storage;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -64,23 +62,9 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         await using var writeDb = _dbFactory.CreateDbContext(window);
         await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
 
-        // Serialize project creation per organization so two concurrent requests cannot both
-        // pass the same configured capacity check before either project is committed.
-        if (string.Equals(
-                writeDb.Database.ProviderName,
-                "Npgsql.EntityFrameworkCore.PostgreSQL",
-                StringComparison.Ordinal))
-        {
-            await using var lockCommand = writeDb.Database.GetDbConnection().CreateCommand();
-            lockCommand.Transaction = transaction.GetDbTransaction();
-            lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lock_key, 0))";
-            var lockParameter = lockCommand.CreateParameter();
-            lockParameter.ParameterName = "lock_key";
-            lockParameter.DbType = DbType.String;
-            lockParameter.Value = $"organization-project-capacity:{orgId:N}";
-            lockCommand.Parameters.Add(lockParameter);
-            await lockCommand.ExecuteNonQueryAsync(ct);
-        }
+        // Share the organization capacity lock with seat reservation/acceptance flows.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            writeDb.Database, transaction, orgId, ct);
 
         if (_entitlements is not null)
         {
