@@ -632,7 +632,8 @@ public sealed class EfOrganizationAdminService(
             ? """SELECT "Id" FROM "Users" WHERE "Id" = @user_id FOR UPDATE"""
             : """SELECT "Id" FROM "Users" WHERE "Id" = @user_id""";
         Add(command, "user_id", DbType.Guid, userId);
-        return await command.ExecuteScalarAsync(ct) is Guid;
+        var result = await command.ExecuteScalarAsync(ct);
+        return result is not null && result is not DBNull;
     }
 
     private static async Task<bool> LockOrganizationAsync(
@@ -644,7 +645,8 @@ public sealed class EfOrganizationAdminService(
             ? """SELECT "Id" FROM "Orgs" WHERE "Id" = @org_id FOR UPDATE"""
             : """SELECT "Id" FROM "Orgs" WHERE "Id" = @org_id""";
         Add(command, "org_id", DbType.Guid, orgId);
-        return await command.ExecuteScalarAsync(ct) is Guid;
+        var result = await command.ExecuteScalarAsync(ct);
+        return result is not null && result is not DBNull;
     }
 
     private static bool CanManage(AdminActor actor) =>
