@@ -2770,4 +2770,16 @@ orthstar</value>
   <data name="NoTextualChanges" xml:space="preserve">
     <value>Keine Textänderungen.</value>
   </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>Dokumentationsänderungen anwenden</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review wartet auf eine menschliche Freigabe. Auto wendet nur Dokumentationsänderungen dieses Profils innerhalb seiner erlaubten Pfade an.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review (menschliche Freigabe)</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto (Dokumentationspatch anwenden)</value>
+  </data>
 </root>
