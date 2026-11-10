@@ -46,32 +46,42 @@ backstop is safe; do not assume otherwise in future code.
 
 ## Classification
 
-All `WorkstationCommandKind` values, complete.
+All 24 `WorkstationCommandKind` values, complete. The executable source of truth is
+`WorkstationCommandCatalog`; tests assert the exhaustive partition.
 
 | Kind | Property | Retryable | ReconcileBacked | Rationale |
 |---|---|---|---|---|
-| `Probe` | Idempotent | yes | no | Read-only: detect binaries. |
-| `ListDir` | Idempotent | yes | no | Read-only: one-level directory listing. |
-| `Install` | Idempotent | yes | no | Winget is re-runnable; an already-installed package is a no-op. A partially failed install is safe to re-run. |
-| `InitProject` | Idempotent | yes | no | Every step is a no-op or a merge: `CreateDirectory` (no-op if present), `git init` (guarded by `!Directory.Exists`), `.gitignore` (set-based merge), `opencode.json` (key/value merge), `local.json` (overwrite). A partially failed init is safe to re-run. |
-| `ApplyOpencode` | Idempotent | yes | yes | Key/value merge of OpenCode config; deterministic from project state. Re-applied by `ReconcileDesired` if lost. |
-| `ScanGguf` | Idempotent | yes | no | Read-only: list `*.gguf`. |
-| `ReloadProxy` | Idempotent | yes | yes | Rewrites llama-swap config from desired state; same state → same result. Re-applied by `ReconcileDesired`. |
-| `UnloadProxy` | Idempotent | yes | no | Unloading an already-unloaded proxy is a no-op. |
-| `SwapModel` | Idempotent | yes | no | Sets the resident model; same model → same state. **Not enqueued through `WorkstationCommand`** — handled client-side inside `ReloadProxy` execution. Kept in the enum for completeness. |
-| `SaveWorkstation` | Idempotent | yes | yes | Writes `workstation.json`; same payload → same file. Re-applied by `ReconcileDesired`. |
-| `ChatEnsureSession` | **AtMostOnce** | **no** | no | Always `POST /session`, which **creates a new OpenCode session every run** — there is no dedup by title. The "ensure" refers to ensuring the OpenCode *process* is running (`TickAsync`), not ensuring a specific session exists. Re-execution orphans a session. |
-| `ChatPrompt` | **AtMostOnce** | **no** | no | An LLM call. A duplicate run produces a second, duplicate assistant turn. |
+| `Probe` | Idempotent | yes | no | Read-only workstation/environment probe. |
+| `ListDir` | Idempotent | yes | no | Read-only one-level directory listing. |
+| `Install` | Idempotent | yes | no | Supported package installation converges when repeated. |
+| `InitProject` | Idempotent | yes | no | Project bootstrap operations are guarded merges/no-ops. |
+| `RetiredAgentConfigApply` | Idempotent (disabled) | yes | yes | Retired descriptor; cannot be newly enqueued. |
+| `ScanGguf` | Idempotent | yes | no | Read-only local model discovery. |
+| `ReloadProxy` | Idempotent | yes | yes | Rebuilds proxy configuration from desired state. |
+| `UnloadProxy` | Idempotent | yes | no | Unloading an already-unloaded model is a no-op. |
+| `SwapModel` | Idempotent | yes | no | Sets the resident model; same model converges to same state. |
+| `SaveWorkstation` | Idempotent | yes | yes | Persists the same desired workstation configuration. |
+| `ChatEnsureSession` | **AtMostOnce** | **no** | no | Creates a new external session; replay can orphan another session. |
+| `ChatPrompt` | **AtMostOnce** | **no** | no | An LLM call; replay creates a duplicate assistant turn. |
 | `ChatAbort` | Idempotent | yes | no | Aborting an already-aborted session is a no-op. |
-| `ConfigureOpenCode` | Idempotent | yes | yes | Applies `/v1/devices/me/opencode-connections` and restarts OpenCode; deterministic from the connection rows. Re-applied by `ReconcileDesired`. |
-| `RunEvalTurn` | **AtMostOnce** | **no** | no | An LLM call. A duplicate run corrupts the eval scores by double-counting the turn. |
-| `ReconcileDesired` | Idempotent | yes | yes (self) | Applies the device's desired state. It is its own backstop; a lost reconcile is re-triggered by the next heartbeat. |
-| `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs `checkCommand` for a `reviewRunId`. A duplicate run produces a second review run. **Defense-in-depth:** `CommandSandbox.SanitizeProjectPayload` strips payload `checkCommand` for `RunReviewCheck`; `EnqueueCommandHandler` injects `TrustedCheckCommand` only (from `RecordReviewCheckHandler`, never from body). `Actor.IsHuman` gate: human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand` (400/409). |
-| `RunPipelineSession` | **AtMostOnce** | **no** | no | Starts one pipeline agent turn; re-delivery could create a duplicate session or repeat tool side effects. |
+| `ChatSwitchAgent` | **AtMostOnce** | **no** | no | Control-lane operation with external side effects; never re-deliver after ambiguous completion. |
+| `ChatReplyForm` | **AtMostOnce** | **no** | no | Submits one answer to a pending external form; duplicate submission is not guaranteed safe. |
+| `RetiredProviderSync` | Idempotent (disabled) | yes | yes | Retired descriptor; cannot be newly enqueued. |
+| `RunEvalTurn` | **AtMostOnce** | **no** | no | Duplicate LLM turn would double-count evaluation results. |
+| `ReconcileDesired` | Idempotent | yes | yes (self) | Reconciles workstation state from desired state; next heartbeat can trigger it again. |
+| `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs one trusted check for a review run; replay can create another run. |
+| `RunPipelineSession` | **AtMostOnce** | **no** | no | Starts one Actor/Planner/Review session; replay can duplicate work and tool side effects. |
+| `CheckClientUpdate` | Idempotent | yes | no | Read-only release metadata check. |
+| `UpdateClient` | **AtMostOnce** | **no** | no | Downloads/verifies/installs a client release; ambiguous interruption is not re-executed. |
+| `GitSync` | Idempotent | yes | no | Repeating status/fetch/fast-forward converges; successful fast-forward is subsequently UpToDate. |
+| `ApplyProposalPatch` | Idempotent | yes | no | Each file is checked against exact base/result hashes; already-applied sections are skipped and only remaining base-state sections are applied. A third state is a conflict, never success. |
 
-Counts: **13 Idempotent**, **7 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`, `ChatSwitchAgent`,
-`ChatReplyForm`, `RunEvalTurn`, `RunReviewCheck`, `RunPipelineSession`), **5 ReconcileBacked** (`ApplyOpencode`,
-`ReloadProxy`, `SaveWorkstation`, `ConfigureOpenCode`, `ReconcileDesired`).
+Counts: **16 Idempotent**, **8 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
+`ChatSwitchAgent`, `ChatReplyForm`, `RunEvalTurn`, `RunReviewCheck`,
+`RunPipelineSession`, `UpdateClient`), **5 ReconcileBacked**
+(`RetiredAgentConfigApply`, `ReloadProxy`, `SaveWorkstation`,
+`RetiredProviderSync`, `ReconcileDesired`). Disabled retired descriptors remain in
+the exhaustive enum/catalog partition but cannot be newly enqueued.
 
 ## Current protection for AtMostOnce
 
