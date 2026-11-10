@@ -35,6 +35,8 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
             throw new ArgumentException("Audit target type filter is too long.", nameof(query));
         if (query.TargetId?.Length > 128)
             throw new ArgumentException("Audit target id filter is too long.", nameof(query));
+        if (query.TraceId?.Length > 128)
+            throw new ArgumentException("Audit trace id filter is too long.", nameof(query));
 
         using (TenantScope.EnterUnscoped())
         {
@@ -63,6 +65,8 @@ public sealed class EfAuditReader(IBeaconDbFactory dbFactory) : IAuditReader
                 events = events.Where(e => e.TargetType == query.TargetType);
             if (!string.IsNullOrWhiteSpace(query.TargetId))
                 events = events.Where(e => e.TargetId == query.TargetId);
+            if (!string.IsNullOrWhiteSpace(query.TraceId))
+                events = events.Where(e => e.TraceId == query.TraceId);
             if (query.Outcome.HasValue)
                 events = events.Where(e => e.Outcome == query.Outcome.Value);
 
