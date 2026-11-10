@@ -129,7 +129,7 @@ public sealed class BillingPlanAdminServiceTests : IDisposable
         Assert.False(updated.IsActive);
 
         Assert.Equal(1, await _seedDb.BillingPlans.CountAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(1, await _seedDb.AuditEvents.IgnoreQueryFilters()
+        Assert.Equal(2, await _seedDb.AuditEvents.IgnoreQueryFilters()
             .CountAsync(item => item.Action == "platform.billing_plan.created"
                 || item.Action == "platform.billing_plan.updated",
                 TestContext.Current.CancellationToken));
