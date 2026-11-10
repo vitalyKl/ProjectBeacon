@@ -166,8 +166,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("ConflictReason")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
