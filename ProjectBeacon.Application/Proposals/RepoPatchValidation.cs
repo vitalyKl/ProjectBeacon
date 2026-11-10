@@ -150,17 +150,21 @@ public static class RepoPatchValidation
         string? currentGitPath = null;
         string? oldPath = null;
         string? newPath = null;
+        var hasOldHeader = false;
+        var hasNewHeader = false;
 
         void CompleteSection()
         {
             if (currentGitPath is null)
                 return;
-            if (oldPath is null && newPath is null)
-                throw new ArgumentException($"RepoPatch section for '{currentGitPath}' has no unified file headers.");
+            if (!hasOldHeader || !hasNewHeader)
+                throw new ArgumentException($"RepoPatch section for '{currentGitPath}' must contain exactly one old-file and one new-file header.");
             sections.Add((currentGitPath, oldPath, newPath));
             currentGitPath = null;
             oldPath = null;
             newPath = null;
+            hasOldHeader = false;
+            hasNewHeader = false;
         }
 
         foreach (var line in patch.Split('\n'))
@@ -183,15 +187,17 @@ public static class RepoPatchValidation
 
             if (line.StartsWith("--- ", StringComparison.Ordinal))
             {
-                if (currentGitPath is null || oldPath is not null)
+                if (currentGitPath is null || hasOldHeader || hasNewHeader)
                     throw new ArgumentException("RepoPatch contains an unexpected or duplicate old-file header.");
                 oldPath = ParseUnifiedPath(line[4..], "a/", currentGitPath);
+                hasOldHeader = true;
             }
             else if (line.StartsWith("+++ ", StringComparison.Ordinal))
             {
-                if (currentGitPath is null || newPath is not null)
+                if (currentGitPath is null || !hasOldHeader || hasNewHeader)
                     throw new ArgumentException("RepoPatch contains an unexpected or duplicate new-file header.");
                 newPath = ParseUnifiedPath(line[4..], "b/", currentGitPath);
+                hasNewHeader = true;
             }
         }
         CompleteSection();
