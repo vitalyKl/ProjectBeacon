@@ -305,6 +305,16 @@ public sealed class PostgresEntitlementService(
         if (request.StartsAtUtc.Offset != TimeSpan.Zero
             || (request.EndsAtUtc is { } suppliedEnd && suppliedEnd.Offset != TimeSpan.Zero))
             return Result.Failure<OrganizationEntitlement>("Subscription period timestamps must be UTC.");
+
+        // PostgreSQL timestamptz stores microsecond precision. Normalize before both persistence
+        // and idempotency comparison so an exact replay does not fail on discarded 100-ns ticks.
+        request = request with
+        {
+            StartsAtUtc = TruncateToPostgresPrecision(request.StartsAtUtc),
+            EndsAtUtc = request.EndsAtUtc is { } periodEnd
+                ? TruncateToPostgresPrecision(periodEnd)
+                : null
+        };
         if (request.StartsAtUtc > now)
             return Result.Failure<OrganizationEntitlement>(
                 "Alpha-to-production conversion must start immediately; future-dated conversion is not supported.");
@@ -675,6 +685,12 @@ public sealed class PostgresEntitlementService(
         Add(command, "org_id", DbType.Guid, orgId);
         var value = await command.ExecuteScalarAsync(ct);
         return value is Guid id ? id : null;
+    }
+
+    private static DateTimeOffset TruncateToPostgresPrecision(DateTimeOffset value)
+    {
+        var utcTicks = value.UtcDateTime.Ticks;
+        return new DateTimeOffset(utcTicks - utcTicks % 10, TimeSpan.Zero);
     }
 
     private static bool SafeBillingReference(string? value, int maximumLength) =>

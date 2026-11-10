@@ -1193,7 +1193,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             """, conn);
         command.Parameters.AddWithValue("id", invoiceId);
         command.Parameters.AddWithValue("org_id", orgId);
-        command.Parameters.AddWithValue("number", $"RLS-{invoiceId:N}");
+        command.Parameters.AddWithValue("number", "RLS-" + invoiceId.ToString("N")[..20]);
         command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("due", now.AddDays(1));
         command.Parameters.AddWithValue("actor_id", actorUserId);
