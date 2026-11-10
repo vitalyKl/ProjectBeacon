@@ -7,6 +7,7 @@ using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Application.Security;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Security;
 
 public sealed class OperatorRoleLoginTests : IDisposable
 {
