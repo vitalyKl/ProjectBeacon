@@ -356,9 +356,9 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             """("Source" = 0 AND "Status" = 4) OR ("Source" = 1 AND "Status" = 1)"""));
         Assert.Equal(3, await CountForOrgRawAsync(
             verify, "AuditEvents", orgId,
-            """"Action" IN ('organization.entitlement.replaced',
-                'organization.entitlement.converted',
-                'organization.subscription.activated')"""));
+            "\"Action\" IN ('organization.entitlement.replaced', "
+            + "'organization.entitlement.converted', "
+            + "'organization.subscription.activated')"));
     }
 
     [Fact]
