@@ -629,6 +629,19 @@ public sealed class EfOrganizationDataExportService(
                         return Result.Failure<OrganizationDataExport>(
                             "An attachment failed the archive integrity or size check; no partial archive was produced.",
                             ErrorKind.Unavailable);
+                    try
+                    {
+                        // Re-inspect bytea payloads as well as legacy files. Metadata is
+                        // not a trust boundary because old rows may predate content sniffing.
+                        detectedContentType = AttachmentContentInspector.DetectContentType(
+                            attachment.FileName, content);
+                    }
+                    catch (AttachmentRejectedException)
+                    {
+                        return Result.Failure<OrganizationDataExport>(
+                            "An attachment cannot be safely exported; no partial archive was produced.",
+                            ErrorKind.Unavailable);
+                    }
 
                     var archivePath = $"attachments/{attachment.Id:N}-{SafeFileName(attachment.FileName)}";
                     var entry = archive.CreateEntry(archivePath, CompressionLevel.Fastest);
