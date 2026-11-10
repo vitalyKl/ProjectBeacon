@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Application.Context;
 using Domain.Entities.Context;
 using Domain.Entities.Identity;
@@ -187,9 +188,14 @@ public sealed class CompileBriefTests : IDisposable
     public async Task UpsertContextDraft_IsIdempotentForItsAuthorAndProtectsOtherAuthors()
     {
         var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
-        UpsertContextNodeCommand Command(string body, int? expectedRevision = null) => new(new UpsertContextNodeRequest(
-            _projectId, "Goals", body, "goals", ContextScopeType.Project,
-            null, null, null, null, ContextSource.Native, "task/123", expectedRevision));
+        var agent = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.ContextRead);
+        UpsertContextNodeCommand Command(string body, int? expectedRevision = null) => new(
+            new UpsertContextNodeRequest(
+                _projectId, "Goals", body, "goals", ContextScopeType.Project,
+                null, null, null, null, ContextSource.Native, "task/123", expectedRevision),
+            agent);
 
         var created = await handler.HandleDraftAsync(Command("Initial draft"), "subtask-one",
             TestContext.Current.CancellationToken);
@@ -211,6 +217,57 @@ public sealed class CompileBriefTests : IDisposable
         Assert.Equal(ErrorKind.Forbidden, otherAuthor.Kind);
         Assert.Equal("Updated draft", (await _db.ContextSections.SingleAsync(
             section => section.Id == created.Value.Id, TestContext.Current.CancellationToken)).BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task UpsertContextDraft_RequiresProjectBoundContextReadActor()
+    {
+        var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
+        UpsertContextNodeCommand Command(ActorContext actor) => new(
+            new UpsertContextNodeRequest(
+                _projectId, "Draft", "Draft body", "draft", ContextScopeType.Project,
+                null, null, null, null, ContextSource.Native, null),
+            actor);
+
+        var unbound = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            Guid.NewGuid(), null, ApiTokenCapability.ContextRead);
+        var missingCapability = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.TaskRead);
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+
+        foreach (var actor in new[] { unbound, missingCapability, outsider })
+        {
+            var denied = await handler.HandleDraftAsync(
+                Command(actor), "actor-subtask", TestContext.Current.CancellationToken);
+            Assert.False(denied.Success);
+            Assert.Equal(ErrorKind.Forbidden, denied.Kind);
+        }
+
+        Assert.Empty(await _db.ContextSections.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task UpsertReviewedContext_RequiresHumanProjectMembership()
+    {
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var command = new UpsertContextNodeCommand(
+            new UpsertContextNodeRequest(
+                _projectId, "Reviewed", "New text", "reviewed", ContextScopeType.Project,
+                null, null, null, null, ContextSource.Native, null),
+            outsider);
+
+        var result = await new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(command, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Empty(await _db.ContextSections.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
