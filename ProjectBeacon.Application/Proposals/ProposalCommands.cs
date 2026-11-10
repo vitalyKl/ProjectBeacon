@@ -1230,7 +1230,7 @@ internal static class ProposalContentValidation
         }
     }
 
-    public static void Apply(object target, ContentTargetKind kind, string payload, Guid userId)
+    public static void Apply(object target, ContentTargetKind kind, string payload, string changedByType, string changedById)
     {
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
@@ -1238,7 +1238,7 @@ internal static class ProposalContentValidation
         {
             case ContentTargetKind.ContextSection:
                 ((ContextSection)target).Update(Required(root, "title", 500), Required(root, "bodyMarkdown", 30_000),
-                    "user", userId.ToString("D"));
+                    changedByType, changedById);
                 break;
             case ContentTargetKind.Decision:
                 ((Decision)target).UpdateContent(Required(root, "title", 200), Required(root, "context", 5_000),
