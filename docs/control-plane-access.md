@@ -162,7 +162,16 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   or log stack and the `ContainerLogsRead` boundary.
 - The provider-neutral plan catalog is available at `/admin/billing/plans`. `BillingRead` operators
   can inspect plans; create/update operations require `BillingManage` and ten-minute TOTP step-up.
-  Plan price and currency may both remain unset. The catalog does not create subscriptions or call
+  Plan price and currency may both remain unset. The catalog does not itself create subscriptions or call
   a payment provider.
-- Billing persistence/provider integration, data export/deletion, and granular feature/usage
-  entitlement enforcement remain future work.
+- Operator-only manual invoices are available at `/admin/billing/invoices`. `BillingRead` controls
+  listing; issuing, marking paid, voiding and marking uncollectible require `BillingManage` plus TOTP
+  step-up. Invoice number, amount/currency, issue/due dates, state transitions, append-only
+  billing-ledger entries and audit events are persisted. Marking an invoice paid stores an
+  operator-attested external receipt reference only; it is not independently verified against a
+  bank or payment provider.
+- The provider-neutral billing core is implemented: plans, subscriptions, append-only ledger,
+  manual invoice records and atomic Alpha → Production conversion. Still future work:
+  payment-provider integration (checkout/portal, payment methods, verified webhooks and refunds),
+  customer billing UI, PDF/printable invoice generation and delivery, settlement reconciliation,
+  data export/deletion, and granular feature/usage entitlement enforcement.
