@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEntitlementService, PostgresEntitlementService>();
         services.AddScoped<IEntitlementEvaluator>(sp => sp.GetRequiredService<IEntitlementService>());
         services.AddScoped<IOrganizationAdminService, EfOrganizationAdminService>();
+        services.AddScoped<IOrganizationDataExportService, EfOrganizationDataExportService>();
         services.AddScoped<IPlatformOperationsService, PlatformOperationsService>();
 
         return services;
