@@ -586,6 +586,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
+        public DbSet<Proposal> Proposals => _inner.Proposals;
 
         public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
             => _inner.Entry(entity);
@@ -665,6 +666,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
+        public DbSet<Proposal> Proposals => _inner.Proposals;
 
         public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
             => _inner.Entry(entity);
