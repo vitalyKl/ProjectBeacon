@@ -15,6 +15,8 @@ public static class EntitlementLimitKeys
 {
     /// <summary>Maximum number of projects an organization may own.</summary>
     public const string Projects = "projects";
+    /// <summary>Maximum number of organization memberships, including reserved valid invites.</summary>
+    public const string Members = "members";
 }
 
 
