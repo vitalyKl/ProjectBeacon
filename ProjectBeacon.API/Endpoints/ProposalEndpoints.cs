@@ -19,6 +19,9 @@ public static class ProposalEndpoints
             .RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/proposals", List)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/proposals/mine", Mine)
+            .RequireAuthorization().DisableAntiforgery()
+            .RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/accept", Accept)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/reject", Reject)
@@ -74,6 +77,26 @@ public static class ProposalEndpoints
         var result = await handler.HandleAsync(
             new ListProposalsQuery(projectId, status, taskId, limit ?? 100),
             context.GetActor(),
+            ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> Mine(
+        Guid projectId,
+        [FromQuery] ProposalStatus? status,
+        HttpContext context,
+        ListOwnProposalsHandler handler,
+        CancellationToken ct)
+    {
+        var user = context.User;
+        var result = await handler.HandleAsync(
+            projectId,
+            context.GetActor(),
+            ReadGuid(user, "pipeline_task_id"),
+            ReadGuid(user, "pipeline_subtask_id"),
+            ReadGuid(user, "pipeline_session_id"),
+            user.FindFirst("pipeline_role")?.Value,
+            status,
             ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
