@@ -86,6 +86,14 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.KnowledgePropose, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeProposals, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeWithdraw, docs.Tools);
+        Assert.Contains(McpToolNames.HashFile, docs.Tools);
+        Assert.Contains(McpToolNames.HashText, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.WriteFile, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.ApplyPatch, docs.Tools);
+        Assert.Contains("must not enter the live working tree before approval", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("targetKind RepoPatch", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("hash_file", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("hash_text", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("baseRevision", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("not applied until a human accepts", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("allowed paths", docs.Instruction, StringComparison.Ordinal);
