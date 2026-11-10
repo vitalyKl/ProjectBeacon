@@ -700,10 +700,6 @@ public sealed class WithdrawProposalHandler
             item => item.Id == command.ProposalId && item.ProjectId == command.ProjectId, ct);
         if (proposal is null)
             return Result.Failure<ProposalDto>("Proposal not found.");
-        if (proposal.Status == ProposalStatus.Withdrawn)
-            return Result.Ok(ProposalMapper.Map(proposal));
-        if (proposal.Status != ProposalStatus.Pending)
-            return Result.Failure<ProposalDto>($"Proposal cannot be withdrawn in status {proposal.Status}.");
 
         var isOriginalHuman = command.Actor.IsHuman
             && command.Actor.UserId is { } userId
@@ -724,6 +720,11 @@ public sealed class WithdrawProposalHandler
             return Result.Forbidden<ProposalDto>("Project membership is required to withdraw this proposal.");
         if (isOriginalAgent && command.Actor.ProjectId != command.ProjectId)
             return Result.Forbidden<ProposalDto>("The API token is not bound to this project.");
+
+        if (proposal.Status == ProposalStatus.Withdrawn)
+            return Result.Ok(ProposalMapper.Map(proposal));
+        if (proposal.Status != ProposalStatus.Pending)
+            return Result.Failure<ProposalDto>($"Proposal cannot be withdrawn in status {proposal.Status}.");
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (proposal.Expire(now))
