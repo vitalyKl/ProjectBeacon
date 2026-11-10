@@ -135,7 +135,7 @@ public sealed class RepoPatchProposalWorkflowTests : IDisposable
             _projectId,
             ProposalOperation.Update,
             1,
-            baseHash,
+            Hash($"{path}\\0{baseHash}\\0{resultHash}"),
             payload,
             "Clarifies the setup instructions.",
             ProposalAuthorKind.Agent,
