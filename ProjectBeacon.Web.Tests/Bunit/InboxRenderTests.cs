@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Bunit;
 using Bunit.TestDoubles;
 using MudBlazor.Extensions;
@@ -98,6 +100,72 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Equal("A clearer project goal",
             cut.Find(".proposal-diff-line.is-added code").TextContent.Trim());
         Assert.Contains("Line-by-line content diff", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Inbox_BatchAcceptance_RefreshesConflictsAndShowsEachItemResult()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var baseSnapshot = """{"description":null}""";
+        var baseHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(baseSnapshot))).ToLowerInvariant();
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId,
+            ContentTargetKind.ProjectDescription,
+            projectId,
+            1,
+            baseSnapshot,
+            "Human",
+            userId.ToString("D")));
+
+        var conflicted = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.ProjectDescription, projectId,
+            ProposalOperation.Update, 1, new string('a', 64),
+            """{"description":"This base is stale"}""",
+            "Proposes content based on a stale snapshot.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-batch-conflict-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+        var accepted = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.ProjectDescription, projectId,
+            ProposalOperation.Update, 1, baseHash,
+            """{"description":"The accepted project goal"}""",
+            "Clarifies the project goal.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-batch-accepted-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+        DbContext.Proposals.AddRange(conflicted, accepted);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        var checkboxes = cut.FindComponents<MudBlazor.MudCheckBox<bool>>();
+        Assert.Equal(2, checkboxes.Count);
+
+        await cut.InvokeAsync(async () =>
+        {
+            foreach (var checkbox in checkboxes)
+                await checkbox.Instance.ValueChanged.InvokeAsync(true);
+        });
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Accept selected", StringComparison.OrdinalIgnoreCase)).Click();
+
+        Assert.Contains("Conflicted: 1", cut.Markup);
+        Assert.Contains("ProjectDescription " + conflicted.Id.ToString("N")[..8], cut.Markup);
+        Assert.Contains("ProjectDescription " + accepted.Id.ToString("N")[..8], cut.Markup);
+        Assert.Contains("Conflicted", cut.Markup);
+        Assert.Contains("Proposal accepted", cut.Markup, StringComparison.OrdinalIgnoreCase);
+
+        var savedProject = await DbContext.Projects.SingleAsync(
+            project => project.Id == projectId, TestContext.Current.CancellationToken);
+        await DbContext.Entry(savedProject).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("The accepted project goal", savedProject.Description);
+
+        var savedConflict = await DbContext.Proposals.SingleAsync(
+            proposal => proposal.Id == conflicted.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Conflicted, savedConflict.Status);
+        var savedAcceptance = await DbContext.Proposals.SingleAsync(
+            proposal => proposal.Id == accepted.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Accepted, savedAcceptance.Status);
     }
 
     [Fact]
