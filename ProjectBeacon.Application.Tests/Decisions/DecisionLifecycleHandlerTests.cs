@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Application.Authorization;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -14,6 +15,7 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
     private readonly Guid _projectId;
+    private readonly Guid _userId;
 
     public DecisionLifecycleHandlerTests()
     {
@@ -25,7 +27,16 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         _db.Projects.Add(project);
         _db.SaveChanges();
         _projectId = project.Id;
+        var user = User.Create("decision-owner", "decision-owner@beacon.local", "hash");
+        _db.Users.Add(user);
+        _db.SaveChanges();
+        _userId = user.Id;
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, _userId, MemberRole.Owner));
+        _db.SaveChanges();
     }
+
+    private ActorContext HumanActor() =>
+        new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
     public void Dispose()
     {
@@ -63,19 +74,49 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         Assert.True(first.Success);
         Assert.True(second.Success);
 
-        var accept = new AcceptDecisionHandler(HandlerSqlite.Factory(_connection));
-        var accepted = await accept.HandleAsync(first.Value!.Id, TestContext.Current.CancellationToken);
+        var accept = new AcceptDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
+        var accepted = await accept.HandleAsync(first.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.Equal(DecisionStatus.Accepted, accepted.Value!.Status);
 
-        var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection));
-        var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, TestContext.Current.CancellationToken);
+        var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
+        var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(replaced.Success, replaced.Error);
         Assert.Equal(DecisionStatus.Superseded, replaced.Value!.Status);
 
-        var deprecate = new DeprecateDecisionHandler(HandlerSqlite.Factory(_connection));
-        var deprecated = await deprecate.HandleAsync(second.Value.Id, TestContext.Current.CancellationToken);
+        var deprecate = new DeprecateDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
+        var deprecated = await deprecate.HandleAsync(second.Value.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(deprecated.Success, deprecated.Error);
         Assert.Equal(DecisionStatus.Deprecated, deprecated.Value!.Status);
+    }
+
+    [Fact]
+    public async Task ProjectMemberCannotAcceptOrDeprecateDecision()
+    {
+        var member = User.Create("decision-member", "decision-member@beacon.local", "hash");
+        _db.Users.Add(member);
+        _db.SaveChanges();
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
+        _db.SaveChanges();
+        var decision = await new CreateDecisionHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new CreateDecisionRequest(_projectId, "Member proposal", "ctx", "body", null),
+                TestContext.Current.CancellationToken);
+        Assert.True(decision.Success, decision.Error);
+        var actor = new ActorContext(
+            ActorType.Human, member.Id, false, null, null, _projectId, null, ApiTokenCapability.None);
+        var factory = HandlerSqlite.Factory(_connection);
+
+        var accept = await new AcceptDecisionHandler(factory, new AuthorizationService())
+            .HandleAsync(decision.Value!.Id, actor, TestContext.Current.CancellationToken);
+        Assert.False(accept.Success);
+        Assert.Equal(ErrorKind.Forbidden, accept.Kind);
+
+        var deprecate = await new DeprecateDecisionHandler(factory, new AuthorizationService())
+            .HandleAsync(decision.Value.Id, actor, TestContext.Current.CancellationToken);
+        Assert.False(deprecate.Success);
+        Assert.Equal(ErrorKind.Forbidden, deprecate.Kind);
+
+        Assert.Equal(DecisionStatus.Proposed,
+            (await _db.Decisions.SingleAsync(item => item.Id == decision.Value.Id, TestContext.Current.CancellationToken)).Status);
     }
 
     [Fact]
@@ -84,8 +125,8 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var create = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
         var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", null), TestContext.Current.CancellationToken);
         var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestContext.Current.CancellationToken);
-        var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection));
-        var result = await supersede.HandleAsync(first.Value!.Id, second.Value!.Id, TestContext.Current.CancellationToken);
+        var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
+        var result = await supersede.HandleAsync(first.Value!.Id, second.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
     }
 }
