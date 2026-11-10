@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
-using ProjectBeacon.Application.Audit;
-using ProjectBeacon.Infrastructure.Audit;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Enums;
@@ -17,7 +15,6 @@ public sealed class InboxRenderTests : BUnitRenderBase
         var project = DbContext.Projects.Single();
         var org = DbContext.Orgs.Single();
 
-        Bunit.Services.AddSingleton<IAuditWriter, EfAuditWriter>();
         var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
         auth.TriggerAuthenticationStateChanged(
             "tester",
