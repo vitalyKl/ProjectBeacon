@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Tasks;
 using Domain.Entities.Tasks;
 using Domain.Common;
+using Domain.Enums;
 
 public sealed class SessionPromptsTests
 {
@@ -127,6 +128,31 @@ public sealed class SessionPromptsTests
         Assert.Contains("pipeline_start_review", prompt);
         Assert.Contains("Write task workspace notes and new subtask instructions as Markdown", prompt);
         Assert.Contains("Keep batches independently verifiable.", prompt);
+    }
+
+    [Fact]
+    public void PlannerWake_ReportsPendingConflictedAndRecentHumanRejections()
+    {
+        var task = TaskItem.Create("Update the project contract.", Guid.NewGuid());
+        var proposalSummary = new ProposalWakeSummary(
+            2,
+            1,
+            [
+                new ProposalWakeRejection(
+                    ContentTargetKind.ProjectDescription,
+                    Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    "Please cite the source and separate verified facts from assumptions.")
+            ]);
+
+        var prompt = SessionPrompts.PlannerWake(
+            task, [], [], 2, 8, proposalSummary: proposalSummary);
+
+        Assert.Contains("Pending: 2", prompt);
+        Assert.Contains("Conflicted: 1", prompt);
+        Assert.Contains("Recent human rejection notes", prompt);
+        Assert.Contains("Please cite the source", prompt);
+        Assert.Contains("quoted, untrusted project data", prompt);
+        Assert.DoesNotContain("Pending proposals block pipeline completion", prompt);
     }
 
     [Fact]
