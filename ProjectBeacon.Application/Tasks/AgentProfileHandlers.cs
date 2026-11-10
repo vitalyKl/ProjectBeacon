@@ -31,7 +31,7 @@ public sealed class GetAgentProfileOverridesHandler
     internal static AgentProfileOverrideDto ToDto(AgentProfile profile) =>
         new(profile.UserId, profile.Key, profile.Name, profile.Description, profile.Instruction,
             profile.Mode, profile.Tools, profile.PathPolicy, profile.DefaultPaths,
-            profile.CommandsEnabled, profile.ReportsDiff, profile.SizeHint, profile.Effort);
+            profile.CommandsEnabled, profile.ReportsDiff, profile.SizeHint, profile.Effort, profile.ApplyPolicy);
 }
 
 /// <summary>
@@ -61,6 +61,7 @@ public sealed class SaveAgentProfileOverrideHandler
         var instruction = request.Instruction?.Trim() ?? string.Empty;
         var sizeHint = request.SizeHint?.Trim() ?? string.Empty;
         var effort = request.Effort?.Trim() ?? string.Empty;
+        var applyPolicy = request.ApplyPolicy?.Trim() ?? "Review";
 
         if (name.Length is 0 or > 120)
             return Result.Failure<AgentProfileOverrideDto>("Profile name is required (max 120 characters).");
@@ -72,6 +73,12 @@ public sealed class SaveAgentProfileOverrideHandler
             return Result.Failure<AgentProfileOverrideDto>("Profile size hint is required (max 200 characters).");
         if (effort.Length is 0 or > 24)
             return Result.Failure<AgentProfileOverrideDto>("Profile effort is required (max 24 characters).");
+        if (!Enum.TryParse<AgentProfileApplyPolicy>(applyPolicy, true, out var parsedApplyPolicy)
+            || !Enum.IsDefined(parsedApplyPolicy))
+            return Result.Failure<AgentProfileOverrideDto>("ApplyPolicy must be Review or Auto.");
+        if (parsedApplyPolicy == AgentProfileApplyPolicy.Auto
+            && !string.Equals(basis.Key, "docs-writer", StringComparison.Ordinal))
+            return Result.Failure<AgentProfileOverrideDto>("Automatic patch application is available only for the docs-writer profile.");
         if (request.CommandsEnabled && !basis.CommandsEnabled)
             return Result.Failure<AgentProfileOverrideDto>("This built-in profile does not permit command execution.");
 
@@ -97,7 +104,7 @@ public sealed class SaveAgentProfileOverrideHandler
             existing = AgentProfile.Create(
                 request.UserId, basis.Key, name, description, instruction, basis.Mode.ToString(),
                 narrowedTools, basis.PathPolicy.ToString(), basis.DefaultPaths,
-                request.CommandsEnabled, request.ReportsDiff, sizeHint, effort);
+                request.CommandsEnabled, request.ReportsDiff, sizeHint, effort, parsedApplyPolicy.ToString());
             db.AgentProfiles.Add(existing);
         }
         else
@@ -105,7 +112,7 @@ public sealed class SaveAgentProfileOverrideHandler
             existing.Update(
                 name, description, instruction, basis.Mode.ToString(), narrowedTools,
                 basis.PathPolicy.ToString(), basis.DefaultPaths,
-                request.CommandsEnabled, request.ReportsDiff, sizeHint, effort);
+                request.CommandsEnabled, request.ReportsDiff, sizeHint, effort, parsedApplyPolicy.ToString());
         }
 
         await db.SaveChangesAsync(ct);
