@@ -206,7 +206,7 @@ else
 
     private async Task Deprecate(DecisionDto decision)
     {
-        var result = await DeprecateDecision.HandleAsync(decision.Id);
+        var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
