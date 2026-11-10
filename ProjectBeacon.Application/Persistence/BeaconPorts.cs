@@ -69,6 +69,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<ContextSection> ContextSections { get; }
     DbSet<ContextRevision> ContextRevisions { get; }
     DbSet<ContentVersion> ContentVersions { get; }
+    DbSet<Proposal> Proposals { get; }
 
     Guid? FilterProjectId { get; }
     Guid? FilterOrgId { get; }
