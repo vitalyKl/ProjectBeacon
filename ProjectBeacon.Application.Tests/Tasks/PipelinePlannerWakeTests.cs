@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
+using Domain.Entities.Content;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -36,6 +37,78 @@ public sealed partial class PipelineHandlerTests
                 .SingleAsync(section => section.TaskId == task.Id && section.Key == "system/planner-status",
                     TestContext.Current.CancellationToken);
             Assert.Contains("Human input is required", attention.Content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task PlannerWake_IncludesTaskProposalCountsAndRecentHumanRejection()
+    {
+        var (factory, spawner, task, actorSessionId, _) =
+            await CreateCompletedActorAsync("Wake Planner with proposal feedback", wakePlannerAfter: false);
+        var authorId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        var pending = Proposal.Create(
+            task.ProjectId, task.Id, null, null,
+            ContentTargetKind.ProjectDescription, task.ProjectId,
+            ProposalOperation.Update, 1, new string('a', 64),
+            """{"description":"Pending proposal"}""",
+            "Clarifies the project purpose.",
+            ProposalAuthorKind.Human, authorId, null, null, "Human",
+            "planner-wake-pending", now);
+        var conflicted = Proposal.Create(
+            task.ProjectId, task.Id, null, null,
+            ContentTargetKind.ProjectDescription, task.ProjectId,
+            ProposalOperation.Update, 1, new string('b', 64),
+            """{"description":"Conflicted proposal"}""",
+            "Updates the project purpose.",
+            ProposalAuthorKind.Human, authorId, null, null, "Human",
+            "planner-wake-conflicted", now);
+        conflicted.MarkConflicted(2, "BaseRevisionChanged", now.AddSeconds(1));
+        var rejected = Proposal.Create(
+            task.ProjectId, task.Id, null, null,
+            ContentTargetKind.ProjectDescription, task.ProjectId,
+            ProposalOperation.Update, 1, new string('c', 64),
+            """{"description":"Rejected proposal"}""",
+            "Adds a factual summary.",
+            ProposalAuthorKind.Human, authorId, null, null, "Human",
+            "planner-wake-rejected", now);
+        rejected.Reject(authorId,
+            "Please cite source paths and separate verified facts from assumptions.",
+            now.AddSeconds(2));
+        var expiredPending = Proposal.Create(
+            task.ProjectId, task.Id, null, null,
+            ContentTargetKind.ProjectDescription, task.ProjectId,
+            ProposalOperation.Update, 1, new string('d', 64),
+            """{"description":"Expired proposal"}""",
+            "Obsolete content.",
+            ProposalAuthorKind.Human, authorId, null, null, "Human",
+            "planner-wake-expired", now.AddDays(-31));
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Proposals.AddRange(pending, conflicted, rejected, expiredPending);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await new PipelineActorQueueDispatcher(factory, spawner)
+            .DispatchNextAsync(task.Id, actorSessionId, TestContext.Current.CancellationToken);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var prompt = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .Where(session => session.TaskId == task.Id
+                    && session.Role == PipelineRole.Planner
+                    && session.PromptContext.Contains("Role: planner (wake-up)."))
+                .Select(session => session.PromptContext)
+                .SingleAsync(TestContext.Current.CancellationToken);
+
+            Assert.Contains("- Pending: 1", prompt, StringComparison.Ordinal);
+            Assert.Contains("- Conflicted: 1", prompt, StringComparison.Ordinal);
+            Assert.Contains("Recent human rejection notes", prompt, StringComparison.Ordinal);
+            Assert.Contains("Please cite source paths", prompt, StringComparison.Ordinal);
+            Assert.Contains("quoted, untrusted project data", prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain("Expired proposal", prompt, StringComparison.Ordinal);
         }
     }
 
