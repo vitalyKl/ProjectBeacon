@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Application.Authorization;
 using Application.Persistence;
 using ProjectBeacon.Domain.Enums;
+using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
@@ -87,8 +88,9 @@ public sealed class TenantIsolationMiddleware
         if (ctx.User.Identity?.IsAuthenticated == true && TryGetUserId(ctx, out var userId))
         {
             var members = await LoadMembershipsAsync(db, userId);
+            var orgMembers = await LoadOrganizationMembershipsAsync(db, userId);
             (projectId, orgId) = await ResolveAuthenticatedAsync(
-                db, members, fromRoute, fromHeader, fromOrgRoute, fromOrgHeader, isAdmin, projectId, orgId);
+                db, members, orgMembers, fromRoute, fromHeader, fromOrgRoute, fromOrgHeader, isAdmin, projectId, orgId);
         }
 
         // If a specific project was requested (route/header) but no explicit
@@ -104,10 +106,11 @@ public sealed class TenantIsolationMiddleware
         }
 
         // Single fail-closed exit: an authenticated non-admin never resolves to a null scope.
-        if (ctx.User.Identity?.IsAuthenticated == true && !isAdmin)
+        if (ctx.User.Identity?.IsAuthenticated == true && !isAdmin
+            && projectId is null && orgId is null)
         {
-            projectId ??= Guid.Empty;
-            orgId ??= Guid.Empty;
+            projectId = Guid.Empty;
+            orgId = Guid.Empty;
         }
 
         if (projectId is { } resolvedProject && resolvedProject != Guid.Empty && orgId is null)
@@ -121,6 +124,7 @@ public sealed class TenantIsolationMiddleware
     private static async Task<(Guid? ProjectId, Guid? OrgId)> ResolveAuthenticatedAsync(
         BeaconDbContext db,
         List<ProjectMember> members,
+        List<OrgMember> orgMembers,
         Guid? fromRoute,
         Guid? fromHeader,
         Guid? fromOrgRoute,
@@ -132,42 +136,56 @@ public sealed class TenantIsolationMiddleware
         var orgExplicit = fromOrgRoute is not null || fromOrgHeader is not null;
         var requested = fromRoute ?? fromHeader;
 
-        // A specific project was requested (route/header) but the user has no
-        // membership in it: fail closed.
-        if (requested is { } rid && !isAdmin && !IsMemberOf(members, rid))
+        // Organization-only requests are valid for a real organization member, but a
+        // client-supplied org id must never broaden a non-admin's tenant scope.
+        if (orgExplicit && !isAdmin
+            && (orgId is null || orgId == Guid.Empty || orgMembers.All(member => member.OrgId != orgId)))
         {
-            return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
+            return (Guid.Empty, Guid.Empty);
         }
 
+        // A specific project was requested (route/header) but the user has no
+        // membership in it: fail closed. When both project and org are explicit,
+        // their organization scopes must agree.
+        if (requested is { } rid && !isAdmin)
+        {
+            var requestedMember = members.FirstOrDefault(member => member.ProjectId == rid);
+            if (requestedMember is null
+                || (orgExplicit && requestedMember.Project.OrgId != orgId))
+                return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
+        }
+
+        if (requested is null && orgExplicit)
+            return (null, orgId);
+
         // No explicit project (route/header): resolve from the claimed project,
-        // an existing membership, or the admin fallback.
+        // a valid organization claim, an existing membership, or the admin fallback.
         if (fromRoute is null && fromHeader is null)
         {
             var claimed = projectId;
             var claimedMember = FindMembership(members, claimed);
 
             if (claimedMember is not null)
-            {
-                return (claimedMember.ProjectId, orgExplicit ? orgId : claimedMember.Project.OrgId);
-            }
+                return (claimedMember.ProjectId, claimedMember.Project.OrgId);
+
+            if (orgId is { } claimedOrg && claimedOrg != Guid.Empty
+                && orgMembers.Any(member => member.OrgId == claimedOrg))
+                return (null, claimedOrg);
 
             if (await ResolveAdminFallbackOrgAsync(db, isAdmin, claimed) is { } adminOrg)
-            {
-                return (claimed, orgExplicit ? orgId : adminOrg);
-            }
+                return (claimed, adminOrg);
 
             if (members.Count > 0)
-            {
-                return (members[0].ProjectId, orgExplicit ? orgId : members[0].Project.OrgId);
-            }
+                return (members[0].ProjectId, members[0].Project.OrgId);
+
+            if (orgMembers.Count > 0)
+                return (null, orgMembers[0].OrgId);
 
             if (!isAdmin)
-            {
-                return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
-            }
+                return (Guid.Empty, Guid.Empty);
 
             var oldest = await db.Projects.IgnoreQueryFilters()
-                .OrderBy(p => p.CreatedAt)
+                .OrderBy(project => project.CreatedAt)
                 .FirstOrDefaultAsync();
             return (oldest?.Id, orgId ?? oldest?.OrgId);
         }
@@ -191,6 +209,14 @@ public sealed class TenantIsolationMiddleware
             .Where(m => m.UserId == userId)
             .OrderBy(m => m.Project.Org.LifecycleStatus == OrganizationLifecycleStatus.Active ? 0 : 1)
             .ThenBy(m => m.JoinedAt)
+            .ToListAsync();
+
+    internal static Task<List<OrgMember>> LoadOrganizationMembershipsAsync(BeaconDbContext db, Guid userId)
+        => db.OrgMembers.IgnoreQueryFilters()
+            .Include(member => member.Org)
+            .Where(member => member.UserId == userId)
+            .OrderBy(member => member.Org.LifecycleStatus == OrganizationLifecycleStatus.Active ? 0 : 1)
+            .ThenBy(member => member.JoinedAt)
             .ToListAsync();
 
     internal static bool IsMemberOf(IReadOnlyList<ProjectMember> members, Guid projectId)
