@@ -180,6 +180,7 @@ else
     private DecisionDto? _superseding;
     private Guid? _replacementId;
     private bool _loading = true;
+    private bool _busy;
     private bool _detailOpen;
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
 
@@ -272,19 +273,27 @@ else
             return;
 
         var decisionId = _selected.Id;
-        var result = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
-            _project.Id, version.Id, _selected.Revision, _actor,
-            ContentTargetKind.Decision, decisionId));
-        if (!result.Success)
+        _busy = true;
+        try
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            return;
-        }
+            var result = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _project.Id, version.Id, _selected.Revision, _actor,
+                ContentTargetKind.Decision, decisionId));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
 
-        await Reload();
-        _selected = _decisions.FirstOrDefault(item => item.Id == decisionId);
-        await LoadSelectedHistory();
-        Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            await Reload();
+            _selected = _decisions.FirstOrDefault(item => item.Id == decisionId);
+            await LoadSelectedHistory();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private static string DecisionSnapshotMarkdown(string json)
