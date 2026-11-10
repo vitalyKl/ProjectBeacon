@@ -8,6 +8,7 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Common;
 using Domain.Entities.Content;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
@@ -382,8 +383,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             && item.ProjectId == command.ProjectId
             && item.Status == SubtaskStatus.InProgress, ct);
         if (subtask is null
-            || !string.Equals(subtask.ProfileKey, "knowledge-curator", StringComparison.Ordinal)
-            || !subtask.AllowedMcpTools.Contains("knowledge_propose", StringComparer.Ordinal))
+            || subtask.ProfileKey is not ("knowledge-curator" or "docs-writer")
+            || !subtask.AllowedMcpTools.Contains(McpToolNames.KnowledgePropose, StringComparer.Ordinal))
             return ProposalAuthorScope.Forbidden("The active subtask profile is not granted knowledge proposal access.");
 
         var session = await db.PipelineSessions.FirstOrDefaultAsync(item =>
@@ -782,8 +783,8 @@ public sealed class WithdrawProposalHandler
                 && item.ProjectId == command.ProjectId
                 && item.Status == SubtaskStatus.InProgress, ct);
             if (subtask is null
-                || !string.Equals(subtask.ProfileKey, "knowledge-curator", StringComparison.Ordinal)
-                || !subtask.AllowedMcpTools.Contains("knowledge_propose", StringComparer.Ordinal))
+                || subtask.ProfileKey is not ("knowledge-curator" or "docs-writer")
+                || !subtask.AllowedMcpTools.Contains(McpToolNames.KnowledgeWithdraw, StringComparer.Ordinal))
                 return Result.Forbidden<ProposalDto>("The original Actor subtask is no longer active or authorized.");
 
             var sessionIsActive = await db.PipelineSessions.AnyAsync(item =>
@@ -908,6 +909,128 @@ public sealed class ListProposalsHandler
                 proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision))
             .ToListAsync(ct);
         return Result.Ok((IReadOnlyList<ProposalDto>)items);
+    }
+}
+
+/// <summary>Minimal status view of proposals authored by the current Actor subtask.</summary>
+public sealed record OwnProposalDto(
+    Guid Id,
+    ContentTargetKind TargetKind,
+    Guid TargetId,
+    ProposalOperation Operation,
+    ProposalStatus Status,
+    int BaseRevision,
+    DateTime CreatedAt,
+    DateTime ExpiresAt,
+    DateTime? DecidedAt,
+    string? DecisionNote,
+    int? AppliedRevision,
+    int? ConflictRevision,
+    string? ConflictReason,
+    Guid? SupersededById,
+    int StateRevision);
+
+/// <summary>Lists only proposals belonging to the current live Actor subtask.</summary>
+public sealed class ListOwnProposalsHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter _auditWriter;
+    private readonly TimeProvider _timeProvider;
+
+    public ListOwnProposalsHandler(
+        IBeaconDbFactory dbFactory,
+        IAuditWriter auditWriter,
+        TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public async Task<Result<IReadOnlyList<OwnProposalDto>>> HandleAsync(
+        Guid projectId,
+        ActorContext actor,
+        Guid? taskId,
+        Guid? subtaskId,
+        Guid? sessionId,
+        string? pipelineRole,
+        ProposalStatus? status = null,
+        CancellationToken ct = default)
+    {
+        if (!actor.IsApiToken
+            || actor.TokenId is not { } tokenId
+            || actor.ProjectId != projectId
+            || !actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead)
+            || taskId is not { } scopedTaskId
+            || subtaskId is not { } scopedSubtaskId
+            || sessionId is not { } scopedSessionId
+            || !string.Equals(pipelineRole, PipelineRole.Actor.ToString(), StringComparison.Ordinal))
+            return Result.Forbidden<IReadOnlyList<OwnProposalDto>>("A live, project-bound Actor session with ContextRead is required.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var subtask = await db.Subtasks.FirstOrDefaultAsync(item =>
+            item.Id == scopedSubtaskId
+            && item.TaskId == scopedTaskId
+            && item.ProjectId == projectId
+            && item.Status == SubtaskStatus.InProgress, ct);
+        if (subtask is null
+            || subtask.ProfileKey is not ("knowledge-curator" or "docs-writer")
+            || !subtask.AllowedMcpTools.Contains(McpToolNames.KnowledgeProposals, StringComparer.Ordinal))
+            return Result.Forbidden<IReadOnlyList<OwnProposalDto>>("This Actor profile is not granted knowledge_proposals.");
+
+        var activeSession = await db.PipelineSessions.AnyAsync(item =>
+            item.Id == scopedSessionId
+            && item.ProjectId == projectId
+            && item.TaskId == scopedTaskId
+            && item.SubtaskId == scopedSubtaskId
+            && item.Role == PipelineRole.Actor
+            && item.Status == SessionStatus.Active, ct);
+        if (!activeSession)
+            return Result.Forbidden<IReadOnlyList<OwnProposalDto>>("The Actor pipeline session is no longer active.");
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var items = await db.Proposals
+            .Where(proposal => proposal.ProjectId == projectId
+                && proposal.TaskId == scopedTaskId
+                && proposal.SubtaskId == scopedSubtaskId
+                && proposal.SessionId == scopedSessionId
+                && proposal.AuthorKind == ProposalAuthorKind.Agent
+                && proposal.AuthorTokenId == tokenId)
+            .OrderByDescending(proposal => proposal.CreatedAt)
+            .Take(100)
+            .ToListAsync(ct);
+
+        var expired = items.Where(proposal => proposal.Status == ProposalStatus.Pending
+            && proposal.ExpiresAt <= now).ToArray();
+        if (expired.Length > 0)
+        {
+            var orgId = await AcceptProposalHandler.GetOrgIdAsync(db, projectId, ct);
+            if (orgId is null)
+                return Result.Failure<IReadOnlyList<OwnProposalDto>>("Project not found.");
+            var systemActor = new ActorContext(
+                ActorType.Worker, null, false, null, null, projectId, orgId, ApiTokenCapability.None);
+            foreach (var proposal in expired)
+            {
+                if (!proposal.Expire(now))
+                    continue;
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    systemActor, "proposal.expired", "Proposal", proposal.Id.ToString("D"),
+                    orgId, projectId,
+                    detailsJson: JsonSerializer.Serialize(new { newState = ProposalStatus.Expired.ToString() })));
+            }
+            await db.SaveChangesAsync(ct);
+        }
+
+        var result = items
+            .Where(proposal => status is null || proposal.Status == status)
+            .Select(proposal => new OwnProposalDto(
+                proposal.Id, proposal.TargetKind, proposal.TargetId, proposal.Operation,
+                proposal.Status, proposal.BaseRevision, proposal.CreatedAt, proposal.ExpiresAt,
+                proposal.DecidedAt, proposal.DecisionNote, proposal.AppliedRevision,
+                proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById,
+                proposal.StateRevision))
+            .ToArray();
+        return Result.Ok<IReadOnlyList<OwnProposalDto>>(result);
     }
 }
 
