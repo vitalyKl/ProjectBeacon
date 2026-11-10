@@ -236,6 +236,54 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Equal(created.Value!.Id, listed.Value![0].Id);
     }
 
+    [Fact]
+    public async Task NonMemberCannotAcceptOrRejectProjectProposals()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var author = HumanActor();
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), author), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accepted = await new AcceptProposalHandler(
+                factory, new AuthorizationService(), new EfAuditWriter(), new ContentWriter())
+            .HandleAsync(new AcceptProposalCommand(_projectId, created.Value!.Id, outsider), TestContext.Current.CancellationToken);
+        Assert.False(accepted.Success);
+        Assert.Equal(ErrorKind.Forbidden, accepted.Kind);
+
+        var rejected = await new RejectProposalHandler(factory, new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new RejectProposalCommand(_projectId, created.Value.Id, outsider), TestContext.Current.CancellationToken);
+        Assert.False(rejected.Success);
+        Assert.Equal(ErrorKind.Forbidden, rejected.Kind);
+
+        var proposal = await _db.Proposals.SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Pending, proposal.Status);
+    }
+
+    [Fact]
+    public async Task NonAuthorCannotReplayWithdrawnProposalAndReadItsDetails()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var author = HumanActor();
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
+        var created = await new CreateProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new CreateProposalCommand(_projectId, Request(), author), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var withdrawn = await new WithdrawProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new WithdrawProposalCommand(_projectId, created.Value!.Id, author), TestContext.Current.CancellationToken);
+        Assert.True(withdrawn.Success, withdrawn.Error);
+        Assert.Equal(ProposalStatus.Withdrawn, withdrawn.Value!.Status);
+
+        var replay = await new WithdrawProposalHandler(factory, new EfAuditWriter())
+            .HandleAsync(new WithdrawProposalCommand(_projectId, created.Value.Id, outsider), TestContext.Current.CancellationToken);
+        Assert.False(replay.Success);
+        Assert.Equal(ErrorKind.Forbidden, replay.Kind);
+    }
+
     private ActorContext HumanActor() =>
         new(ActorType.Human, _userId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
