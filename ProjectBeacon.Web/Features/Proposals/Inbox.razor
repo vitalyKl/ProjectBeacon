@@ -605,7 +605,10 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value,
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
+                {
                     await Reload();
+                    _statusFilter = ProposalStatus.Conflicted.ToString();
+                }
                 return;
             }
             Snackbar.Add(result.Value?.Status == ProposalStatus.Applying
@@ -675,6 +678,7 @@ else
                 }
             }
             _selectedIds.Clear();
+            _statusFilter = string.Empty;
             await Reload();
             _batchResults.AddRange(batchResults);
             Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded + queued, failed),
