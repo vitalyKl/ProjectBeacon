@@ -30,7 +30,7 @@ public record GetProjectRequest(Guid ProjectId);
 /// <summary>
 /// Command for get project.
 /// </summary>
-public record GetProjectCommand(GetProjectRequest Request) : ICommand<Result<ProjectDto>>;
+public record GetProjectCommand(GetProjectRequest Request, ActorContext Actor) : ICommand<Result<ProjectDto>>;
 /// <summary>
 /// Fields for list projects.
 /// </summary>
@@ -38,7 +38,7 @@ public record ListProjectsRequest(Guid? OrgId);
 /// <summary>
 /// Command for list projects.
 /// </summary>
-public record ListProjectsCommand(ListProjectsRequest Request) : ICommand<Result<IList<ProjectDto>>>;
+public record ListProjectsCommand(ListProjectsRequest Request, ActorContext Actor) : ICommand<Result<IList<ProjectDto>>>;
 /// <summary>
 /// A project's id, name, description, org, timestamps, and the trusted review check command.
 /// </summary>
