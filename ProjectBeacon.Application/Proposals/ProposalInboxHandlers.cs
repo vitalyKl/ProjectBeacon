@@ -127,11 +127,11 @@ public sealed class ReviewContextDraftHandler
                 orgId,
                 command.ProjectId,
                 detailsJson: JsonSerializer.Serialize(new { newState = ContextReviewState.Reviewed.ToString() })));
-            var saved = await _contentWriter.SaveAsync(
+            var approvedSave = await _contentWriter.SaveAsync(
                 db, section, "Human", command.Actor.UserId.Value.ToString("D"), ct);
-            if (!saved.Success)
+            if (!approvedSave.Success)
                 return Result.Failure<ContextDraftReviewResult>(
-                    saved.Error ?? "Context draft could not be approved.", ErrorKind.Conflict);
+                    approvedSave.Error ?? "Context draft could not be approved.", ErrorKind.Conflict);
 
             return Result.Ok(new ContextDraftReviewResult(
                 command.ContextSectionId, ContextReviewState.Reviewed, Deleted: false));
