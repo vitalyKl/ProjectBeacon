@@ -17,7 +17,8 @@ public sealed class AuditEventTests
     {
         var sourceVersionId = Guid.NewGuid().ToString("D");
         var detailsJson =
-            "{\"sourceVersionId\":\"" + sourceVersionId + "\",\"restoredRevision\":4}";
+            "{\"sourceVersionId\":\"" + sourceVersionId
+            + "\",\"restoredRevision\":4,\"restoredTaskLinks\":2}";
         var auditEvent = Create(detailsJson);
 
         Assert.Equal(detailsJson, auditEvent.DetailsJson);
