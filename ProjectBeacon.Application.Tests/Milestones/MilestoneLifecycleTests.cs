@@ -52,14 +52,14 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.True(closed.Success, closed.Error);
         Assert.Equal(2, closed.Value!.Revision);
         Assert.NotNull(closed.Value.ClosedAt);
-        Assert.Equal(2, await CountVersions());
+        Assert.Equal(2, await CountVersions(milestone.Id));
 
         var repeatedClose = await close.HandleAsync(
             new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)),
             TestContext.Current.CancellationToken);
         Assert.True(repeatedClose.Success, repeatedClose.Error);
         Assert.Equal(2, repeatedClose.Value!.Revision);
-        Assert.Equal(2, await CountVersions());
+        Assert.Equal(2, await CountVersions(milestone.Id));
 
         var reopen = new ReopenMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
         var reopened = await reopen.HandleAsync(
@@ -69,14 +69,14 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.True(reopened.Success, reopened.Error);
         Assert.Equal(3, reopened.Value!.Revision);
         Assert.Null(reopened.Value.ClosedAt);
-        Assert.Equal(3, await CountVersions());
+        Assert.Equal(3, await CountVersions(milestone.Id));
 
         var repeatedReopen = await reopen.HandleAsync(
             new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)),
             TestContext.Current.CancellationToken);
         Assert.True(repeatedReopen.Success, repeatedReopen.Error);
         Assert.Equal(3, repeatedReopen.Value!.Revision);
-        Assert.Equal(3, await CountVersions());
+        Assert.Equal(3, await CountVersions(milestone.Id));
 
         var history = await _db.ContentVersions
             .Where(version => version.TargetKind == ContentTargetKind.Milestone
@@ -93,12 +93,9 @@ public sealed class MilestoneLifecycleTests : IDisposable
             reopenedSnapshot.RootElement.GetProperty("closedAt").ValueKind);
     }
 
-    private Task<int> CountVersions() =>
+    private Task<int> CountVersions(Guid targetId) =>
         _db.ContentVersions.CountAsync(
             version => version.TargetKind == ContentTargetKind.Milestone
-                && version.TargetId == _db.Milestones.IgnoreQueryFilters()
-                    .Where(item => item.ProjectId == _projectId)
-                    .Select(item => item.Id)
-                    .FirstOrDefault(),
+                && version.TargetId == targetId,
             TestContext.Current.CancellationToken);
 }
