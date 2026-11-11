@@ -80,6 +80,11 @@ public sealed class ContentWriter
                 section.RepoId,
                 section.TaskId,
                 section.Path,
+                section.Source,
+                section.SourcePath,
+                section.ReviewState,
+                section.UpdatedByType,
+                section.UpdatedById,
                 Deleted = deleted
             }, JsonOptions),
             Decision decision => JsonSerializer.Serialize(new
@@ -88,6 +93,8 @@ public sealed class ContentWriter
                 decision.Context,
                 decision.DecisionBody,
                 decision.Consequences,
+                decision.Status,
+                decision.SupersededById,
                 Deleted = deleted
             }, JsonOptions),
             Constraint constraint => JsonSerializer.Serialize(new
@@ -95,6 +102,7 @@ public sealed class ContentWriter
                 constraint.Body,
                 constraint.ScopePath,
                 constraint.Kind,
+                constraint.Status,
                 Deleted = deleted
             }, JsonOptions),
             Milestone milestone => JsonSerializer.Serialize(new
@@ -102,6 +110,7 @@ public sealed class ContentWriter
                 milestone.Name,
                 milestone.Description,
                 milestone.Order,
+                milestone.ClosedAt,
                 Deleted = deleted
             }, JsonOptions),
             Project project => JsonSerializer.Serialize(new
