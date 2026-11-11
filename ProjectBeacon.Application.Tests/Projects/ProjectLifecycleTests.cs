@@ -51,6 +51,28 @@ public sealed class ProjectLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task GetCurrentProject_ReturnsPersistedContentRevision()
+    {
+        var (actor, projectId) = await CreateOwnedProject();
+        var updated = await new UpdateProjectHandler(HandlerSqlite.Factory(_connection), _auth)
+            .HandleAsync(
+                new UpdateProjectCommand(
+                    new UpdateProjectRequest(projectId, null, "Revision two", ExpectedRevision: 1),
+                    actor),
+                TestContext.Current.CancellationToken);
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal(2, updated.Value!.Revision);
+
+        var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(actor, TestContext.Current.CancellationToken);
+
+        Assert.True(current.Success, current.Error);
+        Assert.Equal(projectId, current.Value!.Id);
+        Assert.Equal(2, current.Value.Revision);
+        Assert.Equal("Revision two", current.Value.Description);
+    }
+
+    [Fact]
     public async Task Delete_RemovesProject()
     {
         var (actor, projectId) = await CreateOwnedProject();
