@@ -100,6 +100,8 @@ The provider-neutral `BillingPlan` catalog is implemented in `BillingPlans` with
 
 RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing rows must use the same isolation rule. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
 
+The organization ZIP exporter is built on `IBeaconDbFactory` and the Application-owned `IBeaconDb` persistence port. Infrastructure helper methods must accept that port rather than assume the concrete `BeaconDbContext` returned by a particular implementation. Raw ADO.NET reads of billing rows must enlist in the active EF transaction (`GetDbTransaction`) so the archive remains one consistent snapshot.
+
 ## Delivery order
 
 1. **A0 — access revocation:** DisabledAt, SessionVersion, cookie/JWT validation and circuit revalidation.
