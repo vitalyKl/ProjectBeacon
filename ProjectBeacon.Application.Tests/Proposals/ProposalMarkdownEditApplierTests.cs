@@ -180,6 +180,30 @@ public sealed class ProposalMarkdownEditApplierTests
     }
 
     [Fact]
+    public void Replace_PreservesCrLfLineEndings()
+    {
+        const string source = "# Project\r\n\r\n## Security\r\n\r\nOld security body.\r\n\r\n## Operations\r\n\r\nOperational notes.\r\n";
+        using var payload = JsonDocument.Parse("""
+            [
+              {
+                "heading": "## Security",
+                "op": "replace",
+                "content": "New security body.\n\n### Verification\n\nVerify the boundary."
+              }
+            ]
+            """);
+
+        var applied = ProposalMarkdownEditApplier.TryApply(
+            source, payload.RootElement, out var result, out var error);
+
+        Assert.True(applied, error);
+        Assert.Contains("New security body.\r\n\r\n### Verification", result);
+        Assert.Contains("\r\n\r\n## Operations", result);
+        Assert.DoesNotContain("\n## Operations", result);
+        Assert.DoesNotContain("Old security body.", result);
+    }
+
+    [Fact]
     public void LaterMissingHeading_DoesNotReturnPartiallyModifiedContent()
     {
         using var payload = JsonDocument.Parse("""
