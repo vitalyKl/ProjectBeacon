@@ -88,9 +88,20 @@ public sealed class RestoreContentVersionHandler
                             s => s.Id == source.TargetId && s.ProjectId == command.ProjectId, ct);
                         if (section is null)
                         {
-                            if (!await IsLatestDeletionSnapshotAsync(
-                                    db, source, command.ExpectedRevision, ct))
+                            var deletion = await GetLatestDeletionSnapshotAsync(
+                                db, source, command.ExpectedRevision, ct);
+                            if (deletion is null)
                                 return MissingTargetFailure();
+
+                            var sourceKind = snapshot.Source
+                                ?? ReadSnapshotProperty<ContextSource>(deletion.ContentJson, "source")
+                                ?? ContextSource.Native;
+                            var sourcePath = HasSnapshotProperty(source.ContentJson, "sourcePath")
+                                ? snapshot.SourcePath
+                                : ReadSnapshotString(deletion.ContentJson, "sourcePath");
+                            var reviewState = snapshot.ReviewState
+                                ?? ReadSnapshotProperty<ContextReviewState>(deletion.ContentJson, "reviewState")
+                                ?? ContextReviewState.NeedsReview;
 
                             section = ContextSection.RestoreDeleted(
                                 source.TargetId,
@@ -104,9 +115,9 @@ public sealed class RestoreContentVersionHandler
                                 snapshot.RepoId,
                                 snapshot.TaskId,
                                 snapshot.Path,
-                                snapshot.Source ?? ContextSource.Native,
-                                snapshot.SourcePath,
-                                snapshot.ReviewState ?? ContextReviewState.NeedsReview,
+                                sourceKind,
+                                sourcePath,
+                                reviewState,
                                 checked(command.ExpectedRevision + 1),
                                 attribution.Type ?? "Human",
                                 attribution.Id);
@@ -200,9 +211,14 @@ public sealed class RestoreContentVersionHandler
                             m => m.Id == source.TargetId && m.ProjectId == command.ProjectId, ct);
                         if (milestone is null)
                         {
-                            if (!await IsLatestDeletionSnapshotAsync(
-                                    db, source, command.ExpectedRevision, ct))
+                            var deletion = await GetLatestDeletionSnapshotAsync(
+                                db, source, command.ExpectedRevision, ct);
+                            if (deletion is null)
                                 return MissingTargetFailure();
+
+                            var closedAt = HasSnapshotProperty(source.ContentJson, "closedAt")
+                                ? snapshot.ClosedAt
+                                : ReadSnapshotProperty<DateTime>(deletion.ContentJson, "closedAt");
 
                             milestone = Milestone.RestoreDeleted(
                                 source.TargetId,
@@ -211,7 +227,7 @@ public sealed class RestoreContentVersionHandler
                                 command.ProjectId,
                                 snapshot.Order,
                                 checked(command.ExpectedRevision + 1),
-                                snapshot.ClosedAt);
+                                closedAt);
                             db.Milestones.Add(milestone);
                             target = milestone;
                             currentRevision = command.ExpectedRevision;
@@ -300,7 +316,7 @@ public sealed class RestoreContentVersionHandler
         return document.RootElement.TryGetProperty(propertyName, out _);
     }
 
-    private static async Task<bool> IsLatestDeletionSnapshotAsync(
+    private static async Task<ContentVersion?> GetLatestDeletionSnapshotAsync(
         IBeaconDb db,
         ContentVersion source,
         int expectedRevision,
@@ -313,18 +329,39 @@ public sealed class RestoreContentVersionHandler
             .OrderByDescending(version => version.Revision)
             .FirstOrDefaultAsync(ct);
         if (latest is null || latest.Revision != expectedRevision || latest.Revision <= source.Revision)
-            return false;
+            return null;
 
         try
         {
             using var document = JsonDocument.Parse(latest.ContentJson);
             return document.RootElement.TryGetProperty("deleted", out var deleted)
-                && deleted.ValueKind == JsonValueKind.True;
+                && deleted.ValueKind == JsonValueKind.True
+                    ? latest
+                    : null;
         }
         catch (JsonException)
         {
-            return false;
+            return null;
         }
+    }
+
+    private static T? ReadSnapshotProperty<T>(string json, string propertyName)
+        where T : struct
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty(propertyName, out var value)
+            || value.ValueKind == JsonValueKind.Null)
+            return null;
+        return value.Deserialize<T>(JsonOptions);
+    }
+
+    private static string? ReadSnapshotString(string json, string propertyName)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty(propertyName, out var value)
+            && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
     }
 
     private static T Deserialize<T>(string json) where T : class =>
