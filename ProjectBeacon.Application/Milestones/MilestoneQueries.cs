@@ -4,7 +4,7 @@ using Application.Common;
 /// <summary>
 /// Fields for get milestone.
 /// </summary>
-public record GetMilestoneRequest(Guid MilestoneId);
+public record GetMilestoneRequest(Guid MilestoneId, Guid? ProjectId = null);
 /// <summary>
 /// Command for get milestone.
 /// </summary>
