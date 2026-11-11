@@ -99,7 +99,9 @@ else
                     {
                         <MudText Typo="Typo.caption">@string.Format(L["MoreTasks"].Value, milestoneTasks.Count - 3)</MudText>
                     }
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1"
+                               data-testid="@($"open-milestone-{milestone.Id:D}")"
+                               OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
                     @if (milestone.ClosedAt is not null)
                     {
                         var orphans = MilestoneOrphanLint.OpenTaskCount(
@@ -191,6 +193,7 @@ else
                                 </MudStack>
                                 <MarkdownView Text="@MilestoneHistoryMarkdown(version.ContentJson)" MaxHeight="140" />
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           data-testid="@($"restore-milestone-revision-{version.Revision}")"
                                            Disabled="_busy || version.Revision == _open.Revision"
                                            OnClick="() => RestoreMilestoneVersion(version)">
                                     @L["RestoreRevision"]
