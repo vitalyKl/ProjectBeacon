@@ -59,10 +59,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
 
         Assert.Contains("Content history (2)", cut.Markup);
         Assert.Contains("Current project description.", cut.Markup);
-        var restore = cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)
-            && !button.HasAttribute("disabled"));
-        restore.Click();
+        cut.Find($"[data-testid='restore-project-description-revision-{originalRevision}']").Click();
 
         Assert.Contains("Content history", cut.Markup);
         var restored = await DbContext.Projects.AsNoTracking().SingleAsync(
@@ -192,8 +189,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
         DbContext.ChangeTracker.Clear();
         var cut = Bunit.RenderComponent<Features.Roadmap.Roadmap>();
 
-        cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Open", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.Find($"[data-testid='open-milestone-{milestone.Id:D}']").Click();
         Assert.Contains("Content history (2)", cut.Markup);
         Assert.Contains("Updated milestone", cut.Markup);
 
@@ -201,9 +197,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
             header.TextContent.Contains("Content history", StringComparison.OrdinalIgnoreCase)).Click();
         Assert.Contains("Original milestone description.", cut.Markup);
 
-        cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)
-            && !button.HasAttribute("disabled")).Click();
+        cut.Find($"[data-testid='restore-milestone-revision-{originalRevision}']").Click();
 
         Assert.Contains("Original milestone", cut.Markup);
         var restored = await DbContext.Milestones.AsNoTracking().SingleAsync(
