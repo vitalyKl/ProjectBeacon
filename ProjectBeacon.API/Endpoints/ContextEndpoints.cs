@@ -230,6 +230,7 @@ public static class ContextEndpoints
         ContentTargetKind targetKind,
         Guid targetId,
         int? limit,
+        HttpContext context,
         ListContentVersionsHandler handler,
         CancellationToken ct)
     {
@@ -238,7 +239,8 @@ public static class ContextEndpoints
         if (targetKind == ContentTargetKind.TaskDescription)
             return Results.Forbid();
 
-        var result = await handler.HandleAsync(projectId, targetKind, targetId, limit ?? 50, ct);
+        var result = await handler.HandleAsync(
+            projectId, targetKind, targetId, context.GetActor(), limit ?? 50, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
