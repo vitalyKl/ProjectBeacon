@@ -584,6 +584,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
     {
         var milestone = Milestone.Create(
             "Release milestone", "Release checkpoint", _projectId, 3);
+        var createdAt = milestone.CreatedAt;
         var baseRevision = milestone.Revision;
         _db.Milestones.Add(milestone);
         var writer = new ContentWriter();
@@ -661,6 +662,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Release milestone", recreated.Name);
         Assert.Equal("Release checkpoint", recreated.Description);
         Assert.Equal(3, recreated.Order);
+        Assert.Equal(createdAt, recreated.CreatedAt);
         Assert.Equal(baseRevision + 2, recreated.Revision);
         var restoreAudit = await _db.AuditEvents.SingleAsync(
             item => item.Action == "content.restored"
