@@ -13,6 +13,107 @@ public sealed class P2AuthorizationHttpTests
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
     [Fact]
+    public async Task MilestoneMutations_RequireProjectMembershipAndRespectProjectScopedRoutes()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Milestone mutation org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "Milestone project A", orgId });
+        var projectAId = projectA.GetProperty("id").GetGuid();
+        var projectB = await PostJson(client, "/v1/projects", new { name = "Milestone project B", orgId });
+        var projectBId = projectB.GetProperty("id").GetGuid();
+
+        var milestone = await PostJson(
+            client,
+            $"/v1/projects/{projectAId}/milestones",
+            new
+            {
+                name = "Scoped milestone",
+                description = "Must not be changed through another project path.",
+                projectId = projectAId,
+                order = 1
+            });
+        var milestoneId = milestone.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(
+            client, "milestone-outsider", "milestone-outsider@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+
+        var createDenied = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            new
+            {
+                name = "Unauthorized milestone",
+                description = (string?)null,
+                projectId = projectAId,
+                order = 2
+            },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, createDenied.StatusCode);
+
+        var updateBody = new
+        {
+            milestoneId,
+            name = "Tampered milestone",
+            description = "Unauthorized update",
+            order = 2,
+            expectedRevision = 1
+        };
+        var wrongProjectUpdate = await client.PutAsJsonAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            updateBody,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectUpdate.StatusCode);
+
+        var updateDenied = await client.PutAsJsonAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            updateBody,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, updateDenied.StatusCode);
+
+        var closeDenied = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
+            content: null,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, closeDenied.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+        var closed = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
+            content: null,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+
+        var wrongProjectReopen = await client.PostAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}/reopen",
+            content: null,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectReopen.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+        var reopenDenied = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/reopen",
+            content: null,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, reopenDenied.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+        var wrongProjectDelete = await client.DeleteAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectDelete.StatusCode);
+
+        var stillExists = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, stillExists.StatusCode);
+    }
+
+    [Fact]
     public async Task AddMember_NonMember_Returns403()
     {
         await using var factory = new AuthApiFactory();
