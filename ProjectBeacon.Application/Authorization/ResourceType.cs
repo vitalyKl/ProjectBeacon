@@ -14,6 +14,7 @@ public enum ResourceType
     TaskStep,
     Pipeline,
     Context,
+    Constraint,
     Decision,
     Milestone,
     Label,
