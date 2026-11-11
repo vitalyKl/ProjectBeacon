@@ -151,7 +151,8 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   `/control/security` disables the lost authenticator, consumes that code, revokes all remaining
   recovery codes, increments the session version and invalidates active sessions. The operator
   must sign in again and enroll a new authenticator. The active SystemAdministrator additionally
-  retains the deployment-token-protected `/control/recover` break-glass path.
+  retains the `/control/recover` break-glass path protected by the separate
+  `ADMIN_RECOVERY_TOKEN`, which is never interchangeable with `BOOTSTRAP_ADMIN_TOKEN`.
 - Organization/customer onboarding and Alpha entitlement management are available under
   `/admin/organizations`: list/search, customer detail, organization creation with owner invitation,
   member/invitation visibility, owner invitation creation/revocation, member-role changes, global
