@@ -30,13 +30,37 @@ public sealed class ListContentVersionsHandler
         Guid projectId,
         ContentTargetKind targetKind,
         Guid targetId,
+        ActorContext actor,
         int limit = 50,
         CancellationToken ct = default)
     {
         if (projectId == Guid.Empty || targetId == Guid.Empty)
             return Result.Failure<IList<ContentVersionDto>>("ProjectId and TargetId are required.");
+        if (!Enum.IsDefined(targetKind) || targetKind == ContentTargetKind.TaskDescription)
+            return Result.Forbidden<IList<ContentVersionDto>>(
+                "This target history must be read through its dedicated authorized operation.");
 
         await using var db = _dbFactory.CreateDbContext();
+        if (actor.IsHuman)
+        {
+            if (!await ProposalProjectAuthorization.CanWriteAsync(db, actor, projectId, ct))
+                return Result.Forbidden<IList<ContentVersionDto>>(
+                    "Project membership is required to read content history.");
+        }
+        else if (actor.IsApiToken)
+        {
+            if (actor.ProjectId != projectId
+                || !(actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead)
+                    || actor.Capabilities.HasFlag(ApiTokenCapability.Admin)))
+                return Result.Forbidden<IList<ContentVersionDto>>(
+                    "The API token must be bound to this project and have ContextRead capability.");
+        }
+        else
+        {
+            return Result.Forbidden<IList<ContentVersionDto>>(
+                "Only a project member or project-bound ContextRead token can read content history.");
+        }
+
         var items = await db.ContentVersions
             .Where(v => v.ProjectId == projectId && v.TargetKind == targetKind && v.TargetId == targetId)
             .OrderByDescending(v => v.Revision)
