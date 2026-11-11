@@ -126,6 +126,13 @@ public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
         tenant.Assign(null, command.Request.OrgId, unscoped: false);
         await using var db = _dbFactory.CreateDbContext(tenant);
 
+        // Preserve the public 404 contract for an absent organization before checking
+        // membership. Existing organizations remain protected by the role check below.
+        var exists = await db.Orgs.IgnoreQueryFilters()
+            .AnyAsync(item => item.Id == command.Request.OrgId, ct);
+        if (!exists)
+            return Result.Failure<OrgDto>("Org not found.", ErrorKind.NotFound);
+
         var access = await _authorization.CanAsync(
             db, command.Actor, ResourceType.Org, AuthAction.Read,
             orgId: command.Request.OrgId, ct: ct);
