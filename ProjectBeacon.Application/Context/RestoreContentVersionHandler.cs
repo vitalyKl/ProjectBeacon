@@ -230,6 +230,9 @@ public sealed class RestoreContentVersionHandler
                             var closedAt = HasSnapshotProperty(source.ContentJson, "closedAt")
                                 ? snapshot.ClosedAt
                                 : ReadSnapshotProperty<DateTime>(deletion.ContentJson, "closedAt");
+                            var createdAt = HasSnapshotProperty(source.ContentJson, "createdAt")
+                                ? snapshot.CreatedAt
+                                : ReadSnapshotProperty<DateTime>(deletion.ContentJson, "createdAt");
 
                             milestone = Milestone.RestoreDeleted(
                                 source.TargetId,
@@ -238,7 +241,8 @@ public sealed class RestoreContentVersionHandler
                                 command.ProjectId,
                                 snapshot.Order,
                                 checked(command.ExpectedRevision + 1),
-                                closedAt);
+                                closedAt,
+                                createdAt);
                             db.Milestones.Add(milestone);
                             target = milestone;
                             currentRevision = command.ExpectedRevision;
@@ -440,7 +444,12 @@ public sealed class RestoreContentVersionHandler
         ConstraintStatus? Status = null,
         bool Deleted = false);
     private sealed record MilestoneSnapshot(
-        string Name, string? Description, int Order, DateTime? ClosedAt = null, bool Deleted = false);
+        string Name,
+        string? Description,
+        int Order,
+        DateTime? CreatedAt = null,
+        DateTime? ClosedAt = null,
+        bool Deleted = false);
     private sealed record ProjectDescriptionSnapshot(string? Description, bool Deleted = false);
     private sealed record TaskDescriptionSnapshot(
         string? Description, string? ReviewNotes, bool Deleted = false);
