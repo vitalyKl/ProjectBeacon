@@ -187,7 +187,7 @@ public sealed class ProposalTests
             "Deletes unsupported target.",
             ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
             "bad-delete-" + Guid.NewGuid().ToString("N"), CreatedAt));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Proposal.Create(
+        Assert.Throws<ArgumentException>(() => Proposal.Create(
             Guid.NewGuid(), null, null, null,
             ContentTargetKind.Milestone, Guid.NewGuid(),
             ProposalOperation.Create, 1, BaseHash,
