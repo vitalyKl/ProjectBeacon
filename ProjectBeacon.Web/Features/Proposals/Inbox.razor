@@ -489,7 +489,7 @@ else
             || proposal.Operation == ProposalOperation.Create)
             return;
         var versions = await ListContentVersions.HandleAsync(
-            _project.Id, proposal.TargetKind, proposal.TargetId, 100);
+            _project.Id, proposal.TargetKind, proposal.TargetId, _actor, 100);
         var version = versions.Success
             ? versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision)
             : null;
