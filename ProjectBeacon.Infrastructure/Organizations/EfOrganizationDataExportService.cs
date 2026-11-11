@@ -40,6 +40,24 @@ public sealed class EfOrganizationDataExportService(
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    public async Task<bool> CanExportAsync(
+        Guid orgId,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        if (orgId == Guid.Empty || !actor.IsHuman || actor.UserId is null)
+            return false;
+
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: true);
+        await using var db = dbFactory.CreateDbContext(tenant);
+        return await db.OrgMembers.IgnoreQueryFilters()
+            .AsNoTracking()
+            .AnyAsync(member => member.OrgId == orgId
+                && member.UserId == actor.UserId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin), ct);
+    }
+
     public async Task<Result<OrganizationDataExport>> ExportAsync(
         Guid orgId,
         ActorContext actor,
