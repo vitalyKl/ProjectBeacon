@@ -479,6 +479,66 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ListContentVersions_TaskDescriptionRequiresTaskReadAndProjectBinding()
+    {
+        var task = TaskItem.Create("Private task history", _projectId, description: "Task description");
+        _db.Tasks.Add(task);
+        _db.ContentVersions.Add(ContentVersion.Create(
+            _projectId,
+            ContentTargetKind.TaskDescription,
+            task.Id,
+            1,
+            """{"description":"Private task description","reviewNotes":null}""",
+            "Human",
+            _actorId.ToString("D")));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new ListContentVersionsHandler(HandlerSqlite.Factory(_connection));
+        var taskReadToken = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.TaskRead);
+        var allowed = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.TaskDescription,
+            task.Id,
+            taskReadToken,
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(allowed.Success, allowed.Error);
+        Assert.Contains(allowed.Value!, item => item.ContentJson.Contains("Private task description"));
+
+        var contextReadToken = taskReadToken with
+        {
+            Capabilities = ApiTokenCapability.ContextRead
+        };
+        var wrongCapability = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.TaskDescription,
+            task.Id,
+            contextReadToken,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(wrongCapability.Success);
+        Assert.Equal(ErrorKind.Forbidden, wrongCapability.Kind);
+
+        var crossProjectToken = taskReadToken with { ProjectId = Guid.NewGuid() };
+        var wrongProject = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.TaskDescription,
+            task.Id,
+            crossProjectToken,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(wrongProject.Success);
+        Assert.Equal(ErrorKind.Forbidden, wrongProject.Kind);
+
+        var human = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.TaskDescription,
+            task.Id,
+            HumanActor(),
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(human.Success, human.Error);
+    }
+
+    [Fact]
     public async Task ListDeletedContentTargets_RequiresProjectMembership()
     {
         var outsider = new ActorContext(
