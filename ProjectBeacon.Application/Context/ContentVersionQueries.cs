@@ -91,7 +91,7 @@ public sealed class ListDeletedContentTargetsHandler
             .Where(version => version.ProjectId == projectId
                 && (version.TargetKind == ContentTargetKind.ContextSection
                     || version.TargetKind == ContentTargetKind.Milestone))
-            .OrderByDescending(version => version.Revision)
+            .OrderByDescending(version => version.At)
             .Take(ScanLimit)
             .ToListAsync(ct);
 
