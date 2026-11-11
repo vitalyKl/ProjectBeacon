@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Milestones;
 
 using Application.Milestones;
+using Application.Common;
 using Application.Authorization;
 using Application.Persistence;
 using Domain.Entities.Identity;
