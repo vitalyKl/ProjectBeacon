@@ -43,8 +43,14 @@ public sealed class HttpPlatformContainerLogClient(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        var operationsAccess = await adminGate.RequireAsync(actor, OperatorPermission.OperationsRead);
-        var logAccess = await adminGate.RequireAsync(actor, OperatorPermission.ContainerLogsRead);
+        // AdminActor is a non-forgeable result of the Control Plane gate. Rebuild only
+        // the minimum human operator context so the gate can re-read current persisted role
+        // and account state before and after the remote request; never reuse cached permissions.
+        var operatorContext = ToOperatorActorContext(actor);
+        var operationsAccess = await adminGate.RequireAsync(
+            operatorContext, OperatorPermission.OperationsRead, ct: ct);
+        var logAccess = await adminGate.RequireAsync(
+            operatorContext, OperatorPermission.ContainerLogsRead, ct: ct);
         if (!operationsAccess.Success
             || !logAccess.Success
             || logAccess.Value is null
@@ -53,7 +59,6 @@ public sealed class HttpPlatformContainerLogClient(
             || !logAccess.Value.HasPermission(OperatorPermission.ContainerLogsRead))
             return Result.Failure<PlatformContainerLogResponse>(
                 "Current OperationsRead and ContainerLogsRead permissions are required.", ErrorKind.Forbidden);
-        var currentActor = logAccess.Value;
         if (!Enum.IsDefined(service))
             return Result.Failure<PlatformContainerLogResponse>(
                 "A supported platform service is required.", ErrorKind.Validation);
@@ -128,9 +133,9 @@ public sealed class HttpPlatformContainerLogClient(
                     "The operations log agent returned an empty response.", ErrorKind.Unavailable);
 
             var latestOperationsAccess = await adminGate.RequireAsync(
-                currentActor, OperatorPermission.OperationsRead);
+                operatorContext, OperatorPermission.OperationsRead, ct: ct);
             var latestLogAccess = await adminGate.RequireAsync(
-                currentActor, OperatorPermission.ContainerLogsRead);
+                operatorContext, OperatorPermission.ContainerLogsRead, ct: ct);
             if (!latestOperationsAccess.Success
                 || !latestLogAccess.Success
                 || latestLogAccess.Value is null
@@ -171,6 +176,17 @@ public sealed class HttpPlatformContainerLogClient(
             CryptographicOperations.ZeroMemory(secret);
         }
     }
+    private static ActorContext ToOperatorActorContext(AdminActor actor) =>
+        new(
+            ActorType.Human,
+            actor.UserId,
+            IsAdmin: true,
+            TokenId: null,
+            DeviceId: null,
+            ProjectId: null,
+            OrgId: null,
+            Capabilities: ApiTokenCapability.None);
+
     private async Task RecordAccessAsync(
         AdminActor actor,
         PlatformLogTarget service,
