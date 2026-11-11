@@ -702,6 +702,76 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
+    public async Task CreateMilestoneProposal_OmitsTargetIdAndUsesIdempotentAcceptance()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Milestone proposal org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Milestone proposal project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var request = new
+        {
+            targetKind = "Milestone",
+            operation = "Create",
+            baseRevision = 0,
+            payload = new
+            {
+                name = "Alpha checkpoint",
+                description = "First reviewed roadmap milestone.",
+                order = 1
+            },
+            rationaleMarkdown = "Introduces the first roadmap checkpoint.",
+            idempotencyKey = "milestone-create-http-" + Guid.NewGuid().ToString("N")
+        };
+
+        var created = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals", request,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var proposal = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var proposalId = proposal.GetProperty("id").GetGuid();
+        var milestoneId = proposal.GetProperty("targetId").GetGuid();
+        Assert.NotEqual(Guid.Empty, milestoneId);
+        Assert.Equal("Create", proposal.GetProperty("operation").GetString());
+        Assert.Equal(0, proposal.GetProperty("baseRevision").GetInt32());
+        Assert.Equal("Pending", proposal.GetProperty("status").GetString());
+
+        var duplicate = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals", request,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, duplicate.StatusCode);
+        var duplicateProposal = await duplicate.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal(proposalId, duplicateProposal.GetProperty("id").GetGuid());
+        Assert.Equal(milestoneId, duplicateProposal.GetProperty("targetId").GetGuid());
+
+        var accepted = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals/{proposalId}/accept",
+            new { },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        var acceptedProposal = await accepted.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Accepted", acceptedProposal.GetProperty("status").GetString());
+        Assert.Equal(1, acceptedProposal.GetProperty("appliedRevision").GetInt32());
+
+        var milestonesResponse = await client.GetAsync(
+            $"/v1/projects/{projectId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, milestonesResponse.StatusCode);
+        var milestones = await milestonesResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var milestone = Assert.Single(milestones.EnumerateArray());
+        Assert.Equal(milestoneId, milestone.GetProperty("id").GetGuid());
+        Assert.Equal("Alpha checkpoint", milestone.GetProperty("name").GetString());
+        Assert.Equal("First reviewed roadmap milestone.", milestone.GetProperty("description").GetString());
+        Assert.Equal(1, milestone.GetProperty("revision").GetInt32());
+    }
+
+    [Fact]
     public async Task AcceptProposal_InvalidAcceptedPayload_Returns400WithoutApplyingProposal()
     {
         await using var factory = new AuthApiFactory();
