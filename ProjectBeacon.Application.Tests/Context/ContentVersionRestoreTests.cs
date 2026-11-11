@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Context;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
@@ -729,6 +731,75 @@ public sealed class ContentVersionRestoreTests : IDisposable
             TestContext.Current.CancellationToken);
         Assert.Equal(1, version.Revision);
         Assert.Equal(created.Value.Id, version.ProposalId);
+    }
+
+    [Fact]
+    public async Task MilestoneUpdateProposal_AcceptPreservesLinkedTasksInNewSnapshot()
+    {
+        var milestone = Milestone.Create(
+            "Original milestone", "Original description", _projectId, 1);
+        var linkedTask = TaskItem.Create("Linked milestone task", _projectId);
+        linkedTask.SetMilestone(milestone.Id);
+        _db.Milestones.Add(milestone);
+        _db.Tasks.Add(linkedTask);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, milestone, "Human", _actorId.ToString("D"),
+            milestoneTaskIds: [linkedTask.Id]);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var baseVersion = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id
+                && item.Revision == milestone.Revision,
+            TestContext.Current.CancellationToken);
+        var baseHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
+
+        var proposed = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    new CreateProposalRequest(
+                        ContentTargetKind.Milestone,
+                        milestone.Id,
+                        ProposalOperation.Update,
+                        milestone.Revision,
+                        baseHash,
+                        """{"name":"Updated milestone","description":"Updated description","order":2}""",
+                        "Updates the milestone roadmap details.",
+                        "milestone-update-linked-task-" + Guid.NewGuid().ToString("N")),
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(proposed.Success, proposed.Error);
+
+        var accepted = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                writer)
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, proposed.Value!.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(2, accepted.Value.AppliedRevision);
+
+        var updatedSnapshot = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id
+                && item.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using var snapshot = JsonDocument.Parse(updatedSnapshot.ContentJson);
+        Assert.Equal("Updated milestone", snapshot.RootElement.GetProperty("name").GetString());
+        Assert.Contains(
+            linkedTask.Id,
+            snapshot.RootElement.GetProperty("taskIds").EnumerateArray().Select(item => item.GetGuid()));
+
+        var persistedTask = await _db.Tasks.AsNoTracking().SingleAsync(
+            item => item.Id == linkedTask.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(milestone.Id, persistedTask.MilestoneId);
     }
 
     [Fact]
