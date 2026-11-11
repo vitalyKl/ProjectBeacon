@@ -88,16 +88,18 @@ public sealed class RateLimitPartitioningHttpTests
     [Fact]
     public async Task AttachmentUploadLimitIsPerAuthenticatedUserAcrossClientIps()
     {
-        await using var app = await BuildAppAsync(attachmentUploadPermitLimit: 2);
+        await using var app = await BuildAppAsync();
         using var client = app.GetTestClient();
 
-        for (var i = 0; i < 2; i++)
-            Assert.Equal(HttpStatusCode.OK, (await UploadAsync(client, ClientA, UserA)).StatusCode);
+        // Consume the upload allowance for UserA through distinct IPs so none of the
+        // per-IP buckets is exhausted while the per-user bucket is being tested.
+        for (var i = 0; i < 10; i++)
+            Assert.Equal(HttpStatusCode.OK, (await UploadAsync(client, $"203.0.113.{30 + i}", UserA)).StatusCode);
 
-        // A new IP does not reset the authenticated user's upload allowance.
+        // Changing the client IP does not reset UserA's authenticated upload allowance.
         Assert.Equal(HttpStatusCode.TooManyRequests, (await UploadAsync(client, ClientB, UserA)).StatusCode);
 
-        // Another user on that IP has an independent account bucket.
+        // UserB on that same IP has a fresh user bucket and the IP bucket still has capacity.
         Assert.Equal(HttpStatusCode.OK, (await UploadAsync(client, ClientB, UserB)).StatusCode);
     }
 
