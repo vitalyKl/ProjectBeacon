@@ -442,6 +442,9 @@ else
     private string GetEditedPayload(ProposalDto proposal) =>
         _editedPayloads.TryGetValue(proposal.Id, out var value) ? value : proposal.PayloadJson;
 
+    private string? GetAcceptedPayload(ProposalDto proposal) =>
+        proposal.Operation == ProposalOperation.Delete ? null : GetEditedPayload(proposal);
+
     private void SetEditedPayload(Guid proposalId, string? value) =>
         _editedPayloads[proposalId] = value ?? string.Empty;
 
@@ -641,7 +644,7 @@ else
         try
         {
             var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
-                _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
+                _project.Id, proposal.Id, _actor, GetAcceptedPayload(proposal)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value,
@@ -701,7 +704,7 @@ else
             foreach (var proposal in _proposals.Where(item => _selectedIds.Contains(item.Id) && item.Status == ProposalStatus.Pending))
             {
                 var result = await AcceptProposal.HandleAsync(new AcceptProposalCommand(
-                    _project.Id, proposal.Id, _actor, GetEditedPayload(proposal)));
+                    _project.Id, proposal.Id, _actor, GetAcceptedPayload(proposal)));
                 var itemName = $"{proposal.TargetKind} {proposal.Id.ToString("N")[..8]}";
                 if (!result.Success)
                 {
