@@ -202,21 +202,42 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ProjectDto>> HandleAsync(GetProjectCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
-        if (project is null)
-            return Result.Failure<ProjectDto>("Project not found.");
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Read,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<ProjectDto>();
 
-        return Result.Ok(MapToDto(project));
+        var project = await db.Projects.FirstOrDefaultAsync(
+            item => item.Id == command.Request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<ProjectDto>("Project not found.", ErrorKind.NotFound);
+
+        // The trusted review command is executable configuration, not ordinary project
+        // metadata. Only project/org managers and system administrators may read it.
+        var canManage = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Administer,
+            projectId: project.Id, ct: ct);
+        return Result.Ok(MapToDto(project, includeReviewCommand: canManage.Success));
     }
 
-    private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
+    private static ProjectDto MapToDto(
+        Domain.Entities.Projects.Project project,
+        bool includeReviewCommand) =>
+        new(project.Id, project.Name, project.Description, project.OrgId,
+            project.CreatedAt, project.UpdatedAt,
+            includeReviewCommand ? project.ReviewCheckCommand : null);
 }
 /// <summary>
 /// Lists projects in the current tenant, optionally for one org.
@@ -229,18 +250,62 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var query = db.Projects.AsQueryable();
-        if (command.Request.OrgId is { } orgId)
-            query = query.Where(p => p.OrgId == orgId);
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Forbidden<IList<ProjectDto>>();
 
-        var projects = await query
-            .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new ProjectDto(
-                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt, p.ReviewCheckCommand))
-            .ToListAsync(ct);
+        IBeaconDb db;
+        if (command.Request.OrgId is { } requestedOrgId || command.Actor.IsAdmin)
+        {
+            var tenant = new TenantContext();
+            tenant.Assign(
+                null,
+                command.Request.OrgId,
+                unscoped: command.Actor.IsAdmin && command.Request.OrgId is null);
+            db = _dbFactory.CreateDbContext(tenant);
+        }
+        else
+        {
+            db = _dbFactory.CreateDbContext();
+        }
 
-        return Result.Ok((IList<ProjectDto>)projects);
+        await using (db)
+        {
+            var query = db.Projects.AsQueryable()
+                .Where(project => db.Orgs.IgnoreQueryFilters().Any(org =>
+                    org.Id == project.OrgId
+                    && org.LifecycleStatus == OrganizationLifecycleStatus.Active));
+
+            if (command.Request.OrgId is { } orgId)
+            {
+                query = query.Where(project => project.OrgId == orgId);
+            }
+
+            if (!command.Actor.IsAdmin)
+            {
+                // Project members can see only projects they belong to. Org Owners/Admins
+                // can see project metadata across their organization; Org Members do not
+                // inherit project access merely from organization membership.
+                query = query.Where(project =>
+                    db.ProjectMembers.IgnoreQueryFilters().Any(member =>
+                        member.ProjectId == project.Id && member.UserId == userId)
+                    || db.OrgMembers.IgnoreQueryFilters().Any(member =>
+                        member.OrgId == project.OrgId
+                        && member.UserId == userId
+                        && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin)));
+            }
+
+            var projects = await query
+                .OrderByDescending(project => project.CreatedAt)
+                .Select(project => new ProjectDto(
+                    project.Id, project.Name, project.Description, project.OrgId,
+                    project.CreatedAt, project.UpdatedAt,
+                    // Listing is intentionally metadata-only; trusted shell configuration is
+                    // returned only by GetProject to an authorized project/org manager.
+                    ReviewCheckCommand: null))
+                .ToListAsync(ct);
+
+            return Result.Ok((IList<ProjectDto>)projects);
+        }
     }
 }
 /// <summary>
