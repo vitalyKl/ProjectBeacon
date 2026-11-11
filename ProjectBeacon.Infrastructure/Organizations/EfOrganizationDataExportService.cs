@@ -763,7 +763,7 @@ public sealed class EfOrganizationDataExportService(
         await using var command = db.Database.GetDbConnection().CreateCommand();
         command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE \"OrgId\" = @org_id";
-        AddParameter(command, "org_id", DbType.Guid, orgId);
+        AddParameter(db, command, "org_id", DbType.Guid, orgId);
         var result = await command.ExecuteScalarAsync(ct);
         return Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
@@ -784,7 +784,7 @@ public sealed class EfOrganizationDataExportService(
             WHERE "OrgId" = @org_id
             ORDER BY "CreatedAtUtc", "Id"
             """;
-        AddParameter(command, "org_id", DbType.Guid, orgId);
+        AddParameter(db, command, "org_id", DbType.Guid, orgId);
 
         var rows = new List<OrganizationSubscription>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -826,7 +826,7 @@ public sealed class EfOrganizationDataExportService(
             WHERE "OrgId" = @org_id
             ORDER BY "IssuedAtUtc", "Number"
             """;
-        AddParameter(command, "org_id", DbType.Guid, orgId);
+        AddParameter(db, command, "org_id", DbType.Guid, orgId);
 
         var rows = new List<BillingInvoice>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -867,7 +867,7 @@ public sealed class EfOrganizationDataExportService(
             WHERE "OrgId" = @org_id
             ORDER BY "OccurredAtUtc", "Id"
             """;
-        AddParameter(command, "org_id", DbType.Guid, orgId);
+        AddParameter(db, command, "org_id", DbType.Guid, orgId);
 
         var rows = new List<BillingLedgerEntry>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -894,12 +894,35 @@ public sealed class EfOrganizationDataExportService(
         return rows;
     }
 
-    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    private static void AddParameter(
+        IBeaconDb db,
+        DbCommand command,
+        string name,
+        DbType type,
+        object value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
-        parameter.DbType = type;
-        parameter.Value = value;
+
+        // Microsoft.Data.Sqlite's DbType.Guid parameter binding is not equivalent to
+        // a TEXT value inserted by the SQLite fixture. Use the canonical D-form text
+        // representation for SQLite; PostgreSQL continues to bind a native UUID.
+        if (type == DbType.Guid
+            && value is Guid guid
+            && string.Equals(
+                db.Database.ProviderName,
+                "Microsoft.EntityFrameworkCore.Sqlite",
+                StringComparison.Ordinal))
+        {
+            parameter.DbType = DbType.String;
+            parameter.Value = guid.ToString("D", CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            parameter.DbType = type;
+            parameter.Value = value;
+        }
+
         command.Parameters.Add(parameter);
     }
 
