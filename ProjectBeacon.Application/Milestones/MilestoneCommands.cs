@@ -21,7 +21,7 @@ public record UpdateMilestoneCommand(UpdateMilestoneRequest Request, ActorContex
 /// <summary>
 /// Fields for delete milestone.
 /// </summary>
-public record DeleteMilestoneRequest(Guid MilestoneId);
+public record DeleteMilestoneRequest(Guid MilestoneId, Guid? ProjectId = null);
 /// <summary>
 /// Command for delete milestone.
 /// </summary>
