@@ -104,7 +104,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ChangeTracker.Clear();
-        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var restore = CreateRestoreHandler();
         var restoredSection = await restore.HandleAsync(new RestoreContentVersionCommand(
             _projectId, legacySection.Id, 3, HumanActor(),
             ContentTargetKind.ContextSection, section.Id), TestContext.Current.CancellationToken);
@@ -186,7 +186,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(changedMilestone.Success, changedMilestone.Error);
         Assert.NotNull(milestone.ClosedAt);
 
-        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var restore = CreateRestoreHandler();
         var expected = new Dictionary<ContentTargetKind, int>
         {
             [ContentTargetKind.ContextSection] = 2,
@@ -255,7 +255,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(changed.Success, changed.Error);
         Assert.Equal(2, changed.Value);
 
-        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var restored = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
@@ -281,7 +281,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         using var snapshot = JsonDocument.Parse(history[^1].ContentJson);
         Assert.Equal("Original description", snapshot.RootElement.GetProperty("description").GetString());
 
-        var stale = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var stale = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
@@ -306,7 +306,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         var outsider = new ActorContext(
             ActorType.Human, Guid.NewGuid(), false, null, null, _projectId, null, ApiTokenCapability.None);
 
-        var result = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var result = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId, version.Id, project.Revision, outsider),
                 TestContext.Current.CancellationToken);
@@ -350,7 +350,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(changed.Success, changed.Error);
         Assert.Equal(3, changed.Value);
 
-        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var restored = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
@@ -405,7 +405,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         writer.AddVersion(_db, milestone, "Human", _actorId.ToString("D"));
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var restore = CreateRestoreHandler();
         foreach (var kind in new[]
         {
             ContentTargetKind.ContextSection,
@@ -572,7 +572,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(original.Id, listedDeletion.SourceVersionId);
         Assert.Contains("Release milestone", listedDeletion.Title);
 
-        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var restored = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
@@ -591,6 +591,17 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Release checkpoint", recreated.Description);
         Assert.Equal(3, recreated.Order);
         Assert.Equal(baseRevision + 2, recreated.Revision);
+        var restoreAudit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "content.restored"
+                && item.TargetType == nameof(ContentTargetKind.Milestone)
+                && item.TargetId == milestone.Id.ToString("D"),
+            TestContext.Current.CancellationToken);
+        using (var details = JsonDocument.Parse(restoreAudit.DetailsJson!))
+        {
+            Assert.Equal(original.Id.ToString("D"), details.RootElement.GetProperty("sourceVersionId").GetString());
+            Assert.Equal(baseRevision + 2, details.RootElement.GetProperty("restoredRevision").GetInt32());
+        }
+        Assert.DoesNotContain("Release milestone", restoreAudit.DetailsJson);
         var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(remainingDeleted.Success, remainingDeleted.Error);
@@ -663,7 +674,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(original.Id, listedDeletion.SourceVersionId);
         Assert.Equal("Architecture", listedDeletion.Title);
 
-        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+        var restored = await CreateRestoreHandler()
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
@@ -682,6 +693,17 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Reviewed architecture section", recreated.BodyMarkdown);
         Assert.Equal(ContextReviewState.Reviewed, recreated.ReviewState);
         Assert.Equal(baseRevision + 2, recreated.Revision);
+        var restoreAudit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "content.restored"
+                && item.TargetType == nameof(ContentTargetKind.ContextSection)
+                && item.TargetId == section.Id.ToString("D"),
+            TestContext.Current.CancellationToken);
+        using (var details = JsonDocument.Parse(restoreAudit.DetailsJson!))
+        {
+            Assert.Equal(original.Id.ToString("D"), details.RootElement.GetProperty("sourceVersionId").GetString());
+            Assert.Equal(baseRevision + 2, details.RootElement.GetProperty("restoredRevision").GetInt32());
+        }
+        Assert.DoesNotContain("Reviewed architecture section", restoreAudit.DetailsJson);
         var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(remainingDeleted.Success, remainingDeleted.Error);
@@ -760,7 +782,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(ConstraintStatus.Rejected, constraint.Status);
         Assert.Equal(3, constraint.Revision);
 
-        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var restore = CreateRestoreHandler();
         var decisionRestored = await restore.HandleAsync(new RestoreContentVersionCommand(
             _projectId, decisionBase.Id, 3, HumanActor(),
             ContentTargetKind.Decision, decision.Id), TestContext.Current.CancellationToken);
@@ -777,6 +799,9 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(ConstraintStatus.Active, constraint.Status);
         Assert.Equal(4, constraint.Revision);
     }
+
+    private RestoreContentVersionHandler CreateRestoreHandler() =>
+        new(HandlerSqlite.Factory(_connection), new ContentWriter(), new EfAuditWriter());
 
     private ActorContext HumanActor() =>
         new(ActorType.Human, _actorId, false, null, null, _projectId, null, ApiTokenCapability.None);
