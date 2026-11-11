@@ -2620,6 +2620,9 @@ orthstar</value>
   <data name="ProposalInbox" xml:space="preserve">
     <value>Posteingang für Vorschläge</value>
   </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>Neues Ziel</value>
+  </data>
   <data name="ShellHintProposalInbox" xml:space="preserve">
     <value>Vorgeschlagenes Projektwissen und Revisionen prüfen.</value>
   </data>
