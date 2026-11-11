@@ -42,7 +42,6 @@ services:
       # The superuser password doubles as the beacon_app password (EnsureAppRoleAsync bootstraps it).
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
-      OPS_AGENT_SHARED_SECRET: ""
       # The docker network subnet below. An explicit list is the COMPLETE trust set
       # (the framework loopback default is dropped) — required for X-Forwarded-Proto
       # (Secure cookies, HTTPS redirect) and for per-client-IP rate limiting.
@@ -121,6 +120,11 @@ services:
     security_opt: [no-new-privileges]
     mem_limit: 128m
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
     restart: unless-stopped
 
   # One-shot schema migration + data-key re-encryption + role bootstrap.
