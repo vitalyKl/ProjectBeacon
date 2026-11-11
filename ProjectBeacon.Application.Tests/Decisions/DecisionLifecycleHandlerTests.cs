@@ -124,6 +124,7 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(replaced.Success, replaced.Error);
         Assert.Equal(DecisionStatus.Superseded, replaced.Value!.Status);
+        Assert.Equal(3, replaced.Value.Revision);
 
         var deprecate = new DeprecateDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var deprecated = await deprecate.HandleAsync(second.Value.Id, HumanActor(), TestContext.Current.CancellationToken);
