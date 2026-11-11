@@ -115,7 +115,7 @@ public sealed class DockerEngineLogReaderTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["DOCKER_SOCKET_PATH"] = "/var/run/docker.sock",
+                ["DOCKER_SOCKET_PATH"] = Path.Combine(Path.GetTempPath(), "docker.sock"),
                 ["DOCKER_LOG_PROXY_COMPOSE_PROJECT"] = "beacon-alpha",
                 ["DOCKER_LOG_PROXY_SHARED_SECRET"] = Convert.ToHexString(new byte[32])
             })
