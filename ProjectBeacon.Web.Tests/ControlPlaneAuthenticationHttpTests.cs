@@ -201,6 +201,7 @@ public sealed class ControlPlaneAuthenticationHttpTests
         logout.Headers.TryAddWithoutValidation("Origin", "http://control.localhost");
         logout.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
         logout.Headers.TryAddWithoutValidation("Cookie", controlCookie);
+        logout.Content = new FormUrlEncodedContent(new Dictionary<string, string>());
         using var logoutResponse = await client.SendAsync(
             logout, TestContext.Current.CancellationToken);
 
