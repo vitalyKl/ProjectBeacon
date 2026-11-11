@@ -216,7 +216,8 @@ else
             return;
         }
 
-        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(
+            new ListProjectMilestonesRequest(_project.Id), _actor));
         _milestones = milestones.Success ? milestones.Value!.ToList() : [];
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
         _deletedMilestones = deleted.Success
