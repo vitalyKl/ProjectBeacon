@@ -747,14 +747,6 @@ public sealed class ContentVersionRestoreTests : IDisposable
             milestoneTaskIds: [linkedTask.Id]);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var baseVersion = await _db.ContentVersions.SingleAsync(
-            item => item.TargetKind == ContentTargetKind.Milestone
-                && item.TargetId == milestone.Id
-                && item.Revision == milestone.Revision,
-            TestContext.Current.CancellationToken);
-        var baseHash = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
-
         var proposed = await new CreateProposalHandler(
                 HandlerSqlite.Factory(_connection), new EfAuditWriter())
             .HandleAsync(
@@ -765,7 +757,6 @@ public sealed class ContentVersionRestoreTests : IDisposable
                         milestone.Id,
                         ProposalOperation.Update,
                         milestone.Revision,
-                        baseHash,
                         """{"name":"Updated milestone","description":"Updated description","order":2}""",
                         "Updates the milestone roadmap details.",
                         "milestone-update-linked-task-" + Guid.NewGuid().ToString("N")),
