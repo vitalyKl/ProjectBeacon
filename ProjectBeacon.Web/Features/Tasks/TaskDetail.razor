@@ -588,7 +588,7 @@ else
 
     private async Task ReloadSteps()
     {
-        var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId)));
+        var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId), _actorContext));
         _steps = result.Success ? result.Value!.ToList() : [];
         var phases = await ListPhases.HandleAsync(new ListTaskPhasesCommand(TaskId));
         _phases = phases.Success ? phases.Value!.ToList() : [];
@@ -604,7 +604,7 @@ else
         _busy = true;
         try
         {
-            var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle)));
+            var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -621,7 +621,7 @@ else
 
     private async Task OnToggleStep(TaskStepDto step, bool done)
     {
-        var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done)));
+        var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -632,7 +632,7 @@ else
 
     private async Task OnDeleteStep(TaskStepDto step)
     {
-        var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id)));
+        var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

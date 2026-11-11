@@ -77,8 +77,8 @@ public sealed class TaskStepHandlerTests : IDisposable
         var deleted = await new DeleteTaskStepHandler(factory, authorization).HandleAsync(
             new DeleteTaskStepCommand(new DeleteTaskStepRequest(added.Value.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(deleted.Success);
-        var empty = await new ListTaskStepsHandler(factory).HandleAsync(
-            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)), TestContext.Current.CancellationToken);
+        var empty = await new ListTaskStepsHandler(factory, authorization).HandleAsync(
+            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId), actor), TestContext.Current.CancellationToken);
         Assert.Empty(empty.Value!);
     }
 
