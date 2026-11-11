@@ -8,7 +8,7 @@ var options = DockerLogProxyOptions.FromConfiguration(builder.Configuration);
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<ReplayNonceStore>();
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton<HttpClient>(sp =>
 {
     var proxyOptions = sp.GetRequiredService<DockerLogProxyOptions>();
     var handler = new SocketsHttpHandler
