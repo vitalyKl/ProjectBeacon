@@ -50,13 +50,16 @@ public class Milestone : Entity, IProjectScoped
         Guid projectId,
         int order,
         int revision,
-        DateTime? closedAt)
+        DateTime? closedAt,
+        DateTime? createdAt = null)
     {
         if (id == Guid.Empty || projectId == Guid.Empty || revision < 1)
             throw new ArgumentException("A milestone id, project id and positive revision are required.");
         var milestone = CreateWithId(id, name, description, projectId, order);
         milestone.Revision = revision;
         milestone.ClosedAt = closedAt;
+        if (createdAt is { } originalCreatedAt)
+            milestone.CreatedAt = originalCreatedAt;
         return milestone;
     }
 
