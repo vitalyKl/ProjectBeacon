@@ -16,7 +16,7 @@ internet ── 22 / 80 / 443 ──► Caddy (TLS, Let's Encrypt)
               beacon-alpha-internal (172.29.0.0/16)
                  ├─ web      :8080   (read-only, caps dropped)
                  ├─ worker          (read-only, caps dropped)
-                 ├─ ops-agent :8080 (no Docker socket or host mount)
+                 ├─ ops-agent :8080 (no host port, Docker socket or host mount)
                  ├─ postgres :5432  (internal only, no published ports)
                  └─ caddy
 migrate — one-shot container of the same image (profile "migrate")
