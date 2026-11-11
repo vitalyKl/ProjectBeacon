@@ -71,6 +71,52 @@ public class ContextSection : Entity, IProjectScoped
         return section;
     }
 
+    /// <summary>Recreates a physically deleted section from its immutable history identity.</summary>
+    public static ContextSection RestoreDeleted(
+        Guid id,
+        Guid projectId,
+        string sectionId,
+        string key,
+        string title,
+        string bodyMarkdown,
+        int ordinal,
+        ContextScopeType scopeType,
+        Guid? repoId,
+        Guid? taskId,
+        string path,
+        ContextSource source,
+        string? sourcePath,
+        ContextReviewState reviewState,
+        int revision,
+        string? updatedByType,
+        string? updatedById)
+    {
+        if (id == Guid.Empty || projectId == Guid.Empty || revision < 1)
+            throw new ArgumentException("A section id, project id and positive revision are required.");
+
+        var section = Entity.New<ContextSection>();
+        section.Id = id;
+        section.ProjectId = projectId;
+        section.SectionId = sectionId;
+        section.Key = key;
+        section.Title = title;
+        section.BodyMarkdown = bodyMarkdown;
+        section.Ordinal = ordinal;
+        section.ScopeType = scopeType;
+        section.RepoId = repoId;
+        section.TaskId = taskId;
+        section.Path = path;
+        section.Source = source;
+        section.SourcePath = sourcePath;
+        section.ReviewState = reviewState;
+        section.Revision = revision;
+        section.UpdatedByType = updatedByType;
+        section.UpdatedById = updatedById;
+        section.UpdatedAt = DateTime.UtcNow;
+        section.SectionsText = $"{title} {bodyMarkdown}";
+        return section;
+    }
+
     public void Update(string? title = null, string? bodyMarkdown = null, string? updatedByType = null, string? updatedById = null)
     {
         var contentChanged =
