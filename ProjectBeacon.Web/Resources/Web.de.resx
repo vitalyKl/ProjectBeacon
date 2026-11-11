@@ -2709,4 +2709,7 @@ orthstar</value>
 <data name="MarkdownExpand" xml:space="preserve"><value>Mehr anzeigen</value></data>
 <data name="MarkdownCollapse" xml:space="preserve"><value>Weniger anzeigen</value></data>
 <data name="Characters" xml:space="preserve"><value>Zeichen</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>Organisationsdaten</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>Laden Sie einen Snapshot des Arbeitsbereichs, der Mitglieder, Rechnungen und Abrechnungshistorie Ihrer Organisation herunter. Zugangsdaten und Anbieterkennungen werden ausgeschlossen.</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>Organisationsexport herunterladen (ZIP)</value></data>
 </root>
