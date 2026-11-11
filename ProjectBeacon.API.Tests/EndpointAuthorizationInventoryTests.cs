@@ -53,6 +53,22 @@ public sealed class EndpointAuthorizationInventoryTests
             && route.Policy == "Human or API token (ContextRead)");
 
         Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "PUT" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "DELETE" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen"
+            && route.Policy == "Human");
+
+        Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/git-sync" && route.Policy == "Human");
         Assert.Contains(routes, route =>
             route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/git-sync/{commandId:guid}" && route.Policy == "Human");
