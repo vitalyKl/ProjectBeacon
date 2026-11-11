@@ -15,29 +15,29 @@ public static class PipelineEndpoints
 {
     /// <summary>
     /// Maps <c>GET /v1/tasks/{taskId:guid}/pipeline</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
-    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/restart</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel</c>, and <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>, <c>POST /v1/sessions/{sessionId:guid}/launch</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>, and <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
+    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/restart</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel</c>, and <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>, <c>POST /v1/sessions/{sessionId:guid}/launch</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>, and the pipeline drive, session, subtask, and review-verdict routes with <c>RequireHumanOrApiToken(ApiTokenCapability.SessionDrive)</c>. Approval is Human-only; a reviewer token may submit a verdict but cannot approve.
     /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/force-close</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.Admin)</c>. The body is task id plus an optional reason.
     /// </summary>
     public static IEndpointRouteBuilder MapPipelineEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/tasks/{taskId:guid}/pipeline", GetPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/forms/{formId}/reply", ReplyPipelineForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/start", StartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/cancel", CancelPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/restart", RestartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel", CancelPipelineSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel", CancelSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/start", StartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/cancel", CancelPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/restart", RestartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel", CancelPipelineSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel", CancelSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
 
-        app.MapPost("/v1/tasks/{taskId:guid}/subtasks", CreateSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session", StartActorSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/sessions/{sessionId:guid}/launch", LaunchSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/sessions/{sessionId:guid}/retry", RetryPipelineSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result", ReportSubtaskResult).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail", FailSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/start", StartReview).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/verdict", RecordReviewVerdict).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/check", RecordReviewCheck).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/approve", ApprovePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks", CreateSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session", StartActorSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/sessions/{sessionId:guid}/launch", LaunchSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/sessions/{sessionId:guid}/retry", RetryPipelineSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result", ReportSubtaskResult).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail", FailSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/start", StartReview).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/verdict", RecordReviewVerdict).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/check", RecordReviewCheck).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/approve", ApprovePipeline).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.Admin);
 
         return app;
