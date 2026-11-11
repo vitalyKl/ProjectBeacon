@@ -320,6 +320,10 @@ public sealed class MilestoneLifecycleTests : IDisposable
             .OrderBy(version => version.Revision)
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(new[] { 1, 2, 3 }, history.Select(version => version.Revision).ToArray());
+        Assert.Equal("Human", history[1].ChangedByType);
+        Assert.Equal(_ownerId.ToString("D"), history[1].ChangedById);
+        Assert.Equal("Human", history[2].ChangedByType);
+        Assert.Equal(_ownerId.ToString("D"), history[2].ChangedById);
 
         using var closedSnapshot = System.Text.Json.JsonDocument.Parse(history[1].ContentJson);
         Assert.NotEqual(System.Text.Json.JsonValueKind.Null,
