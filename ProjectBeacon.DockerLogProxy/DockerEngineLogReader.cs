@@ -140,8 +140,8 @@ public sealed class DockerEngineLogReader(
                 throw new InvalidDataException("Docker Engine returned an unsupported log stream frame.");
 
             var frameLength = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(4, 4));
-            if (frameLength is 0 or > int.MaxValue
-                || frameLength > options.MaximumFrameBytes
+            if (frameLength == 0
+                || frameLength > (uint)options.MaximumFrameBytes
                 || totalBytes + (long)frameLength > options.MaximumResponseBytes)
                 throw new InvalidDataException("Docker Engine log frame exceeded the configured size limit.");
 
