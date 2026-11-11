@@ -39,7 +39,7 @@ public sealed class DockerJsonLogReaderTests
         Assert.Equal(PlatformLogTarget.Web, response.Service);
         Assert.Equal("/beacon-alpha-web-1", response.ContainerName);
         Assert.Equal(new[] { "web-two", "web-three" }, response.Entries.Select(entry => entry.Message));
-        Assert.Equal(new[] { "stdout", "stderr" }, response.Entries.Select(entry => entry.Stream));
+        Assert.Equal(new[] { "stderr", "stdout" }, response.Entries.Select(entry => entry.Stream));
         Assert.Single(handler.Requests.Where(request => request.RequestUri!.AbsolutePath.EndsWith("/logs", StringComparison.Ordinal)));
         Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.Contains(foreignId, StringComparison.Ordinal));
         Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.Contains(workerId, StringComparison.Ordinal));
