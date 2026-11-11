@@ -7,7 +7,11 @@ var options = OpsAgentOptions.FromConfiguration(builder.Configuration);
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<ReplayNonceStore>();
-builder.Services.AddSingleton<DockerJsonLogReader>();
+builder.Services.AddHttpClient<DockerLogProxyClient>(client =>
+{
+    client.BaseAddress = options.DockerLogProxyBaseUrl;
+    client.Timeout = TimeSpan.FromSeconds(12);
+});
 builder.Services.ConfigureHttpJsonOptions(json =>
     json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -20,7 +24,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "healthy" }))
 app.MapGet("/internal/v1/logs/{service}", async (
     HttpContext context,
     string service,
-    DockerJsonLogReader reader,
+    DockerLogProxyClient logProxy,
     OpsAgentOptions agentOptions,
     CancellationToken ct) =>
 {
@@ -34,7 +38,7 @@ app.MapGet("/internal/v1/logs/{service}", async (
     if (tail is < 1 || tail > agentOptions.MaximumTail)
         return Results.BadRequest(new { error = $"tail must be between 1 and {agentOptions.MaximumTail}." });
 
-    var snapshot = await reader.ReadAsync(target, tail, ct);
+    var snapshot = await logProxy.GetLogsAsync(target, tail, ct);
     return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
 });
 
