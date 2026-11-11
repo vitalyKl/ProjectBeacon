@@ -91,7 +91,7 @@ public class BootstrapHandler
 
             return await strategy.ExecuteAsync(
                 db,
-                async (context, _, operationCancellationToken) =>
+                async (_, context, operationCancellationToken) =>
             {
                 // A transient database failure may re-enter this delegate. Detach entities
                 // from the failed attempt before attaching the stable user/audit instances.
@@ -105,7 +105,7 @@ public class BootstrapHandler
                 {
                     await context.Database.ExecuteSqlRawAsync(
                         "SELECT pg_advisory_xact_lock(20261111, 97)",
-                        ct);
+                        operationCancellationToken);
                 }
 
                 var existingAdminId = await context.Users
