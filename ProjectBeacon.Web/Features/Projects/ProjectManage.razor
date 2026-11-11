@@ -110,6 +110,7 @@ else
                                 </MudStack>
                                 <MarkdownView Text="@ProjectDescriptionSnapshotMarkdown(version.ContentJson)" MaxHeight="140" />
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           data-testid="@($"restore-project-description-revision-{version.Revision}")"
                                            Disabled="_busy || version.Revision == _projectRevision"
                                            OnClick="() => RestoreProjectDescriptionVersion(version)">
                                     @L["RestoreRevision"]
