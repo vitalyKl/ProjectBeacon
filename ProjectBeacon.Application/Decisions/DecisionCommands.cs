@@ -132,11 +132,21 @@ public class AcceptDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly ContentWriter _contentWriter;
 
     public AcceptDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+        : this(dbFactory, authorization, new ContentWriter())
+    {
+    }
+
+    public AcceptDecisionHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<DecisionDto>> HandleAsync(
@@ -155,11 +165,21 @@ public class AcceptDecisionHandler
         if (!permission.Success)
             return Result.Forbidden<DecisionDto>("Only a project or organization Owner/Admin can accept decisions.");
 
+        var previousRevision = decision.Revision;
         decision.Accept();
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(new DecisionDto(
-            decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision));
+        if (decision.Revision == previousRevision)
+            return Result.Ok(new DecisionDto(
+                decision.Id, decision.Title, decision.Context, decision.DecisionBody,
+                decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision));
+
+        var attribution = ContentAttribution.FromActor(actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, decision, attribution.Type ?? "Human", attribution.Id, ct);
+        return saved.Success
+            ? Result.Ok(new DecisionDto(
+                decision.Id, decision.Title, decision.Context, decision.DecisionBody,
+                decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision))
+            : Result.Failure<DecisionDto>(saved.Error ?? "Decision content conflict.", ErrorKind.Conflict);
     }
 }
 /// <summary>
@@ -169,11 +189,21 @@ public class DeprecateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly ContentWriter _contentWriter;
 
     public DeprecateDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+        : this(dbFactory, authorization, new ContentWriter())
+    {
+    }
+
+    public DeprecateDecisionHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<DecisionDto>> HandleAsync(
@@ -192,9 +222,17 @@ public class DeprecateDecisionHandler
         if (!permission.Success)
             return Result.Forbidden<DecisionDto>("Only a project or organization Owner/Admin can deprecate decisions.");
 
+        var previousRevision = decision.Revision;
         decision.Deprecate();
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(Map(decision));
+        if (decision.Revision == previousRevision)
+            return Result.Ok(Map(decision));
+
+        var attribution = ContentAttribution.FromActor(actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, decision, attribution.Type ?? "Human", attribution.Id, ct);
+        return saved.Success
+            ? Result.Ok(Map(decision))
+            : Result.Failure<DecisionDto>(saved.Error ?? "Decision deprecation conflict.", ErrorKind.Conflict);
     }
 
     private static DecisionDto Map(Decision d) =>
@@ -207,11 +245,21 @@ public class SupersedeDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly ContentWriter _contentWriter;
 
     public SupersedeDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+        : this(dbFactory, authorization, new ContentWriter())
+    {
+    }
+
+    public SupersedeDecisionHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<DecisionDto>> HandleAsync(
@@ -245,9 +293,13 @@ public class SupersedeDecisionHandler
             return Result.Failure<DecisionDto>(ex.Message);
         }
 
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(new DecisionDto(
-            decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision));
+        var attribution = ContentAttribution.FromActor(actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, decision, attribution.Type ?? "Human", attribution.Id, ct);
+        return saved.Success
+            ? Result.Ok(new DecisionDto(
+                decision.Id, decision.Title, decision.Context, decision.DecisionBody,
+                decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById, decision.Revision))
+            : Result.Failure<DecisionDto>(saved.Error ?? "Decision supersession conflict.", ErrorKind.Conflict);
     }
 }
