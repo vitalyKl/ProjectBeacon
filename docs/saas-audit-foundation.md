@@ -143,5 +143,7 @@ security lifecycle are implemented. Deliberately not included in this slice:
 - Full event capture for every task, chat, context, pipeline and read operation. High-volume
   content events are not audit records; any new action must be explicitly selected and use the
   fixed metadata allowlist.
-- Full operations telemetry and restricted container-log access remain in the B4 operations
-  phase; this audit journal is deliberately not a high-volume diagnostic log.
+- Full metrics/tracing aggregation and Kubernetes-native pod-log access remain outside this
+  alpha slice. B4 metadata heartbeats and restricted Docker Compose/VPS Web/Worker/Migrate log
+  tails are implemented behind `OperationsRead` + `ContainerLogsRead`; the audit journal records
+  successful log-read metadata but is deliberately not a high-volume diagnostic log.
