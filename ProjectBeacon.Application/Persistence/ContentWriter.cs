@@ -110,6 +110,7 @@ public sealed class ContentWriter
                 milestone.Name,
                 milestone.Description,
                 milestone.Order,
+                milestone.CreatedAt,
                 milestone.ClosedAt,
                 Deleted = deleted
             }, JsonOptions),
