@@ -17,6 +17,12 @@ public sealed record OrganizationDataExport(
 
 public interface IOrganizationDataExportService
 {
+    /// <summary>Checks the caller's owner/admin membership without generating an archive.</summary>
+    Task<bool> CanExportAsync(
+        Guid orgId,
+        ActorContext actor,
+        CancellationToken ct = default);
+
     /// <summary>Exports the target organization only after verifying its human owner/admin membership.</summary>
     Task<Result<OrganizationDataExport>> ExportAsync(
         Guid orgId,
