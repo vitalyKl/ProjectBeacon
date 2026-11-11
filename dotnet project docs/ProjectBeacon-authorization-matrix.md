@@ -267,7 +267,7 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 | GET | `/v1/projects/{pid}/context/nodes` | ContextEndpoints.cs:14 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
 | POST | `/v1/projects/{pid}/context/nodes` | ContextEndpoints.cs:15 | Any-auth | none | none | project | `REVIEW REQUIRED` (upsert/write) |
 | GET | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:16 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| DELETE | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion before deleting the section; restore is Human/member-only. |
+| DELETE | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion and `content.deleted` audit event before deleting the section; restore is Human/member-only. |
 | POST | `/v1/projects/{pid}/context/import` | ContextEndpoints.cs:18 | Any-auth | none | none | project | `REVIEW REQUIRED` (file import) |
 | GET | `/v1/projects/{pid}/context/export/agents-md` | ContextEndpoints.cs:19 | Any-auth | none | none | project | `REVIEW REQUIRED` |
 | POST | `/v1/projects/{pid}/context/compile` | ContextEndpoints.cs:20 | Any-auth | none | none | project | `REVIEW REQUIRED` |
@@ -297,8 +297,8 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 | POST | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:16 | Any-auth | none | none | project | `REVIEW REQUIRED` |
 | PUT | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:17 | Any-auth | none | none | project | `REVIEW REQUIRED` |
 | PUT | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:18 | Any-auth | none | none | — | `REVIEW REQUIRED` |
-| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:21 | Human-only | — | `RequireHuman`; handler resolves the milestone project and requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion before deleting the milestone; restore is Human/member-only. |
-| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:21 | Human-only | — | `RequireHuman`; same project membership check after resolving the milestone | project (resolved) | Legacy route; same tombstone and restore semantics as project-scoped delete. |
+| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler resolves the milestone project and requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion and `content.deleted` audit event before deleting the milestone; restore is Human/member-only. |
+| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:27 | Human-only | — | `RequireHuman`; same project membership check after resolving the milestone | project (resolved) | Legacy route; same tombstone, audit and restore semantics as project-scoped delete. |
 | GET | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:21 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
 | GET | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:22 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
 | GET | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:23 | Any-auth | none | RLS only | — | `REVIEW REQUIRED` |
