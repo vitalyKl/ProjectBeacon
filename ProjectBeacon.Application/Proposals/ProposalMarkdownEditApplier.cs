@@ -216,9 +216,10 @@ public static class ProposalMarkdownEditApplier
 
     private static string ReplaceSectionBody(string markdown, int bodyStart, int sectionEnd, string content)
     {
+        var newLine = GetNewLine(markdown);
         var replacement = content.Trim('\r', '\n');
         if (replacement.Length > 0)
-            replacement += Environment.NewLine + Environment.NewLine;
+            replacement += newLine + newLine;
         return markdown[..bodyStart] + replacement + markdown[sectionEnd..];
     }
 
@@ -226,15 +227,22 @@ public static class ProposalMarkdownEditApplier
     {
         var prefix = markdown[..sectionEnd];
         var suffix = markdown[sectionEnd..];
-        var normalized = content.Trim('\r', '\n');
-        var separator = prefix.EndsWith(Environment.NewLine + Environment.NewLine, StringComparison.Ordinal)
+        var newLine = GetNewLine(markdown);
+        var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Replace("\n", newLine, StringComparison.Ordinal)
+            .Trim('\r', '\n');
+        var separator = prefix.EndsWith(newLine + newLine, StringComparison.Ordinal)
             ? string.Empty
-            : prefix.EndsWith('\n')
-                ? Environment.NewLine
-                : Environment.NewLine + Environment.NewLine;
-        var inserted = separator + normalized + Environment.NewLine + Environment.NewLine;
+            : prefix.EndsWith(newLine, StringComparison.Ordinal)
+                ? newLine
+                : newLine + newLine;
+        var inserted = separator + normalized + newLine + newLine;
         return prefix + inserted + suffix;
     }
+
+    private static string GetNewLine(string markdown) =>
+        markdown.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 
     private static string DeleteSection(string markdown, int sectionStart, int sectionEnd)
     {
