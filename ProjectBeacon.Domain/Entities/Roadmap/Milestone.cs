@@ -32,6 +32,34 @@ public class Milestone : Entity, IProjectScoped
         return milestone;
     }
 
+    /// <summary>Creates a milestone with an id reserved by a pending Create proposal.</summary>
+    public static Milestone CreateWithId(Guid id, string name, string? description, Guid projectId, int order)
+    {
+        if (id == Guid.Empty)
+            throw new ArgumentException("Milestone id is required.", nameof(id));
+        var milestone = Create(name, description, projectId, order);
+        milestone.Id = id;
+        return milestone;
+    }
+
+    /// <summary>Recreates a deleted milestone from history, continuing after its tombstone revision.</summary>
+    public static Milestone RestoreDeleted(
+        Guid id,
+        string name,
+        string? description,
+        Guid projectId,
+        int order,
+        int revision,
+        DateTime? closedAt)
+    {
+        if (id == Guid.Empty || projectId == Guid.Empty || revision < 1)
+            throw new ArgumentException("A milestone id, project id and positive revision are required.");
+        var milestone = CreateWithId(id, name, description, projectId, order);
+        milestone.Revision = revision;
+        milestone.ClosedAt = closedAt;
+        return milestone;
+    }
+
     public void Update(string? name = null, string? description = null, int? order = null)
     {
         var contentChanged =
