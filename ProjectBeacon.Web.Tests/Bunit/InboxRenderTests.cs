@@ -174,6 +174,12 @@ public sealed class InboxRenderTests : BUnitRenderBase
         new ContentWriter().AddVersion(
             DbContext, section, "Human", userId.ToString("D"));
         await DbContext.SaveChangesAsync(CancellationToken.None);
+        var baseVersion = await DbContext.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id,
+            CancellationToken.None);
+        var baseHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
 
         var proposal = Proposal.Create(
             projectId,
@@ -183,8 +189,8 @@ public sealed class InboxRenderTests : BUnitRenderBase
             ContentTargetKind.ContextSection,
             section.Id,
             ProposalOperation.Delete,
-            1,
-            new string('e', 64),
+            section.Revision,
+            baseHash,
             "{}",
             "Removes an obsolete reviewed section.",
             ProposalAuthorKind.Human,
