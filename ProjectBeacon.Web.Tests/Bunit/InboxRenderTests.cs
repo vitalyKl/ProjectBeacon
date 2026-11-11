@@ -141,13 +141,10 @@ public sealed class InboxRenderTests : BUnitRenderBase
         DbContext.SaveChanges();
 
         var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
-        var compareButtons = cut.FindAll("[data-testid='compare-base-revision'] button");
-        Assert.Equal(2, compareButtons.Count);
+        Assert.Equal(2, cut.FindAll("[data-testid='compare-base-revision'] button").Count);
 
-        foreach (var index in Enumerable.Range(0, compareButtons.Count))
-        {
-            cut.FindAll("[data-testid='compare-base-revision'] button")[index].Click();
-        }
+        cut.FindAll("[data-testid='compare-base-revision'] button").First().Click();
+        cut.FindAll("[data-testid='compare-base-revision'] button").Skip(1).First().Click();
 
         Assert.Contains("reviewNotes", cut.Markup);
         Assert.Contains("Existing review notes", cut.Markup);
