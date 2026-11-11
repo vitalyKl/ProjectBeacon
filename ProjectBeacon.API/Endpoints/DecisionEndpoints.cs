@@ -14,13 +14,13 @@ using Microsoft.AspNetCore.Mvc;
 public static class DecisionEndpoints
 {
     /// <summary>
-    /// Maps <c>POST /v1/projects/{projectId:guid}/decisions</c>, <c>GET /v1/projects/{projectId:guid}/decisions</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate</c>, and <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede</c> with <c>RequireHuman</c>.
+    /// Proposals and decisions are Human-only writes. List/get allow scoped <c>ContextRead</c> tokens; accept/deprecate/supersede are Human-only.
     /// </summary>
     public static IEndpointRouteBuilder MapDecisionEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/decisions/propose", Propose)
-            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}", Get)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
