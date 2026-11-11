@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Logging;
 using ProjectBeacon.Infrastructure.Http;
+using ProjectBeacon.Application.Authorization;
 
 /// <summary>
 /// Verifies that opted-in endpoints use forwarded client IPs and authenticated user IDs
@@ -104,6 +105,40 @@ public sealed class RateLimitPartitioningHttpTests
     }
 
     [Fact]
+    public async Task ApiTokenCreatorSharesBucketAcrossDifferentTokensAndClientIps()
+    {
+        await using var app = await BuildApiTokenAppAsync();
+        using var client = app.GetTestClient();
+
+        // Each request gets a fresh IP and token id. The verified token creator is the
+        // stable account identity, so a second token cannot reset the creator's allowance.
+        for (var i = 0; i < 5; i++)
+        {
+            var response = await PostApiTokenAsync(
+                client,
+                $"198.51.100.{i + 1}",
+                UserA,
+                Guid.NewGuid().ToString("D"));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        var blocked = await PostApiTokenAsync(
+            client,
+            "198.51.100.20",
+            UserA,
+            Guid.NewGuid().ToString("D"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+
+        // A different creator remains independent even though the request uses the same route.
+        var otherCreator = await PostApiTokenAsync(
+            client,
+            "198.51.100.21",
+            UserB,
+            Guid.NewGuid().ToString("D"));
+        Assert.Equal(HttpStatusCode.OK, otherCreator.StatusCode);
+    }
+
+    [Fact]
     public async Task UntrustedPeerCannotSpoofForwardedClientIp()
     {
         const string untrustedPeer = "198.51.100.99";
@@ -140,6 +175,60 @@ public sealed class RateLimitPartitioningHttpTests
         for (var i = 0; i < 5; i++)
             Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, null)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await PostAsync(client, null)).StatusCode);
+    }
+
+    private static async Task<WebApplication> BuildApiTokenAppAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseTestServer();
+        builder.Configuration["ForwardedHeaders:KnownNetworks:0"] = $"{ProxyIp}/32";
+        builder.Services.AddRateLimiter(options => AuthRateLimiter.Configure(options, 5, 60, 5));
+        builder.Services.AddSingleton(new ApiTokenIdentityRateLimiter(5, 60, 5));
+
+        var app = builder.Build();
+
+        app.Use(async (context, next) =>
+        {
+            context.Connection.RemoteIpAddress = IPAddress.Parse(ProxyIp);
+            await next(context);
+        });
+        app.UseForwardedHeaders(ForwardedHeadersOptionsFactory.Create(builder.Configuration));
+        app.UseRouting();
+
+        // The built-in limiter runs before credential verification and provides the IP gate.
+        app.UseRateLimiter();
+
+        // Simulate ApiTokenAuthMiddleware after it has validated bcn_ and resolved token claims.
+        app.Use(async (context, next) =>
+        {
+            var creator = context.Request.Headers["X-Test-User"].ToString();
+            var token = context.Request.Headers["X-Test-Token"].ToString();
+            var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
+            identity.AddClaim(new Claim("token_id", token));
+            if (Guid.TryParse(creator, out var creatorId))
+                identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, creatorId.ToString("D")));
+            context.User = new ClaimsPrincipal(identity);
+            await next(context);
+        });
+        app.UseMiddleware<ApiTokenIdentityRateLimitMiddleware>();
+        app.MapPost("/auth-test", () => Results.Ok()).RequireRateLimiting("auth");
+
+        await app.StartAsync();
+        return app;
+    }
+
+    private static async Task<HttpResponseMessage> PostApiTokenAsync(
+        HttpClient client,
+        string forwardedFor,
+        string creatorId,
+        string tokenId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/auth-test");
+        request.Headers.Add("X-Forwarded-For", forwardedFor);
+        request.Headers.Add("X-Test-User", creatorId);
+        request.Headers.Add("X-Test-Token", tokenId);
+        return await client.SendAsync(request);
     }
 
     private static async Task<WebApplication> BuildAppAsync(
