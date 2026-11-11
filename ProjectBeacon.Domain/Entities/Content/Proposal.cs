@@ -4,8 +4,9 @@ using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
 /// <summary>
-/// A revision-bound proposal to change existing, accepted project content. Proposal payloads are
-/// untrusted input; only a human can transition a Pending proposal to an accepted or rejected state.
+/// A revision-bound proposal to create a Milestone or change existing project content.
+/// Create proposals reserve their target id before review; payloads are untrusted input and
+/// only a human can transition a Pending proposal to an accepted or rejected state.
 /// </summary>
 public sealed class Proposal : Entity, IProjectScoped
 {
@@ -71,12 +72,31 @@ public sealed class Proposal : Entity, IProjectScoped
     {
         if (projectId == Guid.Empty || targetId == Guid.Empty)
             throw new ArgumentException("ProjectId and TargetId are required.");
-        if (baseRevision < 1)
-            throw new ArgumentOutOfRangeException(nameof(baseRevision));
         if (!Enum.IsDefined(targetKind) || !Enum.IsDefined(operation) || !Enum.IsDefined(authorKind))
             throw new ArgumentOutOfRangeException(nameof(targetKind));
-        if (operation != ProposalOperation.Update)
-            throw new ArgumentException("Only Update proposals against existing accepted content are supported.", nameof(operation));
+
+        if (operation == ProposalOperation.Create)
+        {
+            if (targetKind != ContentTargetKind.Milestone || baseRevision != 0)
+                throw new ArgumentException(
+                    "Create proposals are currently supported for Milestone with BaseRevision 0.",
+                    nameof(operation));
+        }
+        else if (baseRevision < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseRevision));
+        }
+
+        if (operation == ProposalOperation.Delete
+            && targetKind is not (ContentTargetKind.ContextSection
+                or ContentTargetKind.Decision
+                or ContentTargetKind.Constraint
+                or ContentTargetKind.Milestone))
+            throw new ArgumentException(
+                "Delete proposals are supported only for ContextSection, Decision, Constraint and Milestone.",
+                nameof(operation));
+        if (targetKind == ContentTargetKind.RepoPatch && operation != ProposalOperation.Update)
+            throw new ArgumentException("RepoPatch supports Update only.", nameof(operation));
         ArgumentException.ThrowIfNullOrWhiteSpace(baseHash);
         if (baseHash.Length != 64 || !baseHash.All(Uri.IsHexDigit))
             throw new ArgumentException("BaseHash must be a SHA-256 hexadecimal digest.", nameof(baseHash));
