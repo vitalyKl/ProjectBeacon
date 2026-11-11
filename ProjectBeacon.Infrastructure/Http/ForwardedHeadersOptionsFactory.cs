@@ -35,7 +35,7 @@ public static class ForwardedHeadersOptionsFactory
             foreach (var value in knownProxies)
                 options.KnownProxies.Add(IPAddress.Parse(value));
             foreach (var value in knownNetworks)
-                options.KnownNetworks.Add(IPNetwork.Parse(value));
+                options.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(value));
         }
 
         return options;
