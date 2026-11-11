@@ -316,6 +316,35 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteContextNode_RequiresProjectMembershipAndPreservesContent()
+    {
+        var section = ContextSection.Create(
+            "private", "Protected section", "Protected content.",
+            _projectId, ContextScopeType.Project);
+        _db.ContextSections.Add(section);
+        new ContentWriter().AddVersion(_db, section, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var result = await new DeleteContextNodeHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(
+                new DeleteContextNodeCommand(
+                    new DeleteContextNodeRequest(_projectId, section.Id), outsider),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.True(await _db.ContextSections.AsNoTracking().AnyAsync(
+            item => item.Id == section.Id, TestContext.Current.CancellationToken));
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            version => version.TargetKind == ContentTargetKind.ContextSection
+                && version.TargetId == section.Id,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ListDeletedContentTargets_RequiresProjectMembership()
     {
         var outsider = new ActorContext(
