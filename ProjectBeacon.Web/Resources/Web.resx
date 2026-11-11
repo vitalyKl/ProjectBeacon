@@ -2907,4 +2907,7 @@ No Beacon-hosted coding agent.</value>
 <data name="MarkdownExpand" xml:space="preserve"><value>Show more</value></data>
 <data name="MarkdownCollapse" xml:space="preserve"><value>Show less</value></data>
 <data name="Characters" xml:space="preserve"><value>characters</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>Organization data</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>Download a snapshot of your organization workspace, members, invoices and billing history. Credentials and provider identifiers are excluded.</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>Download organization export (ZIP)</value></data>
 </root>
