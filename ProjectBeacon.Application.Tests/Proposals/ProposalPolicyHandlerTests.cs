@@ -97,7 +97,10 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
                 item.TargetKind == targetKind && item.Operation == ProposalOperation.Delete);
             Assert.True(delete.Supported);
             Assert.False(delete.AutoAllowed);
-            Assert.Contains("manual human review", delete.RestrictionReason, StringComparison.OrdinalIgnoreCase);
+            if (targetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
+                Assert.Contains("Owner/Admin decision", delete.RestrictionReason, StringComparison.OrdinalIgnoreCase);
+            else
+                Assert.Contains("manual human review", delete.RestrictionReason, StringComparison.OrdinalIgnoreCase);
         }
 
         Assert.False(Assert.Single(initial.Value!, item =>
