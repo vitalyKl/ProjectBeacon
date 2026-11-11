@@ -70,13 +70,9 @@ else
         </MudPaper>
     }
 
-    @if (_milestones.Count == 0 && !_showCreateForm)
+    @if (_milestones.Count > 0)
     {
-        <EmptyState>@L["NoMilestones"]</EmptyState>
-    }
-    else
-    {
-    <MudGrid Class="mt-4">
+        <MudGrid Class="mt-4">
         @foreach (var milestone in _milestones.OrderBy(m => m.Order))
         {
             <MudItem xs="12" sm="6" md="4">
@@ -130,7 +126,7 @@ else
                 </MudPaper>
             </MudItem>
         }
-    </MudGrid>
+        </MudGrid>
     }
 
     @if (_deletedMilestones.Count > 0)
