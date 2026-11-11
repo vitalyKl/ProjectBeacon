@@ -231,9 +231,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             ct);
         if (existingByKey is not null)
         {
-            if (SameRequest(existingByKey, command.Request with { RationaleMarkdown = normalizedRationale }, command.Actor, author.TaskId, author.SubtaskId, author.SessionId))
-                return Result.Ok(Map(existingByKey));
-            return Result.Failure<ProposalDto>("IdempotencyKey has already been used for a different proposal.", ErrorKind.Conflict);
+            return await ReturnIdempotentResultAsync(
+                db, existingByKey, command, author, normalizedRationale, ct);
         }
 
         ProposalContentValidation.ProposalTarget? target = null;
@@ -508,18 +507,73 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         var existing = await verify.Proposals.FirstOrDefaultAsync(proposal =>
             proposal.ProjectId == command.ProjectId
             && proposal.IdempotencyKey == normalizedIdempotencyKey, ct);
-        if (existing is not null
-            && SameRequest(existing,
+        if (existing is not null)
+        {
+            var idempotent = await ReturnIdempotentResultAsync(
+                verify, existing, command, author, normalizedRationale, ct);
+            if (idempotent.Success || idempotent.Kind != ErrorKind.Conflict)
+                return idempotent;
+        }
+
+        return Result.Failure<ProposalDto>(
+            "The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.",
+            ErrorKind.Conflict);
+    }
+
+    private async Task<Result<ProposalDto>> ReturnIdempotentResultAsync(
+        IBeaconDb db,
+        Proposal existing,
+        CreateProposalCommand command,
+        ProposalAuthorScope author,
+        string normalizedRationale,
+        CancellationToken ct)
+    {
+        if (!SameRequest(
+                existing,
                 command.Request with { RationaleMarkdown = normalizedRationale },
                 command.Actor,
                 author.TaskId,
                 author.SubtaskId,
                 author.SessionId))
-            return Result.Ok(Map(existing));
+            return Result.Failure<ProposalDto>(
+                "IdempotencyKey has already been used for a different proposal.",
+                ErrorKind.Conflict);
 
-        return Result.Failure<ProposalDto>(
-            "The proposal could not be saved because another request changed the same proposal scope. Refresh and retry.",
-            ErrorKind.Conflict);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (existing.Expire(now))
+        {
+            var orgId = await AcceptProposalHandler.GetOrgIdAsync(db, command.ProjectId, ct);
+            if (orgId is null)
+                return Result.Failure<ProposalDto>("Project not found.");
+
+            var systemActor = new ActorContext(
+                ActorType.Worker, null, false, null, null,
+                command.ProjectId, orgId, ApiTokenCapability.None);
+            _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                systemActor,
+                "proposal.expired",
+                "Proposal",
+                existing.Id.ToString("D"),
+                orgId.Value,
+                command.ProjectId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    newState = ProposalStatus.Expired.ToString()
+                })));
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure<ProposalDto>(
+                    "The proposal changed while its expiry was being recorded. Refresh and retry.",
+                    ErrorKind.Conflict);
+            }
+        }
+
+        return Result.Ok(Map(existing));
     }
 
     private async Task<ProposalAuthorScope> ResolveAuthorAsync(
