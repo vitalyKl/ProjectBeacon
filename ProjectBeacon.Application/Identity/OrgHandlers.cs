@@ -170,7 +170,7 @@ public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<Org
         {
             db = _dbFactory.CreateDbContext();
         }
-        await using (db)
+        await using var dbScope = db;
 
         var query = db.Orgs.Where(org => org.LifecycleStatus == OrganizationLifecycleStatus.Active);
         if (!command.Actor.IsAdmin)
