@@ -785,6 +785,54 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ProjectMemberCannotRestoreAcceptedDecisionHistory()
+    {
+        var decision = Decision.Create(
+            "Governance decision", "Context", "Accepted decision body", _projectId);
+        decision.Accept();
+        _db.Decisions.Add(decision);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, decision, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var acceptedVersion = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Decision
+                && item.TargetId == decision.Id
+                && item.Revision == decision.Revision,
+            TestContext.Current.CancellationToken);
+
+        decision.Deprecate();
+        var deprecated = await writer.SaveAsync(
+            _db, decision, "Human", _actorId.ToString("D"),
+            TestContext.Current.CancellationToken);
+        Assert.True(deprecated.Success, deprecated.Error);
+
+        var member = User.Create(
+            "restore-member", "restore-member@beacon.local", "hash");
+        _db.Users.Add(member);
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, member.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var memberActor = new ActorContext(
+            ActorType.Human, member.Id, false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var result = await CreateRestoreHandler().HandleAsync(
+            new RestoreContentVersionCommand(
+                _projectId,
+                acceptedVersion.Id,
+                decision.Revision,
+                memberActor,
+                ContentTargetKind.Decision,
+                decision.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(DecisionStatus.Deprecated, decision.Status);
+        Assert.Equal(3, decision.Revision);
+    }
+
+    [Fact]
     public async Task DeleteDecisionAndConstraintProposals_TransitionAndRestoreLifecycleStatus()
     {
         var decision = Decision.Create(
@@ -874,7 +922,11 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     private RestoreContentVersionHandler CreateRestoreHandler() =>
-        new(HandlerSqlite.Factory(_connection), new ContentWriter(), new EfAuditWriter());
+        new(
+            HandlerSqlite.Factory(_connection),
+            new ContentWriter(),
+            new EfAuditWriter(),
+            new AuthorizationService());
 
     private ActorContext HumanActor() =>
         new(ActorType.Human, _actorId, false, null, null, _projectId, null, ApiTokenCapability.None);
