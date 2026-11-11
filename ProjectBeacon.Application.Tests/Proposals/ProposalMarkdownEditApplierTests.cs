@@ -203,7 +203,6 @@ public sealed class ProposalMarkdownEditApplierTests
         Assert.False(applied);
         Assert.Equal(Document, result);
         Assert.Contains("## Missing", error);
-        Assert.Contains("Updated security.", result is null ? string.Empty : result);
         Assert.DoesNotContain("Updated security.", result);
     }
 
