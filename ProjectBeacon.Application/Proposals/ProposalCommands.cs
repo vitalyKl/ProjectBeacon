@@ -102,6 +102,9 @@ public sealed record ProposalDto(
 /// </summary>
 public sealed class CreateProposalHandler : ICommandHandler<CreateProposalCommand, Result<ProposalDto>>
 {
+    private static readonly string EmptyCreateBaseHash =
+        Convert.ToHexString(SHA256.HashData(Array.Empty<byte>())).ToLowerInvariant();
+
     private static readonly Regex SecretPattern = new(
         @"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{24,}|bcn_[A-Za-z0-9_-]{24,}|bcd_[A-Za-z0-9_-]{24,})",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -125,10 +128,46 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
     public async Task<Result<ProposalDto>> HandleAsync(CreateProposalCommand command, CancellationToken ct = default)
     {
-        if (command.ProjectId == Guid.Empty || command.Request.TargetId == Guid.Empty)
-            return Result.Failure<ProposalDto>("ProjectId and TargetId are required.");
-        if (command.Request.Operation != ProposalOperation.Update)
-            return Result.Failure<ProposalDto>("Only Update proposals are currently supported.");
+        if (command.ProjectId == Guid.Empty)
+            return Result.Failure<ProposalDto>("ProjectId is required.");
+        if (!Enum.IsDefined(command.Request.Operation) || !Enum.IsDefined(command.Request.TargetKind))
+            return Result.Failure<ProposalDto>("Unknown proposal target or operation.");
+
+        var isCreate = command.Request.Operation == ProposalOperation.Create;
+        if (isCreate)
+        {
+            if (command.Request.TargetKind != ContentTargetKind.Milestone
+                || command.Request.TargetId != Guid.Empty
+                || command.Request.BaseRevision != 0)
+                return Result.Failure<ProposalDto>(
+                    "Create is supported for Milestone only; omit TargetId and use BaseRevision 0.");
+            if (!ProposalContentValidation.TryValidateCreatePayload(
+                    command.Request.TargetKind, command.Request.PayloadJson, out var createError))
+                return Result.Failure<ProposalDto>(createError!);
+        }
+        else
+        {
+            if (command.Request.TargetId == Guid.Empty || command.Request.BaseRevision < 1)
+                return Result.Failure<ProposalDto>("TargetId and a positive BaseRevision are required.");
+            if (command.Request.Operation == ProposalOperation.Delete)
+            {
+                if (command.Request.TargetKind is not (ContentTargetKind.ContextSection
+                    or ContentTargetKind.Decision
+                    or ContentTargetKind.Constraint
+                    or ContentTargetKind.Milestone))
+                    return Result.Failure<ProposalDto>(
+                        "Delete is supported only for ContextSection, Decision, Constraint and Milestone.");
+                if (!ProposalContentValidation.TryValidateDeletePayload(command.Request.PayloadJson, out var deleteError))
+                    return Result.Failure<ProposalDto>(deleteError!);
+            }
+            else if (command.Request.Operation == ProposalOperation.Update
+                && command.Request.TargetKind != ContentTargetKind.RepoPatch
+                && !ProposalContentValidation.TryValidatePayload(
+                    command.Request.TargetKind, command.Request.PayloadJson, out var updateError))
+            {
+                return Result.Failure<ProposalDto>(updateError!);
+            }
+        }
         var normalizedIdempotencyKey = command.Request.IdempotencyKey?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedIdempotencyKey)
             || normalizedIdempotencyKey.Length > Proposal.MaxIdempotencyKeyLength
@@ -140,9 +179,6 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return Result.Failure<ProposalDto>("RationaleMarkdown must contain 1-1000 characters.");
         if (!Enum.IsDefined(command.Request.TargetKind))
             return Result.Failure<ProposalDto>("Unknown proposal target kind.");
-        if (command.Request.TargetKind != ContentTargetKind.RepoPatch
-            && !ProposalContentValidation.TryValidatePayload(command.Request.TargetKind, command.Request.PayloadJson, out var validationError))
-            return Result.Failure<ProposalDto>(validationError!);
         if (SecretPattern.IsMatch(command.Request.PayloadJson)
             || SecretPattern.IsMatch(command.Request.RationaleMarkdown ?? string.Empty))
             return Result.Failure<ProposalDto>("Proposal content appears to contain a credential or private key. Remove secrets before submitting.");
@@ -202,7 +238,12 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         ProposalContentValidation.ProposalTarget? target = null;
         string baseHash;
-        if (command.Request.TargetKind == ContentTargetKind.RepoPatch)
+        var targetId = isCreate ? Guid.CreateVersion7() : command.Request.TargetId;
+        if (isCreate)
+        {
+            baseHash = EmptyCreateBaseHash;
+        }
+        else if (command.Request.TargetKind == ContentTargetKind.RepoPatch)
         {
             if (command.Request.TargetId != command.ProjectId)
                 return Result.Failure<ProposalDto>("RepoPatch TargetId must equal ProjectId.");
@@ -303,7 +344,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 author.SubtaskId,
                 author.SessionId,
                 command.Request.TargetKind,
-                command.Request.TargetId,
+                targetId,
                 command.Request.Operation,
                 command.Request.BaseRevision,
                 baseHash,
@@ -366,7 +407,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                         autoApplyQueued = true;
                     }
                 }
-                else if (proposal.Status == ProposalStatus.Pending)
+                else if (proposal.Status == ProposalStatus.Pending
+                    && proposal.Operation != ProposalOperation.Create)
                 {
                     var latestTarget = await ProposalContentValidation.LoadTargetAsync(
                         db, command.ProjectId, command.Request.TargetKind, command.Request.TargetId, ct);
@@ -416,7 +458,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
                 // A newer proposal from the same Actor supersedes its previous pending
                 // proposal even when the new proposal was accepted by an Auto policy.
-                if ((proposal.Status == ProposalStatus.Pending || autoAccepted || autoApplyQueued)
+                if (proposal.Operation != ProposalOperation.Create
+                    && (proposal.Status == ProposalStatus.Pending || autoAccepted || autoApplyQueued)
                     && author.SubtaskId is { } sourceSubtask)
                 {
                     var previous = await db.Proposals
@@ -547,7 +590,7 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         Guid? subtaskId,
         Guid? sessionId) =>
         existing.TargetKind == request.TargetKind
-        && existing.TargetId == request.TargetId
+        && (request.Operation == ProposalOperation.Create || existing.TargetId == request.TargetId)
         && existing.Operation == request.Operation
         && existing.BaseRevision == request.BaseRevision
         && existing.PayloadJson == request.PayloadJson
@@ -1304,6 +1347,47 @@ internal static class ProposalMapper
 /// <summary>Strict target-specific proposal payload validation and content application.</summary>
 internal static class ProposalContentValidation
 {
+    public static bool TryValidateCreatePayload(ContentTargetKind kind, string? payload, out string? error)
+    {
+        error = null;
+        try
+        {
+            Proposal.ValidatePayload(payload);
+            using var document = JsonDocument.Parse(payload!);
+            var root = document.RootElement;
+            if (kind != ContentTargetKind.Milestone)
+                throw new ArgumentException("Only Milestone creation proposals are supported.");
+            Exact(root, "name", "description", "order");
+            Required(root, "name", 200);
+            Optional(root, "description", 5_000);
+            if (!root.GetProperty("order").TryGetInt32(out _))
+                throw new ArgumentException("Milestone order must be an integer.");
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+        {
+            error = exception.Message;
+            return false;
+        }
+    }
+
+    public static bool TryValidateDeletePayload(string? payload, out string? error)
+    {
+        error = null;
+        try
+        {
+            Proposal.ValidatePayload(payload);
+            using var document = JsonDocument.Parse(payload!);
+            Exact(document.RootElement);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+        {
+            error = exception.Message;
+            return false;
+        }
+    }
+
     public static bool TryValidatePayload(ContentTargetKind kind, string? payload, out string? error)
     {
         error = null;
