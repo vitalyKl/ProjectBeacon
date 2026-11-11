@@ -320,6 +320,37 @@ public sealed class OrganizationDataExportTests : IDisposable
     }
 
     [Fact]
+    public async Task CanExportAsync_RequiresOwnerOrAdminMembership()
+    {
+        var owner = User.Create("export-owner", "export-owner@example.test", "hash");
+        var admin = User.Create("export-admin", "export-admin@example.test", "hash");
+        var member = User.Create("export-member", "export-member@example.test", "hash");
+        var org = Org.Create("Export permissions org");
+        _db.Users.AddRange(owner, admin, member);
+        _db.Orgs.Add(org);
+        _db.OrgMembers.AddRange(
+            OrgMember.Create(org.Id, owner.Id, MemberRole.Owner),
+            OrgMember.Create(org.Id, admin.Id, MemberRole.Admin),
+            OrgMember.Create(org.Id, member.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _unscoped.Dispose();
+        _scopeDisposed = true;
+
+        var factory = HandlerSqlite.Factory(_connection);
+        var exporter = new EfOrganizationDataExportService(
+            factory,
+            new AuthorizationService(),
+            new EfAuditWriter(),
+            new DatabaseAttachmentService(factory),
+            TimeProvider.System);
+
+        Assert.True(await exporter.CanExportAsync(org.Id, Human(owner.Id), TestContext.Current.CancellationToken));
+        Assert.True(await exporter.CanExportAsync(org.Id, Human(admin.Id), TestContext.Current.CancellationToken));
+        Assert.False(await exporter.CanExportAsync(org.Id, Human(member.Id), TestContext.Current.CancellationToken));
+        Assert.False(await exporter.CanExportAsync(org.Id, Human(Guid.NewGuid()), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Export_RejectsHumanWithoutOrganizationAdminMembership()
     {
         var owner = User.Create("owner", "owner@denied.test", "hash");
