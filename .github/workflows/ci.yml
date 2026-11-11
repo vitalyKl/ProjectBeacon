@@ -82,7 +82,7 @@ jobs:
         timeout-minutes: 8
         run: |
           mkdir -p TestResults/ProjectBeacon.Cli.Tests
-          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -result-trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
