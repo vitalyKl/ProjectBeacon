@@ -83,8 +83,8 @@ public sealed class BootstrapHandlerTests : IDisposable
             firstHandler.HandleAsync(BootstrapToken, TestContext.Current.CancellationToken),
             secondHandler.HandleAsync(BootstrapToken, TestContext.Current.CancellationToken));
 
-        Assert.Single(results.Where(result => result.Success));
-        var rejected = Assert.Single(results.Where(result => !result.Success));
+        Assert.Single(results, result => result.Success);
+        var rejected = Assert.Single(results, result => !result.Success);
         Assert.Equal(ErrorKind.Conflict, rejected.Kind);
         Assert.Equal(1, await _db.Users.IgnoreQueryFilters()
             .CountAsync(user => user.IsAdmin, TestContext.Current.CancellationToken));
