@@ -140,13 +140,16 @@ public sealed class RateLimitPartitioningHttpTests
         Assert.Equal(HttpStatusCode.TooManyRequests, (await PostAsync(client, null)).StatusCode);
     }
 
-    private static async Task<WebApplication> BuildAppAsync(string remoteIp = ProxyIp, int attachmentUploadPermitLimit = 10)
+    private static async Task<WebApplication> BuildAppAsync(
+        string remoteIp = ProxyIp,
+        int attachmentUploadPermitLimit = 10)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
         builder.Configuration["ForwardedHeaders:KnownNetworks:0"] = $"{ProxyIp}/32";
-        builder.Services.AddRateLimiter(options => AuthRateLimiter.Configure(options, 5, 60, 5, attachmentUploadPermitLimit));
+        builder.Services.AddRateLimiter(options => AuthRateLimiter.Configure(
+            options, 5, 60, 5, attachmentUploadPermitLimit));
 
         var app = builder.Build();
 
