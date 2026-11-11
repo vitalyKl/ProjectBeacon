@@ -37,7 +37,7 @@ public sealed class DockerEngineLogReaderTests
 
         Assert.NotNull(response);
         Assert.Equal(PlatformLogTarget.Web, response.Service);
-        Assert.Equal("/beacon-alpha-web-1", response.ContainerName);
+        Assert.Equal("beacon-alpha-web-1", response.ContainerName);
         Assert.Equal(new[] { "web-two", "web-three" }, response.Entries.Select(entry => entry.Message));
         Assert.Equal(new[] { "stderr", "stdout" }, response.Entries.Select(entry => entry.Stream));
         Assert.Single(handler.Requests.Where(request => request.RequestUri!.AbsolutePath.EndsWith("/logs", StringComparison.Ordinal)));
