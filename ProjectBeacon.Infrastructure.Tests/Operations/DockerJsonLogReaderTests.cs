@@ -46,6 +46,24 @@ public sealed class DockerEngineLogReaderTests
     }
 
     [Fact]
+    public async Task DockerEngineReader_RejectsTruncatedMultiplexedFramePayload()
+    {
+        var id = new string('e', 64);
+        var header = new byte[8];
+        header[0] = 1;
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4, 4), 16);
+        var truncatedFrame = header.Concat(new byte[] { 0x32, 0x30, 0x32 }).ToArray();
+        var handler = new FakeDockerEngineHandler(
+            [Container(id, "beacon-alpha", "web", "/beacon-alpha-web-1", "running")],
+            [],
+            truncatedFrame);
+        var reader = CreateReader(new HttpClient(handler) { BaseAddress = new Uri("http://docker") });
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            reader.ReadAsync(PlatformLogTarget.Web, 10, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task DockerEngineReader_ReturnsNullWhenNoContainerHasTheAllowlistedProjectLabel()
     {
         var id = new string('d', 64);
@@ -143,7 +161,8 @@ public sealed class DockerEngineLogReaderTests
 
     private sealed class FakeDockerEngineHandler(
         object[] containers,
-        (string Message, string Timestamp, byte StreamType)[] logs) : HttpMessageHandler
+        (string Message, string Timestamp, byte StreamType)[] logs,
+        byte[]? rawLogPayload = null) : HttpMessageHandler
     {
         public List<HttpRequestMessage> Requests { get; } = [];
 
@@ -164,7 +183,7 @@ public sealed class DockerEngineLogReaderTests
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StreamContent(new MemoryStream(BuildFrames(logs)))
+                    Content = new StreamContent(new MemoryStream(rawLogPayload ?? BuildFrames(logs)))
                 });
             }
 
