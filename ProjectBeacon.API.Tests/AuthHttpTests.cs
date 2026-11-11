@@ -157,6 +157,55 @@ public sealed class AuthHttpTests
     }
 
     [Fact]
+    public async Task GenerateReport_UsesAuthenticatedActorInsteadOfBodySuppliedCreator()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        Guid adminId;
+        using (TenantScope.EnterUnscoped())
+            adminId = await db.Users.Where(user => user.IsAdmin)
+                .Select(user => user.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+
+        using var orgResponse = await client.PostAsJsonAsync(
+            "/v1/orgs",
+            new { name = "Report attribution" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        orgResponse.EnsureSuccessStatusCode();
+        var org = await orgResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var orgId = org.GetProperty("id").GetGuid();
+
+        using var projectResponse = await client.PostAsJsonAsync(
+            "/v1/projects",
+            new { name = "Attribution test", orgId },
+            cancellationToken: TestContext.Current.CancellationToken);
+        projectResponse.EnsureSuccessStatusCode();
+        var project = await projectResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var forgedCreatorId = Guid.NewGuid();
+        using var reportResponse = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId:D}/reports",
+            new
+            {
+                createdByType = "system",
+                createdById = forgedCreatorId.ToString("D")
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, reportResponse.StatusCode);
+
+        var report = await reportResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal("user", report.GetProperty("createdByType").GetString());
+        Assert.Equal(adminId.ToString("D"), report.GetProperty("createdById").GetString());
+        Assert.NotEqual(forgedCreatorId.ToString("D"), report.GetProperty("createdById").GetString());
+    }
+
+    [Fact]
     public async Task Register_Open_CreatesUser()
     {
         await using var factory = new AuthApiFactory();
