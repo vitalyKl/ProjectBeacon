@@ -33,6 +33,10 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
         var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<MilestoneDto>("Project not found.");
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(
+                db, actor, command.Request.ProjectId, ct))
+            return Result.Forbidden<MilestoneDto>("Project membership is required to create a milestone.");
 
         var milestone = Domain.Entities.Roadmap.Milestone.Create(
             command.Request.Name,
@@ -75,8 +79,13 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.");
+        if (milestone is null
+            || (command.Request.ProjectId is { } expectedProjectId
+                && milestone.ProjectId != expectedProjectId))
+            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
+            return Result.Forbidden<MilestoneDto>("Project membership is required to update a milestone.");
 
         var contentChanged =
             (command.Request.Name is not null && !string.Equals(milestone.Name, command.Request.Name, StringComparison.Ordinal))
@@ -235,8 +244,13 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.");
+        if (milestone is null
+            || (command.Request.ProjectId is { } expectedProjectId
+                && milestone.ProjectId != expectedProjectId))
+            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
+            return Result.Forbidden<MilestoneDto>("Project membership is required to close a milestone.");
         var previousRevision = milestone.Revision;
         milestone.Close();
         if (milestone.Revision != previousRevision)
@@ -273,8 +287,13 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.");
+        if (milestone is null
+            || (command.Request.ProjectId is { } expectedProjectId
+                && milestone.ProjectId != expectedProjectId))
+            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
+            return Result.Forbidden<MilestoneDto>("Project membership is required to reopen a milestone.");
         var previousRevision = milestone.Revision;
         milestone.Reopen();
         if (milestone.Revision != previousRevision)
