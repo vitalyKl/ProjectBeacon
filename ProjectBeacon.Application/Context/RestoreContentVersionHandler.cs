@@ -116,6 +116,7 @@ public sealed class RestoreContentVersionHandler
         var changed = false;
         var currentRevision = 0;
         var restoredTaskLinks = 0;
+        Guid[]? milestoneTaskIds = null;
 
         try
         {
@@ -292,6 +293,7 @@ public sealed class RestoreContentVersionHandler
                                     .ToListAsync(ct);
                                 foreach (var task in tasksToRelink)
                                     task.SetMilestone(milestone.Id);
+                                milestoneTaskIds = tasksToRelink.Select(task => task.Id).ToArray();
                                 restoredTaskLinks = tasksToRelink.Count;
                             }
 
@@ -311,6 +313,11 @@ public sealed class RestoreContentVersionHandler
                             HasSnapshotProperty(source.ContentJson, "closedAt")
                                 ? snapshot.ClosedAt
                                 : milestone.ClosedAt);
+                        milestoneTaskIds = await db.Tasks
+                            .Where(task => task.ProjectId == command.ProjectId
+                                && task.MilestoneId == milestone.Id)
+                            .Select(task => task.Id)
+                            .ToArrayAsync(ct);
                         target = milestone;
                         changed = milestone.Revision != currentRevision;
                         break;
@@ -393,7 +400,8 @@ public sealed class RestoreContentVersionHandler
         }
 
         var saved = await _contentWriter.SaveAsync(
-            db, target, attribution.Type ?? "Human", attribution.Id, ct);
+            db, target, attribution.Type ?? "Human", attribution.Id, ct,
+            milestoneTaskIds: milestoneTaskIds);
         if (!saved.Success)
             return Result.Failure<RestoreContentVersionDto>(
                 saved.Error ?? "Content restore conflict.", ErrorKind.Conflict);
