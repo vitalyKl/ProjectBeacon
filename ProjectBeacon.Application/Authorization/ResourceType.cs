@@ -24,6 +24,9 @@ public enum ResourceType
     WorkstationCommand,
     ProjectRuntime,
     ModelBackend,
+    AgentTemplate,
+    McpConfiguration,
+    WorkstationConfiguration,
     EvalRun,
     Work,
 }
