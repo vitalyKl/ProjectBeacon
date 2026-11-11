@@ -217,6 +217,55 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public async Task Inbox_ContextSectionFullUpdate_RendersTitleAndBodyChangesWithoutJsonFieldNames()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var section = ContextSection.Create(
+            "operations",
+            "Current operations",
+            "Existing runbook text.",
+            projectId,
+            ContextScopeType.Project,
+            key: "operations");
+        section.MarkReviewed(userId.ToString("D"));
+        DbContext.ContextSections.Add(section);
+        new ContentWriter().AddVersion(
+            DbContext, section, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var baseVersion = await DbContext.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id,
+            CancellationToken.None);
+        var baseHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
+        var proposal = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.ContextSection, section.Id,
+            ProposalOperation.Update, section.Revision, baseHash,
+            """{"title":"Updated operations","bodyMarkdown":"Updated runbook text."}""",
+            "Updates the operations title and runbook.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-context-title-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+        DbContext.Proposals.Add(proposal);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.Find("[data-testid='compare-base-revision'] button").Click();
+
+        var removed = cut.Find(".proposal-diff-line.is-removed").TextContent;
+        var added = cut.Find(".proposal-diff-line.is-added").TextContent;
+        Assert.Contains("Current operations", removed);
+        Assert.Contains("Existing runbook text.", removed);
+        Assert.Contains("Updated operations", added);
+        Assert.Contains("Updated runbook text.", added);
+        Assert.DoesNotContain("**bodyMarkdown**", cut.Markup);
+        Assert.DoesNotContain("**title**", cut.Markup);
+    }
+
+    [Fact]
     public async Task Inbox_DeleteProposal_AcceptsWithoutSendingEditedPayload()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
