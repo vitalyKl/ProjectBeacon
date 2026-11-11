@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Tests;
 
 using Application;
+using Application.Authorization;
 using Application.Auth;
 using Application.Devices;
 using Application.Persistence;
@@ -30,6 +31,9 @@ public sealed class ExecutionStrategyPostgresTests : IClassFixture<PostgresFixtu
     private readonly PostgresFixture _postgres;
 
     public ExecutionStrategyPostgresTests(PostgresFixture postgres) => _postgres = postgres;
+
+    private static ActorContext WorkActor(Guid userId) => new(
+        ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
 
     private ServiceProvider BuildProvider()
     {
@@ -88,8 +92,7 @@ public sealed class ExecutionStrategyPostgresTests : IClassFixture<PostgresFixtu
         var handler = scope.ServiceProvider.GetRequiredService<FinishWorkHandler>();
 
         var result = await handler.HandleAsync(
-            new FinishWorkCommand(new FinishWorkRequest(
-                taskId.ToString(), "skipped", "verification output", userId.ToString())),
+            new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "verification output"), WorkActor(userId)),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
@@ -239,8 +242,7 @@ public sealed class ExecutionStrategyPostgresTests : IClassFixture<PostgresFixtu
         var handler = scope.ServiceProvider.GetRequiredService<FinishWorkHandler>();
 
         var result = await handler.HandleAsync(
-            new FinishWorkCommand(new FinishWorkRequest(
-                taskId.ToString(), "skipped", "verification output", userId.ToString())),
+            new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "verification output"), WorkActor(userId)),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
