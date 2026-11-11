@@ -9,14 +9,21 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Operations;
+using ProjectBeacon.Application.Authorization;
+using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Infrastructure.Data;
 
 public sealed class HttpPlatformContainerLogClient(
     HttpClient httpClient,
     IConfiguration configuration,
     TimeProvider timeProvider,
-    ILogger<HttpPlatformContainerLogClient> logger) : IPlatformContainerLogClient
+    ILogger<HttpPlatformContainerLogClient> logger,
+    IBeaconDbFactory dbFactory,
+    IAuditWriter auditWriter) : IPlatformContainerLogClient
 {
     private const int MaximumTail = 500;
     private const string TimestampHeader = "X-Beacon-Ops-Timestamp";
@@ -107,10 +114,25 @@ public sealed class HttpPlatformContainerLogClient(
 
             var payload = await response.Content.ReadFromJsonAsync<PlatformContainerLogResponse>(
                 JsonOptions, ct);
-            return payload is null
-                ? Result.Failure<PlatformContainerLogResponse>(
-                    "The operations log agent returned an empty response.", ErrorKind.Unavailable)
-                : Result.Ok(payload);
+            if (payload is null)
+                return Result.Failure<PlatformContainerLogResponse>(
+                    "The operations log agent returned an empty response.", ErrorKind.Unavailable);
+
+            try
+            {
+                await RecordAccessAsync(actor, service, payload.ReturnedLines, ct);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception,
+                    "Could not audit a container-log read for {Service}; withholding the log response.",
+                    service);
+                return Result.Failure<PlatformContainerLogResponse>(
+                    "The container-log access could not be audited, so the response was withheld.",
+                    ErrorKind.Unavailable);
+            }
+
+            return Result.Ok(payload);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -127,4 +149,37 @@ public sealed class HttpPlatformContainerLogClient(
             CryptographicOperations.ZeroMemory(secret);
         }
     }
+    private async Task RecordAccessAsync(
+        AdminActor actor,
+        PlatformLogTarget service,
+        int returnedLines,
+        CancellationToken ct)
+    {
+        using var unscoped = TenantScope.EnterUnscoped();
+        await using var db = dbFactory.CreateDbContext();
+        var actorContext = new ActorContext(
+            ActorType.Human,
+            actor.UserId,
+            IsAdmin: false,
+            TokenId: null,
+            DeviceId: null,
+            ProjectId: null,
+            OrgId: null,
+            Capabilities: ApiTokenCapability.None);
+        var details = JsonSerializer.Serialize(new
+        {
+            scope = "tail",
+            count = returnedLines
+        }, JsonOptions);
+        auditWriter.Stage(db, AuditEventFactory.ForActor(
+            actorContext,
+            "platform.container_logs.read",
+            "ContainerLogs",
+            service.ToString(),
+            null,
+            null,
+            detailsJson: details));
+        await db.SaveChangesAsync(ct);
+    }
+
 }
