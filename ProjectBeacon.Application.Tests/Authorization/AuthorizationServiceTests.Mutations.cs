@@ -260,7 +260,7 @@ public sealed partial class AuthorizationServiceTests
     public void HasCapability_UnknownOrEmptyRequirement_ReturnsFalse()
     {
         Assert.False(_auth.HasCapability(Human(Guid.NewGuid()), ApiTokenCapability.None));
-        Assert.False(_auth.HasCapability(Token(ApiTokenCapability.Admin), (ApiTokenCapability)1L << 20));
+        Assert.False(_auth.HasCapability(Token(ApiTokenCapability.Admin), (ApiTokenCapability)(1L << 20)));
     }
 
     [Fact]
