@@ -82,6 +82,18 @@ app.MapGet("/internal/v1/logs/{service}", async (
             title: "Docker Engine returned an unsupported log stream.",
             statusCode: StatusCodes.Status502BadGateway);
     }
+    catch (System.Text.Json.JsonException)
+    {
+        return Results.Problem(
+            title: "Docker Engine returned an invalid container response.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (TaskCanceledException)
+    {
+        return Results.Problem(
+            title: "Docker Engine log retrieval timed out.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 }).WithName("GetAllowlistedContainerLogs");
 
 app.Run();
