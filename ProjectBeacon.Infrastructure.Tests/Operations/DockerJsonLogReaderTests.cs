@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Tests.Operations;
 
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -107,6 +108,24 @@ public sealed class DockerEngineLogReaderTests
     }
 
     [Fact]
+    public void DockerLogProxyReplayNonceStore_EnforcesHardCapacityAndReclaimsExpiredNonces()
+    {
+        var store = new ProjectBeacon.DockerLogProxy.ReplayNonceStore();
+        var now = DateTimeOffset.Parse("2026-11-11T08:00:00Z");
+        for (var i = 0; i < 8192; i++)
+            Assert.True(store.TryAccept(CreateNonce(i), now));
+
+        // A rejected request at capacity must not consume a slot.
+        Assert.False(store.TryAccept(CreateNonce(8192), now.AddSeconds(10)));
+
+        // The first replay window expires; all capacity must be available again.
+        var nextWindow = now.AddSeconds(61);
+        for (var i = 0; i < 8192; i++)
+            Assert.True(store.TryAccept(CreateNonce(10_000 + i), nextWindow));
+        Assert.False(store.TryAccept(CreateNonce(20_000), nextWindow));
+    }
+
+    [Fact]
     public void DockerLogProxyReplayNonceStore_RejectsDuplicateNonces()
     {
         var store = new ProjectBeacon.DockerLogProxy.ReplayNonceStore();
@@ -115,6 +134,22 @@ public sealed class DockerEngineLogReaderTests
 
         Assert.True(store.TryAccept(nonce, now));
         Assert.False(store.TryAccept(nonce, now.AddSeconds(1)));
+    }
+
+    [Fact]
+    public void OpsAgentReplayNonceStore_EnforcesHardCapacityAndReclaimsExpiredNonces()
+    {
+        var store = new OpsAgentReplayNonceStore();
+        var now = DateTimeOffset.Parse("2026-11-11T08:00:00Z");
+        for (var i = 0; i < 8192; i++)
+            Assert.True(store.TryAccept(CreateNonce(i), now));
+
+        Assert.False(store.TryAccept(CreateNonce(8192), now.AddSeconds(10)));
+
+        var nextWindow = now.AddSeconds(61);
+        for (var i = 0; i < 8192; i++)
+            Assert.True(store.TryAccept(CreateNonce(10_000 + i), nextWindow));
+        Assert.False(store.TryAccept(CreateNonce(20_000), nextWindow));
     }
 
     [Fact]
@@ -127,6 +162,9 @@ public sealed class DockerEngineLogReaderTests
         Assert.True(store.TryAccept(nonce, now));
         Assert.False(store.TryAccept(nonce, now.AddSeconds(1)));
     }
+
+    private static string CreateNonce(int value) =>
+        value.ToString("x32", CultureInfo.InvariantCulture);
 
     private static DockerEngineLogReader CreateReader(HttpClient client)
     {
