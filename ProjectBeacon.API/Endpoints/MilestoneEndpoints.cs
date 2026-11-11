@@ -130,10 +130,10 @@ public static class MilestoneEndpoints
 
     private static async Task<IResult> GetMilestone(
         Guid milestoneId,
-        Guid? projectId,
         HttpContext context,
         GetMilestoneHandler handler,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid? projectId = null)
     {
         var result = await handler.HandleAsync(
             new GetMilestoneCommand(
