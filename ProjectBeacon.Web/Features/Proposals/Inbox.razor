@@ -509,7 +509,7 @@ else
             using var document = JsonDocument.Parse(payload);
             if (document.RootElement.TryGetProperty("edits", out var edits))
             {
-                var baseMarkdown = ExtractMarkdown(baseSnapshot);
+                var baseMarkdown = ExtractContextSectionBody(baseSnapshot);
                 return ProposalMarkdownEditApplier.TryApply(
                         baseMarkdown, edits, out var result, out var error)
                     ? result
@@ -522,6 +522,22 @@ else
         }
 
         return ExtractMarkdown(payload);
+    }
+
+    private static string ExtractContextSectionBody(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty("bodyMarkdown", out var body)
+                && body.ValueKind == JsonValueKind.String
+                ? body.GetString() ?? string.Empty
+                : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private static string ExtractMarkdown(string json)
