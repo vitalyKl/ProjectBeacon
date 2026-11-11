@@ -23,7 +23,7 @@ public sealed class OpsAgentOptions
     public string ComposeProject { get; }
     public byte[] SharedSecret { get; }
     public int MaximumTail => 500;
-    public int MaximumContainers => 5;
+    public int MaximumContainers => 2;
     public long MaximumLogFileBytes => 10L * 1024 * 1024;
 
     public static OpsAgentOptions FromConfiguration(IConfiguration configuration)
