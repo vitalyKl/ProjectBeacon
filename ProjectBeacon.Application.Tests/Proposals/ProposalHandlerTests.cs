@@ -536,6 +536,90 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ContextSectionHeadingEdits_AreAppliedAgainstTheProposalBaseRevision()
+    {
+        var section = ContextSection.Create(
+            "architecture",
+            "Architecture",
+            "# Architecture\n\nOverview.\n\n## Security\n\nOld security details.\n\n## Operations\n\nOperational details.",
+            _projectId,
+            ContextScopeType.Project,
+            key: "architecture");
+        section.MarkReviewed(_userId.ToString("D"));
+        _db.ContextSections.Add(section);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, section, "Human", _userId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var baseRevision = section.Revision;
+
+        var payload = """
+            {
+              "edits": [
+                {
+                  "heading": "## Security",
+                  "op": "replace",
+                  "content": "Reviewed security details.\n\n### Verification\n\nVerify all trust boundaries."
+                },
+                {
+                  "heading": "## Operations",
+                  "op": "insert_after",
+                  "content": "## Recovery\n\nDocument the recovery process."
+                }
+              ]
+            }
+            """;
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    new CreateProposalRequest(
+                        ContentTargetKind.ContextSection,
+                        section.Id,
+                        ProposalOperation.Update,
+                        baseRevision,
+                        payload,
+                        "Updates security guidance and adds recovery instructions.",
+                        "context-heading-edits-" + Guid.NewGuid().ToString("N")),
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        Assert.Equal(ProposalStatus.Pending, created.Value!.Status);
+
+        var accepted = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                writer)
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, created.Value.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(baseRevision + 1, accepted.Value.AppliedRevision);
+
+        await _db.Entry(section).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("## Security", section.BodyMarkdown);
+        Assert.Contains("Reviewed security details.", section.BodyMarkdown);
+        Assert.Contains("### Verification", section.BodyMarkdown);
+        Assert.DoesNotContain("Old security details.", section.BodyMarkdown);
+        Assert.Contains("## Operations", section.BodyMarkdown);
+        Assert.Contains("## Recovery", section.BodyMarkdown);
+        Assert.Contains("Document the recovery process.", section.BodyMarkdown);
+        Assert.Equal(baseRevision + 1, section.Revision);
+
+        var history = await _db.ContentVersions
+            .Where(item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id)
+            .OrderBy(item => item.Revision)
+            .Select(item => item.Revision)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { baseRevision, baseRevision + 1 }, history);
+    }
+
+    [Fact]
     public async Task ProjectMemberCanCreateListAndAcceptOrdinaryProposal()
     {
         var member = User.Create("proposal-member", "proposal-member@beacon.local", "hash");
