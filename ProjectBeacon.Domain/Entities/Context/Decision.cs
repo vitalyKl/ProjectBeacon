@@ -69,7 +69,36 @@ public class Decision : Entity, IProjectScoped
 
     public void Deprecate()
     {
+        if (Status == DecisionStatus.Deprecated)
+            return;
         Status = DecisionStatus.Deprecated;
+        Revision++;
+    }
+
+    /// <summary>Restores content and lifecycle status from a historical snapshot as a new revision.</summary>
+    public void RestoreFromHistory(
+        string title,
+        string context,
+        string decisionBody,
+        string? consequences,
+        DecisionStatus status,
+        Guid? supersededById)
+    {
+        if (string.Equals(Title, title, StringComparison.Ordinal)
+            && string.Equals(Context, context, StringComparison.Ordinal)
+            && string.Equals(DecisionBody, decisionBody, StringComparison.Ordinal)
+            && string.Equals(Consequences, consequences, StringComparison.Ordinal)
+            && Status == status
+            && SupersededById == supersededById)
+            return;
+
+        Title = title;
+        Context = context;
+        DecisionBody = decisionBody;
+        Consequences = consequences;
+        Status = status;
+        SupersededById = supersededById;
+        Revision++;
     }
 
     public void AddRelatedTask(Guid taskId)
