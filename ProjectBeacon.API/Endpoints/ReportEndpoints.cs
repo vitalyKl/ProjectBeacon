@@ -25,11 +25,14 @@ public static class ReportEndpoints
 
     private static async Task<IResult> Generate(Guid projectId, [FromBody] GenerateReportBody? body, HttpContext ctx, GenerateReportHandler handler)
     {
+        // Attribution is security metadata, not report content. Never accept it from the
+        // request body: a caller must not be able to forge another user's authorship.
         var actor = ctx.GetActor();
-        var createdByType = string.IsNullOrWhiteSpace(body?.CreatedByType) ? "user" : body.CreatedByType;
-        var createdById = body?.CreatedById ?? actor.UserId?.ToString() ?? string.Empty;
+        if (!actor.IsHuman || actor.UserId is not { } userId)
+            return ProblemResults.Unauthorized();
+
         var result = await handler.HandleAsync(new GenerateReportCommand(
-            new GenerateReportRequest(projectId, createdByType, createdById)));
+            new GenerateReportRequest(projectId, "user", userId.ToString())));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/reports/{result.Value!.Id}", result.Value)
             : result.FromResult();
@@ -57,6 +60,6 @@ public static class ReportEndpoints
             : result.FromResult(404);
     }
 
-    /// <summary>Optional JSON body for <c>POST /v1/projects/{projectId:guid}/reports</c>. Omitted ids fall back to the actor.</summary>
+    /// <summary>Legacy optional JSON body for <c>POST /v1/projects/{projectId:guid}/reports</c>. Creator fields are ignored; attribution is always server-derived.</summary>
     public record GenerateReportBody(string? CreatedByType, string? CreatedById);
 }
