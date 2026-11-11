@@ -318,7 +318,7 @@ public sealed class RestoreContentVersionHandler
 
     private static Result<RestoreContentVersionDto> MissingTargetFailure() =>
         Result.Failure<RestoreContentVersionDto>(
-            "The content target no longer exists. Recreating deleted targets is not supported.");
+            "The content target no longer exists and has no matching latest deletion snapshot to restore.");
 
     private static Result<RestoreContentVersionDto> RevisionConflictFailure() =>
         Result.Failure<RestoreContentVersionDto>(
