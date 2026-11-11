@@ -49,7 +49,9 @@ public class FinishWorkHandler
             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
         if (task is null)
-            return Result.Failure("Task not found.");
+            return command.Actor.IsApiToken
+                ? Result.Forbidden()
+                : Result.Failure("Task not found.", ErrorKind.NotFound);
 
         var permission = command.Actor.IsWorker
             ? WorkerHasAccess(command.WorkerToken)
