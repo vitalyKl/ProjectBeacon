@@ -21,7 +21,7 @@ public static class MilestoneEndpoints
     public static IEndpointRouteBuilder MapMilestoneEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateProjectMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteProjectMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -48,6 +48,24 @@ public static class MilestoneEndpoints
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value!.Id}", MapMilestoneResponse(result.Value!))
             : result.FromResult();
+    }
+
+    private static async Task<IResult> UpdateProjectMilestone(
+        Guid projectId,
+        Guid milestoneId,
+        [FromBody] UpdateMilestoneRequest request,
+        HttpContext context,
+        UpdateMilestoneHandler handler)
+    {
+        if (milestoneId != request.MilestoneId)
+            return ProblemResults.Bad("MilestoneId mismatch.");
+
+        var scopedRequest = request with { ProjectId = projectId };
+        var result = await handler.HandleAsync(new UpdateMilestoneCommand(scopedRequest, context.GetActor()));
+
+        return result.Success
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> UpdateMilestone(
@@ -111,17 +129,27 @@ public static class MilestoneEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> CloseMilestone(Guid projectId, Guid milestoneId, CloseMilestoneHandler handler)
+    private static async Task<IResult> CloseMilestone(
+        Guid projectId,
+        Guid milestoneId,
+        HttpContext context,
+        CloseMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new CloseMilestoneCommand(
+            new CloseMilestoneRequest(milestoneId, projectId), context.GetActor()));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ReopenMilestone(Guid projectId, Guid milestoneId, ReopenMilestoneHandler handler)
+    private static async Task<IResult> ReopenMilestone(
+        Guid projectId,
+        Guid milestoneId,
+        HttpContext context,
+        ReopenMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new ReopenMilestoneCommand(
+            new ReopenMilestoneRequest(milestoneId, projectId), context.GetActor()));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
