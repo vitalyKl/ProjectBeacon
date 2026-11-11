@@ -915,8 +915,19 @@ public sealed class AcceptProposalHandler
 
                 var appliedRevision = ProposalContentValidation.GetRevision(target.Entity);
                 if (proposal.Operation != ProposalOperation.Delete && appliedRevision != target.Revision)
-                    _contentWriter.AddVersion(db, target.Entity, changedByType, changedById,
-                        proposalId: proposal.Id);
+                {
+                    var milestoneTaskIds = target.Entity is Milestone milestoneTarget
+                        ? await db.Tasks
+                            .Where(task => task.ProjectId == proposal.ProjectId
+                                && task.MilestoneId == milestoneTarget.Id)
+                            .Select(task => task.Id)
+                            .ToArrayAsync(ct)
+                        : null;
+                    _contentWriter.AddVersion(
+                        db, target.Entity, changedByType, changedById,
+                        proposalId: proposal.Id,
+                        milestoneTaskIds: milestoneTaskIds);
+                }
 
                 proposal.Accept(command.Actor.UserId.Value, appliedRevision,
                     proposal.Operation == ProposalOperation.Delete ? null : command.AcceptedPayloadJson,
