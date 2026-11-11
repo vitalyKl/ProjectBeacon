@@ -210,8 +210,10 @@ else
                                             <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
                                             <MudPaper Elevation="0" Outlined="true" Class="pa-2 proposal-diff">
                                                 @{
+                                                    var baseMarkdown = ExtractSnapshotMarkdown(
+                                                        baseSnapshot, proposal.TargetKind);
                                                     var diff = BuildProposalDiff(
-                                                        ExtractMarkdown(baseSnapshot),
+                                                        baseMarkdown,
                                                         ExtractProposedMarkdown(baseSnapshot, proposal));
                                                 }
                                                 @if (diff.Count == 0)
@@ -231,7 +233,7 @@ else
                                             <MudGrid Spacing="2">
                                                 <MudItem xs="12" md="6">
                                                     <MudText Typo="Typo.subtitle2">@L["BaseRevision"]</MudText>
-                                                    <MarkdownView Text="@ExtractMarkdown(baseSnapshot)" MaxHeight="220" />
+                                                    <MarkdownView Text="@ExtractSnapshotMarkdown(baseSnapshot, proposal.TargetKind)" MaxHeight="220" />
                                                 </MudItem>
                                                 <MudItem xs="12" md="6">
                                                     <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
@@ -540,6 +542,11 @@ else
             return string.Empty;
         }
     }
+
+    private static string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
+        targetKind == ContentTargetKind.ContextSection
+            ? ExtractContextSectionBody(json)
+            : ExtractMarkdown(json);
 
     private static string ExtractMarkdown(string json)
     {
