@@ -142,7 +142,7 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/verdict", _taskId));
-        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/approve", _taskId));
 
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
