@@ -152,5 +152,13 @@ public sealed class ConstraintHandlerTests : IDisposable
         var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection), new AuthorizationService()).HandleAsync(created.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(rejected.Success);
         Assert.Equal(ConstraintStatus.Rejected, rejected.Value!.Status);
+        Assert.Equal(3, rejected.Value.Revision);
+
+        var history = await _db.ContentVersions
+            .Where(item => item.TargetKind == ContentTargetKind.Constraint && item.TargetId == created.Value.Id)
+            .OrderBy(item => item.Revision)
+            .Select(item => item.Revision)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2, 3 }, history);
     }
 }
