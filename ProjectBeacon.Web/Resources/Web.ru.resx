@@ -2610,6 +2610,9 @@
   <data name="ProposalInbox" xml:space="preserve">
     <value>Входящие предложения</value>
   </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>Новая цель</value>
+  </data>
   <data name="ShellHintProposalInbox" xml:space="preserve">
     <value>Проверка предложений и изменений проектной базы знаний.</value>
   </data>
