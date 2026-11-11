@@ -373,4 +373,4 @@ The Control Plane Web host signs requests to the private `ops-agent`. The agent 
 
 Container log access is available in Control Plane **Operations** only to operators with both `OperationsRead` and `ContainerLogsRead`. Successful reads append `platform.container_logs.read` to the platform audit journal before the response is returned. PostgreSQL, Caddy and arbitrary container logs are not exposed. Log lines may contain customer data or secrets; use the viewer only for incident response.
 
-The Compose file assumes Docker's default socket path `/var/run/docker.sock` and Compose project name `beacon-alpha`. If either is changed, update `DOCKER_SOCKET_PATH`, `DOCKER_LOG_PROXY_COMPOSE_PROJECT` and the corresponding Compose network/project settings together.
+The Compose file assumes Docker's default socket path `/var/run/docker.sock` and Compose project name `beacon-alpha`. If the socket location changes, update both the `DOCKER_SOCKET_PATH` value and the Docker socket bind-mount source in Compose. If the Compose project name changes, update `DOCKER_LOG_PROXY_COMPOSE_PROJECT` and the Compose project/network settings together.
