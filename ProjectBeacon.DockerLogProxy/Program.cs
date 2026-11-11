@@ -53,6 +53,8 @@ app.MapGet("/internal/v1/logs/{service}", async (
     DockerLogProxyOptions proxyOptions,
     CancellationToken ct) =>
 {
+    context.Response.Headers["Cache-Control"] = "no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     if (!TryParseTarget(service, out var target))
         return Results.BadRequest(new { error = "Unsupported log service." });
 
