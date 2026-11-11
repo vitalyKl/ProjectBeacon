@@ -197,7 +197,8 @@ public static class ProposalMarkdownEditApplier
         try
         {
             using var document = JsonDocument.Parse(payloadJson);
-            if (!document.RootElement.TryGetProperty("edits", out var edits))
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("edits", out var edits))
             {
                 result = sourceMarkdown;
                 error = "'edits' was not found in the proposal payload.";
