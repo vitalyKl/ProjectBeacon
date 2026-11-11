@@ -1516,9 +1516,18 @@ internal static class ProposalContentValidation
             switch (kind)
             {
                 case ContentTargetKind.ContextSection:
-                    Exact(root, "title", "bodyMarkdown");
-                    Required(root, "title", 500);
-                    Required(root, "bodyMarkdown", 30_000);
+                    if (root.TryGetProperty("edits", out var edits))
+                    {
+                        Exact(root, "edits");
+                        if (!ProposalMarkdownEditApplier.TryValidate(edits, out var editsError))
+                            throw new ArgumentException(editsError);
+                    }
+                    else
+                    {
+                        Exact(root, "title", "bodyMarkdown");
+                        Required(root, "title", 500);
+                        Required(root, "bodyMarkdown", 30_000);
+                    }
                     break;
                 case ContentTargetKind.Decision:
                     Exact(root, "title", "context", "decisionBody", "consequences");
@@ -1617,8 +1626,19 @@ internal static class ProposalContentValidation
         switch (kind)
         {
             case ContentTargetKind.ContextSection:
-                ((ContextSection)target).Update(Required(root, "title", 500), Required(root, "bodyMarkdown", 30_000),
-                    changedByType, changedById);
+                var section = (ContextSection)target;
+                if (root.TryGetProperty("edits", out var edits))
+                {
+                    if (!ProposalMarkdownEditApplier.TryApply(
+                            section.BodyMarkdown, edits, out var updatedBody, out var editError))
+                        throw new ArgumentException(editError ?? "Markdown section edits could not be applied.");
+                    section.Update(section.Title, updatedBody, changedByType, changedById);
+                }
+                else
+                {
+                    section.Update(Required(root, "title", 500), Required(root, "bodyMarkdown", 30_000),
+                        changedByType, changedById);
+                }
                 break;
             case ContentTargetKind.Decision:
                 ((Decision)target).UpdateContent(Required(root, "title", 200), Required(root, "context", 5_000),
