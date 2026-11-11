@@ -36,9 +36,8 @@ public sealed class ListContentVersionsHandler
     {
         if (projectId == Guid.Empty || targetId == Guid.Empty)
             return Result.Failure<IList<ContentVersionDto>>("ProjectId and TargetId are required.");
-        if (!Enum.IsDefined(targetKind) || targetKind == ContentTargetKind.TaskDescription)
-            return Result.Forbidden<IList<ContentVersionDto>>(
-                "This target history must be read through its dedicated authorized operation.");
+        if (!Enum.IsDefined(targetKind))
+            return Result.Forbidden<IList<ContentVersionDto>>("Unknown content history target kind.");
 
         await using var db = _dbFactory.CreateDbContext();
         if (actor.IsHuman)
@@ -49,11 +48,14 @@ public sealed class ListContentVersionsHandler
         }
         else if (actor.IsApiToken)
         {
+            var requiredCapability = targetKind == ContentTargetKind.TaskDescription
+                ? ApiTokenCapability.TaskRead
+                : ApiTokenCapability.ContextRead;
             if (actor.ProjectId != projectId
-                || !(actor.Capabilities.HasFlag(ApiTokenCapability.ContextRead)
+                || !(actor.Capabilities.HasFlag(requiredCapability)
                     || actor.Capabilities.HasFlag(ApiTokenCapability.Admin)))
                 return Result.Forbidden<IList<ContentVersionDto>>(
-                    "The API token must be bound to this project and have ContextRead capability.");
+                    $"The API token must be bound to this project and have {requiredCapability} capability.");
         }
         else
         {
