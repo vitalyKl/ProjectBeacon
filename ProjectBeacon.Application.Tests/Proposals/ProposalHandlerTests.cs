@@ -829,7 +829,8 @@ public sealed class ProposalHandlerTests : IDisposable
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(new[] { 1, 2 }, approvedHistory.Select(version => version.Revision).ToArray());
         using (var approvedSnapshot = System.Text.Json.JsonDocument.Parse(approvedHistory[^1].ContentJson))
-            Assert.Equal("Reviewed", approvedSnapshot.RootElement.GetProperty("reviewState").GetString());
+            Assert.Equal((int)ContextReviewState.Reviewed,
+                approvedSnapshot.RootElement.GetProperty("reviewState").GetInt32());
         await _db.Entry(context).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, context.Revision);
         Assert.Contains(await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
