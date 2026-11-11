@@ -43,6 +43,7 @@ public sealed class OrganizationDataExportTests : IDisposable
         var owner = User.Create("owner", "owner@example.test", "password-hash-must-not-export");
         var org = Org.Create("Export Org", "Customer-owned description");
         var project = Project.Create("Export Project", "Project description", org.Id);
+        project.Update(reviewCheckCommand: "dotnet test");
         var foreignOwner = User.Create("foreign-owner", "foreign-owner@example.test", "foreign-password-hash");
         var foreignOrg = Org.Create("Foreign Org");
         var foreignProject = Project.Create("FOREIGN PROJECT MUST NOT EXPORT", null, foreignOrg.Id);
