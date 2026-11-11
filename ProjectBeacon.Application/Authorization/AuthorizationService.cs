@@ -28,7 +28,8 @@ public sealed class AuthorizationService : IAuthorizationService
         Guid? orgId = null,
         CancellationToken ct = default)
     {
-        if (!Enum.IsDefined(resource) || !Enum.IsDefined(action))
+        if (!Enum.IsDefined(resource) || !Enum.IsDefined(action)
+            || !IsSupportedActionCombination(resource, action))
             return Result.Forbidden();
 
         if (actor.IsWorker)
@@ -36,7 +37,8 @@ public sealed class AuthorizationService : IAuthorizationService
 
         if (actor.IsDevice)
             return actor.DeviceId is { } deviceId && deviceId != Guid.Empty
-                && (resource is ResourceType.Device or ResourceType.WorkstationCommand)
+                && (resource == ResourceType.Device && action is AuthAction.Read or AuthAction.Update
+                    || resource == ResourceType.WorkstationCommand && action == AuthAction.Execute)
                     ? Result.Ok()
                     : Result.Forbidden();
 
@@ -250,6 +252,13 @@ public sealed class AuthorizationService : IAuthorizationService
         if (IsProjectManagerOnly(resource, action))
             return await CanManageProjectAsync(db, actor, scopedProjectId, ct);
 
+        // Membership is not a blanket allow. A known resource/action pair must also
+        // appear in the normal-member policy. Resource-owner/participant actions that
+        // need an entity id are deliberately excluded until their dedicated handler
+        // check supplies that context.
+        if (!IsProjectMemberActionAllowed(resource, action))
+            return Result.Forbidden();
+
         return await CanUseProjectAsync(db, actor, scopedProjectId, ct);
     }
 
@@ -268,6 +277,68 @@ public sealed class AuthorizationService : IAuthorizationService
             return projectId is { } scopedProjectId && scopedProjectId != Guid.Empty;
         return false;
     }
+
+    private static bool IsSupportedActionCombination(ResourceType resource, AuthAction action)
+    {
+        if (action == AuthAction.Administer)
+            return IsOrganizationScoped(resource) || IsProjectScoped(resource);
+
+        return resource switch
+        {
+            ResourceType.Project => action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.Org => action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
+            ResourceType.ProjectMember or ResourceType.OrgMember =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.ApiToken => action is AuthAction.Read or AuthAction.Create or AuthAction.Delete,
+            ResourceType.ProjectInvite or ResourceType.OrgInvite =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.Task or ResourceType.TaskStep =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.Pipeline =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Execute,
+            ResourceType.Context or ResourceType.Constraint or ResourceType.Decision or ResourceType.Milestone =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.Label => action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.Report => action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.ChatSession =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.Device =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.WorkstationCommand => action == AuthAction.Execute,
+            ResourceType.ProjectRuntime or ResourceType.ModelBackend
+                or ResourceType.AgentTemplate or ResourceType.McpConfiguration
+                or ResourceType.WorkstationConfiguration =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.EvalRun =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.Work => action == AuthAction.Execute,
+            _ => false
+        };
+    }
+
+    private static bool IsProjectMemberActionAllowed(ResourceType resource, AuthAction action) =>
+        resource switch
+        {
+            ResourceType.Project => action == AuthAction.Read,
+            ResourceType.Task => action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
+            ResourceType.TaskStep => action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
+            ResourceType.Pipeline =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Execute,
+            ResourceType.Context =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Execute,
+            ResourceType.Constraint =>
+                action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
+            ResourceType.Decision => action is AuthAction.Read or AuthAction.Create,
+            ResourceType.Milestone => action == AuthAction.Read,
+            ResourceType.Label => action == AuthAction.Read,
+            ResourceType.Report => action is AuthAction.Read or AuthAction.Create,
+            ResourceType.ProjectRuntime or ResourceType.ModelBackend
+                or ResourceType.AgentTemplate or ResourceType.McpConfiguration =>
+                action is AuthAction.Read or AuthAction.Execute,
+            ResourceType.EvalRun => action is AuthAction.Read or AuthAction.Create or AuthAction.Execute,
+            ResourceType.Work => action == AuthAction.Execute,
+            _ => false
+        };
 
     private static bool IsOrganizationScoped(ResourceType resource) =>
         resource is ResourceType.Org or ResourceType.OrgMember or ResourceType.OrgInvite;
@@ -298,7 +369,7 @@ public sealed class AuthorizationService : IAuthorizationService
             ResourceType.Task => action == AuthAction.Delete,
             ResourceType.TaskStep => action == AuthAction.Delete,
             ResourceType.Context => action == AuthAction.Delete,
-            ResourceType.Constraint => action is AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
+            ResourceType.Constraint => action is AuthAction.Delete or AuthAction.Execute,
             ResourceType.Decision => action is AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
             ResourceType.Milestone => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
             ResourceType.Label => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
