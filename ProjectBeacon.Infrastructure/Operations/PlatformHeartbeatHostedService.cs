@@ -60,8 +60,18 @@ public sealed class PlatformHeartbeatHostedService(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await PublishAsync(PlatformServiceHealth.Stopping, cancellationToken);
-        await base.StopAsync(cancellationToken);
+        try
+        {
+            await PublishAsync(PlatformServiceHealth.Stopping, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown must continue even when the final best-effort heartbeat is cancelled.
+        }
+        finally
+        {
+            await base.StopAsync(cancellationToken);
+        }
     }
 
     private async Task PublishAsync(PlatformServiceHealth health, CancellationToken ct)
@@ -87,9 +97,19 @@ public sealed class PlatformHeartbeatHostedService(
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception,
-                "Could not record the {Service} platform heartbeat for this instance.",
-                options.Service);
+            // A provider can already be disposed while WebApplicationFactory or the host
+            // is stopping (notably Windows EventLog). A best-effort heartbeat must never
+            // turn a logging-sink failure into a host-disposal failure.
+            try
+            {
+                logger.LogWarning(exception,
+                    "Could not record the {Service} platform heartbeat for this instance.",
+                    options.Service);
+            }
+            catch
+            {
+                // Logging during shutdown is best-effort too.
+            }
         }
     }
 }
