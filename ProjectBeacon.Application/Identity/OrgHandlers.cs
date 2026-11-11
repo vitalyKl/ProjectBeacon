@@ -112,15 +112,29 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
 public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetOrgHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<OrgDto>> HandleAsync(GetOrgCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
+        var tenant = new TenantContext();
+        tenant.Assign(null, command.Request.OrgId, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(tenant);
+
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Org, AuthAction.Read,
+            orgId: command.Request.OrgId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<OrgDto>();
+
+        var org = await db.Orgs.FirstOrDefaultAsync(item => item.Id == command.Request.OrgId, ct);
         if (org is null)
-            return Result.Failure<OrgDto>("Org not found.");
+            return Result.Failure<OrgDto>("Org not found.", ErrorKind.NotFound);
 
         return Result.Ok(MapToDto(org));
     }
@@ -139,10 +153,23 @@ public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<Org
 
     public async Task<Result<IList<OrgDto>>> HandleAsync(ListOrgsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var orgs = await db.Orgs
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new OrgDto(o.Id, o.Name, o.Description, o.CreatedAt, o.UpdatedAt))
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Forbidden<IList<OrgDto>>();
+
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: command.Actor.IsAdmin);
+        await using var db = _dbFactory.CreateDbContext(tenant);
+
+        var query = db.Orgs.Where(org => org.LifecycleStatus == OrganizationLifecycleStatus.Active);
+        if (!command.Actor.IsAdmin)
+        {
+            query = query.Where(org => db.OrgMembers.IgnoreQueryFilters().Any(member =>
+                member.OrgId == org.Id && member.UserId == userId));
+        }
+
+        var orgs = await query
+            .OrderByDescending(org => org.CreatedAt)
+            .Select(org => new OrgDto(org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt))
             .ToListAsync(ct);
 
         return Result.Ok((IList<OrgDto>)orgs);
