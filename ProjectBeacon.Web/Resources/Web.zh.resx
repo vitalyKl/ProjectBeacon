@@ -2748,6 +2748,12 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>需要加入该项目才能查看此收件箱。</value>
   </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>已删除内容</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>已删除</value>
+  </data>
   <data name="ContentHistory" xml:space="preserve">
     <value>内容历史</value>
   </data>
