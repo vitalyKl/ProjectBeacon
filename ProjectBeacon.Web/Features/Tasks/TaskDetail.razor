@@ -769,8 +769,10 @@ else
         _busy = true;
         try
         {
+            var authentication = await Auth.GetAuthenticationStateAsync();
+            var actor = ActorContextFactory.FromPrincipal(authentication.User);
             var result = await DeleteTask.HandleAsync(
-                new DeleteTaskCommand(new DeleteTaskRequest(TaskId)));
+                new DeleteTaskCommand(new DeleteTaskRequest(TaskId), actor));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

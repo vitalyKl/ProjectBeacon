@@ -63,7 +63,7 @@ public sealed class TaskKindHandlerTests : IDisposable
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId, orgId));
         var actor = new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
-        var created = await new CreateTaskHandler(factory).HandleAsync(new CreateTaskCommand(
+        var created = await new CreateTaskHandler(factory, new AuthorizationService()).HandleAsync(new CreateTaskCommand(
             new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null), actor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 

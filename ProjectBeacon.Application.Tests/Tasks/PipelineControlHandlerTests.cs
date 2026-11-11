@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Evals;
 using Domain.Entities.Tasks;
@@ -146,8 +147,9 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(planner.Value!.Id)), TestContext.Current.CancellationToken);
         Assert.True(launch.Success, launch.Error);
 
-        var deleted = await new DeleteTaskHandler(factory)
-            .HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(task.Id)), TestContext.Current.CancellationToken);
+        var actor = new ActorContext(ActorType.Human, Guid.NewGuid(), true, null, null, null, null, ApiTokenCapability.None);
+        var deleted = await new DeleteTaskHandler(factory, new AuthorizationService())
+            .HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(task.Id), actor), TestContext.Current.CancellationToken);
 
         Assert.True(deleted.Success, deleted.Error);
         using (TenantScope.EnterUnscoped())

@@ -123,7 +123,7 @@ public sealed class AuthorizationService : IAuthorizationService
 
         var targetRole = await GetMemberRoleAsync(db, projectId, targetUserId, ct);
         if (targetRole is null)
-            return Result.Failure("Project member not found.", ErrorKind.NotFound);
+            return Result.Forbidden();
 
         var isSelfRemoval = actor.UserId == targetUserId;
         if (targetRole == MemberRole.Owner)
