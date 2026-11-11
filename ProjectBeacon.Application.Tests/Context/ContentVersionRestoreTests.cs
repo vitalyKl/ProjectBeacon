@@ -457,14 +457,23 @@ public sealed class ContentVersionRestoreTests : IDisposable
             "Adds the first roadmap checkpoint.",
             "milestone-create-" + Guid.NewGuid().ToString("N"));
 
-        var created = await new CreateProposalHandler(
-                HandlerSqlite.Factory(_connection), new EfAuditWriter())
-            .HandleAsync(
-                new CreateProposalCommand(_projectId, request, HumanActor()),
-                TestContext.Current.CancellationToken);
+        var creator = new CreateProposalHandler(
+            HandlerSqlite.Factory(_connection), new EfAuditWriter());
+        var created = await creator.HandleAsync(
+            new CreateProposalCommand(_projectId, request, HumanActor()),
+            TestContext.Current.CancellationToken);
 
         Assert.True(created.Success, created.Error);
         Assert.NotEqual(Guid.Empty, created.Value!.TargetId);
+        var replay = await creator.HandleAsync(
+            new CreateProposalCommand(_projectId, request, HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(replay.Success, replay.Error);
+        Assert.Equal(created.Value.Id, replay.Value!.Id);
+        Assert.Equal(created.Value.TargetId, replay.Value.TargetId);
+        Assert.Equal(1, await _db.Proposals.CountAsync(
+            item => item.IdempotencyKey == request.IdempotencyKey,
+            TestContext.Current.CancellationToken));
         Assert.Equal(ProposalOperation.Create, created.Value.Operation);
         Assert.Equal(0, created.Value.BaseRevision);
         Assert.Equal(ProposalStatus.Pending, created.Value.Status);
