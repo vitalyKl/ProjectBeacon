@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ProjectBeacon.OpsAgent;
+using ProjectBeacon.Application.Operations;
 
 var builder = WebApplication.CreateBuilder(args);
 var options = OpsAgentOptions.FromConfiguration(builder.Configuration);
@@ -35,7 +36,7 @@ app.MapGet("/internal/v1/logs/{service}", async (
 
     var snapshot = await reader.ReadAsync(target, tail, ct);
     return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
-}).RequireHttpMethod("GET");
+});
 
 app.Run();
 
@@ -51,4 +52,4 @@ static bool TryParseTarget(string service, out PlatformLogTarget target)
     return Enum.IsDefined(target);
 }
 
-public partial class Program;
+public partial class Program { }
