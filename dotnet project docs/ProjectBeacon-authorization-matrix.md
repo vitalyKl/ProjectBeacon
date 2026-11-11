@@ -294,16 +294,16 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
-| POST | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:16 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| PUT | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:17 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| PUT | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:18 | Any-auth | none | none | — | `REVIEW REQUIRED` |
-| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler resolves the milestone project and requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion and `content.deleted` audit event before deleting the milestone; restore is Human/member-only. |
-| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:27 | Human-only | — | `RequireHuman`; same project membership check after resolving the milestone | project (resolved) | Legacy route; same tombstone, audit and restore semantics as project-scoped delete. |
-| GET | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:21 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| GET | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:22 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| GET | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:23 | Any-auth | none | RLS only | — | `REVIEW REQUIRED` |
-| POST | `/v1/projects/{pid}/milestones/{mid}/close` | MilestoneEndpoints.cs:24 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| POST | `/v1/projects/{pid}/milestones/{mid}/reopen` | MilestoneEndpoints.cs:25 | Any-auth | none | none | project | `REVIEW REQUIRED` |
+| POST | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:23 | Human-only | — | Human project member or inherited org Owner/Admin; enforced by `CreateMilestoneHandler` | project | Creates initial ContentVersion atomically with the milestone. |
+| PUT | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:24 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Revision-checked update; appends ContentVersion. |
+| PUT | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:25 | Human-only | — | Human project member or inherited org Owner/Admin after resolving the milestone project | project (resolved) | Legacy route; same revision and membership checks as the project-scoped update. |
+| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler checks expected projectId and requires project membership or inherited org Owner/Admin | project | A mismatched projectId returns NotFound without deletion; writes a tombstone ContentVersion and `content.deleted` audit atomically. |
+| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:27 | Human-only | — | `RequireHuman`; handler resolves the milestone project and requires project membership or inherited org Owner/Admin | project (resolved) | Legacy route; same tombstone, audit and restore semantics as project-scoped delete. |
+| GET | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:28 | Human-only | — | Human route; project data remains protected by RLS | project | Lists project milestones. |
+| GET | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:29 | Human-only | — | Human route; project data remains protected by RLS | project | Loads one milestone. |
+| GET | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:30 | Human-only | — | Human route; project data remains protected by RLS | project (resolved) | Legacy route. |
+| POST | `/v1/projects/{pid}/milestones/{mid}/close` | MilestoneEndpoints.cs:31 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Appends a ContentVersion when the state changes; repeated close is idempotent. |
+| POST | `/v1/projects/{pid}/milestones/{mid}/reopen` | MilestoneEndpoints.cs:32 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Appends a ContentVersion when the state changes; repeated reopen is idempotent. |
 
 ### 4.9 Labels (`LabelEndpoints.cs`)
 
