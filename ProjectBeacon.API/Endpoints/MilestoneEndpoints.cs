@@ -111,18 +111,35 @@ public static class MilestoneEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListMilestones(Guid projectId, CancellationToken ct, ListProjectMilestonesHandler handler)
+    private static async Task<IResult> ListMilestones(
+        Guid projectId,
+        HttpContext context,
+        CancellationToken ct,
+        ListProjectMilestonesHandler handler)
     {
-        var result = await handler.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(projectId)), ct);
+        var result = await handler.HandleAsync(
+            new ListProjectMilestonesCommand(
+                new ListProjectMilestonesRequest(projectId),
+                context.GetActor()),
+            ct);
 
         return result.Success
             ? Results.Ok(result.Value!.Select(MapMilestoneResponse))
             : result.FromResult();
     }
 
-    private static async Task<IResult> GetMilestone(Guid milestoneId, GetMilestoneHandler handler)
+    private static async Task<IResult> GetMilestone(
+        Guid milestoneId,
+        Guid? projectId,
+        HttpContext context,
+        GetMilestoneHandler handler,
+        CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetMilestoneCommand(new GetMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(
+            new GetMilestoneCommand(
+                new GetMilestoneRequest(milestoneId, projectId),
+                context.GetActor()),
+            ct);
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
