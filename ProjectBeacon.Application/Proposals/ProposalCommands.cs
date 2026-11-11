@@ -866,21 +866,21 @@ public sealed class AcceptProposalHandler
                                 db.ContextSections.Remove(section);
                                 break;
                             case Milestone milestone:
-                                    {
-                                        var linkedTaskIds = await db.Tasks
-                                            .Where(task => task.ProjectId == proposal.ProjectId
-                                                && task.MilestoneId == milestone.Id)
-                                            .Select(task => task.Id)
-                                            .ToArrayAsync(ct);
-                                        milestone.Delete();
-                                        _contentWriter.AddVersion(
-                                            db, milestone, changedByType, changedById,
-                                            deleted: true,
-                                            proposalId: proposal.Id,
-                                            milestoneTaskIds: linkedTaskIds);
-                                        db.Milestones.Remove(milestone);
-                                        break;
-                                    }
+                                {
+                                    var linkedTaskIds = await db.Tasks
+                                        .Where(task => task.ProjectId == proposal.ProjectId
+                                            && task.MilestoneId == milestone.Id)
+                                        .Select(task => task.Id)
+                                        .ToArrayAsync(ct);
+                                    milestone.Delete();
+                                    _contentWriter.AddVersion(
+                                        db, milestone, changedByType, changedById,
+                                        deleted: true,
+                                        proposalId: proposal.Id,
+                                        milestoneTaskIds: linkedTaskIds);
+                                    db.Milestones.Remove(milestone);
+                                    break;
+                                }
                             case Decision decision:
                                 decision.Deprecate();
                                 _contentWriter.AddVersion(
