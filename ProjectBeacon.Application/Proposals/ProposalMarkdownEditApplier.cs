@@ -163,7 +163,7 @@ public static class ProposalMarkdownEditApplier
                 .OrderBy(item => item.Block.Span.Start)
                 .FirstOrDefault();
             var sectionEnd = nextSection?.Block.Span.Start ?? result.Length;
-            var lineBreak = result.IndexOf('\n', Math.Min(result.Length, target.Span.End + 1));
+            var lineBreak = result.IndexOf('\n', Math.Min(result.Length, target.Span.End));
             var headingLineEnd = lineBreak < 0 ? result.Length : lineBreak + 1;
             sectionEnd = Math.Max(headingLineEnd, sectionEnd);
 
@@ -217,7 +217,10 @@ public static class ProposalMarkdownEditApplier
     private static string ReplaceSectionBody(string markdown, int bodyStart, int sectionEnd, string content)
     {
         var newLine = GetNewLine(markdown);
-        var replacement = content.Trim('\r', '\n');
+        var replacement = content.Replace("\\r\\n", "\\n", StringComparison.Ordinal)
+            .Replace("\\r", "\\n", StringComparison.Ordinal)
+            .Replace("\\n", newLine, StringComparison.Ordinal)
+            .Trim('\\r', '\\n');
         if (replacement.Length > 0)
             replacement += newLine + newLine;
         return markdown[..bodyStart] + replacement + markdown[sectionEnd..];
