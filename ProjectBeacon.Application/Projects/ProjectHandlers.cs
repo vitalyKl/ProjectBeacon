@@ -254,7 +254,7 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
             return Result.Forbidden<IList<ProjectDto>>();
 
         IBeaconDb db;
-        if (command.Request.OrgId is { } requestedOrgId || command.Actor.IsAdmin)
+        if (command.Request.OrgId is not null || command.Actor.IsAdmin)
         {
             var tenant = new TenantContext();
             tenant.Assign(
