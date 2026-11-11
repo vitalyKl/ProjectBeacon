@@ -56,7 +56,8 @@ public sealed class ApiTokenIdentityRateLimiter : IDisposable
         });
     }
 
-    public RateLimitLease Acquire(HttpContext context) => _limiter.Acquire(context);
+    public ValueTask<RateLimitLease> AcquireAsync(HttpContext context, CancellationToken cancellationToken = default) =>
+        _limiter.AcquireAsync(context, cancellationToken);
 
     public void Dispose() => _limiter.Dispose();
 }
