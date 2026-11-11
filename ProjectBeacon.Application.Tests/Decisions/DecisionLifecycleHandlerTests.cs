@@ -130,6 +130,20 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var deprecated = await deprecate.HandleAsync(second.Value.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(deprecated.Success, deprecated.Error);
         Assert.Equal(DecisionStatus.Deprecated, deprecated.Value!.Status);
+        Assert.Equal(2, deprecated.Value.Revision);
+
+        var firstHistory = await _db.ContentVersions
+            .Where(item => item.TargetKind == ContentTargetKind.Decision && item.TargetId == first.Value.Id)
+            .OrderBy(item => item.Revision)
+            .Select(item => item.Revision)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        var secondHistory = await _db.ContentVersions
+            .Where(item => item.TargetKind == ContentTargetKind.Decision && item.TargetId == second.Value.Id)
+            .OrderBy(item => item.Revision)
+            .Select(item => item.Revision)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2, 3 }, firstHistory);
+        Assert.Equal(new[] { 1, 2 }, secondHistory);
     }
 
     [Fact]
