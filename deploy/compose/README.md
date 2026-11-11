@@ -64,7 +64,7 @@ and `docker inspect` `.Networks` keys.
    chmod 600 .env
    # generate values, e.g.:  openssl rand -base64 48
    #   POSTGRES_PASSWORD, JWT__Secret, DATA_PROTECTION_KEY,
-   #   BOOTSTRAP_ADMIN_TOKEN, BEACON_WORKER_TOKEN
+   #   BOOTSTRAP_ADMIN_TOKEN, ADMIN_RECOVERY_TOKEN, BEACON_WORKER_TOKEN
    ```
 
    Keep `DATA_PROTECTION_WRITE_V2=true` (fresh install). Set
@@ -134,7 +134,10 @@ and `docker inspect` `.Networks` keys.
 
    Then in a browser open `https://<CONTROL_HOST>/control/bootstrap` (enter
    `BOOTSTRAP_ADMIN_TOKEN`; the generated admin password is shown **once**),
-   log in to the operator console at `https://<CONTROL_HOST>/control/login`,
+   log in to the operator console at `https://<CONTROL_HOST>/control/login`. Configure
+   `ADMIN_RECOVERY_TOKEN` as a different high-entropy secret before relying on
+   `/control/recover`; recovery is fail-closed when it is missing and does not accept
+   `BOOTSTRAP_ADMIN_TOKEN`.
    and verify that `https://<BEACON_DOMAIN>/control/login` returns 404. Customer
    users continue to sign in at `https://<BEACON_DOMAIN>/login`. With
    `AUTH_LOCAL_INVITE_ONLY=true` (set in `.env.example`) registration requires
@@ -322,10 +325,10 @@ configured key material (fail-closed).
   narrow, and its network limited to OpsAgent. Caddy runs as root with only
   `cap_add: NET_BIND_SERVICE` (required to bind 80/443 — everything else stays dropped).
 - The initial-admin bootstrap endpoint is exposed only on `CONTROL_HOST` and
-  works only until the first admin exists (then 409); the token stays in `.env`
-  but grants nothing afterwards. Rotate
-  `BOOTSTRAP_ADMIN_TOKEN` anyway and keep `.env` out of backups unless
-  encrypted.
+  works only until the first admin exists (then 409). `BOOTSTRAP_ADMIN_TOKEN` and
+  `ADMIN_RECOVERY_TOKEN` are independent secrets: bootstrap cannot authorize recovery,
+  and recovery remains unavailable when its own secret is unset. Generate and rotate
+  both separately. They stay in `.env`; keep `.env` out of backups unless encrypted.
 - Do not point `BEACON_TEST_DATABASE_URL` or any tooling at this database.
 
 ## Local verification (performed, on Docker Desktop)
