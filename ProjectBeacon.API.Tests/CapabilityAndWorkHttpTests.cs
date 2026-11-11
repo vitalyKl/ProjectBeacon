@@ -7,6 +7,7 @@ using System.Text.Json;
 using Domain.Entities.Evals;
 using Domain.Entities.Audit;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 [Collection("api-http")]
