@@ -42,11 +42,17 @@ services:
       # The superuser password doubles as the beacon_app password (EnsureAppRoleAsync bootstraps it).
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      OPS_AGENT_SHARED_SECRET: ""
+      OPS_AGENT_SHARED_SECRET: ""
       # The docker network subnet below. An explicit list is the COMPLETE trust set
       # (the framework loopback default is dropped) — required for X-Forwarded-Proto
       # (Secure cookies, HTTPS redirect) and for per-client-IP rate limiting.
       FORWARDEDHEADERS__KNOWNNETWORKS__0: "172.29.0.0/16"
       BEACON_PUBLIC_URL: "https://${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}"
+      OpsAgent__BaseUrl: "http://ops-agent:8080"
+      OpsAgent__SharedSecret: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
+      # Do not expose the raw agent secret to the Web process under an alternate key.
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,6 +64,11 @@ services:
     stop_grace_period: 45s
     mem_limit: 512m
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   worker:
@@ -79,6 +90,36 @@ services:
     security_opt: [no-new-privileges]
     stop_grace_period: 45s
     mem_limit: 256m
+    networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # Restricted log reader. This container sees only Docker json-file logs as a
+  # read-only filesystem; it has no Docker socket, database credentials or host ports.
+  ops-agent:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-ops-agent
+    command: ["dotnet", "/app/ops-agent/ProjectBeacon.OpsAgent.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:8080"
+      HOME: /tmp
+      OPS_AGENT_SHARED_SECRET: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
+      OPS_AGENT_LOG_ROOT: /host-docker-logs
+      OPS_AGENT_COMPOSE_PROJECT: beacon-alpha
+    volumes:
+      - /var/lib/docker/containers:/host-docker-logs:ro
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    mem_limit: 128m
     networks: [beacon-alpha-internal]
     restart: unless-stopped
 
@@ -106,6 +147,11 @@ services:
     security_opt: [no-new-privileges]
     restart: "no"
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     # Pinned tag; verify the amd64 digest on first pull and record it in README evidence.
