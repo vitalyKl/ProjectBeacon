@@ -2819,6 +2819,9 @@ No Beacon-hosted coding agent.</value>
   <data name="ProposalInbox" xml:space="preserve">
     <value>Proposal inbox</value>
   </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>New target</value>
+  </data>
   <data name="ShellHintProposalInbox" xml:space="preserve">
     <value>Review proposed project knowledge and revisions.</value>
   </data>
