@@ -41,7 +41,7 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         var initialSessionVersion = admin.SessionVersion;
 
         var sessionVersions = new RecordingSessionVersionCache();
-        var result = await CreateHandler(sessionVersions).HandleAsync("deployment-break-glass-token",
+        var result = await CreateHandler(sessionVersions).HandleAsync("dedicated-recovery-secret",
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
@@ -67,7 +67,7 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var initialSessionVersion = ordinary.SessionVersion;
 
-        var result = await CreateHandler().HandleAsync("deployment-break-glass-token",
+        var result = await CreateHandler().HandleAsync("dedicated-recovery-secret",
             TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
