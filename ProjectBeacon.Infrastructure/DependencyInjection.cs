@@ -46,6 +46,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrganizationAdminService, EfOrganizationAdminService>();
         services.AddScoped<IOrganizationDataExportService, EfOrganizationDataExportService>();
         services.AddScoped<IPlatformOperationsService, PlatformOperationsService>();
+        services.AddHttpClient<IPlatformContainerLogClient, HttpPlatformContainerLogClient>(client =>
+            client.Timeout = TimeSpan.FromSeconds(12));
 
         return services;
     }
