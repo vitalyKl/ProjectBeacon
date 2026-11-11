@@ -1,7 +1,7 @@
 # Closed-alpha deploy: single Ubuntu VPS (Docker Compose)
 
-Brings up **Web + Worker + PostgreSQL + Caddy** on one VPS. No Kubernetes, no
-auto-deploy: every deployment is a manual run of `upgrade.sh` with an explicit
+Brings up **Web + Worker + OpsAgent + DockerLogProxy + PostgreSQL + Caddy** on one VPS.
+No Kubernetes, no auto-deploy: every deployment is a manual run of `upgrade.sh` with an explicit
 image reference. The local development stack (repo-root `docker-compose.yml`)
 and the Kubernetes manifests (`deploy/k8s/`) are untouched and stay independent.
 
@@ -14,10 +14,16 @@ current checkout; anything not executed is marked **(not verified)**.
 internet ── 22 / 80 / 443 ──► Caddy (TLS, Let's Encrypt)
                                    │  (only 80/443 published)
               beacon-alpha-internal (172.29.0.0/16)
-                                   ├─ web      :8080   (read-only, caps dropped)
-                                   ├─ worker          (read-only, caps dropped)
-                                   └─ postgres :5432   (internal only, no published ports)
+                 ├─ web      :8080   (read-only, caps dropped)
+                 ├─ worker          (read-only, caps dropped)
+                 ├─ ops-agent :8080 (no Docker socket or host mount)
+                 ├─ postgres :5432  (internal only, no published ports)
+                 └─ caddy
 migrate — one-shot container of the same image (profile "migrate")
+
+              beacon-alpha-ops-internal (172.30.0.0/16, internal: true)
+                 ├─ ops-agent       (also attached to beacon-alpha-internal)
+                 └─ docker-log-proxy :8081 (only service with Docker socket; no host port)
 ```
 
 Note: the compose network is declared as `beacon-alpha-internal`, but Docker
@@ -114,7 +120,7 @@ and `docker inspect` `.Networks` keys.
 6. Start the services:
 
    ```bash
-   docker compose up -d web worker caddy
+   docker compose up -d web worker docker-log-proxy ops-agent caddy
    ```
 
 7. Verify:
@@ -160,7 +166,7 @@ exists as a local image is deployed as-is, no registry pull) → updates
 `.env` → `docker compose pull` (registry refs only) → runs the **migrate
 one-shot** (gate, `--no-deps`: a missing database fails it; bounded to
 300s, so a corrupt image whose migrate never exits also fails and rolls
-back) → swaps web+worker → waits for `/health` 200 (120s) → prints
+back) → swaps web, worker, OpsAgent and DockerLogProxy → waits for `/health` 200 (120s) → prints
 `/v1/version` → records the deployed reference in `.state/last-known-good.txt`. When the script runs
 from a separate admin container instead of the VPS itself, set
 `BEACON_HEALTH_HOST` (e.g. `host.docker.internal`).
@@ -201,7 +207,7 @@ the new container reads the existing ring and still accepts a live session:
 
 ```bash
 sed -i "s|^BEACON_WEB_IMAGE=.*|BEACON_WEB_IMAGE=<old-digest>|" .env
-docker compose up -d web worker
+docker compose up -d web worker docker-log-proxy ops-agent
 curl -fsS https://beacon.example.com/health
 ```
 
@@ -294,6 +300,7 @@ configured key material (fail-closed).
 | Secure cookies / HTTPS redirect missing | `FORWARDEDHEADERS__KNOWNNETWORKS__0` must equal the docker subnet (172.29.0.0/16); check `docker inspect --format '{{range $n, $i := .Networks}}{{$n}}: {{$i.IPAddress}}{{end}}' beacon-alpha-caddy` (prints `beacon-alpha_beacon-alpha-internal: 172.29.0.x`) |
 | Rate limits hit by everyone at once | Same as above: X-Forwarded-For not honored, limiter keys all clients on the proxy IP |
 | Invite emails not sent | `MAIL__Host`/`MAIL__From` unset or SMTP auth failing: `docker compose logs web` |
+| Container logs unavailable | `docker compose logs ops-agent docker-log-proxy`; verify both services are up and the Docker socket bind mount exists |
 | Worker not cleaning expired records | `docker compose logs worker` — role guard or connection failure; the first tick is up to 30 min after start |
 
 `docker compose ps` — container states; `docker compose logs -f web worker caddy`
@@ -307,9 +314,13 @@ configured key material (fail-closed).
   policies; migrations run as `beacon` (superuser) only during the one-shot
   migrate. Production hosts refuse to start otherwise (fail-closed).
 - Containers run read-only, `cap_drop: ALL`, `no-new-privileges`, with `/tmp`
-  as the only writable mount. web/worker/migrate run as the non-root `app`
-  image user; Caddy runs as root with only `cap_add: NET_BIND_SERVICE`
-  (required to bind 80/443 — everything else stays dropped).
+  as the only writable container filesystem. web/worker/migrate/OpsAgent run as the
+  non-root `app` image user. DockerLogProxy is the only service with the Docker Engine
+  socket bind-mounted read-only; it runs root because the host socket is root-owned,
+  has no published port, and is attached only to the internal ops network. The socket
+  is a privileged resource: keep the proxy image pinned, its signed endpoint allowlist
+  narrow, and its network limited to OpsAgent. Caddy runs as root with only
+  `cap_add: NET_BIND_SERVICE` (required to bind 80/443 — everything else stays dropped).
 - The initial-admin bootstrap endpoint is exposed only on `CONTROL_HOST` and
   works only until the first admin exists (then 409); the token stays in `.env`
   but grants nothing afterwards. Rotate
@@ -348,8 +359,8 @@ The full stack was exercised end-to-end locally with a test Caddy override
 ## What is NOT verified in this environment
 
 - No real Contabo VPS run: DNS, public Let's Encrypt issuance (the local
-  test used `tls internal`), provider firewall, and rclone off-host copy
-  were not executed.
+  test used `tls internal`), provider firewall, restricted OpsAgent/DockerLogProxy
+  service startup against the host Docker socket, and rclone off-host copy were not executed.
 - UI flows were verified with HTTP requests (curl), not in a browser.
 - The 30-minute worker cleanup tick was not observed live (service start and
   role-guard pass were verified; the first tick is deferred).
