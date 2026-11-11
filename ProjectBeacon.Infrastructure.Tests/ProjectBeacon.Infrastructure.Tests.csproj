@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ProjectBeacon.Infrastructure\ProjectBeacon.Infrastructure.csproj" />
     <ProjectReference Include="..\ProjectBeacon.OpsAgent\ProjectBeacon.OpsAgent.csproj" />
+    <ProjectReference Include="..\ProjectBeacon.DockerLogProxy\ProjectBeacon.DockerLogProxy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
