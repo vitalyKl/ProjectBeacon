@@ -2,6 +2,7 @@
 @layout ControlLayout
 @attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
 @using Microsoft.AspNetCore.Components.Authorization
+@using System.Globalization
 @using Microsoft.AspNetCore.Authorization
 @using ProjectBeacon.Application.Admin
 @using ProjectBeacon.Application.Authorization
@@ -11,6 +12,7 @@
 @inject AuthenticationStateProvider Auth
 @inject IAdminGate AdminGate
 @inject IPlatformOperationsService PlatformOperations
+@inject IPlatformContainerLogClient ContainerLogs
 @inject NavigationManager Navigation
 
 <PageTitle>Control — Operations</PageTitle>
@@ -90,9 +92,69 @@
             </MudTable>
         }
 
+        @if (_canReadContainerLogs)
+        {
+            <MudText Typo="Typo.h6" Class="mt-6 mb-2">Restricted container logs</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Access is separately permissioned and audited. Output may contain customer data or secrets; use it only for incident response.
+            </MudText>
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-3">
+                <div class="d-flex align-center flex-wrap gap-3">
+                    <MudSelect T="PlatformLogTarget" Label="Service" @bind-Value="_logTarget"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 180px;">
+                        <MudSelectItem T="PlatformLogTarget" Value="@PlatformLogTarget.Web">Web</MudSelectItem>
+                        <MudSelectItem T="PlatformLogTarget" Value="@PlatformLogTarget.Worker">Worker</MudSelectItem>
+                        <MudSelectItem T="PlatformLogTarget" Value="@PlatformLogTarget.Migrate">Migrate</MudSelectItem>
+                    </MudSelect>
+                    <MudSelect T="int" Label="Tail lines" @bind-Value="_logTail"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                        <MudSelectItem T="int" Value="50">50</MudSelectItem>
+                        <MudSelectItem T="int" Value="100">100</MudSelectItem>
+                        <MudSelectItem T="int" Value="200">200</MudSelectItem>
+                        <MudSelectItem T="int" Value="500">500</MudSelectItem>
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="LoadContainerLogs" Disabled="_logsBusy">
+                        @(_logsBusy ? "Loading…" : "Load logs")
+                    </MudButton>
+                    @if (_logResponse is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @_logResponse.ContainerName · @_logResponse.ReturnedLines lines ·
+                            <LocalTime OffsetValue="@_logResponse.CollectedAtUtc" Format="T" />
+                        </MudText>
+                    }
+                </div>
+            </MudPaper>
+
+            @if (_logError is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3">@_logError</MudAlert>
+            }
+            else if (_logResponse is not null && _logResponse.Entries.Count == 0)
+            {
+                <EmptyState>No recent log output was found for this service.</EmptyState>
+            }
+            else if (_logResponse is not null)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-4"
+                          Style="max-height: 34rem; overflow: auto; background: var(--mud-palette-surface);">
+                    @foreach (var entry in _logResponse.Entries)
+                    {
+                        <div class="d-flex align-start gap-2 mb-1" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem;">
+                            <span class="mud-text-secondary" style="white-space: nowrap;">@entry.TimestampUtc.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)</span>
+                            <span style="min-width: 3.8rem; color: @(entry.Stream == "stderr" ? "var(--mud-palette-error)" : "var(--mud-palette-primary))">@entry.Stream</span>
+                            <pre class="ma-0" style="white-space: pre-wrap; overflow-wrap: anywhere;">@entry.Message</pre>
+                        </div>
+                    }
+                </MudPaper>
+            }
+        }
+
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
-            This page contains bounded process metadata only. Container logs, hostnames, environment variables and secret values are not collected or exposed here; container-log access requires the separate restricted operations boundary.
-        </MudAlert>
+            Process metadata is collected separately from the restricted log agent. The agent has no Docker socket, database access or public port; only allowlisted Web/Worker/Migrate JSON logs are available.
+        </MudAlert> 
     }
 }
 
@@ -102,6 +164,13 @@
     private bool _busy;
     private string? _error;
     private PlatformOperationsSnapshot? _snapshot;
+    private AdminActor? _logAdmin;
+    private bool _canReadContainerLogs;
+    private bool _logsBusy;
+    private string? _logError;
+    private PlatformLogTarget _logTarget = PlatformLogTarget.Web;
+    private int _logTail = 200;
+    private PlatformContainerLogResponse? _logResponse;
 
     private int HealthyCount => _snapshot?.Instances.Count(instance =>
         !instance.IsStale && instance.Health == PlatformServiceHealth.Healthy) ?? 0;
@@ -141,6 +210,12 @@
         }
 
         _authorized = true;
+        var logAccess = await AdminGate.RequireAsync(actor, OperatorPermission.ContainerLogsRead);
+        _canReadContainerLogs = logAccess.Success && logAccess.Value is not null;
+        _logAdmin = _canReadContainerLogs ? logAccess.Value : null;
+        if (!_canReadContainerLogs)
+            _logResponse = null;
+
         _busy = true;
         _error = null;
         try
@@ -162,6 +237,40 @@
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task LoadContainerLogs()
+    {
+        if (!_canReadContainerLogs || _logAdmin is null)
+        {
+            _logError = "ContainerLogsRead permission is required.";
+            _logResponse = null;
+            return;
+        }
+
+        _logsBusy = true;
+        _logError = null;
+        _logResponse = null;
+        try
+        {
+            var result = await ContainerLogs.GetLogsAsync(
+                _logAdmin, _logTarget, _logTail, CancellationToken.None);
+            if (!result.Success || result.Value is null)
+            {
+                _logError = result.Error ?? "Could not load restricted container logs.";
+                return;
+            }
+
+            _logResponse = result.Value;
+        }
+        catch
+        {
+            _logError = "Could not load restricted container logs.";
+        }
+        finally
+        {
+            _logsBusy = false;
         }
     }
 
