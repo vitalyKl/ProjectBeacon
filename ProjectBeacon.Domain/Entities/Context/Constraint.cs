@@ -59,6 +59,22 @@ public class Constraint : Entity, IProjectScoped
         if (Status == ConstraintStatus.Rejected)
             return;
         Status = ConstraintStatus.Rejected;
+        Revision++;
+    }
+
+    /// <summary>Restores content and lifecycle status from a historical snapshot as a new revision.</summary>
+    public void RestoreFromHistory(string body, string scopePath, ConstraintStatus status)
+    {
+        var normalizedPath = scopePath ?? string.Empty;
+        if (string.Equals(Body, body, StringComparison.Ordinal)
+            && string.Equals(ScopePath, normalizedPath, StringComparison.Ordinal)
+            && Status == status)
+            return;
+
+        Body = body;
+        ScopePath = normalizedPath;
+        Status = status;
+        Revision++;
     }
 
     public void SetScopePath(string path) => UpdateContent(Body, path);
