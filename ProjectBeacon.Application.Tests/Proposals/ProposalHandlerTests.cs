@@ -171,6 +171,39 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateMilestoneProposal_IdempotentReplayKeepsReservedTargetId()
+    {
+        var request = new CreateProposalRequest(
+            ContentTargetKind.Milestone,
+            Guid.Empty,
+            ProposalOperation.Create,
+            0,
+            """{"name":"Alpha milestone","description":"Initial milestone","order":1}""",
+            "Creates the first roadmap milestone.",
+            "milestone-create-idempotency-" + Guid.NewGuid().ToString("N"));
+        var command = new CreateProposalCommand(_projectId, request, HumanActor());
+        var handler = new CreateProposalHandler(
+            HandlerSqlite.Factory(_connection), new EfAuditWriter());
+
+        var first = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+        var replay = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        Assert.True(first.Success, first.Error);
+        Assert.True(replay.Success, replay.Error);
+        Assert.NotEqual(Guid.Empty, first.Value!.TargetId);
+        Assert.Equal(first.Value.Id, replay.Value!.Id);
+        Assert.Equal(first.Value.TargetId, replay.Value.TargetId);
+        Assert.Equal(0, replay.Value.BaseRevision);
+
+        var persisted = await _db.Proposals
+            .Where(item => item.ProjectId == _projectId
+                && item.IdempotencyKey == request.IdempotencyKey)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Single(persisted);
+        Assert.Equal(first.Value.TargetId, persisted[0].TargetId);
+    }
+
+    [Fact]
     public async Task StaleBaseRevision_MarksProposalConflictedWithoutChangingTarget()
     {
         var actor = HumanActor();
