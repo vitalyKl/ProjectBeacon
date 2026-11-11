@@ -1201,14 +1201,19 @@ System admin
 
 ## H11.3 Logout
 
-Документировать и реализовать:
+**Implemented contract:**
 
-```text
-current browser logout
-current session logout
-logout all
-JWT policy
-```
+- `GET /logout` clears only the current customer browser cookie; it does not revoke other
+  sessions.
+- `POST /control/logout` audits and clears only the current operator Control Plane cookie.
+- `POST /v1/auth/logout` is account-wide: it bumps `SessionVersion`, deactivates all active
+  `UserSession` rows, and invalidates previously issued customer JWT/cookie credentials.
+- API-token revocation remains a separate token-management operation; browser logout does not
+  revoke API tokens.
+
+There is no targeted revoke-one-JWT operation. A future per-session JWT id/revocation store is
+required before that can be offered; do not describe account-wide invalidation as current-session
+logout.
 
 ### Gate H11
 
