@@ -36,7 +36,7 @@ public sealed class AuthorizationService : IAuthorizationService
 
         if (actor.IsDevice)
             return actor.DeviceId is { } deviceId && deviceId != Guid.Empty
-                && resource is ResourceType.Device or ResourceType.WorkstationCommand
+                && (resource is ResourceType.Device or ResourceType.WorkstationCommand)
                     ? Result.Ok()
                     : Result.Forbidden();
 

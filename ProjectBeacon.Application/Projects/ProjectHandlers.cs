@@ -18,14 +18,14 @@ using Microsoft.EntityFrameworkCore;
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAuthorizationService? _auth;
+    private readonly IAuthorizationService _auth;
     private readonly ITenantContext _tenant;
     private readonly IAuditWriter? _auditWriter;
     private readonly IEntitlementEvaluator? _entitlements;
 
     public CreateProjectHandler(
         IBeaconDbFactory dbFactory,
-        IAuthorizationService? auth,
+        IAuthorizationService auth,
         ITenantContext tenant,
         IAuditWriter? auditWriter = null,
         IEntitlementEvaluator? entitlements = null)
@@ -53,7 +53,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         var window = new TenantContext();
         window.Assign(_tenant.ProjectId, orgId, _tenant.Unscoped);
         await using var authDb = _dbFactory.CreateDbContext(window);
-        if (!await CanCreateInOrgAsync(authDb, command.Actor, orgId, ct))
+        var permission = await _auth.CanAsync(
+            authDb,
+            command.Actor,
+            ResourceType.Org,
+            AuthAction.Administer,
+            orgId: orgId,
+            ct: ct);
+        if (!permission.Success)
             return Result.Forbidden<ProjectDto>("You need Owner or Admin rights in this org to create a project.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, orgId);
@@ -121,26 +128,6 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         await transaction.CommitAsync(ct);
 
         return Result.Ok(MapToDto(project));
-    }
-
-    // The membership rows are tenant-scoped, so the check must run inside the RLS window
-    // for the target org. Delegates to IAuthorizationService when one was injected; a
-    // direct construction without it (e.g. tests) applies the same rule: org Owner/Admin
-    // or system admin.
-    private async Task<bool> CanCreateInOrgAsync(IBeaconDb db, ActorContext actor, Guid orgId, CancellationToken ct)
-    {
-        if (actor.UserId is not { } userId)
-            return false;
-
-        if (_auth is not null)
-            return (await _auth.CanAsync(db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct)).Success;
-
-        if (await db.OrgMembers.IgnoreQueryFilters()
-                .AnyAsync(m => m.OrgId == orgId && m.UserId == userId
-                    && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct))
-            return true;
-        return await db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
