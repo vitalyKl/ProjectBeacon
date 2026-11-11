@@ -324,7 +324,7 @@ else
     {
         if (_editingId is null) return;
         var updated = await UpdateMilestoneHandler.HandleAsync(new UpdateMilestoneCommand(new UpdateMilestoneRequest(
-            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision), _actor));
+            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision, _project?.Id), _actor));
         if (!updated.Success)
         {
             Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
@@ -350,7 +350,8 @@ else
 
     private async Task CloseMilestone(MilestoneDto milestone)
     {
-        var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)));
+        var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(
+            new CloseMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -362,7 +363,8 @@ else
 
     private async Task ReopenMilestone(MilestoneDto milestone)
     {
-        var result = await ReopenMilestoneHandler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)));
+        var result = await ReopenMilestoneHandler.HandleAsync(new ReopenMilestoneCommand(
+            new ReopenMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
