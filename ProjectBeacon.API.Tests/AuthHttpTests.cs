@@ -379,7 +379,7 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -388,7 +388,7 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory(configureRecoveryToken: false);
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
