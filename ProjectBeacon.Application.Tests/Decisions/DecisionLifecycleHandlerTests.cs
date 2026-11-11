@@ -118,6 +118,7 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var accept = new AcceptDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var accepted = await accept.HandleAsync(first.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.Equal(DecisionStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(2, accepted.Value.Revision);
 
         var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
