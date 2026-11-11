@@ -234,11 +234,13 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
 
     public const string BootstrapToken = "web-test-bootstrap-token";
+    public const string RecoveryToken = "web-test-admin-recovery-token";
 
     public WebTestFactory()
     {
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
         Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
+        Environment.SetEnvironmentVariable("ADMIN_RECOVERY_TOKEN", RecoveryToken);
         _connection.Open();
     }
 
@@ -250,6 +252,7 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
         // v1 material is bridged from JWT:Secret, mirroring the rollout phase.
         builder.UseSetting("DATA_PROTECTION_KEY", "ProjectBeacon-Data-Protection-Key-Must-Be-At-Least-32-Chars");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
+        builder.UseSetting("ADMIN_RECOVERY_TOKEN", RecoveryToken);
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())
