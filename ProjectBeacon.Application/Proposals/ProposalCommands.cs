@@ -741,6 +741,48 @@ public sealed class AcceptProposalHandler
                     return Result.Failure<ProposalDto>("Proposal has expired.", ErrorKind.Conflict);
                 }
 
+                if (proposal.Operation == ProposalOperation.Create)
+                {
+                    if (proposal.TargetKind != ContentTargetKind.Milestone)
+                        return Result.Failure<ProposalDto>("Create is supported for Milestone only.");
+                    var createPayload = command.AcceptedPayloadJson ?? proposal.PayloadJson;
+                    if (!ProposalContentValidation.TryValidateCreatePayload(
+                            proposal.TargetKind, createPayload, out var createError))
+                        return Result.Failure<ProposalDto>(createError!);
+                    if (await db.Milestones.AnyAsync(item =>
+                            item.Id == proposal.TargetId && item.ProjectId == proposal.ProjectId, ct))
+                        return Result.Failure<ProposalDto>(
+                            "The reserved milestone id is already in use.", ErrorKind.Conflict);
+
+                    using var createDocument = JsonDocument.Parse(createPayload);
+                    var createRoot = createDocument.RootElement;
+                    var milestone = Milestone.CreateWithId(
+                        proposal.TargetId,
+                        createRoot.GetProperty("name").GetString()!,
+                        createRoot.GetProperty("description").ValueKind == JsonValueKind.Null
+                            ? null
+                            : createRoot.GetProperty("description").GetString(),
+                        proposal.ProjectId,
+                        createRoot.GetProperty("order").GetInt32());
+                    db.Milestones.Add(milestone);
+                    _contentWriter.AddVersion(
+                        db, milestone,
+                        "Human", command.Actor.UserId.Value.ToString("D"),
+                        proposalId: proposal.Id);
+                    proposal.Accept(
+                        command.Actor.UserId.Value,
+                        milestone.Revision,
+                        command.AcceptedPayloadJson,
+                        now);
+                    StageAudit(db, command.Actor, proposal, orgId.Value,
+                        "proposal.accepted", ProposalStatus.Accepted);
+                    await db.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
+                    decisionTaskId = proposal.TaskId;
+                    decisionCommitted = true;
+                    return Result.Ok(ProposalMapper.Map(proposal));
+                }
+
                 if (proposal.TargetKind == ContentTargetKind.RepoPatch)
                 {
                     if (command.AcceptedPayloadJson is not null
@@ -762,8 +804,20 @@ public sealed class AcceptProposalHandler
                 }
 
                 var payload = command.AcceptedPayloadJson ?? proposal.PayloadJson;
-                if (!ProposalContentValidation.TryValidatePayload(proposal.TargetKind, payload, out var validationError))
+                if (proposal.Operation == ProposalOperation.Delete)
+                {
+                    if (command.AcceptedPayloadJson is not null)
+                        return Result.Failure<ProposalDto>(
+                            "Delete proposals cannot be edited during approval.",
+                            ErrorKind.Validation);
+                    if (!ProposalContentValidation.TryValidateDeletePayload(payload, out var deleteError))
+                        return Result.Failure<ProposalDto>(deleteError!);
+                }
+                else if (!ProposalContentValidation.TryValidatePayload(
+                    proposal.TargetKind, payload, out var validationError))
+                {
                     return Result.Failure<ProposalDto>(validationError!);
+                }
 
                 var target = await ProposalContentValidation.LoadTargetAsync(
                     db, proposal.ProjectId, proposal.TargetKind, proposal.TargetId, ct);
@@ -796,8 +850,46 @@ public sealed class AcceptProposalHandler
                 var changedById = attribution.Id ?? command.Actor.UserId.Value.ToString("D");
                 try
                 {
-                    ProposalContentValidation.Apply(
-                        target.Entity, proposal.TargetKind, payload, changedByType, changedById);
+                    if (proposal.Operation == ProposalOperation.Delete)
+                    {
+                        switch (target.Entity)
+                        {
+                            case ContextSection section:
+                                section.Delete();
+                                _contentWriter.AddVersion(
+                                    db, section, changedByType, changedById,
+                                    deleted: true, proposalId: proposal.Id);
+                                db.ContextSections.Remove(section);
+                                break;
+                            case Milestone milestone:
+                                milestone.Delete();
+                                _contentWriter.AddVersion(
+                                    db, milestone, changedByType, changedById,
+                                    deleted: true, proposalId: proposal.Id);
+                                db.Milestones.Remove(milestone);
+                                break;
+                            case Decision decision:
+                                decision.Deprecate();
+                                _contentWriter.AddVersion(
+                                    db, decision, changedByType, changedById,
+                                    proposalId: proposal.Id);
+                                break;
+                            case Constraint constraint:
+                                constraint.Reject();
+                                _contentWriter.AddVersion(
+                                    db, constraint, changedByType, changedById,
+                                    proposalId: proposal.Id);
+                                break;
+                            default:
+                                return Result.Failure<ProposalDto>(
+                                    "This content target does not support Delete proposals.");
+                        }
+                    }
+                    else
+                    {
+                        ProposalContentValidation.Apply(
+                            target.Entity, proposal.TargetKind, payload, changedByType, changedById);
+                    }
                 }
                 catch (ArgumentException exception)
                 {
@@ -809,12 +901,13 @@ public sealed class AcceptProposalHandler
                 }
 
                 var appliedRevision = ProposalContentValidation.GetRevision(target.Entity);
-                if (appliedRevision != target.Revision)
+                if (proposal.Operation != ProposalOperation.Delete && appliedRevision != target.Revision)
                     _contentWriter.AddVersion(db, target.Entity, changedByType, changedById,
                         proposalId: proposal.Id);
 
                 proposal.Accept(command.Actor.UserId.Value, appliedRevision,
-                    command.AcceptedPayloadJson, now);
+                    proposal.Operation == ProposalOperation.Delete ? null : command.AcceptedPayloadJson,
+                    now);
                 StageAudit(db, command.Actor, proposal, orgId.Value, "proposal.accepted", ProposalStatus.Accepted);
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
