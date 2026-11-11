@@ -441,7 +441,7 @@ public sealed class EfOrganizationDataExportService(
             {
                 item.Id,
                 item.ProjectId,
-                RepoId = item.RepoId != null && projectIds.Contains(item.RepoId.Value) ? item.RepoId : null,
+                item.RepoId,
                 item.TaskId,
                 item.SectionId,
                 item.Key,
