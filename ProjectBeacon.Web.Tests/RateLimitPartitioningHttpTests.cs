@@ -69,6 +69,23 @@ public sealed class RateLimitPartitioningHttpTests
     }
 
     [Fact]
+    public async Task AuthAndReadPoliciesHaveIndependentUserBuckets()
+    {
+        await using var app = await BuildAppAsync();
+        using var client = app.GetTestClient();
+
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, ClientA, UserA)).StatusCode);
+
+        // The same user has a separate auth-read bucket and must not inherit auth exhaustion.
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.OK, (await GetAsync(client, ClientA, UserA)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await PostAsync(client, ClientA, UserA)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await GetAsync(client, ClientA, UserA)).StatusCode);
+    }
+
+    [Fact]
     public async Task UntrustedPeerCannotSpoofForwardedClientIp()
     {
         const string untrustedPeer = "198.51.100.99";
@@ -128,9 +145,23 @@ public sealed class RateLimitPartitioningHttpTests
         });
         app.UseRateLimiter();
         app.MapPost("/auth-test", () => Results.Ok()).RequireRateLimiting("auth");
+        app.MapGet("/auth-read-test", () => Results.Ok()).RequireRateLimiting("auth-read");
 
         await app.StartAsync();
         return app;
+    }
+
+    private static async Task<HttpResponseMessage> GetAsync(
+        HttpClient client,
+        string? forwardedFor,
+        string? userId = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/auth-read-test");
+        if (forwardedFor is not null)
+            request.Headers.Add("X-Forwarded-For", forwardedFor);
+        if (userId is not null)
+            request.Headers.Add("X-Test-User", userId);
+        return await client.SendAsync(request);
     }
 
     private static async Task<HttpResponseMessage> PostAsync(
