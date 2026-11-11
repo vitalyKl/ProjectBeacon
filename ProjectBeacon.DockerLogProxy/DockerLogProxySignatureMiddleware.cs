@@ -50,7 +50,7 @@ public sealed class DockerLogProxySignatureMiddleware(
                 timestamp,
                 nonce,
                 context.Request.Method,
-                $"{context.Request.Path.Value}{context.Request.QueryString.Value}",
+                context.Request.Path + context.Request.QueryString,
                 signature))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;

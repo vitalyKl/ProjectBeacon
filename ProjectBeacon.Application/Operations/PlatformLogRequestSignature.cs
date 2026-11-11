@@ -3,7 +3,10 @@ namespace ProjectBeacon.Application.Operations;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>Shared HMAC request format between the Control Plane and the isolated OpsAgent.</summary>
+/// <summary>
+/// Shared request-signing format between the Control Plane and the isolated OpsAgent.
+/// The caller signs only a method and exact path/query; no body or arbitrary target is accepted.
+/// </summary>
 public static class PlatformLogRequestSignature
 {
     public const int MinimumSecretBytes = 32;
@@ -24,7 +27,11 @@ public static class PlatformLogRequestSignature
             || pathAndQuery[0] != '/')
             throw new ArgumentException("The signed request fields are invalid.");
 
-        var canonical = string.Join('\n', timestamp, nonce, method.ToUpperInvariant(), pathAndQuery);
+        var canonical = string.Join('\n',
+            timestamp,
+            nonce,
+            method.ToUpperInvariant(),
+            pathAndQuery);
         var digest = HMACSHA256.HashData(secret, Encoding.UTF8.GetBytes(canonical));
         return Convert.ToHexString(digest).ToLowerInvariant();
     }
