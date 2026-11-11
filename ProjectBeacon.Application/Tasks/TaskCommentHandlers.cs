@@ -21,6 +21,9 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
 
     public async Task<Result<TaskCommentDto>> HandleAsync(AddCommentCommand command, CancellationToken ct = default)
     {
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Failure<TaskCommentDto>("A human project member must author task comments.", ErrorKind.Forbidden);
+
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
@@ -36,7 +39,6 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
         if (!permission.Success)
             return Result.Failure<TaskCommentDto>(permission);
 
-        var userId = command.Actor.UserId ?? Guid.Empty;
         var comment = Domain.Entities.Tasks.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
         db.TaskComments.Add(comment);
         await db.SaveChangesAsync(ct);
