@@ -126,6 +126,42 @@ public sealed class AuthorizationService : IAuthorizationService
             return Result.Forbidden();
 
         var isSelfRemoval = actor.UserId == targetUserId;
+        if (isSelfRemoval)
+        {
+            // A member may leave without being a project administrator, but the project
+            // must retain at least one Owner. Resolve lifecycle before exposing the outcome.
+            var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, null, ct);
+            if (!lifecycle.Success)
+                return lifecycle;
+
+            if (targetRole == MemberRole.Owner)
+            {
+                var ownerCount = await db.ProjectMembers.IgnoreQueryFilters()
+                    .CountAsync(m => m.ProjectId == projectId && m.Role == MemberRole.Owner, ct);
+                if (ownerCount <= 1)
+                    return Result.Failure(
+                        "The last project Owner cannot leave or be removed.",
+                        ErrorKind.Conflict);
+            }
+
+            return Result.Ok();
+        }
+
+        // Check the caller before revealing whether the target is the last Owner.
+        // Otherwise an unrelated user could distinguish owner-count state via 409 vs 403.
+        var manage = await CanAsync(
+            db, actor, ResourceType.Project, AuthAction.Administer,
+            projectId: projectId, ct: ct);
+        if (!manage.Success)
+            return Result.Forbidden();
+
+        if (targetRole == MemberRole.Owner && !actor.IsAdmin)
+        {
+            var actorRole = await GetActorRoleAsync(db, projectId, actor, ct);
+            if (actorRole != MemberRole.Owner)
+                return Result.Forbidden();
+        }
+
         if (targetRole == MemberRole.Owner)
         {
             var ownerCount = await db.ProjectMembers.IgnoreQueryFilters()
@@ -134,29 +170,9 @@ public sealed class AuthorizationService : IAuthorizationService
                 return Result.Failure(
                     "The last project Owner cannot leave or be removed.",
                     ErrorKind.Conflict);
-
-            if (!isSelfRemoval && !actor.IsAdmin)
-            {
-                var actorRole = await GetActorRoleAsync(db, projectId, actor, ct);
-                if (actorRole != MemberRole.Owner)
-                    return Result.Failure("Only an Owner or system admin can remove an Owner.");
-            }
-
-            if (isSelfRemoval)
-            {
-                var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, null, ct);
-                return lifecycle.Success ? Result.Ok() : lifecycle;
-            }
-        }
-        else if (isSelfRemoval)
-        {
-            var lifecycle = await EnsureOrganizationActiveAsync(db, projectId, null, ct);
-            return lifecycle.Success ? Result.Ok() : lifecycle;
         }
 
-        return await CanAsync(
-            db, actor, ResourceType.Project, AuthAction.Administer,
-            projectId: projectId, ct: ct);
+        return Result.Ok();
     }
 
     public async Task<Result> CanCreateTokenAsync(
