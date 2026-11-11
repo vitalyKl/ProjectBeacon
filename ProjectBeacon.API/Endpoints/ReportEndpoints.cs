@@ -23,7 +23,7 @@ public static class ReportEndpoints
         return app;
     }
 
-    private static async Task<IResult> Generate(Guid projectId, [FromBody] GenerateReportBody? body, HttpContext ctx, GenerateReportHandler handler)
+    private static async Task<IResult> Generate(Guid projectId, HttpContext ctx, GenerateReportHandler handler)
     {
         // Attribution is security metadata, not report content. Never accept it from the
         // request body: a caller must not be able to forge another user's authorship.
@@ -32,34 +32,32 @@ public static class ReportEndpoints
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new GenerateReportCommand(
-            new GenerateReportRequest(projectId, "user", userId.ToString())));
+            new GenerateReportRequest(projectId), actor));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/reports/{result.Value!.Id}", result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> List(Guid projectId, ListReportsHandler handler)
+    private static async Task<IResult> List(Guid projectId, HttpContext ctx, ListReportsHandler handler)
     {
-        var result = await handler.HandleAsync(new ListReportsRequest(projectId));
+        var result = await handler.HandleAsync(new ListReportsRequest(projectId, ctx.GetActor()));
         return Results.Ok(result.Value);
     }
 
-    private static async Task<IResult> Get(Guid projectId, Guid reportId, GetReportHandler handler)
+    private static async Task<IResult> Get(Guid projectId, Guid reportId, HttpContext ctx, GetReportHandler handler)
     {
-        var result = await handler.HandleAsync(new GetReportRequest(projectId, reportId));
+        var result = await handler.HandleAsync(new GetReportRequest(projectId, reportId, ctx.GetActor()));
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ContextCost(Guid taskId, ContextCostReportHandler handler)
+    private static async Task<IResult> ContextCost(Guid taskId, HttpContext ctx, ContextCostReportHandler handler)
     {
-        var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId));
+        var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId, Actor: ctx.GetActor()));
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    /// <summary>Legacy optional JSON body for <c>POST /v1/projects/{projectId:guid}/reports</c>. Creator fields are ignored; attribution is always server-derived.</summary>
-    public record GenerateReportBody(string? CreatedByType, string? CreatedById);
 }
