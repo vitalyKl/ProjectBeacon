@@ -191,6 +191,39 @@ public sealed class CapabilityAndWorkHttpTests
         var forgedActorId = creator.GetProperty("id").GetGuid().ToString();
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+
+        // TaskWrite explicitly permits adding task content, but does not grant session
+        // execution, human-authored comments, or modification/removal of human checklist steps.
+        var taskAId = taskA.GetProperty("id").GetGuid();
+        var addedStep = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/steps",
+            new { title = "Agent-created step" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, addedStep.StatusCode);
+        var addedStepJson = await addedStep.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var stepId = addedStepJson.GetProperty("id").GetGuid();
+
+        var toggleStep = await client.PatchAsJsonAsync(
+            $"/v1/steps/{stepId}", new { done = true },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var deleteStep = await client.DeleteAsync(
+            $"/v1/steps/{stepId}", TestContext.Current.CancellationToken);
+        var comment = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/comments",
+            new { taskId = taskAId, content = "Token comment" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var pipelineStart = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/pipeline/start",
+            new { taskId = taskAId },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, toggleStep.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, deleteStep.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, comment.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, pipelineStart.StatusCode);
+
+
         var foreign = await client.PostAsJsonAsync("/v1/work/finish_work", new
         {
             taskId = taskB.GetProperty("id").GetGuid().ToString(),
