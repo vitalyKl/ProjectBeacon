@@ -140,8 +140,10 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null)
-            return Result.Failure("Milestone not found.");
+        if (milestone is null
+            || (command.Request.ProjectId is { } expectedProjectId
+                && milestone.ProjectId != expectedProjectId))
+            return Result.Failure("Milestone not found.", ErrorKind.NotFound);
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
             return Result.Forbidden("Project membership is required to delete a milestone.");
