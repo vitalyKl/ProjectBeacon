@@ -84,33 +84,6 @@ public sealed class OrganizationDataExportTests : IDisposable
         var foreignInvoiceId = Guid.NewGuid();
         var foreignLedgerId = Guid.NewGuid();
         var billingTime = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
-        await _db.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE "OrganizationSubscriptions" (
-                "Id" TEXT NOT NULL, "OrgId" TEXT NOT NULL, "PlanKey" TEXT NOT NULL,
-                "Status" INTEGER NOT NULL, "Source" INTEGER NOT NULL,
-                "TrialEndsAtUtc" TEXT NULL, "CurrentPeriodStartsAtUtc" TEXT NOT NULL,
-                "CurrentPeriodEndsAtUtc" TEXT NULL, "CancelAtPeriodEnd" INTEGER NOT NULL,
-                "GraceUntilUtc" TEXT NULL, "ProviderKey" TEXT NULL,
-                "ExternalCustomerReference" TEXT NULL, "ExternalSubscriptionReference" TEXT NULL,
-                "CreatedAtUtc" TEXT NOT NULL, "UpdatedAtUtc" TEXT NOT NULL
-            );
-            CREATE TABLE "BillingInvoices" (
-                "Id" TEXT NOT NULL, "OrgId" TEXT NOT NULL, "Number" TEXT NOT NULL,
-                "Description" TEXT NOT NULL, "AmountMinor" INTEGER NOT NULL, "Currency" TEXT NOT NULL,
-                "IssuedAtUtc" TEXT NOT NULL, "DueAtUtc" TEXT NOT NULL, "Status" INTEGER NOT NULL,
-                "PaidAtUtc" TEXT NULL, "PaymentReference" TEXT NULL,
-                "ProviderKey" TEXT NULL, "ExternalInvoiceReference" TEXT NULL
-            );
-            CREATE TABLE "BillingLedgerEntries" (
-                "Id" TEXT NOT NULL, "OccurredAtUtc" TEXT NOT NULL, "OrgId" TEXT NOT NULL,
-                "EventType" INTEGER NOT NULL, "Source" INTEGER NOT NULL, "AmountMinor" INTEGER NULL,
-                "Currency" TEXT NULL, "ProviderKey" TEXT NULL, "ProviderEventId" TEXT NULL,
-                "Reference" TEXT NULL, "ActorUserId" TEXT NULL, "Note" TEXT NULL,
-                "IdempotencyKey" TEXT NULL, "SubscriptionId" TEXT NULL, "InvoiceId" TEXT NULL
-            );
-            """,
-            TestContext.Current.CancellationToken);
         await _db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "OrganizationSubscriptions"
