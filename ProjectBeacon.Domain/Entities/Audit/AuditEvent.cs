@@ -15,7 +15,7 @@ public sealed class AuditEvent : Entity
     {
         "reasonCode", "permission", "authMethod", "source", "previousState",
         "newState", "count", "policyCode", "resultCode",
-        "sourceVersionId", "restoredRevision"
+        "sourceVersionId", "restoredRevision", "restoredTaskLinks"
     };
 
     private static readonly Regex DetailCodePattern =
