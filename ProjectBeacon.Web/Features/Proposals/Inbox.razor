@@ -509,14 +509,25 @@ else
         try
         {
             using var document = JsonDocument.Parse(payload);
-            if (document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("edits", out var edits))
+            if (proposal.TargetKind == ContentTargetKind.ContextSection
+                && document.RootElement.ValueKind == JsonValueKind.Object)
             {
-                var baseMarkdown = ExtractContextSectionBody(baseSnapshot);
-                return ProposalMarkdownEditApplier.TryApply(
-                        baseMarkdown, edits, out var result, out var error)
-                    ? result
-                    : $"Preview unavailable: {error}";
+                var title = document.RootElement.TryGetProperty("title", out var titleElement)
+                    && titleElement.ValueKind == JsonValueKind.String
+                        ? titleElement.GetString()
+                        : ExtractContextSectionTitle(baseSnapshot);
+                if (document.RootElement.TryGetProperty("edits", out var edits))
+                {
+                    var baseMarkdown = ExtractContextSectionBody(baseSnapshot);
+                    var body = ProposalMarkdownEditApplier.TryApply(
+                            baseMarkdown, edits, out var result, out var error)
+                        ? result
+                        : $"Preview unavailable: {error}";
+                    return FormatContextSectionPreview(title, body);
+                }
+
+                var proposedBody = ExtractContextSectionBody(payload);
+                return FormatContextSectionPreview(title, proposedBody);
             }
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
@@ -525,6 +536,30 @@ else
         }
 
         return ExtractMarkdown(payload);
+    }
+
+    private static string ExtractContextSectionTitle(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty("title", out var title)
+                && title.ValueKind == JsonValueKind.String
+                    ? title.GetString() ?? string.Empty
+                    : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string FormatContextSectionPreview(string? title, string body)
+    {
+        var normalizedTitle = title?.Trim() ?? string.Empty;
+        return string.IsNullOrWhiteSpace(normalizedTitle)
+            ? body
+            : $"**Title:** {normalizedTitle}{Environment.NewLine}{Environment.NewLine}{body}";
     }
 
     private static string ExtractContextSectionBody(string json)
@@ -545,7 +580,7 @@ else
 
     private static string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
         targetKind == ContentTargetKind.ContextSection
-            ? ExtractContextSectionBody(json)
+            ? FormatContextSectionPreview(ExtractContextSectionTitle(json), ExtractContextSectionBody(json))
             : ExtractMarkdown(json);
 
     private static string ExtractMarkdown(string json)
