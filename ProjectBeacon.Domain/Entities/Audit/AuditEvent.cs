@@ -14,7 +14,8 @@ public sealed class AuditEvent : Entity
     private static readonly HashSet<string> AllowedDetailKeys = new(StringComparer.Ordinal)
     {
         "reasonCode", "permission", "authMethod", "source", "previousState",
-        "newState", "count", "policyCode", "resultCode"
+        "newState", "count", "policyCode", "resultCode",
+        "sourceVersionId", "restoredRevision"
     };
 
     private static readonly Regex DetailCodePattern =
