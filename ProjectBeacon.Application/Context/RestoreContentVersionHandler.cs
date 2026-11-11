@@ -115,6 +115,7 @@ public sealed class RestoreContentVersionHandler
         object target;
         var changed = false;
         var currentRevision = 0;
+        var restoredTaskLinks = 0;
 
         try
         {
@@ -275,6 +276,25 @@ public sealed class RestoreContentVersionHandler
                                 closedAt,
                                 createdAt);
                             db.Milestones.Add(milestone);
+
+                            // Deleting a milestone sets task MilestoneId to null. Restore only
+                            // links tasks that remain unassigned; a later deliberate move to a
+                            // different milestone must not be overwritten by history restoration.
+                            var taskIds = ReadSnapshotArray<Guid>(deletion.ContentJson, "taskIds")
+                                ?? snapshot.TaskIds
+                                ?? [];
+                            if (taskIds.Length > 0)
+                            {
+                                var tasksToRelink = await db.Tasks
+                                    .Where(task => task.ProjectId == command.ProjectId
+                                        && task.MilestoneId == null
+                                        && taskIds.Contains(task.Id))
+                                    .ToListAsync(ct);
+                                foreach (var task in tasksToRelink)
+                                    task.SetMilestone(milestone.Id);
+                                restoredTaskLinks = tasksToRelink.Count;
+                            }
+
                             target = milestone;
                             currentRevision = command.ExpectedRevision;
                             changed = true;
@@ -359,7 +379,8 @@ public sealed class RestoreContentVersionHandler
             var auditDetails = JsonSerializer.Serialize(new
             {
                 sourceVersionId = source.Id,
-                restoredRevision
+                restoredRevision,
+                restoredTaskLinks
             }, JsonOptions);
             _auditWriter.Stage(db, AuditEventFactory.ForActor(
                 command.Actor,
@@ -414,6 +435,15 @@ public sealed class RestoreContentVersionHandler
         {
             return null;
         }
+    }
+
+    private static T[]? ReadSnapshotArray<T>(string json, string propertyName)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.Array)
+            return null;
+        return value.Deserialize<T[]>(JsonOptions) ?? [];
     }
 
     private static T? ReadSnapshotProperty<T>(string json, string propertyName)
@@ -480,6 +510,7 @@ public sealed class RestoreContentVersionHandler
         int Order,
         DateTime? CreatedAt = null,
         DateTime? ClosedAt = null,
+        Guid[]? TaskIds = null,
         bool Deleted = false);
     private sealed record ProjectDescriptionSnapshot(string? Description, bool Deleted = false);
     private sealed record TaskDescriptionSnapshot(
