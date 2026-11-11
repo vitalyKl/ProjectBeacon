@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Context;
 using ProjectBeacon.Domain.Entities.Roadmap;
