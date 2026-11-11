@@ -89,27 +89,29 @@ public class BootstrapHandler
                     outcome: AuditOutcome.Denied,
                     detailsJson: """{"reasonCode":"bootstrap_already_completed"}""");
 
-            return await strategy.ExecuteAsync(async () =>
+            return await strategy.ExecuteAsync(
+                db,
+                async (context, _, operationCancellationToken) =>
             {
                 // A transient database failure may re-enter this delegate. Detach entities
                 // from the failed attempt before attaching the stable user/audit instances.
-                db.ChangeTracker.Clear();
-                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+                context.ChangeTracker.Clear();
+                await using var transaction = await context.Database.BeginTransactionAsync(operationCancellationToken);
 
                 if (string.Equals(
-                    db.Database.ProviderName,
+                    context.Database.ProviderName,
                     "Npgsql.EntityFrameworkCore.PostgreSQL",
                     StringComparison.Ordinal))
                 {
-                    await db.Database.ExecuteSqlRawAsync(
+                    await context.Database.ExecuteSqlRawAsync(
                         "SELECT pg_advisory_xact_lock(20261111, 97)",
                         ct);
                 }
 
-                var existingAdminId = await db.Users
+                var existingAdminId = await context.Users
                     .Where(item => item.IsAdmin)
                     .Select(item => (Guid?)item.Id)
-                    .FirstOrDefaultAsync(ct);
+                    .FirstOrDefaultAsync(operationCancellationToken);
 
                 if (existingAdminId is { } existingId)
                 {
@@ -118,7 +120,7 @@ public class BootstrapHandler
                     // competing administrator; return the same one-time password.
                     if (existingId == user.Id)
                     {
-                        await transaction.CommitAsync(ct);
+                        await transaction.CommitAsync(operationCancellationToken);
                         return Result.Ok(new BootstrapResponse(
                             user.Id, user.Login, user.Email, user.IsAdmin, password));
                     }
@@ -127,27 +129,29 @@ public class BootstrapHandler
                     // not write duplicate audit rows if the prior commit acknowledgement was
                     // lost after the database committed it.
                     if (deniedEvent is not null
-                        && !await db.AuditEvents.AnyAsync(item => item.Id == deniedEvent.Id, ct))
+                        && !await context.AuditEvents.AnyAsync(item => item.Id == deniedEvent.Id, operationCancellationToken))
                     {
-                        _auditWriter!.Stage(db, deniedEvent);
-                        await db.SaveChangesAsync(ct);
+                        _auditWriter!.Stage(context, deniedEvent);
+                        await context.SaveChangesAsync(operationCancellationToken);
                     }
 
-                    await transaction.CommitAsync(ct);
+                    await transaction.CommitAsync(operationCancellationToken);
                     return Result.Failure<BootstrapResponse>(
                         "Bootstrap already completed.", ErrorKind.Conflict);
                 }
 
-                db.Users.Add(user);
+                context.Users.Add(user);
                 if (completedEvent is not null)
-                    _auditWriter!.Stage(db, completedEvent);
+                    _auditWriter!.Stage(context, completedEvent);
 
-                await db.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
+                await context.SaveChangesAsync(operationCancellationToken);
+                await transaction.CommitAsync(operationCancellationToken);
 
                 return Result.Ok(new BootstrapResponse(
                     user.Id, user.Login, user.Email, user.IsAdmin, password));
-            });
+            },
+                verifySucceeded: null,
+                cancellationToken: ct);
         }
         finally
         {
