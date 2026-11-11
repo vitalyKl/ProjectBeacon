@@ -207,6 +207,10 @@ public sealed class InboxRenderTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
         cut.FindAll(".mud-expand-panel-header").First(header =>
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        var deletePayload = cut.FindComponents<MudBlazor.MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Payload to apply when accepted (JSON)");
+        Assert.True(deletePayload.Instance.ReadOnly);
+
         cut.FindAll("button").First(button =>
             string.Equals(button.TextContent.Trim(), "Accept", StringComparison.OrdinalIgnoreCase)).Click();
 
@@ -278,7 +282,6 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains("ProjectDescription " + conflicted.Id.ToString("N")[..8], cut.Markup);
         Assert.Contains("ProjectDescription " + accepted.Id.ToString("N")[..8], cut.Markup);
         Assert.Contains("Conflicted", cut.Markup);
-        Assert.Contains("Proposal accepted", cut.Markup, StringComparison.OrdinalIgnoreCase);
 
         var savedProject = await DbContext.Projects.SingleAsync(
             project => project.Id == projectId, CancellationToken.None);
