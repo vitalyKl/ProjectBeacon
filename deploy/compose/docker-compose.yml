@@ -43,7 +43,6 @@ services:
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
       OPS_AGENT_SHARED_SECRET: ""
-      OPS_AGENT_SHARED_SECRET: ""
       # The docker network subnet below. An explicit list is the COMPLETE trust set
       # (the framework loopback default is dropped) — required for X-Forwarded-Proto
       # (Secure cookies, HTTPS redirect) and for per-client-IP rate limiting.
@@ -80,6 +79,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,6 +137,7 @@ services:
       BEACON_MIGRATE_THEN_EXIT: "true"
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
