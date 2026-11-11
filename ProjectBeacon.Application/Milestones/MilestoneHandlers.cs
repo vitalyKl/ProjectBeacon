@@ -4,6 +4,7 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Application.Persistence;
+using Application.Proposals;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates a milestone on a project.
@@ -129,10 +130,13 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure("Milestone not found.");
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
+            return Result.Forbidden("Project membership is required to delete a milestone.");
 
         milestone.Delete();
         db.Milestones.Remove(milestone);
-        var attribution = ContentAttribution.FromActor(command.Actor);
+        var attribution = ContentAttribution.FromActor(actor);
         var saved = await _contentWriter.SaveAsync(
             db, milestone, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
         return saved.Success
