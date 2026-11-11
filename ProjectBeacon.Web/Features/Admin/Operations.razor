@@ -144,7 +144,7 @@
                     {
                         <div class="d-flex align-start gap-2 mb-1" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem;">
                             <span class="mud-text-secondary" style="white-space: nowrap;">@entry.TimestampUtc.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)</span>
-                            <span style="min-width: 3.8rem; color: @(entry.Stream == "stderr" ? "var(--mud-palette-error)" : "var(--mud-palette-primary))">@entry.Stream</span>
+                            <span style="min-width: 3.8rem; color: @(entry.Stream == "stderr" ? "var(--mud-palette-error)" : "var(--mud-palette-primary)")">@entry.Stream</span>
                             <pre class="ma-0" style="white-space: pre-wrap; overflow-wrap: anywhere;">@entry.Message</pre>
                         </div>
                     }
