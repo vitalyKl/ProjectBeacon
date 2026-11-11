@@ -255,7 +255,9 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
         milestone.Close();
         if (milestone.Revision != previousRevision)
         {
-            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            var attribution = ContentAttribution.FromActor(actor);
+            var saved = await _contentWriter.SaveAsync(
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone close conflict.", ErrorKind.Conflict);
         }
@@ -298,7 +300,9 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
         milestone.Reopen();
         if (milestone.Revision != previousRevision)
         {
-            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            var attribution = ContentAttribution.FromActor(actor);
+            var saved = await _contentWriter.SaveAsync(
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone reopen conflict.", ErrorKind.Conflict);
         }
