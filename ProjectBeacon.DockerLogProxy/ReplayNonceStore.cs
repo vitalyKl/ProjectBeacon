@@ -47,10 +47,12 @@ public sealed class ReplayNonceStore
 
     private void RemoveExpiredNonces(long nowUnixSeconds)
     {
-        foreach (var item in _nonces)
+        foreach (var nonce in _nonces
+                     .Where(item => item.Value < nowUnixSeconds)
+                     .Select(item => item.Key)
+                     .ToArray())
         {
-            if (item.Value < nowUnixSeconds)
-                _nonces.Remove(item.Key);
+            _nonces.Remove(nonce);
         }
     }
 }
