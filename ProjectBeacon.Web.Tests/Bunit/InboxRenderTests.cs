@@ -207,10 +207,12 @@ public sealed class InboxRenderTests : BUnitRenderBase
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
         cut.Find("[data-testid='compare-base-revision'] button").Click();
 
-        Assert.Contains("Old security details.",
-            cut.Find(".proposal-diff-line.is-removed").TextContent);
-        Assert.Contains("New security details.",
-            cut.Find(".proposal-diff-line.is-added").TextContent);
+        var removedLines = string.Join(
+            "\\n", cut.FindAll(".proposal-diff-line.is-removed").Select(line => line.TextContent));
+        var addedLines = string.Join(
+            "\\n", cut.FindAll(".proposal-diff-line.is-added").Select(line => line.TextContent));
+        Assert.Contains("Old security details.", removedLines);
+        Assert.Contains("New security details.", addedLines);
         Assert.Contains("## Security", cut.Markup);
         Assert.Contains("## Operations", cut.Markup);
         Assert.DoesNotContain("**bodyMarkdown**", cut.Markup);
@@ -255,8 +257,10 @@ public sealed class InboxRenderTests : BUnitRenderBase
             header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
         cut.Find("[data-testid='compare-base-revision'] button").Click();
 
-        var removed = cut.Find(".proposal-diff-line.is-removed").TextContent;
-        var added = cut.Find(".proposal-diff-line.is-added").TextContent;
+        var removed = string.Join(
+            "\\n", cut.FindAll(".proposal-diff-line.is-removed").Select(line => line.TextContent));
+        var added = string.Join(
+            "\\n", cut.FindAll(".proposal-diff-line.is-added").Select(line => line.TextContent));
         Assert.Contains("Current operations", removed);
         Assert.Contains("Existing runbook text.", removed);
         Assert.Contains("Updated operations", added);
