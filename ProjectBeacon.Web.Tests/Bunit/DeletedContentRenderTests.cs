@@ -116,8 +116,11 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
             button.TextContent.Contains("Content history", StringComparison.OrdinalIgnoreCase)).Click();
         cut.FindAll(".mud-expand-panel-header").First(header =>
             header.TextContent.Contains("Content history:", StringComparison.OrdinalIgnoreCase)).Click();
-        cut.FindAll("button").First(button =>
-            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)).Click();
+        var constraintRestoreButtons = cut.FindAll("button")
+            .Where(button => button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.Equal(3, constraintRestoreButtons.Length);
+        constraintRestoreButtons[1].Click();
 
         var restored = await DbContext.Constraints.AsNoTracking().SingleAsync(
             item => item.Id == constraint.Id,
