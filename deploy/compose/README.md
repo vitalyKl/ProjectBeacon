@@ -138,7 +138,7 @@ and `docker inspect` `.Networks` keys.
    `ADMIN_RECOVERY_TOKEN` as a different high-entropy secret before relying on
    `/control/recover`; recovery is fail-closed when it is missing and does not accept
    `BOOTSTRAP_ADMIN_TOKEN`.
-   and verify that `https://<BEACON_DOMAIN>/control/login` returns 404. Customer
+   Then verify that `https://<BEACON_DOMAIN>/control/login` returns 404. Customer
    users continue to sign in at `https://<BEACON_DOMAIN>/login`. With
    `AUTH_LOCAL_INVITE_ONLY=true` (set in `.env.example`) registration requires
     an invite.
