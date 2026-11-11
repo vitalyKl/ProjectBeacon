@@ -17,6 +17,7 @@ public sealed class MilestoneLifecycleTests : IDisposable
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
     private readonly Guid _projectId;
+    private Guid _ownerId;
 
     public MilestoneLifecycleTests()
     {
@@ -27,6 +28,13 @@ public sealed class MilestoneLifecycleTests : IDisposable
         _db.Projects.Add(project);
         _db.SaveChanges();
         _projectId = project.Id;
+
+        var owner = User.Create("milestone-owner", "milestone-owner@beacon.local", "hash");
+        _db.Users.Add(owner);
+        _db.SaveChanges();
+        _ownerId = owner.Id;
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, _ownerId, MemberRole.Owner));
+        _db.SaveChanges();
     }
 
     public void Dispose()
@@ -34,6 +42,42 @@ public sealed class MilestoneLifecycleTests : IDisposable
         _unscoped.Dispose();
         _db.Dispose();
         _connection.Dispose();
+    }
+
+    [Fact]
+    public async Task DeleteMilestone_WritesTombstoneAndAuditAtomically()
+    {
+        var milestone = Milestone.Create(
+            "Retired milestone", "Content to be removed.", _projectId, 2);
+        var writer = new ContentWriter();
+        _db.Milestones.Add(milestone);
+        writer.AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new DeleteMilestoneHandler(
+                HandlerSqlite.Factory(_connection), writer, new Infrastructure.Audit.EfAuditWriter())
+            .HandleAsync(
+                new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.False(await _db.Milestones.AsNoTracking().AnyAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
+        var tombstone = await _db.ContentVersions.SingleAsync(
+            version => version.TargetKind == ContentTargetKind.Milestone
+                && version.TargetId == milestone.Id
+                && version.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using (var snapshot = System.Text.Json.JsonDocument.Parse(tombstone.ContentJson))
+            Assert.True(snapshot.RootElement.GetProperty("deleted").GetBoolean());
+
+        var audit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "content.deleted"
+                && item.TargetType == nameof(ContentTargetKind.Milestone)
+                && item.TargetId == milestone.Id.ToString("D"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_projectId, audit.ProjectId);
+        Assert.Null(audit.DetailsJson);
     }
 
     [Fact]
@@ -122,6 +166,9 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.Equal(System.Text.Json.JsonValueKind.Null,
             reopenedSnapshot.RootElement.GetProperty("closedAt").ValueKind);
     }
+
+    private ActorContext HumanActor() =>
+        new(ActorType.Human, _ownerId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
     private Task<int> CountVersions(Guid targetId) =>
         _db.ContentVersions.CountAsync(
