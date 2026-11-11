@@ -454,7 +454,7 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[1] == "tasks"
                 && GuidSegmentEquals(segments, 2, scopedTaskId)
                 && segments[3] == "pipeline"
-                && segments[4] is "verdict" or "approve";
+                && segments[4] == "verdict";
         }
 
         return false;
