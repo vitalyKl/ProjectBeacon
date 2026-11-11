@@ -216,12 +216,12 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var first = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
 
         // The same failure report again: the effect is already in place, so it is a no-op.
         var replay = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
         Assert.True(replay.Success, replay.Error);
 
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
@@ -239,12 +239,12 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         var first = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
 
         // "Failed: XY" is not a "\n\n" segment of "Failed: X", so it must be appended.
         var second = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "XY", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "XY")), TestContext.Current.CancellationToken);
         Assert.True(second.Success, second.Error);
 
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
@@ -293,7 +293,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         var handler = new FinishWorkHandler(new FixedDbFactory(db), new AuthorizationService());
         var result = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Conflict, result.Kind);
@@ -323,7 +323,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
             .SetProperty(t => t.ReviewNotes, "rival notes")
             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1)));
 
-        var handler = new FinishWorkHandler(new FixedDbFactory(db));
+        var handler = new FinishWorkHandler(new FixedDbFactory(db), new AuthorizationService());
         var result = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
             task.Id.ToString(), "done", "my notes", ReviewRunId: proof.Id)), TestContext.Current.CancellationToken);
 
@@ -349,9 +349,9 @@ public sealed class FinishWorkHandlerTests : IDisposable
             .SetProperty(t => t.Description, "Failed: X")
             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1)));
 
-        var handler = new FinishWorkHandler(new FixedDbFactory(db));
+        var handler = new FinishWorkHandler(new FixedDbFactory(db), new AuthorizationService());
         var result = await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
 
         // The re-read shows Todo plus the exact note: idempotent Ok, nothing duplicated.
         Assert.True(result.Success, result.Error);
@@ -371,13 +371,13 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection), new AuthorizationService());
         Assert.True((await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken)).Success);
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken)).Success);
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(1, task.StateRevision);
 
         // A different report reads the fresh revision and lands: the token bumps again.
         Assert.True((await handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "Y", _userId.ToString())), TestContext.Current.CancellationToken)).Success);
+            task.Id.ToString(), "failed", "Y")), TestContext.Current.CancellationToken)).Success);
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, task.StateRevision);
         Assert.Equal("Failed: X\n\nFailed: Y", task.Description);
@@ -429,9 +429,9 @@ public sealed class FinishWorkHandlerTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
-        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)));
+        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)), new AuthorizationService());
         await Assert.ThrowsAsync<DbUpdateException>(() => handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken));
+            task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken));
 
         // The note append and the status write rolled back with the failed comment.
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
@@ -443,7 +443,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         // The retry lands the note and exactly one comment.
         var retry = await new FinishWorkHandler(HandlerSqlite.Factory(_connection), new AuthorizationService())
             .HandleAsync(HumanCommand(new FinishWorkRequest(
-                task.Id.ToString(), "failed", "X", _userId.ToString())), TestContext.Current.CancellationToken);
+                task.Id.ToString(), "failed", "X")), TestContext.Current.CancellationToken);
         Assert.True(retry.Success, retry.Error);
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(TaskItemStatus.Todo, task.Status);
@@ -460,9 +460,9 @@ public sealed class FinishWorkHandlerTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
-        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)));
+        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)), new AuthorizationService());
         await Assert.ThrowsAsync<DbUpdateException>(() => handler.HandleAsync(HumanCommand(new FinishWorkRequest(
-            task.Id.ToString(), "skipped", "reason", _userId.ToString())), TestContext.Current.CancellationToken));
+            task.Id.ToString(), "skipped", "reason")), TestContext.Current.CancellationToken));
 
         // The note append rolled back with the failed comment; status never moves for skipped.
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
@@ -474,7 +474,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         // The retry lands the note and exactly one comment; the revision stays untouched.
         var retry = await new FinishWorkHandler(HandlerSqlite.Factory(_connection), new AuthorizationService())
             .HandleAsync(HumanCommand(new FinishWorkRequest(
-                task.Id.ToString(), "skipped", "reason", _userId.ToString())), TestContext.Current.CancellationToken);
+                task.Id.ToString(), "skipped", "reason")), TestContext.Current.CancellationToken);
         Assert.True(retry.Success, retry.Error);
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(TaskItemStatus.Todo, task.Status);

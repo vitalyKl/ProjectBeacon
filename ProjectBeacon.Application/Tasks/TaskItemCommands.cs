@@ -2,7 +2,6 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Authorization;
 using Application.Common;
-using Application.Authorization;
 using Domain.Enums;
 /// <summary>
 /// Title, project, priority, and type. Label, milestone, path, and kind are optional.
