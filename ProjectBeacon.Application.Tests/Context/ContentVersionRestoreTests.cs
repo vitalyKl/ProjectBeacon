@@ -367,8 +367,8 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(restored.Success, restored.Error);
         Assert.True(restored.Value!.Changed);
         Assert.Equal(3, restored.Value.Revision);
-        var recreated = await _db.Milestones.SingleAsync(
-            item => item.Id == milestone.Id, TestContext.Current.CancellationToken);
+        await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
+        var recreated = milestone;
         Assert.Equal("Release milestone", recreated.Name);
         Assert.Equal("Release checkpoint", recreated.Description);
         Assert.Equal(3, recreated.Order);
@@ -442,8 +442,8 @@ public sealed class ContentVersionRestoreTests : IDisposable
 
         Assert.True(restored.Success, restored.Error);
         Assert.Equal(3, restored.Value!.Revision);
-        var recreated = await _db.ContextSections.SingleAsync(
-            item => item.Id == section.Id, TestContext.Current.CancellationToken);
+        await _db.Entry(section).ReloadAsync(TestContext.Current.CancellationToken);
+        var recreated = section;
         Assert.Equal("architecture", recreated.SectionId);
         Assert.Equal("Architecture", recreated.Title);
         Assert.Equal("Reviewed architecture section", recreated.BodyMarkdown);
