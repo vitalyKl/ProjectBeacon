@@ -321,7 +321,7 @@ public sealed class AuthorizationService : IAuthorizationService
         {
             ResourceType.Project => action == AuthAction.Read,
             ResourceType.Task => action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
-            ResourceType.TaskStep => action is AuthAction.Read or AuthAction.Create or AuthAction.Update,
+            ResourceType.TaskStep => action is AuthAction.Read or AuthAction.Create,
             ResourceType.Pipeline =>
                 action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Execute,
             ResourceType.Context =>
@@ -349,9 +349,10 @@ public sealed class AuthorizationService : IAuthorizationService
             or ResourceType.Task or ResourceType.TaskStep or ResourceType.Pipeline
             or ResourceType.Context or ResourceType.Constraint or ResourceType.Decision
             or ResourceType.Milestone or ResourceType.Label or ResourceType.Report
-            or ResourceType.ChatSession or ResourceType.ProjectRuntime or ResourceType.ModelBackend
+            or ResourceType.ProjectRuntime or ResourceType.ModelBackend
             or ResourceType.AgentTemplate or ResourceType.McpConfiguration
-            or ResourceType.WorkstationConfiguration or ResourceType.EvalRun or ResourceType.Work;
+            or ResourceType.WorkstationConfiguration or ResourceType.EvalRun or ResourceType.Work
+            or ResourceType.Device;
 
     private static bool IsOrganizationManagerOnly(ResourceType resource, AuthAction action) =>
         resource is ResourceType.OrgMember or ResourceType.OrgInvite
@@ -367,7 +368,7 @@ public sealed class AuthorizationService : IAuthorizationService
             ResourceType.Project => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
             ResourceType.ProjectMember or ResourceType.ApiToken or ResourceType.ProjectInvite => true,
             ResourceType.Task => action == AuthAction.Delete,
-            ResourceType.TaskStep => action == AuthAction.Delete,
+            ResourceType.TaskStep => action is AuthAction.Update or AuthAction.Delete,
             ResourceType.Context => action == AuthAction.Delete,
             ResourceType.Constraint => action is AuthAction.Delete or AuthAction.Execute,
             ResourceType.Decision => action is AuthAction.Update or AuthAction.Delete or AuthAction.Execute,
@@ -379,7 +380,7 @@ public sealed class AuthorizationService : IAuthorizationService
             ResourceType.AgentTemplate or ResourceType.McpConfiguration or ResourceType.WorkstationConfiguration
                 => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
             ResourceType.EvalRun => action is AuthAction.Update or AuthAction.Delete,
-            ResourceType.Device => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.Device => true,
             _ => false
         };
     }
