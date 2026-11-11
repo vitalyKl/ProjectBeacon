@@ -23,7 +23,7 @@ public static class MilestoneEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteProjectMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/milestones", ListMilestones).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -66,7 +66,24 @@ public static class MilestoneEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteMilestone(Guid milestoneId, HttpContext context, DeleteMilestoneHandler handler)
+    private static async Task<IResult> DeleteProjectMilestone(
+        Guid projectId,
+        Guid milestoneId,
+        HttpContext context,
+        DeleteMilestoneHandler handler)
+    {
+        var result = await handler.HandleAsync(new DeleteMilestoneCommand(
+            new DeleteMilestoneRequest(milestoneId, projectId), context.GetActor()));
+
+        return result.Success
+            ? Results.NoContent()
+            : result.FromResult(404);
+    }
+
+    private static async Task<IResult> DeleteMilestone(
+        Guid milestoneId,
+        HttpContext context,
+        DeleteMilestoneHandler handler)
     {
         var result = await handler.HandleAsync(new DeleteMilestoneCommand(
             new DeleteMilestoneRequest(milestoneId), context.GetActor()));
