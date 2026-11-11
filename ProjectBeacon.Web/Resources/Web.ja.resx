@@ -2748,6 +2748,12 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>このインボックスを表示するにはプロジェクトへの参加が必要です。</value>
   </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>削除済みコンテンツ</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>削除済み</value>
+  </data>
   <data name="ContentHistory" xml:space="preserve">
     <value>コンテンツ履歴</value>
   </data>
