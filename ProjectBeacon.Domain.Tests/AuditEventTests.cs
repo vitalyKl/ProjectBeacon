@@ -13,6 +13,18 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsRestoreMetadataWithoutContentPayload()
+    {
+        var sourceVersionId = Guid.NewGuid();
+        var auditEvent = Create(detailsJson:
+            $"""{"sourceVersionId":"{{sourceVersionId:D}}","restoredRevision":4}""");
+
+        Assert.Equal(
+            $"""{"sourceVersionId":"{{sourceVersionId:D}}","restoredRevision":4}""",
+            auditEvent.DetailsJson);
+    }
+
+    [Fact]
     public void Create_RejectsUnlistedSensitiveMetadataKeys()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"password":"secret"}"""));
