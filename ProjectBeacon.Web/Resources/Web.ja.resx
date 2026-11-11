@@ -2717,4 +2717,7 @@ orthstar</value>
 <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
 <data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
 <data name="Characters" xml:space="preserve"><value>文字</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>組織データ</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>組織のワークスペース、メンバー、請求書、請求履歴のスナップショットをダウンロードします。認証情報とプロバイダー識別子は含まれません。</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>組織データをダウンロード (ZIP)</value></data>
 </root>
