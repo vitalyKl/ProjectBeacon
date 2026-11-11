@@ -227,9 +227,16 @@ public static class ProposalMarkdownEditApplier
             .Replace("\r", "\n", StringComparison.Ordinal)
             .Replace("\n", newLine, StringComparison.Ordinal)
             .Trim('\r', '\n');
+        var prefix = markdown[..bodyStart];
         if (replacement.Length > 0)
+        {
+            // A final heading line may have no line terminator. Keep the replacement
+            // body on its own Markdown line instead of concatenating it to the heading.
+            if (prefix.Length > 0 && !prefix.EndsWith(newLine, StringComparison.Ordinal))
+                replacement = newLine + replacement;
             replacement += newLine + newLine;
-        return markdown[..bodyStart] + replacement + markdown[sectionEnd..];
+        }
+        return prefix + replacement + markdown[sectionEnd..];
     }
 
     private static string InsertAfterSection(string markdown, int sectionEnd, string content)
