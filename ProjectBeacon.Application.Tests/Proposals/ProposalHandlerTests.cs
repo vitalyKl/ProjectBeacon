@@ -469,6 +469,53 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task IdempotentReplayMaterializesExpiredPendingProposalAndAuditsExpiry()
+    {
+        var request = Request();
+        var expired = Proposal.Create(
+            _projectId,
+            null,
+            null,
+            null,
+            request.TargetKind,
+            request.TargetId,
+            request.Operation,
+            request.BaseRevision,
+            new string('a', 64),
+            request.PayloadJson,
+            request.RationaleMarkdown,
+            ProposalAuthorKind.Human,
+            _userId,
+            null,
+            null,
+            "Human",
+            request.IdempotencyKey,
+            DateTime.UtcNow.AddDays(-31));
+        _db.Proposals.Add(expired);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var expiredId = expired.Id;
+
+        var replay = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(replay.Success, replay.Error);
+        Assert.Equal(expiredId, replay.Value!.Id);
+        Assert.Equal(ProposalStatus.Expired, replay.Value.Status);
+
+        await _db.Entry(expired).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Expired, expired.Status);
+
+        var expiryAudit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "proposal.expired"
+                && item.TargetId == expiredId.ToString("D"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Proposal", expiryAudit.TargetType);
+    }
+
+    [Fact]
     public async Task AcceptExpiredProposal_PersistsExpiryAndReturnsConflict()
     {
         var expired = Proposal.Create(
