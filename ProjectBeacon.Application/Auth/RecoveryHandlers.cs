@@ -12,13 +12,13 @@ using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 
 /// <summary>
-/// Resets the admin password when the bootstrap token matches. This is break-glass, not the user reset flow.
+/// Resets the active SystemAdministrator password using a dedicated deployment recovery secret. This is break-glass, not the user reset flow.
 /// </summary>
 public class RecoverAdminHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IPasswordHasher _passwords;
-    private readonly string _bootstrapToken;
+    private readonly string _recoveryToken;
     private readonly IAuditWriter? _auditWriter;
     private readonly ILogger<RecoverAdminHandler>? _logger;
     private readonly IUserSessionVersionCache? _sessionVersions;
@@ -33,7 +33,7 @@ public class RecoverAdminHandler
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
-        _bootstrapToken = configuration?["BOOTSTRAP_ADMIN_TOKEN"] ?? string.Empty;
+        _recoveryToken = configuration?["ADMIN_RECOVERY_TOKEN"] ?? string.Empty;
         _auditWriter = auditWriter;
         _logger = logger;
         _sessionVersions = sessionVersions;
@@ -41,16 +41,16 @@ public class RecoverAdminHandler
 
     public async Task<Result<RecoverAdminResponse>> HandleAsync(string providedToken, CancellationToken ct = default)
     {
-        if (_bootstrapToken.Length == 0)
+        if (_recoveryToken.Length == 0)
         {
-            await RecordDeniedAttemptAsync("bootstrap_token_unconfigured", ct);
-            return Result.Failure<RecoverAdminResponse>("Bootstrap token is not configured.", ErrorKind.Unauthorized);
+            await RecordDeniedAttemptAsync("recovery_token_unconfigured", ct);
+            return Result.Failure<RecoverAdminResponse>("Admin recovery is not configured.", ErrorKind.Unauthorized);
         }
 
-        if (!FixedTimeEquals(providedToken, _bootstrapToken))
+        if (!FixedTimeEquals(providedToken, _recoveryToken))
         {
-            await RecordDeniedAttemptAsync("bootstrap_token_invalid", ct);
-            return Result.Failure<RecoverAdminResponse>("Invalid bootstrap token.", ErrorKind.Unauthorized);
+            await RecordDeniedAttemptAsync("recovery_token_invalid", ct);
+            return Result.Failure<RecoverAdminResponse>("Invalid admin recovery token.", ErrorKind.Unauthorized);
         }
 
         // Recovery is a platform-wide operation. Do not inherit an ambient organization/project scope.
