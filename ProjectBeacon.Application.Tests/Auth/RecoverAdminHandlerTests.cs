@@ -97,13 +97,46 @@ public sealed class RecoverAdminHandlerTests : IDisposable
         Assert.Equal("protected-totp-secret", admin.TotpSecretCipher);
     }
 
-    private RecoverAdminHandler CreateHandler(IUserSessionVersionCache? sessionVersions = null)
+    [Fact]
+    public async Task Recovery_BootstrapSecretCannotAuthorizeRecovery()
     {
+        var admin = User.Create("admin", "admin@example.test", "old-password-hash", isAdmin: true);
+        _db.Users.Add(admin);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await CreateHandler().HandleAsync("bootstrap-only-secret",
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        await _db.Entry(admin).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("old-password-hash", admin.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Recovery_WithoutDedicatedSecretFailsClosed()
+    {
+        var admin = User.Create("admin", "admin@example.test", "old-password-hash", isAdmin: true);
+        _db.Users.Add(admin);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await CreateHandler(recoveryToken: null).HandleAsync(
+            "bootstrap-only-secret", TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        await _db.Entry(admin).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("old-password-hash", admin.PasswordHash);
+    }
+
+    private RecoverAdminHandler CreateHandler(
+        IUserSessionVersionCache? sessionVersions = null,
+        string? recoveryToken = "dedicated-recovery-secret")
+    {
+        var values = new Dictionary<string, string?>();
+        if (recoveryToken is not null)
+            values["ADMIN_RECOVERY_TOKEN"] = recoveryToken;
+
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["BOOTSTRAP_ADMIN_TOKEN"] = "deployment-break-glass-token"
-            })
+            .AddInMemoryCollection(values)
             .Build();
         return new RecoverAdminHandler(_factory, _passwords, configuration,
             sessionVersions: sessionVersions);
