@@ -11,19 +11,19 @@ using ProjectBeacon.API.Auth;
 public static class ModelEndpoints
 {
     /// <summary>
-    /// Registry and proxy reads allow <see cref="ApiTokenCapability.TaskRead"/>.
-    /// Upsert, delete, bind, unbind, reload, and unload allow <see cref="ApiTokenCapability.TaskWrite"/>.
+    /// The personal model registry and global proxy administration are Human-only.
+    /// Project agent capabilities never grant model configuration or proxy control.
     /// </summary>
     public static IEndpointRouteBuilder MapModelEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
-        app.MapPost("/v1/models", UpsertModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/models/{id:guid}", DeleteModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapGet("/v1/models/proxy/status", GetProxyStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
-        app.MapPost("/v1/models/proxy/reload", ReloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/models/proxy/unload", UnloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/models", UpsertModelBackend).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/models/{id:guid}", DeleteModelBackend).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/models/proxy/status", GetProxyStatus).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/models/proxy/reload", ReloadProxy).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/models/proxy/unload", UnloadProxy).RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 
