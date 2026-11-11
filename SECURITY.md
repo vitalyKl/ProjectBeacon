@@ -119,7 +119,35 @@ required policy.
 - Tokens (`bcn_`/`bcd_`/`bci_`/`bcr_`) and keys are shown at most once; never logged or
   printed afterward. Invite/password-reset lookups use `IgnoreQueryFilters` because the
   actor is not in the tenant yet.
-- All auth endpoints are rate-limited.
+Authentication lifecycle and abuse protection:
+
+- `POST /v1/auth/bootstrap` is a one-time operation. The configured
+  `BOOTSTRAP_ADMIN_TOKEN` is checked in constant time. The absence check, initial
+  administrator insert, and audit event run in one transaction. A process-local async
+  gate serializes callers in one host; PostgreSQL hosts additionally take a transaction-
+  scoped advisory lock, so two Web replicas cannot both complete bootstrap.
+- `POST /v1/auth/recover-admin` is an explicit break-glass path using the same
+  `BOOTSTRAP_ADMIN_TOKEN`; it is not the ordinary password-reset flow. It resets the
+  active platform administrator's password, clears TOTP/recovery codes, bumps
+  `SessionVersion`, and writes audit events. The operation is rate-limited and failures
+  are audited without storing the supplied secret.
+- `GET /logout` clears only the current customer browser cookie.
+  `POST /control/logout` audits and clears only the current operator Control Plane
+  cookie. `POST /v1/auth/logout` is deliberately account-wide: it bumps
+  `SessionVersion`, deactivates all active `UserSession` records, and invalidates
+  previously issued customer JWT/cookie credentials.
+- Sensitive auth endpoints and task attachment uploads use independent fixed-window
+  policies. Every policy first partitions by the trusted client IP. After customer
+  cookie/JWT authentication, humans also consume a per-user bucket. After `bcn_`
+  validation, API tokens consume a per-creator bucket (falling back to token id for a
+  token without a creator). Anonymous bootstrap/login/recovery/registration remains
+  IP-only because there is no authenticated identity yet. The API token identity stage
+  runs after token validation; the early IP gate remains before token lookup.
+- Web and standalone API hosts share `ForwardedHeadersOptionsFactory`. Explicit
+  `KnownProxies`/`KnownNetworks` replace the framework loopback defaults as the
+  complete trust set; untrusted `X-Forwarded-For` values are ignored. Regression tests
+  cover trusted/untrusted peers, IP isolation, human identity partitions, API-token
+  creator partitions, and independent policy buckets.
 
 ## Native agent command execution
 
@@ -190,10 +218,11 @@ Native agents do not receive Git credentials or a raw repository-management tool
 
 ## Known limitations (open)
 
-- **Rate limiting behind a proxy.** The IP key for a proxied client relies on forwarded
-  headers; the trusted proxy list is the complete trust set
-  (explicit `KnownProxies`), but per-account identity-based limiting is not yet in
-  place — tracked in the hardening roadmap (H11).
+- **Single-token revocation.** The current JWT contract uses account-wide
+  `SessionVersion`: `POST /v1/auth/logout` revokes all credentials for the account.
+  There is no targeted revoke-one-JWT operation. Browser cookie logout remains local to
+  that browser. A separate per-session JWT identifier and revoke contract would be needed
+  before offering targeted session revocation.
 - **`REVIEW REQUIRED` endpoints.** A number of `/v1` endpoints are still marked
   `REVIEW REQUIRED` in the authorization matrix and must not be treated as audited.
 - **Hardening blocks H5–H7, H10, H13** are not closed by code evidence alone and remain
