@@ -147,6 +147,7 @@ public sealed class ConstraintHandlerTests : IDisposable
         var activated = await new ActivateConstraintHandler(HandlerSqlite.Factory(_connection), new AuthorizationService()).HandleAsync(created.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(activated.Success);
         Assert.Equal(ConstraintStatus.Active, activated.Value!.Status);
+        Assert.Equal(2, activated.Value.Revision);
 
         var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection), new AuthorizationService()).HandleAsync(created.Value!.Id, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(rejected.Success);
