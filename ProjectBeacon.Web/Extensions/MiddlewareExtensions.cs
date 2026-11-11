@@ -53,6 +53,7 @@ public static class MiddlewareExtensions
         // explicit HTTP 403 on a versioned API route is observed.
         app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();
+        app.UseMiddleware<ProjectBeacon.Infrastructure.Http.ApiTokenIdentityRateLimitMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
