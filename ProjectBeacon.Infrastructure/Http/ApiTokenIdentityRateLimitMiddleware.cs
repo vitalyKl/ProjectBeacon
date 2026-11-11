@@ -10,7 +10,7 @@ public sealed class ApiTokenIdentityRateLimitMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, ApiTokenIdentityRateLimiter limiter)
     {
-        using var lease = limiter.Acquire(context);
+        using var lease = await limiter.AcquireAsync(context, context.RequestAborted);
         if (!lease.IsAcquired)
         {
             await ProblemJson.WriteAsync(
