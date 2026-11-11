@@ -1,12 +1,14 @@
 namespace ProjectBeacon.Infrastructure.Organizations;
 
 using System.Data;
+using System.Data.Common;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Audit;
+using ProjectBeacon.Application.Billing;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Organizations;
@@ -116,6 +118,13 @@ public sealed class EfOrganizationDataExportService(
             .OrderBy(project => project.CreatedAt)
             .Select(project => project.Id)
             .ToListAsync(ct);
+        var billingSubscriptionCount = await CountOrganizationRowsAsync(
+            db, "OrganizationSubscriptions", orgId, ct);
+        var billingInvoiceCount = await CountOrganizationRowsAsync(
+            db, "BillingInvoices", orgId, ct);
+        var billingLedgerCount = await CountOrganizationRowsAsync(
+            db, "BillingLedgerEntries", orgId, ct);
+
         var taskIds = db.Tasks.AsNoTracking()
             .Where(task => projectIds.Contains(task.ProjectId))
             .Select(task => task.Id);
@@ -155,7 +164,10 @@ public sealed class EfOrganizationDataExportService(
             await db.Constraints.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ChatSessions.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
             await db.ChatParts.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
-            await db.TaskAttachments.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct)
+            await db.TaskAttachments.LongCountAsync(item => projectIds.Contains(item.ProjectId), ct),
+            billingSubscriptionCount,
+            billingInvoiceCount,
+            billingLedgerCount
         };
         var totalRows = counts.Aggregate(0L, (total, count) => checked(total + count));
         if (totalRows > MaximumRows)
@@ -542,6 +554,13 @@ public sealed class EfOrganizationDataExportService(
                 item.CreatedAt
             }).ToListAsync(ct);
 
+        // Billing rows are organization-owned rather than project-scoped. Export only
+        // provider-neutral commercial fields; omit provider/customer/subscription ids,
+        // webhook event ids and idempotency keys.
+        var billingSubscriptions = await ReadBillingSubscriptionsAsync(db, orgId, ct);
+        var billingInvoices = await ReadBillingInvoicesAsync(db, orgId, ct);
+        var billingLedger = await ReadBillingLedgerAsync(db, orgId, ct);
+
         var attachmentBytes = attachmentRows.Aggregate(
             0L, (total, item) => checked(total + item.Length));
         if (attachmentBytes > MaximumAttachmentBytes)
@@ -563,11 +582,17 @@ public sealed class EfOrganizationDataExportService(
                     projectCount = projects.Count,
                     taskCount = tasks.Count,
                     attachmentCount = attachmentRows.Count,
+                    billingSubscriptionCount = billingSubscriptions.Count,
+                    billingInvoiceCount = billingInvoices.Count,
+                    billingLedgerEntryCount = billingLedger.Count,
                     rowCount = totalRows
                 }, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "organization.json", organization, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "members.json", members, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "organization-invites.json", orgInvites, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "billing-subscriptions.json", billingSubscriptions, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "billing-invoices.json", billingInvoices, jsonBudget, ct);
+                await AddJsonEntryAsync(archive, "billing-ledger.json", billingLedger, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "projects.json", projects, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "project-members.json", projectMembers, jsonBudget, ct);
                 await AddJsonEntryAsync(archive, "project-invites.json", projectInvites, jsonBudget, ct);
@@ -699,6 +724,199 @@ public sealed class EfOrganizationDataExportService(
             projects.Count,
             attachmentRows.Count));
     }
+
+    private static async Task<long> CountOrganizationRowsAsync(
+        BeaconDbContext db,
+        string tableName,
+        Guid orgId,
+        CancellationToken ct)
+    {
+        var table = tableName switch
+        {
+            "OrganizationSubscriptions" => "\"OrganizationSubscriptions\"",
+            "BillingInvoices" => "\"BillingInvoices\"",
+            "BillingLedgerEntries" => "\"BillingLedgerEntries\"",
+            _ => throw new ArgumentOutOfRangeException(nameof(tableName))
+        };
+
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE \"OrgId\" = @org_id";
+        AddParameter(command, "org_id", DbType.Guid, orgId);
+        var result = await command.ExecuteScalarAsync(ct);
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<IReadOnlyList<OrganizationSubscription>> ReadBillingSubscriptionsAsync(
+        BeaconDbContext db,
+        Guid orgId,
+        CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT "Id", "OrgId", "PlanKey", "Status", "Source", "TrialEndsAtUtc",
+                   "CurrentPeriodStartsAtUtc", "CurrentPeriodEndsAtUtc", "CancelAtPeriodEnd",
+                   "GraceUntilUtc", "CreatedAtUtc", "UpdatedAtUtc"
+            FROM "OrganizationSubscriptions"
+            WHERE "OrgId" = @org_id
+            ORDER BY "CreatedAtUtc", "Id"
+            """;
+        AddParameter(command, "org_id", DbType.Guid, orgId);
+
+        var rows = new List<OrganizationSubscription>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new OrganizationSubscription(
+                ReadGuid(reader, 0),
+                ReadGuid(reader, 1),
+                reader.GetString(2),
+                (SubscriptionStatus)Convert.ToInt16(reader.GetValue(3), CultureInfo.InvariantCulture),
+                (SubscriptionSource)Convert.ToInt16(reader.GetValue(4), CultureInfo.InvariantCulture),
+                ReadNullableTimestamp(reader, 5),
+                ReadTimestamp(reader, 6),
+                ReadNullableTimestamp(reader, 7),
+                Convert.ToBoolean(reader.GetValue(8), CultureInfo.InvariantCulture),
+                ReadNullableTimestamp(reader, 9),
+                null,
+                null,
+                null,
+                ReadTimestamp(reader, 10),
+                ReadTimestamp(reader, 11)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<BillingInvoice>> ReadBillingInvoicesAsync(
+        BeaconDbContext db,
+        Guid orgId,
+        CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT "Id", "OrgId", "Number", "Description", "AmountMinor", "Currency",
+                   "IssuedAtUtc", "DueAtUtc", "Status", "PaidAtUtc", "PaymentReference"
+            FROM "BillingInvoices"
+            WHERE "OrgId" = @org_id
+            ORDER BY "IssuedAtUtc", "Number"
+            """;
+        AddParameter(command, "org_id", DbType.Guid, orgId);
+
+        var rows = new List<BillingInvoice>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new BillingInvoice(
+                ReadGuid(reader, 0),
+                ReadGuid(reader, 1),
+                reader.GetString(2),
+                reader.GetString(3),
+                Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                reader.GetString(5),
+                ReadTimestamp(reader, 6),
+                ReadTimestamp(reader, 7),
+                (BillingInvoiceStatus)Convert.ToInt16(reader.GetValue(8), CultureInfo.InvariantCulture),
+                ReadNullableTimestamp(reader, 9),
+                ReadNullableString(reader, 10),
+                null,
+                null));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<BillingLedgerEntry>> ReadBillingLedgerAsync(
+        BeaconDbContext db,
+        Guid orgId,
+        CancellationToken ct)
+    {
+        await db.Database.OpenConnectionAsync(ct);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT "Id", "OccurredAtUtc", "OrgId", "EventType", "Source",
+                   "AmountMinor", "Currency", "Reference", "ActorUserId", "Note",
+                   "SubscriptionId", "InvoiceId"
+            FROM "BillingLedgerEntries"
+            WHERE "OrgId" = @org_id
+            ORDER BY "OccurredAtUtc", "Id"
+            """;
+        AddParameter(command, "org_id", DbType.Guid, orgId);
+
+        var rows = new List<BillingLedgerEntry>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new BillingLedgerEntry(
+                ReadGuid(reader, 0),
+                ReadTimestamp(reader, 1),
+                ReadGuid(reader, 2),
+                (BillingLedgerEventType)Convert.ToInt16(reader.GetValue(3), CultureInfo.InvariantCulture),
+                (SubscriptionSource)Convert.ToInt16(reader.GetValue(4), CultureInfo.InvariantCulture),
+                reader.IsDBNull(5) ? null : Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture),
+                ReadNullableString(reader, 6),
+                null,
+                null,
+                ReadNullableString(reader, 7),
+                ReadNullableGuid(reader, 8),
+                ReadNullableString(reader, 9),
+                ReadNullableGuid(reader, 10),
+                null,
+                ReadNullableGuid(reader, 11)));
+        }
+
+        return rows;
+    }
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static Guid ReadGuid(DbDataReader reader, int ordinal) =>
+        reader.GetValue(ordinal) switch
+        {
+            Guid value => value,
+            string value => Guid.Parse(value),
+            byte[] value => new Guid(value),
+            var value => Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)
+                ?? throw new InvalidDataException("Billing row contains an invalid GUID."))
+        };
+
+    private static Guid? ReadNullableGuid(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : ReadGuid(reader, ordinal);
+
+    private static string? ReadNullableString(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+
+    private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
+    {
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateTimeOffset timestamp => timestamp.ToUniversalTime(),
+            DateTime timestamp => new DateTimeOffset(
+                timestamp.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
+                    : timestamp).ToUniversalTime(),
+            string text => DateTimeOffset.Parse(
+                text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal).ToUniversalTime(),
+            _ => throw new InvalidDataException($"Unsupported billing timestamp type at column {ordinal}.")
+        };
+    }
+
+    private static DateTimeOffset? ReadNullableTimestamp(DbDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : ReadTimestamp(reader, ordinal);
 
     private static Result<OrganizationDataExport> TooLarge() =>
         Result.Failure<OrganizationDataExport>(
@@ -851,14 +1069,16 @@ public sealed class EfOrganizationDataExportService(
         This archive is a read-only snapshot. It does not delete or change source data.
 
         Included: organization and membership metadata, invitations (without token hashes),
-        projects, memberships, tasks, task phases, task workspace sections, project review commands and role bindings,
-        comments, dependencies, checklists, subtasks, milestones, labels, reports, context,
-        decisions, constraints, chat content, and task attachments.
+        provider-neutral subscription state, manual invoices and billing ledger entries,
+        projects, memberships, tasks, task phases, task workspace sections, project review
+        commands and role bindings, comments, dependencies, checklists, subtasks, milestones,
+        labels, reports, context, decisions, constraints, chat content, and task attachments.
 
         Excluded by design: password hashes, password-reset tokens, user sessions, TOTP
         secrets and recovery-code hashes, API-token hashes or raw credentials, device tokens
         and fingerprints, encrypted provider/MCP credentials, local workspace roots and
-        external daemon session identifiers, and platform audit/security internals.
+        external daemon session identifiers, provider customer/subscription references, provider
+        webhook event identifiers, idempotency keys, and platform audit/security internals.
         Customer-authored text, chat messages and attachments are included as stored and may
         themselves contain sensitive values that users previously placed in that content.
 
