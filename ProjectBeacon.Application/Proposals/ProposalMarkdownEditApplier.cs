@@ -123,6 +123,10 @@ public static class ProposalMarkdownEditApplier
         if (!TryValidate(edits, out error))
             return false;
 
+        // Apply all requested edits to a private working copy. If a later target is
+        // missing or ambiguous, the caller receives the original content, never a
+        // partially modified result.
+        var working = sourceMarkdown;
         foreach (var edit in edits.EnumerateArray())
         {
             var headingText = edit.GetProperty("heading").GetString()!;
@@ -130,7 +134,7 @@ public static class ProposalMarkdownEditApplier
             var operation = edit.GetProperty("op").GetString()!;
             var content = edit.GetProperty("content").GetString() ?? string.Empty;
 
-            var document = Markdown.Parse(result);
+            var document = Markdown.Parse(working);
             var headings = document.OfType<HeadingBlock>()
                 .Where(item => item.Span.Start >= 0 && item.Span.End >= item.Span.Start)
                 .Select(item => new ParsedHeading(item, GetHeadingText(item)))
@@ -162,21 +166,21 @@ public static class ProposalMarkdownEditApplier
                     && item.Block.Level <= target.Level)
                 .OrderBy(item => item.Block.Span.Start)
                 .FirstOrDefault();
-            var sectionEnd = nextSection?.Block.Span.Start ?? result.Length;
-            var lineBreak = result.IndexOf('\n', Math.Min(result.Length, target.Span.End));
-            var headingLineEnd = lineBreak < 0 ? result.Length : lineBreak + 1;
+            var sectionEnd = nextSection?.Block.Span.Start ?? working.Length;
+            var lineBreak = working.IndexOf('\n', Math.Min(working.Length, target.Span.End));
+            var headingLineEnd = lineBreak < 0 ? working.Length : lineBreak + 1;
             sectionEnd = Math.Max(headingLineEnd, sectionEnd);
 
             switch (operation.ToLowerInvariant())
             {
                 case "replace":
-                    result = ReplaceSectionBody(result, headingLineEnd, sectionEnd, content);
+                    working = ReplaceSectionBody(working, headingLineEnd, sectionEnd, content);
                     break;
                 case "insert_after":
-                    result = InsertAfterSection(result, sectionEnd, content);
+                    working = InsertAfterSection(working, sectionEnd, content);
                     break;
                 case "delete":
-                    result = DeleteSection(result, target.Span.Start, sectionEnd);
+                    working = DeleteSection(working, target.Span.Start, sectionEnd);
                     break;
                 default:
                     error = $"Unsupported Markdown edit operation '{operation}'.";
@@ -184,6 +188,7 @@ public static class ProposalMarkdownEditApplier
             }
         }
 
+        result = working;
         error = null;
         return true;
     }
