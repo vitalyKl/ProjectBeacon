@@ -1,4 +1,6 @@
 using ProjectBeacon.Application;
+using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Organizations;
 using ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
@@ -64,6 +66,7 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddScoped<IBeaconDbFactory>(sp => (IBeaconDbFactory)sp.GetRequiredService<IDbContextFactory<BeaconDbContext>>());
         _bunit.Services.AddApplicationPorts();
         _bunit.Services.AddScoped<IAttachmentService, FakeAttachmentService>();
+        _bunit.Services.AddScoped<IOrganizationDataExportService, DisabledOrganizationDataExportService>();
         _bunit.Services.AddApplicationHandlers();
         _bunit.Services.AddMudServices();
         _bunit.Services.AddLocalization();
@@ -163,4 +166,19 @@ internal sealed class FakeAttachmentService : IAttachmentService
     public Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
         Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default, long? maxBytes = null)
         => Task.FromResult<(TaskAttachmentDto Attachment, byte[] Content)?>(null);
+}
+
+internal sealed class DisabledOrganizationDataExportService : IOrganizationDataExportService
+{
+    public Task<bool> CanExportAsync(
+        Guid orgId,
+        ProjectBeacon.Application.Authorization.ActorContext actor,
+        CancellationToken ct = default) =>
+        Task.FromResult(false);
+
+    public Task<Result<OrganizationDataExport>> ExportAsync(
+        Guid orgId,
+        ProjectBeacon.Application.Authorization.ActorContext actor,
+        CancellationToken ct = default) =>
+        throw new NotSupportedException("Organization export is disabled in BUnit render tests.");
 }
