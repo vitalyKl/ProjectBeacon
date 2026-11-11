@@ -19,7 +19,7 @@ public sealed class EndpointAuthorizationInventoryTests
         Assert.NotEmpty(routes);
         var unclassified = routes.Where(route => route.Policy == "UNCLASSIFIED").ToArray();
         Assert.True(unclassified.Length == 0,
-            "Every /v1 endpoint must declare AllowAnonymous, RequireAuthorization, or typed actor metadata.\n"
+            "Every /v1 endpoint must declare AllowAnonymous or typed actor metadata (Human, Device, API token/capability). A bare RequireAuthorization() is insufficient.\n"
             + EndpointAuthorizationInventory.ToMarkdown(unclassified));
 
         Assert.Contains(routes, route =>
@@ -70,5 +70,6 @@ public sealed class EndpointAuthorizationInventoryTests
         Assert.Contains("| POST | `/v1/devices/me/heartbeat` | Device |", markdown, StringComparison.Ordinal);
         Assert.Contains("| POST | `/v1/auth/login` | Anonymous |", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("UNCLASSIFIED", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("| Authenticated |", markdown, StringComparison.Ordinal);
     }
 }
