@@ -887,10 +887,10 @@ public sealed class EfOrganizationDataExportService(
     private static Guid ReadGuid(DbDataReader reader, int ordinal) =>
         reader.GetValue(ordinal) switch
         {
-            Guid value => value,
-            string value => Guid.Parse(value),
-            byte[] value => new Guid(value),
-            var value => Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)
+            Guid guidValue => guidValue,
+            string stringValue => Guid.Parse(stringValue),
+            byte[] bytesValue => new Guid(bytesValue),
+            var otherValue => Guid.Parse(Convert.ToString(otherValue, CultureInfo.InvariantCulture)
                 ?? throw new InvalidDataException("Billing row contains an invalid GUID."))
         };
 
