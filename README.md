@@ -8,10 +8,10 @@ Product operating model: `docs/saas-operator-foundation.md` (SaaS operator, alph
 
 ProjectBeacon is being developed as a hosted multi-tenant SaaS. Customer self-hosted deployments are not a supported product path. The Compose/PostgreSQL setup below is for local development and tests only.
 
-1. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, `JWT__Secret`, and `CONTROL_HOST=control.localhost`.
+1. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, the separate `ADMIN_RECOVERY_TOKEN`, `JWT__Secret`, and `CONTROL_HOST=control.localhost`.
 2. Start Postgres: `docker compose up -d` (or let `DockerPostgresHelper` start it on first Web run). Both use image `postgres:16-bookworm`, container `beacon-postgres`, and the named volume `pgdata` mounted at `/var/lib/postgresql/data`. Port `5432` is published to `127.0.0.1` only — connections come from the host; remote clients are not supported.
 3. `dotnet run --project ProjectBeacon.Web --launch-profile http` — Web loads `.env` from the repo root.
-4. Open the customer application at `http://localhost:5083/` and sign in at `/login`. Open the separate Control Plane at `http://control.localhost:5083/control/login`; create the first administrator at `/control/bootstrap` when required. Break-glass recovery is `/control/recover` and is unavailable on the customer host.
+4. Open the customer application at `http://localhost:5083/` and sign in at `/login`. Open the separate Control Plane at `http://control.localhost:5083/control/login`; create the first administrator at `/control/bootstrap` when required. Break-glass recovery at `/control/recover` requires the independent `ADMIN_RECOVERY_TOKEN` and is unavailable on the customer host.
 5. Users: `/register` requires an operator-issued organization or project invitation. Public self-service registration is disabled for the SaaS alpha. Invitation links use `bci_` tokens and are emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`.
 6. Product version is centrally defined in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows `Beacon v` plus that version.
 
