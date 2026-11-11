@@ -166,6 +166,11 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
         if (orgId is null)
             return Result.Failure("Project not found.");
 
+        var linkedTaskIds = await db.Tasks
+            .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+            .Select(task => task.Id)
+            .ToArrayAsync(ct);
+
         milestone.Delete();
         db.Milestones.Remove(milestone);
         _auditWriter?.Stage(db, AuditEventFactory.ForActor(
@@ -173,7 +178,8 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
             milestone.Id.ToString("D"), orgId, milestone.ProjectId));
         var attribution = ContentAttribution.FromActor(actor);
         var saved = await _contentWriter.SaveAsync(
-            db, milestone, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
+            db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
+            deleted: true, milestoneTaskIds: linkedTaskIds);
         return saved.Success
             ? Result.Ok()
             : Result.Failure(saved.Error ?? "Milestone delete conflict.", ErrorKind.Conflict);
