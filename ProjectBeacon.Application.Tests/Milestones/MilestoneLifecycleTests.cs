@@ -106,6 +106,10 @@ public sealed class MilestoneLifecycleTests : IDisposable
             version => version.TargetKind == ContentTargetKind.Milestone
                 && version.TargetId == milestone.Id,
             TestContext.Current.CancellationToken));
+        Assert.False(await _db.AuditEvents.AnyAsync(
+            item => item.Action == "content.deleted"
+                && item.TargetId == milestone.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
