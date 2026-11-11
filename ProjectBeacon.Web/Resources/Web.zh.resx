@@ -2717,4 +2717,7 @@ orthstar</value>
 <data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
 <data name="MarkdownCollapse" xml:space="preserve"><value>收起</value></data>
 <data name="Characters" xml:space="preserve"><value>字符</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>组织数据</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>下载组织工作区、成员、发票和账单历史记录的快照。导出中不包含凭据和服务提供商标识。</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>下载组织数据包 (ZIP)</value></data>
 </root>
