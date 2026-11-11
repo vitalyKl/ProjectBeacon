@@ -46,6 +46,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
             ContextScopeType.Project,
             key: "architecture");
         section.MarkReviewed(userId.ToString("D"));
+        var sourceRevision = section.Revision;
 
         var writer = new ContentWriter();
         DbContext.ContextSections.Add(section);
@@ -77,7 +78,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
             CancellationToken.None);
         Assert.Equal("Deleted architecture section", restored.Title);
         Assert.Equal(ContextReviewState.Reviewed, restored.ReviewState);
-        Assert.Equal(3, restored.Revision);
+        Assert.Equal(sourceRevision + 2, restored.Revision);
     }
 
     [Fact]
