@@ -2740,6 +2740,12 @@ orthstar</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Für diesen Posteingang ist eine Projektmitgliedschaft erforderlich.</value>
   </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>Gelöschte Inhalte</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>Gelöscht</value>
+  </data>
   <data name="ContentHistory" xml:space="preserve">
     <value>Inhaltsverlauf</value>
   </data>
