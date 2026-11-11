@@ -127,9 +127,22 @@ public sealed class HttpPlatformContainerLogClient(
                 return Result.Failure<PlatformContainerLogResponse>(
                     "The operations log agent returned an empty response.", ErrorKind.Unavailable);
 
+            var latestOperationsAccess = await adminGate.RequireAsync(
+                currentActor, OperatorPermission.OperationsRead);
+            var latestLogAccess = await adminGate.RequireAsync(
+                currentActor, OperatorPermission.ContainerLogsRead);
+            if (!latestOperationsAccess.Success
+                || !latestLogAccess.Success
+                || latestLogAccess.Value is null
+                || latestLogAccess.Value.UserId != actor.UserId
+                || !latestLogAccess.Value.HasPermission(OperatorPermission.OperationsRead)
+                || !latestLogAccess.Value.HasPermission(OperatorPermission.ContainerLogsRead))
+                return Result.Failure<PlatformContainerLogResponse>(
+                    "Container log permissions changed while the request was running.", ErrorKind.Forbidden);
+
             try
             {
-                await RecordAccessAsync(currentActor, service, payload.ReturnedLines, ct);
+                await RecordAccessAsync(latestLogAccess.Value, service, payload.ReturnedLines, ct);
             }
             catch (Exception exception)
             {
