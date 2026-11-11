@@ -132,6 +132,52 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public async Task Roadmap_ShowsMilestoneHistoryAndRestoresAnEarlierRevision()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var milestone = Milestone.Create(
+            "Original milestone",
+            "Original milestone description.",
+            projectId,
+            1);
+        var writer = new ContentWriter();
+        DbContext.Milestones.Add(milestone);
+        writer.AddVersion(DbContext, milestone, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+        var originalRevision = milestone.Revision;
+
+        milestone.Update("Updated milestone", "Updated milestone description.", 4);
+        var updated = await writer.SaveAsync(
+            DbContext, milestone, "Human", userId.ToString("D"), CancellationToken.None);
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal(originalRevision + 1, updated.Value);
+
+        DbContext.ChangeTracker.Clear();
+        var cut = Bunit.RenderComponent<Features.Roadmap.Roadmap>();
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Open", StringComparison.OrdinalIgnoreCase)).Click();
+        Assert.Contains("Content history (2)", cut.Markup);
+        Assert.Contains("Updated milestone", cut.Markup);
+
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Content history", StringComparison.OrdinalIgnoreCase)).Click();
+        Assert.Contains("Original milestone description.", cut.Markup);
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)
+            && !button.HasAttribute("disabled")).Click();
+
+        Assert.Contains("Original milestone", cut.Markup);
+        var restored = await DbContext.Milestones.AsNoTracking().SingleAsync(
+            item => item.Id == milestone.Id, CancellationToken.None);
+        Assert.Equal("Original milestone", restored.Name);
+        Assert.Equal("Original milestone description.", restored.Description);
+        Assert.Equal(1, restored.Order);
+        Assert.Equal(originalRevision + 2, restored.Revision);
+    }
+
+    [Fact]
     public async Task Roadmap_ShowsDeletedMilestoneAndRestoresItFromHistory()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
