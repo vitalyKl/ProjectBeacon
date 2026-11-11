@@ -354,6 +354,15 @@ public sealed class ContentVersionRestoreTests : IDisposable
         using (var json = JsonDocument.Parse(tombstone.ContentJson))
             Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
 
+        var deletedTargets = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
+        Assert.True(deletedTargets.Success, deletedTargets.Error);
+        var listedDeletion = Assert.Single(deletedTargets.Value!, item =>
+            item.TargetKind == ContentTargetKind.Milestone && item.TargetId == milestone.Id);
+        Assert.Equal(2, listedDeletion.DeletedRevision);
+        Assert.Equal(original.Id, listedDeletion.SourceVersionId);
+        Assert.Contains("Release milestone", listedDeletion.Title);
+
         var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
@@ -373,6 +382,11 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Release checkpoint", recreated.Description);
         Assert.Equal(3, recreated.Order);
         Assert.Equal(3, recreated.Revision);
+        var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
+        Assert.True(remainingDeleted.Success, remainingDeleted.Error);
+        Assert.DoesNotContain(remainingDeleted.Value!, item =>
+            item.TargetKind == ContentTargetKind.Milestone && item.TargetId == milestone.Id);
     }
 
     [Fact]
@@ -430,6 +444,15 @@ public sealed class ContentVersionRestoreTests : IDisposable
         using (var json = JsonDocument.Parse(tombstone.ContentJson))
             Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
 
+        var deletedTargets = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
+        Assert.True(deletedTargets.Success, deletedTargets.Error);
+        var listedDeletion = Assert.Single(deletedTargets.Value!, item =>
+            item.TargetKind == ContentTargetKind.ContextSection && item.TargetId == section.Id);
+        Assert.Equal(2, listedDeletion.DeletedRevision);
+        Assert.Equal(original.Id, listedDeletion.SourceVersionId);
+        Assert.Equal("Architecture", listedDeletion.Title);
+
         var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
@@ -449,6 +472,11 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Reviewed architecture section", recreated.BodyMarkdown);
         Assert.Equal(ContextReviewState.Reviewed, recreated.ReviewState);
         Assert.Equal(3, recreated.Revision);
+        var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
+        Assert.True(remainingDeleted.Success, remainingDeleted.Error);
+        Assert.DoesNotContain(remainingDeleted.Value!, item =>
+            item.TargetKind == ContentTargetKind.ContextSection && item.TargetId == section.Id);
     }
 
     [Fact]
