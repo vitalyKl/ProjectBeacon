@@ -359,13 +359,22 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task DeleteContextNode_RemovesSection()
     {
+        var owner = User.Create("context-delete-owner", "context-delete-owner@beacon.local", "hash");
+        _db.Users.Add(owner);
+        _db.ProjectMembers.Add(ProjectMember.Create(_projectId, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var actor = new ActorContext(
+            ActorType.Human, owner.Id, false, null, null,
+            _projectId, _orgId, ApiTokenCapability.None);
+
         var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         var createResult = await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId, "Goals", "Text", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)), TestContext.Current.CancellationToken);
 
         var deleteHandler = new DeleteContextNodeHandler(HandlerSqlite.Factory(_connection));
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value!.Id));
+        var command = new DeleteContextNodeCommand(
+            new DeleteContextNodeRequest(_projectId, createResult.Value!.Id), actor);
 
         var result = await deleteHandler.HandleAsync(command, TestContext.Current.CancellationToken);
 
