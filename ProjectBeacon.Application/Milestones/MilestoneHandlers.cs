@@ -101,9 +101,14 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
         milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
         if (contentChanged)
         {
+            var linkedTaskIds = await db.Tasks
+                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                .Select(task => task.Id)
+                .ToArrayAsync(ct);
             var attribution = ContentAttribution.FromActor(command.Actor);
             var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
+                milestoneTaskIds: linkedTaskIds);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone content conflict.", ErrorKind.Conflict);
         }
@@ -277,9 +282,14 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
         milestone.Close();
         if (milestone.Revision != previousRevision)
         {
+            var linkedTaskIds = await db.Tasks
+                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                .Select(task => task.Id)
+                .ToArrayAsync(ct);
             var attribution = ContentAttribution.FromActor(actor);
             var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
+                milestoneTaskIds: linkedTaskIds);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone close conflict.", ErrorKind.Conflict);
         }
@@ -322,9 +332,14 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
         milestone.Reopen();
         if (milestone.Revision != previousRevision)
         {
+            var linkedTaskIds = await db.Tasks
+                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                .Select(task => task.Id)
+                .ToArrayAsync(ct);
             var attribution = ContentAttribution.FromActor(actor);
             var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct);
+                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
+                milestoneTaskIds: linkedTaskIds);
             if (!saved.Success)
                 return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone reopen conflict.", ErrorKind.Conflict);
         }
