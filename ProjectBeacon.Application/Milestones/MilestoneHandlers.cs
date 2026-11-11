@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Milestones;
 
 using Application.Common;
+using Application.Authorization;
+using Application.Proposals;
 using Application.Audit;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
@@ -189,11 +191,14 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     public async Task<Result<MilestoneDto>> HandleAsync(GetMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null
-            || (command.Request.ProjectId is { } expectedProjectId
-                && milestone.ProjectId != expectedProjectId))
+        var milestone = await db.Milestones
+            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
+                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
+        if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
+        if (!await ProposalProjectAuthorization.CanWriteAsync(
+                db, command.Actor, milestone.ProjectId, ct))
+            return Result.Forbidden<MilestoneDto>("Project membership is required to read a milestone.");
 
         return Result.Ok(MapToDto(milestone));
     }
@@ -213,6 +218,15 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
     public async Task<Result<IList<MilestoneDto>>> HandleAsync(ListProjectMilestonesCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var projectExists = await db.Projects.AnyAsync(
+            project => project.Id == command.Request.ProjectId, ct);
+        if (!projectExists)
+            return Result.Failure<IList<MilestoneDto>>("Project not found.", ErrorKind.NotFound);
+        if (!await ProposalProjectAuthorization.CanWriteAsync(
+                db, command.Actor, command.Request.ProjectId, ct))
+            return Result.Forbidden<IList<MilestoneDto>>(
+                "Project membership is required to list milestones.");
+
         var milestones = await db.Milestones
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
