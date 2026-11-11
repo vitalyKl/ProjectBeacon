@@ -66,7 +66,8 @@ public sealed record OrganizationEntitlement(
 public sealed record EntitlementRequirement(
     string FeatureKey,
     string? LimitKey = null,
-    long RequestedUnits = 1);
+    long RequestedUnits = 1,
+    long CurrentUsage = 0);
 
 public sealed record EntitlementDecision(
     bool Allowed,
