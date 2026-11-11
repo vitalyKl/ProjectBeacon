@@ -36,6 +36,24 @@ Role assignment is stored on the user account and changed only through `Operator
 
 Sensitive mutations require an elevated AdminActor. The database-backed gate validates the current operator account, its persisted TOTP-enabled state, and the signed Control Plane elevation expiry on each invocation; a Blazor page authorization attribute is only a UI guard.
 
+## Trusted proxy and sensitive endpoint limits
+
+The Web and standalone API hosts use the same ForwardedHeadersOptionsFactory. Forwarded headers
+are processed before routing, authentication and rate limiting. Without an explicit trust list,
+the framework loopback-only defaults remain in force. When one or more
+ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks entries are configured,
+they replace the defaults completely; only those proxy addresses/networks may supply
+X-Forwarded-For and X-Forwarded-Proto. Never enable
+ASPNETCORE_FORWARDEDHEADERS_ENABLED, which bypasses this trust boundary.
+
+Sensitive authentication and attachment-upload endpoints use fixed-window buckets partitioned by
+the resolved client IP and, for authenticated human sessions, an additional user-identity bucket.
+The buckets are independent for auth, auth-read and attachment-upload; exhausting one
+policy does not consume another policy's allowance. Anonymous endpoints remain IP-limited because
+no verified user identity exists yet. The attachment-upload allowance is separate from the
+general authentication allowance. If forwarded headers are not trusted correctly, the IP bucket
+will collapse to the proxy address, so production must configure the actual ingress/Caddy network.
+
 ## Organization entitlements
 
 Application contracts live in ProjectBeacon.Application/Entitlements:
