@@ -26,7 +26,7 @@ public static class MilestoneEndpoints
         app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteProjectMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/milestones", ListMilestones).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetProjectMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close", CloseMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen", ReopenMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -128,16 +128,33 @@ public static class MilestoneEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> GetMilestone(
+    private static async Task<IResult> GetProjectMilestone(
+        Guid projectId,
         Guid milestoneId,
         HttpContext context,
         GetMilestoneHandler handler,
-        CancellationToken ct,
-        Guid? projectId = null)
+        CancellationToken ct)
     {
         var result = await handler.HandleAsync(
             new GetMilestoneCommand(
                 new GetMilestoneRequest(milestoneId, projectId),
+                context.GetActor()),
+            ct);
+
+        return result.Success
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
+            : result.FromResult(404);
+    }
+
+    private static async Task<IResult> GetMilestone(
+        Guid milestoneId,
+        HttpContext context,
+        GetMilestoneHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            new GetMilestoneCommand(
+                new GetMilestoneRequest(milestoneId),
                 context.GetActor()),
             ct);
 
