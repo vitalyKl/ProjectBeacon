@@ -42,9 +42,10 @@ public sealed class HttpPlatformContainerLogClient(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        if (!actor.HasPermission(OperatorPermission.ContainerLogsRead))
+        if (!actor.HasPermission(OperatorPermission.OperationsRead)
+            || !actor.HasPermission(OperatorPermission.ContainerLogsRead))
             return Result.Failure<PlatformContainerLogResponse>(
-                "Container log read permission is required.", ErrorKind.Forbidden);
+                "OperationsRead and ContainerLogsRead permissions are required.", ErrorKind.Forbidden);
         if (!Enum.IsDefined(service))
             return Result.Failure<PlatformContainerLogResponse>(
                 "A supported platform service is required.", ErrorKind.Validation);
