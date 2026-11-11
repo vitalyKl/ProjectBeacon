@@ -513,6 +513,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
     {
         var milestone = Milestone.Create(
             "Release milestone", "Release checkpoint", _projectId, 3);
+        var baseRevision = milestone.Revision;
         _db.Milestones.Add(milestone);
         var writer = new ContentWriter();
         writer.AddVersion(_db, milestone, "Human", _actorId.ToString("D"));
@@ -520,7 +521,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         var original = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Milestone
                 && item.TargetId == milestone.Id
-                && item.Revision == 1,
+                && item.Revision == baseRevision,
             TestContext.Current.CancellationToken);
 
         var created = await new CreateProposalHandler(
@@ -532,7 +533,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                         ContentTargetKind.Milestone,
                         milestone.Id,
                         ProposalOperation.Delete,
-                        1,
+                        baseRevision,
                         "{}",
                         "Removes a completed milestone.",
                         "milestone-delete-" + Guid.NewGuid().ToString("N")),
@@ -550,14 +551,14 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 TestContext.Current.CancellationToken);
         Assert.True(accepted.Success, accepted.Error);
         Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
-        Assert.Equal(2, accepted.Value.AppliedRevision);
+        Assert.Equal(baseRevision + 1, accepted.Value.AppliedRevision);
         Assert.False(await _db.Milestones.AsNoTracking().AnyAsync(
             item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
 
         var tombstone = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Milestone
                 && item.TargetId == milestone.Id
-                && item.Revision == 2,
+                && item.Revision == baseRevision + 1,
             TestContext.Current.CancellationToken);
         using (var json = JsonDocument.Parse(tombstone.ContentJson))
             Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
@@ -575,7 +576,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
             .HandleAsync(new RestoreContentVersionCommand(
                 _projectId,
                 original.Id,
-                ExpectedRevision: 2,
+                ExpectedRevision: baseRevision + 1,
                 Actor: HumanActor(),
                 ExpectedTargetKind: ContentTargetKind.Milestone,
                 ExpectedTargetId: milestone.Id),
@@ -583,7 +584,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
 
         Assert.True(restored.Success, restored.Error);
         Assert.True(restored.Value!.Changed);
-        Assert.Equal(3, restored.Value.Revision);
+        Assert.Equal(baseRevision + 2, restored.Value.Revision);
         await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
         var recreated = milestone;
         Assert.Equal("Release milestone", recreated.Name);
@@ -658,7 +659,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.True(deletedTargets.Success, deletedTargets.Error);
         var listedDeletion = Assert.Single(deletedTargets.Value!, item =>
             item.TargetKind == ContentTargetKind.ContextSection && item.TargetId == section.Id);
-        Assert.Equal(2, listedDeletion.DeletedRevision);
+        Assert.Equal(baseRevision + 1, listedDeletion.DeletedRevision);
         Assert.Equal(original.Id, listedDeletion.SourceVersionId);
         Assert.Equal("Architecture", listedDeletion.Title);
 
@@ -680,7 +681,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Architecture", recreated.Title);
         Assert.Equal("Reviewed architecture section", recreated.BodyMarkdown);
         Assert.Equal(ContextReviewState.Reviewed, recreated.ReviewState);
-        Assert.Equal(3, recreated.Revision);
+        Assert.Equal(baseRevision + 2, recreated.Revision);
         var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
         Assert.True(remainingDeleted.Success, remainingDeleted.Error);
