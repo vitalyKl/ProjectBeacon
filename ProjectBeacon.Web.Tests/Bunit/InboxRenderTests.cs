@@ -170,6 +170,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
             ContextScopeType.Project,
             key: "architecture");
         section.MarkReviewed(userId.ToString("D"));
+        var baseRevision = section.Revision;
         DbContext.ContextSections.Add(section);
         new ContentWriter().AddVersion(
             DbContext, section, "Human", userId.ToString("D"));
@@ -220,7 +221,7 @@ public sealed class InboxRenderTests : BUnitRenderBase
                 && item.TargetId == section.Id)
             .OrderBy(item => item.Revision)
             .ToListAsync(CancellationToken.None);
-        Assert.Equal(new[] { section.Revision - 1, section.Revision }, history.Select(item => item.Revision).ToArray());
+        Assert.Equal(new[] { baseRevision, baseRevision + 1 }, history.Select(item => item.Revision).ToArray());
         Assert.Equal(proposal.Id, history[^1].ProposalId);
         using var tombstone = System.Text.Json.JsonDocument.Parse(history[^1].ContentJson);
         Assert.True(tombstone.RootElement.GetProperty("deleted").GetBoolean());
