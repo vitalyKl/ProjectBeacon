@@ -54,14 +54,15 @@ public static class AuthRateLimiter
 
         // The endpoint policy adds a second, independent bucket for authenticated users.
         // Anonymous requests continue to be protected by the client-IP global limiter.
-        options.AddPolicy("auth", context => UserPartition(context, permitLimit, windowSeconds));
-        options.AddPolicy("auth-read", context => UserPartition(context, readPermitLimit, windowSeconds));
+        options.AddPolicy("auth", context => UserPartition(context, "auth", permitLimit, windowSeconds));
+        options.AddPolicy("auth-read", context => UserPartition(context, "auth-read", readPermitLimit, windowSeconds));
         options.AddPolicy("attachment-upload", context =>
-            UserPartition(context, attachmentUploadPermitLimit, windowSeconds));
+            UserPartition(context, "attachment-upload", attachmentUploadPermitLimit, windowSeconds));
     }
 
     private static RateLimitPartition<string> UserPartition(
         HttpContext context,
+        string policyName,
         int permits,
         int seconds)
     {
@@ -73,7 +74,7 @@ public static class AuthRateLimiter
             return RateLimitPartition.GetNoLimiter("anonymous");
 
         return RateLimitPartition.GetFixedWindowLimiter(
-            $"user:{userId:N}",
+            $"{policyName}:user:{userId:N}",
             _ => CreateOptions(permits, seconds));
     }
 
