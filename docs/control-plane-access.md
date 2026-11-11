@@ -82,14 +82,21 @@ Customer owners can be invited into an organization before any project exists. I
 
 The initial administrator bootstrap and break-glass password recovery are Control Plane functions:
 
-- `/control/bootstrap` calls `POST /v1/auth/bootstrap`.
-- `/control/recover` calls `POST /v1/auth/recover-admin`.
+- `/control/bootstrap` calls `POST /v1/auth/bootstrap` and requires `BOOTSTRAP_ADMIN_TOKEN`.
+- `/control/recover` calls `POST /v1/auth/recover-admin` and requires the separate
+  `ADMIN_RECOVERY_TOKEN`; the bootstrap token is deliberately rejected by recovery.
 
 Both are unavailable on the customer and standalone API hosts. Bootstrap and recovery pages also
 check the current browser origin and recheck it immediately before submitting their action. The
-recovery handler records denied, failed, and successful attempts without storing the bootstrap token or generated password. A successful break-glass recovery selects only an active SystemAdministrator, resets the password, clears enabled or pending TOTP enrollment, increments SessionVersion, and invalidates the local session-version cache. If an authenticator was cleared, a dedicated audit event is committed with the recovery event. The generated password is returned once; the operator must sign in and enroll a new authenticator before using elevated actions.
-Bootstrap remains protected by the configured secret and rate limit; it can create the first
-administrator only.
+recovery handler records denied, failed, and successful attempts without storing the supplied
+recovery token or generated password. A successful break-glass recovery selects only an active
+SystemAdministrator, resets the password, clears enabled or pending TOTP enrollment, increments
+SessionVersion, and invalidates the local session-version cache. If an authenticator was cleared,
+a dedicated audit event is committed with the recovery event. The generated password is returned
+once; the operator must sign in and enroll a new authenticator before using elevated actions.
+Bootstrap remains protected by its own configured secret and rate limit; it can create the first
+administrator only. Recovery fails closed if its independent secret is absent. Both secrets must
+be generated separately and rotated separately.
 
 ## Deployment
 
