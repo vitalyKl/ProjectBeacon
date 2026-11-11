@@ -169,6 +169,13 @@ the actual ingress source restores `Request.Scheme=https` before the origin chec
 authentication cookies remain `Secure` independently because their cookie policy is
 `SecurePolicy.Always`; that flag does not replace correct forwarded-header handling.
 
+Sensitive authentication endpoints and task attachment uploads apply fixed-window limits per
+trusted client IP. Once a human is authenticated, they also consume a separate per-user bucket;
+auth, auth-read and attachment-upload have independent allowances. Anonymous login,
+registration and recovery requests remain IP-limited because a verified user identity does not
+exist yet. This second identity bucket prevents authenticated users behind a shared ingress from
+sharing one account allowance, but it does not replace the trusted-proxy configuration above.
+
 Do not set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` — it bypasses the trust lists and would honor
 forwarded headers from any client. Without the variables, forwarded headers are ignored: the
 application sees the internal HTTP request, and Control Plane form login/logout fail closed with
