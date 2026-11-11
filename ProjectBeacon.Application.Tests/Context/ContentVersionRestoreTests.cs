@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
 using Application.Context;
+using Application.Proposals;
 using Application.Persistence;
 using Domain.Entities.Identity;
 using Domain.Entities.Context;
@@ -12,6 +13,7 @@ using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.Audit;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -243,6 +245,297 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal("Original milestone description", milestone.Description);
         Assert.Equal(1, milestone.Order);
         Assert.Equal(3, milestone.Revision);
+    }
+
+    [Fact]
+    public async Task CreateMilestoneProposal_AcceptCreatesReservedTargetAndInitialHistory()
+    {
+        var request = new CreateProposalRequest(
+            ContentTargetKind.Milestone,
+            Guid.Empty,
+            ProposalOperation.Create,
+            0,
+            """{"name":"Alpha milestone","description":"First release checkpoint","order":1}""",
+            "Adds the first roadmap checkpoint.",
+            "milestone-create-" + Guid.NewGuid().ToString("N"));
+
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        Assert.NotEqual(Guid.Empty, created.Value!.TargetId);
+        Assert.Equal(ProposalOperation.Create, created.Value.Operation);
+        Assert.Equal(0, created.Value.BaseRevision);
+        Assert.Equal(ProposalStatus.Pending, created.Value.Status);
+
+        var accepted = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                new ContentWriter())
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, created.Value.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(1, accepted.Value.AppliedRevision);
+
+        var milestone = await _db.Milestones.SingleAsync(
+            item => item.Id == created.Value.TargetId,
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Alpha milestone", milestone.Name);
+        Assert.Equal("First release checkpoint", milestone.Description);
+        Assert.Equal(1, milestone.Order);
+        Assert.Equal(1, milestone.Revision);
+
+        var version = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, version.Revision);
+        Assert.Equal(created.Value.Id, version.ProposalId);
+    }
+
+    [Fact]
+    public async Task DeleteMilestoneProposal_AcceptWritesTombstoneAndRestoreRecreatesSameId()
+    {
+        var milestone = Milestone.Create(
+            "Release milestone", "Release checkpoint", _projectId, 3);
+        _db.Milestones.Add(milestone);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, milestone, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var original = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id
+                && item.Revision == 1,
+            TestContext.Current.CancellationToken);
+
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    new CreateProposalRequest(
+                        ContentTargetKind.Milestone,
+                        milestone.Id,
+                        ProposalOperation.Delete,
+                        1,
+                        "{}",
+                        "Removes a completed milestone.",
+                        "milestone-delete-" + Guid.NewGuid().ToString("N")),
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accepted = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                writer)
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, created.Value!.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.Equal(2, accepted.Value.AppliedRevision);
+        Assert.False(await _db.Milestones.AsNoTracking().AnyAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
+
+        var tombstone = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id
+                && item.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using (var json = JsonDocument.Parse(tombstone.ContentJson))
+            Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
+
+        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new RestoreContentVersionCommand(
+                _projectId,
+                original.Id,
+                ExpectedRevision: 2,
+                Actor: HumanActor(),
+                ExpectedTargetKind: ContentTargetKind.Milestone,
+                ExpectedTargetId: milestone.Id),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(restored.Success, restored.Error);
+        Assert.True(restored.Value!.Changed);
+        Assert.Equal(3, restored.Value.Revision);
+        var recreated = await _db.Milestones.SingleAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken);
+        Assert.Equal("Release milestone", recreated.Name);
+        Assert.Equal("Release checkpoint", recreated.Description);
+        Assert.Equal(3, recreated.Order);
+        Assert.Equal(3, recreated.Revision);
+    }
+
+    [Fact]
+    public async Task DeleteContextSectionProposal_AcceptWritesTombstoneAndRestoreRecreatesReviewedSection()
+    {
+        var section = ContextSection.Create(
+            "architecture", "Architecture", "Reviewed architecture section",
+            _projectId, ContextScopeType.Project);
+        section.MarkReviewed(_actorId.ToString("D"));
+        _db.ContextSections.Add(section);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, section, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var original = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id
+                && item.Revision == 1,
+            TestContext.Current.CancellationToken);
+
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    new CreateProposalRequest(
+                        ContentTargetKind.ContextSection,
+                        section.Id,
+                        ProposalOperation.Delete,
+                        1,
+                        "{}",
+                        "Removes an obsolete reviewed section.",
+                        "section-delete-" + Guid.NewGuid().ToString("N")),
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var accepted = await new AcceptProposalHandler(
+                HandlerSqlite.Factory(_connection),
+                new AuthorizationService(),
+                new EfAuditWriter(),
+                writer)
+            .HandleAsync(
+                new AcceptProposalCommand(_projectId, created.Value!.Id, HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.True(accepted.Success, accepted.Error);
+        Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
+        Assert.False(await _db.ContextSections.AsNoTracking().AnyAsync(
+            item => item.Id == section.Id, TestContext.Current.CancellationToken));
+
+        var tombstone = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id
+                && item.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using (var json = JsonDocument.Parse(tombstone.ContentJson))
+            Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
+
+        var restored = await new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new RestoreContentVersionCommand(
+                _projectId,
+                original.Id,
+                ExpectedRevision: 2,
+                Actor: HumanActor(),
+                ExpectedTargetKind: ContentTargetKind.ContextSection,
+                ExpectedTargetId: section.Id),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(restored.Success, restored.Error);
+        Assert.Equal(3, restored.Value!.Revision);
+        var recreated = await _db.ContextSections.SingleAsync(
+            item => item.Id == section.Id, TestContext.Current.CancellationToken);
+        Assert.Equal("architecture", recreated.SectionId);
+        Assert.Equal("Architecture", recreated.Title);
+        Assert.Equal("Reviewed architecture section", recreated.BodyMarkdown);
+        Assert.Equal(ContextReviewState.Reviewed, recreated.ReviewState);
+        Assert.Equal(3, recreated.Revision);
+    }
+
+    [Fact]
+    public async Task DeleteDecisionAndConstraintProposals_TransitionAndRestoreLifecycleStatus()
+    {
+        var decision = Decision.Create(
+            "Accepted decision", "Context", "Decision body", _projectId, "Consequences");
+        decision.Accept();
+        var constraint = Constraint.Create(
+            "Active rule", ConstraintKind.Must, _projectId, "src/");
+        constraint.Activate();
+        _db.Decisions.Add(decision);
+        _db.Constraints.Add(constraint);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, decision, "Human", _actorId.ToString("D"));
+        writer.AddVersion(_db, constraint, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var decisionBase = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Decision
+                && item.TargetId == decision.Id && item.Revision == 1,
+            TestContext.Current.CancellationToken);
+        var constraintBase = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Constraint
+                && item.TargetId == constraint.Id && item.Revision == 1,
+            TestContext.Current.CancellationToken);
+
+        var creator = new CreateProposalHandler(
+            HandlerSqlite.Factory(_connection), new EfAuditWriter());
+        var decisionProposal = await creator.HandleAsync(
+            new CreateProposalCommand(
+                _projectId,
+                new CreateProposalRequest(
+                    ContentTargetKind.Decision, decision.Id, ProposalOperation.Delete, 1, "{}",
+                    "Deprecates an obsolete decision.",
+                    "decision-delete-" + Guid.NewGuid().ToString("N")),
+                HumanActor()),
+            TestContext.Current.CancellationToken);
+        var constraintProposal = await creator.HandleAsync(
+            new CreateProposalCommand(
+                _projectId,
+                new CreateProposalRequest(
+                    ContentTargetKind.Constraint, constraint.Id, ProposalOperation.Delete, 1, "{}",
+                    "Rejects an obsolete constraint.",
+                    "constraint-delete-" + Guid.NewGuid().ToString("N")),
+                HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(decisionProposal.Success, decisionProposal.Error);
+        Assert.True(constraintProposal.Success, constraintProposal.Error);
+
+        var acceptor = new AcceptProposalHandler(
+            HandlerSqlite.Factory(_connection),
+            new AuthorizationService(),
+            new EfAuditWriter(),
+            writer);
+        var acceptedDecision = await acceptor.HandleAsync(
+            new AcceptProposalCommand(_projectId, decisionProposal.Value!.Id, HumanActor()),
+            TestContext.Current.CancellationToken);
+        var acceptedConstraint = await acceptor.HandleAsync(
+            new AcceptProposalCommand(_projectId, constraintProposal.Value!.Id, HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(acceptedDecision.Success, acceptedDecision.Error);
+        Assert.True(acceptedConstraint.Success, acceptedConstraint.Error);
+
+        await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(constraint).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(DecisionStatus.Deprecated, decision.Status);
+        Assert.Equal(2, decision.Revision);
+        Assert.Equal(ConstraintStatus.Rejected, constraint.Status);
+        Assert.Equal(2, constraint.Revision);
+
+        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var decisionRestored = await restore.HandleAsync(new RestoreContentVersionCommand(
+            _projectId, decisionBase.Id, 2, HumanActor(),
+            ContentTargetKind.Decision, decision.Id), TestContext.Current.CancellationToken);
+        var constraintRestored = await restore.HandleAsync(new RestoreContentVersionCommand(
+            _projectId, constraintBase.Id, 2, HumanActor(),
+            ContentTargetKind.Constraint, constraint.Id), TestContext.Current.CancellationToken);
+        Assert.True(decisionRestored.Success, decisionRestored.Error);
+        Assert.True(constraintRestored.Success, constraintRestored.Error);
+
+        await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(constraint).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(DecisionStatus.Accepted, decision.Status);
+        Assert.Equal(3, decision.Revision);
+        Assert.Equal(ConstraintStatus.Active, constraint.Status);
+        Assert.Equal(3, constraint.Revision);
     }
 
     private ActorContext HumanActor() =>
