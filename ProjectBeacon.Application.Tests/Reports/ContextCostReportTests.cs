@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Evals;
+using Application.Authorization;
 using Application.Reports;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -30,9 +31,9 @@ public sealed class ContextCostReportTests : IDisposable
 
     private BeaconDbFactory Factory() => HandlerSqlite.Factory(_connection);
 
-    private ContextCostReportHandler Handler() => new(Factory());
+    private ContextCostReportHandler Handler() => new(Factory(), new AuthorizationService());
 
-    private async Task<(Project Project, TaskItem Task)> SeedProjectAndTaskAsync(string projectName, string taskTitle)
+    private async Task<(Project Project, TaskItem Task, ActorContext Actor)> SeedProjectAndTaskAsync(string projectName, string taskTitle)
     {
         using (TenantScope.EnterUnscoped())
         {
@@ -51,7 +52,9 @@ public sealed class ContextCostReportTests : IDisposable
             _db.Tasks.Add(task);
 
             await _db.SaveChangesAsync();
-            return (project, task);
+            return (project, task, new ActorContext(
+                ActorType.Human, user.Id, false, null, null,
+                project.Id, org.Id, ApiTokenCapability.None));
         }
     }
 
@@ -82,13 +85,13 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_PairedCompletedRuns_ReturnsDeltas()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P1", "Test task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P1", "Test task");
         var pairId = Guid.NewGuid().ToString("n");
 
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief, 50, 100, 3, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(task.Id, result.Value!.TaskId);
@@ -118,10 +121,10 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_NoPairedRuns_ReturnsEmptyPairs()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P2", "Lonely task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P2", "Lonely task");
         await RecordAsync(project.Id, task.Id, null, EvalCondition.WithBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(0, result.Value!.PairCount);
@@ -131,9 +134,9 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_TaskNotFound_Fails()
     {
-        await SeedProjectAndTaskAsync("P3", "Some task");
+        var (_, _, actor) = await SeedProjectAndTaskAsync("P3", "Some task");
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(Guid.NewGuid()), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(Guid.NewGuid(), null, actor), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
@@ -142,13 +145,13 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_PartialPair_DeltasAreNull()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P4", "Partial task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P4", "Partial task");
         var pairId = Guid.NewGuid().ToString("n");
 
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, result.Value!.PairCount);
@@ -163,7 +166,7 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_MultiplePairs_ReturnsAllPairs()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P5", "Multi pair task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P5", "Multi pair task");
         var pair1 = Guid.NewGuid().ToString("n");
         var pair2 = Guid.NewGuid().ToString("n");
 
@@ -172,7 +175,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pair2, EvalCondition.WithBrief, 80, 160, 4, false);
         await RecordAndCompleteAsync(project.Id, task.Id, pair2, EvalCondition.WithoutBrief, 40, 80, 2, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(2, result.Value!.PairCount);
@@ -182,8 +185,8 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_WrongProject_ReturnsFailure()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P6", "Scoped task");
-        var (_, otherProject) = await SeedProjectAndTaskAsync("P6b", "Other task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P6", "Scoped task");
+        var (otherProject, _, _) = await SeedProjectAndTaskAsync("P6b", "Other task");
         var pairId = Guid.NewGuid().ToString("n");
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief, 50, 100, 3, false);
@@ -197,13 +200,13 @@ public sealed class ContextCostReportTests : IDisposable
     [Fact]
     public async Task Report_UncompletedRuns_ReturnsPairWithNullDeltas()
     {
-        var (project, task) = await SeedProjectAndTaskAsync("P7", "Pending task");
+        var (project, task, actor) = await SeedProjectAndTaskAsync("P7", "Pending task");
         var pairId = Guid.NewGuid().ToString("n");
 
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief);
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, result.Value!.PairCount);
