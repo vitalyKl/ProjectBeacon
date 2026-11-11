@@ -6,6 +6,7 @@ using Application.Common;
 using Application.Context;
 using Application.Proposals;
 using Application.Persistence;
+using Domain.Entities.Content;
 using Domain.Entities.Identity;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
