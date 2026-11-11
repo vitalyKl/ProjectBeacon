@@ -23,7 +23,8 @@ public sealed class HttpPlatformContainerLogClient(
     TimeProvider timeProvider,
     ILogger<HttpPlatformContainerLogClient> logger,
     IBeaconDbFactory dbFactory,
-    IAuditWriter auditWriter) : IPlatformContainerLogClient
+    IAuditWriter auditWriter,
+    IAdminGate adminGate) : IPlatformContainerLogClient
 {
     private const int MaximumTail = 500;
     private const string TimestampHeader = "X-Beacon-Ops-Timestamp";
@@ -42,10 +43,17 @@ public sealed class HttpPlatformContainerLogClient(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        if (!actor.HasPermission(OperatorPermission.OperationsRead)
-            || !actor.HasPermission(OperatorPermission.ContainerLogsRead))
+        var operationsAccess = await adminGate.RequireAsync(actor, OperatorPermission.OperationsRead);
+        var logAccess = await adminGate.RequireAsync(actor, OperatorPermission.ContainerLogsRead);
+        if (!operationsAccess.Success
+            || !logAccess.Success
+            || logAccess.Value is null
+            || logAccess.Value.UserId != actor.UserId
+            || !logAccess.Value.HasPermission(OperatorPermission.OperationsRead)
+            || !logAccess.Value.HasPermission(OperatorPermission.ContainerLogsRead))
             return Result.Failure<PlatformContainerLogResponse>(
-                "OperationsRead and ContainerLogsRead permissions are required.", ErrorKind.Forbidden);
+                "Current OperationsRead and ContainerLogsRead permissions are required.", ErrorKind.Forbidden);
+        var currentActor = logAccess.Value;
         if (!Enum.IsDefined(service))
             return Result.Failure<PlatformContainerLogResponse>(
                 "A supported platform service is required.", ErrorKind.Validation);
@@ -121,7 +129,7 @@ public sealed class HttpPlatformContainerLogClient(
 
             try
             {
-                await RecordAccessAsync(actor, service, payload.ReturnedLines, ct);
+                await RecordAccessAsync(currentActor, service, payload.ReturnedLines, ct);
             }
             catch (Exception exception)
             {
