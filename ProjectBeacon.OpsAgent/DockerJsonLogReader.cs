@@ -128,12 +128,16 @@ public sealed class DockerJsonLogReader(
                 var isRunning = root.TryGetProperty("State", out var state)
                     && state.TryGetProperty("Running", out var running)
                     && running.ValueKind == JsonValueKind.True;
+                var currentLog = Path.Combine(directory, id + "-json.log");
+                var lastChanged = File.Exists(currentLog)
+                    ? File.GetLastWriteTimeUtc(currentLog)
+                    : Directory.GetLastWriteTimeUtc(directory);
                 candidates.Add(new ContainerMetadata(
                     id,
                     directory,
                     name,
                     isRunning,
-                    Directory.GetLastWriteTimeUtc(directory)));
+                    lastChanged));
             }
             catch (Exception exception) when (
                 exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
@@ -182,7 +186,7 @@ public sealed class DockerJsonLogReader(
         CancellationToken ct)
     {
         var file = new FileInfo(path);
-        if (file.Length <= 0 || file.Length > options.MaximumLogFileBytes)
+        if (file.Length <= 0)
             return [];
 
         var results = new Queue<PlatformContainerLogEntry>(maximumLines);
@@ -193,7 +197,12 @@ public sealed class DockerJsonLogReader(
             FileShare.ReadWrite | FileShare.Delete,
             bufferSize: 16 * 1024,
             FileOptions.SequentialScan);
+        var startOffset = Math.Max(0, stream.Length - options.MaximumLogFileBytes);
+        if (startOffset > 0)
+            stream.Seek(startOffset, SeekOrigin.Begin);
         using var reader = new StreamReader(stream);
+        if (startOffset > 0)
+            await reader.ReadLineAsync(ct); // Discard the partial first JSON record.
 
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) is not null)
