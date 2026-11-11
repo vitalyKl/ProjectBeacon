@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Audit;
 using Application.Authorization;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -8,24 +9,28 @@ using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 /// <summary>
 /// Finishes a task as done, failed, skipped, or partial, including review-proof and actor-access checks.
-/// Guarded finishes (done, failed) are compare-and-swapped on StateRevision: exactly one
-/// rival wins, and a loser that cannot prove its effect is already in place gets
-/// ErrorKind.Conflict (409) with no side effects. The state write and the "Work finished"
-/// comment commit in one short transaction; a comment-insert or commit failure rolls the
-/// whole operation back, so no partial state survives.
+/// Guarded finishes (done, failed) are compare-and-swapped on StateRevision. The task mutation,
+/// any human-authored task comment, and the actor-aware audit event commit in one transaction,
+/// so an audit failure cannot leave an unaudited completion.
 /// </summary>
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly IAuditWriter? _auditWriter;
 
-    public FinishWorkHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    public FinishWorkHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _auditWriter = auditWriter;
     }
 
     /// <summary>
@@ -59,6 +64,13 @@ public class FinishWorkHandler
                 ct: ct);
         if (!permission.Success)
             return Result.Failure(permission);
+
+        var orgId = await db.Projects
+            .Where(project => project.Id == task.ProjectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is null)
+            return Result.Failure("Task project not found.", ErrorKind.NotFound);
 
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
@@ -219,9 +231,9 @@ public class FinishWorkHandler
                 }
             }
 
-            // Task comments are human-authored content. API-token completions are
-            // authorized as the token itself (and audited by its creator metadata elsewhere),
-            // not silently attributed as a human action. Internal workers have no user author.
+            // Task comments are human-authored content. API tokens and workers are not
+            // silently attributed to a human; their actor kind and stable principal id are
+            // recorded in the audit event below instead.
             if (command.Actor.IsHuman && command.Actor.UserId is { } userId)
             {
                 db.TaskComments.Add(TaskComment.Create(
@@ -230,6 +242,18 @@ public class FinishWorkHandler
                     taskId,
                     userId));
             }
+
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                command.Actor,
+                "work.finished",
+                "Task",
+                taskId.ToString(),
+                orgId,
+                task.ProjectId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    resultCode = resultType
+                })));
 
             try
             {

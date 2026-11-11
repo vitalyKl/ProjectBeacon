@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Domain.Entities.Evals;
+using Domain.Entities.Audit;
 using Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -206,6 +207,25 @@ public sealed class CapabilityAndWorkHttpTests
             actorId = Guid.NewGuid().ToString()
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, scoped.StatusCode);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                var audit = await db.AuditEvents.IgnoreQueryFilters()
+                    .Where(item => item.Action == "work.finished"
+                        && item.TargetId == taskA.GetProperty("id").GetGuid().ToString())
+                    .OrderByDescending(item => item.At)
+                    .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+                Assert.NotNull(audit);
+                Assert.Equal(AuditActorKind.ApiToken, audit.ActorKind);
+                Assert.Equal(projectAId, audit.ProjectId);
+                Assert.Null(audit.ActorUserId);
+                Assert.NotNull(audit.ActorTokenId);
+                Assert.Contains("\\"resultCode\\":\\"failed\\" ", audit.DetailsJson ?? string.Empty);
+            }
+        }
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)
