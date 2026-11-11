@@ -50,7 +50,7 @@ public sealed class OpsAgentSignatureMiddleware(
                 timestamp,
                 nonce,
                 context.Request.Method,
-                context.Request.Path + context.Request.QueryString,
+                $"{context.Request.Path.Value}{context.Request.QueryString.Value}",
                 signature))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
