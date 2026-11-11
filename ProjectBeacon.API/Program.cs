@@ -111,6 +111,8 @@ builder.Services.AddRateLimiter(options =>
         rateLimitWindowSeconds,
         rateLimitReadPerWindow,
         attachmentUploadRateLimit));
+builder.Services.AddSingleton(new ApiTokenIdentityRateLimiter(
+    rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow, attachmentUploadRateLimit));
 
 var app = builder.Build();
 
@@ -137,6 +139,7 @@ app.UseMiddleware<PublicApiOperatorRouteMiddleware>();
 // explicit HTTP 403 on a versioned API route is observed.
 app.UseMiddleware<AuditDeniedRequestMiddleware>();
 app.UseMiddleware<ApiTokenAuthMiddleware>();
+app.UseMiddleware<ApiTokenIdentityRateLimitMiddleware>();
 app.UseMiddleware<DeviceActorBoundaryMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
 app.UseMiddleware<OrganizationEntitlementMiddleware>();
