@@ -299,7 +299,7 @@ else
             else
             {
                 var history = await ContentVersions.HandleAsync(
-                    _project.Id, ContentTargetKind.Constraint, constraintId, 50);
+                    _project.Id, ContentTargetKind.Constraint, constraintId, _actor, 50);
                 _constraintHistory = history.Success ? history.Value!.ToList() : [];
             }
         }
@@ -350,7 +350,7 @@ else
         }
 
         var history = await ContentVersions.HandleAsync(
-            _project.Id, ContentTargetKind.ContextSection, node.Id, 50);
+            _project.Id, ContentTargetKind.ContextSection, node.Id, _actor, 50);
         _sectionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
             Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
@@ -485,7 +485,7 @@ else
 
         _selectedConstraint = constraint;
         var history = await ContentVersions.HandleAsync(
-            _project.Id, ContentTargetKind.Constraint, constraint.Id, 50);
+            _project.Id, ContentTargetKind.Constraint, constraint.Id, _actor, 50);
         _constraintHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
             Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
