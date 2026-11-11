@@ -467,13 +467,15 @@ public sealed class ContentVersionRestoreTests : IDisposable
         writer.AddVersion(_db, constraint, "Human", _actorId.ToString("D"));
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        var decisionBaseRevision = decision.Revision;
+        var constraintBaseRevision = constraint.Revision;
         var decisionBase = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Decision
-                && item.TargetId == decision.Id && item.Revision == 1,
+                && item.TargetId == decision.Id && item.Revision == decisionBaseRevision,
             TestContext.Current.CancellationToken);
         var constraintBase = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Constraint
-                && item.TargetId == constraint.Id && item.Revision == 1,
+                && item.TargetId == constraint.Id && item.Revision == constraintBaseRevision,
             TestContext.Current.CancellationToken);
 
         var creator = new CreateProposalHandler(
@@ -482,7 +484,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
             new CreateProposalCommand(
                 _projectId,
                 new CreateProposalRequest(
-                    ContentTargetKind.Decision, decision.Id, ProposalOperation.Delete, 1, "{}",
+                    ContentTargetKind.Decision, decision.Id, ProposalOperation.Delete, decisionBaseRevision, "{}",
                     "Deprecates an obsolete decision.",
                     "decision-delete-" + Guid.NewGuid().ToString("N")),
                 HumanActor()),
@@ -491,7 +493,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
             new CreateProposalCommand(
                 _projectId,
                 new CreateProposalRequest(
-                    ContentTargetKind.Constraint, constraint.Id, ProposalOperation.Delete, 1, "{}",
+                    ContentTargetKind.Constraint, constraint.Id, ProposalOperation.Delete, constraintBaseRevision, "{}",
                     "Rejects an obsolete constraint.",
                     "constraint-delete-" + Guid.NewGuid().ToString("N")),
                 HumanActor()),
@@ -516,16 +518,16 @@ public sealed class ContentVersionRestoreTests : IDisposable
         await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
         await _db.Entry(constraint).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(DecisionStatus.Deprecated, decision.Status);
-        Assert.Equal(2, decision.Revision);
+        Assert.Equal(3, decision.Revision);
         Assert.Equal(ConstraintStatus.Rejected, constraint.Status);
-        Assert.Equal(2, constraint.Revision);
+        Assert.Equal(3, constraint.Revision);
 
         var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
         var decisionRestored = await restore.HandleAsync(new RestoreContentVersionCommand(
-            _projectId, decisionBase.Id, 2, HumanActor(),
+            _projectId, decisionBase.Id, 3, HumanActor(),
             ContentTargetKind.Decision, decision.Id), TestContext.Current.CancellationToken);
         var constraintRestored = await restore.HandleAsync(new RestoreContentVersionCommand(
-            _projectId, constraintBase.Id, 2, HumanActor(),
+            _projectId, constraintBase.Id, 3, HumanActor(),
             ContentTargetKind.Constraint, constraint.Id), TestContext.Current.CancellationToken);
         Assert.True(decisionRestored.Success, decisionRestored.Error);
         Assert.True(constraintRestored.Success, constraintRestored.Error);
@@ -533,9 +535,9 @@ public sealed class ContentVersionRestoreTests : IDisposable
         await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
         await _db.Entry(constraint).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(DecisionStatus.Accepted, decision.Status);
-        Assert.Equal(3, decision.Revision);
+        Assert.Equal(4, decision.Revision);
         Assert.Equal(ConstraintStatus.Active, constraint.Status);
-        Assert.Equal(3, constraint.Revision);
+        Assert.Equal(4, constraint.Revision);
     }
 
     private ActorContext HumanActor() =>
