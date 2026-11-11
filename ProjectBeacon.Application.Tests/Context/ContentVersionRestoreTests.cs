@@ -783,7 +783,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 TestContext.Current.CancellationToken);
         Assert.True(accepted.Success, accepted.Error);
         Assert.Equal(ProposalStatus.Accepted, accepted.Value!.Status);
-        Assert.Equal(2, accepted.Value.AppliedRevision);
+        Assert.Equal(2, accepted.Value.AppliedRevision.GetValueOrDefault());
 
         var updatedSnapshot = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Milestone
@@ -799,7 +799,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         var persistedTask = await _db.Tasks.AsNoTracking().SingleAsync(
             item => item.Id == linkedTask.Id,
             TestContext.Current.CancellationToken);
-        Assert.Equal(milestone.Id, persistedTask.MilestoneId);
+        Assert.Equal(milestone.Id, persistedTask.MilestoneId.GetValueOrDefault());
     }
 
     [Fact]
