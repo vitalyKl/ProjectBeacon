@@ -78,25 +78,28 @@ public static class ProjectEndpoints
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler)
+    private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetProjectCommand(new GetProjectRequest(projectId)));
+        var result = await handler.HandleAsync(
+            new GetProjectCommand(new GetProjectRequest(projectId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler)
+    private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(orgId)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(orgId), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapProjectResponse));
     }
 
-    private static async Task<IResult> ListAllProjects(ListProjectsHandler handler)
+    private static async Task<IResult> ListAllProjects(ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(null)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(null), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapProjectResponse));
     }
