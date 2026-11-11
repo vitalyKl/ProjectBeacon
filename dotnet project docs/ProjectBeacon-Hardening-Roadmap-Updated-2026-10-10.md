@@ -814,21 +814,10 @@ Route/header override → `403`.
 
 ### H1.1 Permission matrix
 
-Создать документ:
-
-```text
-docs/authorization-matrix.md
-```
-
-Зафиксировать доступ для:
-
-- Human;
-- Owner;
-- Admin;
-- Member;
-- ApiToken;
-- Device;
-- Worker.
+- Current behavior and evidence baseline: `dotnet project docs/ProjectBeacon-authorization-matrix.md`.
+- Target decisions for roles, resources and token capabilities: `dotnet project docs/ProjectBeacon-authorization-target-matrix.md`.
+- The target matrix is the implementation contract for H1.2–H1.4. It keeps current behavior separate and records role/capability decisions, scope rules, denial semantics and implementation sequence.
+- **H1.1 document deliverable: drafted.** Runtime enforcement is not complete until H1.2–H1.4 and the H1 gate are proven.
 
 ### H1.2 Authorization service
 
