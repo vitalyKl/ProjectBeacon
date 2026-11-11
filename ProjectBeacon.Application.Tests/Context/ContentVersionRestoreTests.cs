@@ -380,6 +380,10 @@ public sealed class ContentVersionRestoreTests : IDisposable
             version => version.TargetKind == ContentTargetKind.ContextSection
                 && version.TargetId == section.Id,
             TestContext.Current.CancellationToken));
+        Assert.False(await _db.AuditEvents.AnyAsync(
+            item => item.Action == "content.deleted"
+                && item.TargetId == section.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
