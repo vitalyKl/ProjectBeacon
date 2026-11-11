@@ -97,8 +97,7 @@ services:
         max-file: "3"
     restart: unless-stopped
 
-  # Restricted log reader. This container sees only Docker json-file logs as a
-  # read-only filesystem; it has no Docker socket, database credentials or host ports.
+  # Narrow relay between Web and the DockerLogProxy. It has no host mount or Docker socket.
   ops-agent:
     image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
     container_name: beacon-alpha-ops-agent
@@ -108,10 +107,39 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       HOME: /tmp
       OPS_AGENT_SHARED_SECRET: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
-      OPS_AGENT_LOG_ROOT: /host-docker-logs
-      OPS_AGENT_COMPOSE_PROJECT: beacon-alpha
+      OPS_AGENT_DOCKER_PROXY_URL: "http://docker-log-proxy:8081"
+    depends_on:
+      docker-log-proxy:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    mem_limit: 128m
+    networks: [beacon-alpha-internal, beacon-alpha-ops-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    restart: unless-stopped
+
+  # The only service with Docker Engine socket access. It has no published ports
+  # and is reachable only from OpsAgent on the dedicated internal bridge network.
+  docker-log-proxy:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-docker-log-proxy
+    command: ["dotnet", "/app/docker-log-proxy/ProjectBeacon.DockerLogProxy.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:8081"
+      HOME: /tmp
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_LOG_PROXY_COMPOSE_PROJECT: beacon-alpha
+      DOCKER_LOG_PROXY_SHARED_SECRET: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
     volumes:
-      - /var/lib/docker/containers:/host-docker-logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     user: "0:0"
     read_only: true
     tmpfs:
@@ -119,7 +147,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges]
     mem_limit: 128m
-    networks: [beacon-alpha-internal]
+    networks: [beacon-alpha-ops-internal]
     logging:
       driver: json-file
       options:
@@ -200,3 +228,9 @@ networks:
     ipam:
       config:
         - subnet: 172.29.0.0/16
+  beacon-alpha-ops-internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
