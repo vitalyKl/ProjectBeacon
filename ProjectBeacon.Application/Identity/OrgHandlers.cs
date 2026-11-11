@@ -156,9 +156,21 @@ public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<Org
         if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
             return Result.Forbidden<IList<OrgDto>>();
 
-        var tenant = new TenantContext();
-        tenant.Assign(null, null, unscoped: command.Actor.IsAdmin);
-        await using var db = _dbFactory.CreateDbContext(tenant);
+        // Keep the caller's bound tenant for member queries so PostgreSQL RLS receives
+        // the same organization scope as the request. Only a verified system admin uses
+        // the explicit unscoped operator path.
+        IBeaconDb db;
+        if (command.Actor.IsAdmin)
+        {
+            var tenant = new TenantContext();
+            tenant.Assign(null, null, unscoped: true);
+            db = _dbFactory.CreateDbContext(tenant);
+        }
+        else
+        {
+            db = _dbFactory.CreateDbContext();
+        }
+        await using (db)
 
         var query = db.Orgs.Where(org => org.LifecycleStatus == OrganizationLifecycleStatus.Active);
         if (!command.Actor.IsAdmin)
