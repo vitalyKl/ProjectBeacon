@@ -202,7 +202,7 @@ public sealed class AuditApiTests
         }
 
         var recovered = await client.SendAsync(
-            RecoveryRequest(AuthApiFactory.BootstrapToken),
+            RecoveryRequest(AuthApiFactory.RecoveryToken),
             cancellationToken: TestContext.Current.CancellationToken);
         recovered.EnsureSuccessStatusCode();
         var recoveredJson = await recovered.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
@@ -219,7 +219,7 @@ public sealed class AuditApiTests
                 TestContext.Current.CancellationToken);
             Assert.Equal(AuditOutcome.Denied, deniedRecoveryEvent.Outcome);
             Assert.Equal(AuditActorKind.System, deniedRecoveryEvent.ActorKind);
-            Assert.Contains("bootstrap_token_invalid", deniedRecoveryEvent.DetailsJson);
+            Assert.Contains("recovery_token_invalid", deniedRecoveryEvent.DetailsJson);
 
             var recoveryEvent = await auditDb.AuditEvents.SingleAsync(
                 item => item.Action == "platform.admin_recovery.completed",
