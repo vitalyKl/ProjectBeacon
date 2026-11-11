@@ -187,7 +187,7 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
         Assert.Equal(originalRevision + 1, updated.Value);
 
         DbContext.ChangeTracker.Clear();
-        var cut = Bunit.RenderComponent<Features.Roadmap.Roadmap>();
+        var cut = Bunit.RenderComponent<RoadmapDialogTestHost>();
 
         cut.Find($"[data-testid='open-milestone-{milestone.Id:D}']").Click();
         Assert.Contains("Content history (2)", cut.Markup);
