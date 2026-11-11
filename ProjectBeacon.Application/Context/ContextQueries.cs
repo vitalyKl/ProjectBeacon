@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Audit;
 using Application.Authorization;
 using Application.Proposals;
 using Domain.Enums;
@@ -54,16 +55,26 @@ public class DeleteContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+    private readonly IAuditWriter? _auditWriter;
 
     public DeleteContextNodeHandler(IBeaconDbFactory dbFactory)
-        : this(dbFactory, new ContentWriter())
+        : this(dbFactory, new ContentWriter(), null)
     {
     }
 
     public DeleteContextNodeHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+        : this(dbFactory, contentWriter, null)
+    {
+    }
+
+    public DeleteContextNodeHandler(
+        IBeaconDbFactory dbFactory,
+        ContentWriter contentWriter,
+        IAuditWriter? auditWriter)
     {
         _dbFactory = dbFactory;
         _contentWriter = contentWriter;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
@@ -80,8 +91,18 @@ public class DeleteContextNodeHandler
         if (section is null)
             return Result.Failure("Context node not found.");
 
+        var orgId = await db.Projects
+            .Where(project => project.Id == section.ProjectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is null)
+            return Result.Failure("Project not found.");
+
         section.Delete();
         db.ContextSections.Remove(section);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            actor, "content.deleted", nameof(ContentTargetKind.ContextSection),
+            section.Id.ToString("D"), orgId, section.ProjectId));
         var attribution = ContentAttribution.FromActor(actor);
         var saved = await _contentWriter.SaveAsync(
             db, section, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
