@@ -162,8 +162,14 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   A separate Control Plane deployment remains a future hardening option.
 - Metadata-only Web/API/Worker heartbeats are written every 30 seconds and visible to operators
   with `OperationsRead` at `/admin/operations`; instances become stale after 90 seconds without an
-  update. Container log access is not exposed: it still requires a restricted external ops-agent
-  or log stack and the `ContainerLogsRead` boundary.
+  update. Bounded Web/Worker/Migrate log tails are available to operators with both
+  `OperationsRead` and `ContainerLogsRead`. In the Compose/VPS topology, Web signs requests to
+  OpsAgent; OpsAgent signs a second request to DockerLogProxy over a dedicated internal network.
+  OpsAgent has no Docker socket or host filesystem mount. DockerLogProxy is the only service with
+  a read-only Docker socket bind mount; it has no published port and accepts only the fixed signed
+  GET endpoint for the three allowlisted services. PostgreSQL, Caddy and arbitrary containers are
+  not exposed. The real VPS socket/network smoke test and Kubernetes-native pod-log integration
+  remain outstanding.
 - The provider-neutral plan catalog is available at `/admin/billing/plans`. `BillingRead` operators
   can inspect plans; create/update operations require `BillingManage` and ten-minute TOTP step-up.
   Plan price and currency may both remain unset. The catalog does not itself create subscriptions or call
@@ -175,7 +181,9 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   operator-attested external receipt reference only; it is not independently verified against a
   bank or payment provider.
 - The provider-neutral billing core is implemented: plans, subscriptions, append-only ledger,
-  manual invoice records and atomic Alpha → Production conversion. Still future work:
-  payment-provider integration (checkout/portal, payment methods, verified webhooks and refunds),
-  customer billing UI, PDF/printable invoice generation and delivery, settlement reconciliation,
-  data export/deletion, and granular feature/usage entitlement enforcement.
+  manual invoice records and atomic Alpha → Production conversion. The customer `/billing` UI and
+  tenant-bound invoice detail with browser Print / Save PDF are also implemented for active-tenant
+  Owners/Admins. Still future work: payment-provider integration (checkout/portal, payment methods,
+  verified webhooks and refunds), server-generated PDF artifact/email delivery, settlement
+  reconciliation, individual data-subject export/deletion, and granular feature/usage entitlement
+  enforcement.
