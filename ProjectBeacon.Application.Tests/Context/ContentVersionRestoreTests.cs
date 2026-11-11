@@ -316,6 +316,44 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteContextNode_WritesTombstoneAndAuditAtomically()
+    {
+        var section = ContextSection.Create(
+            "retired", "Retired section", "Content to be removed.",
+            _projectId, ContextScopeType.Project);
+        _db.ContextSections.Add(section);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, section, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new DeleteContextNodeHandler(
+                HandlerSqlite.Factory(_connection), writer, new EfAuditWriter())
+            .HandleAsync(
+                new DeleteContextNodeCommand(
+                    new DeleteContextNodeRequest(_projectId, section.Id), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.False(await _db.ContextSections.AsNoTracking().AnyAsync(
+            item => item.Id == section.Id, TestContext.Current.CancellationToken));
+        var tombstone = await _db.ContentVersions.SingleAsync(
+            version => version.TargetKind == ContentTargetKind.ContextSection
+                && version.TargetId == section.Id
+                && version.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using (var snapshot = JsonDocument.Parse(tombstone.ContentJson))
+            Assert.True(snapshot.RootElement.GetProperty("deleted").GetBoolean());
+
+        var audit = await _db.AuditEvents.SingleAsync(
+            item => item.Action == "content.deleted"
+                && item.TargetType == nameof(ContentTargetKind.ContextSection)
+                && item.TargetId == section.Id.ToString("D"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(_projectId, audit.ProjectId);
+        Assert.Null(audit.DetailsJson);
+    }
+
+    [Fact]
     public async Task DeleteContextNode_RequiresProjectMembershipAndPreservesContent()
     {
         var section = ContextSection.Create(
