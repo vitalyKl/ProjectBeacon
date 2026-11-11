@@ -501,8 +501,75 @@ public sealed class McpApiToolsTests
         args["operation"] = "Delete";
         var unsupported = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
         Assert.True(unsupported.IsError);
-        Assert.Contains("only operation 'Update'", unsupported.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Delete is supported for ContextSection", unsupported.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task KnowledgePropose_SupportsMilestoneCreateAndReviewedDelete()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var sectionId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var create = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose,
+            new JsonObject
+            {
+                ["targetKind"] = "Milestone",
+                ["operation"] = "Create",
+                ["baseRevision"] = 0,
+                ["payload"] = new JsonObject
+                {
+                    ["name"] = "Alpha milestone",
+                    ["description"] = "First milestone",
+                    ["order"] = 1
+                },
+                ["rationaleMarkdown"] = "Creates the first roadmap checkpoint."
+            },
+            api,
+            env);
+
+        Assert.False(create.IsError, create.Text);
+
+        var delete = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose,
+            new JsonObject
+            {
+                ["targetKind"] = "ContextSection",
+                ["targetId"] = sectionId.ToString("D"),
+                ["operation"] = "Delete",
+                ["baseRevision"] = 4,
+                ["payload"] = new JsonObject(),
+                ["rationaleMarkdown"] = "Removes an obsolete reviewed section."
+            },
+            api,
+            env);
+
+        Assert.False(delete.IsError, delete.Text);
+        var calls = handler.Calls
+            .Where(call => call.Path == $"/v1/projects/{projectId:D}/proposals")
+            .ToArray();
+        Assert.Equal(2, calls.Length);
+
+        var createBody = JsonNode.Parse(calls[0].Body)!.AsObject();
+        Assert.Equal("Create", createBody["operation"]!.GetValue<string>());
+        Assert.Equal(0, createBody["baseRevision"]!.GetValue<int>());
+        Assert.Equal(Guid.Empty, Guid.Parse(createBody["targetId"]!.GetValue<string>()));
+        Assert.Equal("Alpha milestone", createBody["payload"]!["name"]!.GetValue<string>());
+
+        var deleteBody = JsonNode.Parse(calls[1].Body)!.AsObject();
+        Assert.Equal("Delete", deleteBody["operation"]!.GetValue<string>());
+        Assert.Equal(4, deleteBody["baseRevision"]!.GetValue<int>());
+        Assert.Equal(sectionId, Guid.Parse(deleteBody["targetId"]!.GetValue<string>()));
+        Assert.Empty(deleteBody["payload"]!.AsObject());
+        Assert.All(calls, call => Assert.Equal("POST", call.Method));
     }
 
     [Fact]
