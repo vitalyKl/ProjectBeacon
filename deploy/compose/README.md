@@ -360,3 +360,17 @@ The full stack was exercised end-to-end locally with a test Caddy override
 - The mandatory **ring check after deploy** (restart web → the same
   `BeaconAuth` cookie is still accepted by `/v1/auth/me`) has not yet been
   performed on the VPS; run it right after the first deploy there.
+
+## Restricted container logs
+
+Set `OPS_AGENT_SHARED_SECRET` in `.env` to a freshly generated 32-byte hexadecimal secret:
+
+```sh
+openssl rand -hex 32
+```
+
+The Control Plane Web host signs requests to the private `ops-agent`. The agent signs a second request to `docker-log-proxy` on the separate `beacon-alpha-ops-internal` network. Only `docker-log-proxy` mounts `/var/run/docker.sock`; it exposes a single HMAC-authenticated GET endpoint and returns normalized log frames for the allowlisted Compose services `web`, `worker` and `migrate` in project `beacon-alpha`. The proxy has no published port. OpsAgent has no Docker socket or host filesystem mount. Worker and migration containers receive an empty `OPS_AGENT_SHARED_SECRET`.
+
+Container log access is available in Control Plane **Operations** only to operators with both `OperationsRead` and `ContainerLogsRead`. Successful reads append `platform.container_logs.read` to the platform audit journal before the response is returned. PostgreSQL, Caddy and arbitrary container logs are not exposed. Log lines may contain customer data or secrets; use the viewer only for incident response.
+
+The Compose file assumes Docker's default socket path `/var/run/docker.sock` and Compose project name `beacon-alpha`. If either is changed, update `DOCKER_SOCKET_PATH`, `DOCKER_LOG_PROXY_COMPOSE_PROJECT` and the corresponding Compose network/project settings together.
