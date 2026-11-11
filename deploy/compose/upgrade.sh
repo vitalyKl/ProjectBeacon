@@ -134,7 +134,7 @@ rollback() {
   fi
   echo "Rolling back to $OLD_REF ..." >&2
   sed -i "s|^BEACON_WEB_IMAGE=.*|BEACON_WEB_IMAGE=$OLD_REF|" .env
-  docker compose up -d web worker || exit 1
+  docker compose up -d web worker docker-log-proxy ops-agent || exit 1
   wait_healthy || exit 1
   echo "Rollback complete: stack is back on $OLD_REF." >&2
   exit 1
@@ -157,7 +157,7 @@ timeout 300 docker compose --profile migrate run --rm --no-deps migrate
 echo "Migration pass OK."
 
 # --- 4. Swap web+worker to the new image --------------------------------------
-docker compose up -d web worker
+docker compose up -d web worker docker-log-proxy ops-agent
 
 # --- 5. Health gate -----------------------------------------------------------
 wait_healthy
