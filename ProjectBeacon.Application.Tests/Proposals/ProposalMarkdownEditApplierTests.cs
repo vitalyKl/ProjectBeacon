@@ -49,6 +49,28 @@ public sealed class ProposalMarkdownEditApplierTests
     }
 
     [Fact]
+    public void Replace_FinalHeadingWithoutTrailingNewlineInsertsBodyOnNewLine()
+    {
+        const string source = "# Project\n\n## Security";
+        using var payload = JsonDocument.Parse("""
+            [
+              {
+                "heading": "## Security",
+                "op": "replace",
+                "content": "Security details."
+              }
+            ]
+            """);
+
+        var applied = ProposalMarkdownEditApplier.TryApply(
+            source, payload.RootElement, out var result, out var error);
+
+        Assert.True(applied, error);
+        Assert.Equal("# Project\n\n## Security\nSecurity details.\n\n", result);
+        Assert.Contains("## Security\nSecurity details.", result);
+    }
+
+    [Fact]
     public void InsertAfter_InsertsAfterWholeTargetSectionAndBeforeNextSibling()
     {
         using var payload = JsonDocument.Parse("""
