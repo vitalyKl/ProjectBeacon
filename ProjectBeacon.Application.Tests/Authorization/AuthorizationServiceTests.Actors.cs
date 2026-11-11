@@ -322,6 +322,62 @@ public sealed partial class AuthorizationServiceTests
     }
 
     [Fact]
+    public async Task ProjectMember_UnsupportedResourceActionPairs_FailClosed()
+    {
+        var memberId = await SeedProjectMemberAsync(MemberRole.Member);
+        var member = Human(memberId);
+
+        var allowed = new[]
+        {
+            (Resource: ResourceType.Pipeline, Action: AuthAction.Execute),
+            (Resource: ResourceType.Context, Action: AuthAction.Execute),
+            (Resource: ResourceType.Constraint, Action: AuthAction.Update)
+        };
+
+        foreach (var (resource, action) in allowed)
+        {
+            var result = await _auth.CanAsync(
+                _db, member, resource, action,
+                projectId: _projectId,
+                ct: TestContext.Current.CancellationToken);
+            Assert.True(result.Success, $"Expected member access for {resource}/{action}.");
+        }
+
+        var denied = new[]
+        {
+            (Resource: ResourceType.Project, Action: AuthAction.Execute),
+            (Resource: ResourceType.Task, Action: AuthAction.Execute),
+            (Resource: ResourceType.Report, Action: AuthAction.Execute),
+            (Resource: ResourceType.ChatSession, Action: AuthAction.Read),
+            (Resource: ResourceType.WorkstationConfiguration, Action: AuthAction.Read),
+            (Resource: ResourceType.Work, Action: AuthAction.Read)
+        };
+
+        foreach (var (resource, action) in denied)
+        {
+            var result = await _auth.CanAsync(
+                _db, member, resource, action,
+                projectId: _projectId,
+                ct: TestContext.Current.CancellationToken);
+            Assert.False(result.Success, $"Unexpected member access for {resource}/{action}.");
+        }
+    }
+
+    [Fact]
+    public async Task SystemAdmin_UnsupportedResourceActionPair_IsDenied()
+    {
+        var result = await _auth.CanAsync(
+            _db,
+            Admin(Guid.NewGuid()),
+            ResourceType.Project,
+            AuthAction.Execute,
+            projectId: _projectId,
+            ct: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public async Task Human_DecisionRead_WithoutMembership_ReturnsForbidden()
     {
         var r = await _auth.CanAsync(_db, Human(Guid.NewGuid()), ResourceType.Decision, AuthAction.Read, projectId: _projectId, ct: TestContext.Current.CancellationToken);
