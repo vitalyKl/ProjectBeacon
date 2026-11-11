@@ -73,7 +73,7 @@ public sealed class CookieLoginHttpTests
         logout.Headers.Host = "app.projectbeacon.tech";
         var logoutResponse = await client.SendAsync(logout, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
-        Assert.Equal("/login", logoutResponse.Headers.Location?.AbsolutePath);
+        Assert.Equal("/login", logoutResponse.Headers.Location?.ToString());
         Assert.Contains(logoutResponse.Headers.GetValues("Set-Cookie"),
             value => value.StartsWith("BeaconAuth=", StringComparison.Ordinal)
                 && value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
