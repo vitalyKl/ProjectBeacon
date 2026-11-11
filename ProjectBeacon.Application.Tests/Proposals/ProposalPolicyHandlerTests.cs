@@ -79,6 +79,31 @@ public sealed class ProposalPolicyHandlerTests : IDisposable
         Assert.Null(repoPatch.RestrictionReason);
         Assert.All(initial.Value!.Where(item => item != repoPatch), item => Assert.False(item.AutoAllowed));
 
+        var milestoneCreate = Assert.Single(initial.Value!, item =>
+            item.TargetKind == ContentTargetKind.Milestone
+            && item.Operation == ProposalOperation.Create);
+        Assert.True(milestoneCreate.Supported);
+        Assert.Contains("manual human review", milestoneCreate.RestrictionReason, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var targetKind in new[]
+        {
+            ContentTargetKind.ContextSection,
+            ContentTargetKind.Decision,
+            ContentTargetKind.Constraint,
+            ContentTargetKind.Milestone
+        })
+        {
+            var delete = Assert.Single(initial.Value!, item =>
+                item.TargetKind == targetKind && item.Operation == ProposalOperation.Delete);
+            Assert.True(delete.Supported);
+            Assert.False(delete.AutoAllowed);
+            Assert.Contains("manual human review", delete.RestrictionReason, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.False(Assert.Single(initial.Value!, item =>
+            item.TargetKind == ContentTargetKind.TaskDescription
+            && item.Operation == ProposalOperation.Delete).Supported);
+
         var projectDescription = Assert.Single(initial.Value!, item =>
             item.TargetKind == ContentTargetKind.ProjectDescription
             && item.Operation == ProposalOperation.Update);
