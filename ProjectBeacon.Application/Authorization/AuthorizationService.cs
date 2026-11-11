@@ -444,7 +444,7 @@ public sealed class AuthorizationService : IAuthorizationService
                 => TokenCan(actor, ApiTokenCapability.TaskWrite),
             ResourceType.TaskStep when action is AuthAction.Read
                 => TokenCan(actor, ApiTokenCapability.TaskRead),
-            ResourceType.TaskStep when action is AuthAction.Create or AuthAction.Update
+            ResourceType.TaskStep when action is AuthAction.Create
                 => TokenCan(actor, ApiTokenCapability.TaskWrite),
             ResourceType.Work when action is AuthAction.Execute
                 => TokenCan(actor, ApiTokenCapability.TaskWrite),
