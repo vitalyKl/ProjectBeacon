@@ -561,7 +561,7 @@ public sealed class McpApiToolsTests
         var createBody = JsonNode.Parse(calls[0].Body)!.AsObject();
         Assert.Equal("Create", createBody["operation"]!.GetValue<string>());
         Assert.Equal(0, createBody["baseRevision"]!.GetValue<int>());
-        Assert.Equal(Guid.Empty, Guid.Parse(createBody["targetId"]!.GetValue<string>()));
+        Assert.False(createBody.ContainsKey("targetId"));
         Assert.Equal("Alpha milestone", createBody["payload"]!["name"]!.GetValue<string>());
 
         var deleteBody = JsonNode.Parse(calls[1].Body)!.AsObject();
