@@ -46,7 +46,8 @@ Token types (all shown once at creation, never persisted raw):
 | Invite token | `bci_` | Registration invitation (required for all SaaS alpha account creation) | SHA-256 hash only |
 | Password-reset token | `bcr_` | One-shot password reset link | SHA-256 hash only |
 | JWT session | — | Human session cookie; signed with `JWT:Secret` **only** | signed, not encrypted |
-| Bootstrap admin token | — | `BOOTSTRAP_ADMIN_TOKEN`; `/recover` break-glass, not a user reset | env/config only |
+| Bootstrap admin token | — | `BOOTSTRAP_ADMIN_TOKEN`; one-time creation of the initial administrator only | env/config only |
+| Admin recovery token | — | `ADMIN_RECOVERY_TOKEN`; `/control/recover` break-glass password/MFA recovery, not a user reset; independent of bootstrap | env/config only |
 
 `BEACON_WORKER_TOKEN` is **not** a bearer token: it is an `ActorId` string compared in
 constant time, used only by `finish_work` and pipeline force-close. It does not make the
@@ -126,11 +127,13 @@ Authentication lifecycle and abuse protection:
   administrator insert, and audit event run in one transaction. A process-local async
   gate serializes callers in one host; PostgreSQL hosts additionally take a transaction-
   scoped advisory lock, so two Web replicas cannot both complete bootstrap.
-- `POST /v1/auth/recover-admin` is an explicit break-glass path using the same
-  `BOOTSTRAP_ADMIN_TOKEN`; it is not the ordinary password-reset flow. It resets the
-  active platform administrator's password, clears TOTP/recovery codes, bumps
-  `SessionVersion`, and writes audit events. The operation is rate-limited and failures
-  are audited without storing the supplied secret.
+- `POST /v1/auth/recover-admin` is an explicit break-glass path using the separate
+  `ADMIN_RECOVERY_TOKEN`; it never falls back to `BOOTSTRAP_ADMIN_TOKEN`. It is not the
+  ordinary password-reset flow. It resets the active platform administrator's password,
+  clears TOTP/recovery codes, bumps `SessionVersion`, and writes audit events. The
+  operation is rate-limited and failures are audited without storing the supplied secret.
+  Keep both values high-entropy, distinct, and outside source control; recovery stays
+  fail-closed when `ADMIN_RECOVERY_TOKEN` is absent.
 - `GET /logout` clears only the current customer browser cookie.
   `POST /control/logout` audits and clears only the current operator Control Plane
   cookie. `POST /v1/auth/logout` is deliberately account-wide: it bumps
