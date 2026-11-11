@@ -197,7 +197,7 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
 
         var (factory, tenant) = NewTenantlessSession();
 
-        var result = await new CreateProjectHandler(factory, null, tenant).HandleAsync(
+        var result = await new CreateProjectHandler(factory, new AuthorizationService(), tenant).HandleAsync(
             new CreateProjectCommand(new CreateProjectRequest("Tenantless Intruder Proj", null, _orgA), Human(_userB)),
             TestContext.Current.CancellationToken);
 
