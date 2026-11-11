@@ -76,7 +76,7 @@
 | H8 — Desired/Applied Reconciliation | Есть новая подтверждённая проблема с вечными `Running` командами | Приоритетный ремонтный путь/реапер и тесты потери completion |
 | H9 — Application Architecture | Остался namespace leakage и `IBeaconDb` с `DbSet<T>` | Переносить application-owned ports постепенно, без массового переписывания EF |
 | H10 — Runtime / Device Permissions | Не подтверждено свежим аудитом как закрыто | Проверить ownership/permissions отдельным verification pass |
-| H11 — Authentication Hardening | **M7 (trusted proxy + IP + authenticated identity rate limits) implemented** on the SaaS branch: shared Web/API forwarded-header parser; IP gate before token lookup; human per-user partition after cookie/JWT auth; API-token per-creator partition after token validation; regression coverage for proxy spoofing and partition isolation. **H11.1 Bootstrap** now uses a transaction plus a PostgreSQL transaction-scoped advisory lock and has missing/wrong/repeat/parallel-call tests. **H11.2 Recovery** is an explicit break-glass path using `BOOTSTRAP_ADMIN_TOKEN`; it clears TOTP/recovery codes and invalidates prior credentials. **H11.3 Logout** distinguishes customer-browser and Control Plane cookie logout from account-wide JWT/session revocation. Targeted revocation of one JWT is not supported by the current account-wide `SessionVersion` contract and remains explicitly out of scope until a per-session token id is introduced. CI proof for the current code head is pending. | Verify current-head CI; record targeted single-JWT revocation as a documented limitation rather than claiming it exists |
+| H11 — Authentication Hardening | **M7 (trusted proxy + IP + authenticated identity rate limits) implemented** on the SaaS branch: shared Web/API forwarded-header parser; IP gate before token lookup; human per-user partition after cookie/JWT auth; API-token per-creator partition after token validation; regression coverage for proxy spoofing and partition isolation. **H11.1 Bootstrap** uses a retry-strategy-safe transaction plus PostgreSQL transaction-scoped advisory lock and has missing/wrong/repeat/parallel-call tests. **H11.2 Recovery** uses a dedicated `ADMIN_RECOVERY_TOKEN`, independent from `BOOTSTRAP_ADMIN_TOKEN`; there is no fallback, and unit/HTTP tests prove the bootstrap secret cannot recover the administrator and missing recovery configuration fails closed. **H11.3 Logout** distinguishes customer-browser and Control Plane cookie logout from account-wide JWT/session revocation. Targeted revocation of one JWT is not supported by the current account-wide `SessionVersion` contract and remains explicitly out of scope until a per-session token id is introduced. Current-head CI proof is pending after the final compile fix. | Verify current-head CI; record targeted single-JWT revocation as a documented limitation rather than claiming it exists |
 | H12 — CI / Security / Concurrency | **Закрыто 2026-10-17.** RLS-тесты применяются на реальных миграциях, закоммичено `bc49dd5` и верифицировано двумя последовательными зелёными CI-запусками (run `39025332248` attempts 1+2, TRX `OK: 1360 results, 1 platform-conditional skips, 7 modules`): `RlsIsolationTests` на изолированной БД, `RlsRuntimeRoleTests` — поведенческие тесты дочерних таблиц + drift-guard по всем tenant-таблицам; concurrency покрытие усилено (`f67d160`, `e1779b7`, `4ffbfce`, `20aef35`) | Блок закрыт 2026-10-17: commit `bc49dd5` + два последовательных green CI runs (run `39025332248`) |
 | H13 — Visual Regression | Статус по свежему аудиту не подтверждён | Оставить после устранения P0/P1; проверить фактическое подключение к CI |
 | H14 — Documentation Reconciliation | **Обновлено 2026-10-17 (`bc49dd5`, CI-verified, run `39025332248` attempts 1+2):** добавлен `SECURITY.md` (trust boundaries control plane/workstation/DB, токены `bcn_`/`bcd_`/`bci_`/`bcr_`/JWT/bootstrap/`BEACON_WORKER_TOKEN`, роли Postgres и fail-closed guard, RLS через GUC `app.tenant_*` + явное ограничение «RLS не защищает от произвольного SQL роли `beacon_app`», separation `DATA_PROTECTION_KEY`/`JWT:Secret`, открытые лимиты); статусы H11/H12/H14 и P1.x обновлены в этой же сессии по коду+тестам | Блок остаётся открытым: сверка остальных canonical docs (authorization matrix, endpoint classification) отдельным pass |
@@ -1193,19 +1193,11 @@ System admin
 
 ## H11.1 Bootstrap
 
-Добавить race-safe tests:
-
-```text
-missing token
-wrong token
-correct token
-second bootstrap
-parallel bootstrap
-```
+<escape>**Implemented:**</escape> transaction plus process-local gate and PostgreSQL transaction-scoped advisory lock. The work unit runs inside the provider execution strategy; the generated admin identity/password stay stable across retries. Tests cover missing token, wrong token, first success, replay conflict, and parallel first-bootstrap requests (exactly one admin).
 
 ## H11.2 Recovery
 
-Разделить bootstrap/recovery secret или реализовать explicit break-glass mechanism.
+<escape>**Implemented:**</escape> `ADMIN_RECOVERY_TOKEN` is a separate deployment secret from `BOOTSTRAP_ADMIN_TOKEN`. Recovery fails closed when unset, never falls back to the bootstrap secret, remains available only through the Control Plane origin, and resets only an active SystemAdministrator. Success clears TOTP/recovery codes and invalidates previous credentials; denied/failed/successful attempts are audited without recording the supplied secret. Unit and HTTP tests cover bootstrap-secret rejection, missing recovery secret, invalid token, and successful recovery.
 
 ## H11.3 Logout
 
@@ -1221,11 +1213,14 @@ JWT policy
 ### Gate H11
 
 ```text
-[ ] Bootstrap is fail-closed
-[ ] Bootstrap is race-safe
-[ ] Recovery is explicit
-[ ] Logout semantics are documented and tested
+[x] Bootstrap is fail-closed
+[x] Bootstrap is race-safe (including Postgres multi-replica lock and retry strategy)
+[x] Recovery is explicit and uses an independent ADMIN_RECOVERY_TOKEN
+[x] Logout semantics are documented and tested
+[ ] Full matrix green on the final current HEAD
 ```
+
+Known limitation: customer JWT revocation is account-wide via `SessionVersion`; the application does not yet expose a revoke-one-session/JWT operation. Browser logout and Control Plane cookie logout remain origin-local.
 
 ---
 
