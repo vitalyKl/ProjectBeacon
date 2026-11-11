@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Milestones;
 
 using Application.Common;
+using Application.Audit;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Application.Persistence;
@@ -112,16 +113,26 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+    private readonly IAuditWriter? _auditWriter;
 
     public DeleteMilestoneHandler(IBeaconDbFactory dbFactory)
-        : this(dbFactory, new ContentWriter())
+        : this(dbFactory, new ContentWriter(), null)
     {
     }
 
     public DeleteMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+        : this(dbFactory, contentWriter, null)
+    {
+    }
+
+    public DeleteMilestoneHandler(
+        IBeaconDbFactory dbFactory,
+        ContentWriter contentWriter,
+        IAuditWriter? auditWriter)
     {
         _dbFactory = dbFactory;
         _contentWriter = contentWriter;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
@@ -134,8 +145,18 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
             return Result.Forbidden("Project membership is required to delete a milestone.");
 
+        var orgId = await db.Projects
+            .Where(project => project.Id == milestone.ProjectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is null)
+            return Result.Failure("Project not found.");
+
         milestone.Delete();
         db.Milestones.Remove(milestone);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            actor, "content.deleted", nameof(ContentTargetKind.Milestone),
+            milestone.Id.ToString("D"), orgId, milestone.ProjectId));
         var attribution = ContentAttribution.FromActor(actor);
         var saved = await _contentWriter.SaveAsync(
             db, milestone, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
