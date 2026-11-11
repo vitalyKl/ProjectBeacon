@@ -82,6 +82,53 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public async Task Context_OpensConstraintHistoryAndRestoresPriorLifecycleStatus()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var constraint = Constraint.Create(
+            "Must retain audit history", ConstraintKind.Must, projectId, "src/");
+        DbContext.Constraints.Add(constraint);
+        var writer = new ContentWriter();
+        writer.AddVersion(DbContext, constraint, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+        var proposedRevision = constraint.Revision;
+
+        constraint.Activate();
+        var activated = await writer.SaveAsync(
+            DbContext, constraint, "Human", userId.ToString("D"), CancellationToken.None);
+        Assert.True(activated.Success, activated.Error);
+        var activeVersion = await DbContext.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Constraint
+                && item.TargetId == constraint.Id
+                && item.Revision == constraint.Revision,
+            CancellationToken.None);
+
+        constraint.Reject();
+        var rejected = await writer.SaveAsync(
+            DbContext, constraint, "Human", userId.ToString("D"), CancellationToken.None);
+        Assert.True(rejected.Success, rejected.Error);
+        Assert.Equal(ConstraintStatus.Rejected, constraint.Status);
+
+        DbContext.ChangeTracker.Clear();
+        var cut = Bunit.RenderComponent<Features.Context.Context>();
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Content history", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Content history:", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)).Click();
+
+        var restored = await DbContext.Constraints.AsNoTracking().SingleAsync(
+            item => item.Id == constraint.Id,
+            CancellationToken.None);
+        Assert.Equal(ConstraintStatus.Active, restored.Status);
+        Assert.Equal(constraint.Revision + 1, restored.Revision);
+        Assert.Equal("Must retain audit history", restored.Body);
+        Assert.True(proposedRevision < activeVersion.Revision);
+    }
+
+    [Fact]
     public async Task Roadmap_ShowsDeletedMilestoneAndRestoresItFromHistory()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
