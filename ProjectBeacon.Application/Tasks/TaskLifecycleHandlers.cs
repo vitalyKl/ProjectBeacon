@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -12,12 +13,27 @@ using Microsoft.EntityFrameworkCore;
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CreateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(CreateTaskCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Task,
+            AuthAction.Create,
+            projectId: command.Request.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
+
         var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<TaskItemDto>("Project not found.");
@@ -142,8 +158,13 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public DeleteTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
@@ -157,6 +178,16 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure("Task not found.");
+
+            var permission = await _authorization.CanAsync(
+                db,
+                command.Actor,
+                ResourceType.Task,
+                AuthAction.Delete,
+                projectId: task.ProjectId,
+                ct: ct);
+            if (!permission.Success)
+                return Result.Failure(permission);
 
             var sessions = await db.PipelineSessions.IgnoreQueryFilters()
                 .Where(session => session.ProjectId == task.ProjectId && session.TaskId == task.Id)

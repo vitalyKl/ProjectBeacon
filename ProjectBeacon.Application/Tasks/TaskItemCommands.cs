@@ -42,7 +42,7 @@ public record DeleteTaskRequest(Guid TaskId);
 /// <summary>
 /// Command for delete task.
 /// </summary>
-public record DeleteTaskCommand(DeleteTaskRequest Request) : ICommand<Result>;
+public record DeleteTaskCommand(DeleteTaskRequest Request, ActorContext Actor) : ICommand<Result>;
 /// <summary>
 /// Task and the in-progress sub-stage. The domain rejects this unless the task is InProgress.
 /// </summary>

@@ -42,7 +42,7 @@ public sealed class TaskItemCommandTests
     public void DeleteTaskCommand_CreatesFromRequest()
     {
         var taskId = Guid.NewGuid();
-        var command = new DeleteTaskCommand(new DeleteTaskRequest(taskId));
+        var command = new DeleteTaskCommand(new DeleteTaskRequest(taskId), ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
     }

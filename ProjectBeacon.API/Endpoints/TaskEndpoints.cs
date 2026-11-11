@@ -87,11 +87,12 @@ public static class TaskEndpoints
 
     private static async Task<IResult> DeleteTask(
         Guid taskId,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         var result = await dispatcher.SendAsync<Result>(
-            new DeleteTaskCommand(new DeleteTaskRequest(taskId)), ct);
+            new DeleteTaskCommand(new DeleteTaskRequest(taskId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.NoContent()

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Tasks;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -10,8 +11,13 @@ using Microsoft.EntityFrameworkCore;
 public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskCommentDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public AddCommentHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AddCommentHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskCommentDto>> HandleAsync(AddCommentCommand command, CancellationToken ct = default)
     {
@@ -19,6 +25,16 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskCommentDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Task,
+            AuthAction.Create,
+            projectId: task.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskCommentDto>(permission);
 
         var userId = command.Actor.UserId ?? Guid.Empty;
         var comment = Domain.Entities.Tasks.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
