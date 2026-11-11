@@ -158,7 +158,7 @@ public sealed partial class AuthorizationServiceTests
 
         var r = await _auth.CanRemoveMemberAsync(_db, Human(adminId), projectId, owner.Id, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
-        Assert.Contains("Owner", r.Error);
+        Assert.Equal(ErrorKind.Forbidden, r.Kind);
     }
 
     [Fact]
