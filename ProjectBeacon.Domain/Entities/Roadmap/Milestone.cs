@@ -75,16 +75,22 @@ public class Milestone : Entity, IProjectScoped
     }
 
     /// <summary>Restores milestone content, including a nullable description, from history.</summary>
-    public void RestoreContentFromHistory(string name, string? description, int order)
+    public void RestoreContentFromHistory(
+        string name,
+        string? description,
+        int order,
+        DateTime? closedAt = null)
     {
         if (string.Equals(Name, name, StringComparison.Ordinal)
             && string.Equals(Description, description, StringComparison.Ordinal)
-            && Order == order)
+            && Order == order
+            && ClosedAt == closedAt)
             return;
 
         Name = name;
         Description = description;
         Order = order;
+        ClosedAt = closedAt;
         Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
