@@ -215,12 +215,15 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Equal(ProposalStatus.Accepted, savedProposal.Status);
         Assert.False(await DbContext.ContextSections.AsNoTracking().AnyAsync(
             item => item.Id == section.Id, CancellationToken.None));
-        Assert.Contains(await DbContext.ContentVersions
+        var history = await DbContext.ContentVersions
             .Where(item => item.TargetKind == ContentTargetKind.ContextSection
                 && item.TargetId == section.Id)
-            .Select(item => item.Revision)
-            .ToListAsync(CancellationToken.None), revision => revision == 2);
-        Assert.Contains("Proposal accepted", cut.Markup, StringComparison.OrdinalIgnoreCase);
+            .OrderBy(item => item.Revision)
+            .ToListAsync(CancellationToken.None);
+        Assert.Equal(new[] { section.Revision - 1, section.Revision }, history.Select(item => item.Revision).ToArray());
+        Assert.Equal(proposal.Id, history[^1].ProposalId);
+        using var tombstone = System.Text.Json.JsonDocument.Parse(history[^1].ContentJson);
+        Assert.True(tombstone.RootElement.GetProperty("deleted").GetBoolean());
     }
 
     [Fact]
