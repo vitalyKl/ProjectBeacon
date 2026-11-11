@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Reports;
 
 using Application.Common;
 using Application.Evals;
+using Application.Authorization;
 using Domain.Entities.Evals;
 using Domain.Enums;
 using Application.Persistence;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Task whose with-brief and without-brief eval pairs should be compared.
 /// </summary>
-public record GetContextCostReportRequest(Guid TaskId, Guid? ProjectId = null);
+public record GetContextCostReportRequest(Guid TaskId, Guid? ProjectId, ActorContext Actor);
 /// <summary>
 /// One eval pair with input-context, generated-output, and turn deltas reported independently.
 /// </summary>
@@ -37,11 +38,19 @@ public record ContextCostReportDto(
 public class ContextCostReportHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ContextCostReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ContextCostReportHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ContextCostReportDto>> HandleAsync(GetContextCostReportRequest request, CancellationToken ct = default)
     {
+        if (!request.Actor.IsHuman || request.Actor.UserId is null)
+            return Result.Forbidden<ContextCostReportDto>();
+
         await using var db = _dbFactory.CreateDbContext();
 
         var taskQuery = db.Tasks.Where(t => t.Id == request.TaskId);
@@ -51,6 +60,12 @@ public class ContextCostReportHandler
         var task = await taskQuery.FirstOrDefaultAsync(ct);
         if (task is null)
             return Result.Failure<ContextCostReportDto>("Task not found.");
+
+        var access = await _authorization.CanAsync(
+            db, request.Actor, ResourceType.Task, AuthAction.Read,
+            projectId: task.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<ContextCostReportDto>();
 
         var runs = await db.EvalRuns
             .Where(e => e.ProjectId == task.ProjectId && e.TaskId == task.Id && e.PairId != null && e.PairId != "")
