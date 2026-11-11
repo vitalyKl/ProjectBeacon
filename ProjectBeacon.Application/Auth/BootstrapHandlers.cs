@@ -147,9 +147,9 @@ public class BootstrapHandler
 
                 return Result.Ok(new BootstrapResponse(
                     user.Id, user.Login, user.Email, user.IsAdmin, password));
-            }, ct);
+            });
         }
-                finally
+        finally
         {
             BootstrapGate.Release();
         }
