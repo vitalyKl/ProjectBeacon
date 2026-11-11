@@ -347,6 +347,7 @@ public sealed partial class AuthorizationServiceTests
         {
             (Resource: ResourceType.Project, Action: AuthAction.Execute),
             (Resource: ResourceType.Task, Action: AuthAction.Execute),
+            (Resource: ResourceType.TaskStep, Action: AuthAction.Update),
             (Resource: ResourceType.Report, Action: AuthAction.Execute),
             (Resource: ResourceType.ChatSession, Action: AuthAction.Read),
             (Resource: ResourceType.WorkstationConfiguration, Action: AuthAction.Read),
