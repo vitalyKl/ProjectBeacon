@@ -55,6 +55,21 @@ public sealed class P2AuthorizationHttpTests
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, createDenied.StatusCode);
 
+        var listDenied = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, listDenied.StatusCode);
+
+        var getDenied = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, getDenied.StatusCode);
+
+        var legacyGetDenied = await client.GetAsync(
+            $"/v1/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, legacyGetDenied.StatusCode);
+
         var updateBody = new
         {
             milestoneId,
@@ -107,10 +122,19 @@ public sealed class P2AuthorizationHttpTests
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, wrongProjectDelete.StatusCode);
 
+        var wrongProjectGet = await client.GetAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectGet.StatusCode);
+
         var stillExists = await client.GetAsync(
             $"/v1/projects/{projectAId}/milestones/{milestoneId}",
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, stillExists.StatusCode);
+        var listAllowed = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, listAllowed.StatusCode);
         var savedMilestone = await stillExists.Content.ReadFromJsonAsync<JsonElement>(Json);
         Assert.Equal("Scoped milestone", savedMilestone.GetProperty("name").GetString());
         Assert.Equal(2, savedMilestone.GetProperty("revision").GetInt32());
