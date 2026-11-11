@@ -212,7 +212,7 @@ else
                                                 @{
                                                     var diff = BuildProposalDiff(
                                                         ExtractMarkdown(baseSnapshot),
-                                                        ExtractMarkdown(GetEditedPayload(proposal)));
+                                                        ExtractProposedMarkdown(baseSnapshot, proposal));
                                                 }
                                                 @if (diff.Count == 0)
                                                 {
@@ -235,7 +235,7 @@ else
                                                 </MudItem>
                                                 <MudItem xs="12" md="6">
                                                     <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
-                                                    <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" MaxHeight="220" />
+                                                    <MarkdownView Text="@ExtractProposedMarkdown(baseSnapshot, proposal)" MaxHeight="220" />
                                                 </MudItem>
                                             </MudGrid>
                                         }
@@ -499,6 +499,29 @@ else
             return;
         }
         _baseSnapshots[proposal.Id] = version.ContentJson;
+    }
+
+    private string ExtractProposedMarkdown(string baseSnapshot, ProposalDto proposal)
+    {
+        var payload = GetEditedPayload(proposal);
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            if (document.RootElement.TryGetProperty("edits", out var edits))
+            {
+                var baseMarkdown = ExtractMarkdown(baseSnapshot);
+                return ProposalMarkdownEditApplier.TryApply(
+                        baseMarkdown, edits, out var result, out var error)
+                    ? result
+                    : $"Preview unavailable: {error}";
+            }
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+
+        return ExtractMarkdown(payload);
     }
 
     private static string ExtractMarkdown(string json)
