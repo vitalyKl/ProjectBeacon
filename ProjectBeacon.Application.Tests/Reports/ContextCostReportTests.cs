@@ -191,7 +191,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief, 50, 100, 3, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, otherProject.Id), TestContext.Current.CancellationToken);
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, otherProject.Id, actor), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
