@@ -38,8 +38,27 @@ app.MapGet("/internal/v1/logs/{service}", async (
     if (tail is < 1 || tail > agentOptions.MaximumTail)
         return Results.BadRequest(new { error = $"tail must be between 1 and {agentOptions.MaximumTail}." });
 
-    var snapshot = await logProxy.GetLogsAsync(target, tail, ct);
-    return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
+    try
+    {
+        var snapshot = await logProxy.GetLogsAsync(target, tail, ct);
+        return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    {
+        throw;
+    }
+    catch (HttpRequestException)
+    {
+        return Results.Problem(
+            title: "The restricted Docker log proxy is unavailable.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (TaskCanceledException)
+    {
+        return Results.Problem(
+            title: "The restricted Docker log proxy timed out.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 });
 
 app.Run();
