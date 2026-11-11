@@ -125,9 +125,12 @@ if (!app.Environment.IsEnvironment("Testing") && PostgresConnection.IsPostgresBa
 }
 
 app.UseBeaconExceptionHandler();
+// Keep proxy trust validation before routing and rate limiting. Untrusted forwarded
+// headers are ignored by the shared factory's explicit KnownProxies/KnownNetworks list.
+app.UseForwardedHeaders(ForwardedHeadersOptionsFactory.Create(app.Configuration));
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 // The standalone API host never serves operator-console or bootstrap/recovery routes.
 app.UseMiddleware<PublicApiOperatorRouteMiddleware>();
 // Wrap token/device boundaries, tenant isolation and endpoint authorization so every

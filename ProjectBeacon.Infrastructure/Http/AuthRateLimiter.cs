@@ -1,12 +1,14 @@
 namespace ProjectBeacon.Infrastructure.Http;
 
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 
 /// <summary>
-/// Adds the auth, read, and attachment-upload rate-limit policies. Rejection is HTTP 429 as problem+json.
+/// Adds per-client-IP and authenticated-user rate limits for sensitive endpoints.
+/// Rejection is HTTP 429 as problem+json.
 /// </summary>
 public static class AuthRateLimiter
 {
@@ -25,20 +27,61 @@ public static class AuthRateLimiter
             "https://tools.ietf.org/html/rfc6585#section-4",
             "Too many requests.",
             ct));
-        options.AddPolicy("auth", context => Partition(context, permitLimit, windowSeconds));
-        options.AddPolicy("auth-read", context => Partition(context, readPermitLimit, windowSeconds));
-        options.AddPolicy("attachment-upload", context => Partition(context, attachmentUploadPermitLimit, windowSeconds));
 
-        static RateLimitPartition<string> Partition(HttpContext context, int permits, int seconds)
+        // The global limiter supplies an independent client-IP bucket. It only activates
+        // on endpoints that opted into one of the named policies below.
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         {
-            var key = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            var policyName = context.GetEndpoint()?.Metadata
+                .GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+            var permits = policyName switch
             {
-                PermitLimit = Math.Max(1, permits),
-                Window = TimeSpan.FromSeconds(Math.Max(1, seconds)),
-                AutoReplenishment = true,
-                QueueLimit = 0
-            });
-        }
+                "auth" => permitLimit,
+                "auth-read" => readPermitLimit,
+                "attachment-upload" => attachmentUploadPermitLimit,
+                _ => 0
+            };
+
+            if (permits <= 0)
+                return RateLimitPartition.GetNoLimiter("unlimited");
+
+            var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var key = $"{policyName}:{remoteIp}";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                key,
+                _ => CreateOptions(permits, windowSeconds));
+        });
+
+        // The endpoint policy adds a second, independent bucket for authenticated users.
+        // Anonymous requests continue to be protected by the client-IP global limiter.
+        options.AddPolicy("auth", context => UserPartition(context, permitLimit, windowSeconds));
+        options.AddPolicy("auth-read", context => UserPartition(context, readPermitLimit, windowSeconds));
+        options.AddPolicy("attachment-upload", context =>
+            UserPartition(context, attachmentUploadPermitLimit, windowSeconds));
     }
+
+    private static RateLimitPartition<string> UserPartition(
+        HttpContext context,
+        int permits,
+        int seconds)
+    {
+        if (context.User.Identity?.IsAuthenticated != true)
+            return RateLimitPartition.GetNoLimiter("anonymous");
+
+        var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(subject, out var userId) || userId == Guid.Empty)
+            return RateLimitPartition.GetNoLimiter("anonymous");
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            $"user:{userId:N}",
+            _ => CreateOptions(permits, seconds));
+    }
+
+    private static FixedWindowRateLimiterOptions CreateOptions(int permits, int seconds) => new()
+    {
+        PermitLimit = Math.Max(1, permits),
+        Window = TimeSpan.FromSeconds(Math.Max(1, seconds)),
+        AutoReplenishment = true,
+        QueueLimit = 0
+    };
 }
