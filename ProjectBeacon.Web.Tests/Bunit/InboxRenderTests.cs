@@ -104,6 +104,62 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void Inbox_StructuredTargetDiff_ShowsEveryFieldIncludingClearedAndNumericValues()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var task = DbContext.Tasks.Single(item => item.Title == "Task Three");
+        const string taskBase = """{"description":"Current task description","reviewNotes":"Existing review notes"}""";
+        const string taskProposal = """{"description":null,"reviewNotes":"Updated review guidance"}""";
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId, ContentTargetKind.TaskDescription, task.Id, 1,
+            taskBase, "Human", userId.ToString("D")));
+        var taskProposalRecord = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.TaskDescription, task.Id,
+            ProposalOperation.Update, 1, new string('c', 64),
+            taskProposal, "Updates the task description and review guidance.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-structured-task-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+
+        var milestone = ProjectBeacon.Domain.Entities.Roadmap.Milestone.Create(
+            "Alpha release", "Earlier roadmap note", projectId, 2);
+        DbContext.Milestones.Add(milestone);
+        const string milestoneBase = """{"name":"Alpha release","description":"Earlier roadmap note","order":2}""";
+        const string milestoneProposal = """{"name":"Alpha release","description":null,"order":7}""";
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId, ContentTargetKind.Milestone, milestone.Id, 1,
+            milestoneBase, "Human", userId.ToString("D")));
+        var milestoneProposalRecord = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.Milestone, milestone.Id,
+            ProposalOperation.Update, 1, new string('d', 64),
+            milestoneProposal, "Moves the milestone to the next roadmap position.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-structured-milestone-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+
+        DbContext.Proposals.AddRange(taskProposalRecord, milestoneProposalRecord);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        var compareButtons = cut.FindAll("[data-testid='compare-base-revision'] button");
+        Assert.Equal(2, compareButtons.Count);
+
+        foreach (var index in Enumerable.Range(0, compareButtons.Count))
+        {
+            cut.FindAll("[data-testid='compare-base-revision'] button")[index].Click();
+        }
+
+        Assert.Contains("reviewNotes", cut.Markup);
+        Assert.Contains("Existing review notes", cut.Markup);
+        Assert.Contains("Updated review guidance", cut.Markup);
+        Assert.Contains("(cleared)", cut.Markup);
+        Assert.Contains("order", cut.Markup);
+        Assert.Contains(">7<", cut.Markup);
+        Assert.Contains("Earlier roadmap note", cut.Markup);
+        Assert.Contains("Moves the milestone to the next roadmap position.", cut.Markup);
+    }
+
+    [Fact]
     public async Task Inbox_BatchAcceptance_RefreshesConflictsAndShowsEachItemResult()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
