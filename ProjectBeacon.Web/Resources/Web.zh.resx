@@ -2628,6 +2628,9 @@ orthstar</value>
   <data name="ProposalInbox" xml:space="preserve">
     <value>提案收件箱</value>
   </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>新目标</value>
+  </data>
   <data name="ShellHintProposalInbox" xml:space="preserve">
     <value>审核项目知识提案和修订。</value>
   </data>
