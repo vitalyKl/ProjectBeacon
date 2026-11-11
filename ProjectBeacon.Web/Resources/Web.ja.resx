@@ -2628,6 +2628,9 @@ orthstar</value>
   <data name="ProposalInbox" xml:space="preserve">
     <value>提案インボックス</value>
   </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>新しい対象</value>
+  </data>
   <data name="ShellHintProposalInbox" xml:space="preserve">
     <value>プロジェクト知識の提案と改訂を確認します。</value>
   </data>
