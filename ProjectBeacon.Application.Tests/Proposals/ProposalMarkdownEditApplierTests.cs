@@ -199,7 +199,7 @@ public sealed class ProposalMarkdownEditApplierTests
         Assert.True(applied, error);
         Assert.Contains("New security body.\r\n\r\n### Verification", result);
         Assert.Contains("\r\n\r\n## Operations", result);
-        Assert.DoesNotContain("\n## Operations", result);
+        Assert.DoesNotContain("\n", result.Replace("\r\n", string.Empty, StringComparison.Ordinal));
         Assert.DoesNotContain("Old security body.", result);
     }
 
