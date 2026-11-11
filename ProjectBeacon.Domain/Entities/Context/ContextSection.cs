@@ -134,7 +134,6 @@ public class ContextSection : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
-    /// <summary>Marks a NeedsReview section as approved by a human reviewer.</summary>
     /// <summary>Restores content and review state from a historical snapshot as a new revision.</summary>
     public void RestoreFromHistory(
         string title,
@@ -166,6 +165,7 @@ public class ContextSection : Entity, IProjectScoped
         SectionsText = $"{title} {bodyMarkdown}";
     }
 
+    /// <summary>Marks a NeedsReview section as approved by a human reviewer.</summary>
     public void MarkReviewed(string reviewerUserId)
     {
         if (ReviewState != ContextReviewState.NeedsReview)
