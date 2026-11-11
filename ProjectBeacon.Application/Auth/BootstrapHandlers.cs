@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
-using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Creates the first admin when the bootstrap token matches and no admin exists yet. A second call conflicts.
@@ -53,57 +52,105 @@ public class BootstrapHandler
             return Result.Failure<BootstrapResponse>("Invalid bootstrap token.", ErrorKind.Unauthorized);
         }
 
-        // Bootstrap is a one-time global transition. Serialize callers within this process
-        // and across Web replicas, then keep the existence check, user insert, and audit event
-        // in one transaction. A transaction-scoped advisory lock is released automatically on
-        // commit/rollback and is shared by every PostgreSQL connection to this database.
+        // Bootstrap is a one-time global transition. Serialize callers within this process,
+        // and use a transaction-scoped advisory lock to serialize independent Web replicas.
+        // Npgsql production options enable retries, so the whole transaction must run inside
+        // the provider execution strategy. The generated user ID and password are stable
+        // across retries: if a commit succeeds but its acknowledgement is lost, the next
+        // attempt recognizes its own user row and returns the original one-time credentials.
         await BootstrapGate.WaitAsync(ct);
         try
         {
             var globalTenant = new TenantContext();
             globalTenant.Assign(null, null, unscoped: true);
             await using var db = _dbFactory.CreateDbContext(globalTenant);
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var strategy = db.Database.CreateExecutionStrategy();
 
-            if (string.Equals(
-                db.Database.ProviderName,
-                "Npgsql.EntityFrameworkCore.PostgreSQL",
-                StringComparison.Ordinal))
-            {
-                await db.Database.ExecuteSqlRawAsync(
-                    "SELECT pg_advisory_xact_lock(20261111, 97)",
-                    ct);
-            }
+            var password = _passwords.GenerateRandomPassword(32);
+            var user = User.Create(
+                "admin",
+                "admin@beacon.local",
+                _passwords.Hash(password),
+                isAdmin: true);
 
-            var exists = await db.Users.AnyAsync(u => u.IsAdmin, ct);
-            if (exists)
-            {
-                _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
+            var completedEvent = _auditWriter is null
+                ? null
+                : AuditEventFactory.ForSystem(
+                    "platform.bootstrap.completed",
+                    "User",
+                    user.Id.ToString(),
+                    detailsJson: """{"newState":"Active"}""");
+            var deniedEvent = _auditWriter is null
+                ? null
+                : AuditEventFactory.ForSystem(
                     "platform.bootstrap.denied",
                     "AdminBootstrap",
                     null,
                     outcome: AuditOutcome.Denied,
-                    detailsJson: """{"reasonCode":"bootstrap_already_completed"}"""));
+                    detailsJson: """{"reasonCode":"bootstrap_already_completed"}""");
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                // A transient database failure may re-enter this delegate. Detach entities
+                // from the failed attempt before attaching the stable user/audit instances.
+                db.ChangeTracker.Clear();
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+                if (string.Equals(
+                    db.Database.ProviderName,
+                    "Npgsql.EntityFrameworkCore.PostgreSQL",
+                    StringComparison.Ordinal))
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "SELECT pg_advisory_xact_lock(20261111, 97)",
+                        ct);
+                }
+
+                var existingAdminId = await db.Users
+                    .Where(item => item.IsAdmin)
+                    .Select(item => (Guid?)item.Id)
+                    .FirstOrDefaultAsync(ct);
+
+                if (existingAdminId is { } existingId)
+                {
+                    await transaction.CommitAsync(ct);
+
+                    // The preceding attempt may have committed successfully but lost its
+                    // acknowledgement. In that case this is our own bootstrap, not a
+                    // competing administrator; return the same one-time password.
+                    if (existingId == user.Id)
+                    {
+                        return Result.Ok(new BootstrapResponse(
+                            user.Id, user.Login, user.Email, user.IsAdmin, password));
+                    }
+
+                    // The denial event has a stable ID so an execution-strategy retry does
+                    // not write duplicate audit rows if the prior commit acknowledgement was
+                    // lost after the database committed it.
+                    if (deniedEvent is not null
+                        && !await db.AuditEvents.AnyAsync(item => item.Id == deniedEvent.Id, ct))
+                    {
+                        _auditWriter!.Stage(db, deniedEvent);
+                        await db.SaveChangesAsync(ct);
+                        await transaction.CommitAsync(ct);
+                    }
+
+                    return Result.Failure<BootstrapResponse>(
+                        "Bootstrap already completed.", ErrorKind.Conflict);
+                }
+
+                db.Users.Add(user);
+                if (completedEvent is not null)
+                    _auditWriter!.Stage(db, completedEvent);
+
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
-                return Result.Failure<BootstrapResponse>("Bootstrap already completed.", ErrorKind.Conflict);
-            }
 
-            var password = _passwords.GenerateRandomPassword(32);
-            var user = User.Create("admin", "admin@beacon.local",
-                _passwords.Hash(password), isAdmin: true);
-
-            db.Users.Add(user);
-            _auditWriter?.Stage(db, AuditEventFactory.ForSystem(
-                "platform.bootstrap.completed", "User", user.Id.ToString(),
-                detailsJson: """{"newState":"Active"}"""));
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-
-            return Result.Ok(new BootstrapResponse(
-                user.Id, user.Login, user.Email, user.IsAdmin, password));
+                return Result.Ok(new BootstrapResponse(
+                    user.Id, user.Login, user.Email, user.IsAdmin, password));
+            }, ct);
         }
-        finally
+                finally
         {
             BootstrapGate.Release();
         }
