@@ -554,7 +554,7 @@ public sealed class ProposalHandlerTests : IDisposable
             ContentTargetKind.Decision,
             decision.Id,
             ProposalOperation.Update,
-            1,
+            2,
             """{"title":"Revised decision","context":"Updated context","decisionBody":"Updated decision","consequences":null}""",
             "Clarifies the decision.",
             "governance-decision-update-v1");
@@ -911,7 +911,7 @@ public sealed class ProposalHandlerTests : IDisposable
             ContentTargetKind.Decision,
             decision.Id,
             ProposalOperation.Update,
-            1,
+            2,
             """{"title":"Updated decision","context":"Updated context","decisionBody":"Updated body","consequences":null}""",
             "Proposes a governance change.",
             "auto-policy-governance-manual");
@@ -927,7 +927,7 @@ public sealed class ProposalHandlerTests : IDisposable
 
         await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Accepted content", decision.DecisionBody);
-        Assert.Equal(1, decision.Revision);
+        Assert.Equal(2, decision.Revision);
     }
 
     [Fact]
