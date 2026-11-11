@@ -57,6 +57,7 @@ public class Decision : Entity, IProjectScoped
         if (Status == DecisionStatus.Accepted)
             return;
         Status = DecisionStatus.Accepted;
+        Revision++;
     }
 
     public void Supersede(Decision replacement)
@@ -65,6 +66,7 @@ public class Decision : Entity, IProjectScoped
             throw new InvalidOperationException("Only accepted decisions can be superseded.");
         Status = DecisionStatus.Superseded;
         SupersededById = replacement.Id;
+        Revision++;
     }
 
     public void Deprecate()
