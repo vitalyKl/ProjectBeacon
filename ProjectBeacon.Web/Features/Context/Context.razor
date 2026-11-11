@@ -17,6 +17,7 @@
 @inject CompileBriefHandler CompileBrief
 @inject ListContextRevisionsHandler ListRevisions
 @inject ListContentVersionsHandler ContentVersions
+@inject ListDeletedContentTargetsHandler ListDeletedContentTargets
 @inject RestoreContentVersionHandler RestoreContentVersion
 @inject ExportAgentsMdHandler ExportAgents
 @inject CreateConstraintHandler CreateConstraint
@@ -76,6 +77,28 @@ else
                         }
                     </MudList>
                 </MudPaper>
+            }
+
+            @if (_deletedSections.Count > 0)
+            {
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
+                    <MudExpansionPanel Text="@($"{L["DeletedContent"]} ({_deletedSections.Count})")">
+                        @foreach (var deleted in _deletedSections)
+                        {
+                            <MudPaper @key="deleted.TargetId" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudText Typo="Typo.subtitle2">@deleted.Title</MudText>
+                                <MudText Typo="Typo.caption">
+                                    @L["Deleted"] · rev. @deleted.DeletedRevision · <LocalTime Value="deleted.DeletedAt" Format="g" />
+                                </MudText>
+                                <MarkdownView Text="@ContextSnapshotMarkdown(deleted.SourceContentJson)" MaxHeight="100" />
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           Disabled="_busy" OnClick="() => RestoreDeletedSection(deleted)">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
             }
         </div>
         <div>
@@ -187,6 +210,7 @@ else
     private ProjectDto? _project;
     private ActorContext _actor = ActorContext.Anonymous;
     private List<ContextSectionDto> _nodes = [];
+    private List<DeletedContentTargetDto> _deletedSections = [];
     private string _title = string.Empty;
     private string _sectionId = "goals";
     private string _body = string.Empty;
@@ -225,6 +249,12 @@ else
         _nodes = nodes.Success ? nodes.Value!.ToList() : [];
         if (!nodes.Success)
             _error = nodes.Error;
+        var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
+        _deletedSections = deleted.Success
+            ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList()
+            : [];
+        if (!deleted.Success)
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
         var revisions = await ListRevisions.HandleAsync();
@@ -278,6 +308,39 @@ else
         _sectionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
             Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreDeletedSection(DeletedContentTargetDto deleted)
+    {
+        if (_project is null || _busy)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _project.Id,
+                deleted.SourceVersionId,
+                deleted.DeletedRevision,
+                _actor,
+                ContentTargetKind.ContextSection,
+                deleted.TargetId));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            var restoredNode = _nodes.FirstOrDefault(node => node.Id == deleted.TargetId);
+            if (restoredNode is not null)
+                await LoadSection(restoredNode);
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task RestoreSectionVersion(ContentVersionDto version)
