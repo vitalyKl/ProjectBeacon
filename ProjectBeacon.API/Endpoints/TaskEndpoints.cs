@@ -78,11 +78,12 @@ public static class TaskEndpoints
         Guid projectId,
         Guid taskId,
         [FromQuery] int? limit,
+        HttpContext ctx,
         ListContentVersionsHandler handler,
         CancellationToken ct)
     {
         var result = await handler.HandleAsync(
-            projectId, ContentTargetKind.TaskDescription, taskId, limit ?? 50, ct);
+            projectId, ContentTargetKind.TaskDescription, taskId, ctx.GetActor(), limit ?? 50, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
