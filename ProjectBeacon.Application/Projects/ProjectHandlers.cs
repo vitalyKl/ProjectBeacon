@@ -299,9 +299,7 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
                 .Select(project => new ProjectDto(
                     project.Id, project.Name, project.Description, project.OrgId,
                     project.CreatedAt, project.UpdatedAt,
-                    // Listing is intentionally metadata-only; trusted shell configuration is
-                    // returned only by GetProject to an authorized project/org manager.
-                    ReviewCheckCommand: null))
+                    null))
                 .ToListAsync(ct);
 
             return Result.Ok((IList<ProjectDto>)projects);
