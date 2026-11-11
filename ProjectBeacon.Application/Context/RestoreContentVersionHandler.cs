@@ -85,7 +85,35 @@ public sealed class RestoreContentVersionHandler
                         var section = await db.ContextSections.FirstOrDefaultAsync(
                             s => s.Id == source.TargetId && s.ProjectId == command.ProjectId, ct);
                         if (section is null)
-                            return MissingTargetFailure();
+                        {
+                            if (!await IsLatestDeletionSnapshotAsync(
+                                    db, source, command.ExpectedRevision, ct))
+                                return MissingTargetFailure();
+
+                            section = ContextSection.RestoreDeleted(
+                                source.TargetId,
+                                command.ProjectId,
+                                snapshot.SectionId,
+                                snapshot.Key,
+                                snapshot.Title,
+                                snapshot.BodyMarkdown,
+                                snapshot.Ordinal,
+                                snapshot.ScopeType,
+                                snapshot.RepoId,
+                                snapshot.TaskId,
+                                snapshot.Path,
+                                snapshot.Source,
+                                snapshot.SourcePath,
+                                snapshot.ReviewState,
+                                checked(command.ExpectedRevision + 1),
+                                attribution.Type ?? "Human",
+                                attribution.Id);
+                            db.ContextSections.Add(section);
+                            target = section;
+                            currentRevision = command.ExpectedRevision;
+                            changed = true;
+                            break;
+                        }
                         if (section.Revision != command.ExpectedRevision)
                             return RevisionConflictFailure();
 
@@ -122,7 +150,13 @@ public sealed class RestoreContentVersionHandler
                             return RevisionConflictFailure();
 
                         currentRevision = decision.Revision;
-                        decision.UpdateContent(snapshot.Title, snapshot.Context, snapshot.DecisionBody, snapshot.Consequences);
+                        decision.RestoreFromHistory(
+                            snapshot.Title,
+                            snapshot.Context,
+                            snapshot.DecisionBody,
+                            snapshot.Consequences,
+                            snapshot.Status,
+                            snapshot.SupersededById);
                         target = decision;
                         changed = decision.Revision != currentRevision;
                         break;
@@ -143,7 +177,7 @@ public sealed class RestoreContentVersionHandler
                             return UnsupportedStructureFailure();
 
                         currentRevision = constraint.Revision;
-                        constraint.RestoreContentFromHistory(snapshot.Body, snapshot.ScopePath);
+                        constraint.RestoreFromHistory(snapshot.Body, snapshot.ScopePath, snapshot.Status);
                         target = constraint;
                         changed = constraint.Revision != currentRevision;
                         break;
@@ -157,12 +191,31 @@ public sealed class RestoreContentVersionHandler
                         var milestone = await db.Milestones.FirstOrDefaultAsync(
                             m => m.Id == source.TargetId && m.ProjectId == command.ProjectId, ct);
                         if (milestone is null)
-                            return MissingTargetFailure();
+                        {
+                            if (!await IsLatestDeletionSnapshotAsync(
+                                    db, source, command.ExpectedRevision, ct))
+                                return MissingTargetFailure();
+
+                            milestone = Milestone.RestoreDeleted(
+                                source.TargetId,
+                                snapshot.Name,
+                                snapshot.Description,
+                                command.ProjectId,
+                                snapshot.Order,
+                                checked(command.ExpectedRevision + 1),
+                                snapshot.ClosedAt);
+                            db.Milestones.Add(milestone);
+                            target = milestone;
+                            currentRevision = command.ExpectedRevision;
+                            changed = true;
+                            break;
+                        }
                         if (milestone.Revision != command.ExpectedRevision)
                             return RevisionConflictFailure();
 
                         currentRevision = milestone.Revision;
-                        milestone.RestoreContentFromHistory(snapshot.Name, snapshot.Description, snapshot.Order);
+                        milestone.RestoreContentFromHistory(
+                            snapshot.Name, snapshot.Description, snapshot.Order, snapshot.ClosedAt);
                         target = milestone;
                         changed = milestone.Revision != currentRevision;
                         break;
@@ -228,6 +281,33 @@ public sealed class RestoreContentVersionHandler
             source.Id, source.TargetKind, source.TargetId, saved.Value, true));
     }
 
+    private static async Task<bool> IsLatestDeletionSnapshotAsync(
+        IBeaconDb db,
+        ContentVersion source,
+        int expectedRevision,
+        CancellationToken ct)
+    {
+        var latest = await db.ContentVersions
+            .Where(version => version.ProjectId == source.ProjectId
+                && version.TargetKind == source.TargetKind
+                && version.TargetId == source.TargetId)
+            .OrderByDescending(version => version.Revision)
+            .FirstOrDefaultAsync(ct);
+        if (latest is null || latest.Revision != expectedRevision || latest.Revision <= source.Revision)
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(latest.ContentJson);
+            return document.RootElement.TryGetProperty("deleted", out var deleted)
+                && deleted.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static T Deserialize<T>(string json) where T : class =>
         JsonSerializer.Deserialize<T>(json, JsonOptions)
         ?? throw new JsonException("The content snapshot is empty.");
@@ -251,13 +331,24 @@ public sealed class RestoreContentVersionHandler
 
     private sealed record ContextSectionSnapshot(
         string SectionId, string Key, string Title, string BodyMarkdown, int Ordinal,
-        ContextScopeType ScopeType, Guid? RepoId, Guid? TaskId, string Path, bool Deleted = false);
+        ContextScopeType ScopeType, Guid? RepoId, Guid? TaskId, string Path,
+        ContextSource Source = ContextSource.Native,
+        string? SourcePath = null,
+        ContextReviewState ReviewState = ContextReviewState.Reviewed,
+        string? UpdatedByType = null,
+        string? UpdatedById = null,
+        bool Deleted = false);
     private sealed record DecisionSnapshot(
-        string Title, string Context, string DecisionBody, string? Consequences, bool Deleted = false);
+        string Title, string Context, string DecisionBody, string? Consequences,
+        DecisionStatus Status = DecisionStatus.Accepted,
+        Guid? SupersededById = null,
+        bool Deleted = false);
     private sealed record ConstraintSnapshot(
-        string Body, string ScopePath, ConstraintKind Kind, bool Deleted = false);
+        string Body, string ScopePath, ConstraintKind Kind,
+        ConstraintStatus Status = ConstraintStatus.Active,
+        bool Deleted = false);
     private sealed record MilestoneSnapshot(
-        string Name, string? Description, int Order, bool Deleted = false);
+        string Name, string? Description, int Order, DateTime? ClosedAt = null, bool Deleted = false);
     private sealed record ProjectDescriptionSnapshot(string? Description, bool Deleted = false);
     private sealed record TaskDescriptionSnapshot(
         string? Description, string? ReviewNotes, bool Deleted = false);
