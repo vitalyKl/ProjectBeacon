@@ -180,6 +180,34 @@ public sealed class ProposalMarkdownEditApplierTests
     }
 
     [Fact]
+    public void LaterMissingHeading_DoesNotReturnPartiallyModifiedContent()
+    {
+        using var payload = JsonDocument.Parse("""
+            [
+              {
+                "heading": "## Security",
+                "op": "replace",
+                "content": "Updated security."
+              },
+              {
+                "heading": "## Missing",
+                "op": "delete",
+                "content": ""
+              }
+            ]
+            """);
+
+        var applied = ProposalMarkdownEditApplier.TryApply(
+            Document, payload.RootElement, out var result, out var error);
+
+        Assert.False(applied);
+        Assert.Equal(Document, result);
+        Assert.Contains("## Missing", error);
+        Assert.Contains("Updated security.", result is null ? string.Empty : result);
+        Assert.DoesNotContain("Updated security.", result);
+    }
+
+    [Fact]
     public void TryValidate_RejectsDuplicateTargetsAndInvalidOperations()
     {
         using var duplicate = JsonDocument.Parse("""
