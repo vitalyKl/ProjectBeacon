@@ -25,14 +25,15 @@ public sealed class RestoreContentVersionHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
     private readonly IAuditWriter? _auditWriter;
+    private readonly IAuthorizationService? _authorization;
 
     public RestoreContentVersionHandler(IBeaconDbFactory dbFactory)
-        : this(dbFactory, new ContentWriter(), null)
+        : this(dbFactory, new ContentWriter(), null, null)
     {
     }
 
     public RestoreContentVersionHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
-        : this(dbFactory, contentWriter, null)
+        : this(dbFactory, contentWriter, null, null)
     {
     }
 
@@ -40,10 +41,20 @@ public sealed class RestoreContentVersionHandler
         IBeaconDbFactory dbFactory,
         ContentWriter contentWriter,
         IAuditWriter? auditWriter)
+        : this(dbFactory, contentWriter, auditWriter, null)
+    {
+    }
+
+    public RestoreContentVersionHandler(
+        IBeaconDbFactory dbFactory,
+        ContentWriter contentWriter,
+        IAuditWriter? auditWriter,
+        IAuthorizationService? authorization)
     {
         _dbFactory = dbFactory;
         _contentWriter = contentWriter;
         _auditWriter = auditWriter;
+        _authorization = authorization;
     }
 
     public async Task<Result<RestoreContentVersionDto>> HandleAsync(
@@ -67,6 +78,26 @@ public sealed class RestoreContentVersionHandler
             v => v.Id == command.ContentVersionId && v.ProjectId == command.ProjectId, ct);
         if (source is null)
             return Result.Failure<RestoreContentVersionDto>("Content version not found.");
+
+        // Restoring Decision/Constraint history can reinstate accepted governance state.
+        // It therefore uses the same Owner/Admin boundary as approving governance proposals.
+        if (source.TargetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
+        {
+            if (_authorization is null)
+                return Result.Forbidden<RestoreContentVersionDto>(
+                    "Decision and Constraint history can only be restored by a project or organization Owner/Admin.");
+
+            var governance = await _authorization.CanAsync(
+                db,
+                command.Actor,
+                ResourceType.Project,
+                AuthAction.Administer,
+                projectId: command.ProjectId,
+                ct: ct);
+            if (!governance.Success)
+                return Result.Forbidden<RestoreContentVersionDto>(
+                    "Decision and Constraint history can only be restored by a project or organization Owner/Admin.");
+        }
 
         if (source.TargetKind == ContentTargetKind.TaskDescription
             && (command.ExpectedTargetKind != ContentTargetKind.TaskDescription
