@@ -31,7 +31,8 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
     public async Task<Result<MilestoneDto>> HandleAsync(CreateMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
+        var projectExists = await db.Projects.IgnoreQueryFilters()
+            .AnyAsync(project => project.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<MilestoneDto>("Project not found.");
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
@@ -79,10 +80,10 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
     public async Task<Result<MilestoneDto>> HandleAsync(UpdateMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null
-            || (command.Request.ProjectId is { } expectedProjectId
-                && milestone.ProjectId != expectedProjectId))
+        var milestone = await db.Milestones.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
+                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
+        if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
@@ -149,16 +150,16 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
     public async Task<Result> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null
-            || (command.Request.ProjectId is { } expectedProjectId
-                && milestone.ProjectId != expectedProjectId))
+        var milestone = await db.Milestones.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
+                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
+        if (milestone is null)
             return Result.Failure("Milestone not found.", ErrorKind.NotFound);
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
             return Result.Forbidden("Project membership is required to delete a milestone.");
 
-        var orgId = await db.Projects
+        var orgId = await db.Projects.IgnoreQueryFilters()
             .Where(project => project.Id == milestone.ProjectId)
             .Select(project => (Guid?)project.OrgId)
             .FirstOrDefaultAsync(ct);
@@ -258,10 +259,10 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
     public async Task<Result<MilestoneDto>> HandleAsync(CloseMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null
-            || (command.Request.ProjectId is { } expectedProjectId
-                && milestone.ProjectId != expectedProjectId))
+        var milestone = await db.Milestones.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
+                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
+        if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
@@ -303,10 +304,10 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
     public async Task<Result<MilestoneDto>> HandleAsync(ReopenMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null
-            || (command.Request.ProjectId is { } expectedProjectId
-                && milestone.ProjectId != expectedProjectId))
+        var milestone = await db.Milestones.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
+                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
+        if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
         if (command.Actor is not { IsHuman: true, UserId: not null } actor
             || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
