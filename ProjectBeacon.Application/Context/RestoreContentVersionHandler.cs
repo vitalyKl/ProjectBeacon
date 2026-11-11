@@ -104,9 +104,9 @@ public sealed class RestoreContentVersionHandler
                                 snapshot.RepoId,
                                 snapshot.TaskId,
                                 snapshot.Path,
-                                snapshot.Source,
+                                snapshot.Source ?? ContextSource.Native,
                                 snapshot.SourcePath,
-                                snapshot.ReviewState,
+                                snapshot.ReviewState ?? ContextReviewState.NeedsReview,
                                 checked(command.ExpectedRevision + 1),
                                 attribution.Type ?? "Human",
                                 attribution.Id);
@@ -129,9 +129,12 @@ public sealed class RestoreContentVersionHandler
                             return UnsupportedStructureFailure();
 
                         currentRevision = section.Revision;
-                        section.Update(
+                        section.RestoreFromHistory(
                             snapshot.Title,
                             snapshot.BodyMarkdown,
+                            snapshot.Source ?? section.Source,
+                            snapshot.Source.HasValue ? snapshot.SourcePath : section.SourcePath,
+                            snapshot.ReviewState ?? section.ReviewState,
                             updatedByType: command.Actor.IsHuman ? "user" : "system",
                             updatedById: attribution.Id);
                         target = section;
@@ -157,8 +160,10 @@ public sealed class RestoreContentVersionHandler
                             snapshot.Context,
                             snapshot.DecisionBody,
                             snapshot.Consequences,
-                            snapshot.Status,
-                            snapshot.SupersededById);
+                            snapshot.Status ?? decision.Status,
+                            HasSnapshotProperty(source.ContentJson, "supersededById")
+                                ? snapshot.SupersededById
+                                : decision.SupersededById);
                         target = decision;
                         changed = decision.Revision != currentRevision;
                         break;
@@ -179,7 +184,8 @@ public sealed class RestoreContentVersionHandler
                             return UnsupportedStructureFailure();
 
                         currentRevision = constraint.Revision;
-                        constraint.RestoreFromHistory(snapshot.Body, snapshot.ScopePath, snapshot.Status);
+                        constraint.RestoreFromHistory(
+                            snapshot.Body, snapshot.ScopePath, snapshot.Status ?? constraint.Status);
                         target = constraint;
                         changed = constraint.Revision != currentRevision;
                         break;
@@ -217,7 +223,12 @@ public sealed class RestoreContentVersionHandler
 
                         currentRevision = milestone.Revision;
                         milestone.RestoreContentFromHistory(
-                            snapshot.Name, snapshot.Description, snapshot.Order, snapshot.ClosedAt);
+                            snapshot.Name,
+                            snapshot.Description,
+                            snapshot.Order,
+                            HasSnapshotProperty(source.ContentJson, "closedAt")
+                                ? snapshot.ClosedAt
+                                : milestone.ClosedAt);
                         target = milestone;
                         changed = milestone.Revision != currentRevision;
                         break;
@@ -283,6 +294,12 @@ public sealed class RestoreContentVersionHandler
             source.Id, source.TargetKind, source.TargetId, saved.Value, true));
     }
 
+    private static bool HasSnapshotProperty(string json, string propertyName)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty(propertyName, out _);
+    }
+
     private static async Task<bool> IsLatestDeletionSnapshotAsync(
         IBeaconDb db,
         ContentVersion source,
@@ -334,20 +351,20 @@ public sealed class RestoreContentVersionHandler
     private sealed record ContextSectionSnapshot(
         string SectionId, string Key, string Title, string BodyMarkdown, int Ordinal,
         ContextScopeType ScopeType, Guid? RepoId, Guid? TaskId, string Path,
-        ContextSource Source = ContextSource.Native,
+        ContextSource? Source = null,
         string? SourcePath = null,
-        ContextReviewState ReviewState = ContextReviewState.Reviewed,
+        ContextReviewState? ReviewState = null,
         string? UpdatedByType = null,
         string? UpdatedById = null,
         bool Deleted = false);
     private sealed record DecisionSnapshot(
         string Title, string Context, string DecisionBody, string? Consequences,
-        DecisionStatus Status = DecisionStatus.Accepted,
+        DecisionStatus? Status = null,
         Guid? SupersededById = null,
         bool Deleted = false);
     private sealed record ConstraintSnapshot(
         string Body, string ScopePath, ConstraintKind Kind,
-        ConstraintStatus Status = ConstraintStatus.Active,
+        ConstraintStatus? Status = null,
         bool Deleted = false);
     private sealed record MilestoneSnapshot(
         string Name, string? Description, int Order, DateTime? ClosedAt = null, bool Deleted = false);
