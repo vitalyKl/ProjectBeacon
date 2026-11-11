@@ -2939,6 +2939,12 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Project membership is required to view this inbox.</value>
   </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>Deleted content</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>Deleted</value>
+  </data>
   <data name="ContentHistory" xml:space="preserve">
     <value>Content history</value>
   </data>
