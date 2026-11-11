@@ -135,6 +135,37 @@ public class ContextSection : Entity, IProjectScoped
     }
 
     /// <summary>Marks a NeedsReview section as approved by a human reviewer.</summary>
+    /// <summary>Restores content and review state from a historical snapshot as a new revision.</summary>
+    public void RestoreFromHistory(
+        string title,
+        string bodyMarkdown,
+        ContextSource source,
+        string? sourcePath,
+        ContextReviewState reviewState,
+        string? updatedByType,
+        string? updatedById)
+    {
+        var changed =
+            !string.Equals(Title, title, StringComparison.Ordinal)
+            || !string.Equals(BodyMarkdown, bodyMarkdown, StringComparison.Ordinal)
+            || Source != source
+            || !string.Equals(SourcePath, sourcePath, StringComparison.Ordinal)
+            || ReviewState != reviewState;
+        if (!changed)
+            return;
+
+        Title = title;
+        BodyMarkdown = bodyMarkdown;
+        Source = source;
+        SourcePath = sourcePath;
+        ReviewState = reviewState;
+        UpdatedByType = updatedByType;
+        UpdatedById = updatedById;
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+        SectionsText = $"{title} {bodyMarkdown}";
+    }
+
     public void MarkReviewed(string reviewerUserId)
     {
         if (ReviewState != ContextReviewState.NeedsReview)
@@ -145,6 +176,7 @@ public class ContextSection : Entity, IProjectScoped
         ReviewState = ContextReviewState.Reviewed;
         UpdatedByType = "user";
         UpdatedById = reviewerUserId;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
