@@ -13,8 +13,9 @@ using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-/// Restores an earlier content snapshot as a new revision. Existing target rows are required;
-/// a snapshot representing deletion cannot be restored through this operation.
+/// Restores an earlier content snapshot as a new revision. Physically deleted ContextSection
+/// and Milestone targets are recreated only from an earlier snapshot when the latest target
+/// revision is the matching deletion tombstone; a tombstone snapshot itself is never restored.
 /// </summary>
 public sealed class RestoreContentVersionHandler
 {
