@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
+using Application.Proposals;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -67,6 +69,11 @@ public class DeleteContextNodeHandler
     public async Task<Result> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        if (command.Actor is not { IsHuman: true, UserId: not null } actor
+            || !await ProposalProjectAuthorization.CanWriteAsync(
+                db, actor, command.Request.ProjectId, ct))
+            return Result.Forbidden("Project membership is required to delete a context section.");
+
         var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 
@@ -75,7 +82,7 @@ public class DeleteContextNodeHandler
 
         section.Delete();
         db.ContextSections.Remove(section);
-        var attribution = ContentAttribution.FromActor(command.Actor);
+        var attribution = ContentAttribution.FromActor(actor);
         var saved = await _contentWriter.SaveAsync(
             db, section, attribution.Type ?? "Human", attribution.Id, ct, deleted: true);
         return saved.Success
