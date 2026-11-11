@@ -73,6 +73,8 @@ public static class ServiceCollectionExtensions
         services.AddRateLimiter(options =>
             ProjectBeacon.Infrastructure.Http.AuthRateLimiter.Configure(
                 options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow, attachmentUploadRateLimit));
+        services.AddSingleton(new ProjectBeacon.Infrastructure.Http.ApiTokenIdentityRateLimiter(
+            rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow, attachmentUploadRateLimit));
 
         services.AddAuthentication(options =>
         {
