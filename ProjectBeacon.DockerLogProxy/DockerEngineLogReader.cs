@@ -146,7 +146,17 @@ public sealed class DockerEngineLogReader(
                 throw new InvalidDataException("Docker Engine log frame exceeded the configured size limit.");
 
             var payload = new byte[(int)frameLength];
-            await stream.ReadExactlyAsync(payload, ct);
+            try
+            {
+                await stream.ReadExactlyAsync(payload, ct);
+            }
+            catch (EndOfStreamException exception)
+            {
+                throw new InvalidDataException(
+                    "Docker Engine returned a truncated log frame payload.",
+                    exception);
+            }
+
             totalBytes += payload.Length;
             var text = Encoding.UTF8.GetString(payload);
             var streamName = streamType == 2 ? "stderr" : "stdout";
