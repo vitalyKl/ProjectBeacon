@@ -421,6 +421,10 @@ Capability gate `TaskWrite`/`TaskRead` on the route. Registry/proxy reads are hu
 | GET | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | project membership / inherited org Owner/Admin / system admin | project | Members may inspect the policy matrix. |
 | PUT | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | Project Administer; project/org Owner/Admin or system admin; optimistic policy revision | project | Auto is supported only for RepoPatch Update and still requires the documentation profile's explicit Auto setting. |
 
+**Supported proposal operation pairs:** Update applies to the revisioned content targets and RepoPatch. Create is supported only for a new Milestone: MCP omits targetId, uses BaseRevision 0, and the server reserves the actual target ID before persisting the proposal. Delete is supported only for ContextSection, Milestone, Decision and Constraint. ContextSection/Milestone are physically removed after an immutable deletion snapshot is appended; Decision transitions to Deprecated and Constraint to Rejected. Decision/Constraint review still requires Project Administer. New Decision/Constraint records and new ContextSection drafts continue to use their existing Proposed/NeedsReview paths. RepoPatch is Update-only. Create/Delete are always Manual; Auto remains RepoPatch Update-only.
+
+Deleted ContextSection/Milestone targets are listed through the project-scoped human-only history query. Restore requires project membership, the expected target kind/ID, and the latest target revision to be the matching tombstone; it recreates the same target ID from the previous immutable snapshot as a new revision. Decision/Constraint history restore similarly appends a new revision and restores the historical lifecycle status. API tokens and devices cannot inspect or restore deleted content.
+
 > ApplyProposalPatch is a workstation command, not an HTTP endpoint. It is never available through generic device-command enqueue and is created only by a human acceptance or the explicitly enabled RepoPatch Auto policy.
 
 ---
