@@ -89,10 +89,12 @@ public sealed class ListDeletedContentTargetsHandler
                 "Project membership is required to inspect deleted content history.");
 
         var versions = await db.ContentVersions
+            .AsNoTracking()
             .Where(version => version.ProjectId == projectId
                 && (version.TargetKind == ContentTargetKind.ContextSection
                     || version.TargetKind == ContentTargetKind.Milestone))
             .OrderByDescending(version => version.At)
+            .ThenByDescending(version => version.Revision)
             .Take(ScanLimit)
             .ToListAsync(ct);
 
