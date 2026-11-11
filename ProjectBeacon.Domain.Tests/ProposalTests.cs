@@ -122,6 +122,82 @@ public sealed class ProposalTests
     }
 
     [Fact]
+    public void CreateAndDelete_ValidateSupportedTargetOperationPairs()
+    {
+        const string emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        var reservedMilestoneId = Guid.NewGuid();
+        var milestoneCreate = Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.Milestone, reservedMilestoneId,
+            ProposalOperation.Create, 0, emptyHash,
+            """{"name":"Alpha","description":null,"order":1}""",
+            "Adds the first roadmap milestone.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "milestone-create-" + Guid.NewGuid().ToString("N"), CreatedAt);
+
+        Assert.Equal(ProposalOperation.Create, milestoneCreate.Operation);
+        Assert.Equal(reservedMilestoneId, milestoneCreate.TargetId);
+        Assert.Equal(0, milestoneCreate.BaseRevision);
+        Assert.Equal(ProposalStatus.Pending, milestoneCreate.Status);
+
+        var sectionDelete = Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.ContextSection, Guid.NewGuid(),
+            ProposalOperation.Delete, 4, BaseHash, "{}",
+            "Removes the obsolete reviewed section.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "section-delete-" + Guid.NewGuid().ToString("N"), CreatedAt);
+        var decisionDelete = Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.Decision, Guid.NewGuid(),
+            ProposalOperation.Delete, 2, BaseHash, "{}",
+            "Deprecates the obsolete accepted decision.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "decision-delete-" + Guid.NewGuid().ToString("N"), CreatedAt);
+        var constraintDelete = Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.Constraint, Guid.NewGuid(),
+            ProposalOperation.Delete, 3, BaseHash, "{}",
+            "Rejects the obsolete active constraint.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "constraint-delete-" + Guid.NewGuid().ToString("N"), CreatedAt);
+        var milestoneDelete = Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.Milestone, Guid.NewGuid(),
+            ProposalOperation.Delete, 5, BaseHash, "{}",
+            "Removes the completed milestone.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "milestone-delete-" + Guid.NewGuid().ToString("N"), CreatedAt);
+
+        Assert.All(
+            new[] { sectionDelete, decisionDelete, constraintDelete, milestoneDelete },
+            proposal => Assert.Equal(ProposalOperation.Delete, proposal.Operation));
+
+        Assert.Throws<ArgumentException>(() => Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.ProjectDescription, Guid.NewGuid(),
+            ProposalOperation.Create, 0, emptyHash,
+            """{"description":"new"}""", "Creates unsupported target.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "bad-create-" + Guid.NewGuid().ToString("N"), CreatedAt));
+        Assert.Throws<ArgumentException>(() => Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.TaskDescription, Guid.NewGuid(),
+            ProposalOperation.Delete, 1, BaseHash, "{}",
+            "Deletes unsupported target.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "bad-delete-" + Guid.NewGuid().ToString("N"), CreatedAt));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Proposal.Create(
+            Guid.NewGuid(), null, null, null,
+            ContentTargetKind.Milestone, Guid.NewGuid(),
+            ProposalOperation.Create, 1, BaseHash,
+            """{"name":"Alpha","description":null,"order":1}""",
+            "Create must use revision zero.",
+            ProposalAuthorKind.Human, Guid.NewGuid(), null, null, "Human",
+            "bad-create-revision-" + Guid.NewGuid().ToString("N"), CreatedAt));
+    }
+
+    [Fact]
     public void Create_RequiresValidJsonObjectAndBoundedRationale()
     {
         Assert.Throws<ArgumentException>(() => Proposal.ValidatePayload("[]"));
