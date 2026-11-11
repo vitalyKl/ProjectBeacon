@@ -45,8 +45,9 @@ if ops_network not in networks or networks[ops_network].get("internal") is not T
 def attached(service_name: str) -> set[str]:
     return set(services[service_name].get("networks", {}))
 
-if ops_network not in attached("ops-agent") or internal not in attached("ops-agent"):
-    raise SystemExit("::error::OpsAgent must bridge the application network and the isolated ops network.")
+ops_agent = services["ops-agent"]
+if attached("ops-agent") != {internal, ops_network}:
+    raise SystemExit("::error::OpsAgent must bridge only the application network and the isolated ops network.")
 if attached("docker-log-proxy") != {ops_network}:
     raise SystemExit("::error::DockerLogProxy must be attached only to the isolated ops network.")
 for name in ("web", "worker", "postgres", "caddy", "migrate"):
@@ -54,10 +55,22 @@ for name in ("web", "worker", "postgres", "caddy", "migrate"):
         raise SystemExit(f"::error::{name} must not be attached to the Docker socket network.")
 
 proxy = services["docker-log-proxy"]
-if proxy.get("ports"):
-    raise SystemExit("::error::DockerLogProxy must not publish a host port.")
-if proxy.get("read_only") is not True or proxy.get("user") != "0:0":
-    raise SystemExit("::error::DockerLogProxy must use a read-only root filesystem and the socket-owning UID.")
+for service_name, service in (("ops-agent", ops_agent), ("docker-log-proxy", proxy)):
+    if service.get("ports"):
+        raise SystemExit(f"::error::{service_name} must not publish a host port.")
+    if service.get("read_only") is not True or service.get("privileged") is True:
+        raise SystemExit(f"::error::{service_name} must use a read-only, non-privileged container.")
+    if "ALL" not in service.get("cap_drop", []):
+        raise SystemExit(f"::error::{service_name} must drop all Linux capabilities.")
+    security_options = {
+        str(option).split(":", 1)[0]
+        for option in service.get("security_opt", [])
+    }
+    if "no-new-privileges" not in security_options:
+        raise SystemExit(f"::error::{service_name} must enable no-new-privileges.")
+
+if proxy.get("user") != "0:0":
+    raise SystemExit("::error::DockerLogProxy must run as the socket-owning UID.")
 
 socket_mounts = []
 for service_name, service in services.items():
@@ -68,7 +81,10 @@ if len(socket_mounts) != 1 or socket_mounts[0][0] != "docker-log-proxy":
     raise SystemExit("::error::Only DockerLogProxy may mount /var/run/docker.sock.")
 if socket_mounts[0][1].get("read_only") is not True:
     raise SystemExit("::error::The Docker socket mount must be read-only.")
-if services["ops-agent"].get("volumes"):
+proxy_mounts = proxy.get("volumes", [])
+if len(proxy_mounts) != 1 or proxy_mounts[0].get("target") != "/var/run/docker.sock":
+    raise SystemExit("::error::DockerLogProxy may mount only the Docker Engine socket.")
+if ops_agent.get("volumes"):
     raise SystemExit("::error::OpsAgent must not receive a host filesystem mount.")
 
 proxy_environment = proxy.get("environment", {})
