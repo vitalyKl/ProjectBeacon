@@ -5,6 +5,7 @@ using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
 using Application.Proposals;
+using Domain.Entities.Content;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
