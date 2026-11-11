@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Milestones;
 
 using Application.Milestones;
+using Application.Authorization;
 using Application.Persistence;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -33,6 +34,34 @@ public sealed class MilestoneLifecycleTests : IDisposable
         _unscoped.Dispose();
         _db.Dispose();
         _connection.Dispose();
+    }
+
+    [Fact]
+    public async Task DeleteMilestone_RequiresProjectMembershipAndPreservesContent()
+    {
+        var milestone = Milestone.Create(
+            "Protected milestone", "Protected roadmap content.", _projectId, 1);
+        _db.Milestones.Add(milestone);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, milestone, "Human", "owner");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var result = await new DeleteMilestoneHandler(HandlerSqlite.Factory(_connection), writer)
+            .HandleAsync(
+                new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), outsider),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.True(await _db.Milestones.AsNoTracking().AnyAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            version => version.TargetKind == ContentTargetKind.Milestone
+                && version.TargetId == milestone.Id,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
