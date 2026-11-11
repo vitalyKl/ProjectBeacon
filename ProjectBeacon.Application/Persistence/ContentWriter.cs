@@ -21,9 +21,10 @@ public sealed class ContentWriter
         string? changedById,
         CancellationToken ct = default,
         bool deleted = false,
-        Guid? proposalId = null)
+        Guid? proposalId = null,
+        IReadOnlyCollection<Guid>? milestoneTaskIds = null)
     {
-        AddVersion(db, target, changedByType, changedById, deleted, proposalId);
+        AddVersion(db, target, changedByType, changedById, deleted, proposalId, milestoneTaskIds);
         try
         {
             await db.SaveChangesAsync(ct);
@@ -65,7 +66,8 @@ public sealed class ContentWriter
         string? changedByType,
         string? changedById,
         bool deleted = false,
-        Guid? proposalId = null)
+        Guid? proposalId = null,
+        IReadOnlyCollection<Guid>? milestoneTaskIds = null)
     {
         var snapshotJson = target switch
         {
@@ -112,6 +114,10 @@ public sealed class ContentWriter
                 milestone.Order,
                 milestone.CreatedAt,
                 milestone.ClosedAt,
+                TaskIds = (milestoneTaskIds ?? milestone.Tasks.Select(task => task.Id).ToArray())
+                    .Distinct()
+                    .OrderBy(id => id)
+                    .ToArray(),
                 Deleted = deleted
             }, JsonOptions),
             Project project => JsonSerializer.Serialize(new
