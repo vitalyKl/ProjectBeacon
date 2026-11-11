@@ -145,6 +145,132 @@ public sealed class MilestoneLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateMilestone_RequiresProjectMembership()
+    {
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var handler = new CreateMilestoneHandler(HandlerSqlite.Factory(_connection));
+        var request = new CreateMilestoneRequest(
+            "Unauthorized milestone", "Must not be created.", _projectId, 1);
+
+        var denied = await handler.HandleAsync(
+            new CreateMilestoneCommand(request, outsider),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(denied.Success);
+        Assert.Equal(ErrorKind.Forbidden, denied.Kind);
+        Assert.Empty(await _db.Milestones.ToListAsync(TestContext.Current.CancellationToken));
+
+        var allowed = await handler.HandleAsync(
+            new CreateMilestoneCommand(
+                request with { Name = "Owner milestone" }, HumanActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(allowed.Success, allowed.Error);
+        Assert.Equal("Owner milestone", allowed.Value!.Name);
+        Assert.Equal(1, await _db.ContentVersions.CountAsync(
+            version => version.TargetKind == ContentTargetKind.Milestone
+                && version.TargetId == allowed.Value.Id,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task UpdateMilestone_RequiresMembershipAndMatchingProjectScope()
+    {
+        var milestone = Milestone.Create("Original", "Original description", _projectId, 1);
+        _db.Milestones.Add(milestone);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new UpdateMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var request = new UpdateMilestoneRequest(
+            milestone.Id, "Changed", "Changed description", 2, milestone.Revision, _projectId);
+
+        var denied = await handler.HandleAsync(
+            new UpdateMilestoneCommand(request, outsider),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(denied.Success);
+        Assert.Equal(ErrorKind.Forbidden, denied.Kind);
+        await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Original", milestone.Name);
+        Assert.Equal(1, await CountVersions(milestone.Id));
+
+        var wrongProject = await handler.HandleAsync(
+            new UpdateMilestoneCommand(
+                request with { ProjectId = Guid.NewGuid() }, HumanActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(wrongProject.Success);
+        Assert.Equal(ErrorKind.NotFound, wrongProject.Kind);
+        Assert.Equal("Original", milestone.Name);
+        Assert.Equal(1, await CountVersions(milestone.Id));
+
+        var allowed = await handler.HandleAsync(
+            new UpdateMilestoneCommand(request, HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(allowed.Success, allowed.Error);
+        Assert.Equal("Changed", allowed.Value!.Name);
+        Assert.Equal(2, allowed.Value.Revision);
+        Assert.Equal(2, await CountVersions(milestone.Id));
+    }
+
+    [Fact]
+    public async Task CloseAndReopen_RequireMembershipAndMatchingProjectScope()
+    {
+        var milestone = Milestone.Create("Scoped milestone", null, _projectId, 1);
+        _db.Milestones.Add(milestone);
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var close = new CloseMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+
+        var deniedClose = await close.HandleAsync(
+            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id, _projectId), outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(deniedClose.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedClose.Kind);
+
+        var wrongProjectClose = await close.HandleAsync(
+            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id, Guid.NewGuid()), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.False(wrongProjectClose.Success);
+        Assert.Equal(ErrorKind.NotFound, wrongProjectClose.Kind);
+        Assert.Equal(1, await CountVersions(milestone.Id));
+
+        var closed = await close.HandleAsync(
+            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id, _projectId), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(closed.Success, closed.Error);
+        Assert.NotNull(closed.Value!.ClosedAt);
+        Assert.Equal(2, await CountVersions(milestone.Id));
+
+        var reopen = new ReopenMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
+        var deniedReopen = await reopen.HandleAsync(
+            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id, _projectId), outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(deniedReopen.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedReopen.Kind);
+        Assert.Equal(2, await CountVersions(milestone.Id));
+
+        var reopened = await reopen.HandleAsync(
+            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id, _projectId), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(reopened.Success, reopened.Error);
+        Assert.Null(reopened.Value!.ClosedAt);
+        Assert.Equal(3, await CountVersions(milestone.Id));
+    }
+
+    [Fact]
     public async Task CloseAndReopen_AppendLifecycleVersions_AndRemainIdempotent()
     {
         var milestone = Milestone.Create(
@@ -156,7 +282,7 @@ public sealed class MilestoneLifecycleTests : IDisposable
 
         var close = new CloseMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
         var closed = await close.HandleAsync(
-            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)),
+            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id, _projectId), HumanActor()),
             TestContext.Current.CancellationToken);
 
         Assert.True(closed.Success, closed.Error);
@@ -165,7 +291,7 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.Equal(2, await CountVersions(milestone.Id));
 
         var repeatedClose = await close.HandleAsync(
-            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)),
+            new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id, _projectId), HumanActor()),
             TestContext.Current.CancellationToken);
         Assert.True(repeatedClose.Success, repeatedClose.Error);
         Assert.Equal(2, repeatedClose.Value!.Revision);
@@ -173,7 +299,7 @@ public sealed class MilestoneLifecycleTests : IDisposable
 
         var reopen = new ReopenMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
         var reopened = await reopen.HandleAsync(
-            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)),
+            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id, _projectId), HumanActor()),
             TestContext.Current.CancellationToken);
 
         Assert.True(reopened.Success, reopened.Error);
@@ -182,7 +308,7 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.Equal(3, await CountVersions(milestone.Id));
 
         var repeatedReopen = await reopen.HandleAsync(
-            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)),
+            new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id, _projectId), HumanActor()),
             TestContext.Current.CancellationToken);
         Assert.True(repeatedReopen.Success, repeatedReopen.Error);
         Assert.Equal(3, repeatedReopen.Value!.Revision);
