@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Application.Proposals;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
