@@ -31,6 +31,47 @@ public sealed class AuthHttpTests
     }
 
     [Fact]
+    public async Task Bootstrap_ParallelRequests_CreateExactlyOneAdminAndAuditTheRest()
+    {
+        await using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+        {
+            using var request = BootstrapRequest(AuthApiFactory.BootstrapToken);
+            return await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+        }));
+
+        try
+        {
+            Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+            Assert.Equal(3, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+
+            // The one-time transition remains closed after the concurrent winner commits.
+            using var secondRequest = BootstrapRequest(AuthApiFactory.BootstrapToken);
+            using var secondResponse = await client.SendAsync(
+                secondRequest, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+        }
+        finally
+        {
+            foreach (var response in responses)
+                response.Dispose();
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.Equal(1, await db.Users.CountAsync(user => user.IsAdmin, TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.AuditEvents.CountAsync(
+                item => item.Action == "platform.bootstrap.completed", TestContext.Current.CancellationToken));
+            Assert.Equal(4, await db.AuditEvents.CountAsync(
+                item => item.Action == "platform.bootstrap.denied", TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task AuthEndpoints_RateLimited()
     {
         Environment.SetEnvironmentVariable("RATE_LIMIT_PER_WINDOW", "5");
