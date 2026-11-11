@@ -131,6 +131,20 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDeletedContentTargets_RequiresProjectMembership()
+    {
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+
+        var result = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(_projectId, outsider, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
     public async Task RestoreTaskDescription_RestoresNullableReviewNotes()
     {
         var task = TaskItem.Create("Task", _projectId, description: "Original task description");
