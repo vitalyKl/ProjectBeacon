@@ -157,6 +157,69 @@ public sealed class ControlPlaneAuthenticationHttpTests
         Assert.False(HasCookie(response, "BeaconControlAuth"));
     }
 
+    [Fact]
+    public async Task ControlLogout_ClearsOnlyOperatorCookieAndLeavesCustomerSessionValid()
+    {
+        await using var factory = new ControlPlaneWebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false
+        });
+
+        var password = await BootstrapOnControlHostAsync(client);
+
+        using var customerLogin = Request(
+            HttpMethod.Post, "/v1/auth/cookie-login", "app.projectbeacon.tech");
+        customerLogin.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = "admin",
+            ["password"] = password
+        });
+        using var customerLoginResponse = await client.SendAsync(
+            customerLogin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, customerLoginResponse.StatusCode);
+        var customerCookie = GetCookie(customerLoginResponse, "BeaconAuth");
+        Assert.NotNull(customerCookie);
+
+        using var controlLogin = Request(
+            HttpMethod.Post, "/v1/auth/control-cookie-login", "control.localhost");
+        controlLogin.Headers.TryAddWithoutValidation("Origin", "http://control.localhost");
+        controlLogin.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+        controlLogin.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = "admin",
+            ["password"] = password
+        });
+        using var controlLoginResponse = await client.SendAsync(
+            controlLogin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, controlLoginResponse.StatusCode);
+        var controlCookie = GetCookie(controlLoginResponse, "BeaconControlAuth");
+        Assert.NotNull(controlCookie);
+
+        using var logout = Request(HttpMethod.Post, "/control/logout", "control.localhost");
+        logout.Headers.TryAddWithoutValidation("Origin", "http://control.localhost");
+        logout.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+        logout.Headers.TryAddWithoutValidation("Cookie", controlCookie);
+        using var logoutResponse = await client.SendAsync(
+            logout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
+        Assert.Equal("/control/login", logoutResponse.Headers.Location?.ToString());
+        var clearedControlCookie = logoutResponse.Headers.GetValues("Set-Cookie")
+            .Single(value => value.StartsWith("BeaconControlAuth=", StringComparison.Ordinal));
+        Assert.Contains("expires=", clearedControlCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BeaconAuth=", string.Join("\n", logoutResponse.Headers.GetValues("Set-Cookie")));
+
+        // Operator logout is scoped to its own host-only cookie and must not revoke
+        // or clear the separately issued customer session.
+        using var customerMe = Request(HttpMethod.Get, "/v1/auth/me", "app.projectbeacon.tech");
+        customerMe.Headers.TryAddWithoutValidation("Cookie", customerCookie);
+        using var customerResponse = await client.SendAsync(
+            customerMe, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, customerResponse.StatusCode);
+    }
+
     private static async Task<string> BootstrapOnControlHostAsync(HttpClient client)
     {
         using var request = Request(HttpMethod.Post, "/v1/auth/bootstrap", "control.localhost");
