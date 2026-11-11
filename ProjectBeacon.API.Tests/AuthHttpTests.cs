@@ -333,7 +333,7 @@ public sealed class AuthHttpTests
         var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var oldPassword = bootJson.GetProperty("password").GetString()!;
 
-        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         recover.EnsureSuccessStatusCode();
         var recoverJson = await recover.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var newPassword = recoverJson.GetProperty("password").GetString()!;
@@ -344,6 +344,22 @@ public sealed class AuthHttpTests
 
         var newLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = newPassword }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoverAdmin_BootstrapTokenIsNotAccepted()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var bootstrap = await client.SendAsync(
+            BootstrapRequest(AuthApiFactory.BootstrapToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        bootstrap.EnsureSuccessStatusCode();
+
+        var response = await client.SendAsync(
+            RecoverRequest(AuthApiFactory.BootstrapToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -370,7 +386,7 @@ public sealed class AuthHttpTests
     [Fact]
     public async Task RecoverAdmin_TokenNotConfigured_Unauthorized()
     {
-        await using var factory = new AuthApiFactory(false);
+        await using var factory = new AuthApiFactory(configureRecoveryToken: false);
         var client = factory.CreateClient();
         var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -395,17 +411,24 @@ public sealed class AuthHttpTests
 public class AuthApiFactory : WebApplicationFactory<Program>
 {
     public const string BootstrapToken = "test-bootstrap-token";
+    public const string RecoveryToken = "test-admin-recovery-token";
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly bool _configureBootstrapToken;
+    private readonly bool _configureRecoveryToken;
     private readonly bool _inviteOnly;
 
-    public AuthApiFactory(bool configureBootstrapToken = true, bool inviteOnly = false)
+    public AuthApiFactory(
+        bool configureBootstrapToken = true,
+        bool inviteOnly = false,
+        bool configureRecoveryToken = true)
     {
         _configureBootstrapToken = configureBootstrapToken;
+        _configureRecoveryToken = configureRecoveryToken;
         _inviteOnly = inviteOnly;
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
         Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
+        Environment.SetEnvironmentVariable("ADMIN_RECOVERY_TOKEN", _configureRecoveryToken ? RecoveryToken : "");
         _connection.Open();
     }
 
@@ -415,6 +438,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Testing");
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
+        builder.UseSetting("ADMIN_RECOVERY_TOKEN", _configureRecoveryToken ? RecoveryToken : "");
         builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", _inviteOnly ? "true" : "false");
         builder.ConfigureServices(services =>
         {
