@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests.Milestones;
 
 using Application.Milestones;
 using Application.Persistence;
+using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Enums;
