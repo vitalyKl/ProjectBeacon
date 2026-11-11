@@ -114,11 +114,21 @@ public class ActivateConstraintHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly ContentWriter _contentWriter;
 
     public ActivateConstraintHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+        : this(dbFactory, authorization, new ContentWriter())
+    {
+    }
+
+    public ActivateConstraintHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<ConstraintDto>> HandleAsync(
@@ -137,9 +147,17 @@ public class ActivateConstraintHandler
         if (!permission.Success)
             return Result.Forbidden<ConstraintDto>("Only a project or organization Owner/Admin can activate constraints.");
 
+        var previousRevision = constraint.Revision;
         constraint.Activate();
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
+        if (constraint.Revision == previousRevision)
+            return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
+
+        var attribution = ContentAttribution.FromActor(actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, constraint, attribution.Type ?? "Human", attribution.Id, ct);
+        return saved.Success
+            ? Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision))
+            : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint activation conflict.", ErrorKind.Conflict);
     }
 }
 /// <summary>
@@ -149,11 +167,21 @@ public class RejectConstraintHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly ContentWriter _contentWriter;
 
     public RejectConstraintHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+        : this(dbFactory, authorization, new ContentWriter())
+    {
+    }
+
+    public RejectConstraintHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<ConstraintDto>> HandleAsync(
@@ -172,8 +200,16 @@ public class RejectConstraintHandler
         if (!permission.Success)
             return Result.Forbidden<ConstraintDto>("Only a project or organization Owner/Admin can reject constraints.");
 
+        var previousRevision = constraint.Revision;
         constraint.Reject();
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
+        if (constraint.Revision == previousRevision)
+            return Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision));
+
+        var attribution = ContentAttribution.FromActor(actor);
+        var saved = await _contentWriter.SaveAsync(
+            db, constraint, attribution.Type ?? "Human", attribution.Id, ct);
+        return saved.Success
+            ? Result.Ok(new ConstraintDto(constraint.Id, constraint.Body, constraint.Kind, constraint.Status, constraint.ProjectId, constraint.Revision))
+            : Result.Failure<ConstraintDto>(saved.Error ?? "Constraint rejection conflict.", ErrorKind.Conflict);
     }
 }
