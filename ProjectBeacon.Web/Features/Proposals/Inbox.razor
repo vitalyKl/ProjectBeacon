@@ -127,9 +127,14 @@ else
                         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
                             <MudCheckBox T="bool" Value="@IsSelected(proposal.Id)" ValueChanged="value => SetSelected(proposal.Id, value)" Disabled="@(proposal.Status != ProposalStatus.Pending || _busy)" />
                             <MudText Typo="Typo.subtitle1">@proposal.TargetKind</MudText>
+                            <MudText Typo="Typo.caption">@proposal.Operation</MudText>
                             <StatusChip Color="@ProposalStatusColor(proposal.Status)" Label="@ProposalStatusLabel(proposal.Status)" />
                             <MudSpacer />
-                            <MudText Typo="Typo.caption">rev. @proposal.BaseRevision · @proposal.CreatedAt.ToString("u")</MudText>
+                            <MudText Typo="Typo.caption">
+                                @(proposal.Operation == ProposalOperation.Create
+                                    ? L["NewContent"]
+                                    : $"rev. {proposal.BaseRevision}") · @proposal.CreatedAt.ToString("u")
+                            </MudText>
                         </MudStack>
                         <MudText Typo="Typo.caption">@proposal.TargetId</MudText>
                         @if (proposal.TaskId is Guid taskId)
@@ -184,13 +189,22 @@ else
                                     else
                                     {
                                         <MudTextField T="string" Value="@GetEditedPayload(proposal)" ValueChanged="value => SetEditedPayload(proposal.Id, value)"
-                                                      Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8" ReadOnly="@(proposal.Status != ProposalStatus.Pending)" />
-                                        <div data-testid="compare-base-revision">
-                                            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
-                                                       OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
-                                                @L["CompareBaseRevision"] (@proposal.BaseRevision)
-                                            </MudButton>
-                                        </div>
+                                                      Label="@L["AcceptedPayload"]" Variant="Variant.Outlined" Lines="8"
+                                                      ReadOnly="@(proposal.Status != ProposalStatus.Pending || proposal.Operation == ProposalOperation.Delete)" />
+                                        @if (proposal.Operation == ProposalOperation.Create)
+                                        {
+                                            <MudText Typo="Typo.subtitle2">@L["ProposedContent"]</MudText>
+                                            <MarkdownView Text="@ExtractMarkdown(GetEditedPayload(proposal))" MaxHeight="220" />
+                                        }
+                                        else
+                                        {
+                                            <div data-testid="compare-base-revision">
+                                                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.CompareArrows"
+                                                           OnClick="() => LoadBaseSnapshot(proposal)" Disabled="_busy">
+                                                    @L["CompareBaseRevision"] (@proposal.BaseRevision)
+                                                </MudButton>
+                                            </div>
+                                        }
                                         @if (_baseSnapshots.TryGetValue(proposal.Id, out var baseSnapshot))
                                         {
                                             <MudText Typo="Typo.subtitle2">@L["ProposalDiff"]</MudText>
@@ -467,7 +481,10 @@ else
 
     private async Task LoadBaseSnapshot(ProposalDto proposal)
     {
-        if (_project is null || proposal.TargetKind == ContentTargetKind.RepoPatch) return;
+        if (_project is null
+            || proposal.TargetKind == ContentTargetKind.RepoPatch
+            || proposal.Operation == ProposalOperation.Create)
+            return;
         var versions = await ListContentVersions.HandleAsync(
             _project.Id, proposal.TargetKind, proposal.TargetId, 100);
         var version = versions.Success
