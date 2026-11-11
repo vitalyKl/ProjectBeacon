@@ -2699,4 +2699,7 @@
 <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
 <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
 <data name="Characters" xml:space="preserve"><value>символов</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>Данные организации</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>Скачайте снимок рабочего пространства организации, участников, счетов и истории биллинга. Пароли, секреты и идентификаторы платёжных провайдеров не включаются.</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>Скачать архив организации (ZIP)</value></data>
 </root>
