@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Application.Billing;
 using ProjectBeacon.Application.Authorization;
@@ -745,7 +746,7 @@ public sealed class EfOrganizationDataExportService(
     }
 
     private static async Task<long> CountOrganizationRowsAsync(
-        BeaconDbContext db,
+        IBeaconDb db,
         string tableName,
         Guid orgId,
         CancellationToken ct)
@@ -768,7 +769,7 @@ public sealed class EfOrganizationDataExportService(
     }
 
     private static async Task<IReadOnlyList<OrganizationSubscription>> ReadBillingSubscriptionsAsync(
-        BeaconDbContext db,
+        IBeaconDb db,
         Guid orgId,
         CancellationToken ct)
     {
@@ -811,7 +812,7 @@ public sealed class EfOrganizationDataExportService(
     }
 
     private static async Task<IReadOnlyList<BillingInvoice>> ReadBillingInvoicesAsync(
-        BeaconDbContext db,
+        IBeaconDb db,
         Guid orgId,
         CancellationToken ct)
     {
@@ -851,7 +852,7 @@ public sealed class EfOrganizationDataExportService(
     }
 
     private static async Task<IReadOnlyList<BillingLedgerEntry>> ReadBillingLedgerAsync(
-        BeaconDbContext db,
+        IBeaconDb db,
         Guid orgId,
         CancellationToken ct)
     {
