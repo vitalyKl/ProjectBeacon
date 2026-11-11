@@ -28,7 +28,7 @@ public static class ReportEndpoints
         // Attribution is security metadata, not report content. Never accept it from the
         // request body: a caller must not be able to forge another user's authorship.
         var actor = ctx.GetActor();
-        if (!actor.IsHuman || actor.UserId is not { } userId)
+        if (!actor.IsHuman || actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new GenerateReportCommand(
@@ -54,7 +54,7 @@ public static class ReportEndpoints
 
     private static async Task<IResult> ContextCost(Guid taskId, HttpContext ctx, ContextCostReportHandler handler)
     {
-        var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId, Actor: ctx.GetActor()));
+        var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId, null, ctx.GetActor()));
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
