@@ -191,7 +191,7 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     public async Task<Result<MilestoneDto>> HandleAsync(GetMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones
+        var milestone = await db.Milestones.IgnoreQueryFilters()
             .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
                 && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
         if (milestone is null)
@@ -218,7 +218,7 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
     public async Task<Result<IList<MilestoneDto>>> HandleAsync(ListProjectMilestonesCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var projectExists = await db.Projects.AnyAsync(
+        var projectExists = await db.Projects.IgnoreQueryFilters().AnyAsync(
             project => project.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<IList<MilestoneDto>>("Project not found.", ErrorKind.NotFound);
@@ -227,7 +227,7 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
             return Result.Forbidden<IList<MilestoneDto>>(
                 "Project membership is required to list milestones.");
 
-        var milestones = await db.Milestones
+        var milestones = await db.Milestones.IgnoreQueryFilters()
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
             .Select(m => new MilestoneDto(
