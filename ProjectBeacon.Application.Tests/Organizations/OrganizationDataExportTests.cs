@@ -77,6 +77,76 @@ public sealed class OrganizationDataExportTests : IDisposable
         _db.ProjectInvites.Add(projectInvite);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        var subscriptionId = Guid.NewGuid();
+        var invoiceId = Guid.NewGuid();
+        var ledgerId = Guid.NewGuid();
+        var billingTime = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        await _db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE "OrganizationSubscriptions" (
+                "Id" TEXT NOT NULL, "OrgId" TEXT NOT NULL, "PlanKey" TEXT NOT NULL,
+                "Status" INTEGER NOT NULL, "Source" INTEGER NOT NULL,
+                "TrialEndsAtUtc" TEXT NULL, "CurrentPeriodStartsAtUtc" TEXT NOT NULL,
+                "CurrentPeriodEndsAtUtc" TEXT NULL, "CancelAtPeriodEnd" INTEGER NOT NULL,
+                "GraceUntilUtc" TEXT NULL, "ProviderKey" TEXT NULL,
+                "ExternalCustomerReference" TEXT NULL, "ExternalSubscriptionReference" TEXT NULL,
+                "CreatedAtUtc" TEXT NOT NULL, "UpdatedAtUtc" TEXT NOT NULL
+            );
+            CREATE TABLE "BillingInvoices" (
+                "Id" TEXT NOT NULL, "OrgId" TEXT NOT NULL, "Number" TEXT NOT NULL,
+                "Description" TEXT NOT NULL, "AmountMinor" INTEGER NOT NULL, "Currency" TEXT NOT NULL,
+                "IssuedAtUtc" TEXT NOT NULL, "DueAtUtc" TEXT NOT NULL, "Status" INTEGER NOT NULL,
+                "PaidAtUtc" TEXT NULL, "PaymentReference" TEXT NULL,
+                "ProviderKey" TEXT NULL, "ExternalInvoiceReference" TEXT NULL
+            );
+            CREATE TABLE "BillingLedgerEntries" (
+                "Id" TEXT NOT NULL, "OccurredAtUtc" TEXT NOT NULL, "OrgId" TEXT NOT NULL,
+                "EventType" INTEGER NOT NULL, "Source" INTEGER NOT NULL, "AmountMinor" INTEGER NULL,
+                "Currency" TEXT NULL, "ProviderKey" TEXT NULL, "ProviderEventId" TEXT NULL,
+                "Reference" TEXT NULL, "ActorUserId" TEXT NULL, "Note" TEXT NULL,
+                "IdempotencyKey" TEXT NULL, "SubscriptionId" TEXT NULL, "InvoiceId" TEXT NULL
+            );
+            """,
+            TestContext.Current.CancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "OrganizationSubscriptions"
+                ("Id", "OrgId", "PlanKey", "Status", "Source", "CurrentPeriodStartsAtUtc",
+                 "CancelAtPeriodEnd", "ProviderKey", "ExternalCustomerReference",
+                 "ExternalSubscriptionReference", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                ({subscriptionId.ToString("D")}, {org.Id.ToString("D")}, {"alpha"}, {1}, {0},
+                 {billingTime}, {false}, {"provider-secret-key"}, {"provider-customer-reference"},
+                 {"provider-subscription-reference"}, {billingTime}, {billingTime});
+            """,
+            TestContext.Current.CancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "BillingInvoices"
+                ("Id", "OrgId", "Number", "Description", "AmountMinor", "Currency",
+                 "IssuedAtUtc", "DueAtUtc", "Status", "PaidAtUtc", "PaymentReference",
+                 "ProviderKey", "ExternalInvoiceReference")
+            VALUES
+                ({invoiceId.ToString("D")}, {org.Id.ToString("D")}, {"PB-2026-000001"},
+                 {"Manual alpha invoice"}, {1999L}, {"EUR"}, {billingTime}, {billingTime},
+                 {2}, {billingTime}, {"receipt-reference-123"}, {"provider-secret-key"},
+                 {"provider-invoice-reference"});
+            """,
+            TestContext.Current.CancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "BillingLedgerEntries"
+                ("Id", "OccurredAtUtc", "OrgId", "EventType", "Source", "AmountMinor",
+                 "Currency", "ProviderKey", "ProviderEventId", "Reference", "ActorUserId",
+                 "Note", "IdempotencyKey", "SubscriptionId", "InvoiceId")
+            VALUES
+                ({ledgerId.ToString("D")}, {billingTime}, {org.Id.ToString("D")}, {8}, {0},
+                 {1999L}, {"EUR"}, {"provider-secret-key"}, {"provider-webhook-event-id"},
+                 {"receipt-reference-123"}, {owner.Id.ToString("D")}, {"Marked paid manually"},
+                 {"idempotency-secret-key"}, {subscriptionId.ToString("D")}, {invoiceId.ToString("D")});
+            """,
+            TestContext.Current.CancellationToken);
+
         var factory = HandlerSqlite.Factory(_connection);
         var attachmentService = new DatabaseAttachmentService(factory);
         var actor = Human(owner.Id);
@@ -124,6 +194,9 @@ public sealed class OrganizationDataExportTests : IDisposable
         Assert.Contains("organization.json", names);
         Assert.Contains("members.json", names);
         Assert.Contains("organization-invites.json", names);
+        Assert.Contains("billing-subscriptions.json", names);
+        Assert.Contains("billing-invoices.json", names);
+        Assert.Contains("billing-ledger.json", names);
         Assert.Contains("projects.json", names);
         Assert.Contains("tasks.json", names);
         Assert.Contains("task-phases.json", names);
@@ -150,7 +223,26 @@ public sealed class OrganizationDataExportTests : IDisposable
 
         var manifestJson = await ReadEntryAsync(archive, "manifest.json");
         using (var manifestDoc = JsonDocument.Parse(manifestJson))
+        {
             Assert.Equal(1, manifestDoc.RootElement.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal(1, manifestDoc.RootElement.GetProperty("billingSubscriptionCount").GetInt32());
+            Assert.Equal(1, manifestDoc.RootElement.GetProperty("billingInvoiceCount").GetInt32());
+            Assert.Equal(1, manifestDoc.RootElement.GetProperty("billingLedgerEntryCount").GetInt32());
+        }
+
+        var subscriptionJson = await ReadEntryAsync(archive, "billing-subscriptions.json");
+        Assert.Contains("alpha", subscriptionJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-customer-reference", subscriptionJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-subscription-reference", subscriptionJson, StringComparison.Ordinal);
+        var invoiceJson = await ReadEntryAsync(archive, "billing-invoices.json");
+        Assert.Contains("PB-2026-000001", invoiceJson, StringComparison.Ordinal);
+        Assert.Contains("receipt-reference-123", invoiceJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-invoice-reference", invoiceJson, StringComparison.Ordinal);
+        var ledgerJson = await ReadEntryAsync(archive, "billing-ledger.json");
+        Assert.Contains("Marked paid manually", ledgerJson, StringComparison.Ordinal);
+        Assert.Contains("receipt-reference-123", ledgerJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-webhook-event-id", ledgerJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("idempotency-secret-key", ledgerJson, StringComparison.Ordinal);
 
         var memberJson = await ReadEntryAsync(archive, "members.json");
         Assert.Contains("owner@example.test", memberJson, StringComparison.Ordinal);
