@@ -738,7 +738,11 @@ public sealed class ContentVersionRestoreTests : IDisposable
             "Release milestone", "Release checkpoint", _projectId, 3);
         var createdAt = milestone.CreatedAt;
         var baseRevision = milestone.Revision;
+        var linkedTask = TaskItem.Create(
+            "Task assigned to release milestone", _projectId);
+        linkedTask.SetMilestone(milestone.Id);
         _db.Milestones.Add(milestone);
+        _db.Tasks.Add(linkedTask);
         var writer = new ContentWriter();
         writer.AddVersion(_db, milestone, "Human", _actorId.ToString("D"));
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -778,6 +782,9 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(baseRevision + 1, accepted.Value.AppliedRevision);
         Assert.False(await _db.Milestones.AsNoTracking().AnyAsync(
             item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
+        var taskAfterDelete = await _db.Tasks.AsNoTracking().SingleAsync(
+            item => item.Id == linkedTask.Id, TestContext.Current.CancellationToken);
+        Assert.Null(taskAfterDelete.MilestoneId);
 
         var tombstone = await _db.ContentVersions.SingleAsync(
             item => item.TargetKind == ContentTargetKind.Milestone
@@ -785,7 +792,12 @@ public sealed class ContentVersionRestoreTests : IDisposable
                 && item.Revision == baseRevision + 1,
             TestContext.Current.CancellationToken);
         using (var json = JsonDocument.Parse(tombstone.ContentJson))
+        {
             Assert.True(json.RootElement.GetProperty("deleted").GetBoolean());
+            Assert.Contains(
+                linkedTask.Id,
+                json.RootElement.GetProperty("taskIds").EnumerateArray().Select(item => item.GetGuid()));
+        }
 
         var deletedTargets = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
             .HandleAsync(_projectId, HumanActor(), TestContext.Current.CancellationToken);
@@ -816,6 +828,9 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(3, recreated.Order);
         Assert.Equal(createdAt, recreated.CreatedAt);
         Assert.Equal(baseRevision + 2, recreated.Revision);
+        var taskAfterRestore = await _db.Tasks.AsNoTracking().SingleAsync(
+            item => item.Id == linkedTask.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(milestone.Id, taskAfterRestore.MilestoneId);
         var restoreAudit = await _db.AuditEvents.SingleAsync(
             item => item.Action == "content.restored"
                 && item.TargetType == nameof(ContentTargetKind.Milestone)
