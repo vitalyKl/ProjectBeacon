@@ -387,6 +387,98 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ListContentVersions_RequiresMembershipOrProjectBoundContextReadToken()
+    {
+        var orgId = _db.Orgs.Single().Id;
+        var otherProject = Project.Create("Other restore project", null, orgId);
+        _db.Projects.Add(otherProject);
+        _db.ContentVersions.AddRange(
+            ContentVersion.Create(
+                _projectId,
+                ContentTargetKind.ProjectDescription,
+                _projectId,
+                1,
+                """{"description":"Private project A history"}""",
+                "Human",
+                _actorId.ToString("D")),
+            ContentVersion.Create(
+                otherProject.Id,
+                ContentTargetKind.ProjectDescription,
+                otherProject.Id,
+                1,
+                """{"description":"Private project B history"}""",
+                "Human",
+                _actorId.ToString("D")));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var handler = new ListContentVersionsHandler(HandlerSqlite.Factory(_connection));
+        var ownerResult = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            HumanActor(),
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(ownerResult.Success, ownerResult.Error);
+        Assert.Contains(ownerResult.Value!, item => item.ContentJson.Contains("Private project A history"));
+
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+        var outsiderResult = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            outsider,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(outsiderResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, outsiderResult.Kind);
+
+        var crossProjectHuman = await handler.HandleAsync(
+            otherProject.Id,
+            ContentTargetKind.ProjectDescription,
+            otherProject.Id,
+            HumanActor(),
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(crossProjectHuman.Success);
+        Assert.Equal(ErrorKind.Forbidden, crossProjectHuman.Kind);
+
+        var tokenForOtherProject = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            otherProject.Id, null, ApiTokenCapability.ContextRead);
+        var crossProjectToken = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            tokenForOtherProject,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(crossProjectToken.Success);
+        Assert.Equal(ErrorKind.Forbidden, crossProjectToken.Kind);
+
+        var tokenForCurrentProject = tokenForOtherProject with { ProjectId = _projectId };
+        var tokenResult = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            tokenForCurrentProject,
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(tokenResult.Success, tokenResult.Error);
+        Assert.Contains(tokenResult.Value!, item => item.ContentJson.Contains("Private project A history"));
+
+        var tokenWithoutContextRead = tokenForCurrentProject with
+        {
+            Capabilities = ApiTokenCapability.TaskRead
+        };
+        var noCapabilityResult = await handler.HandleAsync(
+            _projectId,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            tokenWithoutContextRead,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(noCapabilityResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, noCapabilityResult.Kind);
+    }
+
+    [Fact]
     public async Task ListDeletedContentTargets_RequiresProjectMembership()
     {
         var outsider = new ActorContext(
