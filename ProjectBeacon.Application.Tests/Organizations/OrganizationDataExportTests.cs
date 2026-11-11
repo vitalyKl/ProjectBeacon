@@ -232,15 +232,18 @@ public sealed class OrganizationDataExportTests : IDisposable
 
         var subscriptionJson = await ReadEntryAsync(archive, "billing-subscriptions.json");
         Assert.Contains("alpha", subscriptionJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-secret-key", subscriptionJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-customer-reference", subscriptionJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-subscription-reference", subscriptionJson, StringComparison.Ordinal);
         var invoiceJson = await ReadEntryAsync(archive, "billing-invoices.json");
         Assert.Contains("PB-2026-000001", invoiceJson, StringComparison.Ordinal);
         Assert.Contains("receipt-reference-123", invoiceJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-secret-key", invoiceJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-invoice-reference", invoiceJson, StringComparison.Ordinal);
         var ledgerJson = await ReadEntryAsync(archive, "billing-ledger.json");
         Assert.Contains("Marked paid manually", ledgerJson, StringComparison.Ordinal);
         Assert.Contains("receipt-reference-123", ledgerJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-secret-key", ledgerJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-webhook-event-id", ledgerJson, StringComparison.Ordinal);
         Assert.DoesNotContain("idempotency-secret-key", ledgerJson, StringComparison.Ordinal);
 
