@@ -507,7 +507,8 @@ else
         try
         {
             using var document = JsonDocument.Parse(payload);
-            if (document.RootElement.TryGetProperty("edits", out var edits))
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("edits", out var edits))
             {
                 var baseMarkdown = ExtractContextSectionBody(baseSnapshot);
                 return ProposalMarkdownEditApplier.TryApply(
@@ -516,7 +517,7 @@ else
                     : $"Preview unavailable: {error}";
             }
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
             return string.Empty;
         }
