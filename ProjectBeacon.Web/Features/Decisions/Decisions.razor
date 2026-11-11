@@ -261,7 +261,7 @@ else
         }
 
         var history = await ContentVersions.HandleAsync(
-            _project.Id, ContentTargetKind.Decision, _selected.Id, 50);
+            _project.Id, ContentTargetKind.Decision, _selected.Id, _actor, 50);
         _selectedHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
             Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
