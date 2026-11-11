@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests.Milestones;
 
+using System.Text.Json;
 using Application.Milestones;
 using Application.Common;
 using Application.Authorization;
