@@ -224,7 +224,7 @@ public sealed class CapabilityAndWorkHttpTests
                 Assert.Equal(projectAId, audit.ProjectId);
                 Assert.Null(audit.ActorUserId);
                 Assert.NotNull(audit.ActorTokenId);
-                Assert.Contains("\\"resultCode\\":\\"failed\\" ", audit.DetailsJson ?? string.Empty);
+                Assert.Contains("\"resultCode\":\"failed\"", audit.DetailsJson ?? string.Empty);
             }
         }
     }
