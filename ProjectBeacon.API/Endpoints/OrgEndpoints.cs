@@ -73,18 +73,20 @@ public static class OrgEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler)
+    private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetOrgCommand(new GetOrgRequest(orgId)));
+        var result = await handler.HandleAsync(
+            new GetOrgCommand(new GetOrgRequest(orgId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, BeaconDbContext db, HttpContext ctx)
+    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListOrgsCommand(new ListOrgsRequest()));
+        var result = await handler.HandleAsync(
+            new ListOrgsCommand(new ListOrgsRequest(), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapOrgResponse));
     }
