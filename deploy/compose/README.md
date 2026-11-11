@@ -298,7 +298,7 @@ configured key material (fail-closed).
 | Log: "Failed to determine the https port for redirect" | Expected: web binds `http://8080` only, so the app-level redirect cannot build a URL; Caddy does the HTTP→HTTPS 308 instead. No action needed |
 | No certificate / site down on 443 | DNS not propagated, or 80/443 not open (ACME HTTP-01): `docker compose logs caddy` |
 | Secure cookies / HTTPS redirect missing | `FORWARDEDHEADERS__KNOWNNETWORKS__0` must equal the docker subnet (172.29.0.0/16); check `docker inspect --format '{{range $n, $i := .Networks}}{{$n}}: {{$i.IPAddress}}{{end}}' beacon-alpha-caddy` (prints `beacon-alpha_beacon-alpha-internal: 172.29.0.x`) |
-| Rate limits hit by everyone at once | Same as above: X-Forwarded-For not honored, limiter keys all clients on the proxy IP |
+| Rate limits hit by everyone at once | Check FORWARDEDHEADERS__KNOWNNETWORKS__0 first: anonymous requests use trusted client-IP buckets; authenticated auth and upload requests also have independent per-user buckets, but an incorrect trust list collapses the IP bucket to Caddy's address |
 | Invite emails not sent | `MAIL__Host`/`MAIL__From` unset or SMTP auth failing: `docker compose logs web` |
 | Container logs unavailable | `docker compose logs ops-agent docker-log-proxy`; verify both services are up and the Docker socket bind mount exists |
 | Worker not cleaning expired records | `docker compose logs worker` — role guard or connection failure; the first tick is up to 30 min after start |
@@ -341,8 +341,10 @@ The full stack was exercised end-to-end locally with a test Caddy override
   redirects without a cookie; rate limit returns 429 after 5 auth requests
   per 60s per client.
 - forwarded headers: from the internal subnet (172.29.0.0/16) X-Forwarded-For
-  is honored (rate-limit buckets partition by it); client-side XFF spoofing
+  is honored (IP rate-limit buckets partition by it); client-side XFF spoofing
   through Caddy does NOT partition; Caddy itself issues the HTTP→HTTPS 308.
+  Authenticated auth/read and attachment-upload requests also get an independent
+  per-user bucket; anonymous auth requests remain protected by the IP bucket.
 - role guard: web pointed at the superuser role exits non-zero (fail-closed)
   with a precise diagnostic.
 - postgres down: Caddy answers 503 ("no upstreams available"), web stays up
