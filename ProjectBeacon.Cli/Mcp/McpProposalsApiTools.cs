@@ -11,10 +11,10 @@ internal static partial class McpApiTools
     private static IEnumerable<McpTool> ProposalTools() =>
     [
         new(McpToolNames.KnowledgePropose,
-            "Submit a revision-bound content proposal for human review. Only Update is supported. For RepoPatch, submit a valid unified diff and a files manifest containing gitPath, projectPath, baseHash and resultHash; use hash_file/hash_text to calculate exact SHA-256 digests. The proposal is scoped to the current Actor subtask and this tool never applies it.",
+            "Submit a revision-bound content proposal for human review. Use Update for edits to existing content; Create is supported only for a new Milestone (omit targetId, use baseRevision 0); Delete is supported for reviewed ContextSection/Milestone and accepted Decision/active Constraint targets (use the exact current baseRevision and payload {}). Existing Proposed Decision/Constraint and NeedsReview ContextSection creation remain on their existing tools. RepoPatch is Update-only and requires a valid unified diff plus a files manifest with gitPath, projectPath, baseHash and resultHash; use hash_file/hash_text for exact SHA-256 digests. The proposal is scoped to the current Actor subtask and never applies content itself.",
             () => Props(
                 ("targetKind", "string", true),
-                ("targetId", "string", true),
+                ("targetId", "string", false),
                 ("operation", "string", false),
                 ("baseRevision", "integer", true),
                 ("payload", "object", true),
@@ -49,19 +49,36 @@ internal static partial class McpApiTools
             || !Enum.IsDefined(kind))
             return new McpToolText(true, "targetKind must be a supported ContentTargetKind.");
 
-        if (!TryGuid(args, "targetId", out var targetId) || targetId == Guid.Empty)
-            return new McpToolText(true, "missing or invalid 'targetId'.");
-
         var operation = Text(args, "operation");
         if (string.IsNullOrWhiteSpace(operation))
             operation = ProposalOperation.Update.ToString();
         if (!Enum.TryParse<ProposalOperation>(operation, ignoreCase: true, out var parsedOperation)
-            || parsedOperation != ProposalOperation.Update)
-            return new McpToolText(true, "P2 supports only operation 'Update'.");
+            || !Enum.IsDefined(parsedOperation))
+            return new McpToolText(true, "operation must be Create, Update or Delete.");
 
+        var hasTargetId = TryGuid(args, "targetId", out var targetId) && targetId != Guid.Empty;
         var baseRevision = IntArg(args, "baseRevision");
-        if (baseRevision is null or < 1)
-            return new McpToolText(true, "baseRevision must be a positive integer copied from the current content target.");
+        if (parsedOperation == ProposalOperation.Create)
+        {
+            if (kind != ContentTargetKind.Milestone || hasTargetId || baseRevision != 0)
+                return new McpToolText(true,
+                    "Create is supported for a new Milestone only: omit targetId and set baseRevision to 0.");
+        }
+        else
+        {
+            if (!hasTargetId)
+                return new McpToolText(true, "Update and Delete require the exact existing targetId.");
+            if (baseRevision is null or < 1)
+                return new McpToolText(true, "Update and Delete require a positive current baseRevision.");
+            if (parsedOperation == ProposalOperation.Delete
+                && kind is not (ContentTargetKind.ContextSection or ContentTargetKind.Decision
+                    or ContentTargetKind.Constraint or ContentTargetKind.Milestone))
+                return new McpToolText(true,
+                    "Delete is supported for ContextSection, Decision, Constraint and Milestone only.");
+            if (parsedOperation == ProposalOperation.Delete && args?["payload"] is JsonObject deletePayload
+                && deletePayload.Count != 0)
+                return new McpToolText(true, "Delete proposals require an empty object payload.");
+        }
 
         var rationale = Text(args, "rationaleMarkdown");
         if (string.IsNullOrWhiteSpace(rationale) || rationale.Trim().Length > 1000)
