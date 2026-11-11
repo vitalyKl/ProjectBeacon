@@ -151,6 +151,20 @@ public sealed partial class AuthorizationServiceTests
     }
 
     [Fact]
+    public async Task Token_WithTaskWrite_TaskStepUpdate_ReturnsForbidden()
+    {
+        var result = await _auth.CanAsync(
+            _db,
+            Token(ApiTokenCapability.TaskWrite),
+            ResourceType.TaskStep,
+            AuthAction.Update,
+            projectId: _projectId,
+            ct: TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public async Task Token_WithContextRead_ContextRead_ReturnsOk()
     {
         var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.ContextRead), ResourceType.Context, AuthAction.Read, ct: TestContext.Current.CancellationToken);
