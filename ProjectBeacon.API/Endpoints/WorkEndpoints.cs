@@ -16,7 +16,8 @@ public static class WorkEndpoints
 {
     /// <summary>
     /// Maps <c>POST /v1/work/finish_work</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
-    /// The actor passed to the handler is <c>HttpContext.GetActor().UserId</c>, not a body field. <c>done</c> still depends on the handler requiring <c>reviewRunId</c>.
+    /// The full caller identity, including API-token project binding, is passed to the handler;
+    /// no caller id is accepted from the request body.
     /// </summary>
     public static IEndpointRouteBuilder MapWorkEndpoints(this IEndpointRouteBuilder app)
     {
@@ -32,19 +33,20 @@ public static class WorkEndpoints
         CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
+        if (!actor.IsHuman && !actor.IsApiToken)
+            return ProblemResults.Unauthorized();
+        if (actor.IsHuman && actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var command = new FinishWorkCommand(new Application.Tasks.FinishWorkRequest(
             request.TaskId,
             request.Result,
             request.Output,
-            actor.UserId!.Value.ToString(),
             request.Review is null
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),
             request.ReviewTranscriptRef,
-            request.ReviewRunId));
+            request.ReviewRunId), actor);
 
         var result = await handler.HandleAsync(command, ct);
 

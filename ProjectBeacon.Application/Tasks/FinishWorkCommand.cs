@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
@@ -19,12 +20,19 @@ using System.Text;
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public FinishWorkHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public FinishWorkHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     /// <summary>
-    /// <c>done</c> requires a review run id for a run of this task that is not failed and is check proof, plus review notes or output. Unfixed regressions block done.
-    /// The actor id string must be a project member, a system admin, or match <c>BEACON_WORKER_TOKEN</c> in constant time (remark: the HTTP layer supplies the principal user id, not a body field).
+    /// <c>done</c> requires a review run id for a run of this task that is not failed and is
+    /// check proof, plus review notes or output. Unfixed regressions block done.
+    /// Human and API-token permissions are checked against the server-resolved ActorContext.
+    /// Internal workers must present the separately supplied worker secret.
     /// </summary>
     public async Task<Result> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
     {
@@ -38,8 +46,19 @@ public class FinishWorkHandler
         if (task is null)
             return Result.Failure("Task not found.");
 
-        if (!await ActorHasAccess(db, command.Request.ActorId, task.ProjectId, ct))
-            return Result.Failure("Actor does not have access to this project.");
+        var permission = command.Actor.IsWorker
+            ? WorkerHasAccess(command.WorkerToken)
+                ? Result.Ok()
+                : Result.Forbidden()
+            : await _authorization.CanAsync(
+                db,
+                command.Actor,
+                ResourceType.Work,
+                AuthAction.Execute,
+                projectId: task.ProjectId,
+                ct: ct);
+        if (!permission.Success)
+            return Result.Failure(permission);
 
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
@@ -200,7 +219,10 @@ public class FinishWorkHandler
                 }
             }
 
-            if (Guid.TryParse(command.Request.ActorId, out var userId))
+            // Task comments are human-authored content. API-token completions are
+            // authorized as the token itself (and audited by its creator metadata elsewhere),
+            // not silently attributed as a human action. Internal workers have no user author.
+            if (command.Actor.IsHuman && command.Actor.UserId is { } userId)
             {
                 db.TaskComments.Add(TaskComment.Create(
                     $"Work finished: {command.Request.Result}" +
@@ -241,17 +263,12 @@ public class FinishWorkHandler
         return await db.ReviewRuns.FirstOrDefaultAsync(r => r.Id == reviewRunId && r.TaskId == taskId, ct);
     }
 
-    private static async Task<bool> ActorHasAccess(IBeaconDb db, string actorId, Guid projectId, CancellationToken ct)
+    private static bool WorkerHasAccess(string? suppliedWorkerToken)
     {
-        var workerToken = Environment.GetEnvironmentVariable("BEACON_WORKER_TOKEN");
-        if (!string.IsNullOrEmpty(workerToken) && FixedTimeEquals(actorId, workerToken))
-            return true;
-
-        if (!Guid.TryParse(actorId, out var userId))
-            return false;
-
-        return await db.ProjectMembers.AnyAsync(m => m.ProjectId == projectId && m.UserId == userId, ct)
-            || await db.Users.AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
+        var configuredWorkerToken = Environment.GetEnvironmentVariable("BEACON_WORKER_TOKEN");
+        return !string.IsNullOrEmpty(configuredWorkerToken)
+            && !string.IsNullOrEmpty(suppliedWorkerToken)
+            && FixedTimeEquals(suppliedWorkerToken, configuredWorkerToken);
     }
 
     private static string FormatReview(FinishWorkReview review, string? output)

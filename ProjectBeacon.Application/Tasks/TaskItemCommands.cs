@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Authorization;
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 /// <summary>
 /// Title, project, priority, and type. Label, milestone, path, and kind are optional.
@@ -88,20 +89,24 @@ public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : IComman
 /// </summary>
 public record FinishWorkReview(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);
 /// <summary>
-/// Result is done, failed, skipped, or partial. ActorId is the principal user id supplied by the host, not a client body field. Done requires ReviewRunId.
+/// Result is done, failed, skipped, or partial. Caller identity is supplied separately
+/// through the server-resolved ActorContext on FinishWorkCommand. Done requires ReviewRunId.
 /// </summary>
 public record FinishWorkRequest(
     string TaskId,
     string Result,
     string? Output,
-    string ActorId,
     FinishWorkReview? Review = null,
     string? ReviewTranscriptRef = null,
     Guid? ReviewRunId = null);
 /// <summary>
-/// Command for finish work.
+/// Command for finish work. Actor identity is resolved at the trusted HTTP or worker boundary,
+/// never copied from a request DTO.
 /// </summary>
-public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
+public record FinishWorkCommand(
+    FinishWorkRequest Request,
+    ActorContext Actor,
+    string? WorkerToken = null) : ICommand<Result>;
 /// <summary>
 /// A task row, including status, priority, review notes, and timestamps.
 /// </summary>

@@ -149,6 +149,65 @@ public sealed class CapabilityAndWorkHttpTests
         }
     }
 
+    [Fact]
+    public async Task FinishWork_ApiTokenMustBeBoundToTargetProject()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "Agent project", orgId });
+        var projectAId = projectA.GetProperty("id").GetGuid();
+        var projectB = await PostJson(client, "/v1/projects", new { name = "Other project", orgId });
+        var projectBId = projectB.GetProperty("id").GetGuid();
+
+        var taskA = await PostJson(client, $"/v1/projects/{projectAId}/tasks", new
+        {
+            title = "Scoped task",
+            projectId = projectAId,
+            priority = 1,
+            type = 3
+        });
+        var taskB = await PostJson(client, $"/v1/projects/{projectBId}/tasks", new
+        {
+            title = "Foreign task",
+            projectId = projectBId,
+            priority = 1,
+            type = 3
+        });
+        var tokenResponse = await PostJson(client, $"/v1/projects/{projectAId}/tokens", new
+        {
+            projectId = projectAId,
+            name = "finish-work-token",
+            capabilities = (int)Domain.Enums.ApiTokenCapability.TaskWrite
+        });
+        var apiToken = tokenResponse.GetProperty("token").GetString()!;
+        var creator = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var forgedActorId = creator.GetProperty("id").GetGuid().ToString();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+        var foreign = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskB.GetProperty("id").GetGuid().ToString(),
+            result = "failed",
+            output = "must not cross project",
+            actorId = forgedActorId
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
+
+        var scoped = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskA.GetProperty("id").GetGuid().ToString(),
+            result = "failed",
+            output = "scoped token may finish this task",
+            actorId = Guid.NewGuid().ToString()
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, scoped.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
