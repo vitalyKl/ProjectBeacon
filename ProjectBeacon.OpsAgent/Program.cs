@@ -61,6 +61,18 @@ app.MapGet("/internal/v1/logs/{service}", async (
             title: "The restricted Docker log proxy timed out.",
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+    catch (InvalidDataException)
+    {
+        return Results.Problem(
+            title: "The restricted Docker log proxy returned an invalid response.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        return Results.Problem(
+            title: "The restricted Docker log proxy returned an invalid response.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
 });
 
 app.Run();
