@@ -286,8 +286,23 @@ else
             : [];
         if (!deleted.Success)
             Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
+        var selectedConstraintId = _selectedConstraint?.Id;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
+        if (selectedConstraintId is { } constraintId)
+        {
+            _selectedConstraint = _constraints.FirstOrDefault(item => item.Id == constraintId);
+            if (_selectedConstraint is null)
+            {
+                _constraintHistory = [];
+            }
+            else
+            {
+                var history = await ContentVersions.HandleAsync(
+                    _project.Id, ContentTargetKind.Constraint, constraintId, 50);
+                _constraintHistory = history.Success ? history.Value!.ToList() : [];
+            }
+        }
         var revisions = await ListRevisions.HandleAsync();
         _revisions = revisions.Success ? revisions.Value!.ToList() : [];
     }
@@ -499,9 +514,6 @@ else
             }
 
             await Reload();
-            var selected = _constraints.FirstOrDefault(item => item.Id == constraintId);
-            if (selected is not null)
-                await LoadConstraintHistory(selected);
             Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
