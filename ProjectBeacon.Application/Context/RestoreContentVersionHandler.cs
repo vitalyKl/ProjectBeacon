@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Context;
 
 using System.Text.Json;
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
 using Application.Persistence;
 using Application.Proposals;
@@ -23,16 +24,26 @@ public sealed class RestoreContentVersionHandler
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ContentWriter _contentWriter;
+    private readonly IAuditWriter? _auditWriter;
 
     public RestoreContentVersionHandler(IBeaconDbFactory dbFactory)
-        : this(dbFactory, new ContentWriter())
+        : this(dbFactory, new ContentWriter(), null)
     {
     }
 
     public RestoreContentVersionHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+        : this(dbFactory, contentWriter, null)
+    {
+    }
+
+    public RestoreContentVersionHandler(
+        IBeaconDbFactory dbFactory,
+        ContentWriter contentWriter,
+        IAuditWriter? auditWriter)
     {
         _dbFactory = dbFactory;
         _contentWriter = contentWriter;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<RestoreContentVersionDto>> HandleAsync(
@@ -299,6 +310,31 @@ public sealed class RestoreContentVersionHandler
         if (!changed)
             return Result.Ok(new RestoreContentVersionDto(
                 source.Id, source.TargetKind, source.TargetId, currentRevision, false));
+
+        var restoredRevision = checked(currentRevision + 1);
+        if (_auditWriter is not null)
+        {
+            var orgId = await db.Projects
+                .Where(project => project.Id == command.ProjectId)
+                .Select(project => (Guid?)project.OrgId)
+                .FirstOrDefaultAsync(ct);
+            if (orgId is null)
+                return Result.Failure<RestoreContentVersionDto>("Project not found.");
+
+            var auditDetails = JsonSerializer.Serialize(new
+            {
+                sourceVersionId = source.Id,
+                restoredRevision
+            }, JsonOptions);
+            _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                command.Actor,
+                "content.restored",
+                source.TargetKind.ToString(),
+                source.TargetId.ToString("D"),
+                orgId,
+                command.ProjectId,
+                detailsJson: auditDetails));
+        }
 
         var saved = await _contentWriter.SaveAsync(
             db, target, attribution.Type ?? "Human", attribution.Id, ct);
