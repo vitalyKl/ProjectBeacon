@@ -34,9 +34,16 @@ public static class ProposalPolicyCatalog
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static bool IsSupported(ContentTargetKind targetKind, ProposalOperation operation) =>
-        Enum.IsDefined(targetKind)
-        && Enum.IsDefined(operation)
-        && operation == ProposalOperation.Update;
+        operation switch
+        {
+            ProposalOperation.Create => targetKind == ContentTargetKind.Milestone,
+            ProposalOperation.Update => Enum.IsDefined(targetKind),
+            ProposalOperation.Delete => targetKind is ContentTargetKind.ContextSection
+                or ContentTargetKind.Decision
+                or ContentTargetKind.Constraint
+                or ContentTargetKind.Milestone,
+            _ => false
+        };
 
     /// <summary>
     /// Automatic proposal application is restricted to documentation RepoPatch updates.
@@ -47,15 +54,17 @@ public static class ProposalPolicyCatalog
 
     public static string RestrictionReason(ContentTargetKind targetKind, ProposalOperation operation)
     {
-        if (operation != ProposalOperation.Update)
-            return "Create and Delete proposals are not implemented in P2.";
+        if (!IsSupported(targetKind, operation))
+            return "This target/operation pair is not currently supported.";
         if (targetKind is ContentTargetKind.Decision or ContentTargetKind.Constraint)
-            return "Decision and Constraint proposals always require an Owner/Admin decision.";
+            return "Decision and Constraint changes always require an Owner/Admin decision.";
+        if (operation == ProposalOperation.Create)
+            return "New milestones always require manual human review.";
+        if (operation == ProposalOperation.Delete)
+            return "Deletes always require manual human review and can be restored from content history.";
         if (targetKind == ContentTargetKind.RepoPatch)
             return "Repository patches require explicit documentation profile and path grants before Auto can be used.";
-        if (operation == ProposalOperation.Update && IsSupported(targetKind, operation))
-            return "Updates to existing accepted content always require manual human review.";
-        return "This target/operation pair is not currently supported.";
+        return "Updates to existing accepted content always require manual human review.";
     }
 
     public static string Key(ContentTargetKind targetKind, ProposalOperation operation) =>
