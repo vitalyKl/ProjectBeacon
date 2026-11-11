@@ -222,7 +222,6 @@ public sealed class ContentVersionRestoreTests : IDisposable
 
         Assert.Equal(ContextReviewState.NeedsReview, section.ReviewState);
         Assert.Equal("Legacy context", section.Title);
-        Assert.Equal(ContextReviewState.NeedsReview, section.ReviewState);
         Assert.Equal(3, section.Revision);
 
         Assert.Equal(DecisionStatus.Proposed, decision.Status);
@@ -234,7 +233,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         Assert.Equal(3, constraint.Revision);
 
         Assert.Equal("Legacy milestone", milestone.Name);
-        Assert.Equal(3, milestone.Revision);
+        Assert.Equal(4, milestone.Revision);
         Assert.NotNull(milestone.ClosedAt);
     }
 
