@@ -170,11 +170,14 @@ authentication cookies remain `Secure` independently because their cookie policy
 `SecurePolicy.Always`; that flag does not replace correct forwarded-header handling.
 
 Sensitive authentication endpoints and task attachment uploads apply fixed-window limits per
-trusted client IP. Once a human is authenticated, they also consume a separate per-user bucket;
-auth, auth-read and attachment-upload have independent allowances. Anonymous login,
-registration and recovery requests remain IP-limited because a verified user identity does not
-exist yet. This second identity bucket prevents authenticated users behind a shared ingress from
-sharing one account allowance, but it does not replace the trusted-proxy configuration above.
+trusted client IP. After customer cookie/JWT authentication, humans also consume a separate
+per-user bucket. After `bcn_` validation, API tokens consume a per-creator bucket, falling back
+to token id for tokens without a creator. The API token identity limiter runs after token
+validation, while the IP limiter remains before token lookup. The `auth`, `auth-read` and
+`attachment-upload` policies have independent allowances. Anonymous bootstrap, login,
+registration and recovery requests remain IP-limited because no verified identity exists yet.
+This prevents authenticated humans and agent tokens behind a shared ingress from consuming one
+common account allowance, but it does not replace the trusted-proxy configuration above.
 
 Do not set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` — it bypasses the trust lists and would honor
 forwarded headers from any client. Without the variables, forwarded headers are ignored: the
