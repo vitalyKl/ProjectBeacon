@@ -86,6 +86,22 @@ public sealed class RateLimitPartitioningHttpTests
     }
 
     [Fact]
+    public async Task AttachmentUploadLimitIsPerAuthenticatedUserAcrossClientIps()
+    {
+        await using var app = await BuildAppAsync(attachmentUploadPermitLimit: 2);
+        using var client = app.GetTestClient();
+
+        for (var i = 0; i < 2; i++)
+            Assert.Equal(HttpStatusCode.OK, (await UploadAsync(client, ClientA, UserA)).StatusCode);
+
+        // A new IP does not reset the authenticated user's upload allowance.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await UploadAsync(client, ClientB, UserA)).StatusCode);
+
+        // Another user on that IP has an independent account bucket.
+        Assert.Equal(HttpStatusCode.OK, (await UploadAsync(client, ClientB, UserB)).StatusCode);
+    }
+
+    [Fact]
     public async Task UntrustedPeerCannotSpoofForwardedClientIp()
     {
         const string untrustedPeer = "198.51.100.99";
@@ -100,6 +116,20 @@ public sealed class RateLimitPartitioningHttpTests
     }
 
     [Fact]
+    public async Task ExplicitTrustListReplacesDefaultLoopbackTrust()
+    {
+        await using var app = await BuildAppAsync("127.0.0.1");
+        using var client = app.GetTestClient();
+
+        for (var i = 1; i <= 5; i++)
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, $"192.0.2.{i}")).StatusCode);
+
+        // Loopback is not trusted once an explicit proxy/network allowlist is configured.
+        // All forwarded values are ignored and continue consuming the loopback IP bucket.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await PostAsync(client, "192.0.2.200")).StatusCode);
+    }
+
+    [Fact]
     public async Task NoForwardedFor_FallsBackToProxyRemoteIp()
     {
         await using var app = await BuildAppAsync();
@@ -110,13 +140,13 @@ public sealed class RateLimitPartitioningHttpTests
         Assert.Equal(HttpStatusCode.TooManyRequests, (await PostAsync(client, null)).StatusCode);
     }
 
-    private static async Task<WebApplication> BuildAppAsync(string remoteIp = ProxyIp)
+    private static async Task<WebApplication> BuildAppAsync(string remoteIp = ProxyIp, int attachmentUploadPermitLimit = 10)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
         builder.Configuration["ForwardedHeaders:KnownNetworks:0"] = $"{ProxyIp}/32";
-        builder.Services.AddRateLimiter(options => AuthRateLimiter.Configure(options, 5, 60, 5));
+        builder.Services.AddRateLimiter(options => AuthRateLimiter.Configure(options, 5, 60, 5, attachmentUploadPermitLimit));
 
         var app = builder.Build();
 
@@ -146,9 +176,23 @@ public sealed class RateLimitPartitioningHttpTests
         app.UseRateLimiter();
         app.MapPost("/auth-test", () => Results.Ok()).RequireRateLimiting("auth");
         app.MapGet("/auth-read-test", () => Results.Ok()).RequireRateLimiting("auth-read");
+        app.MapPut("/attachment-upload-test", () => Results.Ok()).RequireRateLimiting("attachment-upload");
 
         await app.StartAsync();
         return app;
+    }
+
+    private static async Task<HttpResponseMessage> UploadAsync(
+        HttpClient client,
+        string? forwardedFor,
+        string? userId = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/attachment-upload-test");
+        if (forwardedFor is not null)
+            request.Headers.Add("X-Forwarded-For", forwardedFor);
+        if (userId is not null)
+            request.Headers.Add("X-Test-User", userId);
+        return await client.SendAsync(request);
     }
 
     private static async Task<HttpResponseMessage> GetAsync(
