@@ -19,6 +19,7 @@ public static class TaskEndpoints
 {
     /// <summary>
     /// Maps <c>GET /v1/projects/{projectId:guid}/tasks</c>, <c>GET /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>GET /v1/tasks/{taskId:guid}</c>, and <c>GET /v1/tasks/{taskId:guid}/steps</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
+    /// Task comments and step toggling/deletion require Human identity; TaskWrite tokens may add steps but cannot impersonate comment or step authors.
     /// Maps <c>POST /v1/projects/{projectId:guid}/tasks</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>PUT /v1/tasks/{taskId:guid}</c>, <c>DELETE /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>DELETE /v1/tasks/{taskId:guid}</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim</c>, <c>PATCH /v1/tasks/{taskId:guid}/claim</c>, <c>POST /v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments</c>, <c>POST /v1/tasks/{taskId:guid}/comments</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies</c>, <c>PUT /v1/tasks/{taskId:guid}/dependencies</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes</c>, <c>PATCH /v1/tasks/{taskId:guid}/review-notes</c>, <c>POST /v1/tasks/{taskId:guid}/steps</c>, <c>PATCH /v1/steps/{stepId:guid}</c>, and <c>DELETE /v1/steps/{stepId:guid}</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>. Task deletion requires a human user.
     /// </summary>
     public static IEndpointRouteBuilder MapTaskEndpoints(this IEndpointRouteBuilder app)
@@ -37,16 +38,16 @@ public static class TaskEndpoints
         app.MapPatch("/v1/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPut("/v1/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/tasks/{taskId:guid}/steps", ListSteps).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/steps", AddStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/steps/{stepId:guid}", DeleteStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/steps/{stepId:guid}", DeleteStep).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
     }
