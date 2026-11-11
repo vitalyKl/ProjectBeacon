@@ -103,13 +103,19 @@ public class Milestone : Entity, IProjectScoped
 
     public void Close()
     {
+        if (ClosedAt is not null)
+            return;
         ClosedAt = DateTime.UtcNow;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void Reopen()
     {
+        if (ClosedAt is null)
+            return;
         ClosedAt = null;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 }
