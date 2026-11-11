@@ -497,7 +497,7 @@ else
         {
             var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
             _labels = labels.Success ? labels.Value!.ToList() : [];
-            var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId)));
+            var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
             _milestones = milestones.Success ? milestones.Value!.ToList() : [];
             await ReloadTaskProposals();
         }
