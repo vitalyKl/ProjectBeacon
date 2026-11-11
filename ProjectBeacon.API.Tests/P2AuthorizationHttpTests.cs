@@ -475,7 +475,41 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
-    public async Task ApiToken_WithReadCapabilities_CanReadProjectLabelsAndContextNodes()
+    public async Task ApiToken_TaskCapabilities_CannotReadOrAdministerModelRegistryOrProxy()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Model API Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Model API Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "task-capability-model-deny",
+            capabilities = (int)(Domain.Enums.ApiTokenCapability.TaskRead | Domain.Enums.ApiTokenCapability.TaskWrite)
+        });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", token.GetProperty("token").GetString());
+
+        var registry = await client.GetAsync("/v1/models", TestContext.Current.CancellationToken);
+        var proxyStatus = await client.GetAsync("/v1/models/proxy/status", TestContext.Current.CancellationToken);
+        var reload = await client.PostAsync("/v1/models/proxy/reload", content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var unload = await client.PostAsync("/v1/models/proxy/unload", content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, registry.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, proxyStatus.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, reload.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, unload.StatusCode);
+    }
+
+    [Fact]
+    public async Task ApiToken_WithReadCapabilities_CanReadLabelsAndContextNodes_ButNotProjectMetadata()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -487,7 +521,8 @@ public sealed class P2AuthorizationHttpTests
         var project = await PostJson(client, "/v1/projects", new { name = "Read API Project", orgId });
         var projectId = project.GetProperty("id").GetGuid();
 
-        // TaskRead grants project metadata and label reads; ContextRead grants context-node reads.
+        // TaskRead grants explicitly exposed label reads; ContextRead grants context reads.
+        // Neither capability grants project metadata.
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {
             projectId,
@@ -501,8 +536,7 @@ public sealed class P2AuthorizationHttpTests
         var labelsResponse = await client.GetAsync($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
         var nodesResponse = await client.GetAsync($"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
 
-        Assert.True(projectResponse.StatusCode == HttpStatusCode.OK,
-            $"Project read returned {(int)projectResponse.StatusCode}: {await projectResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+        Assert.Equal(HttpStatusCode.Forbidden, projectResponse.StatusCode);
         Assert.True(labelsResponse.StatusCode == HttpStatusCode.OK,
             $"Label read returned {(int)labelsResponse.StatusCode}: {await labelsResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
         Assert.True(nodesResponse.StatusCode == HttpStatusCode.OK,
