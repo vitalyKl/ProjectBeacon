@@ -48,6 +48,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlatformOperationsService, PlatformOperationsService>();
         services.AddHttpClient<IPlatformContainerLogClient, HttpPlatformContainerLogClient>(client =>
             client.Timeout = TimeSpan.FromSeconds(12));
+        services.AddHttpClient<IPlatformContainerLogClient, HttpPlatformContainerLogClient>(client =>
+            client.Timeout = TimeSpan.FromSeconds(12));
 
         return services;
     }
