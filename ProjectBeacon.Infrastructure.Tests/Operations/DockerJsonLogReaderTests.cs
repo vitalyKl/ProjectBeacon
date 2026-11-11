@@ -89,6 +89,17 @@ public sealed class DockerEngineLogReaderTests
     }
 
     [Fact]
+    public void DockerLogProxyReplayNonceStore_RejectsDuplicateNonces()
+    {
+        var store = new ProjectBeacon.DockerLogProxy.ReplayNonceStore();
+        var now = DateTimeOffset.Parse("2026-11-11T08:00:00Z");
+        const string nonce = "fedcba9876543210fedcba9876543210";
+
+        Assert.True(store.TryAccept(nonce, now));
+        Assert.False(store.TryAccept(nonce, now.AddSeconds(1)));
+    }
+
+    [Fact]
     public void ReplayNonceStore_RejectsDuplicateNonces()
     {
         var store = new OpsAgentReplayNonceStore();
