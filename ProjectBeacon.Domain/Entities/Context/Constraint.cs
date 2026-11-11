@@ -52,6 +52,7 @@ public class Constraint : Entity, IProjectScoped
         if (Status == ConstraintStatus.Active)
             return;
         Status = ConstraintStatus.Active;
+        Revision++;
     }
 
     public void Reject()
