@@ -53,7 +53,15 @@ public class GetCurrentProjectHandler
     }
 
     private static ProjectDto MapToDto(Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
+        new(
+            project.Id,
+            project.Name,
+            project.Description,
+            project.OrgId,
+            project.CreatedAt,
+            project.UpdatedAt,
+            project.ReviewCheckCommand,
+            project.Revision);
 }
 /// <summary>
 /// Counts for the dashboard: projects, tasks, in progress, and done.
