@@ -215,18 +215,18 @@ public static class TaskEndpoints
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
 
-    private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
+    private static async Task<IResult> ListSteps(Guid taskId, HttpContext ctx, ListTaskStepsHandler handler)
     {
-        var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
+        var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId), ctx.GetActor()));
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/steps</c>.</summary>
     public record AddStepBody(string Title);
 
-    private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, AddTaskStepHandler handler)
+    private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, HttpContext ctx, AddTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title)));
+        var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title), ctx.GetActor()));
         return result.Success
             ? Results.Created($"/v1/steps/{result.Value!.Id}", result.Value)
             : result.FromResult();
@@ -235,15 +235,15 @@ public static class TaskEndpoints
     /// <summary>JSON body for <c>PATCH /v1/steps/{stepId:guid}</c>.</summary>
     public record ToggleStepBody(bool Done);
 
-    private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, ToggleTaskStepHandler handler)
+    private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, HttpContext ctx, ToggleTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done)));
+        var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done), ctx.GetActor()));
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteStep(Guid stepId, DeleteTaskStepHandler handler)
+    private static async Task<IResult> DeleteStep(Guid stepId, HttpContext ctx, DeleteTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId)));
+        var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId), ctx.GetActor()));
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 }

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -35,6 +36,7 @@ public sealed class TaskStepHandlerTests : IDisposable
     {
         Guid taskId;
         Guid projectId;
+        Guid userId;
         using (TenantScope.EnterUnscoped())
         {
             var user = User.Create("dev", "dev@beacon.local", "hash");
@@ -50,27 +52,30 @@ public sealed class TaskStepHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
+            userId = user.Id;
         }
 
+        var actor = new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+        var authorization = new AuthorizationService();
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var factory = Factory(tenant);
 
-        var added = await new AddTaskStepHandler(factory).HandleAsync(
-            new AddTaskStepCommand(new AddTaskStepRequest(taskId, "Write tests")), TestContext.Current.CancellationToken);
+        var added = await new AddTaskStepHandler(factory, authorization).HandleAsync(
+            new AddTaskStepCommand(new AddTaskStepRequest(taskId, "Write tests"), actor), TestContext.Current.CancellationToken);
         Assert.True(added.Success, added.Error);
         Assert.False(added.Value!.IsDone);
 
-        var listed = await new ListTaskStepsHandler(factory).HandleAsync(
-            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)), TestContext.Current.CancellationToken);
+        var listed = await new ListTaskStepsHandler(factory, authorization).HandleAsync(
+            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId), actor), TestContext.Current.CancellationToken);
         Assert.Single(listed.Value!);
 
-        var toggled = await new ToggleTaskStepHandler(factory).HandleAsync(
-            new ToggleTaskStepCommand(new ToggleTaskStepRequest(added.Value.Id, true)), TestContext.Current.CancellationToken);
+        var toggled = await new ToggleTaskStepHandler(factory, authorization).HandleAsync(
+            new ToggleTaskStepCommand(new ToggleTaskStepRequest(added.Value.Id, true), actor), TestContext.Current.CancellationToken);
         Assert.True(toggled.Value!.IsDone);
 
-        var deleted = await new DeleteTaskStepHandler(factory).HandleAsync(
-            new DeleteTaskStepCommand(new DeleteTaskStepRequest(added.Value.Id)), TestContext.Current.CancellationToken);
+        var deleted = await new DeleteTaskStepHandler(factory, authorization).HandleAsync(
+            new DeleteTaskStepCommand(new DeleteTaskStepRequest(added.Value.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(deleted.Success);
         var empty = await new ListTaskStepsHandler(factory).HandleAsync(
             new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)), TestContext.Current.CancellationToken);
@@ -80,8 +85,8 @@ public sealed class TaskStepHandlerTests : IDisposable
     [Fact]
     public async Task Add_RejectsBlankTitle()
     {
-        var result = await new AddTaskStepHandler(Factory()).HandleAsync(
-            new AddTaskStepCommand(new AddTaskStepRequest(Guid.NewGuid(), "  ")), TestContext.Current.CancellationToken);
+        var result = await new AddTaskStepHandler(Factory(), new AuthorizationService()).HandleAsync(
+            new AddTaskStepCommand(new AddTaskStepRequest(Guid.NewGuid(), "  "), ActorContext.Anonymous), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
     }
 }

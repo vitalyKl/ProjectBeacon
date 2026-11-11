@@ -141,7 +141,7 @@ public record ListTaskStepsRequest(Guid TaskId);
 /// <summary>
 /// Command for list task steps.
 /// </summary>
-public record ListTaskStepsCommand(ListTaskStepsRequest Request) : ICommand<Result<IList<TaskStepDto>>>;
+public record ListTaskStepsCommand(ListTaskStepsRequest Request, ActorContext Actor) : ICommand<Result<IList<TaskStepDto>>>;
 /// <summary>
 /// Fields for add task step.
 /// </summary>
@@ -149,7 +149,7 @@ public record AddTaskStepRequest(Guid TaskId, string Title);
 /// <summary>
 /// Command for add task step.
 /// </summary>
-public record AddTaskStepCommand(AddTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+public record AddTaskStepCommand(AddTaskStepRequest Request, ActorContext Actor) : ICommand<Result<TaskStepDto>>;
 /// <summary>
 /// Step id and whether it is done.
 /// </summary>
@@ -157,7 +157,7 @@ public record ToggleTaskStepRequest(Guid StepId, bool Done);
 /// <summary>
 /// Command for toggle task step.
 /// </summary>
-public record ToggleTaskStepCommand(ToggleTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+public record ToggleTaskStepCommand(ToggleTaskStepRequest Request, ActorContext Actor) : ICommand<Result<TaskStepDto>>;
 /// <summary>
 /// Fields for delete task step.
 /// </summary>
@@ -165,4 +165,4 @@ public record DeleteTaskStepRequest(Guid StepId);
 /// <summary>
 /// Command for delete task step.
 /// </summary>
-public record DeleteTaskStepCommand(DeleteTaskStepRequest Request) : ICommand<Result>;
+public record DeleteTaskStepCommand(DeleteTaskStepRequest Request, ActorContext Actor) : ICommand<Result>;
