@@ -822,6 +822,16 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.True(approved.Success, approved.Error);
         Assert.Equal(ContextReviewState.Reviewed, approved.Value!.ReviewState);
         Assert.False(approved.Value.Deleted);
+        var approvedHistory = await _db.ContentVersions
+            .Where(version => version.TargetKind == ContentTargetKind.ContextSection
+                && version.TargetId == context.Id)
+            .OrderBy(version => version.Revision)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2 }, approvedHistory.Select(version => version.Revision).ToArray());
+        using (var approvedSnapshot = System.Text.Json.JsonDocument.Parse(approvedHistory[^1].ContentJson))
+            Assert.Equal("Reviewed", approvedSnapshot.RootElement.GetProperty("reviewState").GetString());
+        await _db.Entry(context).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, context.Revision);
         Assert.Contains(await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
             action => action == "context.draft.approved");
 
