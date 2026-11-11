@@ -113,13 +113,12 @@ public class BootstrapHandler
 
                 if (existingAdminId is { } existingId)
                 {
-                    await transaction.CommitAsync(ct);
-
                     // The preceding attempt may have committed successfully but lost its
                     // acknowledgement. In that case this is our own bootstrap, not a
                     // competing administrator; return the same one-time password.
                     if (existingId == user.Id)
                     {
+                        await transaction.CommitAsync(ct);
                         return Result.Ok(new BootstrapResponse(
                             user.Id, user.Login, user.Email, user.IsAdmin, password));
                     }
@@ -132,9 +131,9 @@ public class BootstrapHandler
                     {
                         _auditWriter!.Stage(db, deniedEvent);
                         await db.SaveChangesAsync(ct);
-                        await transaction.CommitAsync(ct);
                     }
 
+                    await transaction.CommitAsync(ct);
                     return Result.Failure<BootstrapResponse>(
                         "Bootstrap already completed.", ErrorKind.Conflict);
                 }
