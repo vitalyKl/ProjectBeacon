@@ -54,6 +54,119 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreLegacySnapshots_DoesNotUpgradeUnknownLifecycleState()
+    {
+        var section = ContextSection.Create(
+            "goals", "Legacy context", "Legacy context body", _projectId,
+            ContextScopeType.Project);
+        var decision = Decision.Create(
+            "Legacy decision", "Context", "Legacy decision body", _projectId);
+        var constraint = Constraint.Create(
+            "Legacy constraint", ConstraintKind.Must, _projectId, "src/");
+        var milestone = Milestone.Create(
+            "Legacy milestone", "Legacy milestone body", _projectId, 1);
+        _db.ContextSections.Add(section);
+        _db.Decisions.Add(decision);
+        _db.Constraints.Add(constraint);
+        _db.Milestones.Add(milestone);
+
+        var legacyVersions = new[]
+        {
+            ContentVersion.Create(
+                _projectId, ContentTargetKind.ContextSection, section.Id, 1,
+                """{"sectionId":"goals","key":"","title":"Legacy context","bodyMarkdown":"Legacy context body","ordinal":0,"scopeType":0,"repoId":null,"taskId":null,"path":""}""",
+                "Human", _actorId.ToString("D")),
+            ContentVersion.Create(
+                _projectId, ContentTargetKind.Decision, decision.Id, 1,
+                """{"title":"Legacy decision","context":"Context","decisionBody":"Legacy decision body","consequences":null}""",
+                "Human", _actorId.ToString("D")),
+            ContentVersion.Create(
+                _projectId, ContentTargetKind.Constraint, constraint.Id, 1,
+                """{"body":"Legacy constraint","scopePath":"src/","kind":0}""",
+                "Human", _actorId.ToString("D")),
+            ContentVersion.Create(
+                _projectId, ContentTargetKind.Milestone, milestone.Id, 1,
+                """{"name":"Legacy milestone","description":"Legacy milestone body","order":1}""",
+                "Human", _actorId.ToString("D"))
+        };
+        _db.ContentVersions.AddRange(legacyVersions);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        section.Update(title: "Changed context", bodyMarkdown: "Changed context body");
+        decision.UpdateContent("Changed decision", "Changed context", "Changed decision body", "Changed consequences");
+        constraint.UpdateContent("Changed constraint", "tests/");
+        milestone.Close();
+
+        var writer = new ContentWriter();
+        foreach (var entity in new object[] { section, decision, constraint, milestone })
+        {
+            var saved = await writer.SaveAsync(
+                _db, entity, "Human", _actorId.ToString("D"), TestContext.Current.CancellationToken);
+            Assert.True(saved.Success, saved.Error);
+        }
+
+        // Keep a closed milestone after a later content edit. Restoring the old snapshot,
+        // which predates ClosedAt, must not silently reopen it.
+        milestone.Update("Changed milestone", "Changed milestone body", 2);
+        var changedMilestone = await writer.SaveAsync(
+            _db, milestone, "Human", _actorId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(changedMilestone.Success, changedMilestone.Error);
+        Assert.NotNull(milestone.ClosedAt);
+
+        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var expected = new Dictionary<ContentTargetKind, int>
+        {
+            [ContentTargetKind.ContextSection] = 2,
+            [ContentTargetKind.Decision] = 2,
+            [ContentTargetKind.Constraint] = 2,
+            [ContentTargetKind.Milestone] = 3
+        };
+
+        foreach (var kind in expected.Keys)
+        {
+            var restored = await restore.HandleAsync(new RestoreContentVersionCommand(
+                _projectId,
+                legacyVersions.Single(version => version.TargetKind == kind).Id,
+                expected[kind],
+                HumanActor(),
+                kind,
+                kind switch
+                {
+                    ContentTargetKind.ContextSection => section.Id,
+                    ContentTargetKind.Decision => decision.Id,
+                    ContentTargetKind.Constraint => constraint.Id,
+                    ContentTargetKind.Milestone => milestone.Id,
+                    _ => throw new InvalidOperationException("Unexpected test target kind.")
+                }),
+                TestContext.Current.CancellationToken);
+            Assert.True(restored.Success, restored.Error);
+            Assert.Equal(expected[kind] + 1, restored.Value!.Revision);
+        }
+
+        await _db.Entry(section).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(decision).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(constraint).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContextReviewState.NeedsReview, section.ReviewState);
+        Assert.Equal("Legacy context", section.Title);
+        Assert.Equal(ContextReviewState.NeedsReview, section.ReviewState);
+        Assert.Equal(3, section.Revision);
+
+        Assert.Equal(DecisionStatus.Proposed, decision.Status);
+        Assert.Equal("Legacy decision", decision.Title);
+        Assert.Equal(3, decision.Revision);
+
+        Assert.Equal(ConstraintStatus.Proposed, constraint.Status);
+        Assert.Equal("Legacy constraint", constraint.Body);
+        Assert.Equal(3, constraint.Revision);
+
+        Assert.Equal("Legacy milestone", milestone.Name);
+        Assert.Equal(3, milestone.Revision);
+        Assert.NotNull(milestone.ClosedAt);
+    }
+
+    [Fact]
     public async Task RestoreProjectDescription_AppendsNewRevision_AndRecordsRestoringActor()
     {
         var project = await _db.Projects.SingleAsync(p => p.Id == _projectId, TestContext.Current.CancellationToken);
