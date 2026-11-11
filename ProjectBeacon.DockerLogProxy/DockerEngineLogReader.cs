@@ -189,6 +189,15 @@ public sealed class DockerEngineLogReader(
             return null;
 
         var timestampText = line[..separator];
+        var fractionalSeparator = timestampText.IndexOf('.');
+        var utcSuffix = timestampText.IndexOf('Z', fractionalSeparator >= 0 ? fractionalSeparator : 0);
+        if (fractionalSeparator >= 0 && utcSuffix > fractionalSeparator + 8)
+        {
+            // Docker emits RFC3339Nano (up to 9 fractional digits); DateTimeOffset
+            // preserves 7 digits, so truncate only the sub-100ns portion.
+            timestampText = timestampText[..(fractionalSeparator + 8)] + "Z";
+        }
+
         if (!DateTimeOffset.TryParse(
                 timestampText,
                 CultureInfo.InvariantCulture,
