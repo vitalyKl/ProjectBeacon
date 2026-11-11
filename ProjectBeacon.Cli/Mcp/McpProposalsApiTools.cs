@@ -102,13 +102,15 @@ internal static partial class McpApiTools
         var body = new JsonObject
         {
             ["targetKind"] = kind.ToString(),
-            ["targetId"] = targetId.ToString("D"),
             ["operation"] = parsedOperation.ToString(),
             ["baseRevision"] = baseRevision.Value,
             ["payload"] = payload.DeepClone(),
             ["rationaleMarkdown"] = normalizedRationale,
             ["idempotencyKey"] = "knowledge-propose:" + digest
         };
+        if (hasTargetId)
+            body["targetId"] = targetId.ToString("D");
+
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/proposals", body, ct);
     }
 
