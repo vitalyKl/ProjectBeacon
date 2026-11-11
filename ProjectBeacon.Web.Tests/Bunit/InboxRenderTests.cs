@@ -159,6 +159,64 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public async Task Inbox_ContextSectionHeadingEdits_RenderResolvedMarkdownDiff()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var section = ContextSection.Create(
+            "architecture",
+            "Architecture",
+            "# Architecture\n\nOverview.\n\n## Security\n\nOld security details.\n\n## Operations\n\nOperational details.",
+            projectId,
+            ContextScopeType.Project,
+            key: "architecture");
+        section.MarkReviewed(userId.ToString("D"));
+        DbContext.ContextSections.Add(section);
+        var writer = new ContentWriter();
+        writer.AddVersion(DbContext, section, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var baseVersion = await DbContext.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id,
+            CancellationToken.None);
+        var baseHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(baseVersion.ContentJson))).ToLowerInvariant();
+        var proposal = Proposal.Create(
+            projectId, null, null, null,
+            ContentTargetKind.ContextSection, section.Id,
+            ProposalOperation.Update, section.Revision, baseHash,
+            """
+            {
+              "edits": [
+                {
+                  "heading": "## Security",
+                  "op": "replace",
+                  "content": "New security details."
+                }
+              ]
+            }
+            """,
+            "Refreshes only the security subsection.",
+            ProposalAuthorKind.Human, userId, null, null, "Human",
+            "inbox-context-heading-edit-" + Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+        DbContext.Proposals.Add(proposal);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.Find("[data-testid='compare-base-revision'] button").Click();
+
+        Assert.Contains("Old security details.",
+            cut.Find(".proposal-diff-line.is-removed").TextContent);
+        Assert.Contains("New security details.",
+            cut.Find(".proposal-diff-line.is-added").TextContent);
+        Assert.Contains("## Security", cut.Markup);
+        Assert.Contains("## Operations", cut.Markup);
+        Assert.DoesNotContain("**bodyMarkdown**", cut.Markup);
+    }
+
+    [Fact]
     public async Task Inbox_DeleteProposal_AcceptsWithoutSendingEditedPayload()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
