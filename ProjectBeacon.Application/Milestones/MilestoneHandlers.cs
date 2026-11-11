@@ -190,8 +190,10 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.");
+        if (milestone is null
+            || (command.Request.ProjectId is { } expectedProjectId
+                && milestone.ProjectId != expectedProjectId))
+            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
 
         return Result.Ok(MapToDto(milestone));
     }
