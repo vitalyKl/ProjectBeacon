@@ -4,6 +4,7 @@ using Application.Common;
 using Application.Audit;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
+using Domain.Enums;
 using Application.Persistence;
 using Application.Proposals;
 using Microsoft.EntityFrameworkCore;
