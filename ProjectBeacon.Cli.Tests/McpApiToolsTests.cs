@@ -477,6 +477,54 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
+    public async Task KnowledgePropose_PreservesContextSectionHeadingEditsPayload()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var targetId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ContextSection",
+            ["targetId"] = targetId.ToString("D"),
+            ["baseRevision"] = 4,
+            ["payload"] = new JsonObject
+            {
+                ["edits"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["heading"] = "## Security",
+                        ["op"] = "replace",
+                        ["content"] = "Updated security details."
+                    }
+                }
+            },
+            ["rationaleMarkdown"] = "Updates only the security subsection."
+        };
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose, args, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls, item =>
+            item.Method == "POST" && item.Path == $"/v1/projects/{projectId:D}/proposals");
+        var body = JsonNode.Parse(call.Body)!.AsObject();
+        Assert.Equal("ContextSection", body["targetKind"]!.GetValue<string>());
+        Assert.Equal("Update", body["operation"]!.GetValue<string>());
+        Assert.Equal(4, body["baseRevision"]!.GetValue<int>());
+        Assert.Equal(targetId, Guid.Parse(body["targetId"]!.GetValue<string>()));
+        Assert.Equal("## Security", body["payload"]!["edits"]![0]!["heading"]!.GetValue<string>());
+        Assert.Equal("replace", body["payload"]!["edits"]![0]!["op"]!.GetValue<string>());
+        Assert.Equal("Updated security details.", body["payload"]!["edits"]![0]!["content"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task KnowledgePropose_RequiresActorSubtaskAndRejectsUnsupportedOperations()
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
