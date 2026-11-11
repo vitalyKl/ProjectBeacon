@@ -117,7 +117,7 @@ public sealed class DockerLogProxySignatureMiddlewareTests
 
         Assert.False(nextInvoked);
         Assert.Equal(StatusCodes.Status405MethodNotAllowed, context.Response.StatusCode);
-        Assert.Equal(HttpMethods.Get, context.Response.Headers.Allow);
+        Assert.Equal(HttpMethods.Get, context.Response.Headers["Allow"].ToString());
     }
 
     [Fact]
