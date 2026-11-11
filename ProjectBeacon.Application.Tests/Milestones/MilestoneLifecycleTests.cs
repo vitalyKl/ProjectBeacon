@@ -7,6 +7,7 @@ using Application.Persistence;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -179,9 +180,14 @@ public sealed class MilestoneLifecycleTests : IDisposable
     public async Task UpdateMilestone_RequiresMembershipAndMatchingProjectScope()
     {
         var milestone = Milestone.Create("Original", "Original description", _projectId, 1);
+        var linkedTask = TaskItem.Create("Linked milestone task", _projectId);
+        linkedTask.SetMilestone(milestone.Id);
         _db.Milestones.Add(milestone);
+        _db.Tasks.Add(linkedTask);
         var writer = new ContentWriter();
-        writer.AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        writer.AddVersion(
+            _db, milestone, "Human", _ownerId.ToString("D"),
+            milestoneTaskIds: [linkedTask.Id]);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new UpdateMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
@@ -218,6 +224,13 @@ public sealed class MilestoneLifecycleTests : IDisposable
         Assert.Equal("Changed", allowed.Value!.Name);
         Assert.Equal(2, allowed.Value.Revision);
         Assert.Equal(2, await CountVersions(milestone.Id));
+        var updatedSnapshot = await _db.ContentVersions.SingleAsync(
+            version => version.TargetKind == ContentTargetKind.Milestone
+                && version.TargetId == milestone.Id && version.Revision == 2,
+            TestContext.Current.CancellationToken);
+        using var updatedJson = System.Text.Json.JsonDocument.Parse(updatedSnapshot.ContentJson);
+        var updatedTaskIds = updatedJson.RootElement.GetProperty("taskIds").Deserialize<Guid[]>();
+        Assert.Equal(new[] { linkedTask.Id }, updatedTaskIds);
     }
 
     [Fact]
@@ -327,9 +340,13 @@ public sealed class MilestoneLifecycleTests : IDisposable
     {
         var milestone = Milestone.Create(
             "Alpha milestone", "First release checkpoint", _projectId, 1);
+        var linkedTask = TaskItem.Create("Alpha milestone task", _projectId);
+        linkedTask.SetMilestone(milestone.Id);
         _db.Milestones.Add(milestone);
+        _db.Tasks.Add(linkedTask);
         var writer = new ContentWriter();
-        writer.AddVersion(_db, milestone, "Human", "owner");
+        writer.AddVersion(_db, milestone, "Human", "owner",
+            milestoneTaskIds: [linkedTask.Id]);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var close = new CloseMilestoneHandler(HandlerSqlite.Factory(_connection), writer);
@@ -383,6 +400,12 @@ public sealed class MilestoneLifecycleTests : IDisposable
         using var reopenedSnapshot = System.Text.Json.JsonDocument.Parse(history[2].ContentJson);
         Assert.Equal(System.Text.Json.JsonValueKind.Null,
             reopenedSnapshot.RootElement.GetProperty("closedAt").ValueKind);
+        foreach (var version in history)
+        {
+            using var snapshot = System.Text.Json.JsonDocument.Parse(version.ContentJson);
+            var taskIds = snapshot.RootElement.GetProperty("taskIds").Deserialize<Guid[]>();
+            Assert.Equal(new[] { linkedTask.Id }, taskIds);
+        }
     }
 
     private ActorContext HumanActor() =>
