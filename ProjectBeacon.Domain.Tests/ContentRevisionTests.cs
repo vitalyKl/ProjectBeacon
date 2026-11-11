@@ -30,7 +30,7 @@ public sealed class ContentRevisionTests
     }
 
     [Fact]
-    public void Decision_ContentUpdateIncrementsRevision_ButLifecycleDoesNot()
+    public void Decision_ContentAndLifecycleChangesIncrementRevision()
     {
         var decision = Decision.Create("Title", "Context", "Body", Guid.NewGuid());
 
@@ -43,12 +43,14 @@ public sealed class ContentRevisionTests
         Assert.Equal(2, decision.Revision);
 
         decision.Accept();
+        Assert.Equal(3, decision.Revision);
+
         decision.Deprecate();
-        Assert.Equal(2, decision.Revision);
+        Assert.Equal(4, decision.Revision);
     }
 
     [Fact]
-    public void Constraint_BodyUpdateIncrementsRevision_ButActivationDoesNot()
+    public void Constraint_BodyAndLifecycleChangesIncrementRevision()
     {
         var constraint = Constraint.Create("Must use tests", ConstraintKind.Must, Guid.NewGuid());
 
@@ -61,18 +63,20 @@ public sealed class ContentRevisionTests
         Assert.Equal(2, constraint.Revision);
 
         constraint.Activate();
+        Assert.Equal(3, constraint.Revision);
+
         constraint.Reject();
-        Assert.Equal(2, constraint.Revision);
+        Assert.Equal(4, constraint.Revision);
 
         constraint.SetScopePath("src/");
-        Assert.Equal(3, constraint.Revision);
+        Assert.Equal(5, constraint.Revision);
 
         constraint.SetScopePath("src/");
-        Assert.Equal(3, constraint.Revision);
+        Assert.Equal(5, constraint.Revision);
     }
 
     [Fact]
-    public void Milestone_ContentChangesIncrementRevision_ButStatusChangesDoNot()
+    public void Milestone_ContentAndLifecycleChangesIncrementRevision()
     {
         var milestone = Milestone.Create("Release", "Initial description", Guid.NewGuid(), 1);
 
@@ -85,11 +89,13 @@ public sealed class ContentRevisionTests
         Assert.Equal(2, milestone.Revision);
 
         milestone.Close();
+        Assert.Equal(3, milestone.Revision);
+
         milestone.Reopen();
-        Assert.Equal(2, milestone.Revision);
+        Assert.Equal(4, milestone.Revision);
 
         milestone.Update(order: 2);
-        Assert.Equal(3, milestone.Revision);
+        Assert.Equal(5, milestone.Revision);
     }
 
     [Fact]
