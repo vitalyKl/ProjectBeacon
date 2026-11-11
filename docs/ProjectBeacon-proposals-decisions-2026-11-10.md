@@ -38,13 +38,18 @@
 
 Эти решения не меняют уже согласованный контракт Markdown и не оборачивают повторно существующие Proposed Decision/Constraint или NeedsReview ContextSection: они уже являются reviewable drafts.
 
-## Проверенный объём реализации и оставшийся контрактный долг
+## Проверенный объём реализации и оставшиеся границы контракта
 
-Проверка кода и тестов 10 ноября 2026 выявила ограничение, которое нельзя считать закрытым принятыми выше решениями:
+Проверка кода и тестов 11 ноября 2026 подтверждает следующий поддерживаемый контракт:
 
-- Revision-bound Proposal сейчас принимает только `ProposalOperation.Update`. `Create` и `Delete` отклоняются на доменном и Application-уровне; MCP `knowledge_propose` также явно принимает только Update.
-- Это не ломает уже существующие create/review-потоки для `Decision` (`Proposed`), `Constraint` (`Proposed`) и `ContextSection` (`NeedsReview`): они остаются отдельными legacy review items в Inbox и намеренно не оборачиваются вторым Proposal.
-- Для остальных целей универсальный revision-bound Create пока отсутствует. В частности, создание Milestone или Task через `knowledge_propose` сейчас невозможно.
-- Revisioned Delete proposal тоже не реализован. Существующие человеческие удаления ContextSection, Milestone и Task записывают tombstone `ContentVersion`, но физически удаляют целевую строку. `RestoreContentVersionHandler` умеет восстановить выбранную предыдущую версию только пока целевая сущность существует; он не воссоздаёт удалённую строку. Поэтому удаление остаётся аудируемым, но не восстанавливаемым через текущий UI отката.
+- **Update** — существующие revisioned targets: ProjectDescription, ContextSection, Decision, Constraint, Milestone, TaskDescription и документационный RepoPatch. RepoPatch остаётся доступен только `docs-writer` и применяет отдельную строгую политику путей/хешей.
+- **Create** — новая Milestone. Внешний запрос использует `TargetId = Guid.Empty` и `BaseRevision = 0`; сервер резервирует новый ID до сохранения предложения, поэтому повтор по idempotency key возвращает ту же запись. При принятии Milestone, начальная ContentVersion, состояние Proposal и audit записываются атомарно.
+- **Delete** — ContextSection, Milestone, Decision и Constraint. ContextSection/Milestone физически удаляются после записи tombstone ContentVersion; Decision переводится в Deprecated, Constraint — в Rejected. Все четыре перехода требуют текущую ревизию и человеческое подтверждение.
+- Существующие создания Decision/Constraint через Proposed и ContextSection через NeedsReview остаются в прежних review-потоках. Они не дублируются вторым Proposal.
+- Restore ContextSection/Milestone воссоздаёт прежний target ID только если последняя ContentVersion — ожидаемая deletion tombstone; результат получает новую ревизию. Restore Decision/Constraint восстанавливает статус и содержимое из исторического snapshot как новую ревизию. История не перезаписывается.
+- Ручные переходы Accept/Deprecate/Supersede Decision и Activate/Reject Constraint также пишут ContentVersion при изменении статуса; повтор идемпотентного перехода не создаёт фиктивную ревизию.
+- Auto по-прежнему разрешён только для RepoPatch Update и только при одновременном разрешении проекта и профиля docs-writer. Create/Delete всегда Manual.
 
-**Следствие для Definition of Done:** P2 и P1 нельзя объявлять полностью завершёнными относительно исходных разделов 4.2–4.5 и 5 только на основании зелёного CI. До merge нужно либо реализовать Create/Delete с безопасными tombstone/recreation semantics и тестами, либо отдельно утвердить сокращённый v1-контракт. Не расширять операции молча и не выдавать текущую историю удалений за полноценный rollback.
+Неподдерживаемые пары остаются отклонёнными: Create для остальных targets, Delete для ProjectDescription/TaskDescription/RepoPatch, а также любая запись кода через RepoPatch. Не превращать их в побочный эффект или обход review-политики. Для создания Decision/Constraint/ContextSection следует использовать указанные legacy review-пути.
+
+**Definition of Done:** P1/P2 проверяются вместе с Create/Delete и восстановлением tombstone; зелёный CI сам по себе не закрывает фазу, пока не подтверждены UI/history entry points, MCP contract, security/RLS и полная матрица тестов на актуальном HEAD.
