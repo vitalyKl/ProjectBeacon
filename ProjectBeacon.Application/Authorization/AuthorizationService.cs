@@ -377,8 +377,10 @@ public sealed class AuthorizationService : IAuthorizationService
             ResourceType.Report => action is AuthAction.Update or AuthAction.Delete,
             ResourceType.ProjectRuntime => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
             ResourceType.ModelBackend => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
-            ResourceType.AgentTemplate or ResourceType.McpConfiguration or ResourceType.WorkstationConfiguration
+            ResourceType.AgentTemplate or ResourceType.McpConfiguration
                 => action is AuthAction.Create or AuthAction.Update or AuthAction.Delete,
+            ResourceType.WorkstationConfiguration
+                => action is AuthAction.Read or AuthAction.Create or AuthAction.Update or AuthAction.Delete,
             ResourceType.EvalRun => action is AuthAction.Update or AuthAction.Delete,
             ResourceType.Device => true,
             _ => false
