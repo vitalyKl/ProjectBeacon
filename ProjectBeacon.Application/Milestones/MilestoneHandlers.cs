@@ -190,8 +190,18 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
 public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public CloseMilestoneHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CloseMilestoneHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public CloseMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<MilestoneDto>> HandleAsync(CloseMilestoneCommand command, CancellationToken ct = default)
     {
@@ -199,8 +209,14 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
+        var previousRevision = milestone.Revision;
         milestone.Close();
-        await db.SaveChangesAsync(ct);
+        if (milestone.Revision != previousRevision)
+        {
+            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            if (!saved.Success)
+                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone close conflict.", ErrorKind.Conflict);
+        }
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
             milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
@@ -212,8 +228,18 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
 public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public ReopenMilestoneHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ReopenMilestoneHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public ReopenMilestoneHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public async Task<Result<MilestoneDto>> HandleAsync(ReopenMilestoneCommand command, CancellationToken ct = default)
     {
@@ -221,8 +247,14 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
+        var previousRevision = milestone.Revision;
         milestone.Reopen();
-        await db.SaveChangesAsync(ct);
+        if (milestone.Revision != previousRevision)
+        {
+            var saved = await _contentWriter.SaveAsync(db, milestone, "Human", null, ct);
+            if (!saved.Success)
+                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone reopen conflict.", ErrorKind.Conflict);
+        }
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
             milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
