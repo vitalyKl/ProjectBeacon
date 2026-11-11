@@ -24,21 +24,19 @@ public sealed class ReplayNonceStore
                 _nonces.Remove(nonce);
             }
 
-            if (_nonces.Count > MaximumTrackedNonces / 2
-                && nowUnixSeconds - _lastCleanupUnixSeconds >= 10)
+            var cleanupDue = _nonces.Count > MaximumTrackedNonces / 2
+                && nowUnixSeconds - _lastCleanupUnixSeconds >= 10;
+            if (cleanupDue)
             {
                 RemoveExpiredNonces(nowUnixSeconds);
                 _lastCleanupUnixSeconds = nowUnixSeconds;
             }
 
             // Never insert and then reject: the cap must be a hard memory bound.
+            // At capacity, do not rescan on every rejected request; the periodic cleanup
+            // above reclaims expired entries at most ten seconds after they become eligible.
             if (_nonces.Count >= MaximumTrackedNonces)
-            {
-                RemoveExpiredNonces(nowUnixSeconds);
-                _lastCleanupUnixSeconds = nowUnixSeconds;
-                if (_nonces.Count >= MaximumTrackedNonces)
-                    return false;
-            }
+                return false;
 
             _nonces.Add(nonce, nowUnixSeconds + ReplayWindowSeconds);
             return true;
