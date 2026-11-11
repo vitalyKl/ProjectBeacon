@@ -221,6 +221,58 @@ public sealed class MilestoneLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAndListMilestones_RequireMembershipAndRespectProjectScope()
+    {
+        var milestone = Milestone.Create(
+            "Visible milestone", "Visible only to project members.", _projectId, 1);
+        _db.Milestones.Add(milestone);
+        new ContentWriter().AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var get = new GetMilestoneHandler(HandlerSqlite.Factory(_connection));
+        var list = new ListProjectMilestonesHandler(HandlerSqlite.Factory(_connection));
+        var outsider = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null,
+            _projectId, null, ApiTokenCapability.None);
+
+        var deniedGet = await get.HandleAsync(
+            new GetMilestoneCommand(new GetMilestoneRequest(milestone.Id, _projectId), outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(deniedGet.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedGet.Kind);
+
+        var deniedLegacyGet = await get.HandleAsync(
+            new GetMilestoneCommand(new GetMilestoneRequest(milestone.Id), outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(deniedLegacyGet.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedLegacyGet.Kind);
+
+        var deniedList = await list.HandleAsync(
+            new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_projectId), outsider),
+            TestContext.Current.CancellationToken);
+        Assert.False(deniedList.Success);
+        Assert.Equal(ErrorKind.Forbidden, deniedList.Kind);
+
+        var wrongProjectGet = await get.HandleAsync(
+            new GetMilestoneCommand(new GetMilestoneRequest(milestone.Id, Guid.NewGuid()), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.False(wrongProjectGet.Success);
+        Assert.Equal(ErrorKind.NotFound, wrongProjectGet.Kind);
+
+        var allowedGet = await get.HandleAsync(
+            new GetMilestoneCommand(new GetMilestoneRequest(milestone.Id, _projectId), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(allowedGet.Success, allowedGet.Error);
+        Assert.Equal(milestone.Id, allowedGet.Value!.Id);
+
+        var allowedList = await list.HandleAsync(
+            new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_projectId), HumanActor()),
+            TestContext.Current.CancellationToken);
+        Assert.True(allowedList.Success, allowedList.Error);
+        Assert.Contains(allowedList.Value!, item => item.Id == milestone.Id);
+    }
+
+    [Fact]
     public async Task CloseAndReopen_RequireMembershipAndMatchingProjectScope()
     {
         var milestone = Milestone.Create("Scoped milestone", null, _projectId, 1);
