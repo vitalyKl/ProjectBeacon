@@ -111,6 +111,10 @@ public sealed class P2AuthorizationHttpTests
             $"/v1/projects/{projectAId}/milestones/{milestoneId}",
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, stillExists.StatusCode);
+        var savedMilestone = await stillExists.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Scoped milestone", savedMilestone.GetProperty("name").GetString());
+        Assert.Equal(2, savedMilestone.GetProperty("revision").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, savedMilestone.GetProperty("closedAt").ValueKind);
     }
 
     [Fact]
