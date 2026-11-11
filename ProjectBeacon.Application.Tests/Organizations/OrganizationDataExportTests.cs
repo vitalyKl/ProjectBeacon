@@ -80,6 +80,9 @@ public sealed class OrganizationDataExportTests : IDisposable
         var subscriptionId = Guid.NewGuid();
         var invoiceId = Guid.NewGuid();
         var ledgerId = Guid.NewGuid();
+        var foreignSubscriptionId = Guid.NewGuid();
+        var foreignInvoiceId = Guid.NewGuid();
+        var foreignLedgerId = Guid.NewGuid();
         var billingTime = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
         await _db.Database.ExecuteSqlRawAsync(
             """
@@ -144,6 +147,37 @@ public sealed class OrganizationDataExportTests : IDisposable
                  {1999L}, {"EUR"}, {"provider-secret-key"}, {"provider-webhook-event-id"},
                  {"receipt-reference-123"}, {owner.Id.ToString("D")}, {"Marked paid manually"},
                  {"idempotency-secret-key"}, {subscriptionId.ToString("D")}, {invoiceId.ToString("D")});
+            """,
+            TestContext.Current.CancellationToken);
+
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "OrganizationSubscriptions"
+                ("Id", "OrgId", "PlanKey", "Status", "Source", "CurrentPeriodStartsAtUtc",
+                 "CancelAtPeriodEnd", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                ({foreignSubscriptionId.ToString("D")}, {foreignOrg.Id.ToString("D")},
+                 {"foreign-plan"}, {1}, {0}, {billingTime}, {false}, {billingTime}, {billingTime});
+            """,
+            TestContext.Current.CancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "BillingInvoices"
+                ("Id", "OrgId", "Number", "Description", "AmountMinor", "Currency",
+                 "IssuedAtUtc", "DueAtUtc", "Status")
+            VALUES
+                ({foreignInvoiceId.ToString("D")}, {foreignOrg.Id.ToString("D")},
+                 {"FOREIGN-BILLING-INVOICE-MUST-NOT-EXPORT"}, {"Foreign billing invoice"},
+                 {4500L}, {"USD"}, {billingTime}, {billingTime}, {1});
+            """,
+            TestContext.Current.CancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO "BillingLedgerEntries"
+                ("Id", "OccurredAtUtc", "OrgId", "EventType", "Source", "Reference", "Note")
+            VALUES
+                ({foreignLedgerId.ToString("D")}, {billingTime}, {foreignOrg.Id.ToString("D")},
+                 {4}, {0}, {"foreign-provider-event"}, {"FOREIGN-BILLING-LEDGER-MUST-NOT-EXPORT"});
             """,
             TestContext.Current.CancellationToken);
 
@@ -235,17 +269,20 @@ public sealed class OrganizationDataExportTests : IDisposable
         Assert.DoesNotContain("provider-secret-key", subscriptionJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-customer-reference", subscriptionJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-subscription-reference", subscriptionJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("foreign-plan", subscriptionJson, StringComparison.Ordinal);
         var invoiceJson = await ReadEntryAsync(archive, "billing-invoices.json");
         Assert.Contains("PB-2026-000001", invoiceJson, StringComparison.Ordinal);
         Assert.Contains("receipt-reference-123", invoiceJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-secret-key", invoiceJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-invoice-reference", invoiceJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("FOREIGN-BILLING-INVOICE-MUST-NOT-EXPORT", invoiceJson, StringComparison.Ordinal);
         var ledgerJson = await ReadEntryAsync(archive, "billing-ledger.json");
         Assert.Contains("Marked paid manually", ledgerJson, StringComparison.Ordinal);
         Assert.Contains("receipt-reference-123", ledgerJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-secret-key", ledgerJson, StringComparison.Ordinal);
         Assert.DoesNotContain("provider-webhook-event-id", ledgerJson, StringComparison.Ordinal);
         Assert.DoesNotContain("idempotency-secret-key", ledgerJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("FOREIGN-BILLING-LEDGER-MUST-NOT-EXPORT", ledgerJson, StringComparison.Ordinal);
 
         var memberJson = await ReadEntryAsync(archive, "members.json");
         Assert.Contains("owner@example.test", memberJson, StringComparison.Ordinal);
