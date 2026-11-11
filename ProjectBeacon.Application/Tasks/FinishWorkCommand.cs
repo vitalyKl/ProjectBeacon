@@ -65,7 +65,11 @@ public class FinishWorkHandler
         if (!permission.Success)
             return Result.Failure(permission);
 
+        // The task query above has already passed the tenant/RLS boundary. Ignore only
+        // the EF project filter here so an explicitly scoped project can provide its org id;
+        // PostgreSQL RLS remains active on this same connection and transaction.
         var orgId = await db.Projects
+            .IgnoreQueryFilters()
             .Where(project => project.Id == task.ProjectId)
             .Select(project => (Guid?)project.OrgId)
             .FirstOrDefaultAsync(ct);
