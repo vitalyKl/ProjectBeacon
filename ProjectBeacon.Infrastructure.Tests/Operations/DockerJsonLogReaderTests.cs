@@ -1,103 +1,75 @@
 namespace ProjectBeacon.Infrastructure.Tests.Operations;
 
+using System.Buffers.Binary;
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProjectBeacon.Application.Operations;
+using ProjectBeacon.DockerLogProxy;
 using ProjectBeacon.OpsAgent;
 
 public sealed class DockerJsonLogReaderTests
 {
     [Fact]
-    public async Task ReadAsync_ReturnsOnlyTheRequestedComposeProjectAndService()
+    public async Task DockerEngineReader_ReturnsOnlyRequestedComposeProjectAndService()
     {
-        var root = CreateTemporaryDirectory();
-        try
+        var webId = new string('a', 64);
+        var foreignId = new string('b', 64);
+        var workerId = new string('c', 64);
+        var containers = new[]
         {
-            var webId = new string('a', 64);
-            var foreignId = new string('b', 64);
-            var workerId = new string('c', 64);
-            CreateContainer(root, webId, "beacon-alpha", "web", "/beacon-alpha-web-1");
-            CreateContainer(root, foreignId, "other-project", "web", "/other-web-1");
-            CreateContainer(root, workerId, "beacon-alpha", "worker", "/beacon-alpha-worker-1");
+            Container(webId, "beacon-alpha", "web", "/beacon-alpha-web-1", "running"),
+            Container(foreignId, "other-project", "web", "/other-web-1", "running"),
+            Container(workerId, "beacon-alpha", "worker", "/beacon-alpha-worker-1", "running")
+        };
+        var handler = new FakeDockerEngineHandler(containers, [
+            ("web-one", "2026-11-11T08:00:00.0000000Z", (byte)1),
+            ("web-two", "2026-11-11T08:00:01.0000000Z", (byte)2),
+            ("web-three", "2026-11-11T08:00:02.0000000Z", (byte)1)
+        ]);
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://docker") };
+        var reader = CreateReader(client);
 
-            await WriteLogsAsync(root, webId,
-                ("web-one", "2026-11-11T08:00:00.0000000Z"),
-                ("web-two", "2026-11-11T08:00:01.0000000Z"),
-                ("web-three", "2026-11-11T08:00:02.0000000Z"));
-            await WriteLogsAsync(root, foreignId,
-                ("FOREIGN-MUST-NOT-RETURN", "2026-11-11T08:00:03.0000000Z"));
-            await WriteLogsAsync(root, workerId,
-                ("WORKER-MUST-NOT-RETURN", "2026-11-11T08:00:04.0000000Z"));
+        var response = await reader.ReadAsync(
+            PlatformLogTarget.Web, 2, TestContext.Current.CancellationToken);
 
-            var reader = CreateReader(root);
-            var response = await reader.ReadAsync(PlatformLogTarget.Web, 2, TestContext.Current.CancellationToken);
-
-            Assert.NotNull(response);
-            Assert.Equal(PlatformLogTarget.Web, response.Service);
-            Assert.Equal("/beacon-alpha-web-1", response.ContainerName);
-            Assert.Equal(2, response.ReturnedLines);
-            Assert.Equal(new[] { "web-two", "web-three" }, response.Entries.Select(entry => entry.Message));
-            Assert.DoesNotContain(response.Entries, entry =>
-                entry.Message.Contains("FOREIGN", StringComparison.Ordinal)
-                || entry.Message.Contains("WORKER", StringComparison.Ordinal));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.NotNull(response);
+        Assert.Equal(PlatformLogTarget.Web, response.Service);
+        Assert.Equal("/beacon-alpha-web-1", response.ContainerName);
+        Assert.Equal(new[] { "web-two", "web-three" }, response.Entries.Select(entry => entry.Message));
+        Assert.Equal(new[] { "stdout", "stderr" }, response.Entries.Select(entry => entry.Stream));
+        Assert.Single(handler.Requests.Where(request => request.RequestUri!.AbsolutePath.EndsWith("/logs", StringComparison.Ordinal)));
+        Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.Contains(foreignId, StringComparison.Ordinal));
+        Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.Contains(workerId, StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task ReadAsync_CombinesCurrentAndRotatedFilesInTimestampOrder()
+    public async Task DockerEngineReader_ReturnsNullWhenNoContainerHasTheAllowlistedProjectLabel()
     {
-        var root = CreateTemporaryDirectory();
-        try
-        {
-            var id = new string('d', 64);
-            CreateContainer(root, id, "beacon-alpha", "worker", "/beacon-alpha-worker-1");
-            await WriteLogsAsync(root, id,
-                ("current-one", "2026-11-11T08:00:02.0000000Z"),
-                ("current-two", "2026-11-11T08:00:03.0000000Z"));
-            await WriteLogsAsync(root, id,
-                ("rotated-one", "2026-11-11T08:00:00.0000000Z"),
-                ("rotated-two", "2026-11-11T08:00:01.0000000Z"),
-                suffix: ".1");
+        var id = new string('d', 64);
+        var handler = new FakeDockerEngineHandler(
+            [Container(id, "not-beacon-alpha", "web", "/foreign-web", "running")],
+            []);
+        var reader = CreateReader(new HttpClient(handler) { BaseAddress = new Uri("http://docker") });
 
-            var reader = CreateReader(root);
-            var response = await reader.ReadAsync(PlatformLogTarget.Worker, 3, TestContext.Current.CancellationToken);
+        var response = await reader.ReadAsync(
+            PlatformLogTarget.Web, 100, TestContext.Current.CancellationToken);
 
-            Assert.NotNull(response);
-            Assert.Equal(new[] { "rotated-two", "current-one", "current-two" },
-                response.Entries.Select(entry => entry.Message));
-            Assert.All(response.Entries, entry => Assert.Equal("stdout", entry.Stream));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Null(response);
+        Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.EndsWith("/logs", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task ReadAsync_ReturnsNullForContainersFromAnotherComposeProject()
+    public async Task DockerEngineReader_ValidatesTailBeforeCallingEngine()
     {
-        var root = CreateTemporaryDirectory();
-        try
-        {
-            var id = new string('e', 64);
-            CreateContainer(root, id, "not-beacon-alpha", "web", "/other-web");
-            await WriteLogsAsync(root, id,
-                ("foreign-log", "2026-11-11T08:00:00.0000000Z"));
+        var handler = new FakeDockerEngineHandler([], []);
+        var reader = CreateReader(new HttpClient(handler) { BaseAddress = new Uri("http://docker") });
 
-            var reader = CreateReader(root);
-            var response = await reader.ReadAsync(PlatformLogTarget.Web, 100, TestContext.Current.CancellationToken);
-
-            Assert.Null(response);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            reader.ReadAsync(PlatformLogTarget.Web, 501, TestContext.Current.CancellationToken));
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]
@@ -127,80 +99,82 @@ public sealed class DockerJsonLogReaderTests
         Assert.False(store.TryAccept(nonce, now.AddSeconds(1)));
     }
 
-    private static DockerJsonLogReader CreateReader(string root)
+    private static DockerEngineLogReader CreateReader(HttpClient client)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["OPS_AGENT_LOG_ROOT"] = root,
-                ["OPS_AGENT_COMPOSE_PROJECT"] = "beacon-alpha",
-                ["OPS_AGENT_SHARED_SECRET"] = Convert.ToHexString(new byte[32])
+                ["DOCKER_SOCKET_PATH"] = "/var/run/docker.sock",
+                ["DOCKER_LOG_PROXY_COMPOSE_PROJECT"] = "beacon-alpha",
+                ["DOCKER_LOG_PROXY_SHARED_SECRET"] = Convert.ToHexString(new byte[32])
             })
             .Build();
-        return new DockerJsonLogReader(
-            OpsAgentOptions.FromConfiguration(configuration),
+        return new DockerEngineLogReader(
+            client,
+            DockerLogProxyOptions.FromConfiguration(configuration),
             TimeProvider.System,
-            NullLogger<DockerJsonLogReader>.Instance);
+            NullLogger<DockerEngineLogReader>.Instance);
     }
 
-    private static string CreateTemporaryDirectory()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "beacon-opsagent-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void CreateContainer(
-        string root,
-        string id,
-        string project,
-        string service,
-        string name)
-    {
-        var directory = Path.Combine(root, id);
-        Directory.CreateDirectory(directory);
-        var metadata = new
+    private static object Container(string id, string project, string service, string name, string state) =>
+        new
         {
-            Name = name,
-            Config = new
+            Id = id,
+            Names = new[] { name },
+            State = state,
+            Created = 1794384000L,
+            Labels = new Dictionary<string, string>
             {
-                Labels = new Dictionary<string, string>
-                {
-                    ["com.docker.compose.project"] = project,
-                    ["com.docker.compose.service"] = service
-                }
-            },
-            State = new { Running = true }
+                ["com.docker.compose.project"] = project,
+                ["com.docker.compose.service"] = service
+            }
         };
-        File.WriteAllText(
-            Path.Combine(directory, "config.v2.json"),
-            JsonSerializer.Serialize(metadata));
-    }
 
-    private static async Task WriteLogsAsync(
-        string root,
-        string id,
-        params (string Message, string Timestamp)[] values) =>
-        await WriteLogsAsync(root, id, values, string.Empty);
-
-    private static async Task WriteLogsAsync(
-        string root,
-        string id,
-        (string Message, string Timestamp)[] values,
-        string suffix)
+    private sealed class FakeDockerEngineHandler(
+        object[] containers,
+        (string Message, string Timestamp, byte StreamType)[] logs) : HttpMessageHandler
     {
-        var path = Path.Combine(root, id, id + "-json.log" + suffix);
-        await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        await using var writer = new StreamWriter(stream);
-        foreach (var (message, timestamp) in values)
+        public List<HttpRequestMessage> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
-            var line = JsonSerializer.Serialize(new
+            Requests.Add(request);
+            if (request.RequestUri!.AbsolutePath.EndsWith("/containers/json", StringComparison.Ordinal))
             {
-                log = message + "\n",
-                stream = "stdout",
-                time = timestamp
-            });
-            await writer.WriteLineAsync(line);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(containers), Encoding.UTF8, "application/json")
+                });
+            }
+
+            if (request.RequestUri.AbsolutePath.EndsWith("/logs", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StreamContent(new MemoryStream(BuildFrames(logs)))
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
+        private static byte[] BuildFrames(
+            IEnumerable<(string Message, string Timestamp, byte StreamType)> entries)
+        {
+            using var output = new MemoryStream();
+            foreach (var entry in entries)
+            {
+                var payload = Encoding.UTF8.GetBytes($"{entry.Timestamp} {entry.Message}\n");
+                var header = new byte[8];
+                header[0] = entry.StreamType;
+                BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4, 4), (uint)payload.Length);
+                output.Write(header);
+                output.Write(payload);
+            }
+
+            return output.ToArray();
         }
     }
 }
