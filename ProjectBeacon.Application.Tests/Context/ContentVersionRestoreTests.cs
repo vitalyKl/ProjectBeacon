@@ -54,6 +54,78 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreDeletedLegacySnapshots_UsesLifecycleFieldsFromNewTombstones()
+    {
+        var section = ContextSection.Create(
+            "architecture", "Architecture", "Reviewed section body",
+            _projectId, ContextScopeType.Project);
+        _db.ContextSections.Add(section);
+        var legacySection = ContentVersion.Create(
+            _projectId, ContentTargetKind.ContextSection, section.Id, 1,
+            """{"sectionId":"architecture","key":"","title":"Architecture","bodyMarkdown":"Reviewed section body","ordinal":0,"scopeType":0,"repoId":null,"taskId":null,"path":""}""",
+            "Human", _actorId.ToString("D"));
+        _db.ContentVersions.Add(legacySection);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        section.MarkReviewed(_actorId.ToString("D"));
+        var writer = new ContentWriter();
+        var reviewed = await writer.SaveAsync(
+            _db, section, "Human", _actorId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(reviewed.Success, reviewed.Error);
+        section.Delete();
+        var sectionDeleted = await writer.SaveAsync(
+            _db, section, "Human", _actorId.ToString("D"),
+            TestContext.Current.CancellationToken, deleted: true);
+        Assert.True(sectionDeleted.Success, sectionDeleted.Error);
+        _db.ContextSections.Remove(section);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var milestone = Milestone.Create(
+            "Closed legacy milestone", "Milestone description", _projectId, 4);
+        _db.Milestones.Add(milestone);
+        var legacyMilestone = ContentVersion.Create(
+            _projectId, ContentTargetKind.Milestone, milestone.Id, 1,
+            """{"name":"Closed legacy milestone","description":"Milestone description","order":4}""",
+            "Human", _actorId.ToString("D"));
+        _db.ContentVersions.Add(legacyMilestone);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        milestone.Close();
+        var closed = await writer.SaveAsync(
+            _db, milestone, "Human", _actorId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(closed.Success, closed.Error);
+        milestone.Delete();
+        var milestoneDeleted = await writer.SaveAsync(
+            _db, milestone, "Human", _actorId.ToString("D"),
+            TestContext.Current.CancellationToken, deleted: true);
+        Assert.True(milestoneDeleted.Success, milestoneDeleted.Error);
+        _db.Milestones.Remove(milestone);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        _db.ChangeTracker.Clear();
+        var restore = new RestoreContentVersionHandler(HandlerSqlite.Factory(_connection));
+        var restoredSection = await restore.HandleAsync(new RestoreContentVersionCommand(
+            _projectId, legacySection.Id, 3, HumanActor(),
+            ContentTargetKind.ContextSection, section.Id), TestContext.Current.CancellationToken);
+        var restoredMilestone = await restore.HandleAsync(new RestoreContentVersionCommand(
+            _projectId, legacyMilestone.Id, 3, HumanActor(),
+            ContentTargetKind.Milestone, milestone.Id), TestContext.Current.CancellationToken);
+
+        Assert.True(restoredSection.Success, restoredSection.Error);
+        Assert.True(restoredMilestone.Success, restoredMilestone.Error);
+        Assert.Equal(4, restoredSection.Value!.Revision);
+        Assert.Equal(4, restoredMilestone.Value!.Revision);
+
+        var sectionFromHistory = await _db.ContextSections.AsNoTracking().SingleAsync(
+            item => item.Id == section.Id, TestContext.Current.CancellationToken);
+        var milestoneFromHistory = await _db.Milestones.AsNoTracking().SingleAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ContextReviewState.Reviewed, sectionFromHistory.ReviewState);
+        Assert.NotNull(milestoneFromHistory.ClosedAt);
+        Assert.Equal("Closed legacy milestone", milestoneFromHistory.Name);
+    }
+
+    [Fact]
     public async Task RestoreLegacySnapshots_DoesNotUpgradeUnknownLifecycleState()
     {
         var section = ContextSection.Create(
