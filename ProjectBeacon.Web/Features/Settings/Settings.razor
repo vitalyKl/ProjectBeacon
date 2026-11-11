@@ -15,6 +15,7 @@
 @inject SetChatModelHandler SetChatModel
 @inject NudgeModelsHandler NudgeModels
 @inject IOrganizationDataExportService OrganizationDataExport
+@inject ILogger<Settings> Logger
 @inject GetTotpStatusHandler GetTotp
 @inject BeginTotpHandler BeginTotp
 @inject ConfirmTotpHandler ConfirmTotp
@@ -143,8 +144,16 @@
         if (Guid.TryParse(user.FindFirst("org_id")?.Value, out var orgId))
         {
             _organizationId = orgId;
-            _canExportOrganization = await OrganizationDataExport.CanExportAsync(
-                orgId, ActorContextFactory.FromPrincipal(user));
+            try
+            {
+                _canExportOrganization = await OrganizationDataExport.CanExportAsync(
+                    orgId, ActorContextFactory.FromPrincipal(user));
+            }
+            catch (Exception ex)
+            {
+                _canExportOrganization = false;
+                Logger.LogWarning(ex, "Could not resolve organization data-export visibility for the current user.");
+            }
         }
         await ReloadChatModel();
         await ReloadTotp();
