@@ -100,6 +100,11 @@ public sealed class DockerJsonLogReader(
 
             try
             {
+                var containerDirectory = new DirectoryInfo(directory);
+                if (containerDirectory.LinkTarget is not null
+                    || (containerDirectory.Attributes & FileAttributes.ReparsePoint) != 0)
+                    continue;
+
                 var file = new FileInfo(metadataPath);
                 if (file.Length is <= 0 or > 1024 * 1024 || file.LinkTarget is not null)
                     continue;
