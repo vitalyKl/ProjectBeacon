@@ -8,9 +8,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using ProjectBeacon.Application.Operations;
 using ProjectBeacon.DockerLogProxy;
-using ProjectBeacon.OpsAgent;
+using OpsAgentReplayNonceStore = ProjectBeacon.OpsAgent.ReplayNonceStore;
 
-public sealed class DockerJsonLogReaderTests
+public sealed class DockerEngineLogReaderTests
 {
     [Fact]
     public async Task DockerEngineReader_ReturnsOnlyRequestedComposeProjectAndService()
@@ -25,7 +25,7 @@ public sealed class DockerJsonLogReaderTests
             Container(workerId, "beacon-alpha", "worker", "/beacon-alpha-worker-1", "running")
         };
         var handler = new FakeDockerEngineHandler(containers, [
-            ("web-one", "2026-11-11T08:00:00.0000000Z", (byte)1),
+            ("web-one", "2026-11-11T08:00:00.123456789Z", (byte)1),
             ("web-two", "2026-11-11T08:00:01.0000000Z", (byte)2),
             ("web-three", "2026-11-11T08:00:02.0000000Z", (byte)1)
         ]);
@@ -91,7 +91,7 @@ public sealed class DockerJsonLogReaderTests
     [Fact]
     public void ReplayNonceStore_RejectsDuplicateNonces()
     {
-        var store = new ReplayNonceStore();
+        var store = new OpsAgentReplayNonceStore();
         var now = DateTimeOffset.Parse("2026-11-11T08:00:00Z");
         const string nonce = "0123456789abcdef0123456789abcdef";
 
