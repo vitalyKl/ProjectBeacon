@@ -35,6 +35,43 @@ public sealed class DeletedContentRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public async Task ProjectSettings_ShowsDescriptionHistoryAndRestoresNullableDescription()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var project = DbContext.Projects.Single(item => item.Id == projectId);
+        var writer = new ContentWriter();
+
+        writer.AddVersion(DbContext, project, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+        var originalRevision = project.Revision;
+
+        project.Update(description: "Current project description.");
+        var saved = await writer.SaveAsync(
+            DbContext, project, "Human", userId.ToString("D"), CancellationToken.None);
+        Assert.True(saved.Success, saved.Error);
+        Assert.Equal(originalRevision + 1, saved.Value);
+
+        DbContext.ChangeTracker.Clear();
+        var cut = Bunit.RenderComponent<Features.Projects.ProjectManage>();
+
+        cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Content history", StringComparison.OrdinalIgnoreCase)).Click();
+
+        Assert.Contains("Content history (2)", cut.Markup);
+        Assert.Contains("Current project description.", cut.Markup);
+        var restore = cut.FindAll("button").First(button =>
+            button.TextContent.Contains("Restore", StringComparison.OrdinalIgnoreCase)
+            && !button.HasAttribute("disabled"));
+        restore.Click();
+
+        Assert.Contains("Content history", cut.Markup);
+        var restored = await DbContext.Projects.AsNoTracking().SingleAsync(
+            item => item.Id == projectId, CancellationToken.None);
+        Assert.Null(restored.Description);
+        Assert.Equal(originalRevision + 2, restored.Revision);
+    }
+
+    [Fact]
     public async Task Context_ShowsDeletedSectionAndRestoresItFromHistory()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
