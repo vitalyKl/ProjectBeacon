@@ -24,6 +24,23 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsRestoredTaskLinkCountAsIntegerMetadata()
+    {
+        const string detailsJson = """{"sourceVersionId":"abc","restoredRevision":4,"restoredTaskLinks":2}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_RejectsNonIntegerRestoredTaskLinkCount()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"restoredTaskLinks":1.5}"""));
+    }
+
+    [Fact]
     public void Create_RejectsUnlistedSensitiveMetadataKeys()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"password":"secret"}"""));
