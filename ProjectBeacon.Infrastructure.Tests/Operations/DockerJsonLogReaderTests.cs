@@ -37,7 +37,7 @@ public sealed class DockerJsonLogReaderTests
             Assert.Equal(PlatformLogTarget.Web, response.Service);
             Assert.Equal("/beacon-alpha-web-1", response.ContainerName);
             Assert.Equal(2, response.ReturnedLines);
-            Assert.Equal(["web-two", "web-three"], response.Entries.Select(entry => entry.Message));
+            Assert.Equal(new[] { "web-two", "web-three" }, response.Entries.Select(entry => entry.Message));
             Assert.DoesNotContain(response.Entries, entry =>
                 entry.Message.Contains("FOREIGN", StringComparison.Ordinal)
                 || entry.Message.Contains("WORKER", StringComparison.Ordinal));
@@ -68,7 +68,7 @@ public sealed class DockerJsonLogReaderTests
             var response = await reader.ReadAsync(PlatformLogTarget.Worker, 3, TestContext.Current.CancellationToken);
 
             Assert.NotNull(response);
-            Assert.Equal(["rotated-two", "current-one", "current-two"],
+            Assert.Equal(new[] { "rotated-two", "current-one", "current-two" },
                 response.Entries.Select(entry => entry.Message));
             Assert.All(response.Entries, entry => Assert.Equal("stdout", entry.Stream));
         }
@@ -98,6 +98,33 @@ public sealed class DockerJsonLogReaderTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public void PlatformLogRequestSignature_BindsMethodPathTimestampAndNonce()
+    {
+        var secret = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+        const string timestamp = "1794384000";
+        const string nonce = "0123456789abcdef0123456789abcdef";
+        const string method = "GET";
+        const string path = "/internal/v1/logs/web?tail=100";
+        var signature = PlatformLogRequestSignature.Create(secret, timestamp, nonce, method, path);
+
+        Assert.True(PlatformLogRequestSignature.Verify(secret, timestamp, nonce, method, path, signature));
+        Assert.False(PlatformLogRequestSignature.Verify(secret, timestamp, nonce, method, "/internal/v1/logs/worker?tail=100", signature));
+        Assert.False(PlatformLogRequestSignature.Verify(secret, timestamp, nonce, "POST", path, signature));
+        Assert.False(PlatformLogRequestSignature.Verify(secret, "1794384001", nonce, method, path, signature));
+    }
+
+    [Fact]
+    public void ReplayNonceStore_RejectsDuplicateNonces()
+    {
+        var store = new ReplayNonceStore();
+        var now = DateTimeOffset.Parse("2026-11-11T08:00:00Z");
+        const string nonce = "0123456789abcdef0123456789abcdef";
+
+        Assert.True(store.TryAccept(nonce, now));
+        Assert.False(store.TryAccept(nonce, now.AddSeconds(1)));
     }
 
     private static DockerJsonLogReader CreateReader(string root)
