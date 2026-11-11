@@ -15,13 +15,12 @@ public sealed class AuditEventTests
     [Fact]
     public void Create_AcceptsRestoreMetadataWithoutContentPayload()
     {
-        var sourceVersionId = Guid.NewGuid();
-        var auditEvent = Create(detailsJson:
-            $"""{"sourceVersionId":"{{sourceVersionId:D}}","restoredRevision":4}""");
+        var sourceVersionId = Guid.NewGuid().ToString("D");
+        var detailsJson =
+            "{\"sourceVersionId\":\"" + sourceVersionId + "\",\"restoredRevision\":4}";
+        var auditEvent = Create(detailsJson);
 
-        Assert.Equal(
-            $"""{"sourceVersionId":"{{sourceVersionId:D}}","restoredRevision":4}""",
-            auditEvent.DetailsJson);
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
     }
 
     [Fact]
