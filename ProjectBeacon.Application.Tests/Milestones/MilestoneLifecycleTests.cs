@@ -46,6 +46,37 @@ public sealed class MilestoneLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteMilestone_ProjectPathMismatchDoesNotDeleteOrWriteAudit()
+    {
+        var milestone = Milestone.Create(
+            "Protected milestone", "Must remain available.", _projectId, 1);
+        _db.Milestones.Add(milestone);
+        new ContentWriter().AddVersion(_db, milestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var wrongProjectId = Guid.NewGuid();
+
+        var result = await new DeleteMilestoneHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(
+                new DeleteMilestoneCommand(
+                    new DeleteMilestoneRequest(milestone.Id, wrongProjectId), HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.NotFound, result.Kind);
+        Assert.True(await _db.Milestones.AsNoTracking().AnyAsync(
+            item => item.Id == milestone.Id, TestContext.Current.CancellationToken));
+        Assert.DoesNotContain(await _db.ContentVersions
+            .Where(version => version.TargetKind == ContentTargetKind.Milestone
+                && version.TargetId == milestone.Id)
+            .Select(version => version.Revision)
+            .ToListAsync(TestContext.Current.CancellationToken), revision => revision == 2);
+        Assert.Empty(await _db.AuditEvents
+            .Where(item => item.Action == "content.deleted"
+                && item.TargetId == milestone.Id.ToString("D"))
+            .ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task DeleteMilestone_WritesTombstoneAndAuditAtomically()
     {
         var milestone = Milestone.Create(
