@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Proposals
@@ -19,6 +20,8 @@
 @inject AttachRuntimeHandler AttachRuntime
 @inject ListMyProjectsHandler MyProjects
 @inject UpdateProjectHandler UpdateProject
+@inject ListContentVersionsHandler ContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject ListProposalPoliciesHandler ListProposalPolicies
 @inject SetProposalPolicyHandler SetProposalPolicy
 @inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
@@ -85,6 +88,37 @@ else
         <div class="beacon-form">
             <MudTextField @bind-Value="_projectName" InputId="project-name" Label="@L["ProjectName"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
             <MarkdownEditor @bind-Value="_projectDescription" Label="@L["Description"]" Lines="5" Class="mt-3" />
+            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.History"
+                       OnClick="LoadProjectDescriptionHistory" Disabled="_busy">
+                @L["ContentHistory"]
+            </MudButton>
+            @if (_showProjectDescriptionHistory)
+            {
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-2">
+                    <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_projectDescriptionHistory.Count})")" Expanded="true">
+                        @if (_projectDescriptionHistory.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
+                        }
+                        @foreach (var version in _projectDescriptionHistory)
+                        {
+                            <MudPaper @key="version.Id" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">rev. @version.Revision</MudText>
+                                    <MudSpacer />
+                                    <LocalTime Value="version.At" Format="g" />
+                                </MudStack>
+                                <MarkdownView Text="@ProjectDescriptionSnapshotMarkdown(version.ContentJson)" MaxHeight="140" />
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           Disabled="_busy || version.Revision == _projectRevision"
+                                           OnClick="() => RestoreProjectDescriptionVersion(version)">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
             <div class="beacon-field-row">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProject" Disabled="_busy">@L["Save"]</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>
@@ -254,6 +288,8 @@ else
     private string _projectName = string.Empty;
     private string _projectDescription = string.Empty;
     private int _projectRevision;
+    private bool _showProjectDescriptionHistory;
+    private List<ContentVersionDto> _projectDescriptionHistory = [];
     private Guid? _folderDeviceId;
     private string _folderPath = string.Empty;
     private GitSyncResultDto? _gitSyncResult;
@@ -385,6 +421,75 @@ else
     private void OpenProject(Guid projectId)
     {
         Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl={Uri.EscapeDataString("/project/settings")}", forceLoad: true);
+    }
+
+    private async Task LoadProjectDescriptionHistory()
+    {
+        if (_projectId is not { } projectId)
+            return;
+
+        _showProjectDescriptionHistory = true;
+        var history = await ContentVersions.HandleAsync(
+            projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
+        _projectDescriptionHistory = history.Success ? history.Value!.ToList() : [];
+        if (!history.Success)
+            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreProjectDescriptionVersion(ContentVersionDto version)
+    {
+        if (_projectId is not { } projectId || _busy)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                projectId,
+                version.Id,
+                _projectRevision,
+                _actor,
+                ContentTargetKind.ProjectDescription,
+                projectId));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var current = await CurrentProject.HandleAsync(_actor);
+            if (!current.Success || current.Value is null)
+            {
+                Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            _projectName = current.Value.Name;
+            _projectDescription = current.Value.Description ?? string.Empty;
+            _projectRevision = current.Value.Revision;
+            await LoadProjectDescriptionHistory();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string ProjectDescriptionSnapshotMarkdown(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("description", out var description)
+                && description.ValueKind == JsonValueKind.String)
+                return description.GetString() ?? string.Empty;
+            return string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private async Task SaveProject()
