@@ -31,6 +31,9 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
     public ConcurrencyPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
+    private static ActorContext WorkActor(Guid userId) => new(
+        ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+
     private sealed class CountingSpawner : ISessionSpawner
     {
         private int _calls;
@@ -797,9 +800,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", output, userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", output, ReviewRunId: runId), WorkActor(userId)));
             }
         }
 
@@ -845,9 +847,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", output, userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", output), WorkActor(userId)));
             }
         }
 
@@ -923,18 +924,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "done-output", ReviewRunId: runId), WorkActor(userId)));
             }
         }
         async Task<Result> RunFailed()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1031,18 +1030,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "done-output", ReviewRunId: runId), WorkActor(userId)));
             }
         }
         async Task<Result> RunFailed()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1127,9 +1124,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1202,9 +1198,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1273,9 +1268,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "skipped", output, userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", output), WorkActor(userId)));
             }
         }
 
@@ -1342,9 +1336,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "done", "injectFail", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "injectFail", ReviewRunId: proofId), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The state write rolled back with the failed comment: the row is exactly
@@ -1365,9 +1358,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands exactly once.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "clean retry", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "clean retry", ReviewRunId: proofId), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
@@ -1433,9 +1425,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "failed", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "injectFail"), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment: the row is unchanged.
@@ -1454,9 +1445,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands the note once, with one comment.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "clean retry"), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
@@ -1522,9 +1512,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "skipped", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "injectFail"), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment; status never moves for skipped.
@@ -1543,9 +1532,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands the note once, with one comment.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "skipped", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "clean retry"), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
