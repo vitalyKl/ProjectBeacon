@@ -2730,6 +2730,12 @@
   <data name="ProjectAccessRequired" xml:space="preserve">
     <value>Для просмотра входящих предложений требуется членство в проекте.</value>
   </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>Удалённое содержимое</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>Удалено</value>
+  </data>
   <data name="ContentHistory" xml:space="preserve">
     <value>История содержимого</value>
   </data>
