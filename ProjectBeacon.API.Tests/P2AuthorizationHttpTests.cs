@@ -78,27 +78,27 @@ public sealed class P2AuthorizationHttpTests
         var closeDenied = await client.PostAsync(
             $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
             content: null,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, closeDenied.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
         var closed = await client.PostAsync(
             $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
             content: null,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
 
         var wrongProjectReopen = await client.PostAsync(
             $"/v1/projects/{projectBId}/milestones/{milestoneId}/reopen",
             content: null,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, wrongProjectReopen.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
         var reopenDenied = await client.PostAsync(
             $"/v1/projects/{projectAId}/milestones/{milestoneId}/reopen",
             content: null,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, reopenDenied.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
