@@ -3,10 +3,12 @@ using System.Security.Cryptography;
 using System.Text;
 using Bunit;
 using Bunit.TestDoubles;
+using ProjectBeacon.Application.Persistence;
 using MudBlazor.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Domain.Entities.Content;
+using ProjectBeacon.Domain.Entities.Context;
 using ProjectBeacon.Domain.Enums;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
@@ -154,6 +156,65 @@ public sealed class InboxRenderTests : BUnitRenderBase
         Assert.Contains(">7<", cut.Markup);
         Assert.Contains("Earlier roadmap note", cut.Markup);
         Assert.Contains("Moves the milestone to the next roadmap position.", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Inbox_DeleteProposal_AcceptsWithoutSendingEditedPayload()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        var section = ContextSection.Create(
+            "architecture",
+            "Obsolete architecture",
+            "This section is no longer applicable.",
+            projectId,
+            ContextScopeType.Project,
+            key: "architecture");
+        section.MarkReviewed(userId.ToString("D"));
+        DbContext.ContextSections.Add(section);
+        new ContentWriter().AddVersion(
+            DbContext, section, "Human", userId.ToString("D"));
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var proposal = Proposal.Create(
+            projectId,
+            null,
+            null,
+            null,
+            ContentTargetKind.ContextSection,
+            section.Id,
+            ProposalOperation.Delete,
+            1,
+            new string('e', 64),
+            "{}",
+            "Removes an obsolete reviewed section.",
+            ProposalAuthorKind.Human,
+            userId,
+            null,
+            null,
+            "Human",
+            "inbox-delete-" + Guid.NewGuid().ToString("N"),
+            DateTime.UtcNow);
+        DbContext.Proposals.Add(proposal);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+        cut.FindAll(".mud-expand-panel-header").First(header =>
+            header.TextContent.Contains("Proposal details", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll("button").First(button =>
+            string.Equals(button.TextContent.Trim(), "Accept", StringComparison.OrdinalIgnoreCase)).Click();
+
+        var savedProposal = await DbContext.Proposals.SingleAsync(
+            item => item.Id == proposal.Id, CancellationToken.None);
+        await DbContext.Entry(savedProposal).ReloadAsync(CancellationToken.None);
+        Assert.Equal(ProposalStatus.Accepted, savedProposal.Status);
+        Assert.False(await DbContext.ContextSections.AsNoTracking().AnyAsync(
+            item => item.Id == section.Id, CancellationToken.None));
+        Assert.Contains(await DbContext.ContentVersions
+            .Where(item => item.TargetKind == ContentTargetKind.ContextSection
+                && item.TargetId == section.Id)
+            .Select(item => item.Revision)
+            .ToListAsync(CancellationToken.None), revision => revision == 2);
+        Assert.Contains("Proposal accepted", cut.Markup, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
