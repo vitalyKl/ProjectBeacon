@@ -145,6 +145,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RejectConstraintHandler>();
         services.AddTransient<ListContextRevisionsHandler>();
         services.AddTransient<ListContentVersionsHandler>();
+        services.AddTransient<ListDeletedContentTargetsHandler>();
         services.AddTransient<RestoreContentVersionHandler>();
         services.AddTransient<CreateProposalHandler>();
         services.AddTransient<AcceptProposalHandler>();
