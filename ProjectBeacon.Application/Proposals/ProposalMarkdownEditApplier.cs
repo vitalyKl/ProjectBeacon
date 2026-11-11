@@ -217,10 +217,10 @@ public static class ProposalMarkdownEditApplier
     private static string ReplaceSectionBody(string markdown, int bodyStart, int sectionEnd, string content)
     {
         var newLine = GetNewLine(markdown);
-        var replacement = content.Replace("\\r\\n", "\\n", StringComparison.Ordinal)
-            .Replace("\\r", "\\n", StringComparison.Ordinal)
-            .Replace("\\n", newLine, StringComparison.Ordinal)
-            .Trim('\\r', '\\n');
+        var replacement = content.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Replace("\n", newLine, StringComparison.Ordinal)
+            .Trim('\r', '\n');
         if (replacement.Length > 0)
             replacement += newLine + newLine;
         return markdown[..bodyStart] + replacement + markdown[sectionEnd..];
