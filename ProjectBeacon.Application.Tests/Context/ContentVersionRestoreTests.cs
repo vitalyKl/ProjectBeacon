@@ -831,6 +831,17 @@ public sealed class ContentVersionRestoreTests : IDisposable
         var taskAfterRestore = await _db.Tasks.AsNoTracking().SingleAsync(
             item => item.Id == linkedTask.Id, TestContext.Current.CancellationToken);
         Assert.Equal(milestone.Id, taskAfterRestore.MilestoneId);
+        var restoredSnapshot = await _db.ContentVersions.SingleAsync(
+            item => item.TargetKind == ContentTargetKind.Milestone
+                && item.TargetId == milestone.Id
+                && item.Revision == baseRevision + 2,
+            TestContext.Current.CancellationToken);
+        using (var restoredJson = JsonDocument.Parse(restoredSnapshot.ContentJson))
+        {
+            Assert.Contains(
+                linkedTask.Id,
+                restoredJson.RootElement.GetProperty("taskIds").EnumerateArray().Select(item => item.GetGuid()));
+        }
         var restoreAudit = await _db.AuditEvents.SingleAsync(
             item => item.Action == "content.restored"
                 && item.TargetType == nameof(ContentTargetKind.Milestone)
@@ -840,6 +851,7 @@ public sealed class ContentVersionRestoreTests : IDisposable
         {
             Assert.Equal(original.Id.ToString("D"), details.RootElement.GetProperty("sourceVersionId").GetString());
             Assert.Equal(baseRevision + 2, details.RootElement.GetProperty("restoredRevision").GetInt32());
+            Assert.Equal(1, details.RootElement.GetProperty("restoredTaskLinks").GetInt32());
         }
         Assert.DoesNotContain("Release milestone", restoreAudit.DetailsJson);
         var remainingDeleted = await new ListDeletedContentTargetsHandler(HandlerSqlite.Factory(_connection))
