@@ -37,6 +37,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         var project = DbContext.Projects.Single();
         var user = DbContext.Users.Single();
         var device = DbContext.Set<DaemonDevice>().Single();
+        device.Heartbeat();
         DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, "/workspace/project"));
         var command = WorkstationCommand.Create(
             device.Id,
