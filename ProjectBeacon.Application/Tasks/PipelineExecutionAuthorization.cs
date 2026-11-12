@@ -18,13 +18,13 @@ internal static class PipelineExecutionAuthorization
     public static async Task<Result> CanDriveAsync(
         IBeaconDb db,
         IAuthorizationService authorization,
-        ActorContext? actor,
+        ActorContext actor,
         TaskItem task,
         PipelineRole requiredHarnessRole,
         Guid? requiredSubtaskId,
         CancellationToken ct)
     {
-        if (actor is null || (!actor.IsHuman && !actor.IsApiToken))
+        if (!actor.IsHuman && !actor.IsApiToken)
             return Result.Forbidden();
 
         var permission = await authorization.CanAsync(
