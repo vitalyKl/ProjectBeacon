@@ -650,9 +650,9 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task ActivePlannerHarness_CanStartActorAndRequestItsLaunchWithinPinnedTask()
+    public async Task PlannerHarness_CannotStartOrLaunchActorButCanLaunchReviewWithinPinnedTask()
     {
-        var (projectId, task) = await SeedTaskAsync("Planner-scoped Actor launch");
+        var (projectId, task) = await SeedTaskAsync("Planner role launch boundaries");
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var spawner = new FakeSpawner();
 
@@ -689,21 +689,38 @@ public sealed partial class PipelineHandlerTests
                 TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
 
-        var actorSession = await new StartActorSessionHandler(factory, spawner)
+        var directActorStart = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(
                 new StartActorSessionRequest(task.Id, subtask.Value!.Id), plannerActor),
                 TestContext.Current.CancellationToken);
-        Assert.True(actorSession.Success, actorSession.Error);
+        Assert.False(directActorStart.Success);
+        Assert.Equal("Forbidden.", directActorStart.Error);
 
-        // No runtime is configured in this unit test. Reaching that domain validation
-        // proves that CanLaunchAsync accepted the active Planner's exact task/session scope.
-        var launch = await new LaunchSessionHandler(factory)
+        var actorSession = PipelineSession.Create(
+            task.Id, projectId, PipelineRole.Actor, "actor", subtask.Value.Id, null, null);
+        var reviewSession = PipelineSession.Create(
+            task.Id, projectId, PipelineRole.Review, "review", null, null, null);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.PipelineSessions.AddRange(actorSession, reviewSession);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actorLaunch = await new LaunchSessionHandler(factory)
             .HandleAsync(new LaunchSessionCommand(
-                new LaunchSessionRequest(actorSession.Value!.Id), plannerActor),
+                new LaunchSessionRequest(actorSession.Id), plannerActor),
                 TestContext.Current.CancellationToken);
+        Assert.False(actorLaunch.Success);
+        Assert.Equal("Forbidden.", actorLaunch.Error);
 
-        Assert.False(launch.Success);
-        Assert.Contains("No online pipeline workstation", launch.Error);
+        // Review is the one session the active Planner harness may auto-launch.
+        // With no workstation configured, reaching that validation proves the auth check passed.
+        var reviewLaunch = await new LaunchSessionHandler(factory)
+            .HandleAsync(new LaunchSessionCommand(
+                new LaunchSessionRequest(reviewSession.Id), plannerActor),
+                TestContext.Current.CancellationToken);
+        Assert.False(reviewLaunch.Success);
+        Assert.Contains("No online pipeline workstation", reviewLaunch.Error);
     }
 
 }
