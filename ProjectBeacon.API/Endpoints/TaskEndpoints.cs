@@ -137,17 +137,19 @@ public static class TaskEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ChangeStatus(Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
+    private static async Task<IResult> ChangeStatus(Guid taskId, [FromBody] ChangeTaskStatusBody body, HttpContext ctx, ChangeTaskStatusHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status)));
+        var result = await handler.HandleAsync(
+            new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> ChangeStatusInProject(Guid projectId, Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
+    private static async Task<IResult> ChangeStatusInProject(Guid projectId, Guid taskId, [FromBody] ChangeTaskStatusBody body, HttpContext ctx, ChangeTaskStatusHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId)));
+        var result = await handler.HandleAsync(
+            new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
@@ -156,19 +158,22 @@ public static class TaskEndpoints
     /// <summary>JSON body for the task status PATCH routes.</summary>
     public record ChangeTaskStatusBody(TaskItemStatus Status);
 
-    private static async Task<IResult> ChangeSubStage(Guid taskId, [FromBody] TaskSubStage subStage, ChangeSubStageHandler handler)
+    private static async Task<IResult> ChangeSubStage(Guid taskId, [FromBody] TaskSubStage subStage, HttpContext ctx, ChangeSubStageHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, subStage)));
+        var result = await handler.HandleAsync(
+            new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, subStage), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, ClaimTaskHandler handler)
+    private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, HttpContext ctx, ClaimTaskHandler handler, CancellationToken ct)
     {
-        var targetProject = projectId != Guid.Empty ? projectId : tenant.ProjectId ?? Guid.Empty;
-        var result = await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject)));
+        var actor = ctx.GetActor();
+        var targetProject = projectId != Guid.Empty ? projectId : tenant.ProjectId ?? actor.ProjectId ?? Guid.Empty;
+        var result = await handler.HandleAsync(
+            new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject), actor), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -187,21 +192,22 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> SetDependencies(Guid taskId, [FromBody] SetDependenciesRequest request, SetDependenciesHandler handler)
+    private static async Task<IResult> SetDependencies(Guid taskId, [FromBody] SetDependenciesRequest request, HttpContext ctx, SetDependenciesHandler handler, CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new SetDependenciesCommand(request));
+        var result = await handler.HandleAsync(new SetDependenciesCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
+    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, HttpContext ctx, AddReviewNotesHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
+        var result = await handler.HandleAsync(
+            new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))

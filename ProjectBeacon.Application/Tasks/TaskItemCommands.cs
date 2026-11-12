@@ -50,7 +50,7 @@ public record ChangeSubStageRequest(Guid TaskId, TaskSubStage SubStage);
 /// <summary>
 /// Command for change sub stage.
 /// </summary>
-public record ChangeSubStageCommand(ChangeSubStageRequest Request) : ICommand<Result<TaskItemDto>>;
+public record ChangeSubStageCommand(ChangeSubStageRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and comment text. The author is the caller on the command, not a field here.
 /// </summary>
@@ -66,7 +66,7 @@ public record SetDependenciesRequest(Guid TaskId, IList<Guid> DependentTaskIds);
 /// <summary>
 /// Command for set dependencies.
 /// </summary>
-public record SetDependenciesCommand(SetDependenciesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record SetDependenciesCommand(SetDependenciesRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the review notes. Empty notes are rejected.
 /// </summary>
@@ -74,7 +74,7 @@ public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes);
 /// <summary>
 /// Command for add review notes.
 /// </summary>
-public record AddReviewNotesCommand(AddReviewNotesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record AddReviewNotesCommand(AddReviewNotesRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the target status. Done fails unless a completed review run exists.
 /// </summary>
@@ -82,7 +82,7 @@ public record ChangeTaskStatusRequest(Guid TaskId, TaskItemStatus Status, Guid? 
 /// <summary>
 /// Command for change task status.
 /// </summary>
-public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : ICommand<Result<TaskItemDto>>;
+public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Optional review counts. ReviewerRun alone is not proof that the work is done.
 /// </summary>

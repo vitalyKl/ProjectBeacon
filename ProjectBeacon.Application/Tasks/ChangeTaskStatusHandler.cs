@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -11,8 +12,13 @@ using Microsoft.EntityFrameworkCore;
 public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ChangeTaskStatusHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ChangeTaskStatusHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(ChangeTaskStatusCommand command, CancellationToken ct = default)
     {
@@ -23,6 +29,12 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
         var task = await query.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Task, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         if (command.Request.Status == TaskItemStatus.Done)
         {
