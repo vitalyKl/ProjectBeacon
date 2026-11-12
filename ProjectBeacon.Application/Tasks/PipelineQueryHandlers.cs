@@ -59,7 +59,14 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var devices = await db.DaemonDevices.IgnoreQueryFilters()
             .Where(d => deviceIds.Contains(d.Id)).ToListAsync(ct);
         var now = DateTime.UtcNow;
-        var nativeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id, (_, device) => device)
+        var runtimeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id,
+            (runtime, device) => device).ToList();
+        var selectedPipelineDeviceId = runtimeDevices
+            .Where(device => device.IsOnline(now))
+            .OrderByDescending(device => device.LastHeartbeatAt)
+            .Select(device => (Guid?)device.Id)
+            .FirstOrDefault();
+        var nativeDevices = runtimeDevices
             .Where(device => IsNativeRuntime(device.WorkstationJson)).ToList();
         var hasNative = nativeDevices.Count > 0;
         var hasOnlineNative = nativeDevices.Any(device => device.IsOnline(now));
@@ -93,22 +100,30 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             return binding is not null && configured.Contains(binding.ModelBackendId);
         }
 
-        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
-            .Where(command => command.ProjectId == projectId
-                && command.Kind == WorkstationCommandKind.GitSync
-                && command.Status == WorkstationCommandStatus.Succeeded
-                && command.ResultJson != null)
-            .OrderByDescending(command => command.CompletedAt)
-            .Select(command => new { command.ResultJson, command.CompletedAt })
-            .FirstOrDefaultAsync(ct);
+        string? lastGitSyncResultJson = null;
+        DateTime? lastGitSyncCompletedAt = null;
+        if (selectedPipelineDeviceId is { } selectedDeviceId)
+        {
+            var lastGitSync = await db.WorkstationCommands.AsNoTracking()
+                .Where(command => command.ProjectId == projectId
+                    && command.DeviceId == selectedDeviceId
+                    && command.Kind == WorkstationCommandKind.GitSync
+                    && command.Status == WorkstationCommandStatus.Succeeded
+                    && command.ResultJson != null)
+                .OrderByDescending(command => command.CompletedAt)
+                .Select(command => new { command.ResultJson, command.CompletedAt })
+                .FirstOrDefaultAsync(ct);
+            lastGitSyncResultJson = lastGitSync?.ResultJson;
+            lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+        }
 
         int? lastKnownRepositoryBehind = null;
         string? lastKnownRepositoryBranch = null;
-        if (!string.IsNullOrWhiteSpace(lastGitSync?.ResultJson))
+        if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
             try
             {
-                using var gitSyncResult = JsonDocument.Parse(lastGitSync.ResultJson);
+                using var gitSyncResult = JsonDocument.Parse(lastGitSyncResultJson);
                 var root = gitSyncResult.RootElement;
                 if (root.ValueKind == JsonValueKind.Object
                     && root.TryGetProperty("behind", out var behindElement)
@@ -135,7 +150,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             HasModel(PipelineRole.Review),
             lastKnownRepositoryBehind,
             lastKnownRepositoryBranch,
-            lastKnownRepositoryBehind is null ? null : lastGitSync?.CompletedAt);
+            lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
