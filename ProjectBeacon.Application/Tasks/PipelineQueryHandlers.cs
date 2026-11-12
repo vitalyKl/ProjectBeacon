@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Domain.Entities.Agents;
 using Domain.Entities.Devices;
+using Domain.Common;
 using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
@@ -47,7 +48,14 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         var state = await PipelineSupport.StateAsync(db, task, ct);
         var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
-        return Result.Ok(state with { Preflight = preflight });
+        var repositoryBehind = preflight.LastKnownRepositoryBehind is > 0;
+        return Result.Ok(state with
+        {
+            Preflight = preflight,
+            CanStart = state.CanStart && !repositoryBehind,
+            StartBlockedReason = state.StartBlockedReason
+                ?? (repositoryBehind ? "PipelineRepositoryBehind" : null)
+        });
     }
 
     private static async Task<PipelinePreflightDto> BuildPreflightAsync(
@@ -61,11 +69,14 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var now = DateTime.UtcNow;
         var runtimeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id,
             (runtime, device) => device).ToList();
-        var selectedPipelineDeviceId = runtimeDevices
+        var selectedPipelineDevice = runtimeDevices
             .Where(device => device.IsOnline(now))
             .OrderByDescending(device => device.LastHeartbeatAt)
-            .Select(device => (Guid?)device.Id)
             .FirstOrDefault();
+        var selectedPipelineDeviceId = selectedPipelineDevice?.Id;
+        var pipelineGitSyncSupported = selectedPipelineDevice is not null
+            && WorkstationCapabilities.Supports(
+                selectedPipelineDevice.ProbeJson, WorkstationCapabilities.GitSyncV1);
         var nativeDevices = runtimeDevices
             .Where(device => IsNativeRuntime(device.WorkstationJson)).ToList();
         var hasNative = nativeDevices.Count > 0;
@@ -150,7 +161,9 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             HasModel(PipelineRole.Review),
             lastKnownRepositoryBehind,
             lastKnownRepositoryBranch,
-            lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt);
+            lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt,
+            selectedPipelineDeviceId,
+            pipelineGitSyncSupported);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
