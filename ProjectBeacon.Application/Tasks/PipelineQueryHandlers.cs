@@ -173,15 +173,24 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                         && outcomeElement.TryGetInt32(out var outcome)
                         && (outcome == (int)GitSyncOutcome.Failed
                             || outcome == (int)GitSyncOutcome.Refused);
+                    var clean = root.TryGetProperty("clean", out var cleanElement)
+                        && cleanElement.ValueKind == JsonValueKind.True;
                     if (root.TryGetProperty("reasonCode", out var reasonElement)
                         && reasonElement.ValueKind == JsonValueKind.Number
                         && reasonElement.TryGetInt32(out var reason)
                         && Enum.IsDefined(typeof(GitSyncRefusalCode), reason))
                         lastKnownRepositoryReasonCode = (GitSyncRefusalCode)reason;
+                    lastKnownRepositoryReasonCode ??= detached
+                        ? GitSyncRefusalCode.Detached
+                        : !hasUpstream
+                            ? GitSyncRefusalCode.NoUpstream
+                            : !clean
+                                ? GitSyncRefusalCode.DirtyWorkingTree
+                                : diverged
+                                    ? GitSyncRefusalCode.Diverged
+                                    : failedOrRefused ? GitSyncRefusalCode.FetchFailed : null;
                     repositorySyncBlocked = behind > 0 || !hasUpstream || detached || diverged
-                        || failedOrRefused
-                        || (root.TryGetProperty("clean", out var cleanElement)
-                            && cleanElement.ValueKind == JsonValueKind.False);
+                        || !clean || failedOrRefused;
                 }
             }
             catch (JsonException)
