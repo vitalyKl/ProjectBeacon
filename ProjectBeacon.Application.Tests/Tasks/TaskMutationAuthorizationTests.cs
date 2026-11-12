@@ -73,11 +73,6 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
             new ChangeTaskStatusCommand(
                 new ChangeTaskStatusRequest(_taskId, TaskItemStatus.Todo), stranger),
             TestContext.Current.CancellationToken);
-        var update = await new UpdateTaskHandler(_factory, _authorization).HandleAsync(
-            new UpdateTaskCommand(new UpdateTaskRequest(
-                _taskId, "member title", "member description",
-                TaskPriority.High, TaskType.Feature, null, null), actor),
-            TestContext.Current.CancellationToken);
         var substage = await new ChangeSubStageHandler(_factory, _authorization).HandleAsync(
             new ChangeSubStageCommand(
                 new ChangeSubStageRequest(_taskId, TaskSubStage.Review), stranger),
@@ -113,6 +108,11 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
         var actor = new ActorContext(
             ActorType.Human, _memberId, false, null, null, null, null, ApiTokenCapability.None);
 
+        var update = await new UpdateTaskHandler(_factory, _authorization).HandleAsync(
+            new UpdateTaskCommand(new UpdateTaskRequest(
+                _taskId, "member title", "member description",
+                TaskPriority.High, TaskType.Feature, null, null), actor),
+            TestContext.Current.CancellationToken);
         var substage = await new ChangeSubStageHandler(_factory, _authorization).HandleAsync(
             new ChangeSubStageCommand(
                 new ChangeSubStageRequest(_taskId, TaskSubStage.Review), actor),
