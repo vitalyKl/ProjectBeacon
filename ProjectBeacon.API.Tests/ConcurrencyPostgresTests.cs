@@ -213,7 +213,6 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             taskId = task.Id;
             subtaskId = sub.Id;
             projectId = project.Id;
-            projectId = project.Id;
             userId = user.Id;
         }
 
