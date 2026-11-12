@@ -34,7 +34,7 @@ public record UpdateTaskRequest(
 /// <summary>
 /// Command for update task.
 /// </summary>
-public record UpdateTaskCommand(UpdateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
+public record UpdateTaskCommand(UpdateTaskRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Fields for delete task.
 /// </summary>
