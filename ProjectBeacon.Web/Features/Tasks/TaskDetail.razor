@@ -123,7 +123,8 @@ else
     </header>
     <section class="beacon-task-content-history">
         <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
-                   OnClick="LoadTaskContentHistory" Disabled="_busy || _taskHistoryLoading">
+                   OnClick="LoadTaskContentHistory" Disabled="_busy || _taskHistoryLoading"
+                   data-testid="task-content-history">
             @L["ContentHistory"]
         </MudButton>
         @if (_showTaskContentHistory)
@@ -148,7 +149,7 @@ else
                                     @version.ChangedByType · @version.ChangedById
                                 </MudText>
                                 <MudText Typo="Typo.subtitle2">@L["Description"]</MudText>
-                                @if (!string.IsNullOrWhiteSpace(TaskHistoryField(version.ContentJson, "description")))
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryDescription(version)))
                                 {
                                     <MarkdownView Text="@TaskHistoryField(version.ContentJson, "description")" />
                                 }
@@ -156,14 +157,15 @@ else
                                 {
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(TaskHistoryField(version.ContentJson, "reviewNotes")))
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryReviewNotes(version)))
                                 {
                                     <MudText Typo="Typo.subtitle2">@L["ReviewNotes"]</MudText>
                                     <MarkdownView Text="@TaskHistoryField(version.ContentJson, "reviewNotes")" />
                                 }
                                 <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
                                            Disabled="_busy || _task is null || version.Revision >= _task.ContentRevision"
-                                           OnClick="@(() => RestoreTaskContentVersion(version))">
+                                           OnClick="@(() => RestoreTaskContentVersion(version))"
+                                           data-testid="@($"restore-task-revision-{version.Revision}")">
                                     @L["RestoreRevision"]
                                 </MudButton>
                             </MudStack>
@@ -652,6 +654,12 @@ else
             _busy = false;
         }
     }
+
+    private static string TaskHistoryDescription(ContentVersionDto version) =>
+        TaskHistoryField(version.ContentJson, "description");
+
+    private static string TaskHistoryReviewNotes(ContentVersionDto version) =>
+        TaskHistoryField(version.ContentJson, "reviewNotes");
 
     private static string TaskHistoryField(string json, string propertyName)
     {
