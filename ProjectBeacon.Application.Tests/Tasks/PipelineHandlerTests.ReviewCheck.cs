@@ -22,7 +22,9 @@ public sealed partial class PipelineHandlerTests
         Guid projectId,
         Guid taskId,
         Guid sessionId,
-        Guid? tokenId = null) =>
+        Guid? tokenId = null,
+        PipelineRole role = PipelineRole.Review,
+        Guid? subtaskId = null) =>
         new(
             ActorType.ApiToken,
             userId,
@@ -32,8 +34,9 @@ public sealed partial class PipelineHandlerTests
             projectId,
             null,
             ApiTokenCapability.TaskRead | ApiTokenCapability.SessionDrive,
-            PipelineRole: PipelineRole.Review,
+            PipelineRole: role,
             PipelineTaskId: taskId,
+            PipelineSubtaskId: subtaskId,
             PipelineSessionId: sessionId);
 
     private static ActorContext HumanActor(Guid userId) =>
@@ -130,6 +133,49 @@ public sealed partial class PipelineHandlerTests
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Conflict, result.Kind);
+    }
+
+    [Fact]
+    public async Task ReviewCheck_Token_NonReviewerRoleIsForbidden()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var sessionId = await SeedOpenReviewRunAsync(projectId, task.Id);
+        var actorId = Guid.NewGuid();
+
+        var result = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
+            .HandleAsync(new RecordReviewCheckCommand(
+                new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), actorId, null),
+                TokenActor(actorId, projectId, task.Id, sessionId, role: PipelineRole.Actor)),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
+    public async Task ReviewCheck_Token_MismatchedTaskOrSessionScopeIsForbidden()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var sessionId = await SeedOpenReviewRunAsync(projectId, task.Id);
+        var actorId = Guid.NewGuid();
+
+        var wrongTask = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
+            .HandleAsync(new RecordReviewCheckCommand(
+                new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), actorId, null),
+                TokenActor(actorId, projectId, Guid.NewGuid(), sessionId)),
+                TestContext.Current.CancellationToken);
+        var wrongSession = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
+            .HandleAsync(new RecordReviewCheckCommand(
+                new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), actorId, null),
+                TokenActor(actorId, projectId, task.Id, Guid.NewGuid())),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(wrongTask.Success);
+        Assert.Equal(ErrorKind.Forbidden, wrongTask.Kind);
+        Assert.False(wrongSession.Success);
+        Assert.Equal(ErrorKind.Forbidden, wrongSession.Kind);
     }
 
     [Fact]
