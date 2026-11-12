@@ -245,12 +245,13 @@
     private Dictionary<string, bool> _bool = new();
     private Dictionary<string, List<string>> _multi = new();
     private Guid _userId;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private bool _answering;
 
     protected override async Task OnInitializedAsync()
     {
-        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
-        _userId = actor.UserId ?? Guid.Empty;
+        _actorContext = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        _userId = _actorContext.UserId ?? Guid.Empty;
     }
 
     // The host re-pushes the same part on every refresh; re-parsing would wipe the draft
@@ -413,7 +414,7 @@
             if (PipelineTaskId is { } taskId && PipelineSessionId is { } pipelineSessionId)
             {
                 var result = await ReplyPipelineForm.HandleAsync(new ReplyPipelineFormCommand(
-                    new ReplyPipelineFormRequest(taskId, pipelineSessionId, _userId, QFormId, answer.ToJsonString())),
+                    new ReplyPipelineFormRequest(taskId, pipelineSessionId, QFormId, answer.ToJsonString()), _actorContext),
                     CancellationToken.None);
                 success = result.Success;
                 error = result.Error;
