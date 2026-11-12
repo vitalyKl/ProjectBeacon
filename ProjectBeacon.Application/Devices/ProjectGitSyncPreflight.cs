@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Persistence;
+using Domain.Common;
 using Domain.Entities.Devices;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
