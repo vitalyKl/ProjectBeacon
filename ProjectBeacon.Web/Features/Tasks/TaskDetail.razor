@@ -797,7 +797,7 @@ else
                 Snackbar.Add(PlannerPreflightMessage, Severity.Warning);
                 return;
             }
-            var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
+            var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -904,7 +904,7 @@ else
                 Snackbar.Add(ReviewPreflightMessage, Severity.Warning);
                 return;
             }
-            var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
+            var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

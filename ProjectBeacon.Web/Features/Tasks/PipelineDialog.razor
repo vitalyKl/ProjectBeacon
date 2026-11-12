@@ -163,25 +163,25 @@
                 }
                 case PipelineDialogMode.ReportResult:
                 {
-                    var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim())));
+                    var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["ResultReported"].Value);
                     break;
                 }
                 case PipelineDialogMode.FailSubtask:
                 {
-                    var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim())));
+                    var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["SubtaskFailedMsg"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewApprove:
                 {
-                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim())));
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["VerdictRecorded"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewReopen:
                 {
-                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id)));
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id), _actorContext));
                     outcome = (result.Success, result.Error, L["SubtaskReopened"].Value);
                     break;
                 }
