@@ -126,6 +126,7 @@
     private bool _open;
     private string? _block;
     private Guid _userId;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private ChatSessionDto? _session;
     private List<ChatSessionDto> _sessions = [];
     private List<WaitingPipelineTaskDto> _waitingTasks = [];
@@ -148,7 +149,8 @@
     {
         Navigation.LocationChanged += OnLocation;
         UpdateVisible();
-        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        _actorContext = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var actor = _actorContext;
         if (actor.UserId is not null)
             _userId = actor.UserId.Value;
         var current = await CurrentProject.HandleAsync(actor);
@@ -207,7 +209,7 @@
         if (_userId == Guid.Empty)
             return;
         var result = await ListWaitingTasks.HandleAsync(
-            new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
+            new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId), _actorContext));
         _waitingTasks = result.Success ? result.Value!.ToList() : [];
     }
 
