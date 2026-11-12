@@ -25,7 +25,7 @@ public sealed class TenantContextBinder
             return;
 
         await using var db = _dbFactory.CreateDbContext();
-        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
+        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct, actor.OrgId);
         _tenant.Assign(projectId, orgId, unscoped: false);
     }
 }
