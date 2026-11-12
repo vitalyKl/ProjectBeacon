@@ -18,11 +18,16 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public StartReviewHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public StartReviewHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartReviewCommand command, CancellationToken ct = default)
@@ -32,6 +37,11 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
+
+        var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+            db, _authorization, command.Actor, task, PipelineRole.Planner, requiredSubtaskId: null, ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineSessionDto>(permission);
 
         if (task.PipelineStage != TaskPipelineStage.Executing)
             return Result.Failure<PipelineSessionDto>($"Cannot start review in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
@@ -113,8 +123,13 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
 public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public RecordReviewVerdictHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RecordReviewVerdictHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RecordReviewVerdictCommand command, CancellationToken ct = default)
     {
@@ -127,6 +142,11 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+            db, _authorization, command.Actor, task, PipelineRole.Review, requiredSubtaskId: null, ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         if (task.PipelineStage != TaskPipelineStage.Reviewing)
             return Result.Failure<PipelineStateDto>($"Cannot record verdict in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
