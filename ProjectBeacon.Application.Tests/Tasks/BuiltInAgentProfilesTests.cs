@@ -85,6 +85,9 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains(McpToolNames.KnowledgePropose, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeProposals, docs.Tools);
         Assert.Contains(McpToolNames.KnowledgeWithdraw, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.ContextCreateDraft, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.ConstraintPropose, docs.Tools);
+        Assert.DoesNotContain(McpToolNames.DecisionPropose, docs.Tools);
         Assert.Contains(McpToolNames.HashFile, docs.Tools);
         Assert.Contains(McpToolNames.HashText, docs.Tools);
         Assert.DoesNotContain(McpToolNames.HashFile, knowledge.Tools);
