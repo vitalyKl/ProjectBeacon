@@ -41,8 +41,8 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var request = new CreateDecisionRequest(
             _projectId, "Use a review gate", "Human-owned knowledge", "Keep Proposed until reviewed", null);
 
-        var first = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
-        var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+        var first = await handler.HandleProposalAsync(request, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
+        var retry = await handler.HandleProposalAsync(request, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
 
         Assert.True(first.Success, first.Error);
         Assert.True(retry.Success, retry.Error);
@@ -55,22 +55,22 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
     public async Task Accept_Then_Supersede_And_Deprecate()
     {
         var create = new CreateDecisionHandler(HandlerSqlite.Factory(_connection));
-        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", "c"), TestContext.Current.CancellationToken);
-        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestContext.Current.CancellationToken);
+        var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", "c"), TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
+        var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
         Assert.True(first.Success);
         Assert.True(second.Success);
 
         var accept = new AcceptDecisionHandler(HandlerSqlite.Factory(_connection));
-        var accepted = await accept.HandleAsync(first.Value!.Id, TestContext.Current.CancellationToken);
+        var accepted = await accept.HandleAsync(first.Value!.Id, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
         Assert.Equal(DecisionStatus.Accepted, accepted.Value!.Status);
 
         var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection));
-        var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, TestContext.Current.CancellationToken);
+        var replaced = await supersede.HandleAsync(first.Value.Id, second.Value!.Id, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
         Assert.True(replaced.Success, replaced.Error);
         Assert.Equal(DecisionStatus.Superseded, replaced.Value!.Status);
 
         var deprecate = new DeprecateDecisionHandler(HandlerSqlite.Factory(_connection));
-        var deprecated = await deprecate.HandleAsync(second.Value.Id, TestContext.Current.CancellationToken);
+        var deprecated = await deprecate.HandleAsync(second.Value.Id, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
         Assert.True(deprecated.Success, deprecated.Error);
         Assert.Equal(DecisionStatus.Deprecated, deprecated.Value!.Status);
     }
@@ -82,7 +82,7 @@ public sealed class DecisionLifecycleHandlerTests : IDisposable
         var first = await create.HandleAsync(new CreateDecisionRequest(_projectId, "A", "ctx", "body A", null), TestContext.Current.CancellationToken);
         var second = await create.HandleAsync(new CreateDecisionRequest(_projectId, "B", "ctx", "body B", null), TestContext.Current.CancellationToken);
         var supersede = new SupersedeDecisionHandler(HandlerSqlite.Factory(_connection));
-        var result = await supersede.HandleAsync(first.Value!.Id, second.Value!.Id, TestContext.Current.CancellationToken);
+        var result = await supersede.HandleAsync(first.Value!.Id, second.Value!.Id, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
     }
 }
