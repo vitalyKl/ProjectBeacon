@@ -115,17 +115,20 @@ internal static class ProjectGitSyncPreflight
                 || !TryReadNonNegativeInt(root, "behind", out _)
                 || !TryReadBoolean(root, "clean", out _)
                 || !TryReadBoolean(root, "detached", out _)
-                || !TryReadBoolean(root, "hasUpstream", out _)
+                || !TryReadBoolean(root, "hasUpstream", out var hasUpstream)
                 || !TryReadBoolean(root, "diverged", out _)
-                || !TryReadNonEmptyString(root, "branch")
-                || !TryReadNonEmptyString(root, "upstream")
-                || !TryReadNonEmptyString(root, "headAfter")
+                || !TryReadNullableString(root, "branch", out var branchName)
+                || !TryReadNullableString(root, "upstream", out var upstream)
+                || !TryReadNullableString(root, "headAfter", out _)
                 || !root.TryGetProperty("outcome", out var outcome)
-                || !TryReadOutcome(outcome))
+                || !TryReadOutcome(outcome)
+                || (!root.GetProperty("detached").GetBoolean() && string.IsNullOrWhiteSpace(branchName))
+                || (hasUpstream && string.IsNullOrWhiteSpace(upstream)))
                 return false;
 
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             options.Converters.Add(new JsonStringEnumConverter());
+            options.Converters.Add(new JsonStringEnumConverter<GitSyncRefusalCode>());
             var parsed = JsonSerializer.Deserialize<GitSyncResultDto>(root.GetRawText(), options);
             if (parsed is null)
                 return false;
@@ -149,10 +152,18 @@ internal static class ProjectGitSyncPreflight
             && Enum.IsDefined(parsed);
     }
 
-    private static bool TryReadNonEmptyString(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var element)
-        && element.ValueKind == JsonValueKind.String
-        && !string.IsNullOrWhiteSpace(element.GetString());
+    private static bool TryReadNullableString(JsonElement root, string name, out string? value)
+    {
+        value = null;
+        if (!root.TryGetProperty(name, out var element))
+            return false;
+        if (element.ValueKind == JsonValueKind.Null)
+            return true;
+        if (element.ValueKind != JsonValueKind.String)
+            return false;
+        value = element.GetString();
+        return true;
+    }
 
     private static bool TryReadNonNegativeInt(JsonElement root, string name, out int value)
     {
