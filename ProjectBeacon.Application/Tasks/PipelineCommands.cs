@@ -78,7 +78,8 @@ public record PipelinePreflightDto(
     string? LastKnownRepositoryBranch = null,
     DateTime? LastKnownRepositoryStatusAt = null,
     Guid? PipelineDeviceId = null,
-    bool PipelineGitSyncSupported = false);
+    bool PipelineGitSyncSupported = false,
+    bool RepositorySyncInProgress = false);
 
 /// <summary>Finds the most recently active pipeline for the current project.</summary>
 public record GetLivePipelineTaskRequest(Guid ProjectId);
