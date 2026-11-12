@@ -94,7 +94,8 @@ public sealed record ProposalDto(
     string? ConflictReason,
     Guid? SupersededById,
     int StateRevision,
-    Guid? ApplyCommandId = null);
+    Guid? ApplyCommandId = null,
+    string? AuthorModel = null);
 
 /// <summary>
 /// Creates revision-bound proposals. Agent submissions are accepted only from a live Actor
@@ -358,7 +359,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                         author.ProfileKey,
                         author.Role,
                         normalizedIdempotencyKey,
-                        now);
+                        now,
+                        author.Model);
                 }
                 catch (ArgumentException exception)
                 {
@@ -646,13 +648,22 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         if (session is null)
             return ProposalAuthorScope.Forbidden("The Actor pipeline session is no longer active.");
 
+        string? authorModel = null;
+        if (session.ModelBackendId is { } modelBackendId && command.Actor.UserId is { } modelOwnerId)
+        {
+            authorModel = await db.LocalModelBackends
+                .Where(model => model.Id == modelBackendId && model.UserId == modelOwnerId)
+                .Select(model => model.Name)
+                .FirstOrDefaultAsync(ct);
+        }
+
         var taskExists = await db.Tasks.AnyAsync(task =>
             task.Id == command.PipelineTaskId.Value && task.ProjectId == command.ProjectId, ct);
         if (!taskExists)
             return ProposalAuthorScope.Forbidden("The Actor task does not belong to this project.");
 
         return new ProposalAuthorScope(true, command.PipelineTaskId, command.SubtaskId, command.SessionId,
-            subtask.ProfileKey, PipelineRole.Actor.ToString(), null);
+            subtask.ProfileKey, PipelineRole.Actor.ToString(), authorModel, null);
     }
 
     private static bool SameRequest(
@@ -701,10 +712,11 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         Guid? SessionId,
         string? ProfileKey,
         string? Role,
+        string? Model,
         string? Error)
     {
-        public static ProposalAuthorScope Human => new(true, null, null, null, null, "Human", null);
-        public static ProposalAuthorScope Forbidden(string reason) => new(false, null, null, null, null, null, reason);
+        public static ProposalAuthorScope Human => new(true, null, null, null, null, "Human", null, null);
+        public static ProposalAuthorScope Forbidden(string reason) => new(false, null, null, null, null, null, null, reason);
     }
 
     private static ProposalDto Map(Proposal proposal) => ProposalMapper.Map(proposal);
@@ -1334,7 +1346,8 @@ public sealed class ListProposalsHandler
                 proposal.AuthorUserId, proposal.AuthorTokenId, proposal.AuthorProfileKey, proposal.AuthorRole,
                 proposal.CreatedAt, proposal.ExpiresAt, proposal.DecidedAt, proposal.DecidedByUserId,
                 proposal.DecisionNote, proposal.AcceptedPayloadJson, proposal.AppliedRevision,
-                proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision, proposal.ApplyCommandId))
+                proposal.ConflictRevision, proposal.ConflictReason, proposal.SupersededById, proposal.StateRevision,
+                proposal.ApplyCommandId, proposal.AuthorModel))
             .ToListAsync(ct);
         return Result.Ok((IReadOnlyList<ProposalDto>)items);
     }
@@ -1527,7 +1540,7 @@ internal static class ProposalMapper
         proposal.AuthorProfileKey, proposal.AuthorRole, proposal.CreatedAt, proposal.ExpiresAt,
         proposal.DecidedAt, proposal.DecidedByUserId, proposal.DecisionNote, proposal.AcceptedPayloadJson,
         proposal.AppliedRevision, proposal.ConflictRevision, proposal.ConflictReason,
-        proposal.SupersededById, proposal.StateRevision, proposal.ApplyCommandId);
+        proposal.SupersededById, proposal.StateRevision, proposal.ApplyCommandId, proposal.AuthorModel);
 }
 
 /// <summary>Strict target-specific proposal payload validation and content application.</summary>
