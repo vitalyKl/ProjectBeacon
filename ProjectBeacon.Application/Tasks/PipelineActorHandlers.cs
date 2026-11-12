@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
 using Application.Authorization;
-using Application.Authorization;
 using Domain.Common;
 using Domain.Entities.Agents;
 using Domain.Entities.Tasks;
