@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Tasks;
@@ -210,15 +211,25 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
+    private readonly IAuthorizationService _authorization;
 
-    public RecordReviewCheckHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
+    public RecordReviewCheckHandler(
+        IBeaconDbFactory dbFactory,
+        EnqueueCommandHandler enqueue,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _enqueue = enqueue;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RecordReviewCheckCommand command, CancellationToken ct = default)
     {
+        if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
+            return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
+        if (command.Actor.UserId is not { } actorUserId || actorUserId != command.Request.ActorId)
+            return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
+
         var bodyCommand = command.Request.CheckCommand?.Trim();
 
         string checkCommand;
@@ -239,6 +250,29 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Execute,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
+
+        if (command.Actor.IsApiToken)
+        {
+            if (command.Actor.PipelineRole != PipelineRole.Review
+                || command.Actor.PipelineTaskId != task.Id
+                || command.Actor.PipelineSessionId is not { } scopedSessionId)
+                return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
+
+            var scopedReviewSession = await db.PipelineSessions.AsNoTracking().AnyAsync(session =>
+                session.Id == scopedSessionId
+                && session.TaskId == task.Id
+                && session.ProjectId == task.ProjectId
+                && session.Role == PipelineRole.Review
+                && session.Status == SessionStatus.Active, ct);
+            if (!scopedReviewSession)
+                return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
+        }
 
         var reviewRun = await db.ReviewRuns.AsNoTracking()
             .Where(r => r.TaskId == task.Id && r.Status == ReviewRunStatus.Started && r.TargetRunId != null)
