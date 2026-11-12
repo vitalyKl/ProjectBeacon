@@ -2,12 +2,16 @@ namespace ProjectBeacon.API.Tests;
 
 using Application.Devices;
 using Domain.Common;
+using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.Http;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 
 [Collection("postgres-serial")]
@@ -70,6 +74,92 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         Assert.DoesNotContain(taskA, none);
         Assert.DoesNotContain(taskB, none);
         Assert.Empty(none);
+    }
+
+    [Theory]
+    [InlineData(MemberRole.Owner)]
+    [InlineData(MemberRole.Admin)]
+    public async Task OrganizationOwnerOrAdmin_EntersProjectScopeAndReadsThroughPostgresRlsWithoutProjectMembership(
+        MemberRole role)
+    {
+        _postgres.RequirePostgres();
+
+        Guid orgId;
+        Guid projectId;
+        Guid userId;
+        Guid sectionId;
+
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("Inherited tenant RLS org " + Guid.NewGuid().ToString("N"));
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var project = Project.Create("Inherited tenant RLS project", null, org.Id);
+            var unrelatedOrg = Org.Create("Unrelated tenant RLS org " + Guid.NewGuid().ToString("N"));
+            seed.Orgs.Add(unrelatedOrg);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var unrelatedProject = Project.Create("Unrelated tenant RLS project", null, unrelatedOrg.Id);
+            var user = User.Create(
+                "inherited-tenant-" + Guid.NewGuid().ToString("N"),
+                "inherited-tenant-" + Guid.NewGuid().ToString("N") + "@example.test",
+                "hash");
+            var section = ContextSection.Create(
+                "organization-admin-context",
+                "Organization admin context",
+                "Visible only in the managed project.",
+                project.Id,
+                ContextScopeType.Project);
+            var unrelatedSection = ContextSection.Create(
+                "unrelated-context",
+                "Unrelated context",
+                "Must remain hidden.",
+                unrelatedProject.Id,
+                ContextScopeType.Project);
+
+            seed.Projects.AddRange(project, unrelatedProject);
+            seed.Users.Add(user);
+            seed.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, role));
+            seed.ContextSections.AddRange(section, unrelatedSection);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            orgId = org.Id;
+            projectId = project.Id;
+            userId = user.Id;
+            sectionId = section.Id;
+
+            Assert.False(await seed.ProjectMembers.IgnoreQueryFilters()
+                .AnyAsync(member => member.ProjectId == projectId && member.UserId == userId,
+                    TestContext.Current.CancellationToken));
+        }
+
+        Guid? resolvedProject = null;
+        Guid? resolvedOrg = null;
+        IReadOnlyList<Guid> visibleSections = [];
+        await using var requestDb = _postgres.CreateContext();
+        var middleware = new TenantIsolationMiddleware(async _ =>
+        {
+            resolvedProject = TenantScope.CurrentProjectId;
+            resolvedOrg = TenantScope.CurrentOrgId;
+            visibleSections = await requestDb.ContextSections
+                .Select(section => section.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, userId.ToString("D")),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.RouteValues["projectId"] = projectId.ToString("D");
+
+        await middleware.InvokeAsync(http, requestDb);
+
+        Assert.Equal(projectId, resolvedProject);
+        Assert.Equal(orgId, resolvedOrg);
+        Assert.Equal(new[] { sectionId }, visibleSections);
     }
 
     [Fact]
