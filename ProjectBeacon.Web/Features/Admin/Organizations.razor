@@ -8,6 +8,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @using ProjectBeacon.Application.Admin
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Billing
 @using ProjectBeacon.Application.Entitlements
 @using ProjectBeacon.Application.Organizations
 @using ProjectBeacon.Domain.Enums
@@ -17,6 +18,7 @@
 @inject IAdminGate AdminGate
 @inject IOrganizationAdminService OrganizationAdmin
 @inject IEntitlementService Entitlements
+@inject BillingPlanAdminService BillingPlanCatalog
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
@@ -514,6 +516,49 @@
                     Issue Alpha access
                 </MudButton>
             }
+
+            @if (_canConvertToProduction && _detail.Organization.LifecycleStatus == OrganizationLifecycleStatus.Active
+                && EffectiveAlphaEntitlement is not null)
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Convert Alpha to Production</MudText>
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    This preserves the organization and its data, replacing the current Alpha grant with a subscription entitlement.
+                    The billing reference must identify an existing manual invoice or external payment confirmation.
+                    ProjectBeacon does not independently verify that funds were received.
+                </MudAlert>
+                @if (_productionPlans.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        There are no active production plans. Create or activate a plan in Billing plans before converting this organization.
+                    </MudAlert>
+                    <MudButton Variant="Variant.Outlined" Href="/admin/billing/plans">Open billing plans</MudButton>
+                }
+                else
+                {
+                    <MudSelect T="string" @bind-Value="_productionPlanKey" Label="Production plan"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving">
+                        @foreach (var plan in _productionPlans)
+                        {
+                            <MudSelectItem T="string" Value="@plan.Key">@plan.Name (@plan.Cadence)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudTextField T="string" @bind-Value="_billingReference" Label="Manual invoice / receipt reference"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                    <MudTextField T="string" @bind-Value="_productionEndsAt"
+                                  Label="Current period end UTC (required for monthly/annual plans)"
+                                  Placeholder="2027-11-12T00:00:00Z"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                    <MudTextField T="string" @bind-Value="_conversionReason" Label="Conversion reason"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ConvertToProduction"
+                               Disabled="@(_saving || string.IsNullOrWhiteSpace(_productionPlanKey)
+                                   || string.IsNullOrWhiteSpace(_billingReference)
+                                   || string.IsNullOrWhiteSpace(_conversionReason))">
+                        Convert to Production
+                    </MudButton>
+                }
+            }
             }
         </MudPaper>
     }
@@ -530,6 +575,7 @@
     private bool _canReadUsers;
     private bool _canReadEntitlements;
     private bool _canManageEntitlements;
+    private bool _canConvertToProduction;
     private bool _loading;
     private bool _saving;
     private string _search = string.Empty;
@@ -538,6 +584,12 @@
     private List<OrganizationAdminListItem> _organizations = [];
     private OrganizationAdminDetails? _detail;
     private List<OrganizationEntitlement> _entitlements = [];
+    private List<PlanDefinition> _productionPlans = [];
+    private string _productionPlanKey = string.Empty;
+    private string _billingReference = string.Empty;
+    private string _productionEndsAt = string.Empty;
+    private string _conversionReason = "alpha_to_production";
+    private string _conversionIdempotencyKey = Guid.NewGuid().ToString("N");
     private Dictionary<Guid, MemberRole> _memberRoleSelections = [];
     private OperatorInviteCreated? _createdInvite;
     private string _newName = string.Empty;
@@ -565,6 +617,8 @@
         _canReadUsers = await HasPermissionAsync(OperatorPermission.UsersRead);
         _canReadEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsRead);
         _canManageEntitlements = await HasPermissionAsync(OperatorPermission.EntitlementsManage);
+        _canConvertToProduction = await HasPermissionAsync(
+            OperatorPermission.EntitlementsManage | OperatorPermission.BillingRead);
 
         if (OrganizationId is { } orgId)
         {
@@ -578,6 +632,8 @@
             _detail = result.Value;
             SyncMemberRoleSelections();
             await LoadEntitlements(orgId);
+            if (_canConvertToProduction)
+                await LoadProductionPlans();
         }
         else
         {
@@ -817,6 +873,127 @@
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Warning); }
         finally { _saving = false; }
+    }
+
+    private OrganizationEntitlement? EffectiveAlphaEntitlement =>
+        _entitlements.FirstOrDefault(item =>
+            item.Source == EntitlementSource.AlphaProgram
+            && item.IsEffectiveAt(DateTimeOffset.UtcNow));
+
+    private async Task LoadProductionPlans()
+    {
+        try
+        {
+            var plans = await BillingPlanCatalog.ListAsync(
+                await CurrentAdminActor(OperatorPermission.BillingRead));
+            _productionPlans = plans
+                .Where(plan => plan.IsActive)
+                .OrderBy(plan => plan.Key, StringComparer.Ordinal)
+                .ToList();
+            if (_productionPlans.All(plan => plan.Key != _productionPlanKey))
+                _productionPlanKey = _productionPlans.FirstOrDefault()?.Key ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _productionPlans = [];
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task ConvertToProduction()
+    {
+        if (OrganizationId is not { } orgId
+            || !await EnsurePermissionAsync(
+                OperatorPermission.EntitlementsManage | OperatorPermission.BillingRead,
+                requireElevation: true))
+            return;
+
+        var plan = _productionPlans.FirstOrDefault(item =>
+            item.IsActive && string.Equals(item.Key, _productionPlanKey, StringComparison.Ordinal));
+        if (plan is null)
+        {
+            Snackbar.Add("Select an active production plan.", Severity.Warning);
+            return;
+        }
+
+        DateTimeOffset? periodEnd = null;
+        if (!string.IsNullOrWhiteSpace(_productionEndsAt))
+        {
+            if (!DateTimeOffset.TryParse(
+                    _productionEndsAt,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var parsedEnd)
+                || parsedEnd.Offset != TimeSpan.Zero)
+            {
+                Snackbar.Add("Period end must be a valid ISO-8601 UTC timestamp ending in Z or +00:00.", Severity.Warning);
+                return;
+            }
+
+            periodEnd = parsedEnd;
+        }
+
+        if (plan.Cadence is BillingCadence.Monthly or BillingCadence.Annual && periodEnd is null)
+        {
+            Snackbar.Add("Monthly and annual plans require an explicit current-period end.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_billingReference) || _billingReference.Trim().Length > 128)
+        {
+            Snackbar.Add("Enter a manual invoice or receipt reference (1–128 characters).", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_conversionReason) || _conversionReason.Trim().Length > 500)
+        {
+            Snackbar.Add("Enter a conversion reason (1–500 characters).", Severity.Warning);
+            return;
+        }
+
+        var confirmed = await Dialogs.ShowMessageBox(
+            "Convert Alpha to Production",
+            "The active Alpha entitlement will be replaced by the selected subscription plan. This operation preserves the organization and its data and cannot be used to create a second active subscription. Continue?",
+            yesText: "Convert",
+            cancelText: "Cancel");
+        if (confirmed != true)
+            return;
+
+        _saving = true;
+        try
+        {
+            var request = new ConvertAlphaToProductionRequest(
+                orgId,
+                plan.Key,
+                _billingReference.Trim(),
+                DateTimeOffset.UtcNow,
+                periodEnd,
+                _conversionReason.Trim(),
+                _conversionIdempotencyKey);
+
+            var result = await Entitlements.ConvertAlphaToProductionAsync(
+                request,
+                await CurrentAdminActor(
+                    OperatorPermission.EntitlementsManage | OperatorPermission.BillingRead,
+                    requireElevation: true));
+            if (!result.Success)
+                throw new InvalidOperationException(result.Error ?? "Could not convert Alpha access to Production.");
+
+            Snackbar.Add("Organization converted to Production. Its identity and customer data were preserved.", Severity.Success);
+            _billingReference = string.Empty;
+            _productionEndsAt = string.Empty;
+            _conversionReason = "alpha_to_production";
+            _conversionIdempotencyKey = Guid.NewGuid().ToString("N");
+            await LoadEntitlements(orgId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task RevokeEntitlement(Guid entitlementId)
