@@ -2840,4 +2840,5 @@ orthstar</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>上次 Git 检查发现此仓库在分支“{1}”落后 {0} 个提交。使用当前项目快照前请先同步。</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>项目仓库落后于其跟踪的上游分支。启动流水线前请先同步仓库。</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>所选工作站仍在同步仓库。请等待同步完成后再启动流水线。</value></data>
 </root>
