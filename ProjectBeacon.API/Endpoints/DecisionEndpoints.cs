@@ -14,13 +14,13 @@ using Microsoft.AspNetCore.Mvc;
 public static class DecisionEndpoints
 {
     /// <summary>
-    /// Proposals and decisions are Human-only writes. List/get allow scoped <c>ContextRead</c> tokens; accept/deprecate/supersede are Human-only.
+    /// Create and lifecycle decisions are Human-only. Proposals allow Humans or task-scoped Actor tokens; list/get allow scoped <c>ContextRead</c> tokens.
     /// </summary>
     public static IEndpointRouteBuilder MapDecisionEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/decisions/propose", Propose)
-            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
         app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}", Get)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
