@@ -6,6 +6,7 @@ using System.Text.Json;
 using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -35,8 +36,13 @@ public sealed class GetLivePipelineTaskHandler : ICommandHandler<GetLivePipeline
 public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetPipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetPipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(GetPipelineCommand command, CancellationToken ct = default)
     {
@@ -44,6 +50,12 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Read,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         var state = await PipelineSupport.StateAsync(db, task, ct);
         var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
