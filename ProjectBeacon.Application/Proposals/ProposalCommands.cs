@@ -319,37 +319,6 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             }
         }
 
-        Proposal proposal;
-        try
-        {
-            proposal = Proposal.Create(
-                command.ProjectId,
-                author.TaskId,
-                author.SubtaskId,
-                author.SessionId,
-                command.Request.TargetKind,
-                targetId,
-                command.Request.Operation,
-                command.Request.BaseRevision,
-                baseHash,
-                command.Request.PayloadJson,
-                normalizedRationale,
-                command.Actor.IsHuman ? ProposalAuthorKind.Human : ProposalAuthorKind.Agent,
-                command.Actor.IsHuman ? command.Actor.UserId : null,
-                command.Actor.IsApiToken ? command.Actor.TokenId : null,
-                author.ProfileKey,
-                author.Role,
-                normalizedIdempotencyKey,
-                now);
-        }
-        catch (ArgumentException exception)
-        {
-            return Result.Failure<ProposalDto>(exception.Message);
-        }
-
-        if (target is not null && target.Revision != command.Request.BaseRevision)
-            proposal.MarkConflicted(target.Revision, "BaseRevisionChanged", now);
-
         var strategy = db.Database.CreateExecutionStrategy();
         try
         {
@@ -365,6 +334,36 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                     item => item.Id == command.ProjectId, ct);
                 if (currentProject is null)
                     return Result.Failure<ProposalDto>("Project not found.");
+
+                // Recreate the domain object for every execution-strategy attempt. A
+                // serializable retry must not reuse state mutated by the rolled-back attempt.
+                Proposal proposal;
+                try
+                {
+                    proposal = Proposal.Create(
+                        command.ProjectId,
+                        author.TaskId,
+                        author.SubtaskId,
+                        author.SessionId,
+                        command.Request.TargetKind,
+                        targetId,
+                        command.Request.Operation,
+                        command.Request.BaseRevision,
+                        baseHash,
+                        command.Request.PayloadJson,
+                        normalizedRationale,
+                        command.Actor.IsHuman ? ProposalAuthorKind.Human : ProposalAuthorKind.Agent,
+                        command.Actor.IsHuman ? command.Actor.UserId : null,
+                        command.Actor.IsApiToken ? command.Actor.TokenId : null,
+                        author.ProfileKey,
+                        author.Role,
+                        normalizedIdempotencyKey,
+                        now);
+                }
+                catch (ArgumentException exception)
+                {
+                    return Result.Failure<ProposalDto>(exception.Message);
+                }
 
                 var projectAutoApply = proposal.Status == ProposalStatus.Pending
                     && ProposalPolicyCatalog.CanAutoApply(proposal.TargetKind, proposal.Operation)
