@@ -467,7 +467,7 @@ else
         try
         {
             var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
-                new ChangeTaskStatusRequest(_task.Id, status, _task.ProjectId)));
+                new ChangeTaskStatusRequest(_task.Id, status, _task.ProjectId), _actorContext);
             if (!result.Success)
             {
                 _status = previous;
