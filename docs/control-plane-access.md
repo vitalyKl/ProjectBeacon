@@ -166,6 +166,7 @@ Run the first-admin bootstrap at `http://control.localhost:5083/control/bootstra
   Account disable is global across every organization the user belongs to, increments the session
   version, invalidates the local session-version cache, and refuses to disable an owner unless every
   affected organization has another active owner. The last active owner also cannot be demoted.
+  Production conversion is exposed from the same organization detail page for operators with both `BillingRead` and `EntitlementsManage`. It requires current TOTP elevation, an active plan, a manual invoice/receipt reference, a UTC end date for monthly/annual cadence and explicit confirmation. The operation preserves the same organization and customer data; receipt verification remains a manual operator responsibility.
 - This stage isolates the host and browser session but uses the same Web process/image and database.
   A separate Control Plane deployment remains a future hardening option.
 - Metadata-only Web/API/Worker heartbeats are written every 30 seconds and visible to operators
