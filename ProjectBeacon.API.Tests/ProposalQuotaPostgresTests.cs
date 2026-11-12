@@ -128,8 +128,8 @@ public sealed class ProposalQuotaPostgresTests : IClassFixture<PostgresFixture>
                 SubmitAsync("postgres-quota-race-b", "Concurrent description B"));
         }
 
-        Assert.Single(results.Where(result => result.Success));
-        var rejected = Assert.Single(results.Where(result => !result.Success));
+        Assert.Single(results, result => result.Success);
+        var rejected = Assert.Single(results, result => !result.Success);
         Assert.True(
             rejected.Kind == ErrorKind.Conflict
                 || rejected.Error?.Contains("limit of 200 pending", StringComparison.OrdinalIgnoreCase) == true,
