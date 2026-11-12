@@ -20,6 +20,10 @@ public static class ActorContextFactory
     private const string IsAdminClaim = "isAdmin";
     private const string DeviceOwnerClaim = "device_owner_id";
     private const string ControlElevatedUntilClaim = "control_elevated_until";
+    private const string PipelineRoleClaim = "pipeline_role";
+    private const string PipelineTaskIdClaim = "pipeline_task_id";
+    private const string PipelineSubtaskIdClaim = "pipeline_subtask_id";
+    private const string PipelineSessionIdClaim = "pipeline_session_id";
     /// <summary>Authentication type reserved for the isolated operator Control Plane cookie.</summary>
     public const string ControlCookieAuthType = "ControlCookie";
 
@@ -74,7 +78,11 @@ public static class ActorContextFactory
                 DeviceId: null,
                 ProjectId: ToGuid(principal.FindFirst(ProjectIdClaim)?.Value),
                 OrgId: null,
-                Capabilities: ToCapabilities(principal.FindFirst(CapabilitiesClaim)?.Value)),
+                Capabilities: ToCapabilities(principal.FindFirst(CapabilitiesClaim)?.Value),
+                PipelineRole: ToPipelineRole(principal.FindFirst(PipelineRoleClaim)?.Value),
+                PipelineTaskId: ToGuid(principal.FindFirst(PipelineTaskIdClaim)?.Value),
+                PipelineSubtaskId: ToGuid(principal.FindFirst(PipelineSubtaskIdClaim)?.Value),
+                PipelineSessionId: ToGuid(principal.FindFirst(PipelineSessionIdClaim)?.Value)),
             ActorType.Device => new ActorContext(
                 type,
                 userId,
@@ -105,4 +113,10 @@ public static class ActorContextFactory
 
     private static ApiTokenCapability ToCapabilities(string? value) =>
         long.TryParse(value, out var bits) ? (ApiTokenCapability)bits : ApiTokenCapability.None;
+
+    private static PipelineRole? ToPipelineRole(string? value) =>
+        Enum.TryParse<PipelineRole>(value, ignoreCase: false, out var role)
+            && Enum.IsDefined(role)
+                ? role
+                : null;
 }
