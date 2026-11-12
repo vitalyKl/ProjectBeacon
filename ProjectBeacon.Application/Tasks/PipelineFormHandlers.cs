@@ -159,7 +159,7 @@ public sealed class ListWaitingPipelineTasksHandler
                 on session.ProjectId equals member.ProjectId
             join task in db.Tasks.IgnoreQueryFilters()
                 on session.TaskId equals task.Id
-            where member.UserId == command.Request.UserId
+            where member.UserId == userId
                 && session.Status == SessionStatus.WaitingForUser
             orderby session.LaunchedAt descending
             select new WaitingPipelineTaskDto(task.Id, task.Title, session.Id, session.LaunchedAt))
