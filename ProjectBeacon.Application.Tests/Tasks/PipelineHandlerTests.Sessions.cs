@@ -96,14 +96,14 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal(TaskItemStatus.InProgress, verdict.Value.Status);
 
         var blocked = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
         Assert.False(blocked.Success);
         Assert.Equal("Close requires a completed review check.", blocked.Error);
 
         await ProveReviewAsync(projectId, task.Id, factory, 0);
 
         var closed = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
         Assert.True(closed.Success, closed.Error);
         Assert.Equal(TaskPipelineStage.Closed, closed.Value!.Stage);
         Assert.Equal(TaskItemStatus.Done, closed.Value.Status);
