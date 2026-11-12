@@ -70,6 +70,8 @@ Alpha access is a time-bounded or open-ended AlphaProgram entitlement issued by 
 
 The manual Alpha → Production conversion is implemented as one atomic application operation: it locks the active organization, requires a persisted operator permission and current TOTP elevation, creates a ManualInvoice subscription, replaces the Alpha entitlement, appends a billing-ledger activation event and stages audit writes in one PostgreSQL transaction. Exact retries return the original result; conflicting idempotency-key reuse fails. Future provider-backed subscription events must preserve the same effective-access boundary and transactional invariant.
 
+The operator workflow is exposed on the organization detail page at `/admin/organizations/{orgId}`. It is available only when the organization is Active and has a currently effective AlphaProgram entitlement, and requires both `BillingRead` and `EntitlementsManage` plus a current TOTP step-up. The operator selects an active product plan, enters the reference for an existing manual invoice or externally confirmed payment, supplies an explicit UTC period end for monthly/annual plans and a reason, then confirms the transition. The page does not verify funds or create the invoice; the atomic application operation remains the authority for lifecycle, entitlement, subscription, idempotency and audit checks.
+
 ## Billing provider contract
 
 Application contracts live in ProjectBeacon.Application/Billing:
