@@ -160,19 +160,19 @@ public record ForceClosePipelineCommand(ForceClosePipelineRequest Request) : ICo
 
 /// <summary>Stops one planner or review session (Actor work is cancelled by subtask).</summary>
 public record CancelPipelineSessionRequest(Guid TaskId, Guid SessionId);
-public record CancelPipelineSessionCommand(CancelPipelineSessionRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelPipelineSessionCommand(CancelPipelineSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops an Actor subtask and returns it to Pending.</summary>
 public record CancelSubtaskRequest(Guid TaskId, Guid SubtaskId);
-public record CancelSubtaskCommand(CancelSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelSubtaskCommand(CancelSubtaskRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops all current work and marks the pipeline cancelled.</summary>
 public record CancelPipelineRequest(Guid TaskId);
-public record CancelPipelineCommand(CancelPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelPipelineCommand(CancelPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Clears the current pipeline output and makes the task startable from Planning again.</summary>
 public record RestartPipelineRequest(Guid TaskId);
-public record RestartPipelineCommand(RestartPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record RestartPipelineCommand(RestartPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Identifies the task whose pipeline state is requested.</summary>
 public record GetPipelineRequest(Guid TaskId);
