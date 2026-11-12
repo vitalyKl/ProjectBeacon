@@ -210,7 +210,7 @@ public static class ContextEndpoints
     private static async Task<IResult> ListConstraints(Guid projectId, HttpContext context, ListConstraintsHandler handler)
     {
         var result = await handler.HandleAsync(projectId, context.GetActor());
-        return Results.Ok(result.Value);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> GetConstraint(
@@ -238,7 +238,7 @@ public static class ContextEndpoints
 
     private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, HttpContext context, RejectConstraintHandler handler)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor());
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
