@@ -56,8 +56,8 @@ public static class ContextEndpoints
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             projectId, request.Title, request.BodyMarkdown, request.SectionId,
             request.ScopeType, request.Key, request.RepoId, request.TaskId,
-            request.Path, ContextSource.Native, request.SourcePath));
-        var result = await handler.HandleDraftAsync(command, authorId, ct);
+            request.Path, ContextSource.Native, request.SourcePath), actor);
+        var result = await handler.HandleDraftAsync(command, authorId, actor, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
@@ -71,7 +71,7 @@ public static class ContextEndpoints
         if (!IsHumanOrActorKnowledgeWriter(context))
             return Results.Forbid();
         var result = await handler.HandleProposalAsync(
-            new CreateConstraintRequest(projectId, body.Body, body.Kind), ct);
+            new CreateConstraintRequest(projectId, body.Body, body.Kind), context.GetActor(), ct);
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints/propose", result.Value)
             : result.FromResult();
@@ -89,9 +89,10 @@ public static class ContextEndpoints
     private static async Task<IResult> ImportFiles(
         Guid projectId,
         [FromBody] IList<ImportFileRequest> files,
+        HttpContext context,
         ImportFilesHandler handler)
     {
-        var command = new ImportFilesCommand(projectId, files);
+        var command = new ImportFilesCommand(projectId, files, context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -103,9 +104,10 @@ public static class ContextEndpoints
         Guid projectId,
         [FromQuery] Guid? repoId,
         [FromQuery] string? path,
+        HttpContext context,
         ExportAgentsMdHandler handler)
     {
-        var command = new ExportAgentsMdCommand(new ExportAgentsMdRequest(projectId, repoId, path));
+        var command = new ExportAgentsMdCommand(new ExportAgentsMdRequest(projectId, repoId, path), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -115,9 +117,10 @@ public static class ContextEndpoints
 
     private static async Task<IResult> ListNodes(
         Guid projectId,
+        HttpContext context,
         ListContextNodesHandler handler)
     {
-        var command = new ListContextNodesCommand(new ListContextNodesRequest(projectId));
+        var command = new ListContextNodesCommand(new ListContextNodesRequest(projectId), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -128,6 +131,7 @@ public static class ContextEndpoints
     private static async Task<IResult> UpsertNode(
         Guid projectId,
         [FromBody] UpsertNodeRequest request,
+        HttpContext context,
         UpsertContextNodeHandler handler)
     {
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
@@ -141,7 +145,7 @@ public static class ContextEndpoints
             request.TaskId,
             request.Path,
             request.Source,
-            request.SourcePath));
+            request.SourcePath), context.GetActor());
 
         var result = await handler.HandleAsync(command);
 
@@ -153,9 +157,10 @@ public static class ContextEndpoints
     private static async Task<IResult> GetNode(
         Guid projectId,
         Guid nodeId,
+        HttpContext context,
         GetContextNodeHandler handler)
     {
-        var command = new GetContextNodeCommand(new GetContextNodeRequest(projectId, nodeId));
+        var command = new GetContextNodeCommand(new GetContextNodeRequest(projectId, nodeId), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -166,9 +171,10 @@ public static class ContextEndpoints
     private static async Task<IResult> DeleteNode(
         Guid projectId,
         Guid nodeId,
+        HttpContext context,
         DeleteContextNodeHandler handler)
     {
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId));
+        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -179,6 +185,7 @@ public static class ContextEndpoints
     private static async Task<IResult> CompileBrief(
         Guid projectId,
         [FromBody] CompileBriefRequest request,
+        HttpContext context,
         CompileBriefHandler handler)
     {
         var command = new CompileBriefCommand(new Application.Context.CompileBriefRequest(
@@ -191,7 +198,7 @@ public static class ContextEndpoints
             request.IncludeChangedScope,
             request.IncludeTreeCapsule,
             request.TreeCapsule,
-            request.ChangedScope));
+            request.ChangedScope), context.GetActor());
 
         var result = await handler.HandleAsync(command);
 
@@ -200,36 +207,36 @@ public static class ContextEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> ListConstraints(Guid projectId, ListConstraintsHandler handler)
+    private static async Task<IResult> ListConstraints(Guid projectId, HttpContext context, ListConstraintsHandler handler)
     {
-        var result = await handler.HandleAsync(projectId);
+        var result = await handler.HandleAsync(projectId, context.GetActor());
         return Results.Ok(result.Value);
     }
 
     private static async Task<IResult> GetConstraint(
-        Guid projectId, Guid constraintId, GetConstraintHandler handler, CancellationToken ct)
+        Guid projectId, Guid constraintId, HttpContext context, GetConstraintHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(projectId, constraintId, ct);
+        var result = await handler.HandleAsync(projectId, constraintId, context.GetActor(), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)
+    private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, HttpContext context, CreateConstraintHandler handler)
     {
-        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind));
+        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind), context.GetActor());
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints", result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, ActivateConstraintHandler handler)
+    private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, HttpContext context, ActivateConstraintHandler handler)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor());
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, RejectConstraintHandler handler)
+    private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, HttpContext context, RejectConstraintHandler handler)
     {
         var result = await handler.HandleAsync(constraintId);
         return result.Success
