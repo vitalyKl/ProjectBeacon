@@ -82,14 +82,14 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                            StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="OnStartPipeline" Disabled="_busy || !CanStartPlanner">@L["StartPipeline"]</MudButton>
+                           OnClick="OnStartPipeline" Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending || _pipeline?.Preflight?.RepositorySyncInProgress == true || !CanStartPlanner">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
                 @if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null })
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Medium"
                                StartIcon="@Icons.Material.Filled.Sync"
                                OnClick="OnSynchronizeRepository"
-                               Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending"
+                               Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending || _pipeline.Preflight.RepositorySyncInProgress"
                                data-testid="task-repository-sync">
                         @L["GitSyncNow"]
                     </MudButton>
@@ -152,6 +152,10 @@ else
                 repositoryStatus.LastKnownRepositoryBehind!.Value,
                 repositoryStatus.LastKnownRepositoryBranch ?? "—")
             <a href="/project/settings">@L["GitSyncTitle"]</a>
+            @if (_pipeline?.Preflight?.PipelineGitSyncSupported != true)
+            {
+                <div>@L["GitSyncNoCompatibleDevice"]</div>
+            }
         </MudAlert>
     }
     <section class="beacon-task-content-history">
@@ -454,7 +458,8 @@ else
     private string _workspaceAbstract = string.Empty;
     private string _workspaceContent = string.Empty;
     private bool CanStartPlanner => _pipeline?.CanStart == true
-        && _pipeline.Preflight?.LastKnownRepositoryBehind is not > 0;
+        && _pipeline.Preflight?.LastKnownRepositoryBehind is not > 0
+        && _pipeline.Preflight?.RepositorySyncInProgress != true;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
     private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
