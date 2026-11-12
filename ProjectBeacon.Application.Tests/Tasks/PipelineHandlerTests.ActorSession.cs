@@ -4,6 +4,7 @@ using Application.Persistence;
 using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Tasks;
+using Domain.Common;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -694,7 +695,7 @@ public sealed partial class PipelineHandlerTests
                 new StartActorSessionRequest(task.Id, subtask.Value!.Id), plannerActor),
                 TestContext.Current.CancellationToken);
         Assert.False(directActorStart.Success);
-        Assert.Equal("Forbidden.", directActorStart.Error);
+        Assert.Equal(ErrorKind.Forbidden, directActorStart.Kind);
 
         var worker = new ActorContext(
             ActorType.Worker,
@@ -725,7 +726,7 @@ public sealed partial class PipelineHandlerTests
                 new LaunchSessionRequest(actorSession.Value!.Id), plannerActor),
                 TestContext.Current.CancellationToken);
         Assert.False(plannerActorLaunch.Success);
-        Assert.Equal("Forbidden.", plannerActorLaunch.Error);
+        Assert.Equal(ErrorKind.Forbidden, plannerActorLaunch.Kind);
 
         var workerActorLaunch = await new LaunchSessionHandler(factory)
             .HandleAsync(new LaunchSessionCommand(
@@ -739,7 +740,7 @@ public sealed partial class PipelineHandlerTests
                 new LaunchSessionRequest(reviewSession.Id), worker),
                 TestContext.Current.CancellationToken);
         Assert.False(workerReviewLaunch.Success);
-        Assert.Equal("Forbidden.", workerReviewLaunch.Error);
+        Assert.Equal(ErrorKind.Forbidden, workerReviewLaunch.Kind);
 
         // Review is the one session the active Planner harness may auto-launch.
         // With no workstation configured, reaching that validation proves the auth check passed.
