@@ -223,8 +223,8 @@ public sealed class RepoPatchProposalWorkflowTests : IDisposable
         ProposalStatus expectedStatus)
     {
         const string projectPath = "docs/guide.md";
-        const string before = "Before documentation.\\n";
-        const string after = "Updated documentation.\\n";
+        const string before = "Before documentation.\n";
+        const string after = "Updated documentation.\n";
         var patch = """
             diff --git a/docs/guide.md b/docs/guide.md
             index 9d3f98b..f5a8c3d 100644
