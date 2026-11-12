@@ -6,6 +6,7 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
+
 /// <summary>
 /// Imports markdown files as context sections and returns how many were created.
 /// </summary>
@@ -27,24 +28,79 @@ public class ImportFilesHandler
 
     public async Task<Result<int>> HandleAsync(ImportFilesCommand command, CancellationToken ct = default)
     {
+        if (command.Files is null)
+            return Result.Failure<int>("At least one Markdown file is required.");
+        var sourcePaths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in command.Files)
+        {
+            if (string.IsNullOrWhiteSpace(file.FileName) || string.IsNullOrWhiteSpace(file.SourcePath))
+                return Result.Failure<int>("Each imported Markdown file must include a file name and source path.");
+            if (!sourcePaths.Add(file.SourcePath))
+                return Result.Failure<int>("A source path may only be imported once per request.");
+        }
+
         await using var db = _dbFactory.CreateDbContext();
         var createdCount = 0;
         var stagedRevisions = new HashSet<(Guid TargetId, int Revision)>();
+        var stagedImportIdentities = new HashSet<string>(StringComparer.Ordinal);
+        var updatedByType = command.Actor?.Type.ToString().ToLowerInvariant() ?? "system";
 
         foreach (var file in command.Files)
         {
+            var updatedById = command.Actor?.UserId?.ToString("D") ?? file.SourcePath;
             var contextSections = ParseMarkdownFile(
-                command.ProjectId, file.FileName, file.Content, file.SourcePath);
+                command.ProjectId, file.FileName, file.Content, file.SourcePath, updatedByType, updatedById);
 
             foreach (var section in contextSections)
             {
+                // SourcePath identifies the imported file. SectionId alone is not unique:
+                // separate directories commonly contain files with the same basename.
                 var existing = await db.ContextSections
                     .FirstOrDefaultAsync(s =>
                         s.ProjectId == section.ProjectId &&
                         s.ScopeType == section.ScopeType &&
-                        s.SectionId == section.SectionId &&
                         s.RepoId == section.RepoId &&
-                        s.Path == section.Path, ct);
+                        s.TaskId == section.TaskId &&
+                        s.Path == section.Path &&
+                        s.SourcePath == section.SourcePath &&
+                        (s.Source != ContextSource.Native
+                            || s.UpdatedByType == null
+                            || s.UpdatedByType == "system"
+                            || s.UpdatedByType == "human"), ct);
+
+                if (existing is not null && existing.SectionId != section.SectionId)
+                    return Result.Failure<int>(
+                        "The imported source path is already associated with a different context section.",
+                        ErrorKind.Conflict);
+
+                // Older imports stored only FileName in SourcePath. Reuse that row once,
+                // then upgrade its identity to the full caller-supplied SourcePath.
+                if (existing is null)
+                {
+                    var legacyMatches = await db.ContextSections
+                        .Where(s =>
+                            s.ProjectId == section.ProjectId &&
+                            s.ScopeType == section.ScopeType &&
+                            s.RepoId == section.RepoId &&
+                            s.TaskId == section.TaskId &&
+                            s.Path == section.Path &&
+                            s.SectionId == section.SectionId &&
+                            s.SourcePath == file.FileName &&
+                            (s.Source == section.Source
+                                || (s.Source == ContextSource.Native
+                                    && (s.UpdatedByType == null
+                                        || s.UpdatedByType == "system"
+                                        || s.UpdatedByType == "human"))))
+                        .Take(2)
+                        .ToListAsync(ct);
+
+                    if (legacyMatches.Count > 1)
+                        return Result.Failure<int>(
+                            "Multiple legacy context sections match this imported file name. Resolve the ambiguity before importing.",
+                            ErrorKind.Conflict);
+
+                    existing = legacyMatches.SingleOrDefault();
+                }
 
                 if (existing is null)
                 {
@@ -53,19 +109,21 @@ public class ImportFilesHandler
                     _contentWriter.AddVersion(
                         db, section, attribution.Type ?? "System", attribution.Id ?? file.SourcePath);
                     stagedRevisions.Add((section.Id, section.Revision));
+                    stagedImportIdentities.Add(section.SourcePath!);
                     createdCount++;
                 }
                 else
                 {
-                    var contentChanged =
-                        !string.Equals(existing.Title, section.Title, StringComparison.Ordinal)
-                        || !string.Equals(existing.BodyMarkdown, section.BodyMarkdown, StringComparison.Ordinal);
-                    existing.Update(
-                        title: section.Title,
-                        bodyMarkdown: section.BodyMarkdown,
-                        updatedByType: command.Actor?.Type.ToString().ToLowerInvariant() ?? "system",
-                        updatedById: command.Actor?.UserId?.ToString("D") ?? file.SourcePath);
-                    if (contentChanged)
+                    var previousRevision = existing.Revision;
+                    existing.UpdateImportedFile(
+                        section.Title,
+                        section.BodyMarkdown,
+                        section.Source,
+                        section.SourcePath!,
+                        updatedByType,
+                        updatedById);
+
+                    if (existing.Revision != previousRevision)
                     {
                         var attribution = ContentAttribution.FromActor(command.Actor);
                         _contentWriter.AddVersion(
@@ -89,11 +147,10 @@ public class ImportFilesHandler
         }
         catch (DbUpdateException)
         {
-            // A concurrent writer may commit the unique ContentVersions row before
-            // PostgreSQL reports the target row's revision concurrency token. EF rolls
-            // back the SaveChanges transaction, so inspect persisted history after the
-            // failed batch to distinguish that stale-revision race from unrelated errors.
-            if (await HasDuplicateRevisionAsync(db, command.ProjectId, stagedRevisions, ct))
+            // A competing first import may win the unique source-identity index. The
+            // failed SaveChanges transaction is rolled back, so the winner is visible here.
+            if (await HasDuplicateImportIdentityAsync(db, command.ProjectId, stagedImportIdentities, ct)
+                || await HasDuplicateRevisionAsync(db, command.ProjectId, stagedRevisions, ct))
             {
                 return Result.Failure<int>(
                     "Imported context changed while it was being saved. Refresh and retry.",
@@ -102,6 +159,26 @@ public class ImportFilesHandler
 
             throw;
         }
+    }
+
+    private static async Task<bool> HasDuplicateImportIdentityAsync(
+        IBeaconDb db,
+        Guid projectId,
+        IReadOnlySet<string> stagedImportIdentities,
+        CancellationToken ct)
+    {
+        if (stagedImportIdentities.Count == 0)
+            return false;
+
+        return await db.ContextSections.AnyAsync(section =>
+            section.ProjectId == projectId
+            && section.ScopeType == ContextScopeType.Project
+            && section.RepoId == null
+            && section.TaskId == null
+            && section.Path == string.Empty
+            && section.Source != ContextSource.Native
+            && section.SourcePath != null
+            && stagedImportIdentities.Contains(section.SourcePath), ct);
     }
 
     private static async Task<bool> HasDuplicateRevisionAsync(
@@ -130,7 +207,9 @@ public class ImportFilesHandler
         Guid projectId,
         string fileName,
         string content,
-        string sourcePath)
+        string sourcePath,
+        string updatedByType,
+        string updatedById)
     {
         var sections = new List<ContextSection>();
 
@@ -138,10 +217,11 @@ public class ImportFilesHandler
         {
             "AGENTS.md" or "agents.md" => ContextSource.ImportedAgentsMd,
             "CLAUDE.md" or "claude.md" => ContextSource.ImportedClaudeMd,
-            _ => fileName.Contains(".cursor") ? ContextSource.ImportedCursor :
-                 fileName.Contains(".grok") ? ContextSource.ImportedGrok :
-                 fileName.Contains("CODEOWNERS") ? ContextSource.ImportedOwnershipMd :
-                 ContextSource.Native
+            "CONVENTIONS.md" or "conventions.md" => ContextSource.ImportedConventionsMd,
+            _ => fileName.Contains(".cursor", StringComparison.OrdinalIgnoreCase) ? ContextSource.ImportedCursor :
+                 fileName.Contains(".grok", StringComparison.OrdinalIgnoreCase) ? ContextSource.ImportedGrok :
+                 fileName.Contains("CODEOWNERS", StringComparison.OrdinalIgnoreCase) ? ContextSource.ImportedOwnershipMd :
+                 ContextSource.ImportedMarkdown
         };
 
         var title = Path.GetFileNameWithoutExtension(fileName);
@@ -155,7 +235,9 @@ public class ImportFilesHandler
             key: null,
             ordinal: 0,
             source: source,
-            sourcePath: sourcePath);
+            sourcePath: sourcePath,
+            updatedByType: updatedByType,
+            updatedById: updatedById);
 
         sections.Add(section);
         return sections;

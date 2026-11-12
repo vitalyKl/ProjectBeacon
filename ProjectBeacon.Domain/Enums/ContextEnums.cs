@@ -25,5 +25,6 @@ public enum ContextSource
     ImportedCursor = 3,
     ImportedGrok = 4,
     ImportedOwnershipMd = 5,
-    ImportedConventionsMd = 6
+    ImportedConventionsMd = 6,
+    ImportedMarkdown = 7
 }

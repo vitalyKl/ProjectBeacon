@@ -893,6 +893,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProjectId", "SourcePath")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ContextSections_ImportedFileIdentity")
+                        .HasFilter("\"Source\" <> 0 AND \"SourcePath\" IS NOT NULL AND \"SourcePath\" <> '' AND \"ScopeType\" = 0 AND \"RepoId\" IS NULL AND \"TaskId\" IS NULL AND \"Path\" = ''");
+
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("RepoId");

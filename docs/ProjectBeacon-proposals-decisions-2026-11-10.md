@@ -54,3 +54,11 @@
 Неподдерживаемые пары остаются отклонёнными: Create для остальных targets, Delete для ProjectDescription/TaskDescription/RepoPatch, а также любая запись кода через RepoPatch. Не превращать их в побочный эффект или обход review-политики. Для создания Decision/Constraint/ContextSection следует использовать указанные legacy review-пути.
 
 **Definition of Done:** P1/P2 проверяются вместе с Create/Delete и восстановлением tombstone; зелёный CI сам по себе не закрывает фазу, пока не подтверждены UI/history entry points, MCP contract, security/RLS и полная матрица тестов на актуальном HEAD.
+
+### Уточнение идентичности Markdown-импорта
+
+- Для импортированного файла ключом повторного импорта является ProjectId + SourcePath в проектном scope. Совпадающий basename из разных каталогов создаёт разные ContextSection; импорт не обновляет Native-раздел Beacon только из-за совпадения SectionId.
+- SourcePath — идентификатор и происхождение входного файла; Path остаётся отдельным полем области действия ContextSection и не подменяется им.
+- Специализированные файлы сохраняют свои ContextSource; прочие Markdown-файлы получают ImportedMarkdown (Native зарезервирован для содержимого, созданного непосредственно в Beacon).
+- При первом повторном импорте старой записи с SourcePath == FileName запись обновляется на месте, а переход к полному SourcePath фиксируется новой ContentVersion. Неоднозначное legacy-сопоставление возвращает Conflict.
+- Уникальный частичный индекс защищает импортированный project-scope identity от гонки двух первых импортов. Повторная вставка получает Conflict; частично применённая пачка откатывается.

@@ -30,6 +30,23 @@ public sealed class ContentRevisionTests
     }
 
     [Fact]
+    public void ContextSection_ImportedSourceIdentityChangesCreateANewRevision()
+    {
+        var section = ContextSection.Create(
+            "agents", "AGENTS", "Guidance", Guid.NewGuid(), ContextScopeType.Project,
+            source: ContextSource.ImportedAgentsMd, sourcePath: "AGENTS.md");
+
+        section.UpdateImportedFile(
+            "AGENTS", "Guidance", ContextSource.ImportedAgentsMd, "repo/AGENTS.md", "system", "repo/AGENTS.md");
+        Assert.Equal(2, section.Revision);
+        Assert.Equal("repo/AGENTS.md", section.SourcePath);
+
+        section.UpdateImportedFile(
+            "AGENTS", "Guidance", ContextSource.ImportedAgentsMd, "repo/AGENTS.md", "system", "repo/AGENTS.md");
+        Assert.Equal(2, section.Revision);
+    }
+
+    [Fact]
     public void Decision_ContentAndLifecycleChangesIncrementRevision()
     {
         var decision = Decision.Create("Title", "Context", "Body", Guid.NewGuid());

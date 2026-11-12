@@ -165,6 +165,43 @@ public class ContextSection : Entity, IProjectScoped
         SectionsText = $"{title} {bodyMarkdown}";
     }
 
+    /// <summary>Updates an imported Markdown file while preserving its source identity in content history.</summary>
+    public void UpdateImportedFile(
+        string title,
+        string bodyMarkdown,
+        ContextSource source,
+        string sourcePath,
+        string? updatedByType,
+        string? updatedById)
+    {
+        if (source == ContextSource.Native)
+            throw new ArgumentException("Imported Markdown must have a non-native source.", nameof(source));
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("A source path is required for imported Markdown.", nameof(sourcePath));
+
+        var changed =
+            !string.Equals(Title, title, StringComparison.Ordinal)
+            || !string.Equals(BodyMarkdown, bodyMarkdown, StringComparison.Ordinal)
+            || Source != source
+            || !string.Equals(SourcePath, sourcePath, StringComparison.Ordinal);
+
+        Title = title;
+        BodyMarkdown = bodyMarkdown;
+        Source = source;
+        SourcePath = sourcePath;
+        if (changed)
+        {
+            Revision++;
+            SectionsText = $"{title} {bodyMarkdown}";
+        }
+
+        if (updatedByType is not null)
+            UpdatedByType = updatedByType;
+        if (updatedById is not null)
+            UpdatedById = updatedById;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>Marks a NeedsReview section as approved by a human reviewer.</summary>
     public void MarkReviewed(string reviewerUserId)
     {
