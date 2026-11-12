@@ -61,9 +61,9 @@ public static class PipelineEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
-    private static async Task<IResult> GetPipeline(Guid taskId, GetPipelineHandler handler, CancellationToken ct)
+    private static async Task<IResult> GetPipeline(Guid taskId, HttpContext ctx, GetPipelineHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskId)), ct);
+        var result = await handler.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
