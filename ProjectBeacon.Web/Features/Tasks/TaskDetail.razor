@@ -4,6 +4,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Proposals
 @using ProjectBeacon.Application.Projects
@@ -17,6 +18,8 @@
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
 @inject ListProposalsHandler ListProposals
+@inject ListContentVersionsHandler ListContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject WorkspaceIndexHandler WorkspaceIndex
 @inject WorkspaceReadHandler WorkspaceRead
 @inject WorkspaceWriteHandler WorkspaceWrite
@@ -118,6 +121,58 @@ else
             }
         </div>
     </header>
+    <section class="beacon-task-content-history">
+        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
+                   OnClick="LoadTaskContentHistory" Disabled="_busy || _taskHistoryLoading">
+            @L["ContentHistory"]
+        </MudButton>
+        @if (_showTaskContentHistory)
+        {
+            <MudPaper Outlined="true" Elevation="0" Class="beacon-panel mt-2">
+                <MudText Typo="Typo.subtitle2">@L["ContentHistory"] (@_taskContentHistory.Count)</MudText>
+                @if (_taskHistoryLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="my-2" />
+                }
+                else if (_taskContentHistory.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">@L["NoHistory"]</MudText>
+                }
+                else
+                {
+                    @foreach (var version in _taskContentHistory)
+                    {
+                        <MudExpansionPanel Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")">
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @version.ChangedByType · @version.ChangedById
+                                </MudText>
+                                <MudText Typo="Typo.subtitle2">@L["Description"]</MudText>
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryField(version.ContentJson, "description")))
+                                {
+                                    <MarkdownView Text="@TaskHistoryField(version.ContentJson, "description")" />
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryField(version.ContentJson, "reviewNotes")))
+                                {
+                                    <MudText Typo="Typo.subtitle2">@L["ReviewNotes"]</MudText>
+                                    <MarkdownView Text="@TaskHistoryField(version.ContentJson, "reviewNotes")" />
+                                }
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                           Disabled="_busy || _task is null || version.Revision >= _task.ContentRevision"
+                                           OnClick="@(() => RestoreTaskContentVersion(version))">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudStack>
+                        </MudExpansionPanel>
+                    }
+                }
+            </MudPaper>
+        }
+    </section>
     <div class="beacon-task-grid">
         <main class="beacon-task-main">
             <section class="beacon-task-workflow">
@@ -348,6 +403,10 @@ else
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
     private List<ProposalDto> _taskProposals = [];
+    private List<ContentVersionDto> _taskContentHistory = [];
+    private bool _showTaskContentHistory;
+    private bool _taskHistoryLoading;
+
     private List<TaskWorkspaceSectionSummaryDto> _workspaceSections = [];
     private TaskWorkspaceSectionDto? _selectedWorkspace;
     private string _workspaceKey = "notes/human-input";
@@ -531,6 +590,84 @@ else
         ProposalStatus.Accepted => Color.Success,
         _ => Color.Default
     };
+
+    private async Task LoadTaskContentHistory()
+    {
+        if (_task is null || _taskHistoryLoading)
+            return;
+
+        _showTaskContentHistory = true;
+        _taskHistoryLoading = true;
+        try
+        {
+            var result = await ListContentVersions.HandleAsync(
+                _task.ProjectId,
+                ContentTargetKind.TaskDescription,
+                _task.Id,
+                _actorContext,
+                limit: 50);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+                _taskContentHistory = [];
+                return;
+            }
+
+            _taskContentHistory = result.Value!.ToList();
+        }
+        finally
+        {
+            _taskHistoryLoading = false;
+        }
+    }
+
+    private async Task RestoreTaskContentVersion(ContentVersionDto version)
+    {
+        if (_task is null || _busy || version.TargetKind != ContentTargetKind.TaskDescription
+            || version.TargetId != _task.Id || version.Revision >= _task.ContentRevision)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _task.ProjectId,
+                version.Id,
+                _task.ContentRevision,
+                _actorContext,
+                ContentTargetKind.TaskDescription,
+                _task.Id));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            await LoadTaskContentHistory();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string TaskHistoryField(string json, string propertyName)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(propertyName, out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? value.GetString() ?? string.Empty
+                    : string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
+        }
+    }
 
     private async Task OnStatusChanged(TaskItemStatus status)
     {
