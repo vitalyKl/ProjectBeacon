@@ -71,7 +71,7 @@ jobs:
         if: always()
         run: |
           dotnet ef migrations add DiagnoseImportedContextModel --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
-          find ProjectBeacon.Infrastructure/Data/Migrations -maxdepth 1 -type f -name '*DiagnoseImportedContextModel*' -print -exec cat {} \\;
+          find ProjectBeacon.Infrastructure -type f -name '*DiagnoseImportedContextModel*' -print -exec cat {} +
           git diff -- ProjectBeacon.Infrastructure/Data/Migrations/BeaconDbContextModelSnapshot.cs
       - name: Test — API
         if: always()
