@@ -27,7 +27,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement the requested feature"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
 
         var result = await new ReportSubtaskResultHandler(factory).HandleAsync(
@@ -149,7 +149,7 @@ public sealed partial class PipelineHandlerTests
             Assert.Single(reopened.Value.Verdicts);
 
             var actor = await new StartActorSessionHandler(factory, spawner)
-                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             Assert.Equal(TaskPipelineStage.Executing,
                 (await new GetPipelineHandler(factory).HandleAsync(new GetPipelineCommand(new GetPipelineRequest(done.Task.Id)), TestContext.Current.CancellationToken)).Value!.Stage);
@@ -199,7 +199,7 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal(1, first.Value!.Subtasks.Single(s => s.Id == done.SubtaskId).ReopenCount);
 
             var actor = await new StartActorSessionHandler(factory, spawner)
-                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             await new ReportSubtaskResultHandler(factory)
                 .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://b", "ok"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
@@ -299,15 +299,15 @@ public sealed partial class PipelineHandlerTests
         Assert.True(start.Success, start.Error);
 
         var first = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
         var second = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(second.Success);
         Assert.Contains("Cannot launch", second.Error);
 
         var missing = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid())), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid(), PipelineTestActor.AdminFor(task.ProjectId))), TestContext.Current.CancellationToken);
         Assert.False(missing.Success);
         Assert.Equal("Session not found.", missing.Error);
     }
