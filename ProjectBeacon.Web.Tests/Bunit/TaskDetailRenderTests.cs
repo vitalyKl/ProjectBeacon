@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Content;
@@ -108,15 +107,6 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         Assert.Contains("restore-task-revision-2", cut.Markup);
 
         cut.Find("[data-testid='restore-task-revision-2']").Click();
-
-        await using var verification = new BeaconDbContext(
-            new DbContextOptionsBuilder<BeaconDbContext>()
-                .UseSqlite(new SqliteConnectionStringBuilder
-                {
-                    DataSource = "ignored"
-                }.ToString())
-                .Options,
-            new TenantContext());
 
         await DbContext.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Original task goal", task.Description);
