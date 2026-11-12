@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Application.Persistence;
 using Domain.Entities.Devices;
 using Domain.Enums;
@@ -116,14 +117,16 @@ internal static class ProjectGitSyncPreflight
                 || !TryReadBoolean(root, "detached", out _)
                 || !TryReadBoolean(root, "hasUpstream", out _)
                 || !TryReadBoolean(root, "diverged", out _)
+                || !TryReadNonEmptyString(root, "branch")
+                || !TryReadNonEmptyString(root, "upstream")
+                || !TryReadNonEmptyString(root, "headAfter")
                 || !root.TryGetProperty("outcome", out var outcome)
-                || outcome.ValueKind != JsonValueKind.Number
-                || !outcome.TryGetInt32(out var outcomeValue)
-                || !Enum.IsDefined(typeof(GitSyncOutcome), outcomeValue))
+                || !TryReadOutcome(outcome))
                 return false;
 
-            var parsed = JsonSerializer.Deserialize<GitSyncResultDto>(
-                root.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            options.Converters.Add(new JsonStringEnumConverter());
+            var parsed = JsonSerializer.Deserialize<GitSyncResultDto>(root.GetRawText(), options);
             if (parsed is null)
                 return false;
 
@@ -135,6 +138,21 @@ internal static class ProjectGitSyncPreflight
             return false;
         }
     }
+
+    private static bool TryReadOutcome(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Number)
+            return element.TryGetInt32(out var numeric)
+                && Enum.IsDefined(typeof(GitSyncOutcome), numeric);
+        return element.ValueKind == JsonValueKind.String
+            && Enum.TryParse<GitSyncOutcome>(element.GetString(), ignoreCase: true, out var parsed)
+            && Enum.IsDefined(parsed);
+    }
+
+    private static bool TryReadNonEmptyString(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element)
+        && element.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(element.GetString());
 
     private static bool TryReadNonNegativeInt(JsonElement root, string name, out int value)
     {
