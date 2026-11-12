@@ -19,11 +19,16 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public StartPipelineHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public StartPipelineHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartPipelineCommand command, CancellationToken ct = default)
@@ -33,6 +38,19 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
+
+        if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
+            return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+        // A short-lived role-pinned harness token cannot create a new pipeline; it can
+        // only operate within the active session it was issued for.
+        if (command.Actor.IsApiToken && command.Actor.PipelineRole is not null)
+            return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Execute,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineSessionDto>(permission);
 
         var expectedStatus = task.Status;
         try
