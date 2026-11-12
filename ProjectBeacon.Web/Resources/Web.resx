@@ -3029,4 +3029,5 @@ No Beacon-hosted coding agent.</value>
   <data name="TaskId" xml:space="preserve">
     <value>Task ID</value>
   </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>The last Git check found this repository {0} commit(s) behind on branch '{1}'. Synchronize it before relying on the current project snapshot.</value></data>
 </root>
