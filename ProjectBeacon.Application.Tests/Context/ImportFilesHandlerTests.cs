@@ -57,6 +57,7 @@ public sealed class ImportFilesHandlerTests : IDisposable
             TestContext.Current.CancellationToken);
         Assert.Equal(1, section.Revision);
         Assert.Equal("Initial guidance.", section.BodyMarkdown);
+        Assert.Equal("repo/AGENTS.md", section.SourcePath);
 
         var updated = await handler.HandleAsync(new ImportFilesCommand(
             _projectId,
