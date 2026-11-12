@@ -14,14 +14,14 @@ public static class ContextEndpoints
 {
     /// <summary>
     /// Reads (<c>nodes</c>, export, compile, list constraints) allow <see cref="ApiTokenCapability.ContextRead"/>.
-    /// Drafts, proposals, upsert, delete, import, and constraint create, activate, and reject are Human-only.
+    /// Drafts and constraint proposals allow Humans or task-scoped Actor tokens. Ordinary upsert, delete, import, constraint create, activate, and reject are Human-only.
     /// </summary>
     public static IEndpointRouteBuilder MapContextEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/projects/{projectId}/context/nodes", ListNodes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId}/context/nodes", UpsertNode).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId}/context/drafts", CreateDraft)
-            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
         app.MapGet("/v1/projects/{projectId}/context/nodes/{nodeId}", GetNode).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapDelete("/v1/projects/{projectId}/context/nodes/{nodeId}", DeleteNode).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId}/context/import", ImportFiles).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -32,7 +32,7 @@ public static class ContextEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
-            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
         app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/activate", ActivateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/reject", RejectConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
