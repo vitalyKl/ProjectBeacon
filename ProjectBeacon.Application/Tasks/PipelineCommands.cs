@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Authorization;
 using Application.Common;
+using Application.Devices;
 using Domain.Enums;
 
 /// <summary>Subtask row returned by the pipeline.</summary>
@@ -80,7 +81,8 @@ public record PipelinePreflightDto(
     Guid? PipelineDeviceId = null,
     bool PipelineGitSyncSupported = false,
     bool RepositorySyncInProgress = false,
-    bool RepositorySyncBlocked = false);
+    bool RepositorySyncBlocked = false,
+    GitSyncRefusalCode? LastKnownRepositoryReasonCode = null);
 
 /// <summary>Finds the most recently active pipeline for the current project.</summary>
 public record GetLivePipelineTaskRequest(Guid ProjectId);
