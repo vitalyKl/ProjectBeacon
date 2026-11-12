@@ -36,7 +36,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(actorLaunch.Success, actorLaunch.Error);
 
         var cancelled = await new CancelPipelineHandler(factory)
-            .HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
+            .HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(task.Id), PipelineTestActor.AdminFor(projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(cancelled.Success, cancelled.Error);
         Assert.Equal(TaskPipelineStage.Cancelled, cancelled.Value!.Stage);
@@ -76,7 +76,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(launch.Success, launch.Error);
 
         var cancelled = await new CancelSubtaskHandler(factory)
-            .HandleAsync(new CancelSubtaskCommand(new CancelSubtaskRequest(task.Id, subtask.Value.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
+            .HandleAsync(new CancelSubtaskCommand(new CancelSubtaskRequest(task.Id, subtask.Value.Id), PipelineTestActor.AdminFor(projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(cancelled.Success, cancelled.Error);
         Assert.Equal(SubtaskStatus.Pending, cancelled.Value!.Subtasks.Single().Status);
@@ -110,7 +110,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var restarted = await new RestartPipelineHandler(factory)
-            .HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
+            .HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(task.Id), PipelineTestActor.AdminFor(projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(restarted.Success, restarted.Error);
         Assert.Null(restarted.Value!.Stage);
