@@ -76,7 +76,9 @@ public record PipelinePreflightDto(
     bool ReviewModelConfigured,
     int? LastKnownRepositoryBehind = null,
     string? LastKnownRepositoryBranch = null,
-    DateTime? LastKnownRepositoryStatusAt = null);
+    DateTime? LastKnownRepositoryStatusAt = null,
+    Guid? PipelineDeviceId = null,
+    bool PipelineGitSyncSupported = false);
 
 /// <summary>Finds the most recently active pipeline for the current project.</summary>
 public record GetLivePipelineTaskRequest(Guid ProjectId);
