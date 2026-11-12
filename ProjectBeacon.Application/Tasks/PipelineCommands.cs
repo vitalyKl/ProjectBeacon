@@ -73,7 +73,10 @@ public record PipelinePreflightDto(
     bool HasOnlineNativeWorkstation,
     bool PlannerModelConfigured,
     bool ActorModelConfigured,
-    bool ReviewModelConfigured);
+    bool ReviewModelConfigured,
+    int? LastKnownRepositoryBehind = null,
+    string? LastKnownRepositoryBranch = null,
+    DateTime? LastKnownRepositoryStatusAt = null);
 
 /// <summary>Finds the most recently active pipeline for the current project.</summary>
 public record GetLivePipelineTaskRequest(Guid ProjectId);
