@@ -64,6 +64,19 @@ public sealed class EndpointAuthorizationInventoryTests
             && route.Policy == "Human");
 
         Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId}/context/nodes"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId}/context/drafts"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/decisions/propose"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/constraints/propose"
+            && route.Policy == "Human or API token (ContextRead)");
+
+        Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones"
             && route.Policy == "Human");
         Assert.Contains(routes, route =>
