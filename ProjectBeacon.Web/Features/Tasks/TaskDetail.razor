@@ -1,4 +1,5 @@
 @using System.Text.Json
+@using System.Text.Json.Serialization
 @using ProjectBeacon.Web.Features.Chat
 @page "/task/{taskId:guid}"
 @implements IDisposable
@@ -1219,9 +1220,9 @@ else
             GitSyncResultDto? result = null;
             if (!string.IsNullOrWhiteSpace(command.ResultJson))
             {
-                result = JsonSerializer.Deserialize<GitSyncResultDto>(
-                    command.ResultJson,
-                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+                options.Converters.Add(new JsonStringEnumConverter());
+                result = JsonSerializer.Deserialize<GitSyncResultDto>(command.ResultJson, options);
             }
 
             if (result is null)
