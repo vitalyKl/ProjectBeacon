@@ -31,7 +31,7 @@ public sealed class TaskItemCommandTests
     {
         var taskId = Guid.NewGuid();
         var request = new UpdateTaskRequest(taskId, "Updated", "New desc", TaskPriority.Critical, TaskType.Feature, null, null);
-        var command = new UpdateTaskCommand(request);
+        var command = new UpdateTaskCommand(request, ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal("Updated", command.Request.Title);
