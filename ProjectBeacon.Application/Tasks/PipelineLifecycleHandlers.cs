@@ -140,17 +140,17 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         {
             var result = JsonSerializer.Deserialize<GitSyncResultDto>(
                 resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return result is not null
-                && (result.Behind > 0
-                    || !result.Clean
-                    || !result.HasUpstream
-                    || result.Detached
-                    || result.Diverged
-                    || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused);
+            return result is null
+                || result.Behind > 0
+                || !result.Clean
+                || !result.HasUpstream
+                || result.Detached
+                || result.Diverged
+                || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused;
         }
         catch (JsonException)
         {
-            return false;
+            return true;
         }
     }
 }
