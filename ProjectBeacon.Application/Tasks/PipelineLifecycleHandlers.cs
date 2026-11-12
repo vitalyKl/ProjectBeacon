@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Application.Agents;
+using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Tasks;
@@ -322,8 +323,13 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
 public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ForceClosePipelineCommand command, CancellationToken ct = default)
     {
@@ -333,8 +339,15 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
-        if (!await PipelineSupport.IsPrivilegedAsync(db, command.Request.ActorId, ct))
-            return Result.Failure<PipelineStateDto>("Force close requires admin privileges.");
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Pipeline,
+            AuthAction.Administer,
+            projectId: task.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         var reason = command.Request.Reason?.Trim();
         var marker = string.IsNullOrEmpty(reason)
