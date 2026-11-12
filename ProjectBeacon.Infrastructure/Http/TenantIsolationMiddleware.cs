@@ -144,6 +144,13 @@ public sealed class TenantIsolationMiddleware
                 return (claimedMember.ProjectId, orgExplicit ? orgId : claimedMember.Project.OrgId);
             }
 
+            if (claimed is { } claimedProject
+                && await IsOrgOwnerOrAdminOfProjectAsync(db, userId, claimedProject))
+            {
+                var claimedOrg = await GetProjectOrgIdAsync(db, claimedProject);
+                return (claimedProject, orgExplicit ? orgId : claimedOrg);
+            }
+
             if (await ResolveAdminFallbackOrgAsync(db, isAdmin, claimed) is { } adminOrg)
             {
                 return (claimed, orgExplicit ? orgId : adminOrg);
@@ -156,7 +163,18 @@ public sealed class TenantIsolationMiddleware
 
             if (!isAdmin)
             {
-                return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
+                var managedProject = await db.Projects.IgnoreQueryFilters()
+                    .Where(project => (!orgExplicit || project.OrgId == orgId)
+                        && db.OrgMembers.IgnoreQueryFilters().Any(member =>
+                            member.OrgId == project.OrgId
+                            && member.UserId == userId
+                            && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin)))
+                    .OrderBy(project => project.CreatedAt)
+                    .Select(project => new { project.Id, project.OrgId })
+                    .FirstOrDefaultAsync();
+                return managedProject is null
+                    ? (Guid.Empty, orgExplicit ? orgId : Guid.Empty)
+                    : (managedProject.Id, orgExplicit ? orgId : managedProject.OrgId);
             }
 
             var oldest = await db.Projects.IgnoreQueryFilters()
