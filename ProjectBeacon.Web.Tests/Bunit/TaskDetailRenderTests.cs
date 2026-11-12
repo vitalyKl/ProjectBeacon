@@ -123,7 +123,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             .ToListAsync(CancellationToken.None);
         Assert.Equal(new[] { 2, 3, 4 }, history.Select(version => version.Revision).ToArray());
         Assert.Contains("Original task goal", cut.Markup);
-        Assert.Contains("[data-testid=\u0027task-history-panel-4\u0027]", cut.Markup);
+        cut.Find("[data-testid='task-history-panel-4']");
     }
 
 }
