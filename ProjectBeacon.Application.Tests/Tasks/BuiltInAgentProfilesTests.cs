@@ -97,7 +97,7 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains("must not enter the live working tree before approval", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("targetKind RepoPatch", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("only RepoPatch Update proposals", docs.Instruction, StringComparison.Ordinal);
-        Assert.DoesNotContain("knowledge-curator", docs.Instruction, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("use the knowledge-curator profile", docs.Instruction, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not submit ProjectDescription, ContextSection, Decision, Constraint, Milestone, TaskDescription, Create or Delete proposals", docs.Instruction, StringComparison.Ordinal);
         Assert.DoesNotContain("For ContextSection updates", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_file", docs.Instruction, StringComparison.Ordinal);
