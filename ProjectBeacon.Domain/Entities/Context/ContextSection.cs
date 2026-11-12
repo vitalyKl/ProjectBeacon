@@ -222,9 +222,21 @@ public class ContextSection : Entity, IProjectScoped
     /// <summary>Updates only a NeedsReview draft; agent-authored content remains unreviewed.</summary>
     public void UpdateDraft(string title, string bodyMarkdown, string? sourcePath, string? updatedById)
     {
+        var revisionBefore = Revision;
+        var metadataChanged =
+            Source != ContextSource.Native
+            || !string.Equals(SourcePath, sourcePath, StringComparison.Ordinal)
+            || ReviewState != ContextReviewState.NeedsReview;
+
         Update(title, bodyMarkdown, "agent", updatedById);
         Source = ContextSource.Native;
         SourcePath = sourcePath;
         ReviewState = ContextReviewState.NeedsReview;
+
+        // Update() owns text revisions. Source identity is part of the immutable
+        // ContentVersion snapshot too, so a metadata-only path change must append a
+        // revision without double-incrementing when the text changed at the same time.
+        if (metadataChanged && Revision == revisionBefore)
+            Revision++;
     }
 }
