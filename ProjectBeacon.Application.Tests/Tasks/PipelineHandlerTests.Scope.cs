@@ -26,7 +26,7 @@ public sealed partial class PipelineHandlerTests
         var emptyGuidTenant = new TenantContext();
         emptyGuidTenant.Assign(Guid.Empty, null, unscoped: false);
         var emptyScope = await new GetPipelineHandler(HandlerSqlite.Factory(_connection, emptyGuidTenant))
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(emptyScope.Success);
         Assert.Equal("Task not found.", emptyScope.Error);
     }
@@ -40,7 +40,7 @@ public sealed partial class PipelineHandlerTests
         var factoryA = HandlerSqlite.Factory(_connection, Scope(projectIdA));
 
         var getForeign = await new GetPipelineHandler(factoryA)
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskB.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskB.Id), PipelineTestActor.AdminFor(taskB.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(getForeign.Success);
         Assert.Equal("Task not found.", getForeign.Error);
 
@@ -50,7 +50,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal("Task not found.", startForeign.Error);
 
         var getOwn = await new GetPipelineHandler(HandlerSqlite.Factory(_connection, Scope(projectIdB)))
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskB.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskB.Id), PipelineTestActor.AdminFor(taskB.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(getOwn.Success, getOwn.Error);
     }
 
@@ -68,7 +68,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "one"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub1.Success, sub1.Error);
         var afterFirst = await new GetPipelineHandler(factory)
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(afterFirst.Success, afterFirst.Error);
         Assert.Equal(TaskPipelineStage.Executing, afterFirst.Value!.Stage);
 
@@ -76,7 +76,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "two"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub2.Success, sub2.Error);
         var afterSecond = await new GetPipelineHandler(factory)
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(afterSecond.Success, afterSecond.Error);
         Assert.Equal(TaskPipelineStage.Executing, afterSecond.Value!.Stage);
 
@@ -89,7 +89,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains("Another Actor session", actor2.Error);
 
         var final = await new GetPipelineHandler(factory)
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(final.Success, final.Error);
         Assert.Equal(TaskPipelineStage.Executing, final.Value!.Stage);
         Assert.Equal(TaskItemStatus.InProgress, final.Value.Status);
