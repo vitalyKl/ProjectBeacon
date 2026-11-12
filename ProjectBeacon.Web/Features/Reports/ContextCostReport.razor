@@ -1,7 +1,10 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Evals
 @using ProjectBeacon.Application.Reports
 @using ProjectBeacon.Application.Tasks
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
 @inject ListProjectTasksHandler ListTasks
 @inject ContextCostReportHandler ContextCostHandler
 
@@ -82,7 +85,10 @@ else
             return;
         }
 
-        var result = await ContextCostHandler.HandleAsync(new GetContextCostReportRequest(_selectedTaskId.Value, ProjectId));
+        var authState = await Auth.GetAuthenticationStateAsync();
+        var actor = ActorContextFactory.FromPrincipal(authState.User);
+        var result = await ContextCostHandler.HandleAsync(
+            new GetContextCostReportRequest(_selectedTaskId.Value, ProjectId, actor));
         _report = result.Success ? result.Value : null;
     }
 
