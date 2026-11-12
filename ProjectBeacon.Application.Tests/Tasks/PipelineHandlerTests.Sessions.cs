@@ -53,10 +53,10 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains(PipelineRole.Planner, spawner.Calls.Select(c => c.Role));
 
         var sub1 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Collect data", new[] { "beacon_search_code" }, new[] { "data/" })), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Collect data", new[] { "beacon_search_code" }, new[] { "data/" }), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub1.Success, sub1.Error);
         var sub2 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Render charts")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Render charts"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub2.Success, sub2.Error);
 
         var actor1 = await new StartActorSessionHandler(factory, spawner)
@@ -129,7 +129,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains("Secret task description", start.Value.PromptContext);
 
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Do the thing", new[] { "beacon_search_code" }, new[] { "src/" })), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Do the thing", new[] { "beacon_search_code" }, new[] { "src/" }), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
 
         var actor = await new StartActorSessionHandler(factory, spawner)
@@ -178,7 +178,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Null(start.Value.LaunchSpec);
 
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
@@ -206,7 +206,7 @@ public sealed partial class PipelineHandlerTests
         await new StartPipelineHandler(factory, spawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
@@ -269,7 +269,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
         var subtask = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);

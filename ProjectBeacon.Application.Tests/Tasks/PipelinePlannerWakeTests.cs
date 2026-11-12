@@ -121,7 +121,7 @@ public sealed partial class PipelineHandlerTests
         var first = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
                 task.Id, "Explore the relevant implementation.",
-                WakePlannerAfter: wakePlannerAfter)),
+                WakePlannerAfter: wakePlannerAfter), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
 
@@ -130,7 +130,7 @@ public sealed partial class PipelineHandlerTests
         {
             var pending = await new CreateSubtaskHandler(factory)
                 .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-                    task.Id, "Implement the next batch after the checkpoint.")),
+                    task.Id, "Implement the next batch after the checkpoint."), PipelineTestActor.AdminFor(task.ProjectId)),
                     TestContext.Current.CancellationToken);
             Assert.True(pending.Success, pending.Error);
             pendingId = pending.Value!.Id;
