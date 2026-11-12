@@ -573,7 +573,7 @@ else
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
                 var repositorySyncPending = _pipeline?.Preflight?.RepositorySyncInProgress == true
                     || _gitSyncCommandPending;
-                if (_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled
+                if ((_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled)
                     && !repositorySyncPending)
                     continue;
 
@@ -581,7 +581,9 @@ else
                 {
                     await ReloadPipeline(ct);
 
-                    if (_gitSyncCommandId is { } commandId && _gitSyncProjectId is { } projectId)
+                    if (!_gitSyncBusy
+                        && _gitSyncCommandId is { } commandId
+                        && _gitSyncProjectId is { } projectId)
                     {
                         var current = await GetGitSyncCommand.HandleAsync(
                             projectId, commandId, _actorContext, ct);
@@ -1182,7 +1184,11 @@ else
             {
                 await ReloadPipeline(ct);
             }
-            catch (Exception refreshException) when (refreshException is not OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The component is being disposed; the queued command remains durable.
+            }
+            catch (Exception refreshException)
             {
                 Logger.LogWarning(refreshException,
                     "Could not refresh repository preflight after sync exception. TaskId={TaskId}", TaskId);
