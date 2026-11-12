@@ -47,7 +47,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains("done or failed", reviewWithPending.Error);
 
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         var reported = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value.Id, "diff://a", "ok"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
@@ -101,7 +101,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
 
         var actorAgain = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(actorAgain.Success);
         Assert.Equal("Subtask is already finished.", actorAgain.Error);
 
@@ -120,7 +120,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var foreignSub = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, foreignSubtask.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, foreignSubtask.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(foreignSub.Success);
         Assert.Equal("Subtask not found.", foreignSub.Error);
     }
