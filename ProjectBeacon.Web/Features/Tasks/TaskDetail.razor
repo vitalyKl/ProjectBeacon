@@ -466,9 +466,12 @@ else
         : _pipeline.Preflight.HasOnlineNativeWorkstation != true
             ? L["PipelineNativeWorkstationOffline"].Value
             : L["PipelinePreflightNoRoleModel"].Value;
-    private string PlannerPreflightMessage => string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
-        ? L["PipelinePreflightNoPlannerModel"].Value
-        : L[_pipeline.StartBlockedReason].Value;
+    private string PlannerPreflightMessage =>
+        _pipeline?.Preflight?.LastKnownRepositoryReasonCode is { } repositoryReason
+            ? L["GitSyncReason" + repositoryReason].Value
+            : string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
+                ? L["PipelinePreflightNoPlannerModel"].Value
+                : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
 
     private List<LabelDto> _labels = [];
