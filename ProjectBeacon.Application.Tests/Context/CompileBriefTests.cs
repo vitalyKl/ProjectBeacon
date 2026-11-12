@@ -428,7 +428,7 @@ public sealed class CompileBriefTests : IDisposable
         var handler = new ImportFilesHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ImportFilesCommand(_projectId, [
             new ImportFileRequest("AGENTS.md", "# Hello", "/tmp/AGENTS.md")
-        ]), TestContext.Current.CancellationToken);
+        ], TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var section = Assert.Single(_db.ContextSections);
