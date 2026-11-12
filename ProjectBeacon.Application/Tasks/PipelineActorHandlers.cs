@@ -156,11 +156,16 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public StartActorSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public StartActorSessionHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartActorSessionCommand command, CancellationToken ct = default)
@@ -175,6 +180,12 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+                db, _authorization, command.Actor, task,
+                PipelineRole.Planner, requiredSubtaskId: null, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             var subtask = await db.Subtasks.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
