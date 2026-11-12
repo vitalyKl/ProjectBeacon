@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Content;
+using ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Enums;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
@@ -27,6 +28,34 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         Assert.Contains("beacon-task-grid", html);
         Assert.Contains("beacon-state", html);
         Assert.Contains("Start task", html);
+    }
+
+    [Fact]
+    public void TaskDetail_ShowsNonBlockingWarningWhenLastGitStatusIsBehind()
+    {
+        var task = DbContext.Tasks.First();
+        var project = DbContext.Projects.Single();
+        var user = DbContext.Users.Single();
+        var device = DbContext.Set<DaemonDevice>().Single();
+        var command = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            System.Text.Json.JsonSerializer.Serialize(new { projectId = project.Id, mode = "Status" }),
+            project.Id,
+            user.Id);
+        command.Succeed(
+            """{"branch":"feature/task-work","upstream":"origin/feature/task-work","ahead":0,"behind":3,"clean":true,"detached":false,"hasUpstream":true,"diverged":false,"head":"abc","headAfter":"abc","outcome":"UpToDate","reasonCode":null,"stderr":null}""");
+        DbContext.WorkstationCommands.Add(command);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
+            builder => builder.Add(component => component.TaskId, task.Id));
+
+        Assert.Contains("repository-behind-warning", cut.Markup);
+        Assert.Contains("3 commit(s) behind", cut.Markup);
+        Assert.Contains("feature/task-work", cut.Markup);
+        Assert.Contains("href=\"/project/settings\"", cut.Markup);
+        Assert.Contains("Start task", cut.Markup);
     }
 
     [Fact]
