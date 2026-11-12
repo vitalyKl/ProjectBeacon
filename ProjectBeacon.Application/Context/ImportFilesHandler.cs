@@ -29,6 +29,7 @@ public class ImportFilesHandler
     {
         await using var db = _dbFactory.CreateDbContext();
         var createdCount = 0;
+        var stagedRevisions = new HashSet<(Guid TargetId, int Revision)>();
 
         foreach (var file in command.Files)
         {
@@ -50,6 +51,7 @@ public class ImportFilesHandler
                     var attribution = ContentAttribution.FromActor(command.Actor);
                     _contentWriter.AddVersion(
                         db, section, attribution.Type ?? "System", attribution.Id ?? file.SourcePath);
+                    stagedRevisions.Add((section.Id, section.Revision));
                     createdCount++;
                 }
                 else
@@ -67,6 +69,7 @@ public class ImportFilesHandler
                         var attribution = ContentAttribution.FromActor(command.Actor);
                         _contentWriter.AddVersion(
                             db, existing, attribution.Type ?? "System", attribution.Id ?? file.SourcePath);
+                        stagedRevisions.Add((existing.Id, existing.Revision));
                     }
                 }
             }
@@ -83,6 +86,43 @@ public class ImportFilesHandler
                 "Imported context changed while it was being saved. Refresh and retry.",
                 ErrorKind.Conflict);
         }
+        catch (DbUpdateException)
+        {
+            // A concurrent writer may commit the unique ContentVersions row before
+            // PostgreSQL reports the target row's revision concurrency token. EF rolls
+            // back the SaveChanges transaction, so inspect persisted history after the
+            // failed batch to distinguish that stale-revision race from unrelated errors.
+            if (await HasDuplicateRevisionAsync(db, command.ProjectId, stagedRevisions, ct))
+            {
+                return Result.Failure<int>(
+                    "Imported context changed while it was being saved. Refresh and retry.",
+                    ErrorKind.Conflict);
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<bool> HasDuplicateRevisionAsync(
+        IBeaconDb db,
+        Guid projectId,
+        IReadOnlySet<(Guid TargetId, int Revision)> stagedRevisions,
+        CancellationToken ct)
+    {
+        if (stagedRevisions.Count == 0)
+            return false;
+
+        var targetIds = stagedRevisions.Select(item => item.TargetId).Distinct().ToArray();
+        var revisions = stagedRevisions.Select(item => item.Revision).Distinct().ToArray();
+        var persisted = await db.ContentVersions
+            .Where(version => version.ProjectId == projectId
+                && version.TargetKind == ContentTargetKind.ContextSection
+                && targetIds.Contains(version.TargetId)
+                && revisions.Contains(version.Revision))
+            .Select(version => new { version.TargetId, version.Revision })
+            .ToListAsync(ct);
+
+        return persisted.Any(version => stagedRevisions.Contains((version.TargetId, version.Revision)));
     }
 
     private static IList<ContextSection> ParseMarkdownFile(Guid projectId, string fileName, string content)
