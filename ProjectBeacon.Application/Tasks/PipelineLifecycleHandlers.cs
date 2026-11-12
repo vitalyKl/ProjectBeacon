@@ -120,17 +120,21 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (syncIsInProgress)
             return true;
 
-        var resultJson = await db.WorkstationCommands.AsNoTracking()
+        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
             .Where(command => command.ProjectId == projectId
                 && command.DeviceId == selectedDeviceId.Value
-                && command.Kind == WorkstationCommandKind.GitSync
-                && command.Status == WorkstationCommandStatus.Succeeded
-                && command.ResultJson != null)
-            .OrderByDescending(command => command.CompletedAt)
-            .Select(command => command.ResultJson)
+                && command.Kind == WorkstationCommandKind.GitSync)
+            .OrderByDescending(command => command.CreatedAt)
+            .Select(command => new { command.Status, command.ResultJson })
             .FirstOrDefaultAsync(ct);
-        if (string.IsNullOrWhiteSpace(resultJson))
+        if (lastGitSync is null)
             return false;
+        if (lastGitSync.Status != WorkstationCommandStatus.Succeeded)
+            return true;
+
+        var resultJson = lastGitSync.ResultJson;
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return true;
 
         try
         {
