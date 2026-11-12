@@ -183,9 +183,11 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
 
             var permission = command.Actor.IsWorker
                 ? PipelineExecutionAuthorization.CanDispatchInternally(command.Actor, task)
-                : await PipelineExecutionAuthorization.CanDriveAsync(
-                    db, _authorization, command.Actor, task,
-                    PipelineRole.Planner, requiredSubtaskId: null, ct);
+                : command.Actor.IsApiToken && command.Actor.PipelineRole is not null
+                    ? Result.Forbidden()
+                    : await PipelineExecutionAuthorization.CanDriveAsync(
+                        db, _authorization, command.Actor, task,
+                        PipelineRole.Planner, requiredSubtaskId: null, ct);
             if (!permission.Success)
                 return Result.Failure<PipelineSessionDto>(permission);
 
