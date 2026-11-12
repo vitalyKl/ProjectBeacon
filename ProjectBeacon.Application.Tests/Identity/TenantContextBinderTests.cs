@@ -157,6 +157,58 @@ public sealed class TenantContextBinderTests : IDisposable
     }
 
     [Fact]
+    public async Task BindUserAsync_HonorsInheritedOrganizationAdminProjectClaim()
+    {
+        var org = Org.Create("Org manager", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Managed project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-admin-claim", "org-admin-claim@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Admin));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(
+            Actor(user.Id, isAdmin: false, projectClaim: project.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(project.Id, tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_OrganizationOwnerWithoutProjectClaimUsesManagedProject()
+    {
+        var org = Org.Create("Org owner", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Managed default project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-owner-default", "org-owner-default@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(
+            Actor(user.Id, isAdmin: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(project.Id, tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+    }
+
+    [Fact]
     public async Task BindUserAsync_AlreadyAssigned_DoesNotOverride()
     {
         var existing = Guid.NewGuid();
