@@ -102,10 +102,12 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         cut.Find("[data-testid='task-content-history']").Click();
 
-        Assert.Contains("Original task goal", cut.Markup);
         Assert.Contains("Current task goal", cut.Markup);
-        Assert.Contains("restore-task-revision-2", cut.Markup);
+        Assert.DoesNotContain("Original task goal", cut.Markup);
+        cut.Find("[data-testid='task-history-panel-2'] button").Click();
 
+        Assert.Contains("Original task goal", cut.Markup);
+        Assert.Contains("restore-task-revision-2", cut.Markup);
         cut.Find("[data-testid='restore-task-revision-2']").Click();
 
         await DbContext.Entry(task).ReloadAsync(CancellationToken.None);
@@ -119,7 +121,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             .ToListAsync(CancellationToken.None);
         Assert.Equal(new[] { 2, 3, 4 }, history.Select(version => version.Revision).ToArray());
         Assert.Contains("Original task goal", cut.Markup);
-        Assert.Contains("Revision 4", cut.Markup);
+        Assert.Contains("[data-testid=\u0027task-history-panel-4\u0027]", cut.Markup);
     }
 
 }
