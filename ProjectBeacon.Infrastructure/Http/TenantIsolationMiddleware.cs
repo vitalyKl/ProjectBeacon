@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Application.Authorization;
 using Application.Persistence;
 using Domain.Entities.Projects;
+using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -77,7 +78,7 @@ public sealed class TenantIsolationMiddleware
         {
             var members = await LoadMembershipsAsync(db, userId);
             (projectId, orgId) = await ResolveAuthenticatedAsync(
-                db, members, fromRoute, fromHeader, fromOrgRoute, fromOrgHeader, isAdmin, projectId, orgId);
+                db, members, userId, fromRoute, fromHeader, fromOrgRoute, fromOrgHeader, isAdmin, projectId, orgId);
         }
 
         // If a specific project was requested (route/header) but no explicit
@@ -110,6 +111,7 @@ public sealed class TenantIsolationMiddleware
     private static async Task<(Guid? ProjectId, Guid? OrgId)> ResolveAuthenticatedAsync(
         BeaconDbContext db,
         List<ProjectMember> members,
+        Guid userId,
         Guid? fromRoute,
         Guid? fromHeader,
         Guid? fromOrgRoute,
@@ -121,9 +123,11 @@ public sealed class TenantIsolationMiddleware
         var orgExplicit = fromOrgRoute is not null || fromOrgHeader is not null;
         var requested = fromRoute ?? fromHeader;
 
-        // A specific project was requested (route/header) but the user has no
-        // membership in it: fail closed.
-        if (requested is { } rid && !isAdmin && !IsMemberOf(members, rid))
+        // A specific project was requested (route/header). Direct project members
+        // and inherited organization Owner/Admin roles may enter its tenant scope;
+        // an organization Member without project membership remains fail-closed.
+        if (requested is { } rid && !isAdmin && !IsMemberOf(members, rid)
+            && !await IsOrgOwnerOrAdminOfProjectAsync(db, userId, rid))
         {
             return (Guid.Empty, orgExplicit ? orgId : Guid.Empty);
         }
@@ -194,6 +198,21 @@ public sealed class TenantIsolationMiddleware
             .Where(p => p.Id == ac)
             .Select(p => (Guid?)p.OrgId)
             .FirstOrDefaultAsync();
+    }
+
+    private static async Task<bool> IsOrgOwnerOrAdminOfProjectAsync(
+        BeaconDbContext db,
+        Guid userId,
+        Guid projectId)
+    {
+        var orgId = await GetProjectOrgIdAsync(db, projectId);
+        if (orgId is null)
+            return false;
+
+        return await db.OrgMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.OrgId == orgId.Value
+                && member.UserId == userId
+                && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin));
     }
 
     internal static Task<Guid?> GetProjectOrgIdAsync(BeaconDbContext db, Guid projectId)
