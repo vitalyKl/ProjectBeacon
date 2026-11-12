@@ -106,7 +106,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         if (command.Request.AutoLaunch)
         {
             var launched = await new LaunchSessionHandler(_dbFactory)
-                .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)), ct);
+                .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id), command.Actor), ct);
             // Keep the Ready session as a manual fallback when the workstation is offline
             // or cannot launch. The caller receives the original session and the UI can retry.
             return launched.Success && launched.Value is not null
