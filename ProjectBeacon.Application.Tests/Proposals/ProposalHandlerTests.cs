@@ -193,6 +193,84 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_RejectsNewPendingProposalWhenTaskQuotaIsFull()
+    {
+        var projectTask = TaskItem.Create("Review project context.", _projectId);
+        _db.Tasks.Add(projectTask);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var grants = new[]
+        {
+            McpToolNames.KnowledgePropose,
+            McpToolNames.KnowledgeProposals,
+            McpToolNames.KnowledgeWithdraw
+        };
+        var subtask = Subtask.Create(
+            "Review the project description and suggest a precise update.",
+            projectTask.Id,
+            _projectId,
+            allowedMcpTools: grants,
+            profileKey: "knowledge-curator");
+        subtask.Start();
+        _db.Subtasks.Add(subtask);
+        var session = PipelineSession.Create(
+            projectTask.Id, _projectId, PipelineRole.Actor, "Actor quota test session.", subtask.Id);
+        session.Launch();
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tokenId = Guid.NewGuid();
+        var actor = new ActorContext(
+            ActorType.ApiToken, _userId, false, tokenId, null,
+            _projectId, _orgId, ApiTokenCapability.ContextRead);
+        var now = DateTime.UtcNow;
+        var existing = Enumerable.Range(0, 50)
+            .Select(index => Proposal.Create(
+                _projectId,
+                projectTask.Id,
+                subtask.Id,
+                session.Id,
+                ContentTargetKind.ProjectDescription,
+                Guid.NewGuid(),
+                ProposalOperation.Update,
+                1,
+                new string('a', 64),
+                """{"description":"Existing task proposal"}""",
+                "Existing pending proposal for this task.",
+                ProposalAuthorKind.Agent,
+                null,
+                tokenId,
+                "knowledge-curator",
+                PipelineRole.Actor.ToString(),
+                $"task-quota-seed-{index}",
+                now))
+            .ToArray();
+        _db.Proposals.AddRange(existing);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var request = Request() with { IdempotencyKey = "new-pending-at-task-limit" };
+        var command = new CreateProposalCommand(
+            _projectId,
+            request,
+            actor,
+            projectTask.Id,
+            subtask.Id,
+            session.Id,
+            PipelineRole.Actor.ToString());
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(command, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("limit of 50 pending", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(50, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId
+                && item.TaskId == projectTask.Id
+                && item.Status == ProposalStatus.Pending,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
     {
         var factory = HandlerSqlite.Factory(_connection);
