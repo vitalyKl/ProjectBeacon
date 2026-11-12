@@ -89,7 +89,7 @@ internal static class PipelineExecutionAuthorization
         if (actor.IsApiToken && actor.PipelineRole is not null)
         {
             if (actor.PipelineRole != PipelineRole.Planner
-                || session.Role is not (PipelineRole.Actor or PipelineRole.Review))
+                || session.Role != PipelineRole.Review)
                 return Result.Forbidden();
 
             return await CanDriveAsync(
