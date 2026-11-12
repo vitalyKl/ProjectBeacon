@@ -49,12 +49,16 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var state = await PipelineSupport.StateAsync(db, task, ct);
         var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
         var repositoryBehind = preflight.LastKnownRepositoryBehind is > 0;
+        var repositorySyncInProgress = preflight.RepositorySyncInProgress;
+        var repositoryBlocked = repositoryBehind || repositorySyncInProgress;
         return Result.Ok(state with
         {
             Preflight = preflight,
-            CanStart = state.CanStart && !repositoryBehind,
+            CanStart = state.CanStart && !repositoryBlocked,
             StartBlockedReason = state.StartBlockedReason
-                ?? (repositoryBehind ? "PipelineRepositoryBehind" : null)
+                ?? (repositoryBehind
+                    ? "PipelineRepositoryBehind"
+                    : repositorySyncInProgress ? "PipelineRepositorySyncInProgress" : null)
         });
     }
 
@@ -113,8 +117,16 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         string? lastGitSyncResultJson = null;
         DateTime? lastGitSyncCompletedAt = null;
+        var repositorySyncInProgress = false;
         if (selectedPipelineDeviceId is { } selectedDeviceId)
         {
+            repositorySyncInProgress = await db.WorkstationCommands.AsNoTracking()
+                .AnyAsync(command => command.ProjectId == projectId
+                    && command.DeviceId == selectedDeviceId
+                    && command.Kind == WorkstationCommandKind.GitSync
+                    && (command.Status == WorkstationCommandStatus.Pending
+                        || command.Status == WorkstationCommandStatus.Running), ct);
+
             var lastGitSync = await db.WorkstationCommands.AsNoTracking()
                 .Where(command => command.ProjectId == projectId
                     && command.DeviceId == selectedDeviceId
@@ -163,7 +175,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             lastKnownRepositoryBranch,
             lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt,
             selectedPipelineDeviceId,
-            pipelineGitSyncSupported);
+            pipelineGitSyncSupported,
+            repositorySyncInProgress);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
