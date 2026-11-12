@@ -7,7 +7,7 @@ using ProjectBeacon.Infrastructure.Data;
 namespace ProjectBeacon.Infrastructure.Data.Migrations;
 
 [DbContext(typeof(BeaconDbContext))]
-[Migration("20261112080000_AddImportedContextFileIdentity")]
+[Migration("20261112060000_AddImportedContextFileIdentity")]
 public sealed class AddImportedContextFileIdentity : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -31,7 +31,13 @@ public sealed class AddImportedContextFileIdentity : Migration
                     RAISE EXCEPTION 'Duplicate imported ContextSection source paths exist; resolve them before applying the imported-file identity index.';
                 END IF;
             END $$;
+            """);
 
+        migrationBuilder.DropIndex(
+            name: "IX_ContextSections_ProjectId",
+            table: "ContextSections");
+
+        migrationBuilder.Sql("""
             CREATE UNIQUE INDEX "IX_ContextSections_ImportedFileIdentity"
                 ON "ContextSections" ("ProjectId", "SourcePath")
                 WHERE "Source" <> 0
@@ -49,5 +55,10 @@ public sealed class AddImportedContextFileIdentity : Migration
         migrationBuilder.DropIndex(
             name: "IX_ContextSections_ImportedFileIdentity",
             table: "ContextSections");
+
+        migrationBuilder.CreateIndex(
+            name: "IX_ContextSections_ProjectId",
+            table: "ContextSections",
+            column: "ProjectId");
     }
 }
