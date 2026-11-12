@@ -5,6 +5,7 @@
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Proposals
 @using ProjectBeacon.Application.Projects
@@ -17,6 +18,8 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
+@inject EnqueueProjectGitSyncHandler EnqueueGitSync
+@inject GetProjectGitSyncCommandHandler GetGitSyncCommand
 @inject ListProposalsHandler ListProposals
 @inject ListContentVersionsHandler ListContentVersions
 @inject RestoreContentVersionHandler RestoreContentVersion
@@ -81,6 +84,25 @@ else
                            StartIcon="@Icons.Material.Filled.PlayArrow"
                            OnClick="OnStartPipeline" Disabled="_busy || !CanStartPlanner">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
+                @if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null })
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Medium"
+                               StartIcon="@Icons.Material.Filled.Sync"
+                               OnClick="OnSynchronizeRepository"
+                               Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending"
+                               data-testid="task-repository-sync">
+                        @L["GitSyncNow"]
+                    </MudButton>
+                    <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["GitSyncHelp"]</MudText>
+                    @if (_gitSyncBusy)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mt-1" />
+                    }
+                    @if (_gitSyncCommandPending)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
+                    }
+                }
                 @if (!CanStartPlanner)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
@@ -416,6 +438,8 @@ else
     private CancellationTokenSource? _pipelinePoll;
     private PipelineStateDto? _pipeline;
     private bool _busy;
+    private bool _gitSyncBusy;
+    private bool _gitSyncCommandPending;
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
     private List<ProposalDto> _taskProposals = [];
@@ -429,7 +453,8 @@ else
     private string _workspaceTitle = string.Empty;
     private string _workspaceAbstract = string.Empty;
     private string _workspaceContent = string.Empty;
-    private bool CanStartPlanner => _pipeline?.CanStart == true;
+    private bool CanStartPlanner => _pipeline?.CanStart == true
+        && _pipeline.Preflight?.LastKnownRepositoryBehind is not > 0;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
     private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
@@ -1046,6 +1071,91 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task OnSynchronizeRepository()
+    {
+        if (_busy || _gitSyncBusy || _task is null
+            || _pipeline?.Preflight is not { PipelineGitSyncSupported: true, PipelineDeviceId: { } deviceId })
+            return;
+
+        _gitSyncBusy = true;
+        _gitSyncCommandPending = false;
+        try
+        {
+            var queued = await EnqueueGitSync.HandleAsync(
+                _task.ProjectId,
+                _actorContext,
+                GitSyncMode.PullFastForward,
+                targetDeviceId: deviceId);
+            if (!queued.Success || queued.Value is null)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var commandId = queued.Value.Id;
+            var deadline = DateTime.UtcNow.AddSeconds(65);
+            while (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                var current = await GetGitSyncCommand.HandleAsync(
+                    _task.ProjectId, commandId, _actorContext);
+                if (!current.Success || current.Value is null)
+                {
+                    Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+
+                if (current.Value.Status == WorkstationCommandStatus.Failed)
+                {
+                    Snackbar.Add(current.Value.Error ?? L["Error"].Value, Severity.Error);
+                    await ReloadPipeline();
+                    return;
+                }
+
+                if (current.Value.Status == WorkstationCommandStatus.Succeeded)
+                {
+                    GitSyncResultDto? result = null;
+                    if (!string.IsNullOrWhiteSpace(current.Value.ResultJson))
+                    {
+                        result = JsonSerializer.Deserialize<GitSyncResultDto>(
+                            current.Value.ResultJson,
+                            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                    }
+
+                    if (result is null)
+                    {
+                        Snackbar.Add(L["Error"].Value, Severity.Error);
+                        return;
+                    }
+
+                    if (result.Outcome == GitSyncOutcome.FastForwarded)
+                        Snackbar.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
+                    else if (result.Outcome == GitSyncOutcome.UpToDate && result.Behind == 0
+                        && result.Clean && result.HasUpstream && !result.Detached)
+                        Snackbar.Add(L["GitSyncOutcomeUpToDate"].Value, Severity.Success);
+                    else if (result.ReasonCode is { } reason)
+                        Snackbar.Add(L["GitSyncReason" + reason].Value, Severity.Warning);
+                    else
+                        Snackbar.Add(L["GitSyncOutcomeFailed"].Value, Severity.Warning);
+
+                    await ReloadPipeline();
+                    return;
+                }
+            }
+
+            _gitSyncCommandPending = true;
+            Snackbar.Add(L["GitSyncStillRunning"].Value, Severity.Info);
+        }
+        catch (JsonException)
+        {
+            Snackbar.Add(L["Error"].Value, Severity.Error);
+        }
+        finally
+        {
+            _gitSyncBusy = false;
         }
     }
 
