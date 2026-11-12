@@ -624,4 +624,29 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
+    [Fact]
+    public async Task GetPipeline_EnforcesTaskReadAtApplicationBoundary()
+    {
+        var (projectId, task) = await SeedTaskAsync("Pipeline read authorization");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var writeOnly = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.TaskWrite);
+
+        var denied = await new GetPipelineHandler(factory).HandleAsync(
+            new GetPipelineCommand(new GetPipelineRequest(task.Id), writeOnly),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(denied.Success);
+
+        var readOnly = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.TaskRead);
+        var allowed = await new GetPipelineHandler(factory).HandleAsync(
+            new GetPipelineCommand(new GetPipelineRequest(task.Id), readOnly),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(allowed.Success, allowed.Error);
+    }
+
 }
