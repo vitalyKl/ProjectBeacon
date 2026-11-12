@@ -94,6 +94,20 @@ public sealed class PipelineControlAuthorizationTests : IDisposable
     }
 
     [Fact]
+    public async Task NonOwnerCannotApprovePipeline()
+    {
+        var member = new ActorContext(
+            ActorType.Human, _memberId, false, null, null, null, null, ApiTokenCapability.None);
+
+        var result = await new ApprovePipelineHandler(_factory, _authorization).HandleAsync(
+            new ApprovePipelineCommand(new ApprovePipelineRequest(_taskId), member),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("forbidden", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task NonMemberCannotProbeOrCancelPipelineSession()
     {
         var session = PipelineSession.Create(
