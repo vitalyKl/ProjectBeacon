@@ -2601,7 +2601,7 @@ orthstar</value>
   <data name="GitSyncCheck" xml:space="preserve"><value>状態を確認</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。ページを更新して、リポジトリの状態を再確認してください。</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。このページでは状態の確認が自動的に続行されます。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
