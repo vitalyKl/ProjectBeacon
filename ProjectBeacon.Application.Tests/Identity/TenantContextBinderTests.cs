@@ -201,7 +201,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(
-            Actor(user.Id, isAdmin: false),
+            Actor(user.Id, isAdmin: false, orgClaim: org.Id),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(project.Id, tenant.ProjectId);
@@ -246,6 +246,10 @@ public sealed class TenantContextBinderTests : IDisposable
         Assert.True(tenant.Unscoped);
     }
 
-    private static ActorContext Actor(Guid userId, bool isAdmin, Guid? projectClaim = null) =>
-        new(ActorType.Human, userId, isAdmin, null, null, projectClaim, null, ApiTokenCapability.None);
+    private static ActorContext Actor(
+        Guid userId,
+        bool isAdmin,
+        Guid? projectClaim = null,
+        Guid? orgClaim = null) =>
+        new(ActorType.Human, userId, isAdmin, null, null, projectClaim, orgClaim, ApiTokenCapability.None);
 }
