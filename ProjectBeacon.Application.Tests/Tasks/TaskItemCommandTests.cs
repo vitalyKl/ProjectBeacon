@@ -51,7 +51,7 @@ public sealed class TaskItemCommandTests
     public void ChangeSubStageCommand_CreatesFromRequest()
     {
         var taskId = Guid.NewGuid();
-        var command = new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, TaskSubStage.Review));
+        var command = new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, TaskSubStage.Review), ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal(TaskSubStage.Review, command.Request.SubStage);
@@ -73,7 +73,7 @@ public sealed class TaskItemCommandTests
         var taskId = Guid.NewGuid();
         var depId1 = Guid.NewGuid();
         var depId2 = Guid.NewGuid();
-        var command = new SetDependenciesCommand(new SetDependenciesRequest(taskId, new List<Guid> { depId1, depId2 }));
+        var command = new SetDependenciesCommand(new SetDependenciesRequest(taskId, new List<Guid> { depId1, depId2 }), ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal(2, command.Request.DependentTaskIds.Count);
@@ -83,7 +83,7 @@ public sealed class TaskItemCommandTests
     public void AddReviewNotesCommand_CreatesFromRequest()
     {
         var taskId = Guid.NewGuid();
-        var command = new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, "All good"));
+        var command = new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, "All good"), ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal("All good", command.Request.ReviewNotes);
