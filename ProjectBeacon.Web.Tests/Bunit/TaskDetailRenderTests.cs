@@ -89,11 +89,11 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         var writer = new ContentWriter();
         task.Update(description: "Original task goal");
         writer.AddVersion(DbContext, task, "Human", user.Id.ToString("D"));
-        await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
 
         task.Update(description: "Current task goal");
         var saved = await writer.SaveAsync(
-            DbContext, task, "Human", user.Id.ToString("D"), TestContext.Current.CancellationToken);
+            DbContext, task, "Human", user.Id.ToString("D"), CancellationToken.None);
         Assert.True(saved.Success, saved.Error);
         Assert.Equal(3, saved.Value);
 
@@ -108,7 +108,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         cut.Find("[data-testid='restore-task-revision-2']").Click();
 
-        await DbContext.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
+        await DbContext.Entry(task).ReloadAsync(CancellationToken.None);
         Assert.Equal("Original task goal", task.Description);
         Assert.Equal(4, task.ContentRevision);
 
@@ -116,7 +116,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             .Where(version => version.TargetKind == ContentTargetKind.TaskDescription
                 && version.TargetId == task.Id)
             .OrderBy(version => version.Revision)
-            .ToListAsync(TestContext.Current.CancellationToken);
+            .ToListAsync(CancellationToken.None);
         Assert.Equal(new[] { 2, 3, 4 }, history.Select(version => version.Revision).ToArray());
         Assert.Contains("Original task goal", cut.Markup);
         Assert.Contains("Revision 4", cut.Markup);
