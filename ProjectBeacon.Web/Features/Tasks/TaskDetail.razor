@@ -121,6 +121,17 @@ else
             }
         </div>
     </header>
+    @if (_pipeline?.Preflight is { LastKnownRepositoryBehind: > 0 } repositoryStatus)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
+                  data-testid="repository-behind-warning">
+            @string.Format(
+                L["GitSyncRepositoryBehindWarning"].Value,
+                repositoryStatus.LastKnownRepositoryBehind!.Value,
+                repositoryStatus.LastKnownRepositoryBranch ?? "—")
+            <a href="/project/settings">@L["GitSyncTitle"]</a>
+        </MudAlert>
+    }
     <section class="beacon-task-content-history">
         <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
                    OnClick="LoadTaskContentHistory" Disabled="_busy || _taskHistoryLoading"
