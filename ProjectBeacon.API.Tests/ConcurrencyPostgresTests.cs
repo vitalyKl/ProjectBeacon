@@ -69,6 +69,9 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.SessionDrive);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
@@ -212,6 +215,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            projectId = project.Id;
             projectId = project.Id;
             userId = user.Id;
         }
@@ -513,7 +517,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartActorSession_OnlyOneSpawn_OneActorSession()
     {
         _postgres.RequirePostgres();
-        Guid taskId, subtaskId;
+        Guid taskId, subtaskId, projectId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Actor Race Org", null);
@@ -539,7 +543,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 return await new StartActorSessionHandler(factory, spawner)
-                    .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(taskId, subtaskId)));
+                    .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(taskId, subtaskId), actor));
             }
         }
 
@@ -570,7 +574,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid taskId, subtaskId, sessionId, commandId, deviceId, modelBackendId;
+        Guid taskId, subtaskId, sessionId, commandId, deviceId, modelBackendId, projectId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var user = User.Create("actor-retry-" + Guid.NewGuid().ToString("N"), "actor-retry-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
@@ -623,12 +627,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             taskId = task.Id;
             subtaskId = subtask.Id;
             sessionId = session.Id;
+            projectId = project.Id;
             commandId = command.Id;
             deviceId = device.Id;
             modelBackendId = backend.Id;
         }
 
         var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.SessionDrive);
         Result<WorkstationCommandDto> completion;
         using (TenantScope.EnterUnscoped())
         {
@@ -662,7 +670,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             retry = await new RetryPipelineSessionHandler(factory, new RetrySpawner(modelBackendId))
                 .HandleAsync(
-                    new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId)),
+                    new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId), actor),
                     TestContext.Current.CancellationToken);
         }
         Assert.True(retry.Success, retry.Error);
