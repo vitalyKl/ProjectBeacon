@@ -7,7 +7,9 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Proposals;
 using Application.Persistence;
+using Application.Proposals;
 using Application.Tasks;
+using Domain.Entities.Agents;
 using Domain.Entities.Content;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
@@ -208,6 +210,170 @@ public sealed class RepoPatchProposalWorkflowTests : IDisposable
             .Select(item => item.Action)
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Contains("proposal.patch.apply_queued", auditActions);
+    }
+
+    [Theory]
+    [InlineData(false, false, ProposalStatus.Pending)]
+    [InlineData(true, false, ProposalStatus.Pending)]
+    [InlineData(false, true, ProposalStatus.Pending)]
+    [InlineData(true, true, ProposalStatus.Applying)]
+    public async Task CreateRepoPatch_AutomaticApplicationRequiresProjectAndProfilePolicies(
+        bool projectAutoApply,
+        bool profileAutoApply,
+        ProposalStatus expectedStatus)
+    {
+        const string projectPath = "docs/guide.md";
+        const string before = "Before documentation.\\n";
+        const string after = "Updated documentation.\\n";
+        var patch = """
+            diff --git a/docs/guide.md b/docs/guide.md
+            index 9d3f98b..f5a8c3d 100644
+            --- a/docs/guide.md
+            +++ b/docs/guide.md
+            @@ -1 +1 @@
+            -Before documentation.
+            +Updated documentation.
+            """;
+        var payload = JsonSerializer.Serialize(new
+        {
+            patch,
+            files = new[]
+            {
+                new
+                {
+                    gitPath = projectPath,
+                    projectPath,
+                    baseHash = Hash(before),
+                    resultHash = Hash(after)
+                }
+            }
+        });
+
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        project.SetProposalPoliciesJson(ProposalPolicyCatalog.Serialize(
+            new Dictionary<string, string>
+            {
+                [ProposalPolicyCatalog.Key(ContentTargetKind.RepoPatch, ProposalOperation.Update)] =
+                    (projectAutoApply ? ProposalDecisionMode.Auto : ProposalDecisionMode.Manual).ToString()
+            }));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var device = DaemonDevice.Create(
+            "repo-patch-auto-device",
+            _userId,
+            "repo-patch-auto-fingerprint-" + Guid.NewGuid().ToString("N"),
+            "repo-patch-auto-device-token-" + Guid.NewGuid().ToString("N"),
+            "bcd_repo_patch_auto");
+        device.Heartbeat("{}", "{}", "repo-patch-auto-instance");
+        var token = ApiToken.Create(
+            "repo-patch-auto-harness",
+            "repo-patch-auto-harness-token-" + Guid.NewGuid().ToString("N"),
+            "bcn_repo_patch_auto",
+            _projectId,
+            ApiTokenCapability.ContextRead,
+            null,
+            _userId,
+            ApiTokenClientKind.Harness,
+            device.Id);
+        var runtime = ProjectRuntime.Create(_projectId, device.Id, "/workspace/project");
+        var task = TaskItem.Create("Update the project documentation.", _projectId);
+
+        var docsProfile = BuiltInAgentProfiles.Get("docs-writer")!;
+        var profileOverride = AgentProfile.Create(
+            _userId,
+            docsProfile.Key,
+            docsProfile.Name,
+            docsProfile.Description,
+            docsProfile.Instruction,
+            docsProfile.Mode.ToString(),
+            docsProfile.Tools,
+            docsProfile.PathPolicy.ToString(),
+            docsProfile.DefaultPaths,
+            docsProfile.CommandsEnabled,
+            docsProfile.ReportsDiff,
+            docsProfile.SizeHint,
+            docsProfile.Effort,
+            profileAutoApply ? "Auto" : "Review");
+        var profileSnapshot = JsonSerializer.Serialize(
+            BuiltInAgentProfiles.ApplyOverride(docsProfile, profileOverride));
+
+        var subtask = Subtask.Create(
+            "Prepare a documentation-only update.",
+            task.Id,
+            _projectId,
+            allowedMcpTools: [McpToolNames.KnowledgePropose],
+            allowedPaths: ["docs"],
+            profileKey: "docs-writer",
+            profileSnapshotJson: profileSnapshot);
+        subtask.Start();
+        var session = PipelineSession.Create(
+            task.Id, _projectId, PipelineRole.Actor, "Documentation Actor session.", subtask.Id);
+        session.Launch();
+
+        _db.DaemonDevices.Add(device);
+        _db.ApiTokens.Add(token);
+        _db.ProjectRuntimes.Add(runtime);
+        _db.Tasks.Add(task);
+        _db.Subtasks.Add(subtask);
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = new ActorContext(
+            ActorType.ApiToken,
+            _userId,
+            false,
+            token.Id,
+            null,
+            _projectId,
+            null,
+            ApiTokenCapability.ContextRead);
+        var request = new CreateProposalRequest(
+            ContentTargetKind.RepoPatch,
+            _projectId,
+            ProposalOperation.Update,
+            1,
+            payload,
+            "Updates the setup guide.",
+            "repo-patch-auto-" + Guid.NewGuid().ToString("N"));
+        var created = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    request,
+                    actor,
+                    task.Id,
+                    subtask.Id,
+                    session.Id,
+                    PipelineRole.Actor.ToString()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(created.Success, created.Error);
+        Assert.Equal(expectedStatus, created.Value!.Status);
+
+        var commands = await _db.WorkstationCommands
+            .Where(command => command.ProjectId == _projectId
+                && command.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        if (projectAutoApply && profileAutoApply)
+        {
+            var queued = Assert.Single(commands);
+            Assert.Equal(ProposalStatus.Applying, created.Value.Status);
+            Assert.Equal(queued.Id, created.Value.ApplyCommandId);
+            Assert.Equal(WorkstationCommandStatus.Pending, queued.Status);
+            Assert.Contains(await _db.AuditEvents.Select(item => item.Action)
+                .ToListAsync(TestContext.Current.CancellationToken),
+                action => action == "proposal.patch.apply_queued");
+        }
+        else
+        {
+            Assert.Empty(commands);
+            Assert.Null(created.Value.ApplyCommandId);
+            Assert.DoesNotContain(await _db.AuditEvents.Select(item => item.Action)
+                .ToListAsync(TestContext.Current.CancellationToken),
+                action => action == "proposal.patch.apply_queued");
+        }
     }
 
     private static string Hash(string value) =>
