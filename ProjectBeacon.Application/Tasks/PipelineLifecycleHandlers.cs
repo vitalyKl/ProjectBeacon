@@ -134,11 +134,14 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
 
         try
         {
-            using var result = JsonDocument.Parse(resultJson);
-            return result.RootElement.ValueKind == JsonValueKind.Object
-                && result.RootElement.TryGetProperty("behind", out var behind)
-                && behind.TryGetInt32(out var count)
-                && count > 0;
+            var result = JsonSerializer.Deserialize<GitSyncResultDto>(
+                resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return result is not null
+                && (result.Behind > 0
+                    || !result.HasUpstream
+                    || result.Detached
+                    || result.Diverged
+                    || result.Outcome == GitSyncOutcome.Failed);
         }
         catch (JsonException)
         {
