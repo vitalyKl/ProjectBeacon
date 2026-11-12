@@ -6,6 +6,7 @@ using System.Text.Json;
 using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Common;
+using Application.Devices;
 using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
@@ -50,7 +51,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
         var repositoryBehind = preflight.LastKnownRepositoryBehind is > 0;
         var repositorySyncInProgress = preflight.RepositorySyncInProgress;
-        var repositoryBlocked = repositoryBehind || repositorySyncInProgress;
+        var repositoryBlocked = preflight.RepositorySyncBlocked || repositorySyncInProgress;
         return Result.Ok(state with
         {
             Preflight = preflight,
@@ -58,7 +59,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             StartBlockedReason = state.StartBlockedReason
                 ?? (repositoryBehind
                     ? "PipelineRepositoryBehind"
-                    : repositorySyncInProgress ? "PipelineRepositorySyncInProgress" : null)
+                    : repositorySyncInProgress ? "PipelineRepositorySyncInProgress"
+                    : preflight.RepositorySyncBlocked ? "PipelineRepositorySyncRequired" : null)
         });
     }
 
@@ -142,6 +144,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         int? lastKnownRepositoryBehind = null;
         string? lastKnownRepositoryBranch = null;
+        var repositorySyncBlocked = false;
         if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
             try
@@ -157,6 +160,18 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                     if (root.TryGetProperty("branch", out var branchElement)
                         && branchElement.ValueKind == JsonValueKind.String)
                         lastKnownRepositoryBranch = branchElement.GetString();
+
+                    var hasUpstream = root.TryGetProperty("hasUpstream", out var upstreamElement)
+                        && upstreamElement.ValueKind == JsonValueKind.True;
+                    var detached = root.TryGetProperty("detached", out var detachedElement)
+                        && detachedElement.ValueKind == JsonValueKind.True;
+                    var diverged = root.TryGetProperty("diverged", out var divergedElement)
+                        && divergedElement.ValueKind == JsonValueKind.True;
+                    var failed = root.TryGetProperty("outcome", out var outcomeElement)
+                        && outcomeElement.ValueKind == JsonValueKind.Number
+                        && outcomeElement.TryGetInt32(out var outcome)
+                        && outcome == (int)GitSyncOutcome.Failed;
+                    repositorySyncBlocked = behind > 0 || !hasUpstream || detached || diverged || failed;
                 }
             }
             catch (JsonException)
@@ -176,7 +191,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt,
             selectedPipelineDeviceId,
             pipelineGitSyncSupported,
-            repositorySyncInProgress);
+            repositorySyncInProgress,
+            repositorySyncBlocked);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
