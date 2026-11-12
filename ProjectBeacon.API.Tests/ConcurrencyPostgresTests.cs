@@ -61,7 +61,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartPipeline_OnlyOneStarts()
     {
         _postgres.RequirePostgres();
-        var (_, taskId) = await SeedTaskAsync("start race");
+        var (_, taskId, _) = await SeedTaskAsync("start race");
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
@@ -97,15 +97,17 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentTaskStatusChange_NoStaleOverwrite()
     {
         _postgres.RequirePostgres();
-        var (projectId, taskId) = await SeedTaskAsync("status race");
+        var (projectId, taskId, userId) = await SeedTaskAsync("status race");
 
         var factory = _postgres.CreateFactory();
         async Task<Result<TaskItemDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, TaskItemStatus.InProgress, projectId)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, TaskItemStatus.InProgress, projectId),
+                        WorkActor(userId)), TestContext.Current.CancellationToken);
             }
         }
 
@@ -670,14 +672,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentChangeTaskStatus_ToDone_BothOk()
     {
         _postgres.RequirePostgres();
-        Guid taskId;
+        Guid taskId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Done Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Done Race Project", null, org.Id);
+            var user = User.Create("done-race-user", "done-race-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("done race", project.Id);
             task.SetReviewNotes("reviewed");
             seed.Tasks.Add(task);
@@ -686,6 +692,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ReviewRuns.Add(run);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
+            userId = user.Id;
         }
 
         var factory = _postgres.CreateFactory();
@@ -693,8 +700,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, TaskItemStatus.Done, null)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, TaskItemStatus.Done, null), WorkActor(userId)),
+                        TestContext.Current.CancellationToken);
             }
         }
 
@@ -715,13 +724,15 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentChangeTaskStatus_MixedTargets_ClassifiedDeterministically()
     {
         _postgres.RequirePostgres();
-        Guid taskId;
+        Guid taskId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Mix Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Mix Race Project", null, org.Id);
+            var user = User.Create("mixed-race-user", "mixed-race-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
             var task = TaskItem.Create("mixed race", project.Id);
             task.SetReviewNotes("reviewed");
@@ -731,7 +742,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
+            userId = user.Id;
         }
 
         var factory = _postgres.CreateFactory();
@@ -739,8 +753,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, target, null)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, target, null), WorkActor(userId)),
+                        TestContext.Current.CancellationToken);
             }
         }
 
@@ -1557,18 +1573,23 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         }
     }
 
-    private async Task<(Guid ProjectId, Guid TaskId)> SeedTaskAsync(string title)
+    private async Task<(Guid ProjectId, Guid TaskId, Guid UserId)> SeedTaskAsync(string title)
     {
         await using var seed = _postgres.CreateAdminContext();
         var org = Org.Create("Race Org", null);
         seed.Orgs.Add(org);
-        await seed.SaveChangesAsync();
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("Race Project", null, org.Id);
+        var user = User.Create("race-owner-" + Guid.NewGuid().ToString("N")[..8],
+            "race-owner-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
+        seed.Users.Add(user);
         seed.Projects.Add(project);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
         var task = TaskItem.Create(title, project.Id);
         seed.Tasks.Add(task);
-        await seed.SaveChangesAsync();
-        return (project.Id, task.Id);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return (project.Id, task.Id, user.Id);
     }
 
     /// <summary>Seeds an online chat device with an attached runtime so the chat handlers can run.</summary>
