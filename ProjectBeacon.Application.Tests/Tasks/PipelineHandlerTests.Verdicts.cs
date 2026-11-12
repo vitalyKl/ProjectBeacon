@@ -307,7 +307,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains("Cannot launch", second.Error);
 
         var missing = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid(), PipelineTestActor.AdminFor(task.ProjectId))), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid()), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(missing.Success);
         Assert.Equal("Session not found.", missing.Error);
     }
