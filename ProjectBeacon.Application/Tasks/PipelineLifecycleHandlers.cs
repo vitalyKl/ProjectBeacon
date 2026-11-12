@@ -92,7 +92,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
     private static async Task<bool> IsRepositorySyncBlockingStartAsync(
         IBeaconDb db, Guid projectId, CancellationToken ct)
     {
-        var deviceIds = await db.ProjectRuntimes.IgnoreQueryFilters()
+        var deviceIds = await db.ProjectRuntimes
             .Where(runtime => runtime.ProjectId == projectId)
             .Select(runtime => runtime.DeviceId)
             .Distinct()
@@ -100,7 +100,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (deviceIds.Length == 0)
             return false;
 
-        var devices = await db.DaemonDevices.IgnoreQueryFilters()
+        var devices = await db.DaemonDevices
             .Where(device => deviceIds.Contains(device.Id))
             .ToListAsync(ct);
         var selectedDeviceId = devices
