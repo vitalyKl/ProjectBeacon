@@ -103,7 +103,7 @@ else
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
                     }
                 }
-                @if (!CanStartPlanner)
+                @if (!CanStartPlanner && _pipeline?.Preflight?.LastKnownRepositoryBehind is not > 0)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
                 }
