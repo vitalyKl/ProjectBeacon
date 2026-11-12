@@ -21,12 +21,6 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public sealed class ApiTokenAuthMiddleware
 {
-    private const ApiTokenCapability ChatAndPipelineCapabilities =
-        ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite;
-
-    private const ApiTokenCapability EvalCapabilities =
-        ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead;
-
     private readonly RequestDelegate _next;
     private readonly TimeProvider _timeProvider;
 
@@ -150,9 +144,7 @@ public sealed class ApiTokenAuthMiddleware
             || leaseExpiresAt <= utcNow)
             return false;
 
-        var expectedCapabilities = work.Kind == WorkstationCommandKind.RunEvalTurn
-            ? EvalCapabilities
-            : ChatAndPipelineCapabilities;
+        var expectedCapabilities = HarnessApiTokenCapabilities.For(work.Kind);
         if (token.Capabilities != expectedCapabilities)
             return false;
 
