@@ -109,7 +109,7 @@ public sealed partial class PipelineHandlerTests : IDisposable
         Assert.True(check.Success, check.Error);
 
         var stillOpen = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(taskId)));
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(taskId), PipelineTestActor.Admin));
         Assert.False(stillOpen.Success);
 
         Guid commandId;
