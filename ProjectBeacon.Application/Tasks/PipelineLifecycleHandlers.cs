@@ -139,8 +139,8 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
 
-            var permission = await PipelineExecutionAuthorization.CanManageLifecycleAsync(
-                db, _authorization, command.Actor, task, ct);
+            var permission = await PipelineExecutionAuthorization.CanLaunchAsync(
+                db, _authorization, command.Actor, task, session, ct);
             if (!permission.Success)
                 return Result.Failure<PipelineSessionDto>(permission);
 
@@ -461,6 +461,9 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
                 .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            if (previous.ProjectId != task.ProjectId)
+                return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
 
             var permission = await PipelineExecutionAuthorization.CanManageLifecycleAsync(
                 db, _authorization, command.Actor, task, ct);
