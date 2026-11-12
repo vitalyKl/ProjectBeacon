@@ -70,9 +70,13 @@ jobs:
       - name: Diagnose pending EF model changes
         if: always()
         run: |
-          dotnet ef migrations add DiagnoseImportedContextModel --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+          set +e
+          dotnet ef migrations add DiagnoseImportedContextModel --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure --verbose > "$RUNNER_TEMP/ef-diagnostic.log" 2>&1
+          diagnostic_exit=$?
+          cat "$RUNNER_TEMP/ef-diagnostic.log"
           find ProjectBeacon.Infrastructure -type f -name '*DiagnoseImportedContextModel*' -print -exec cat {} +
           git diff -- ProjectBeacon.Infrastructure/Data/Migrations/BeaconDbContextModelSnapshot.cs
+          echo "EF_DIAGNOSTIC_EXIT=$diagnostic_exit"
       - name: Test — API
         if: always()
         timeout-minutes: 8
