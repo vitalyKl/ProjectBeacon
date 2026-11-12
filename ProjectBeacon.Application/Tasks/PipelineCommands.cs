@@ -83,7 +83,7 @@ public record GetLivePipelineTaskCommand(GetLivePipelineTaskRequest Request) : I
 public record StartPipelineRequest(Guid TaskId);
 
 /// <summary>Starts the pipeline for a task and returns the created session.</summary>
-public record StartPipelineCommand(StartPipelineRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartPipelineCommand(StartPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Instructions and optional tool and path limits for a new subtask.</summary>
 public record CreateSubtaskRequest(
@@ -120,25 +120,25 @@ public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request) :
 public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary, string? Abstract = null);
 
 /// <summary>Records a subtask result and returns pipeline state.</summary>
-public record ReportSubtaskResultCommand(ReportSubtaskResultRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ReportSubtaskResultCommand(ReportSubtaskResultRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Reason a subtask failed.</summary>
 public record FailSubtaskRequest(Guid TaskId, Guid SubtaskId, string Reason, string? Abstract = null);
 
 /// <summary>Marks a subtask failed and returns pipeline state.</summary>
-public record FailSubtaskCommand(FailSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record FailSubtaskCommand(FailSubtaskRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Identifies the task whose review stage should start.</summary>
 public record StartReviewRequest(Guid TaskId, bool AutoLaunch = false);
 
 /// <summary>Starts the review session for a task.</summary>
-public record StartReviewCommand(StartReviewRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartReviewCommand(StartReviewRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Verdict kind, note, and optional subtask for a review.</summary>
 public record RecordReviewVerdictRequest(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
 
 /// <summary>Records a review verdict and returns pipeline state.</summary>
-public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Device, actor, and check command used to record a review check. CheckCommand is supplied only by human actors; token actors leave it empty and the project's pinned ReviewCheckCommand is used.</summary>
 public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId, string? CheckCommand, string? Path = null);
