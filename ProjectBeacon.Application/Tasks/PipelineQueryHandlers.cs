@@ -144,6 +144,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         int? lastKnownRepositoryBehind = null;
         string? lastKnownRepositoryBranch = null;
+        GitSyncRefusalCode? lastKnownRepositoryReasonCode = null;
         var repositorySyncBlocked = false;
         if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
@@ -167,11 +168,20 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                         && detachedElement.ValueKind == JsonValueKind.True;
                     var diverged = root.TryGetProperty("diverged", out var divergedElement)
                         && divergedElement.ValueKind == JsonValueKind.True;
-                    var failed = root.TryGetProperty("outcome", out var outcomeElement)
+                    var failedOrRefused = root.TryGetProperty("outcome", out var outcomeElement)
                         && outcomeElement.ValueKind == JsonValueKind.Number
                         && outcomeElement.TryGetInt32(out var outcome)
-                        && outcome == (int)GitSyncOutcome.Failed;
-                    repositorySyncBlocked = behind > 0 || !hasUpstream || detached || diverged || failed;
+                        && (outcome == (int)GitSyncOutcome.Failed
+                            || outcome == (int)GitSyncOutcome.Refused);
+                    if (root.TryGetProperty("reasonCode", out var reasonElement)
+                        && reasonElement.ValueKind == JsonValueKind.Number
+                        && reasonElement.TryGetInt32(out var reason)
+                        && Enum.IsDefined(typeof(GitSyncRefusalCode), reason))
+                        lastKnownRepositoryReasonCode = (GitSyncRefusalCode)reason;
+                    repositorySyncBlocked = behind > 0 || !hasUpstream || detached || diverged
+                        || failedOrRefused
+                        || (root.TryGetProperty("clean", out var cleanElement)
+                            && cleanElement.ValueKind == JsonValueKind.False);
                 }
             }
             catch (JsonException)
@@ -192,7 +202,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             selectedPipelineDeviceId,
             pipelineGitSyncSupported,
             repositorySyncInProgress,
-            repositorySyncBlocked);
+            repositorySyncBlocked,
+            lastKnownRepositoryReasonCode);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
