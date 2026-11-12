@@ -87,6 +87,26 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void DocsWriterCannotUseLegacyKnowledgeWritesEvenWithPersistedOldGrants()
+    {
+        var legacyWrites = new (string Path, string Tool)[]
+        {
+            ($"/v1/projects/{_projectId:D}/context/drafts", McpToolNames.ContextCreateDraft),
+            ($"/v1/projects/{_projectId:D}/constraints/propose", McpToolNames.ConstraintPropose),
+            ($"/v1/projects/{_projectId:D}/decisions/propose", McpToolNames.DecisionPropose)
+        };
+
+        foreach (var (path, tool) in legacyWrites)
+        {
+            var staleGrant = new[] { tool };
+            Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, path, _taskId, _subtaskId, staleGrant, "knowledge-curator"));
+            Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, path, _taskId, _subtaskId, staleGrant, "docs-writer"));
+        }
+    }
+
+    [Fact]
     public void PlannerToken_CanOrchestrateOnlyItsPinnedTask()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
@@ -370,7 +390,8 @@ public sealed class HarnessApiAuthorizationTests
         string path,
         Guid? taskId = null,
         Guid? subtaskId = null,
-        IReadOnlyList<string>? allowedMcpTools = null)
+        IReadOnlyList<string>? allowedMcpTools = null,
+        string? actorProfileKey = "knowledge-curator")
         => ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             commandKind,
             role,
@@ -379,5 +400,6 @@ public sealed class HarnessApiAuthorizationTests
             subtaskId,
             method,
             path,
-            allowedMcpTools: allowedMcpTools);
+            allowedMcpTools: allowedMcpTools,
+            actorProfileKey: actorProfileKey);
 }
