@@ -50,6 +50,53 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void Inbox_LegacyReviewItems_RendersContextDecisionAndConstraintActions()
+    {
+        var (_, projectId) = AuthenticateAsProjectOwner();
+        var decision = Decision.Create(
+            "Legacy proposed decision",
+            "Why this is needed",
+            "Use the revised architecture.",
+            projectId);
+        var constraint = Constraint.Create(
+            "Never commit credentials.",
+            ConstraintKind.Must,
+            projectId);
+        var context = ContextSection.Create(
+            "agent-guidance",
+            "Agent guidance draft",
+            "Review this imported instruction.",
+            projectId,
+            ContextScopeType.Project,
+            updatedByType: "agent",
+            updatedById: "legacy-agent");
+
+        DbContext.Decisions.Add(decision);
+        DbContext.Constraints.Add(constraint);
+        DbContext.ContextSections.Add(context);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+
+        Assert.Contains("Existing review items", cut.Markup);
+        Assert.Contains("Context drafts awaiting review (1)", cut.Markup);
+        Assert.Contains("Proposed decisions (1)", cut.Markup);
+        Assert.Contains("Proposed constraints (1)", cut.Markup);
+        Assert.Contains("Agent guidance draft", cut.Markup);
+        Assert.Contains("Legacy proposed decision", cut.Markup);
+        Assert.Contains("Never commit credentials.", cut.Markup);
+
+        var buttons = cut.FindAll("button")
+            .Select(button => button.TextContent.Trim())
+            .ToArray();
+        Assert.Contains(buttons, text => text == "Approve");
+        Assert.Contains(buttons, text => text == "Reject");
+        Assert.Contains(buttons, text => text == "Accept");
+        Assert.Contains(buttons, text => text == "Deprecate");
+        Assert.Contains(buttons, text => text == "Activate");
+    }
+
+    [Fact]
     public void Inbox_PendingAndConflictedProposals_RendersAttentionCountsAndPendingCard()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
