@@ -157,6 +157,11 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             {
                 lastGitSyncResultJson = lastGitSync?.ResultJson;
                 lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+                if (string.IsNullOrWhiteSpace(lastGitSyncResultJson))
+                {
+                    repositorySyncBlocked = true;
+                    lastKnownRepositoryReasonCode = GitSyncRefusalCode.FetchFailed;
+                }
             }
         }
 
@@ -164,6 +169,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         string? lastKnownRepositoryBranch = null;
         if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
+            var repositoryResultParsed = false;
             try
             {
                 using var gitSyncResult = JsonDocument.Parse(lastGitSyncResultJson);
@@ -173,6 +179,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                     && behindElement.TryGetInt32(out var behind)
                     && behind >= 0)
                 {
+                    repositoryResultParsed = true;
                     lastKnownRepositoryBehind = behind;
                     if (root.TryGetProperty("branch", out var branchElement)
                         && branchElement.ValueKind == JsonValueKind.String)
@@ -212,6 +219,12 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             catch (JsonException)
             {
                 // A malformed or legacy result is treated as unknown, never as current.
+            }
+
+            if (!repositoryResultParsed)
+            {
+                repositorySyncBlocked = true;
+                lastKnownRepositoryReasonCode ??= GitSyncRefusalCode.FetchFailed;
             }
         }
 
