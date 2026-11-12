@@ -9,7 +9,7 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(App).Assembly">
         <Found Context="routeData">
-            <ErrorBoundary @key="Navigation.Uri">
+            <LoggingErrorBoundary @key="Navigation.Uri">
                 <ErrorContent>
                     <MudAlert Severity="Severity.Error">@L["AnErrorOccurred"]</MudAlert>
                     <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true))">
@@ -33,7 +33,7 @@
                 </Authorizing>
             </AuthorizeRouteView>
                 </ChildContent>
-            </ErrorBoundary>
+            </LoggingErrorBoundary>
         </Found>
         <NotFound>
             <AuthorizeView>
