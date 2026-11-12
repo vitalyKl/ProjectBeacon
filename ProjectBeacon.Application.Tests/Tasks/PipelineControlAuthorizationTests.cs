@@ -148,6 +148,67 @@ public sealed class PipelineControlAuthorizationTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateSubtaskRequiresProjectExecutePermission()
+    {
+        var stranger = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, null, null, ApiTokenCapability.None);
+        var wrongProjectToken = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            _otherProjectId, null, ApiTokenCapability.SessionDrive);
+
+        var strangerResult = await new CreateSubtaskHandler(_factory, _authorization).HandleAsync(
+            new CreateSubtaskCommand(
+                new CreateSubtaskRequest(_taskId, "stranger work"), stranger),
+            TestContext.Current.CancellationToken);
+        var tokenResult = await new CreateSubtaskHandler(_factory, _authorization).HandleAsync(
+            new CreateSubtaskCommand(
+                new CreateSubtaskRequest(_taskId, "wrong project work"), wrongProjectToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(strangerResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, strangerResult.Kind);
+        Assert.False(tokenResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, tokenResult.Kind);
+    }
+
+    [Fact]
+    public async Task CreateSubtaskHarnessTokenRequiresAnActivePlannerSession()
+    {
+        var task = await _db.Tasks.SingleAsync(item => item.Id == _taskId, TestContext.Current.CancellationToken);
+        task.StartPipeline();
+        var session = PipelineSession.Create(
+            _taskId, _projectId, PipelineRole.Planner, "planner context", null, null, null);
+        session.Launch("planner-session");
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actorId = Guid.NewGuid();
+        var wrongRole = new ActorContext(
+            ActorType.ApiToken, actorId, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.SessionDrive,
+            PipelineRole: PipelineRole.Actor,
+            PipelineTaskId: _taskId,
+            PipelineSessionId: session.Id);
+        var wrongRoleResult = await new CreateSubtaskHandler(_factory, _authorization).HandleAsync(
+            new CreateSubtaskCommand(new CreateSubtaskRequest(_taskId, "wrong role work"), wrongRole),
+            TestContext.Current.CancellationToken);
+
+        var planner = new ActorContext(
+            ActorType.ApiToken, actorId, false, Guid.NewGuid(), null,
+            _projectId, null, ApiTokenCapability.SessionDrive,
+            PipelineRole: PipelineRole.Planner,
+            PipelineTaskId: _taskId,
+            PipelineSessionId: session.Id);
+        var plannerResult = await new CreateSubtaskHandler(_factory, _authorization).HandleAsync(
+            new CreateSubtaskCommand(new CreateSubtaskRequest(_taskId, "planner work"), planner),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(wrongRoleResult.Success);
+        Assert.Equal(ErrorKind.Forbidden, wrongRoleResult.Kind);
+        Assert.True(plannerResult.Success, plannerResult.Error);
+    }
+
+    [Fact]
     public async Task SessionDriveTokenBoundToTaskProjectPassesAuthorization()
     {
         var token = new ActorContext(
