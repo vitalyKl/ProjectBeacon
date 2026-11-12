@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Tests;
 
+using System.Security.Claims;
 using Application.Devices;
 using Domain.Common;
 using Domain.Entities.Context;
@@ -11,7 +12,6 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Infrastructure.Http;
 using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 
 [Collection("postgres-serial")]
