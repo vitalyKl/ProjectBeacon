@@ -142,8 +142,8 @@ public sealed class RepoPatchApplyServiceTests
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
         const string path = "docs/guide.md";
-        const string before = "Before.\\n";
-        const string after = "Approved.\\n";
+        const string before = "Before.\n";
+        const string after = "Approved.\n";
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
         var payload = Payload(repo.ProjectId, patch, path, before, after);
@@ -186,8 +186,8 @@ public sealed class RepoPatchApplyServiceTests
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
         const string path = "docs/guide.md";
-        const string before = "Before.\\n";
-        const string after = "Approved.\\n";
+        const string before = "Before.\n";
+        const string after = "Approved.\n";
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
         var payload = Payload(repo.ProjectId, patch, path, before, after);
