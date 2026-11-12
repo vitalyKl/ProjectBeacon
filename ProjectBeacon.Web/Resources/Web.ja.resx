@@ -2839,4 +2839,7 @@ orthstar</value>
     <value>タスク ID</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>最後の Git チェックでは、リポジトリがブランチ「{1}」で {0} 件遅れていました。現在のプロジェクトスナップショットを使用する前に同期してください。</value></data>
+  <data name="PipelineRepositoryBehind" xml:space="preserve"><value>プロジェクトのリポジトリが追跡対象の Upstream より遅れています。パイプラインを開始する前に同期してください。</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>選択したワークステーションでリポジトリの同期がまだ実行中です。パイプラインを開始する前に完了を待ってください。</value></data>
+  <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>設定された Upstream に対してリポジトリの状態を確認できませんでした。ブランチと Upstream の設定を確認し、パイプライン開始前に同期してください。</value></data>
 </root>

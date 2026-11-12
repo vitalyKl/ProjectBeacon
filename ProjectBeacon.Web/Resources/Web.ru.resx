@@ -2821,4 +2821,7 @@
     <value>ID задачи</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Синхронизируйте его перед работой с текущим снимком проекта.</value></data>
+  <data name="PipelineRepositoryBehind" xml:space="preserve"><value>Локальная ветка отстаёт от настроенной upstream-ветки. Синхронизируйте репозиторий перед запуском pipeline.</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>На выбранной рабочей станции ещё выполняется синхронизация репозитория. Дождитесь её завершения перед запуском pipeline.</value></data>
+  <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>Не удалось подтвердить актуальность репозитория относительно upstream. Проверьте настройки ветки и upstream, затем синхронизируйте репозиторий перед запуском pipeline.</value></data>
 </root>

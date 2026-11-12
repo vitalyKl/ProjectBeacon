@@ -33,6 +33,10 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
+        if (await IsRepositorySyncBlockingStartAsync(db, task.ProjectId, ct))
+            return Result.Failure<PipelineSessionDto>(
+                "PipelineRepositoryBehind", ErrorKind.Conflict);
+
         var expectedStatus = task.Status;
         try
         {
@@ -83,6 +87,71 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(PipelineMappers.ToDto(session));
+    }
+
+    private static async Task<bool> IsRepositorySyncBlockingStartAsync(
+        IBeaconDb db, Guid projectId, CancellationToken ct)
+    {
+        var deviceIds = await db.ProjectRuntimes
+            .Where(runtime => runtime.ProjectId == projectId)
+            .Select(runtime => runtime.DeviceId)
+            .Distinct()
+            .ToArrayAsync(ct);
+        if (deviceIds.Length == 0)
+            return false;
+
+        var devices = await db.DaemonDevices
+            .Where(device => deviceIds.Contains(device.Id))
+            .ToListAsync(ct);
+        var selectedDeviceId = devices
+            .Where(device => device.IsOnline(DateTime.UtcNow))
+            .OrderByDescending(device => device.LastHeartbeatAt)
+            .Select(device => (Guid?)device.Id)
+            .FirstOrDefault();
+        if (selectedDeviceId is null)
+            return false;
+
+        var syncIsInProgress = await db.WorkstationCommands.AsNoTracking()
+            .AnyAsync(command => command.ProjectId == projectId
+                && command.DeviceId == selectedDeviceId.Value
+                && command.Kind == WorkstationCommandKind.GitSync
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running), ct);
+        if (syncIsInProgress)
+            return true;
+
+        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
+            .Where(command => command.ProjectId == projectId
+                && command.DeviceId == selectedDeviceId.Value
+                && command.Kind == WorkstationCommandKind.GitSync)
+            .OrderByDescending(command => command.CreatedAt)
+            .Select(command => new { command.Status, command.ResultJson })
+            .FirstOrDefaultAsync(ct);
+        if (lastGitSync is null)
+            return false;
+        if (lastGitSync.Status != WorkstationCommandStatus.Succeeded)
+            return true;
+
+        var resultJson = lastGitSync.ResultJson;
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return true;
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<GitSyncResultDto>(
+                resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return result is null
+                || result.Behind > 0
+                || !result.Clean
+                || !result.HasUpstream
+                || result.Detached
+                || result.Diverged
+                || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
     }
 }
 /// <summary>

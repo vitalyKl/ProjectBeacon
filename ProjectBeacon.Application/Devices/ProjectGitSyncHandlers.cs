@@ -35,7 +35,8 @@ public sealed class EnqueueProjectGitSyncHandler
         Guid projectId,
         ActorContext actor,
         GitSyncMode mode,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Guid? targetDeviceId = null)
     {
         if (!actor.IsHuman || actor.UserId is not { } userId)
             return Result.Forbidden<WorkstationCommandDto>();
@@ -60,17 +61,22 @@ public sealed class EnqueueProjectGitSyncHandler
             .Where(device => deviceIds.Contains(device.Id) && !device.IsRevoked)
             .ToListAsync(ct);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var selected = runtimes
+        var compatible = runtimes
             .Join(devices, runtime => runtime.DeviceId, device => device.Id,
                 (runtime, device) => new { Runtime = runtime, Device = device })
             .Where(candidate => candidate.Device.IsOnline(now)
                 && WorkstationCapabilities.Supports(candidate.Device.ProbeJson, WorkstationCapabilities.GitSyncV1))
-            .OrderByDescending(candidate => candidate.Device.LastHeartbeatAt)
-            .FirstOrDefault();
+            .ToList();
+        var selected = targetDeviceId is { } requestedDeviceId
+            ? compatible.FirstOrDefault(candidate => candidate.Device.Id == requestedDeviceId)
+            : compatible.OrderByDescending(candidate => candidate.Device.LastHeartbeatAt).FirstOrDefault();
 
         if (selected is null)
             return Result.Failure<WorkstationCommandDto>(
-                "No online workstation advertising GitSync support is attached to this project.", ErrorKind.Conflict);
+                targetDeviceId is null
+                    ? "No online workstation advertising GitSync support is attached to this project."
+                    : "The selected pipeline workstation is offline or does not support GitSync.",
+                ErrorKind.Conflict);
 
         var project = await db.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(candidate => candidate.Id == projectId, ct);

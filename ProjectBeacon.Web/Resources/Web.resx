@@ -3030,4 +3030,7 @@ No Beacon-hosted coding agent.</value>
     <value>Task ID</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>The last Git check found this repository {0} commit(s) behind on branch '{1}'. Synchronize it before relying on the current project snapshot.</value></data>
+  <data name="PipelineRepositoryBehind" xml:space="preserve"><value>The project repository is behind its tracked upstream. Synchronize it before starting the pipeline.</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>A repository synchronization command is still running on the selected workstation. Wait for it to finish before starting the pipeline.</value></data>
+  <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>The repository could not be verified against a configured upstream. Check the branch and upstream settings, then synchronize before starting the pipeline.</value></data>
 </root>

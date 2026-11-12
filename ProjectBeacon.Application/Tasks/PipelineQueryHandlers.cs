@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using Domain.Entities.Agents;
 using Domain.Entities.Devices;
+using Domain.Common;
+using Application.Devices;
 using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
@@ -47,7 +49,19 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         var state = await PipelineSupport.StateAsync(db, task, ct);
         var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
-        return Result.Ok(state with { Preflight = preflight });
+        var repositoryBehind = preflight.LastKnownRepositoryBehind is > 0;
+        var repositorySyncInProgress = preflight.RepositorySyncInProgress;
+        var repositoryBlocked = preflight.RepositorySyncBlocked || repositorySyncInProgress;
+        return Result.Ok(state with
+        {
+            Preflight = preflight,
+            CanStart = state.CanStart && !repositoryBlocked,
+            StartBlockedReason = state.StartBlockedReason
+                ?? (repositoryBehind
+                    ? "PipelineRepositoryBehind"
+                    : repositorySyncInProgress ? "PipelineRepositorySyncInProgress"
+                    : preflight.RepositorySyncBlocked ? "PipelineRepositorySyncRequired" : null)
+        });
     }
 
     private static async Task<PipelinePreflightDto> BuildPreflightAsync(
@@ -61,11 +75,14 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var now = DateTime.UtcNow;
         var runtimeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id,
             (runtime, device) => device).ToList();
-        var selectedPipelineDeviceId = runtimeDevices
+        var selectedPipelineDevice = runtimeDevices
             .Where(device => device.IsOnline(now))
             .OrderByDescending(device => device.LastHeartbeatAt)
-            .Select(device => (Guid?)device.Id)
             .FirstOrDefault();
+        var selectedPipelineDeviceId = selectedPipelineDevice?.Id;
+        var pipelineGitSyncSupported = selectedPipelineDevice is not null
+            && WorkstationCapabilities.Supports(
+                selectedPipelineDevice.ProbeJson, WorkstationCapabilities.GitSyncV1);
         var nativeDevices = runtimeDevices
             .Where(device => IsNativeRuntime(device.WorkstationJson)).ToList();
         var hasNative = nativeDevices.Count > 0;
@@ -102,25 +119,57 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         string? lastGitSyncResultJson = null;
         DateTime? lastGitSyncCompletedAt = null;
+        var repositorySyncInProgress = false;
+        GitSyncRefusalCode? lastKnownRepositoryReasonCode = null;
+        var repositorySyncBlocked = false;
         if (selectedPipelineDeviceId is { } selectedDeviceId)
         {
+            repositorySyncInProgress = await db.WorkstationCommands.AsNoTracking()
+                .AnyAsync(command => command.ProjectId == projectId
+                    && command.DeviceId == selectedDeviceId
+                    && command.Kind == WorkstationCommandKind.GitSync
+                    && (command.Status == WorkstationCommandStatus.Pending
+                        || command.Status == WorkstationCommandStatus.Running), ct);
+
             var lastGitSync = await db.WorkstationCommands.AsNoTracking()
                 .Where(command => command.ProjectId == projectId
                     && command.DeviceId == selectedDeviceId
-                    && command.Kind == WorkstationCommandKind.GitSync
-                    && command.Status == WorkstationCommandStatus.Succeeded
-                    && command.ResultJson != null)
-                .OrderByDescending(command => command.CompletedAt)
-                .Select(command => new { command.ResultJson, command.CompletedAt })
+                    && command.Kind == WorkstationCommandKind.GitSync)
+                .OrderByDescending(command => command.CreatedAt)
+                .Select(command => new
+                {
+                    command.Status,
+                    command.ResultJson,
+                    command.CompletedAt
+                })
                 .FirstOrDefaultAsync(ct);
-            lastGitSyncResultJson = lastGitSync?.ResultJson;
-            lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+            if (lastGitSync is not null
+                && lastGitSync.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running)
+            {
+                repositorySyncBlocked = true;
+            }
+            else if (lastGitSync is not null && lastGitSync.Status != WorkstationCommandStatus.Succeeded)
+            {
+                repositorySyncBlocked = true;
+                lastKnownRepositoryReasonCode = GitSyncRefusalCode.FetchFailed;
+            }
+            else
+            {
+                lastGitSyncResultJson = lastGitSync?.ResultJson;
+                lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+                if (string.IsNullOrWhiteSpace(lastGitSyncResultJson))
+                {
+                    repositorySyncBlocked = true;
+                    lastKnownRepositoryReasonCode = GitSyncRefusalCode.FetchFailed;
+                }
+            }
         }
 
         int? lastKnownRepositoryBehind = null;
         string? lastKnownRepositoryBranch = null;
         if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
+            var repositoryResultParsed = false;
             try
             {
                 using var gitSyncResult = JsonDocument.Parse(lastGitSyncResultJson);
@@ -130,15 +179,52 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                     && behindElement.TryGetInt32(out var behind)
                     && behind >= 0)
                 {
+                    repositoryResultParsed = true;
                     lastKnownRepositoryBehind = behind;
                     if (root.TryGetProperty("branch", out var branchElement)
                         && branchElement.ValueKind == JsonValueKind.String)
                         lastKnownRepositoryBranch = branchElement.GetString();
+
+                    var hasUpstream = root.TryGetProperty("hasUpstream", out var upstreamElement)
+                        && upstreamElement.ValueKind == JsonValueKind.True;
+                    var detached = root.TryGetProperty("detached", out var detachedElement)
+                        && detachedElement.ValueKind == JsonValueKind.True;
+                    var diverged = root.TryGetProperty("diverged", out var divergedElement)
+                        && divergedElement.ValueKind == JsonValueKind.True;
+                    var failedOrRefused = root.TryGetProperty("outcome", out var outcomeElement)
+                        && outcomeElement.ValueKind == JsonValueKind.Number
+                        && outcomeElement.TryGetInt32(out var outcome)
+                        && (outcome == (int)GitSyncOutcome.Failed
+                            || outcome == (int)GitSyncOutcome.Refused);
+                    var clean = root.TryGetProperty("clean", out var cleanElement)
+                        && cleanElement.ValueKind == JsonValueKind.True;
+                    if (root.TryGetProperty("reasonCode", out var reasonElement)
+                        && reasonElement.ValueKind == JsonValueKind.Number
+                        && reasonElement.TryGetInt32(out var reason)
+                        && Enum.IsDefined(typeof(GitSyncRefusalCode), reason))
+                        lastKnownRepositoryReasonCode = (GitSyncRefusalCode)reason;
+                    lastKnownRepositoryReasonCode ??= detached
+                        ? GitSyncRefusalCode.Detached
+                        : !hasUpstream
+                            ? GitSyncRefusalCode.NoUpstream
+                            : !clean
+                                ? GitSyncRefusalCode.DirtyWorkingTree
+                                : diverged
+                                    ? GitSyncRefusalCode.Diverged
+                                    : failedOrRefused ? GitSyncRefusalCode.FetchFailed : null;
+                    repositorySyncBlocked = behind > 0 || !hasUpstream || detached || diverged
+                        || !clean || failedOrRefused;
                 }
             }
             catch (JsonException)
             {
                 // A malformed or legacy result is treated as unknown, never as current.
+            }
+
+            if (!repositoryResultParsed)
+            {
+                repositorySyncBlocked = true;
+                lastKnownRepositoryReasonCode ??= GitSyncRefusalCode.FetchFailed;
             }
         }
 
@@ -150,7 +236,12 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             HasModel(PipelineRole.Review),
             lastKnownRepositoryBehind,
             lastKnownRepositoryBranch,
-            lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt);
+            lastKnownRepositoryBehind is null ? null : lastGitSyncCompletedAt,
+            selectedPipelineDeviceId,
+            pipelineGitSyncSupported,
+            repositorySyncInProgress,
+            repositorySyncBlocked,
+            lastKnownRepositoryReasonCode);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
