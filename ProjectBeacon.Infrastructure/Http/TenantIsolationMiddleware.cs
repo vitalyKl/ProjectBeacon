@@ -138,28 +138,30 @@ public sealed class TenantIsolationMiddleware
         {
             var claimed = projectId;
             var claimedMember = FindMembership(members, claimed);
-
-            if (claimedMember is not null)
+            if (claimedMember is not null
+                && (!orgExplicit || claimedMember.Project.OrgId == orgId))
             {
-                return (claimedMember.ProjectId, orgExplicit ? orgId : claimedMember.Project.OrgId);
+                return (claimedMember.ProjectId, claimedMember.Project.OrgId);
             }
 
             if (claimed is { } claimedProject
+                && (!orgExplicit || await GetProjectOrgIdAsync(db, claimedProject) == orgId)
                 && await IsOrgOwnerOrAdminOfProjectAsync(db, userId, claimedProject))
             {
                 var claimedOrg = await GetProjectOrgIdAsync(db, claimedProject);
-                return (claimedProject, orgExplicit ? orgId : claimedOrg);
+                return (claimedProject, claimedOrg);
             }
 
-            if (await ResolveAdminFallbackOrgAsync(db, isAdmin, claimed) is { } adminOrg)
+            if (await ResolveAdminFallbackOrgAsync(db, isAdmin, claimed) is { } adminOrg
+                && (!orgExplicit || adminOrg == orgId))
             {
-                return (claimed, orgExplicit ? orgId : adminOrg);
+                return (claimed, adminOrg);
             }
 
-            if (members.Count > 0)
-            {
-                return (members[0].ProjectId, orgExplicit ? orgId : members[0].Project.OrgId);
-            }
+            var scopedMember = members.FirstOrDefault(member =>
+                !orgExplicit || member.Project.OrgId == orgId);
+            if (scopedMember is not null)
+                return (scopedMember.ProjectId, scopedMember.Project.OrgId);
 
             if (!isAdmin)
             {
@@ -177,10 +179,13 @@ public sealed class TenantIsolationMiddleware
                     : (managedProject.Id, managedProject.OrgId);
             }
 
-            var oldest = await db.Projects.IgnoreQueryFilters()
-                .OrderBy(p => p.CreatedAt)
+            var projects = db.Projects.IgnoreQueryFilters().AsQueryable();
+            if (orgExplicit)
+                projects = projects.Where(project => project.OrgId == orgId);
+            var oldest = await projects
+                .OrderBy(project => project.CreatedAt)
                 .FirstOrDefaultAsync();
-            return (oldest?.Id, orgId ?? oldest?.OrgId);
+            return (oldest?.Id, oldest?.OrgId ?? orgId);
         }
 
         return (projectId, orgId);
