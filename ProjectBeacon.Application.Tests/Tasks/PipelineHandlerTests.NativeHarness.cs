@@ -53,7 +53,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var handler = new LaunchSessionHandler(factory);
         var launched = await handler.HandleAsync(
-            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id), PipelineTestActor.AdminFor(projectId)),
             TestContext.Current.CancellationToken);
 
         Assert.True(launched.Success, launched.Error);
@@ -81,7 +81,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var duplicate = await handler.HandleAsync(
-            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id), PipelineTestActor.AdminFor(projectId)),
             TestContext.Current.CancellationToken);
         Assert.False(duplicate.Success);
 
@@ -114,7 +114,7 @@ public sealed partial class PipelineHandlerTests
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var launched = await new LaunchSessionHandler(factory).HandleAsync(
-            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id), PipelineTestActor.AdminFor(projectId)),
             TestContext.Current.CancellationToken);
 
         Assert.False(launched.Success);
@@ -166,7 +166,7 @@ public sealed partial class PipelineHandlerTests
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var launched = await new LaunchSessionHandler(factory).HandleAsync(
-            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id), PipelineTestActor.AdminFor(projectId)),
             TestContext.Current.CancellationToken);
 
         Assert.True(launched.Success, launched.Error);
