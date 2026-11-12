@@ -222,6 +222,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var user = User.Create("multi-org-owner", "multi-org-owner@example.com", "hash");
         _db.Users.Add(user);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.ProjectMembers.Add(ProjectMember.Create(firstProject.Id, user.Id, MemberRole.Member));
         _db.OrgMembers.AddRange(
             OrgMember.Create(firstOrg.Id, user.Id, MemberRole.Admin),
             OrgMember.Create(selectedOrg.Id, user.Id, MemberRole.Owner));
