@@ -26,7 +26,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(plannerLaunch.Success, plannerLaunch.Error);
 
         var subtask = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
@@ -66,7 +66,7 @@ public sealed partial class PipelineHandlerTests
         await new StartPipelineHandler(factory, spawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
         var subtask = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
@@ -100,7 +100,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(planner.Success, planner.Error);
 
         var subtask = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "old plan")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "old plan"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         using (TenantScope.EnterUnscoped())
         {
