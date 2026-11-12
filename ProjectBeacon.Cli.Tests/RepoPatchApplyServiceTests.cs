@@ -106,8 +106,8 @@ public sealed class RepoPatchApplyServiceTests
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
         const string path = "docs/guide.md";
-        const string before = "Before cancellation.\\n";
-        const string after = "Applied before cancellation.\\n";
+        const string before = "Before cancellation.\n";
+        const string after = "Applied before cancellation.\n";
         await repo.WriteCommittedAsync(path, before);
         var patch = await repo.CreatePatchAsync(path, after);
         var payload = Payload(repo.ProjectId, patch, path, before, after);
