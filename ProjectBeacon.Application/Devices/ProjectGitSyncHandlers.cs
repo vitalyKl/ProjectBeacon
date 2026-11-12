@@ -69,7 +69,9 @@ public sealed class EnqueueProjectGitSyncHandler
             .ToList();
         var selected = targetDeviceId is { } requestedDeviceId
             ? compatible.FirstOrDefault(candidate => candidate.Device.Id == requestedDeviceId)
-            : compatible.OrderByDescending(candidate => candidate.Device.LastHeartbeatAt).FirstOrDefault();
+            : compatible.OrderByDescending(candidate => candidate.Device.LastHeartbeatAt)
+                .ThenBy(candidate => candidate.Device.Id)
+                .FirstOrDefault();
 
         if (selected is null)
             return Result.Failure<WorkstationCommandDto>(
