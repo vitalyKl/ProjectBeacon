@@ -174,7 +174,13 @@ public static class BuiltInAgentProfiles
 
     private static IReadOnlyList<string> DocumentationWritable() =>
         Array.AsReadOnly(ReadOnly()
-            .Concat(PipelineToolPolicy.AgentProfileKnowledgeWriteTools)
-            .Concat(new[] { McpToolNames.HashFile, McpToolNames.HashText })
+            .Concat(new[]
+            {
+                McpToolNames.KnowledgePropose,
+                McpToolNames.KnowledgeProposals,
+                McpToolNames.KnowledgeWithdraw,
+                McpToolNames.HashFile,
+                McpToolNames.HashText
+            })
             .Distinct(StringComparer.Ordinal).ToArray());
 }
