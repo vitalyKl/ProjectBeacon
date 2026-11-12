@@ -31,9 +31,6 @@ public sealed class IssueHarnessTokenHandler(
     TimeProvider? timeProvider = null)
     : ICommandHandler<IssueHarnessTokenCommand, Result<HarnessTokenDto>>
 {
-    private const ApiTokenCapability HarnessCapabilities =
-        ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite;
-
     public async Task<Result<HarnessTokenDto>> HandleAsync(
         IssueHarnessTokenCommand command,
         CancellationToken ct = default)
@@ -184,9 +181,7 @@ public sealed class IssueHarnessTokenHandler(
         var rawToken = "bcn_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
         var tokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
         var tokenPrefix = rawToken[..Math.Min(8, rawToken.Length)];
-        var tokenCapabilities = work.Kind == WorkstationCommandKind.RunEvalTurn
-            ? ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead
-            : HarnessCapabilities;
+        var tokenCapabilities = HarnessApiTokenCapabilities.For(work.Kind);
         var tokenRow = ApiToken.Create(
             $"harness:{work.Id:N}",
             tokenHash,
