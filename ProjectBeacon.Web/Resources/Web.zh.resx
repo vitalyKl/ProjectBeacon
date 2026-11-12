@@ -2838,4 +2838,5 @@ orthstar</value>
   <data name="TaskId" xml:space="preserve">
     <value>任务 ID</value>
   </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>上次 Git 检查发现此仓库在分支“{1}”落后 {0} 个提交。使用当前项目快照前请先同步。</value></data>
 </root>
