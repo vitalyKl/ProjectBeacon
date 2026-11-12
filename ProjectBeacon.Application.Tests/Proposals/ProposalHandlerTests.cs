@@ -271,6 +271,109 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_ReplacementProposalSupersedesOldPendingBeforeQuotaEnforcement()
+    {
+        var projectTask = TaskItem.Create("Review project context.", _projectId);
+        _db.Tasks.Add(projectTask);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var grants = new[]
+        {
+            McpToolNames.KnowledgePropose,
+            McpToolNames.KnowledgeProposals,
+            McpToolNames.KnowledgeWithdraw
+        };
+        var subtask = Subtask.Create(
+            "Review the project description and suggest a precise update.",
+            projectTask.Id,
+            _projectId,
+            allowedMcpTools: grants,
+            profileKey: "knowledge-curator");
+        subtask.Start();
+        _db.Subtasks.Add(subtask);
+        var session = PipelineSession.Create(
+            projectTask.Id, _projectId, PipelineRole.Actor, "Actor replacement session.", subtask.Id);
+        session.Launch();
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tokenId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var previous = Proposal.Create(
+            _projectId,
+            projectTask.Id,
+            subtask.Id,
+            session.Id,
+            ContentTargetKind.ProjectDescription,
+            _projectId,
+            ProposalOperation.Update,
+            1,
+            new string('a', 64),
+            """{"description":"Previous actor proposal"}""",
+            "Previous actor proposal to be superseded.",
+            ProposalAuthorKind.Agent,
+            null,
+            tokenId,
+            "knowledge-curator",
+            PipelineRole.Actor.ToString(),
+            "previous-actor-proposal",
+            now);
+        var otherPending = Enumerable.Range(0, 199)
+            .Select(index => Proposal.Create(
+                _projectId,
+                null,
+                null,
+                null,
+                ContentTargetKind.ProjectDescription,
+                Guid.NewGuid(),
+                ProposalOperation.Update,
+                1,
+                new string('b', 64),
+                """{"description":"Other pending proposal"}""",
+                "Another pending review item.",
+                ProposalAuthorKind.Human,
+                _userId,
+                null,
+                null,
+                "Human",
+                $"other-pending-quota-{index}",
+                now))
+            .ToArray();
+        _db.Proposals.Add(previous);
+        _db.Proposals.AddRange(otherPending);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = new ActorContext(
+            ActorType.ApiToken, _userId, false, tokenId, null,
+            _projectId, _orgId, ApiTokenCapability.ContextRead);
+        var request = Request() with { IdempotencyKey = "replacement-actor-proposal" };
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId, request, actor,
+                    projectTask.Id, subtask.Id, session.Id, PipelineRole.Actor.ToString()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Pending, result.Value!.Status);
+        await _db.Entry(previous).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ProposalStatus.Superseded, previous.Status);
+        Assert.Equal(result.Value.Id, previous.SupersededById);
+        Assert.Equal(200, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId && item.Status == ProposalStatus.Pending,
+            TestContext.Current.CancellationToken));
+        var sameTarget = await _db.Proposals.Where(item =>
+                item.ProjectId == _projectId
+                && item.SubtaskId == subtask.Id
+                && item.TargetKind == ContentTargetKind.ProjectDescription
+                && item.TargetId == _projectId
+                && item.Status == ProposalStatus.Pending)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Collection(sameTarget, item => Assert.Equal(result.Value.Id, item.Id));
+    }
+
+    [Fact]
     public async Task Create_ExpiredRowsBeyondMaterializationBatchDoNotConsumePendingQuota()
     {
         var now = DateTime.UtcNow;
