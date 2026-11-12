@@ -97,6 +97,47 @@ public sealed class InboxRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void Inbox_ShowsAgentAuthorModel()
+    {
+        var (userId, projectId) = AuthenticateAsProjectOwner();
+        DbContext.ContentVersions.Add(ContentVersion.Create(
+            projectId,
+            ContentTargetKind.ProjectDescription,
+            projectId,
+            1,
+            """{"description":"The current project goal"}""",
+            "Human",
+            userId.ToString("D")));
+
+        var proposal = Proposal.Create(
+            projectId,
+            null,
+            null,
+            null,
+            ContentTargetKind.ProjectDescription,
+            projectId,
+            ProposalOperation.Update,
+            1,
+            new string('a', 64),
+            """{"description":"A proposed project goal"}""",
+            "Suggests a more precise project goal.",
+            ProposalAuthorKind.Agent,
+            null,
+            Guid.NewGuid(),
+            "knowledge-curator",
+            "Actor",
+            "inbox-author-model",
+            DateTime.UtcNow,
+            "Qwen3.6-35B-A3B");
+        DbContext.Proposals.Add(proposal);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Proposals.Inbox>();
+
+        Assert.Contains("Qwen3.6-35B-A3B", cut.Markup);
+    }
+
+    [Fact]
     public void Inbox_PendingAndConflictedProposals_RendersAttentionCountsAndPendingCard()
     {
         var (userId, projectId) = AuthenticateAsProjectOwner();
