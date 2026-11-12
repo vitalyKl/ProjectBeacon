@@ -19,7 +19,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private readonly Action<string>? _log;
     private readonly NativeServiceManager _services = new();
     private readonly NativeAgentSessionStore _sessionStore;
-    private readonly NativeAgentToolCoordinator _toolCoordinator;
     private readonly NativeAgentTurnCoordinator _turnCoordinator;
     private volatile bool _disposed;
 
@@ -53,7 +52,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             _services,
             commandApproval,
             _log);
-        _toolCoordinator = new NativeAgentToolCoordinator(
+        var toolCoordinator = new NativeAgentToolCoordinator(
             _sessionStore,
             toolExecutor,
             turnFinalizer);
@@ -72,7 +71,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             toolCatalog,
             modelStepRunner,
             turnFinalizer,
-            _toolCoordinator,
+            toolCoordinator,
             scopedMcpClientFactory,
             _log);
     }
