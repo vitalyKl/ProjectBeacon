@@ -144,7 +144,8 @@ else
                     <MudExpansionPanels>
                     @foreach (var version in _taskContentHistory)
                     {
-                        <MudExpansionPanel Expanded="true" Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")">
+                        <MudExpansionPanel Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")"
+                                             data-testid="@($"task-history-panel-{version.Revision}")">
                             <MudStack Spacing="2">
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
                                     @version.ChangedByType · @version.ChangedById
