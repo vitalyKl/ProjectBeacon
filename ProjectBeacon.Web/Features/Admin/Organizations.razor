@@ -951,7 +951,7 @@
             return;
         }
 
-        var confirmed = await Dialogs.ShowMessageBox(
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
             "Convert Alpha to Production",
             "The active Alpha entitlement will be replaced by the selected subscription plan. This operation preserves the organization and its data and cannot be used to create a second active subscription. Continue?",
             yesText: "Convert",
