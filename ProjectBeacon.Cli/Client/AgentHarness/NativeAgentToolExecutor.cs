@@ -335,8 +335,8 @@ internal sealed class NativeAgentToolExecutor(
                     var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
                     isError = result.IsError;
                     toolResult = result.IsError
-            ? "Tool error: " + result.Text
-            : result.Text;
+                        ? "Tool error: " + result.Text
+                        : result.Text;
                 }
                 if (cacheKey is not null && !isError)
                     toolResultCache.TryAdd(cacheKey, new McpToolResult(false, toolResult));
@@ -353,7 +353,7 @@ internal sealed class NativeAgentToolExecutor(
         }
         var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         return new NativeExecutedToolCall(call, TruncateToolResult(toolResult), isError, durationMs, cacheHit);
-                
+
     }
 
     private static string TruncateToolResult(string result)
