@@ -57,6 +57,36 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void ActorKnowledgeWriteRoutesRequireTheirExactMcpToolGrant()
+    {
+        var routes = new (string Path, string Tool)[]
+        {
+            ($"/v1/projects/{_projectId:D}/context/drafts", McpToolNames.ContextCreateDraft),
+            ($"/v1/projects/{_projectId:D}/constraints/propose", McpToolNames.ConstraintPropose),
+            ($"/v1/projects/{_projectId:D}/decisions/propose", McpToolNames.DecisionPropose),
+            ($"/v1/projects/{_projectId:D}/proposals", McpToolNames.KnowledgePropose),
+            ($"/v1/projects/{_projectId:D}/proposals/{Guid.NewGuid():D}/withdraw", McpToolNames.KnowledgeWithdraw)
+        };
+
+        foreach (var (path, requiredTool) in routes)
+        {
+            Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, path, _taskId, _subtaskId));
+            Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, path, _taskId, _subtaskId, [McpToolNames.GetContextNode]));
+            Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, path, _taskId, _subtaskId, [requiredTool]));
+
+            var foreignProjectPath = path.Replace(
+                $"/projects/{_projectId:D}/",
+                $"/projects/{Guid.NewGuid():D}/",
+                StringComparison.Ordinal);
+            Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+                HttpMethods.Post, foreignProjectPath, _taskId, _subtaskId, [requiredTool]));
+        }
+    }
+
+    [Fact]
     public void PlannerToken_CanOrchestrateOnlyItsPinnedTask()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
