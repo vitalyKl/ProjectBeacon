@@ -170,6 +170,7 @@ public class ImportFilesHandler
         if (stagedImportIdentities.Count == 0)
             return false;
 
+        var sourcePaths = stagedImportIdentities.ToArray();
         return await db.ContextSections.AnyAsync(section =>
             section.ProjectId == projectId
             && section.ScopeType == ContextScopeType.Project
@@ -178,7 +179,7 @@ public class ImportFilesHandler
             && section.Path == string.Empty
             && section.Source != ContextSource.Native
             && section.SourcePath != null
-            && stagedImportIdentities.Contains(section.SourcePath), ct);
+            && sourcePaths.Contains(section.SourcePath), ct);
     }
 
     private static async Task<bool> HasDuplicateRevisionAsync(
