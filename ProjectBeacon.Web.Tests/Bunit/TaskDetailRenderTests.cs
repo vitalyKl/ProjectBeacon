@@ -104,7 +104,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         Assert.Contains("Current task goal", cut.Markup);
         Assert.DoesNotContain("Original task goal", cut.Markup);
-        cut.Find("[data-testid='task-history-panel-2'] button").Click();
+        cut.Find("[data-testid='task-history-panel-2'] .mud-expand-panel-header").Click();
 
         Assert.Contains("Original task goal", cut.Markup);
         Assert.Contains("restore-task-revision-2", cut.Markup);
