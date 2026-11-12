@@ -178,4 +178,4 @@ public record RestartPipelineCommand(RestartPipelineRequest Request, ActorContex
 public record GetPipelineRequest(Guid TaskId);
 
 /// <summary>Loads pipeline state for a task.</summary>
-public record GetPipelineCommand(GetPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record GetPipelineCommand(GetPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
