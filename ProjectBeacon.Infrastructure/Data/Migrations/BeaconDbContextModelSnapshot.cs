@@ -132,6 +132,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("AuthorModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<Guid?>("AuthorUserId")
                         .HasColumnType("uuid");
 
