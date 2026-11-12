@@ -201,7 +201,8 @@ public sealed class ApiTokenAuthMiddleware
             launchSessionTaskId,
             launchSessionRole,
             launchSessionStatus,
-            scope.AllowedMcpTools);
+            scope.AllowedMcpTools,
+            scope.ProfileKey);
         if (!allowed)
             return false;
 
@@ -292,7 +293,7 @@ public sealed class ApiTokenAuthMiddleware
                         return null;
                     return new HarnessCommandScope(
                         kind, projectId, pipeline.TaskId, pipeline.SessionId,
-                        pipeline.Role, pipeline.SubtaskId, actorSubtask.AllowedMcpTools);
+                        pipeline.Role, pipeline.SubtaskId, actorSubtask.AllowedMcpTools, actorSubtask.ProfileKey);
                 }
                 else if (pipeline.SubtaskId is not null)
                 {
@@ -342,7 +343,8 @@ public sealed class ApiTokenAuthMiddleware
         Guid? launchSessionTaskId = null,
         PipelineRole? launchSessionRole = null,
         SessionStatus? launchSessionStatus = null,
-        IReadOnlyList<string>? allowedMcpTools = null)
+        IReadOnlyList<string>? allowedMcpTools = null,
+        string? actorProfileKey = null)
     {
         if (projectId == Guid.Empty || string.IsNullOrWhiteSpace(path))
             return false;
@@ -384,7 +386,20 @@ public sealed class ApiTokenAuthMiddleware
                 return IsMcpToolGranted(allowedMcpTools, actorReadTool);
 
             if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
+            {
+                // Legacy Proposed/NeedsReview writes belong to knowledge-curator only.
+                // Re-check the persisted profile as well as the tool grant so old active
+                // subtasks cannot retain grants after the profile contract is tightened.
+                if (knowledgeWriteTool is McpToolNames.ContextCreateDraft
+                    or McpToolNames.ConstraintPropose
+                    or McpToolNames.DecisionPropose)
+                {
+                    if (!string.Equals(actorProfileKey, "knowledge-curator", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
                 return IsMcpToolGranted(allowedMcpTools, knowledgeWriteTool);
+            }
 
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
@@ -714,5 +729,6 @@ public sealed class ApiTokenAuthMiddleware
         Guid? SessionId,
         PipelineRole? Role,
         Guid? SubtaskId,
-        IReadOnlyList<string>? AllowedMcpTools = null);
+        IReadOnlyList<string>? AllowedMcpTools = null,
+        string? ProfileKey = null);
 }
