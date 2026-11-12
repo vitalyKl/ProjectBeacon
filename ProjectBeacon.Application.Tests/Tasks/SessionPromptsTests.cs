@@ -47,6 +47,24 @@ public sealed class SessionPromptsTests
     }
 
     [Fact]
+    public void ActorPrompt_UsesStableFailureCodeWhenRealRepositoryIsBehind()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement against the current project base.", projectId);
+        var subtask = Subtask.Create(
+            "Inspect the repository base before changing files.",
+            task.Id,
+            projectId,
+            allowedMcpTools: ["repo_status", McpToolNames.PipelineFailSubtask]);
+
+        var prompt = SessionPrompts.Actor(task, subtask);
+
+        Assert.Contains("repo_status", prompt);
+        Assert.Contains("repo_out_of_date:", prompt);
+        Assert.Contains("human must synchronize the project from the ProjectBeacon interface", prompt);
+    }
+
+    [Fact]
     public void ActorPrompt_ListsAttachmentMetadataWithoutEmbeddingFileContents()
     {
         var projectId = Guid.NewGuid();
