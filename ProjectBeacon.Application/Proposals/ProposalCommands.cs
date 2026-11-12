@@ -472,7 +472,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                 {
                     var pendingInProject = await db.Proposals.CountAsync(
                         item => item.ProjectId == command.ProjectId
-                            && item.Status == ProposalStatus.Pending, ct);
+                            && item.Status == ProposalStatus.Pending
+                            && item.ExpiresAt > now, ct);
                     if (pendingInProject >= 200)
                         return Result.Failure<ProposalDto>(
                             "The project has reached the limit of 200 pending proposals.");
@@ -482,7 +483,8 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                         var pendingForTask = await db.Proposals.CountAsync(
                             item => item.ProjectId == command.ProjectId
                                 && item.TaskId == taskId
-                                && item.Status == ProposalStatus.Pending, ct);
+                                && item.Status == ProposalStatus.Pending
+                                && item.ExpiresAt > now, ct);
                         if (pendingForTask >= 50)
                             return Result.Failure<ProposalDto>(
                                 "The task has reached the limit of 50 pending proposals.");
