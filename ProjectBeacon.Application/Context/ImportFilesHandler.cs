@@ -31,6 +31,11 @@ public class ImportFilesHandler
         if (command.Files is null)
             return Result.Failure<int>("At least one Markdown file is required.");
         var sourcePaths = new HashSet<string>(StringComparer.Ordinal);
+        var duplicateFileNames = command.Files
+            .GroupBy(file => file.FileName, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var file in command.Files)
         {
             if (string.IsNullOrWhiteSpace(file.FileName) || string.IsNullOrWhiteSpace(file.SourcePath))
@@ -94,9 +99,10 @@ public class ImportFilesHandler
                         .Take(2)
                         .ToListAsync(ct);
 
-                    if (legacyMatches.Count > 1)
+                    if (legacyMatches.Count > 1
+                        || (legacyMatches.Count == 1 && duplicateFileNames.Contains(file.FileName)))
                         return Result.Failure<int>(
-                            "Multiple legacy context sections match this imported file name. Resolve the ambiguity before importing.",
+                            "Legacy imported content cannot be mapped unambiguously to these same-named files. Resolve the legacy source path before importing.",
                             ErrorKind.Conflict);
 
                     existing = legacyMatches.SingleOrDefault();

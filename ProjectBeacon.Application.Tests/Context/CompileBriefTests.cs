@@ -122,6 +122,51 @@ public sealed class CompileBriefTests : IDisposable
     }
 
     [Fact]
+    public async Task CompileBrief_PreservesSameNamedImportedFilesFromDifferentPaths()
+    {
+        _db.ContextSections.AddRange(
+            ContextSection.Create(
+                "agents", "AGENTS", "API-specific guidance.", _projectId, ContextScopeType.Project,
+                source: ContextSource.ImportedAgentsMd, sourcePath: "services/api/AGENTS.md"),
+            ContextSection.Create(
+                "agents", "AGENTS", "Worker-specific guidance.", _projectId, ContextScopeType.Project,
+                source: ContextSource.ImportedAgentsMd, sourcePath: "services/worker/AGENTS.md"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new CompileBriefHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new CompileBriefCommand(
+                new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("API-specific guidance.", result.Value!.BriefMarkdown);
+        Assert.Contains("Worker-specific guidance.", result.Value.BriefMarkdown);
+        Assert.Equal(2, result.Value.BriefMarkdown.Split("## AGENTS", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public async Task CompileBrief_PrefersNativeContentOverImportedSameNamedSections()
+    {
+        _db.ContextSections.AddRange(
+            ContextSection.Create(
+                "agents", "AGENTS", "Beacon-authored guidance.", _projectId, ContextScopeType.Project,
+                source: ContextSource.Native, updatedByType: "user", updatedById: "user-1"),
+            ContextSection.Create(
+                "agents", "AGENTS", "Imported repository guidance.", _projectId, ContextScopeType.Project,
+                source: ContextSource.ImportedAgentsMd, sourcePath: "repo/AGENTS.md"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new CompileBriefHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new CompileBriefCommand(
+                new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("Beacon-authored guidance.", result.Value!.BriefMarkdown);
+        Assert.DoesNotContain("Imported repository guidance.", result.Value.BriefMarkdown);
+    }
+
+    [Fact]
     public async Task CompileBrief_StoresRevisionInDatabase()
     {
         AddSection("goals", "Goals", "Test goals");

@@ -267,6 +267,35 @@ public sealed class ImportFilesHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_RejectsAmbiguousLegacyBasenameAcrossMultipleFiles()
+    {
+        var legacy = ContextSection.Create(
+            "agents", "AGENTS", "Legacy guidance.", _projectId, ContextScopeType.Project,
+            source: ContextSource.ImportedAgentsMd, sourcePath: "AGENTS.md");
+        _db.ContextSections.Add(legacy);
+        new ContentWriter().AddVersion(_db, legacy, "System", "AGENTS.md");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new ImportFilesHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new ImportFilesCommand(
+                _projectId,
+                [
+                    new ImportFileRequest("AGENTS.md", "API guidance.", "services/api/AGENTS.md"),
+                    new ImportFileRequest("AGENTS.md", "Worker guidance.", "services/worker/AGENTS.md")
+                ]),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+
+        await _db.Entry(legacy).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("AGENTS.md", legacy.SourcePath);
+        Assert.Equal("Legacy guidance.", legacy.BodyMarkdown);
+        Assert.Equal(1, legacy.Revision);
+        Assert.Single(await _db.ContextSections.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Import_UsesImportedMarkdownSourceForUnclassifiedFiles()
     {
         var result = await new ImportFilesHandler(HandlerSqlite.Factory(_connection))
