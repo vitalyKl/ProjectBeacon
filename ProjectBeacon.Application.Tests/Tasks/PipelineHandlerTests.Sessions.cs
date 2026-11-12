@@ -110,7 +110,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal("Looks solid", closed.Value.ReviewNotes);
 
         var state = await new GetPipelineHandler(factory)
-            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(state.Success, state.Error);
         Assert.Equal(TaskPipelineStage.Closed, state.Value!.Stage);
     }
