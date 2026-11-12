@@ -138,10 +138,11 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
                 resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             return result is not null
                 && (result.Behind > 0
+                    || !result.Clean
                     || !result.HasUpstream
                     || result.Detached
                     || result.Diverged
-                    || result.Outcome == GitSyncOutcome.Failed);
+                    || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused);
         }
         catch (JsonException)
         {
