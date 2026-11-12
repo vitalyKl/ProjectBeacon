@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
+using Application.Common;
 using Application.Devices;
 using Application.Tasks;
 using Domain.Entities.Agents;
