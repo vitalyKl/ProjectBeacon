@@ -141,9 +141,10 @@ else
                 }
                 else
                 {
+                    <MudExpansionPanels>
                     @foreach (var version in _taskContentHistory)
                     {
-                        <MudExpansionPanel Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")">
+                        <MudExpansionPanel Expanded="true" Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")">
                             <MudStack Spacing="2">
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
                                     @version.ChangedByType · @version.ChangedById
@@ -151,7 +152,7 @@ else
                                 <MudText Typo="Typo.subtitle2">@L["Description"]</MudText>
                                 @if (!string.IsNullOrWhiteSpace(TaskHistoryDescription(version)))
                                 {
-                                    <MarkdownView Text="@TaskHistoryField(version.ContentJson, "description")" />
+                                    <MarkdownView Text="@TaskHistoryDescription(version)" />
                                 }
                                 else
                                 {
@@ -160,7 +161,7 @@ else
                                 @if (!string.IsNullOrWhiteSpace(TaskHistoryReviewNotes(version)))
                                 {
                                     <MudText Typo="Typo.subtitle2">@L["ReviewNotes"]</MudText>
-                                    <MarkdownView Text="@TaskHistoryField(version.ContentJson, "reviewNotes")" />
+                                    <MarkdownView Text="@TaskHistoryReviewNotes(version)" />
                                 }
                                 <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
                                            Disabled="_busy || _task is null || version.Revision >= _task.ContentRevision"
@@ -171,6 +172,7 @@ else
                             </MudStack>
                         </MudExpansionPanel>
                     }
+                    </MudExpansionPanels>
                 }
             </MudPaper>
         }
