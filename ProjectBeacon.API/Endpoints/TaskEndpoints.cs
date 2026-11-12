@@ -35,7 +35,7 @@ public static class TaskEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions", ListTaskContentVersions)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions/{versionId:guid}/restore", RestoreTaskContentVersion)
-            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/status", ChangeStatusInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/status", ChangeStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
