@@ -164,7 +164,7 @@ public sealed class TenantIsolationMiddleware
             if (!isAdmin)
             {
                 var managedProject = await db.Projects.IgnoreQueryFilters()
-                    .Where(project => (!orgExplicit || project.OrgId == orgId)
+                    .Where(project => (orgId == null || project.OrgId == orgId)
                         && db.OrgMembers.IgnoreQueryFilters().Any(member =>
                             member.OrgId == project.OrgId
                             && member.UserId == userId
@@ -173,8 +173,8 @@ public sealed class TenantIsolationMiddleware
                     .Select(project => new { project.Id, project.OrgId })
                     .FirstOrDefaultAsync();
                 return managedProject is null
-                    ? (Guid.Empty, orgExplicit ? orgId : Guid.Empty)
-                    : (managedProject.Id, orgExplicit ? orgId : managedProject.OrgId);
+                    ? (Guid.Empty, orgId ?? Guid.Empty)
+                    : (managedProject.Id, managedProject.OrgId);
             }
 
             var oldest = await db.Projects.IgnoreQueryFilters()
