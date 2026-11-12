@@ -110,8 +110,13 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
 public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public LaunchSessionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public LaunchSessionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(LaunchSessionCommand command, CancellationToken ct = default)
     {
@@ -133,6 +138,11 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanManageLifecycleAsync(
+                db, _authorization, command.Actor, task, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             if (session.Role == PipelineRole.Actor)
             {
@@ -419,11 +429,16 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public RetryPipelineSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public RetryPipelineSessionHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(RetryPipelineSessionCommand command, CancellationToken ct = default)
@@ -446,6 +461,11 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
                 .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanManageLifecycleAsync(
+                db, _authorization, command.Actor, task, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             var expectedStage = previous.Role switch
             {
