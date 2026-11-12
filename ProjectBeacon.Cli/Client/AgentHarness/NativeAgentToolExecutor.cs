@@ -360,10 +360,26 @@ internal sealed class NativeAgentToolExecutor(
     {
         if (result.Length <= MaxToolResultCharacters)
             return result;
-        var end = MaxToolResultCharacters;
-        if (end > 0 && char.IsHighSurrogate(result[end - 1]))
-            end--;
-        return result[..end] + Environment.NewLine + "[Tool result truncated by the native runtime.]";
+
+        var keptCharacters = MaxToolResultCharacters;
+        string marker;
+        do
+        {
+            marker = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "\n\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+                result.Length,
+                keptCharacters);
+            keptCharacters = MaxToolResultCharacters - marker.Length;
+        }
+        while (marker.Length + keptCharacters > MaxToolResultCharacters);
+
+        marker = string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "\n\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+            result.Length,
+            keptCharacters);
+        return result[..keptCharacters] + marker;
     }
 
     private static string SafeError(Exception ex) => ex switch
