@@ -595,6 +595,55 @@ public sealed class ContentVersionRestoreTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreTaskDescription_RejectsApiTokenEvenWithTaskWriteCapability()
+    {
+        var task = TaskItem.Create("Task", _projectId, description: "Original task description");
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var writer = new ContentWriter();
+        writer.AddVersion(_db, task, "Human", _actorId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var source = await _db.ContentVersions.SingleAsync(
+            version => version.TargetKind == ContentTargetKind.TaskDescription
+                && version.TargetId == task.Id,
+            TestContext.Current.CancellationToken);
+
+        task.Update(description: "Changed task description");
+        var changed = await writer.SaveAsync(
+            _db, task, "Human", _actorId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(changed.Success, changed.Error);
+
+        var tokenActor = new ActorContext(
+            ActorType.ApiToken,
+            _actorId,
+            false,
+            Guid.NewGuid(),
+            null,
+            _projectId,
+            null,
+            ApiTokenCapability.TaskWrite);
+        var result = await CreateRestoreHandler().HandleAsync(new RestoreContentVersionCommand(
+            _projectId,
+            source.Id,
+            ExpectedRevision: 2,
+            Actor: tokenActor,
+            ExpectedTargetKind: ContentTargetKind.TaskDescription,
+            ExpectedTargetId: task.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Changed task description", task.Description);
+        Assert.Equal(2, task.ContentRevision);
+        Assert.Equal(2, await _db.ContentVersions.CountAsync(
+            version => version.TargetKind == ContentTargetKind.TaskDescription
+                && version.TargetId == task.Id,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task RestoreContextDecisionConstraintAndMilestone_UsesTheirContentSnapshots()
     {
         var section = ContextSection.Create(
