@@ -21,21 +21,23 @@ public sealed class CancelPipelineSessionHandler : ICommandHandler<CancelPipelin
     public async Task<Result<PipelineStateDto>> HandleAsync(CancelPipelineSessionCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var session = await db.PipelineSessions
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.TaskId == command.Request.TaskId, ct);
-        if (session is null)
-            return Result.Failure<PipelineStateDto>("Pipeline session not found.");
-
         var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
+        // Authorize the parent resource before looking up the session id. Otherwise an
+        // unrelated project member could use 404 vs 200/409 behavior to probe session ids.
         var permission = await _authorization.CanAsync(
             db, command.Actor, ResourceType.Pipeline, AuthAction.Update,
             projectId: task.ProjectId, ct: ct);
         if (!permission.Success)
             return Result.Failure<PipelineStateDto>(permission);
+
+        var session = await db.PipelineSessions
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.TaskId == task.Id, ct);
+        if (session is null)
+            return Result.Failure<PipelineStateDto>("Pipeline session not found.");
 
         await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {
