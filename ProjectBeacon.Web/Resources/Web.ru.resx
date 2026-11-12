@@ -2820,4 +2820,5 @@
   <data name="TaskId" xml:space="preserve">
     <value>ID задачи</value>
   </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Синхронизируйте его перед работой с текущим снимком проекта.</value></data>
 </root>
