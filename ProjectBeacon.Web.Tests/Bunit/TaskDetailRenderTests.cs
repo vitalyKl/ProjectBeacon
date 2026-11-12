@@ -70,9 +70,12 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     [Fact]
     public async Task TaskDetail_RestoresTaskDescriptionFromHistoryAsANewRevision()
     {
-        var task = DbContext.Tasks.First();
-        var user = DbContext.Users.Single();
         var project = DbContext.Projects.Single();
+        var task = ProjectBeacon.Domain.Entities.Tasks.TaskItem.Create("Task history restore", project.Id);
+        DbContext.Tasks.Add(task);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var user = DbContext.Users.Single();
         var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
         auth.TriggerAuthenticationStateChanged(
             "tester",
