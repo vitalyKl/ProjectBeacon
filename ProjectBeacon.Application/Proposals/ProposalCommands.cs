@@ -622,9 +622,10 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
 
         if (string.Equals(subtask.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
         {
-            if (command.Request.Operation != ProposalOperation.Update)
+            if (command.Request.TargetKind != ContentTargetKind.RepoPatch
+                || command.Request.Operation != ProposalOperation.Update)
                 return ProposalAuthorScope.Forbidden(
-                    "The docs-writer profile can submit Update proposals only.");
+                    "The docs-writer profile can submit RepoPatch Update proposals only.");
 
             var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
             if (profile is null || profile.PathPolicy != AgentProfilePathPolicy.Defaults
