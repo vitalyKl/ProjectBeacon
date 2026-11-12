@@ -526,6 +526,8 @@ public sealed class AuthorizationService : IAuthorizationService
                 => TokenCan(actor, ApiTokenCapability.TaskRead),
             ResourceType.Pipeline when action is AuthAction.Create or AuthAction.Update or AuthAction.Execute
                 => TokenCan(actor, ApiTokenCapability.SessionDrive),
+            ResourceType.Pipeline when action == AuthAction.Administer
+                => TokenCan(actor, ApiTokenCapability.Admin),
             ResourceType.Context or ResourceType.Decision when action is AuthAction.Read
                 => TokenCan(actor, ApiTokenCapability.ContextRead),
             ResourceType.Label when action is AuthAction.Read
