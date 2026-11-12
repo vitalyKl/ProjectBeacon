@@ -132,14 +132,25 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             var lastGitSync = await db.WorkstationCommands.AsNoTracking()
                 .Where(command => command.ProjectId == projectId
                     && command.DeviceId == selectedDeviceId
-                    && command.Kind == WorkstationCommandKind.GitSync
-                    && command.Status == WorkstationCommandStatus.Succeeded
-                    && command.ResultJson != null)
-                .OrderByDescending(command => command.CompletedAt)
-                .Select(command => new { command.ResultJson, command.CompletedAt })
+                    && command.Kind == WorkstationCommandKind.GitSync)
+                .OrderByDescending(command => command.CreatedAt)
+                .Select(command => new
+                {
+                    command.Status,
+                    command.ResultJson,
+                    command.CompletedAt
+                })
                 .FirstOrDefaultAsync(ct);
-            lastGitSyncResultJson = lastGitSync?.ResultJson;
-            lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+            if (lastGitSync is not null && lastGitSync.Status != WorkstationCommandStatus.Succeeded)
+            {
+                repositorySyncBlocked = true;
+                lastKnownRepositoryReasonCode = GitSyncRefusalCode.FetchFailed;
+            }
+            else
+            {
+                lastGitSyncResultJson = lastGitSync?.ResultJson;
+                lastGitSyncCompletedAt = lastGitSync?.CompletedAt;
+            }
         }
 
         int? lastKnownRepositoryBehind = null;
