@@ -11,7 +11,8 @@ using ProjectBeacon.Domain.Enums;
 public static class CurrentProjectLookup
 {
     public static async Task<(Guid? ProjectId, Guid? OrgId)> ForUserAsync(
-        IBeaconDb db, Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
+        IBeaconDb db, Guid userId, bool isAdmin, Guid? preferredProjectId = null,
+        CancellationToken ct = default, Guid? preferredOrgId = null)
     {
         if (preferredProjectId is { } preferred)
         {
@@ -48,7 +49,8 @@ public static class CurrentProjectLookup
         if (!isAdmin)
         {
             var managed = await db.Projects.IgnoreQueryFilters()
-                .Where(project => db.OrgMembers.IgnoreQueryFilters().Any(orgMember =>
+                .Where(project => (preferredOrgId == null || project.OrgId == preferredOrgId)
+                    && db.OrgMembers.IgnoreQueryFilters().Any(orgMember =>
                     orgMember.OrgId == project.OrgId
                     && orgMember.UserId == userId
                     && (orgMember.Role == MemberRole.Owner || orgMember.Role == MemberRole.Admin)))
