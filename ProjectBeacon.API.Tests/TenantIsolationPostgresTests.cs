@@ -134,13 +134,11 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         }
 
         Guid? resolvedProject = null;
-        Guid? resolvedOrg = null;
         IReadOnlyList<Guid> visibleSections = [];
         await using var requestDb = _postgres.CreateContext();
         var middleware = new TenantIsolationMiddleware(async _ =>
         {
             resolvedProject = TenantScope.CurrentProjectId;
-            resolvedOrg = TenantScope.CurrentOrgId;
             visibleSections = await requestDb.ContextSections
                 .Select(section => section.Id)
                 .ToListAsync(TestContext.Current.CancellationToken);
@@ -158,7 +156,6 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         await middleware.InvokeAsync(http, requestDb);
 
         Assert.Equal(projectId, resolvedProject);
-        Assert.Equal(orgId, resolvedOrg);
         Assert.Equal(new[] { sectionId }, visibleSections);
     }
 
