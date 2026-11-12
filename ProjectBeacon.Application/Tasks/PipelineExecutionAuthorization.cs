@@ -53,4 +53,27 @@ internal static class PipelineExecutionAuthorization
             && session.Status == SessionStatus.Active, ct);
         return activeSession ? Result.Ok() : Result.Forbidden();
     }
+    
+    /// <summary>
+    /// Authorizes session lifecycle operations initiated by a human or a project-scoped
+    /// SessionDrive token. Short-lived role-pinned harness tokens cannot launch or retry
+    /// sessions outside their active role/session execution.
+    /// </summary>
+    public static async Task<Result> CanManageLifecycleAsync(
+        IBeaconDb db,
+        IAuthorizationService authorization,
+        ActorContext actor,
+        TaskItem task,
+        CancellationToken ct)
+    {
+        if (!actor.IsHuman && !actor.IsApiToken)
+            return Result.Forbidden();
+
+        if (actor.IsApiToken && actor.PipelineRole is not null)
+            return Result.Forbidden();
+
+        return await authorization.CanAsync(
+            db, actor, ResourceType.Pipeline, AuthAction.Execute,
+            projectId: task.ProjectId, ct: ct);
+    }
 }
