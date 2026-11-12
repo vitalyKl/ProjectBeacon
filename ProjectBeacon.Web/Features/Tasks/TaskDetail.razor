@@ -46,6 +46,7 @@
 @inject IDialogService Dialogs
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
+@inject ILogger<TaskDetail> Logger
 @inject NavigationManager Navigation
 
 <PageTitle>@L["TaskDetail"]</PageTitle>
@@ -1158,9 +1159,17 @@ else
             _gitSyncCommandPending = true;
             Snackbar.Add(L["GitSyncStillRunning"].Value, Severity.Info);
         }
-        catch (JsonException)
+        catch (Exception exception)
         {
-            Snackbar.Add(L["Error"].Value, Severity.Error);
+            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+            Logger.LogError(exception,
+                "Project repository synchronization failed. DiagnosticId={DiagnosticId}, TaskId={TaskId}, ProjectId={ProjectId}, DeviceId={DeviceId}",
+                diagnosticId, TaskId, _task?.ProjectId, deviceId);
+
+            var detail = exception.GetBaseException().Message;
+            Snackbar.Add(string.IsNullOrWhiteSpace(detail)
+                ? $"{L["Error"].Value} (ID: {diagnosticId})"
+                : $"{L["Error"].Value}: {detail} (ID: {diagnosticId})", Severity.Error);
         }
         finally
         {
