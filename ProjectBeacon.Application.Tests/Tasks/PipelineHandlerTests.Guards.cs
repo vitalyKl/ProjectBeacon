@@ -78,10 +78,10 @@ public sealed partial class PipelineHandlerTests
         await ProveReviewAsync(projectId, task.Id, factory, 0);
 
         var doubleApprove = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
         Assert.True(doubleApprove.Success, doubleApprove.Error);
         var approveAgain = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
         Assert.False(approveAgain.Success);
     }
 
