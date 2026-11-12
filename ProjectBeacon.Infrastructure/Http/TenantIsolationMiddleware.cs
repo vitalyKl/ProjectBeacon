@@ -120,7 +120,8 @@ public sealed class TenantIsolationMiddleware
         Guid? projectId,
         Guid? orgId)
     {
-        var orgExplicit = fromOrgRoute is not null || fromOrgHeader is not null;
+        var orgExplicit = fromOrgRoute is not null || fromOrgHeader is not null
+            || (requested is null && orgId is not null);
         var requested = fromRoute ?? fromHeader;
 
         // A specific project was requested (route/header). Direct project members
