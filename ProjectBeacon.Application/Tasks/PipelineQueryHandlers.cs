@@ -56,11 +56,13 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         {
             Preflight = preflight,
             CanStart = state.CanStart && !repositoryBlocked,
-            StartBlockedReason = state.StartBlockedReason
-                ?? (repositoryBehind
-                    ? "PipelineRepositoryBehind"
-                    : repositorySyncInProgress ? "PipelineRepositorySyncInProgress"
-                    : preflight.RepositorySyncBlocked ? "PipelineRepositorySyncRequired" : null)
+            StartBlockedReason = repositoryBehind
+                ? "PipelineRepositoryBehind"
+                : repositorySyncInProgress
+                    ? "PipelineRepositorySyncInProgress"
+                    : preflight.RepositorySyncBlocked
+                        ? "PipelineRepositorySyncRequired"
+                        : state.StartBlockedReason
         });
     }
 
