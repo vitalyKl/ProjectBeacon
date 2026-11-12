@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Devices;
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
@@ -231,7 +232,8 @@ public sealed partial class PipelineHandlerTests
 
             var stranger = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString(), "cleanup")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString(), "cleanup"),
+                    new ActorContext(ActorType.Human, Guid.NewGuid(), false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.False(stranger.Success);
             Assert.Equal("Force close requires admin privileges.", stranger.Error);
 
@@ -245,13 +247,15 @@ public sealed partial class PipelineHandlerTests
 
             var member = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, nonAdmin.Id.ToString(), "cleanup")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, nonAdmin.Id.ToString(), "cleanup"),
+                    new ActorContext(ActorType.Human, nonAdmin.Id, false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.False(member.Success);
             Assert.Equal("Force close requires admin privileges.", member.Error);
 
             var asAdmin = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, admin.Id.ToString(), "obsolete")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, admin.Id.ToString(), "obsolete"),
+                    new ActorContext(ActorType.Human, admin.Id, true, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.True(asAdmin.Success, asAdmin.Error);
             Assert.Equal(TaskPipelineStage.Closed, asAdmin.Value!.Stage);
             Assert.Equal(TaskItemStatus.Done, asAdmin.Value.Status);
@@ -275,7 +279,9 @@ public sealed partial class PipelineHandlerTests
         {
             var result = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, "bcn_test_worker_token")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString()),
+                    new ActorContext(ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+                        done.ProjectId, null, ApiTokenCapability.Admin)), TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Error);
             Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
             Assert.Equal("force-closed without review", result.Value.ReviewNotes);
