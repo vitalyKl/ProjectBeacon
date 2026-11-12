@@ -93,12 +93,49 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             return binding is not null && configured.Contains(binding.ModelBackendId);
         }
 
+        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
+            .Where(command => command.ProjectId == projectId
+                && command.Kind == WorkstationCommandKind.GitSync
+                && command.Status == WorkstationCommandStatus.Succeeded
+                && command.ResultJson != null)
+            .OrderByDescending(command => command.CompletedAt)
+            .Select(command => new { command.ResultJson, command.CompletedAt })
+            .FirstOrDefaultAsync(ct);
+
+        int? lastKnownRepositoryBehind = null;
+        string? lastKnownRepositoryBranch = null;
+        if (!string.IsNullOrWhiteSpace(lastGitSync?.ResultJson))
+        {
+            try
+            {
+                using var gitSyncResult = JsonDocument.Parse(lastGitSync.ResultJson);
+                var root = gitSyncResult.RootElement;
+                if (root.ValueKind == JsonValueKind.Object
+                    && root.TryGetProperty("behind", out var behindElement)
+                    && behindElement.TryGetInt32(out var behind)
+                    && behind >= 0)
+                {
+                    lastKnownRepositoryBehind = behind;
+                    if (root.TryGetProperty("branch", out var branchElement)
+                        && branchElement.ValueKind == JsonValueKind.String)
+                        lastKnownRepositoryBranch = branchElement.GetString();
+                }
+            }
+            catch (JsonException)
+            {
+                // A malformed or legacy result is treated as unknown, never as current.
+            }
+        }
+
         return new PipelinePreflightDto(
             hasNative,
             hasOnlineNative,
             HasModel(PipelineRole.Planner),
             HasModel(PipelineRole.Actor),
-            HasModel(PipelineRole.Review));
+            HasModel(PipelineRole.Review),
+            lastKnownRepositoryBehind,
+            lastKnownRepositoryBranch,
+            lastKnownRepositoryBehind is null ? null : lastGitSync?.CompletedAt);
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
