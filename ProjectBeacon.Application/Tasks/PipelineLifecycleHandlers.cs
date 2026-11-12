@@ -33,9 +33,14 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        if (await IsRepositorySyncBlockingStartAsync(db, task.ProjectId, ct))
+        var pipelineDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
+            db, task.ProjectId, DateTime.UtcNow, ct);
+        var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
+            db, task.ProjectId, pipelineDevice, ct);
+        if (repositorySync.Blocked)
             return Result.Failure<PipelineSessionDto>(
-                "PipelineRepositoryBehind", ErrorKind.Conflict);
+                "Repository synchronization must be completed on the selected workstation before starting the pipeline.",
+                ErrorKind.Conflict);
 
         var expectedStatus = task.Status;
         try
@@ -89,70 +94,6 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 
-    private static async Task<bool> IsRepositorySyncBlockingStartAsync(
-        IBeaconDb db, Guid projectId, CancellationToken ct)
-    {
-        var deviceIds = await db.ProjectRuntimes
-            .Where(runtime => runtime.ProjectId == projectId)
-            .Select(runtime => runtime.DeviceId)
-            .Distinct()
-            .ToArrayAsync(ct);
-        if (deviceIds.Length == 0)
-            return false;
-
-        var devices = await db.DaemonDevices
-            .Where(device => deviceIds.Contains(device.Id))
-            .ToListAsync(ct);
-        var selectedDeviceId = devices
-            .Where(device => device.IsOnline(DateTime.UtcNow))
-            .OrderByDescending(device => device.LastHeartbeatAt)
-            .Select(device => (Guid?)device.Id)
-            .FirstOrDefault();
-        if (selectedDeviceId is null)
-            return false;
-
-        var syncIsInProgress = await db.WorkstationCommands.AsNoTracking()
-            .AnyAsync(command => command.ProjectId == projectId
-                && command.DeviceId == selectedDeviceId.Value
-                && command.Kind == WorkstationCommandKind.GitSync
-                && (command.Status == WorkstationCommandStatus.Pending
-                    || command.Status == WorkstationCommandStatus.Running), ct);
-        if (syncIsInProgress)
-            return true;
-
-        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
-            .Where(command => command.ProjectId == projectId
-                && command.DeviceId == selectedDeviceId.Value
-                && command.Kind == WorkstationCommandKind.GitSync)
-            .OrderByDescending(command => command.CreatedAt)
-            .Select(command => new { command.Status, command.ResultJson })
-            .FirstOrDefaultAsync(ct);
-        if (lastGitSync is null)
-            return false;
-        if (lastGitSync.Status != WorkstationCommandStatus.Succeeded)
-            return true;
-
-        var resultJson = lastGitSync.ResultJson;
-        if (string.IsNullOrWhiteSpace(resultJson))
-            return true;
-
-        try
-        {
-            var result = JsonSerializer.Deserialize<GitSyncResultDto>(
-                resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return result is null
-                || result.Behind > 0
-                || !result.Clean
-                || !result.HasUpstream
-                || result.Detached
-                || result.Diverged
-                || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused;
-        }
-        catch (JsonException)
-        {
-            return true;
-        }
-    }
 }
 /// <summary>
 /// Marks a Ready pipeline session launched.
@@ -227,9 +168,17 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     var selected = candidates
                         .Where(x => x.Device.IsOnline(now))
                         .OrderByDescending(x => x.Device.LastHeartbeatAt)
+                        .ThenBy(x => x.Device.Id)
                         .FirstOrDefault();
                     if (selected is null)
                         return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
+
+                    var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
+                        db, session.ProjectId, selected.Device, ct);
+                    if (repositorySync.Blocked)
+                        return Result.Failure<PipelineSessionDto>(
+                            "Repository synchronization must be completed on the selected workstation before the pipeline session can launch.",
+                            ErrorKind.Conflict);
 
                     if (session.ModelBackendId is not { } backendId)
                         return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
