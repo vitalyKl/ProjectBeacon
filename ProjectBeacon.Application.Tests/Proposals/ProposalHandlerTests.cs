@@ -147,6 +147,52 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_ConflictedProposalDoesNotConsumePendingQuota()
+    {
+        await SeedPendingProposalsAsync(200);
+
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId,
+            TestContext.Current.CancellationToken);
+        project.Update(project.Name, "Newer project description", project.ReviewCheckCommand);
+        var version = await new ContentWriter().SaveAsync(
+            _db, project, "Human", _userId.ToString("D"), TestContext.Current.CancellationToken);
+        Assert.True(version.Success, version.Error);
+
+        var request = Request() with { IdempotencyKey = "conflicted-at-project-limit" };
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Conflicted, result.Value!.Status);
+        Assert.Equal(200, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId && item.Status == ProposalStatus.Pending,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Create_RejectsNewPendingProposalWhenProjectQuotaIsFull()
+    {
+        await SeedPendingProposalsAsync(200);
+
+        var request = Request() with { IdempotencyKey = "new-pending-at-project-limit" };
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(_projectId, request, HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("limit of 200 pending", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(200, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId && item.Status == ProposalStatus.Pending,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
     {
         var factory = HandlerSqlite.Factory(_connection);
@@ -1201,6 +1247,35 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Equal(2, project.Revision);
         Assert.DoesNotContain(await _db.ContentVersions.ToListAsync(TestContext.Current.CancellationToken),
             item => item.ProposalId == result.Value.Id);
+    }
+
+    private async Task SeedPendingProposalsAsync(int count)
+    {
+        var now = DateTime.UtcNow;
+        var proposals = Enumerable.Range(0, count)
+            .Select(index => Proposal.Create(
+                _projectId,
+                null,
+                null,
+                null,
+                ContentTargetKind.ProjectDescription,
+                Guid.NewGuid(),
+                ProposalOperation.Update,
+                1,
+                new string('a', 64),
+                """{"description":"Existing pending proposal"}""",
+                "Keeps a pending review slot occupied.",
+                ProposalAuthorKind.Human,
+                _userId,
+                null,
+                null,
+                "Human",
+                $"quota-seed-{index}",
+                now))
+            .ToArray();
+
+        _db.Proposals.AddRange(proposals);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     private ActorContext HumanActor() =>
