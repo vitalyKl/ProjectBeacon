@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
+using Application.Authorization;
 using Domain.Common;
 using Domain.Entities.Agents;
 using Domain.Entities.Tasks;
@@ -16,8 +17,13 @@ using Microsoft.EntityFrameworkCore;
 public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result<SubtaskDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CreateSubtaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateSubtaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<SubtaskDto>> HandleAsync(CreateSubtaskCommand command, CancellationToken ct = default)
     {
@@ -29,6 +35,11 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<SubtaskDto>("Task not found.");
+
+        var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+            db, _authorization, command.Actor, task, PipelineRole.Planner, requiredSubtaskId: null, ct);
+        if (!permission.Success)
+            return Result.Failure<SubtaskDto>(permission);
 
         if (task.PipelineStage is not (TaskPipelineStage.Planning or TaskPipelineStage.Executing))
             return Result.Failure<SubtaskDto>(task.PipelineStage is null
