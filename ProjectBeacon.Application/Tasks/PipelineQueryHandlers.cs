@@ -141,7 +141,12 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
                     command.CompletedAt
                 })
                 .FirstOrDefaultAsync(ct);
-            if (lastGitSync is not null && lastGitSync.Status != WorkstationCommandStatus.Succeeded)
+            if (lastGitSync is not null
+                && lastGitSync.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running)
+            {
+                repositorySyncBlocked = true;
+            }
+            else if (lastGitSync is not null && lastGitSync.Status != WorkstationCommandStatus.Succeeded)
             {
                 repositorySyncBlocked = true;
                 lastKnownRepositoryReasonCode = GitSyncRefusalCode.FetchFailed;
