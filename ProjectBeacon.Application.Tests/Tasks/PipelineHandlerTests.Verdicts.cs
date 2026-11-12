@@ -152,7 +152,7 @@ public sealed partial class PipelineHandlerTests
                 .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             Assert.Equal(TaskPipelineStage.Executing,
-                (await new GetPipelineHandler(factory).HandleAsync(new GetPipelineCommand(new GetPipelineRequest(done.Task.Id)), TestContext.Current.CancellationToken)).Value!.Stage);
+                (await new GetPipelineHandler(factory).HandleAsync(new GetPipelineCommand(new GetPipelineRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken)).Value!.Stage);
 
             var redone = await new ReportSubtaskResultHandler(factory)
                 .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://a2", "fixed"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
