@@ -93,6 +93,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.DoesNotContain(McpToolNames.ApplyPatch, docs.Tools);
         Assert.Contains("must not enter the live working tree before approval", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("targetKind RepoPatch", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("only RepoPatch Update proposals", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("Use the knowledge-curator profile", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_file", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_text", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("for a new file set baseHash to null", docs.Instruction, StringComparison.Ordinal);
