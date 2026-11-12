@@ -2583,7 +2583,7 @@
   <data name="GitSyncCheck" xml:space="preserve"><value>Проверить состояние</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Страница продолжит автоматически отслеживать её состояние.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
