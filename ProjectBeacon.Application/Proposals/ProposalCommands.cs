@@ -319,21 +319,6 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             }
         }
 
-        var pendingInProject = await db.Proposals.CountAsync(
-            proposal => proposal.ProjectId == command.ProjectId && proposal.Status == ProposalStatus.Pending, ct);
-        if (pendingInProject >= 200)
-            return Result.Failure<ProposalDto>("The project has reached the limit of 200 pending proposals.");
-
-        if (author.TaskId is { } taskId)
-        {
-            var pendingForTask = await db.Proposals.CountAsync(
-                proposal => proposal.ProjectId == command.ProjectId
-                    && proposal.TaskId == taskId
-                    && proposal.Status == ProposalStatus.Pending, ct);
-            if (pendingForTask >= 50)
-                return Result.Failure<ProposalDto>("The task has reached the limit of 50 pending proposals.");
-        }
-
         Proposal proposal;
         try
         {
@@ -371,7 +356,10 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
             return await strategy.ExecuteAsync(async () =>
             {
                 db.ChangeTracker.Clear();
-                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+                // Proposal quotas are project-wide/task-wide predicates. A serializable
+                // transaction prevents concurrent submissions from both observing free capacity.
+                await using var transaction = await db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.Serializable, ct);
 
                 var currentProject = await db.Projects.FirstOrDefaultAsync(
                     item => item.Id == command.ProjectId, ct);
@@ -475,6 +463,31 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
                     }
                     if (previous.Count > 0)
                         await db.SaveChangesAsync(ct);
+                }
+
+                // Only proposals that remain Pending consume quota. Superseded rows have
+                // already been persisted within this transaction, so a replacement does not
+                // consume an additional slot. Conflicted, Accepted and Applying proposals do
+                // not count against the pending-work budget.
+                if (proposal.Status == ProposalStatus.Pending)
+                {
+                    var pendingInProject = await db.Proposals.CountAsync(
+                        item => item.ProjectId == command.ProjectId
+                            && item.Status == ProposalStatus.Pending, ct);
+                    if (pendingInProject >= 200)
+                        return Result.Failure<ProposalDto>(
+                            "The project has reached the limit of 200 pending proposals.");
+
+                    if (author.TaskId is { } taskId)
+                    {
+                        var pendingForTask = await db.Proposals.CountAsync(
+                            item => item.ProjectId == command.ProjectId
+                                && item.TaskId == taskId
+                                && item.Status == ProposalStatus.Pending, ct);
+                        if (pendingForTask >= 50)
+                            return Result.Failure<ProposalDto>(
+                                "The task has reached the limit of 50 pending proposals.");
+                    }
                 }
 
                 db.Proposals.Add(proposal);
