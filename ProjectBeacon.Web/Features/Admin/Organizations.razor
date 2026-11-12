@@ -933,7 +933,7 @@
             periodEnd = parsedEnd;
         }
 
-        if (plan.Cadence is BillingCadence.Monthly or BillingCadence.Annual && periodEnd is null)
+        if ((plan.Cadence is BillingCadence.Monthly or BillingCadence.Annual) && periodEnd is null)
         {
             Snackbar.Add("Monthly and annual plans require an explicit current-period end.", Severity.Warning);
             return;
