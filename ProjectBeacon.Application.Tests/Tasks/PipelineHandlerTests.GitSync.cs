@@ -169,6 +169,68 @@ public sealed partial class PipelineHandlerTests
         Assert.False(result.Value.Preflight.RepositorySyncBlocked);
     }
 
+    [Fact]
+    public async Task GetPipeline_KeepsNoUpstreamReasonFromValidNullableResult()
+    {
+        var (projectId, task) = await SeedTaskAsync("No upstream diagnosis");
+        var device = await SeedGitSyncRuntimeAsync(projectId);
+        var command = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId, mode = "PullFastForward" }),
+            projectId);
+        var syncResult = new GitSyncResultDto(
+            "main", null, 0, 0, true, false, false, false,
+            new string('a', 40), new string('a', 40),
+            GitSyncOutcome.Refused, GitSyncRefusalCode.NoUpstream, null);
+        command.Succeed(JsonSerializer.Serialize(
+            syncResult, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new GetPipelineHandler(factory)
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.Value!.Preflight!.RepositorySyncBlocked);
+        Assert.Equal(GitSyncRefusalCode.NoUpstream, result.Value.Preflight.LastKnownRepositoryReasonCode);
+    }
+
+    [Fact]
+    public async Task GetPipeline_KeepsDetachedReasonFromValidNullableResult()
+    {
+        var (projectId, task) = await SeedTaskAsync("Detached HEAD diagnosis");
+        var device = await SeedGitSyncRuntimeAsync(projectId);
+        var command = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId, mode = "PullFastForward" }),
+            projectId);
+        var syncResult = new GitSyncResultDto(
+            null, null, 0, 0, true, true, false, false,
+            new string('a', 40), new string('a', 40),
+            GitSyncOutcome.Refused, GitSyncRefusalCode.Detached, null);
+        command.Succeed(JsonSerializer.Serialize(
+            syncResult, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new GetPipelineHandler(factory)
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.Value!.Preflight!.RepositorySyncBlocked);
+        Assert.Equal(GitSyncRefusalCode.Detached, result.Value.Preflight.LastKnownRepositoryReasonCode);
+    }
+
     private async Task<DaemonDevice> SeedGitSyncRuntimeAsync(Guid projectId)
     {
         var user = User.Create("git-sync", $"git-sync-{Guid.NewGuid():N}@beacon.local", "hash");
