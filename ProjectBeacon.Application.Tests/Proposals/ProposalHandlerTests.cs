@@ -1,5 +1,8 @@
 namespace ProjectBeacon.Application.Tests.Proposals;
 
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Application.Common;
@@ -635,6 +638,103 @@ public sealed class ProposalHandlerTests : IDisposable
         Assert.Equal(ErrorKind.Forbidden, result.Kind);
         var proposal = await _db.Proposals.SingleAsync(item => item.Id == create.Value.Id, TestContext.Current.CancellationToken);
         Assert.Equal(ProposalStatus.Pending, proposal.Status);
+    }
+
+    [Fact]
+    public async Task DocsWriterCanSubmitOnlyRepoPatchUpdateProposals()
+    {
+        var task = TaskItem.Create("Update project documentation.", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var subtask = Subtask.Create(
+            "Prepare a documentation-only patch.",
+            task.Id,
+            _projectId,
+            allowedMcpTools: [McpToolNames.KnowledgePropose],
+            allowedPaths: ["docs"],
+            profileKey: "docs-writer");
+        subtask.Start();
+        _db.Subtasks.Add(subtask);
+
+        var session = PipelineSession.Create(
+            task.Id, _projectId, PipelineRole.Actor, "Write a documentation patch.", subtask.Id);
+        session.Launch();
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tokenId = Guid.NewGuid();
+        var actor = new ActorContext(
+            ActorType.ApiToken,
+            _userId,
+            false,
+            tokenId,
+            null,
+            _projectId,
+            _orgId,
+            ApiTokenCapability.ContextRead);
+        var command = new CreateProposalHandler(
+            HandlerSqlite.Factory(_connection), new EfAuditWriter());
+
+        var nonRepoPatch = await command.HandleAsync(
+            new CreateProposalCommand(
+                _projectId,
+                Request() with { IdempotencyKey = "docs-writer-project-description" },
+                actor,
+                task.Id,
+                subtask.Id,
+                session.Id,
+                PipelineRole.Actor.ToString()),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(nonRepoPatch.Success);
+        Assert.Equal(ErrorKind.Forbidden, nonRepoPatch.Kind);
+
+        const string before = "before\n";
+        const string after = "after\n";
+        const string projectPath = "docs/guide.md";
+        var baseHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before))).ToLowerInvariant();
+        var resultHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(after))).ToLowerInvariant();
+        var patch = """
+            diff --git a/docs/guide.md b/docs/guide.md
+            index 9d3f98b..f5a8c3d 100644
+            --- a/docs/guide.md
+            +++ b/docs/guide.md
+            @@ -1 +1 @@
+            -before
+            +after
+            """;
+        var payload = JsonSerializer.Serialize(new
+        {
+            patch,
+            files = new[]
+            {
+                new { gitPath = projectPath, projectPath, baseHash, resultHash }
+            }
+        });
+        var repoPatch = await command.HandleAsync(
+            new CreateProposalCommand(
+                _projectId,
+                new CreateProposalRequest(
+                    ContentTargetKind.RepoPatch,
+                    _projectId,
+                    ProposalOperation.Update,
+                    1,
+                    payload,
+                    "Update the setup guide.",
+                    "docs-writer-repo-patch-" + Guid.NewGuid().ToString("N")),
+                actor,
+                task.Id,
+                subtask.Id,
+                session.Id,
+                PipelineRole.Actor.ToString()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(repoPatch.Success, repoPatch.Error);
+        Assert.Equal(ProposalStatus.Pending, repoPatch.Value!.Status);
+        Assert.Equal(ContentTargetKind.RepoPatch, repoPatch.Value.TargetKind);
+        Assert.Equal("docs-writer", repoPatch.Value.AuthorProfileKey);
+        Assert.Equal(tokenId, repoPatch.Value.AuthorTokenId);
     }
 
     [Fact]
