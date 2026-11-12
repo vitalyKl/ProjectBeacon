@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 /// <summary>
 /// One context section, including scope, source, and body.
@@ -42,7 +43,7 @@ public record UpsertContextNodeRequest(
 /// <summary>
 /// Command for upsert context node.
 /// </summary>
-public record UpsertContextNodeCommand(UpsertContextNodeRequest Request) : ICommand<Result<ContextSectionDto>>;
+public record UpsertContextNodeCommand(UpsertContextNodeRequest Request, ActorContext Actor) : ICommand<Result<ContextSectionDto>>;
 /// <summary>
 /// Fields for list context nodes.
 /// </summary>
@@ -50,7 +51,7 @@ public record ListContextNodesRequest(Guid ProjectId);
 /// <summary>
 /// Command for list context nodes.
 /// </summary>
-public record ListContextNodesCommand(ListContextNodesRequest Request) : IQuery<IList<ContextSectionDto>>;
+public record ListContextNodesCommand(ListContextNodesRequest Request, ActorContext Actor) : IQuery<Result<IList<ContextSectionDto>>>;
 /// <summary>
 /// Fields for get context node.
 /// </summary>
@@ -58,7 +59,7 @@ public record GetContextNodeRequest(Guid ProjectId, Guid NodeId);
 /// <summary>
 /// Command for get context node.
 /// </summary>
-public record GetContextNodeCommand(GetContextNodeRequest Request) : IQuery<Result<ContextSectionDto>>;
+public record GetContextNodeCommand(GetContextNodeRequest Request, ActorContext Actor) : IQuery<Result<ContextSectionDto>>;
 /// <summary>
 /// Fields for delete context node.
 /// </summary>
@@ -66,4 +67,4 @@ public record DeleteContextNodeRequest(Guid ProjectId, Guid NodeId);
 /// <summary>
 /// Command for delete context node.
 /// </summary>
-public record DeleteContextNodeCommand(DeleteContextNodeRequest Request) : ICommand<Result>;
+public record DeleteContextNodeCommand(DeleteContextNodeRequest Request, ActorContext Actor) : ICommand<Result>;
