@@ -257,8 +257,13 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ApprovePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ApprovePipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ApprovePipelineCommand command, CancellationToken ct = default)
     {
@@ -267,6 +272,12 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Administer,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         if (task.PipelineStage != TaskPipelineStage.Approved)
             return Result.Failure<PipelineStateDto>("Pipeline is not approved.");
