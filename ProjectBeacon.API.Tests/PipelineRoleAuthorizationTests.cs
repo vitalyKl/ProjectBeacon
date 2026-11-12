@@ -101,18 +101,39 @@ public sealed class PipelineRoleAuthorizationTests
         var taskId = Guid.NewGuid();
         var subtaskId = Guid.NewGuid();
 
-        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+        // Legacy Proposed/NeedsReview writes are reserved for the knowledge-curator
+        // profile; an explicit MCP grant alone must not preserve stale grants on
+        // other profiles such as docs-writer.
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
             HttpMethods.Post, $"/v1/projects/{projectId:D}/context/drafts",
             allowedMcpTools: [McpToolNames.ContextCreateDraft]));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, $"/v1/projects/{projectId:D}/constraints/propose",
+            allowedMcpTools: [McpToolNames.ConstraintPropose],
+            actorProfileKey: "docs-writer"));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, $"/v1/projects/{projectId:D}/decisions/propose",
+            allowedMcpTools: [McpToolNames.DecisionPropose],
+            actorProfileKey: "docs-writer"));
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
+            HttpMethods.Post, $"/v1/projects/{projectId:D}/context/drafts",
+            allowedMcpTools: [McpToolNames.ContextCreateDraft],
+            actorProfileKey: "knowledge-curator"));
         Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
             HttpMethods.Post, $"/v1/projects/{projectId:D}/constraints/propose",
-            allowedMcpTools: [McpToolNames.ConstraintPropose]));
+            allowedMcpTools: [McpToolNames.ConstraintPropose],
+            actorProfileKey: "knowledge-curator"));
         Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
             HttpMethods.Post, $"/v1/projects/{projectId:D}/decisions/propose",
-            allowedMcpTools: [McpToolNames.DecisionPropose]));
+            allowedMcpTools: [McpToolNames.DecisionPropose],
+            actorProfileKey: "knowledge-curator"));
 
         Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor, projectId, taskId, subtaskId,
