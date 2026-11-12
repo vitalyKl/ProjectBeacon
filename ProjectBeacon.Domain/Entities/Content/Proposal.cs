@@ -13,6 +13,7 @@ public sealed class Proposal : Entity, IProjectScoped
     public const int MaxPayloadLength = 40_000;
     public const int MaxRationaleLength = 1_000;
     public const int MaxIdempotencyKeyLength = 128;
+    public const int MaxAuthorModelLength = 200;
     public static readonly TimeSpan TimeToLive = TimeSpan.FromDays(30);
 
     public Proposal() { }
@@ -34,6 +35,7 @@ public sealed class Proposal : Entity, IProjectScoped
     public Guid? AuthorTokenId { get; private set; }
     public string? AuthorProfileKey { get; private set; }
     public string? AuthorRole { get; private set; }
+    public string? AuthorModel { get; private set; }
     public string IdempotencyKey { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
     public DateTime ExpiresAt { get; private set; }
@@ -68,7 +70,8 @@ public sealed class Proposal : Entity, IProjectScoped
         string? authorProfileKey,
         string? authorRole,
         string idempotencyKey,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        string? authorModel = null)
     {
         if (projectId == Guid.Empty || targetId == Guid.Empty)
             throw new ArgumentException("ProjectId and TargetId are required.");
@@ -111,8 +114,9 @@ public sealed class Proposal : Entity, IProjectScoped
             throw new ArgumentException("An agent proposal must identify exactly one API token.");
         if (subtaskId.HasValue != sessionId.HasValue)
             throw new ArgumentException("SubtaskId and SessionId must either both be present or both be absent.");
-        if (authorProfileKey?.Length > 100 || authorRole?.Length > 32)
-            throw new ArgumentException("Author profile or role exceeds its maximum length.");
+        if (authorProfileKey?.Length > 100 || authorRole?.Length > 32
+            || authorModel?.Length > MaxAuthorModelLength)
+            throw new ArgumentException("Author profile, role or model exceeds its maximum length.");
 
         var proposal = Entity.New<Proposal>();
         proposal.ProjectId = projectId;
@@ -132,6 +136,7 @@ public sealed class Proposal : Entity, IProjectScoped
         proposal.AuthorTokenId = authorTokenId;
         proposal.AuthorProfileKey = authorProfileKey;
         proposal.AuthorRole = authorRole;
+        proposal.AuthorModel = string.IsNullOrWhiteSpace(authorModel) ? null : authorModel.Trim();
         proposal.IdempotencyKey = idempotencyKey.Trim();
         proposal.CreatedAt = createdAtUtc;
         proposal.ExpiresAt = createdAtUtc.Add(TimeToLive);
