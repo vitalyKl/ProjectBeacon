@@ -649,4 +649,61 @@ public sealed partial class PipelineHandlerTests
         Assert.True(allowed.Success, allowed.Error);
     }
 
+    [Fact]
+    public async Task ActivePlannerHarness_CanStartActorAndRequestItsLaunchWithinPinnedTask()
+    {
+        var (projectId, task) = await SeedTaskAsync("Planner-scoped Actor launch");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner();
+
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(
+                new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(projectId)),
+                TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var plannerRow = await _db.PipelineSessions.SingleAsync(
+                row => row.Id == planner.Value!.Id, TestContext.Current.CancellationToken);
+            plannerRow.Launch("planner-harness");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var plannerActor = new ActorContext(
+            ActorType.ApiToken,
+            UserId: null,
+            IsAdmin: false,
+            TokenId: Guid.NewGuid(),
+            DeviceId: null,
+            ProjectId: projectId,
+            OrgId: null,
+            Capabilities: ApiTokenCapability.SessionDrive,
+            PipelineRole: PipelineRole.Planner,
+            PipelineTaskId: task.Id,
+            PipelineSessionId: planner.Value!.Id);
+
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(
+                new CreateSubtaskRequest(task.Id, "implement the planned work"), plannerActor),
+                TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+
+        var actorSession = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(
+                new StartActorSessionRequest(task.Id, subtask.Value!.Id), plannerActor),
+                TestContext.Current.CancellationToken);
+        Assert.True(actorSession.Success, actorSession.Error);
+
+        // No runtime is configured in this unit test. Reaching that domain validation
+        // proves that CanLaunchAsync accepted the active Planner's exact task/session scope.
+        var launch = await new LaunchSessionHandler(factory)
+            .HandleAsync(new LaunchSessionCommand(
+                new LaunchSessionRequest(actorSession.Value!.Id), plannerActor),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(launch.Success);
+        Assert.Contains("No online pipeline workstation", launch.Error);
+    }
+
 }
