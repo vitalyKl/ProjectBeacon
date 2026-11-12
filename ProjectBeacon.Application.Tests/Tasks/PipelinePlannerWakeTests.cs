@@ -137,7 +137,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, first.Value!.Id)),
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, first.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
 
