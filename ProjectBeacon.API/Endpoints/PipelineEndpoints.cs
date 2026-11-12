@@ -53,11 +53,11 @@ public static class PipelineEndpoints
         CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is not Guid userId)
+        if (!actor.IsHuman || actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new ReplyPipelineFormCommand(
-            new ReplyPipelineFormRequest(taskId, sessionId, userId, formId, body.AnswerJson)), ct);
+            new ReplyPipelineFormRequest(taskId, sessionId, formId, body.AnswerJson), actor), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
