@@ -227,8 +227,6 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
     {
         if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
             return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
-        if (command.Actor.UserId is not { } actorUserId || actorUserId != command.Request.ActorId)
-            return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
 
         var bodyCommand = command.Request.CheckCommand?.Trim();
 
@@ -245,6 +243,9 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
                 return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; set the project ReviewCheckCommand instead.", ErrorKind.Validation);
             checkCommand = null!;
         }
+
+        if (command.Actor.UserId is not { } actorUserId || actorUserId != command.Request.ActorId)
+            return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
