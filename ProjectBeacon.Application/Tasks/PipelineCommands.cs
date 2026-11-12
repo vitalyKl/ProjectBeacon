@@ -150,7 +150,7 @@ public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorCo
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null);
 
 /// <summary>Approves a pipeline and returns its state.</summary>
-public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ApprovePipelineCommand(ApprovePipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Task to force-close, the actor id, and an optional reason.</summary>
 public record ForceClosePipelineRequest(Guid TaskId, string ActorId, string? Reason = null);
