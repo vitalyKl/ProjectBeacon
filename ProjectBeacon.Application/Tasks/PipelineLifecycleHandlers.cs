@@ -111,6 +111,15 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (selectedDeviceId is null)
             return false;
 
+        var syncIsInProgress = await db.WorkstationCommands.AsNoTracking()
+            .AnyAsync(command => command.ProjectId == projectId
+                && command.DeviceId == selectedDeviceId.Value
+                && command.Kind == WorkstationCommandKind.GitSync
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running), ct);
+        if (syncIsInProgress)
+            return true;
+
         var resultJson = await db.WorkstationCommands.AsNoTracking()
             .Where(command => command.ProjectId == projectId
                 && command.DeviceId == selectedDeviceId.Value
