@@ -441,12 +441,15 @@ public sealed class ApiTokenAuthMiddleware
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
-            return method == HttpMethods.Post
-                && segments.Length == 5
-                && segments[1] == "tasks"
-                && GuidSegmentEquals(segments, 2, scopedTaskId)
-                && segments[3] == "pipeline"
-                && segments[4] == "verdict";
+            if (method != HttpMethods.Post
+                || segments.Length < 5
+                || segments[1] != "tasks"
+                || !GuidSegmentEquals(segments, 2, scopedTaskId)
+                || segments[3] != "pipeline")
+                return false;
+
+            return (segments.Length == 5 && segments[4] == "verdict")
+                || (segments.Length == 6 && segments[4] == "review" && segments[5] == "check");
         }
 
         return false;
