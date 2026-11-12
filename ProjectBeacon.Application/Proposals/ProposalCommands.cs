@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Application.Audit;
+using Application.Agents;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
@@ -651,10 +652,18 @@ public sealed class CreateProposalHandler : ICommandHandler<CreateProposalComman
         string? authorModel = null;
         if (session.ModelBackendId is { } modelBackendId && command.Actor.UserId is { } modelOwnerId)
         {
-            authorModel = await db.LocalModelBackends
-                .Where(model => model.Id == modelBackendId && model.UserId == modelOwnerId)
-                .Select(model => model.Name)
+            var model = await db.LocalModelBackends
+                .Where(candidate => candidate.Id == modelBackendId && candidate.UserId == modelOwnerId)
+                .Select(candidate => new
+                {
+                    candidate.BackendType,
+                    candidate.Name,
+                    candidate.ProviderModelId
+                })
                 .FirstOrDefaultAsync(ct);
+            if (model is not null)
+                authorModel = ChatModelSelection.ResolveBackendModelId(
+                    model.BackendType, model.Name, model.ProviderModelId);
         }
 
         var taskExists = await db.Tasks.AnyAsync(task =>
