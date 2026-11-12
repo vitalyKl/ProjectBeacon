@@ -41,7 +41,7 @@ public sealed class ConstraintHandlerTests : IDisposable
         var request = new CreateConstraintRequest(_projectId, "Agents may only propose constraints", ConstraintKind.Must);
 
         var first = await handler.HandleProposalAsync(request, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
-        var retry = await handler.HandleProposalAsync(request, TestContext.Current.CancellationToken);
+        var retry = await handler.HandleProposalAsync(request, TestActorFactory.AdminFor(_projectId), TestContext.Current.CancellationToken);
 
         Assert.True(first.Success, first.Error);
         Assert.True(retry.Success, retry.Error);
