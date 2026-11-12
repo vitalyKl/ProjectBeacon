@@ -49,7 +49,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", "Build a great product");
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -67,7 +67,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals " + new string('x', 8000), "Build something " + new string('y', 8000));
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 40, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 40, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -90,7 +90,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("architecture", "Architecture", "Clean architecture");
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 15, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 15, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -112,7 +112,7 @@ public sealed class CompileBriefTests : IDisposable
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -126,7 +126,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", "Test goals");
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -146,10 +146,10 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", "Consistent test");
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command1 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command1 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
         var result1 = await handler.HandleAsync(command1, TestContext.Current.CancellationToken);
 
-        var command2 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command2 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
         var result2 = await handler.HandleAsync(command2, TestContext.Current.CancellationToken);
 
         Assert.Equal(result1.Value!.CompiledHash, result2.Value!.CompiledHash);
@@ -170,7 +170,7 @@ public sealed class CompileBriefTests : IDisposable
             null,
             null,
             ContextSource.Native,
-            null));
+            null), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -191,21 +191,21 @@ public sealed class CompileBriefTests : IDisposable
             _projectId, "Goals", body, "goals", ContextScopeType.Project,
             null, null, null, null, ContextSource.Native, "task/123"));
 
-        var created = await handler.HandleDraftAsync(Command("Initial draft"), "subtask-one",
+        var created = await handler.HandleDraftAsync(Command("Initial draft"), "subtask-one", TestActorFactory.AdminFor(_projectId),
             TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal(ContextReviewState.NeedsReview, created.Value!.ReviewState);
         Assert.Equal("agent", created.Value.UpdatedByType);
         Assert.Equal("subtask-one", created.Value.UpdatedById);
 
-        var retry = await handler.HandleDraftAsync(Command("Updated draft"), "subtask-one",
+        var retry = await handler.HandleDraftAsync(Command("Updated draft"), "subtask-one", TestActorFactory.AdminFor(_projectId),
             TestContext.Current.CancellationToken);
         Assert.True(retry.Success, retry.Error);
         Assert.Equal(created.Value.Id, retry.Value!.Id);
         Assert.Equal("Updated draft", retry.Value.BodyMarkdown);
         Assert.Equal(ContextReviewState.NeedsReview, retry.Value.ReviewState);
 
-        var otherAuthor = await handler.HandleDraftAsync(Command("Overwrite attempt"), "subtask-two",
+        var otherAuthor = await handler.HandleDraftAsync(Command("Overwrite attempt"), "subtask-two", TestActorFactory.AdminFor(_projectId),
             TestContext.Current.CancellationToken);
         Assert.False(otherAuthor.Success);
         Assert.Equal(ErrorKind.Forbidden, otherAuthor.Kind);
@@ -229,7 +229,7 @@ public sealed class CompileBriefTests : IDisposable
             null,
             null,
             ContextSource.Native,
-            null)), TestContext.Current.CancellationToken);
+            null), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         var updateCommand = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId,
@@ -242,7 +242,7 @@ public sealed class CompileBriefTests : IDisposable
             null,
             null,
             ContextSource.Native,
-            null));
+            null), TestActorFactory.AdminFor(_projectId));
 
         var updateResult = await upsertHandler.HandleAsync(updateCommand, TestContext.Current.CancellationToken);
 
@@ -256,13 +256,13 @@ public sealed class CompileBriefTests : IDisposable
         var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
-            _projectId, "Goals", "Text 1", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)), TestContext.Current.CancellationToken);
+            _projectId, "Goals", "Text 1", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
-            _projectId, "Architecture", "Text 2", "architecture", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)), TestContext.Current.CancellationToken);
+            _projectId, "Architecture", "Text 2", "architecture", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         var listHandler = new ListContextNodesHandler(HandlerSqlite.Factory(_connection));
-        var command = new ListContextNodesCommand(new ListContextNodesRequest(_projectId));
+        var command = new ListContextNodesCommand(new ListContextNodesRequest(_projectId), TestActorFactory.AdminFor(_projectId));
 
         var result = await listHandler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -276,10 +276,10 @@ public sealed class CompileBriefTests : IDisposable
         var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         var createResult = await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
-            _projectId, "Goals", "Text", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)), TestContext.Current.CancellationToken);
+            _projectId, "Goals", "Text", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         var deleteHandler = new DeleteContextNodeHandler(HandlerSqlite.Factory(_connection));
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value!.Id));
+        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value!.Id), TestActorFactory.AdminFor(_projectId));
 
         var result = await deleteHandler.HandleAsync(command, TestContext.Current.CancellationToken);
 
@@ -330,7 +330,7 @@ public sealed class CompileBriefTests : IDisposable
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
-            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)), TestContext.Current.CancellationToken);
+            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Contains("SQLite tests are not proof", result.Value!.BriefMarkdown);
@@ -348,7 +348,7 @@ public sealed class CompileBriefTests : IDisposable
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
-            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)), TestContext.Current.CancellationToken);
+            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Contains("conflicting constraints", result.Value!.BriefMarkdown);
@@ -368,7 +368,7 @@ public sealed class CompileBriefTests : IDisposable
 
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
-            new CompileBriefRequest(_projectId, null, null, task.Id, 50, false, false, false)), TestContext.Current.CancellationToken);
+            new CompileBriefRequest(_projectId, null, null, task.Id, 50, false, false, false), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Contains("Keep never-drop sections", result.Value!.BriefMarkdown);
@@ -382,7 +382,7 @@ public sealed class CompileBriefTests : IDisposable
     {
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
-            new CompileBriefRequest(_projectId, Guid.NewGuid(), null, null, 8000, false, false, false)), TestContext.Current.CancellationToken);
+            new CompileBriefRequest(_projectId, Guid.NewGuid(), null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.DoesNotContain("## Tree", result.Value!.BriefMarkdown);
@@ -398,7 +398,7 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(
                 _projectId, null, null, null, 8000, false, true, true,
                 TreeCapsule: "src/\n  App.cs",
-                ChangedScope: "src/App.cs")), TestContext.Current.CancellationToken);
+                ChangedScope: "src/App.cs"), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Contains("src/\n  App.cs", result.Value!.BriefMarkdown);
@@ -415,7 +415,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", "x");
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
-            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)), TestContext.Current.CancellationToken);
+            new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var stored = await _db.ContextRevisions.FirstAsync(r => r.ProjectId == _projectId, TestContext.Current.CancellationToken);
@@ -476,7 +476,7 @@ public sealed class CompileBriefTests : IDisposable
     public async Task CompileBrief_ToolsSection_NamesIndexTools()
     {
         var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
-        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false), TestActorFactory.AdminFor(_projectId));
 
         var result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
