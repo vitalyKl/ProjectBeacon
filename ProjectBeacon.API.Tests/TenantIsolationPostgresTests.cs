@@ -84,7 +84,6 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     {
         _postgres.RequirePostgres();
 
-        Guid orgId;
         Guid projectId;
         Guid userId;
         Guid sectionId;
@@ -123,7 +122,6 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
             seed.ContextSections.AddRange(section, unrelatedSection);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            orgId = org.Id;
             projectId = project.Id;
             userId = user.Id;
             sectionId = section.Id;
