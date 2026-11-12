@@ -265,10 +265,11 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId mismatch.");
 
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
+        var actorId = actor.UserId?.ToString() ?? actor.TokenId?.ToString() ?? string.Empty;
 
-        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actor.UserId!.Value.ToString(), body.Reason)), ct);
+        var result = await handler.HandleAsync(
+            new ForceClosePipelineCommand(
+                new ForceClosePipelineRequest(body.TaskId, actorId, body.Reason), actor), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
