@@ -63,8 +63,8 @@ public static class CurrentProjectLookup
         }
 
         var projects = db.Projects.IgnoreQueryFilters().AsQueryable();
-        if (preferredOrgId is { } orgId)
-            projects = projects.Where(project => project.OrgId == orgId);
+        if (preferredOrgId is { } selectedOrgId)
+            projects = projects.Where(project => project.OrgId == selectedOrgId);
 
         var project = await projects
             .OrderBy(project => project.CreatedAt)
