@@ -1102,6 +1102,7 @@ else
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                await ReloadPipeline();
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
@@ -1138,6 +1139,7 @@ else
             if (!queued.Success || queued.Value is null)
             {
                 Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                await ReloadPipeline(ct);
                 return;
             }
 
