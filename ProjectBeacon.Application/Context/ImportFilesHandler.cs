@@ -33,7 +33,8 @@ public class ImportFilesHandler
 
         foreach (var file in command.Files)
         {
-            var contextSections = ParseMarkdownFile(command.ProjectId, file.FileName, file.Content);
+            var contextSections = ParseMarkdownFile(
+                command.ProjectId, file.FileName, file.Content, file.SourcePath);
 
             foreach (var section in contextSections)
             {
@@ -125,7 +126,11 @@ public class ImportFilesHandler
         return persisted.Any(version => stagedRevisions.Contains((version.TargetId, version.Revision)));
     }
 
-    private static IList<ContextSection> ParseMarkdownFile(Guid projectId, string fileName, string content)
+    private static IList<ContextSection> ParseMarkdownFile(
+        Guid projectId,
+        string fileName,
+        string content,
+        string sourcePath)
     {
         var sections = new List<ContextSection>();
 
@@ -150,7 +155,7 @@ public class ImportFilesHandler
             key: null,
             ordinal: 0,
             source: source,
-            sourcePath: fileName);
+            sourcePath: sourcePath);
 
         sections.Add(section);
         return sections;
