@@ -1240,11 +1240,17 @@ else
             }
             else if (result.ReasonCode is { } reason)
             {
-                Snackbar.Add(L["GitSyncReason" + reason].Value, Severity.Warning);
+                var message = L["GitSyncReason" + reason].Value;
+                if (!string.IsNullOrWhiteSpace(result.Stderr))
+                    message += Environment.NewLine + result.Stderr;
+                Snackbar.Add(message, Severity.Warning);
             }
             else
             {
-                Snackbar.Add(L["GitSyncOutcomeFailed"].Value, Severity.Warning);
+                var message = L["GitSyncOutcomeFailed"].Value;
+                if (!string.IsNullOrWhiteSpace(result.Stderr))
+                    message += Environment.NewLine + result.Stderr;
+                Snackbar.Add(message, Severity.Warning);
             }
         }
 
