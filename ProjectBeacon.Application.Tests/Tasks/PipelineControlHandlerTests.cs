@@ -19,7 +19,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
         var plannerLaunch = await new LaunchSessionHandler(factory)
             .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(planner.Value!.Id)), TestContext.Current.CancellationToken);
@@ -64,7 +64,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
 
         await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var subtask = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
@@ -96,7 +96,7 @@ public sealed partial class PipelineHandlerTests
         var (projectId, task) = await SeedTaskAsync("Restart pipeline");
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var planner = await new StartPipelineHandler(factory, new FakeSpawner())
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
 
         var subtask = await new CreateSubtaskHandler(factory)
@@ -141,7 +141,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
         var launch = await new LaunchSessionHandler(factory)
             .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(planner.Value!.Id)), TestContext.Current.CancellationToken);

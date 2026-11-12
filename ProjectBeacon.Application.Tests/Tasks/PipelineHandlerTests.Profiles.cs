@@ -16,7 +16,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
 
@@ -27,18 +27,18 @@ public sealed partial class PipelineHandlerTests
 
         var reported = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
-                task.Id, created.Value!.Id, string.Empty, "Initial implementation completed")),
+                task.Id, created.Value!.Id, string.Empty, "Initial implementation completed"), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(reported.Success, reported.Error);
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)),
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
 
         var verdict = await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(
-                task.Id, ReviewVerdictKind.ReopenSubtask, "Please fix the reported edge case.", created.Value.Id)),
+                task.Id, ReviewVerdictKind.ReopenSubtask, "Please fix the reported edge case.", created.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.ReopenedForRevision, verdict.Value!.Stage);
@@ -69,7 +69,7 @@ public sealed partial class PipelineHandlerTests
         var (projectId, task) = await SeedTaskAsync("Create profile-scoped subtasks");
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var started = await new StartPipelineHandler(factory, new FakeSpawner())
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(started.Success, started.Error);
 
