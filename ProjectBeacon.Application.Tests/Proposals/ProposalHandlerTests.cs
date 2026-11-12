@@ -271,6 +271,79 @@ public sealed class ProposalHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_ExpiredRowsBeyondMaterializationBatchDoNotConsumePendingQuota()
+    {
+        var now = DateTime.UtcNow;
+        var expired = Enumerable.Range(0, 501)
+            .Select(index => Proposal.Create(
+                _projectId,
+                null,
+                null,
+                null,
+                ContentTargetKind.ProjectDescription,
+                Guid.NewGuid(),
+                ProposalOperation.Update,
+                1,
+                new string('a', 64),
+                """{"description":"Expired proposal"}""",
+                "Expired proposal awaiting materialization.",
+                ProposalAuthorKind.Human,
+                _userId,
+                null,
+                null,
+                "Human",
+                $"expired-quota-seed-{index}",
+                now.AddDays(-31)))
+            .ToArray();
+        var active = Enumerable.Range(0, 199)
+            .Select(index => Proposal.Create(
+                _projectId,
+                null,
+                null,
+                null,
+                ContentTargetKind.ProjectDescription,
+                Guid.NewGuid(),
+                ProposalOperation.Update,
+                1,
+                new string('b', 64),
+                """{"description":"Active proposal"}""",
+                "Active pending proposal.",
+                ProposalAuthorKind.Human,
+                _userId,
+                null,
+                null,
+                "Human",
+                $"active-quota-seed-{index}",
+                now))
+            .ToArray();
+        _db.Proposals.AddRange(expired);
+        _db.Proposals.AddRange(active);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(
+                new CreateProposalCommand(
+                    _projectId,
+                    Request() with { IdempotencyKey = "new-after-expired-quota-seed" },
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(ProposalStatus.Pending, result.Value!.Status);
+        Assert.Equal(200, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId
+                && item.Status == ProposalStatus.Pending
+                && item.ExpiresAt > DateTime.UtcNow,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(1, await _db.Proposals.CountAsync(
+            item => item.ProjectId == _projectId
+                && item.Status == ProposalStatus.Pending
+                && item.ExpiresAt <= DateTime.UtcNow,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task IdempotencyKeyCannotBeUsedToReadAnotherAuthorsProposal()
     {
         var factory = HandlerSqlite.Factory(_connection);
