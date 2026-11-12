@@ -59,7 +59,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                     $"Unknown subtask profile '{profileKey}'. Available profiles: {string.Join(", ", BuiltInAgentProfiles.All.Select(p => p.Key))}.");
 
             AgentProfile? customProfile = null;
-            if (command.Actor?.UserId is { } profileOwnerId)
+            if (command.Actor.UserId is { } profileOwnerId)
                 customProfile = await db.AgentProfiles.FirstOrDefaultAsync(
                     profileRow => profileRow.UserId == profileOwnerId && profileRow.Key == profileKey, ct);
             profile = BuiltInAgentProfiles.ApplyOverride(profile, customProfile)!;
