@@ -84,7 +84,7 @@ internal static class PipelineExecutionAuthorization
         if (actor.IsWorker)
             return CanDispatchInternally(actor, task);
 
-        // The active Planner may launch Actor work or the Review session it just created.
+        // The active Planner may auto-launch only the Review session it just created.
         // Actor and Reviewer harness tokens cannot launch other sessions.
         if (actor.IsApiToken && actor.PipelineRole is not null)
         {
