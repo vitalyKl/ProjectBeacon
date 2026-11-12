@@ -181,9 +181,11 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
 
-            var permission = await PipelineExecutionAuthorization.CanDriveAsync(
-                db, _authorization, command.Actor, task,
-                PipelineRole.Planner, requiredSubtaskId: null, ct);
+            var permission = command.Actor.IsWorker
+                ? PipelineExecutionAuthorization.CanDispatchInternally(command.Actor, task)
+                : await PipelineExecutionAuthorization.CanDriveAsync(
+                    db, _authorization, command.Actor, task,
+                    PipelineRole.Planner, requiredSubtaskId: null, ct);
             if (!permission.Success)
                 return Result.Failure<PipelineSessionDto>(permission);
 
