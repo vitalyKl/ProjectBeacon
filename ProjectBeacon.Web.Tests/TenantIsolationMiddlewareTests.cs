@@ -357,6 +357,78 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task OrganizationAdminProjectClaim_IsHonoredWithoutDirectProjectMembership()
+    {
+        var org = Org.Create("Org claim scope", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Org claim project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-claim-admin", "org-claim-admin@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Admin));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scoped = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false"),
+                new Claim("project_id", project.Id.ToString("D"))
+            ], "Cookies"))
+        };
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(project.Id, scoped);
+    }
+
+    [Fact]
+    public async Task OrganizationOwnerWithoutProjectClaim_UsesManagedProjectAsTenant()
+    {
+        var org = Org.Create("Org default scope", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Org default project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-default-owner", "org-default-owner@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scoped = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false"),
+                new Claim("org_id", org.Id.ToString("D"))
+            ], "Cookies"))
+        };
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(project.Id, scoped);
+    }
+
+    [Fact]
     public async Task ForeignRouteProjectId_IgnoredForNonMember()
     {
         var org = Org.Create("Org", null);
