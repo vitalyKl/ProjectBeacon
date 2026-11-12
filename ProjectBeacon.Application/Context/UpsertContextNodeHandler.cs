@@ -84,7 +84,11 @@ public class UpsertContextNodeHandler
 
             var contentChanged =
                 !string.Equals(existing.Title, command.Request.Title, StringComparison.Ordinal)
-                || !string.Equals(existing.BodyMarkdown, command.Request.BodyMarkdown, StringComparison.Ordinal);
+                || !string.Equals(existing.BodyMarkdown, command.Request.BodyMarkdown, StringComparison.Ordinal)
+                || (isDraft
+                    && (existing.Source != ContextSource.Native
+                        || !string.Equals(existing.SourcePath, command.Request.SourcePath, StringComparison.Ordinal)
+                        || existing.ReviewState != ContextReviewState.NeedsReview));
             if (contentChanged
                 && command.Request.ExpectedRevision != existing.Revision)
                 return Result.Failure<ContextSectionDto>(
