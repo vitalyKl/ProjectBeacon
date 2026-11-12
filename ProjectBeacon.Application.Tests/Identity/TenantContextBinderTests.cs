@@ -209,6 +209,36 @@ public sealed class TenantContextBinderTests : IDisposable
     }
 
     [Fact]
+    public async Task BindUserAsync_OrganizationClaimSelectsManagedProjectInThatOrganization()
+    {
+        var firstOrg = Org.Create("First managed org", null);
+        var selectedOrg = Org.Create("Selected managed org", null);
+        _db.Orgs.AddRange(firstOrg, selectedOrg);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var firstProject = Project.Create("First managed project", null, firstOrg.Id);
+        var selectedProject = Project.Create("Selected managed project", null, selectedOrg.Id);
+        _db.Projects.AddRange(firstProject, selectedProject);
+        var user = User.Create("multi-org-owner", "multi-org-owner@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.AddRange(
+            OrgMember.Create(firstOrg.Id, user.Id, MemberRole.Admin),
+            OrgMember.Create(selectedOrg.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(
+            Actor(user.Id, isAdmin: false, orgClaim: selectedOrg.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(selectedProject.Id, tenant.ProjectId);
+        Assert.Equal(selectedOrg.Id, tenant.OrgId);
+    }
+
+    [Fact]
     public async Task BindUserAsync_AlreadyAssigned_DoesNotOverride()
     {
         var existing = Guid.NewGuid();
