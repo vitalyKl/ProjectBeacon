@@ -82,7 +82,9 @@ internal static class PipelineExecutionAuthorization
             return Result.Forbidden();
 
         if (actor.IsWorker)
-            return CanDispatchInternally(actor, task);
+            return session.Role is PipelineRole.Planner or PipelineRole.Actor
+                ? CanDispatchInternally(actor, task)
+                : Result.Forbidden();
 
         // The active Planner may auto-launch only the Review session it just created.
         // Actor and Reviewer harness tokens cannot launch other sessions.
