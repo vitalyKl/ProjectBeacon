@@ -258,7 +258,10 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (!permission.Success)
             return Result.Failure<PipelineStateDto>(permission);
 
-        if (command.Actor.IsApiToken)
+        // Short-lived harness tokens are pinned to an execution role/task/session by
+        // ApiTokenAuthMiddleware. Manual project API tokens have no pipeline-role claims and
+        // authorize through their explicit SessionDrive capability and project binding above.
+        if (command.Actor.IsApiToken && command.Actor.PipelineRole is not null)
         {
             if (command.Actor.PipelineRole != PipelineRole.Review
                 || command.Actor.PipelineTaskId != task.Id
