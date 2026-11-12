@@ -262,6 +262,7 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         {
             if (command.Actor.PipelineRole != PipelineRole.Review
                 || command.Actor.PipelineTaskId != task.Id
+                || command.Actor.PipelineSubtaskId is not null
                 || command.Actor.PipelineSessionId is not { } scopedSessionId)
                 return Result.Failure<PipelineStateDto>("Forbidden.", ErrorKind.Forbidden);
 
