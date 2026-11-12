@@ -264,7 +264,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task ForceClose_WorkerToken_ClosesWithoutReasonMarker()
+    public async Task ForceClose_ScopedAdminToken_ClosesWithoutReasonMarker()
     {
         var done = await SeedDoneSubtaskAsync();
         var spawner = new FakeSpawner();
@@ -275,17 +275,15 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new RecordReviewVerdictCommand(
                 new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "stuck", done.SubtaskId)), TestContext.Current.CancellationToken);
 
-        using (new EnvGuard(WorkerTokenEnv, "bcn_test_worker_token"))
-        {
-            var result = await new ForceClosePipelineHandler(factory)
-                .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString()),
-                    new ActorContext(ActorType.ApiToken, null, false, Guid.NewGuid(), null,
-                        done.ProjectId, null, ApiTokenCapability.Admin)), TestContext.Current.CancellationToken);
-            Assert.True(result.Success, result.Error);
-            Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
-            Assert.Equal("force-closed without review", result.Value.ReviewNotes);
-        }
+        var tokenId = Guid.NewGuid();
+        var result = await new ForceClosePipelineHandler(factory)
+            .HandleAsync(new ForceClosePipelineCommand(
+                new ForceClosePipelineRequest(done.Task.Id, tokenId.ToString()),
+                new ActorContext(ActorType.ApiToken, null, false, tokenId, null,
+                    done.ProjectId, null, ApiTokenCapability.Admin)), TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
+        Assert.Equal("force-closed without review", result.Value.ReviewNotes);
     }
     [Fact]
     public async Task LaunchSession_DoubleLaunch_Fails()
