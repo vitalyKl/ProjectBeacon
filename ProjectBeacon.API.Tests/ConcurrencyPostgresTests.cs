@@ -69,9 +69,6 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
-        var actor = new ActorContext(
-            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
-            projectId, null, ApiTokenCapability.SessionDrive);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
@@ -534,10 +531,14 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            projectId = project.Id;
         }
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.SessionDrive);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
