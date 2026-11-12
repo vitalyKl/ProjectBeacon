@@ -34,13 +34,15 @@ public static class CurrentProjectLookup
                 orgId ??= await GetManagedProjectOrgIdAsync(db, userId, preferred, ct);
             }
 
-            if (orgId is { } claimedOrg)
+            if (orgId is { } claimedOrg
+                && (preferredOrgId is null || preferredOrgId == claimedOrg))
                 return (preferred, claimedOrg);
         }
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .Include(m => m.Project)
-            .Where(m => m.UserId == userId)
+            .Where(m => m.UserId == userId
+                && (preferredOrgId == null || m.Project.OrgId == preferredOrgId))
             .OrderBy(m => m.JoinedAt)
             .FirstOrDefaultAsync(ct);
         if (member is not null)
@@ -60,8 +62,12 @@ public static class CurrentProjectLookup
             return (managed?.Id, managed?.OrgId);
         }
 
-        var project = await db.Projects.IgnoreQueryFilters()
-            .OrderBy(p => p.CreatedAt)
+        var projects = db.Projects.IgnoreQueryFilters().AsQueryable();
+        if (preferredOrgId is { } orgId)
+            projects = projects.Where(project => project.OrgId == orgId);
+
+        var project = await projects
+            .OrderBy(project => project.CreatedAt)
             .FirstOrDefaultAsync(ct);
         return (project?.Id, project?.OrgId);
     }
