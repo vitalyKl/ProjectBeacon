@@ -279,6 +279,83 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         Assert.Equal(Guid.Empty, scoped);
     }
 
+    [Theory]
+    [InlineData(MemberRole.Owner)]
+    [InlineData(MemberRole.Admin)]
+    public async Task OrganizationOwnerOrAdmin_CanEnterProjectTenantWithoutDirectMembership(MemberRole role)
+    {
+        var org = Org.Create("Inherited access org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Inherited access project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-manager-" + role, $"org-manager-{role}@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, role));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scoped = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.RouteValues["projectId"] = project.Id.ToString("D");
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(project.Id, scoped);
+        Assert.False(await _db.ProjectMembers.IgnoreQueryFilters()
+            .AnyAsync(member => member.ProjectId == project.Id && member.UserId == user.Id,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task OrganizationMemberWithoutProjectMembership_CannotEnterProjectTenant()
+    {
+        var org = Org.Create("Org member isolation", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var project = Project.Create("Org member project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("org-member-only", "org-member-only@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Guid? scoped = null;
+        var middleware = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.RouteValues["projectId"] = project.Id.ToString("D");
+
+        await middleware.InvokeAsync(http, _db);
+
+        Assert.Equal(Guid.Empty, scoped);
+    }
+
     [Fact]
     public async Task ForeignRouteProjectId_IgnoredForNonMember()
     {
