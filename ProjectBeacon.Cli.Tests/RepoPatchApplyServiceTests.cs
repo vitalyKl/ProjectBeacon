@@ -102,6 +102,42 @@ public sealed class RepoPatchApplyServiceTests
     }
 
     [Fact]
+    public async Task Execute_WhenCancelledAfterGitApply_RestoresOriginalBytes()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
+        const string path = "docs/guide.md";
+        const string before = "Before cancellation.\\n";
+        const string after = "Applied before cancellation.\\n";
+        await repo.WriteCommittedAsync(path, before);
+        var patch = await repo.CreatePatchAsync(path, after);
+        var payload = Payload(repo.ProjectId, patch, path, before, after);
+        using var cancellation = new CancellationTokenSource();
+        var verificationReached = false;
+
+        var execution = _service.ExecuteAsync(
+            repo.ProjectRoot,
+            repo.ProjectId,
+            payload,
+            cancellation.Token,
+            (activity, _) =>
+            {
+                if (activity.Contains(
+                        "Documentation patch applied; verifying result hashes.",
+                        StringComparison.Ordinal))
+                {
+                    verificationReached = true;
+                    cancellation.Cancel();
+                }
+                return Task.CompletedTask;
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await execution);
+
+        Assert.True(verificationReached);
+        Assert.Equal(before, await File.ReadAllTextAsync(Path.Combine(repo.ProjectRoot, path)));
+    }
+
+    [Fact]
     public async Task Execute_ResolvesGitPathAgainstNestedProjectRuntime()
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: true);
@@ -197,9 +233,11 @@ public sealed class RepoPatchApplyServiceTests
             CancellationToken.None,
             (activity, _) =>
             {
-                Assert.Contains("Waiting for the current agent session", activity, StringComparison.Ordinal);
-                Interlocked.Increment(ref progressReports);
-                waiting.TrySetResult(true);
+                if (activity.Contains("Waiting for the current agent session", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref progressReports);
+                    waiting.TrySetResult(true);
+                }
                 return Task.CompletedTask;
             });
 
