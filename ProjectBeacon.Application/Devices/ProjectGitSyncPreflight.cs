@@ -128,7 +128,6 @@ internal static class ProjectGitSyncPreflight
 
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             options.Converters.Add(new JsonStringEnumConverter());
-            options.Converters.Add(new JsonStringEnumConverter<GitSyncRefusalCode>());
             var parsed = JsonSerializer.Deserialize<GitSyncResultDto>(root.GetRawText(), options);
             if (parsed is null)
                 return false;
