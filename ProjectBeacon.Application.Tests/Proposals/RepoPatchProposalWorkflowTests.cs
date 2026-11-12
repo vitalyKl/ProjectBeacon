@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
-using Application.Proposals;
 using Application.Persistence;
 using Application.Proposals;
 using Application.Tasks;
