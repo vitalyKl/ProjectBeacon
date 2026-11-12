@@ -71,7 +71,7 @@ public sealed class TaskKindHandlerTests : IDisposable
         Assert.Equal(new[] { "understand", "do", "check" }, phases.Value!.Select(p => p.Key).ToList());
 
         await new StartPipelineHandler(factory, new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog()))
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id), PipelineTestActor.AdminFor(created.Value.ProjectId)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory).HandleAsync(
             new CreateSubtaskCommand(new CreateSubtaskRequest(created.Value.Id, "Review the settings screen"), PipelineTestActor.AdminFor(created.Value.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);

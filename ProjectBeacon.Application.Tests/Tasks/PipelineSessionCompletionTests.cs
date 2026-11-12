@@ -111,7 +111,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
         var first = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "First actor work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);

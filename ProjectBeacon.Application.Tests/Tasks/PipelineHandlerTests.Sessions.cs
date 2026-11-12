@@ -46,7 +46,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
         Assert.Equal(PipelineRole.Planner, start.Value!.Role);
         Assert.Equal(SessionStatus.Ready, start.Value.Status);
@@ -72,7 +72,7 @@ public sealed partial class PipelineHandlerTests
         Assert.NotNull(launched1.Value.LaunchedAt);
 
         var res1 = await new ReportSubtaskResultHandler(factory)
-            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub1.Value.Id, "diff://sub1", "Data collected")), TestContext.Current.CancellationToken);
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub1.Value.Id, "diff://sub1", "Data collected"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(res1.Success, res1.Error);
         Assert.Contains(res1.Value!.Subtasks, s => s.Id == sub1.Value!.Id && s.Status == SubtaskStatus.Done);
         Assert.Contains(res1.Value.Sessions, s => s.Id == actor1.Value!.Id && s.Status == SessionStatus.Closed);
@@ -81,16 +81,16 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub2.Value!.Id)), TestContext.Current.CancellationToken);
         Assert.True(actor2.Success, actor2.Error);
         var res2 = await new ReportSubtaskResultHandler(factory)
-            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub2.Value!.Id, "diff://sub2", "Charts rendered")), TestContext.Current.CancellationToken);
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub2.Value!.Id, "diff://sub2", "Charts rendered"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(res2.Success, res2.Error);
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
         Assert.Equal(PipelineRole.Review, review.Value!.Role);
 
         var verdict = await new RecordReviewVerdictHandler(factory)
-            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "Looks solid")), TestContext.Current.CancellationToken);
+            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "Looks solid"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
         Assert.Equal(TaskItemStatus.InProgress, verdict.Value.Status);
@@ -122,7 +122,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
         Assert.Contains("PipelineProject", start.Value!.PromptContext);
         Assert.Contains("Secret task title", start.Value.PromptContext);
@@ -144,11 +144,11 @@ public sealed partial class PipelineHandlerTests
         Assert.DoesNotContain("PipelineProject", actorPrompt);
 
         var reported = await new ReportSubtaskResultHandler(factory)
-            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value.Id, "diff://a", "Done it")), TestContext.Current.CancellationToken);
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value.Id, "diff://a", "Done it"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(reported.Success, reported.Error);
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
         var reviewPrompt = review.Value!.PromptContext;
         Assert.Contains("Secret task title", reviewPrompt);
@@ -172,7 +172,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
         Assert.Null(start.Value!.ModelBackendId);
         Assert.Null(start.Value.LaunchSpec);
@@ -204,7 +204,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
@@ -223,7 +223,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var spawner = new FakeSpawner(backendId);
         var started = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(started.Success, started.Error);
 
         using (TenantScope.EnterUnscoped())
@@ -266,7 +266,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
         var subtask = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);

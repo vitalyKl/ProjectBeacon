@@ -19,7 +19,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
 
         var noTenant = new StartPipelineHandler(HandlerSqlite.Factory(_connection), spawner);
-        var nullScope = await noTenant.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var nullScope = await noTenant.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(nullScope.Success);
         Assert.Equal("Task not found.", nullScope.Error);
 
@@ -45,7 +45,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal("Task not found.", getForeign.Error);
 
         var startForeign = await new StartPipelineHandler(factoryA, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(taskB.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(taskB.Id), PipelineTestActor.AdminFor(taskB.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(startForeign.Success);
         Assert.Equal("Task not found.", startForeign.Error);
 
@@ -61,7 +61,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
 
         var sub1 = await new CreateSubtaskHandler(factory)
@@ -103,12 +103,12 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
 
         var first = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
         Assert.Equal(PipelineRole.Review, first.Value!.Role);
 
         var second = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(second.Success);
         Assert.Equal("Cannot start review in stage Reviewing.", second.Error);
     }
@@ -121,17 +121,17 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
 
         var approved = await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(
-                new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.Approve, "ok")), TestContext.Current.CancellationToken);
+                new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.Approve, "ok"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(approved.Success, approved.Error);
         Assert.Equal(TaskPipelineStage.Approved, approved.Value!.Stage);
 
         var late = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(late.Success);
         Assert.Equal("Cannot start review in stage Approved.", late.Error);
     }
@@ -143,7 +143,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
 
         var sub1 = await new CreateSubtaskHandler(factory)
@@ -155,16 +155,16 @@ public sealed partial class PipelineHandlerTests
 
         var reported = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(
-                new ReportSubtaskResultRequest(task.Id, sub1.Value!.Id, "diff://ok", "all good")), TestContext.Current.CancellationToken);
+                new ReportSubtaskResultRequest(task.Id, sub1.Value!.Id, "diff://ok", "all good"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(reported.Success, reported.Error);
 
         var failed = await new FailSubtaskHandler(factory)
             .HandleAsync(new FailSubtaskCommand(
-                new FailSubtaskRequest(task.Id, sub2.Value!.Id, "timed out")), TestContext.Current.CancellationToken);
+                new FailSubtaskRequest(task.Id, sub2.Value!.Id, "timed out"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(failed.Success, failed.Error);
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
         var prompt = review.Value!.PromptContext;
         Assert.Contains($"[DONE] subtask {sub1.Value.Id}", prompt);
