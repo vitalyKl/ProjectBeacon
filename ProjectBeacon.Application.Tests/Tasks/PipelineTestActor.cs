@@ -9,13 +9,13 @@ using Domain.Enums;
 /// </summary>
 internal static class PipelineTestActor
 {
-    public static ActorContext Admin => new(
+    public static ActorContext AdminFor(Guid projectId) => new(
         ActorType.Human,
         Guid.NewGuid(),
         IsAdmin: true,
         TokenId: null,
         DeviceId: null,
-        ProjectId: null,
+        ProjectId: projectId,
         OrgId: null,
         Capabilities: ApiTokenCapability.None);
 }
