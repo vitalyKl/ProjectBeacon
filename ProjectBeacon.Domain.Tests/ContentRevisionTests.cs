@@ -47,6 +47,26 @@ public sealed class ContentRevisionTests
     }
 
     [Fact]
+    public void ContextSection_DraftSourcePathChangesCreateANewRevision()
+    {
+        var section = ContextSection.Create(
+            "agent_draft", "Draft", "Same body", Guid.NewGuid(), ContextScopeType.Project,
+            sourcePath: "docs/first.md");
+
+        section.UpdateDraft("Draft", "Same body", "docs/renamed.md", "actor-1");
+        Assert.Equal(2, section.Revision);
+        Assert.Equal("docs/renamed.md", section.SourcePath);
+
+        // Replaying the same source identity is idempotent and creates no fake revision.
+        section.UpdateDraft("Draft", "Same body", "docs/renamed.md", "actor-1");
+        Assert.Equal(2, section.Revision);
+
+        // A simultaneous text + metadata change still increments only once.
+        section.UpdateDraft("Draft 2", "Updated body", "docs/final.md", "actor-1");
+        Assert.Equal(3, section.Revision);
+    }
+
+    [Fact]
     public void Decision_ContentAndLifecycleChangesIncrementRevision()
     {
         var decision = Decision.Create("Title", "Context", "Body", Guid.NewGuid());
