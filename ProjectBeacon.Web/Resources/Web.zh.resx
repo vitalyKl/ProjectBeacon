@@ -2601,7 +2601,7 @@ orthstar</value>
   <data name="GitSyncCheck" xml:space="preserve"><value>检查状态</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>同步</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>正在等待工作站完成 Git 操作…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。请刷新页面并重新检查仓库状态。</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。此页面将继续自动检查其状态。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>此项目没有连接支持 GitSync 的在线工作站。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>分支</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>上游</value></data>
