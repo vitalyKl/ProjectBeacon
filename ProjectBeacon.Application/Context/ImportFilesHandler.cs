@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -12,12 +13,23 @@ using Microsoft.EntityFrameworkCore;
 public class ImportFilesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ImportFilesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ImportFilesHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<int>> HandleAsync(ImportFilesCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Context, AuthAction.Create,
+            projectId: command.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<int>(permission);
+
         var createdCount = 0;
 
         foreach (var file in command.Files)
