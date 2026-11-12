@@ -163,8 +163,8 @@ public sealed class HarnessApiAuthorizationTests
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/review/check", _taskId));
         Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
-            WorkstationCommandKind.RunPipelineSession, PipelineRole.Review, Guid.NewGuid(), _taskId, null,
-            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/review/check"));
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Review, _projectId, _taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{Guid.NewGuid():D}/pipeline/review/check"));
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/approve", _taskId));
 
