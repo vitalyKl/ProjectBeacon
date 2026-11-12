@@ -60,13 +60,13 @@ public sealed partial class PipelineHandlerTests
         Assert.True(sub2.Success, sub2.Error);
 
         var actor1 = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub1.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub1.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor1.Success, actor1.Error);
         Assert.Equal(PipelineRole.Actor, actor1.Value!.Role);
         Assert.Equal(sub1.Value.Id, actor1.Value.SubtaskId);
 
         var launched1 = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(actor1.Value.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(actor1.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(launched1.Success, launched1.Error);
         Assert.Equal(SessionStatus.Active, launched1.Value!.Status);
         Assert.NotNull(launched1.Value.LaunchedAt);
@@ -78,7 +78,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Contains(res1.Value.Sessions, s => s.Id == actor1.Value!.Id && s.Status == SessionStatus.Closed);
 
         var actor2 = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub2.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub2.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor2.Success, actor2.Error);
         var res2 = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub2.Value!.Id, "diff://sub2", "Charts rendered"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
@@ -133,7 +133,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(sub.Success, sub.Error);
 
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         var actorPrompt = actor.Value!.PromptContext;
         Assert.Contains("Do the thing", actorPrompt);
@@ -181,7 +181,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         Assert.Equal(backend.Id, actor.Value!.ModelBackendId);
         Assert.Contains("--port 8123", actor.Value.LaunchSpec!);
@@ -209,7 +209,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         Assert.Equal(backend.Id, actor.Value!.ModelBackendId);
         Assert.Null(actor.Value.LaunchSpec);
@@ -235,7 +235,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var retried = await new RetryPipelineSessionHandler(factory, spawner)
-            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(started.Value!.Id)),
+            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(started.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
 
         Assert.True(retried.Success, retried.Error);
@@ -272,7 +272,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
 
         using (TenantScope.EnterUnscoped())
@@ -287,7 +287,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var retried = await new RetryPipelineSessionHandler(factory, spawner)
-            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(actor.Value!.Id)),
+            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(actor.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(retried.Success, retried.Error);
         Assert.Equal(PipelineRole.Actor, retried.Value!.Role);
