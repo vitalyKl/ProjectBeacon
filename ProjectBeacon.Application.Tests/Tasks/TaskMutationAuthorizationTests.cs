@@ -64,9 +64,19 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
         var stranger = new ActorContext(
             ActorType.Human, Guid.NewGuid(), false, null, null, null, null, ApiTokenCapability.None);
 
+        var update = await new UpdateTaskHandler(_factory, _authorization).HandleAsync(
+            new UpdateTaskCommand(new UpdateTaskRequest(
+                _taskId, "unauthorized title", "unauthorized description",
+                TaskPriority.Critical, TaskType.Feature, null, null), stranger),
+            TestContext.Current.CancellationToken);
         var status = await new ChangeTaskStatusHandler(_factory, _authorization).HandleAsync(
             new ChangeTaskStatusCommand(
                 new ChangeTaskStatusRequest(_taskId, TaskItemStatus.Todo), stranger),
+            TestContext.Current.CancellationToken);
+        var update = await new UpdateTaskHandler(_factory, _authorization).HandleAsync(
+            new UpdateTaskCommand(new UpdateTaskRequest(
+                _taskId, "member title", "member description",
+                TaskPriority.High, TaskType.Feature, null, null), actor),
             TestContext.Current.CancellationToken);
         var substage = await new ChangeSubStageHandler(_factory, _authorization).HandleAsync(
             new ChangeSubStageCommand(
@@ -81,6 +91,7 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
                 new AddReviewNotesRequest(_taskId, "unauthorized note"), stranger),
             TestContext.Current.CancellationToken);
 
+        Assert.False(update.Success);
         Assert.False(status.Success);
         Assert.False(substage.Success);
         Assert.False(dependencies.Success);
@@ -88,6 +99,7 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
 
         var task = await _db.Tasks.AsNoTracking().SingleAsync(
             item => item.Id == _taskId, TestContext.Current.CancellationToken);
+        Assert.Equal("Work", task.Title);
         Assert.Equal(TaskItemStatus.InProgress, task.Status);
         Assert.Null(task.ReviewNotes);
         Assert.Empty(await _db.TaskDependencies.AsNoTracking()
@@ -114,6 +126,8 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
                 new AddReviewNotesRequest(_taskId, "reviewed"), actor),
             TestContext.Current.CancellationToken);
 
+        Assert.True(update.Success, update.Error);
+        Assert.Equal("member title", update.Value!.Title);
         Assert.True(substage.Success, substage.Error);
         Assert.True(dependencies.Success, dependencies.Error);
         Assert.True(notes.Success, notes.Error);
@@ -134,6 +148,10 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
             null,
             ApiTokenCapability.TaskWrite);
 
+        var update = await new UpdateTaskHandler(_factory, _authorization).HandleAsync(
+            new UpdateTaskCommand(new UpdateTaskRequest(
+                _taskId, "forged title", null, TaskPriority.Low, TaskType.Task, null, null), token),
+            TestContext.Current.CancellationToken);
         var status = await new ChangeTaskStatusHandler(_factory, _authorization).HandleAsync(
             new ChangeTaskStatusCommand(
                 new ChangeTaskStatusRequest(_taskId, TaskItemStatus.Todo), token),
@@ -143,6 +161,7 @@ public sealed class TaskMutationAuthorizationTests : IDisposable
                 new AddReviewNotesRequest(_taskId, "forged project"), token),
             TestContext.Current.CancellationToken);
 
+        Assert.False(update.Success);
         Assert.False(status.Success);
         Assert.False(notes.Success);
     }
