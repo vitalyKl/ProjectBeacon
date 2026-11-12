@@ -73,13 +73,15 @@ public static class TaskEndpoints
     private static async Task<IResult> UpdateTask(
         Guid taskId,
         [FromBody] UpdateTaskRequest request,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request), ct);
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(
+            new UpdateTaskCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
