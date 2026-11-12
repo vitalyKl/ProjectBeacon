@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Application.Persistence;
 using Domain.Enums;
@@ -11,11 +12,10 @@ using Microsoft.EntityFrameworkCore;
 public sealed record ReplyPipelineFormRequest(
     Guid TaskId,
     Guid SessionId,
-    Guid UserId,
     string FormId,
     string AnswerJson);
 
-public sealed record ReplyPipelineFormCommand(ReplyPipelineFormRequest Request)
+public sealed record ReplyPipelineFormCommand(ReplyPipelineFormRequest Request, ActorContext Actor)
     : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>
@@ -39,10 +39,12 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
         CancellationToken ct = default)
     {
         var request = command.Request;
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId)
+            return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+
         var formId = request.FormId?.Trim() ?? string.Empty;
-        if (request.TaskId == Guid.Empty || request.SessionId == Guid.Empty
-            || request.UserId == Guid.Empty || formId.Length == 0)
-            return Result.Failure<PipelineSessionDto>("Task, session, user, and form identifiers are required.");
+        if (request.TaskId == Guid.Empty || request.SessionId == Guid.Empty || formId.Length == 0)
+            return Result.Failure<PipelineSessionDto>("Task, session, and form identifiers are required.");
 
         JsonElement answer;
         try
@@ -66,7 +68,7 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
             return Result.Failure<PipelineSessionDto>("This pipeline session is not waiting for an answer.", ErrorKind.Conflict);
 
         var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == session.ProjectId && m.UserId == request.UserId, ct);
+            .AnyAsync(m => m.ProjectId == session.ProjectId && m.UserId == userId, ct);
         if (!member)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
@@ -93,13 +95,13 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
             return Result.Failure<PipelineSessionDto>("Question already answered.", ErrorKind.Conflict);
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(d => d.Id == deviceId && d.UserId == request.UserId && d.RevokedAt == null, ct);
+            .FirstOrDefaultAsync(d => d.Id == deviceId && d.UserId == userId && d.RevokedAt == null, ct);
         if (device is null)
             return Result.Failure<PipelineSessionDto>("Workstation not found.");
 
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             deviceId,
-            request.UserId,
+            userId,
             WorkstationCommandKind.ChatReplyForm,
             JsonSerializer.Serialize(new { externalSessionId, formId, answerJson = answer.GetRawText() }),
             session.ProjectId)), ct);
@@ -127,7 +129,9 @@ public sealed record WaitingPipelineTaskDto(Guid TaskId, string TaskTitle, Guid 
 
 public sealed record ListWaitingPipelineTasksRequest(Guid UserId);
 
-public sealed record ListWaitingPipelineTasksCommand(ListWaitingPipelineTasksRequest Request)
+public sealed record ListWaitingPipelineTasksCommand(
+    ListWaitingPipelineTasksRequest Request,
+    ActorContext Actor)
     : ICommand<Result<IReadOnlyList<WaitingPipelineTaskDto>>>;
 
 /// <summary>Lists task pipeline sessions that currently need an answer from the signed-in user.</summary>
@@ -142,8 +146,11 @@ public sealed class ListWaitingPipelineTasksHandler
         ListWaitingPipelineTasksCommand command,
         CancellationToken ct = default)
     {
-        if (command.Request.UserId == Guid.Empty)
-            return Result.Failure<IReadOnlyList<WaitingPipelineTaskDto>>("User id is required.");
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId)
+            return Result.Failure<IReadOnlyList<WaitingPipelineTaskDto>>("Forbidden.", ErrorKind.Forbidden);
+
+        if (command.Request.UserId == Guid.Empty || command.Request.UserId != userId)
+            return Result.Failure<IReadOnlyList<WaitingPipelineTaskDto>>("Forbidden.", ErrorKind.Forbidden);
 
         await using var db = _dbFactory.CreateDbContext();
         var rows = await (
