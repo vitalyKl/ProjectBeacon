@@ -15,6 +15,24 @@ public sealed class HarnessApiAuthorizationTests
     private readonly Guid _subtaskId = Guid.NewGuid();
 
     [Fact]
+    public void HarnessTokenCapabilities_AreCommandSpecificAndLeastPrivilege()
+    {
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.ChatPrompt));
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead
+                | ApiTokenCapability.TaskWrite | ApiTokenCapability.SessionDrive,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.RunPipelineSession));
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.RunEvalTurn));
+
+        Assert.False(HarnessApiTokenCapabilities.Chat.HasFlag(ApiTokenCapability.SessionDrive));
+        Assert.True(HarnessApiTokenCapabilities.Pipeline.HasFlag(ApiTokenCapability.SessionDrive));
+    }
+
+    [Fact]
     public void ActorToken_IsBoundToItsOwnSubtaskLifecycleRoutes()
     {
         var resultPath = $"/v1/tasks/{_taskId:D}/subtasks/{_subtaskId:D}/result";
