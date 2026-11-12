@@ -179,12 +179,12 @@ public sealed class ProposalHandlerTests : IDisposable
             .HandleAsync(command, TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
-        Assert.Equal("Actor Model", result.Value!.AuthorModel);
+        Assert.Equal("beacon-local/Actor Model", result.Value!.AuthorModel);
 
         var stored = await _db.Proposals.SingleAsync(
             proposal => proposal.Id == result.Value.Id,
             TestContext.Current.CancellationToken);
-        Assert.Equal("Actor Model", stored.AuthorModel);
+        Assert.Equal("beacon-local/Actor Model", stored.AuthorModel);
     }
 
     [Fact]
