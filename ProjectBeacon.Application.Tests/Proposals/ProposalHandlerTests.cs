@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests.Proposals;
 using Application.Audit;
 using Application.Authorization;
 using Application.Common;
+using Application.Context;
 using Application.Persistence;
 using Application.Proposals;
 using Application.Tasks;
@@ -106,6 +107,71 @@ public sealed class ProposalHandlerTests : IDisposable
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Contains("proposal.created", auditActions);
         Assert.Contains("proposal.accepted", auditActions);
+    }
+
+    [Fact]
+    public async Task AgentDraft_SourcePathOnlyChangeAppendsContentVersion()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var handler = new UpsertContextNodeHandler(factory, new ContentWriter());
+        var actor = new ActorContext(
+            ActorType.ApiToken,
+            _userId,
+            false,
+            Guid.NewGuid(),
+            null,
+            _projectId,
+            _orgId,
+            ApiTokenCapability.ContextRead);
+
+        var request = new UpsertContextNodeRequest(
+            _projectId,
+            "Agent draft",
+            "The Markdown body remains unchanged.",
+            "agent_draft",
+            ContextScopeType.Project,
+            null,
+            null,
+            null,
+            null,
+            ContextSource.Native,
+            "docs/first.md");
+
+        var created = await handler.HandleDraftAsync(
+            new UpsertContextNodeCommand(request, actor),
+            "actor-subtask-1",
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+        Assert.Equal(1, created.Value!.Revision);
+
+        var renamed = await handler.HandleDraftAsync(
+            new UpsertContextNodeCommand(
+                request with { SourcePath = "docs/renamed.md", ExpectedRevision = 1 },
+                actor),
+            "actor-subtask-1",
+            TestContext.Current.CancellationToken);
+        Assert.True(renamed.Success, renamed.Error);
+        Assert.Equal(2, renamed.Value!.Revision);
+        Assert.Equal("docs/renamed.md", renamed.Value.SourcePath);
+
+        var replay = await handler.HandleDraftAsync(
+            new UpsertContextNodeCommand(
+                request with { SourcePath = "docs/renamed.md", ExpectedRevision = 2 },
+                actor),
+            "actor-subtask-1",
+            TestContext.Current.CancellationToken);
+        Assert.True(replay.Success, replay.Error);
+        Assert.Equal(2, replay.Value!.Revision);
+
+        var versions = await _db.ContentVersions
+            .Where(version => version.ProjectId == _projectId
+                && version.TargetKind == ContentTargetKind.ContextSection
+                && version.TargetId == created.Value.Id)
+            .OrderBy(version => version.Revision)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { 1, 2 }, versions.Select(version => version.Revision).ToArray());
+        Assert.Contains("\"sourcePath\":\"docs/first.md\"", versions[0].ContentJson);
+        Assert.Contains("\"sourcePath\":\"docs/renamed.md\"", versions[1].ContentJson);
     }
 
     [Fact]
