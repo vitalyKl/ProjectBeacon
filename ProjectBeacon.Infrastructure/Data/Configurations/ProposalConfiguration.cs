@@ -19,6 +19,7 @@ public sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         entity.Property(proposal => proposal.RationaleMarkdown).HasMaxLength(Proposal.MaxRationaleLength).IsRequired();
         entity.Property(proposal => proposal.AuthorProfileKey).HasMaxLength(100);
         entity.Property(proposal => proposal.AuthorRole).HasMaxLength(32);
+        entity.Property(proposal => proposal.AuthorModel).HasMaxLength(Proposal.MaxAuthorModelLength);
         entity.Property(proposal => proposal.IdempotencyKey).HasMaxLength(Proposal.MaxIdempotencyKeyLength).IsRequired();
         entity.Property(proposal => proposal.DecisionNote).HasMaxLength(Proposal.MaxRationaleLength);
         entity.Property(proposal => proposal.ConflictReason).HasMaxLength(200);
