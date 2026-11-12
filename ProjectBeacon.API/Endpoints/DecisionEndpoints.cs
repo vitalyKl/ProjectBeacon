@@ -34,7 +34,6 @@ public static class DecisionEndpoints
         Guid projectId,
         [FromBody] CreateDecisionBody body,
         HttpContext context,
-        HttpContext context,
         CreateDecisionHandler handler,
         CancellationToken ct)
     {
@@ -68,7 +67,7 @@ public static class DecisionEndpoints
     private static async Task<IResult> List(Guid projectId, HttpContext context, ListDecisionsHandler handler)
     {
         var result = await handler.HandleAsync(projectId, context.GetActor());
-        return Results.Ok(result.Value);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> Get(Guid projectId, Guid decisionId, HttpContext context, GetDecisionHandler handler, CancellationToken ct)
