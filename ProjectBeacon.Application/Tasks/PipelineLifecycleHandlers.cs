@@ -33,7 +33,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        if (await HasKnownRepositoryBehindAsync(db, task.ProjectId, ct))
+        if (await IsRepositorySyncBlockingStartAsync(db, task.ProjectId, ct))
             return Result.Failure<PipelineSessionDto>(
                 "PipelineRepositoryBehind", ErrorKind.Conflict);
 
@@ -89,7 +89,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 
-    private static async Task<bool> HasKnownRepositoryBehindAsync(
+    private static async Task<bool> IsRepositorySyncBlockingStartAsync(
         IBeaconDb db, Guid projectId, CancellationToken ct)
     {
         var deviceIds = await db.ProjectRuntimes.IgnoreQueryFilters()
