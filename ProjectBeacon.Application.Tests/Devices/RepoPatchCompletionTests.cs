@@ -29,10 +29,14 @@ public sealed class RepoPatchCompletionTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, ProposalStatus.Accepted)]
-    [InlineData(true, ProposalStatus.Conflicted)]
-    public async Task Completion_RequiresResultProjectIdToMatchProposalProject(
+    [InlineData(false, false, false, ProposalStatus.Accepted)]
+    [InlineData(true, false, false, ProposalStatus.Conflicted)]
+    [InlineData(false, true, false, ProposalStatus.Conflicted)]
+    [InlineData(false, false, true, ProposalStatus.Applying)]
+    public async Task Completion_RequiresMatchingProjectProposalAndApplyCommand(
         bool wrongProject,
+        bool wrongProposal,
+        bool wrongCommand,
         ProposalStatus expectedStatus)
     {
         var org = Org.Create("RepoPatch completion");
@@ -98,10 +102,11 @@ public sealed class RepoPatchCompletionTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var resultProjectId = wrongProject ? Guid.NewGuid() : project.Id;
+            var resultProposalId = wrongProposal ? Guid.NewGuid() : proposal.Id;
             var resultJson = JsonSerializer.Serialize(new
             {
                 projectId = resultProjectId,
-                proposalId = proposal.Id,
+                proposalId = resultProposalId,
                 applied = true,
                 files = new[]
                 {
@@ -113,9 +118,17 @@ public sealed class RepoPatchCompletionTests : IDisposable
                 }
             });
 
+            var completionCommand = wrongCommand
+                ? WorkstationCommand.Create(
+                    Guid.NewGuid(),
+                    WorkstationCommandKind.ApplyProposalPatch,
+                    JsonSerializer.Serialize(new { projectId = project.Id, proposalId = proposal.Id }),
+                    project.Id)
+                : command;
+
             await new RepoPatchCompletion().ApplyAsync(
                 _db,
-                command,
+                completionCommand,
                 true,
                 resultJson,
                 null,
@@ -123,12 +136,25 @@ public sealed class RepoPatchCompletionTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(expectedStatus, proposal.Status);
-            if (wrongProject)
-                Assert.Equal("ApplyResultInvalid", proposal.ConflictReason);
-            else
-                Assert.Equal(ProposalStatus.Accepted, proposal.Status);
+            if (wrongCommand)
+            {
+                Assert.Equal(ProposalStatus.Applying, proposal.Status);
+                Assert.Equal(command.Id, proposal.ApplyCommandId);
+                Assert.Empty(await _db.AuditEvents.ToListAsync(TestContext.Current.CancellationToken));
+                return;
+            }
 
-            var expectedAction = wrongProject
+            if (wrongProject || wrongProposal)
+            {
+                Assert.Equal("ApplyResultInvalid", proposal.ConflictReason);
+                Assert.Equal(ProposalStatus.Conflicted, proposal.Status);
+            }
+            else
+            {
+                Assert.Equal(ProposalStatus.Accepted, proposal.Status);
+            }
+
+            var expectedAction = wrongProject || wrongProposal
                 ? "proposal.patch.apply_conflicted"
                 : "proposal.patch.applied";
             Assert.Contains(await _db.AuditEvents.Select(item => item.Action).ToListAsync(
