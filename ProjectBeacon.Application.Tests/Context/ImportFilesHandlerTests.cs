@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Context;
 
 using Application.Context;
+using Application.Common;
 using Application.Persistence;
 using Domain.Entities.Content;
 using Domain.Entities.Context;
