@@ -167,6 +167,11 @@ public static class SessionPrompts
             sb.AppendLine($"Allowed MCP tools: {string.Join(", ", tools)}");
         if (paths.Count > 0)
             sb.AppendLine($"Allowed paths: {string.Join(", ", paths)}");
+        if (tools.Contains("repo_status", StringComparer.Ordinal))
+        {
+            sb.AppendLine("Before modifying files, call repo_status to inspect the real project's branch and upstream position.");
+            sb.AppendLine("If the real project is behind and this subtask requires newer upstream code, stop and call pipeline_fail_subtask with a reason starting exactly `repo_out_of_date:`; explain that a human must synchronize the project from the ProjectBeacon interface. Do not continue against the stale snapshot or try to synchronize Git yourself.");
+        }
         sb.AppendLine();
         if (tools.Contains(McpToolNames.TaskListAttachments, StringComparer.Ordinal)
             && tools.Contains(McpToolNames.TaskReadAttachment, StringComparer.Ordinal))
