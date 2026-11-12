@@ -153,7 +153,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(plannerFailed.Success, plannerFailed.Error);
 
         var manualSecondStart = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, second.Value!.Id)),
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, second.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.False(manualSecondStart.Success);
         Assert.Contains("Another Actor session", manualSecondStart.Error);
