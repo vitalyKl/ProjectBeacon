@@ -11,6 +11,7 @@ using Application.Persistence;
 using Application.Proposals;
 using Application.Tasks;
 using Domain.Entities.Content;
+using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -110,6 +111,80 @@ public sealed class ProposalHandlerTests : IDisposable
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Contains("proposal.created", auditActions);
         Assert.Contains("proposal.accepted", auditActions);
+    }
+
+    [Fact]
+    public async Task Create_AgentProposalCapturesAuthorModel()
+    {
+        var task = TaskItem.Create("Review the project description.", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var grants = new[]
+        {
+            McpToolNames.KnowledgePropose,
+            McpToolNames.KnowledgeProposals,
+            McpToolNames.KnowledgeWithdraw
+        };
+        var subtask = Subtask.Create(
+            "Review the project description and propose a precise update.",
+            task.Id,
+            _projectId,
+            allowedMcpTools: grants,
+            profileKey: "knowledge-curator");
+        subtask.Start();
+        _db.Subtasks.Add(subtask);
+
+        var model = LocalModelBackend.Create(
+            "Actor Model",
+            ModelBackendType.LlamaCpp,
+            "llama-server",
+            32768,
+            0,
+            _userId);
+        _db.LocalModelBackends.Add(model);
+
+        var session = PipelineSession.Create(
+            task.Id,
+            _projectId,
+            PipelineRole.Actor,
+            "Actor model attribution test.",
+            subtask.Id,
+            model.Id);
+        session.Launch();
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var actor = new ActorContext(
+            ActorType.ApiToken,
+            _userId,
+            false,
+            Guid.NewGuid(),
+            null,
+            _projectId,
+            _orgId,
+            ApiTokenCapability.ContextRead);
+        var request = Request() with { IdempotencyKey = "actor-model-attribution" };
+        var command = new CreateProposalCommand(
+            _projectId,
+            request,
+            actor,
+            task.Id,
+            subtask.Id,
+            session.Id,
+            PipelineRole.Actor.ToString());
+
+        var result = await new CreateProposalHandler(
+                HandlerSqlite.Factory(_connection), new EfAuditWriter())
+            .HandleAsync(command, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("Actor Model", result.Value!.AuthorModel);
+
+        var stored = await _db.Proposals.SingleAsync(
+            proposal => proposal.Id == result.Value.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Actor Model", stored.AuthorModel);
     }
 
     [Fact]
