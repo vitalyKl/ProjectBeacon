@@ -505,7 +505,7 @@ else
 
     private async Task ReloadPipeline()
     {
-        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)));
+        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId), _actorContext));
         _pipeline = result.Success ? result.Value : null;
     }
 
@@ -804,7 +804,7 @@ else
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -824,14 +824,14 @@ else
         _busy = true;
         try
         {
-            var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id)));
+            var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -850,7 +850,7 @@ else
         _busy = true;
         try
         {
-            var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)));
+            var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -872,7 +872,7 @@ else
         try
         {
             var result = await RetrySession.HandleAsync(
-                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
+                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -880,7 +880,7 @@ else
             }
 
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -911,7 +911,7 @@ else
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
