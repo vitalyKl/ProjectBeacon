@@ -156,7 +156,7 @@ public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<
 public record ForceClosePipelineRequest(Guid TaskId, string ActorId, string? Reason = null);
 
 /// <summary>Force-closes a pipeline and returns its state.</summary>
-public record ForceClosePipelineCommand(ForceClosePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ForceClosePipelineCommand(ForceClosePipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops one planner or review session (Actor work is cancelled by subtask).</summary>
 public record CancelPipelineSessionRequest(Guid TaskId, Guid SessionId);
