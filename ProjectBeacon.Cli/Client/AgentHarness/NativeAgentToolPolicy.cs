@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Client.AgentHarness;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using ProjectBeacon.Application.Runtime;
 
 /// <summary>Centralized policy decisions for native tool exposure, authorization, and caching.</summary>

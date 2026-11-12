@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
+using ProjectBeacon.Application.Context;
+
 /// <summary>Creates the stable system prompt used by new and restored native sessions.</summary>
 internal static class NativeAgentPromptCatalog
 {
