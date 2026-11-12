@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Domain.Entities.Agents;
 using Domain.Entities.Audit;
 using Domain.Entities.Chat;
+using Domain.Entities.Content;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
@@ -68,6 +69,8 @@ public class BeaconDbContext : DbContext, IBeaconDb
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
+    public DbSet<ContentVersion> ContentVersions => Set<ContentVersion>();
+    public DbSet<Proposal> Proposals => Set<Proposal>();
 
     private readonly ITenantContext? _tenant;
 

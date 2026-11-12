@@ -18,7 +18,8 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> AgentProfileKnowledgeWriteTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose
+        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
+        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw
     });
     public static IReadOnlyList<string> PlannerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
@@ -54,7 +55,9 @@ public static class PipelineToolPolicy
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
         McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
-        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose
+        McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
+        McpToolNames.KnowledgePropose, McpToolNames.KnowledgeProposals, McpToolNames.KnowledgeWithdraw,
+        McpToolNames.HashFile, McpToolNames.HashText
     });
     public static IReadOnlyList<string> ActorForbiddenTools { get; } = Array.AsReadOnly(new[]
     {
@@ -106,7 +109,8 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.WriteFile, McpToolNames.ApplyPatch, "run_command", "service_start"
+        McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.KnowledgePropose,
+        McpToolNames.KnowledgeWithdraw, "run_command", "service_start"
     });
 
     /// <summary>Shared maximum set of role-scoped Beacon MCP tools; local execution tools have separate guards.</summary>

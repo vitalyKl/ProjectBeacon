@@ -102,7 +102,8 @@ public static class ProjectEndpoints
     }
 
     private static ProjectDto MapProjectResponse(ProjectDto dto) =>
-        new(dto.Id, dto.Name, dto.Description, dto.OrgId, dto.CreatedAt, dto.UpdatedAt);
+        new(dto.Id, dto.Name, dto.Description, dto.OrgId, dto.CreatedAt, dto.UpdatedAt,
+            dto.ReviewCheckCommand, dto.Revision);
 
     private static async Task<IResult> AddMember(Guid projectId, [FromBody] AddProjectMemberRequest request, AddProjectMemberHandler handler, HttpContext ctx)
     {

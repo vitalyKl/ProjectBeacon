@@ -40,10 +40,36 @@ public sealed class ProjectLifecycleTests : IDisposable
         Assert.False(blank.Success);
 
         var renamed = await handler.HandleAsync(new UpdateProjectCommand(
-            new UpdateProjectRequest(projectId, " North ", "notes"), actor), TestContext.Current.CancellationToken);
+            new UpdateProjectRequest(projectId, " North ", "notes", ExpectedRevision: 1), actor), TestContext.Current.CancellationToken);
         Assert.True(renamed.Success, renamed.Error);
         Assert.Equal("North", renamed.Value!.Name);
         Assert.Equal("notes", renamed.Value.Description);
+        Assert.Equal(2, renamed.Value.Revision);
+        Assert.Equal(2, await _db.ContentVersions.CountAsync(
+            v => v.TargetKind == ContentTargetKind.ProjectDescription && v.TargetId == projectId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GetCurrentProject_ReturnsPersistedContentRevision()
+    {
+        var (actor, projectId) = await CreateOwnedProject();
+        var updated = await new UpdateProjectHandler(HandlerSqlite.Factory(_connection), _auth)
+            .HandleAsync(
+                new UpdateProjectCommand(
+                    new UpdateProjectRequest(projectId, null, "Revision two", ExpectedRevision: 1),
+                    actor),
+                TestContext.Current.CancellationToken);
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal(2, updated.Value!.Revision);
+
+        var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(actor, TestContext.Current.CancellationToken);
+
+        Assert.True(current.Success, current.Error);
+        Assert.Equal(projectId, current.Value!.Id);
+        Assert.Equal(2, current.Value.Revision);
+        Assert.Equal("Revision two", current.Value.Description);
     }
 
     [Fact]

@@ -21,6 +21,7 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
         entity.Property(profile => profile.DefaultPathsJson).IsRequired().HasColumnType("text");
         entity.Property(profile => profile.SizeHint).IsRequired().HasMaxLength(200);
         entity.Property(profile => profile.Effort).IsRequired().HasMaxLength(24);
+        entity.Property(profile => profile.ApplyPolicy).IsRequired().HasMaxLength(16).HasDefaultValue("Review");
         entity.HasIndex(profile => profile.UserId);
         entity.HasIndex(profile => new { profile.UserId, profile.Key }).IsUnique();
         entity.HasOne<User>().WithMany().HasForeignKey(profile => profile.UserId)

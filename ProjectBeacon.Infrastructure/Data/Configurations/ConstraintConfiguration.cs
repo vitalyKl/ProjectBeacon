@@ -15,6 +15,7 @@ public class ConstraintConfiguration : IEntityTypeConfiguration<Constraint>
         entity.Property(e => e.ScopePath).HasMaxLength(500).HasDefaultValue("");
         entity.Property(e => e.Kind).HasConversion<string>().IsRequired();
         entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+        entity.Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken().IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.Kind, e.Status });
     }

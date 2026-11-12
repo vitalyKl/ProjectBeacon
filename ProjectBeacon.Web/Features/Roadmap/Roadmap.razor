@@ -3,6 +3,8 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
@@ -10,6 +12,9 @@
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListProjectMilestonesHandler ListMilestones
+@inject ListDeletedContentTargetsHandler ListDeletedContentTargets
+@inject ListContentVersionsHandler ContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject ListProjectTasksHandler ListTasks
 @inject CreateMilestoneHandler CreateMilestoneHandler
 @inject UpdateMilestoneHandler UpdateMilestoneHandler
@@ -32,7 +37,7 @@ else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-    else if (_milestones.Count == 0 && !_showCreateForm)
+    else if (_milestones.Count == 0 && _deletedMilestones.Count == 0 && !_showCreateForm)
 {
     <EmptyState>@L["NoMilestones"]</EmptyState>
 }
@@ -66,7 +71,9 @@ else
         </MudPaper>
     }
 
-    <MudGrid Class="mt-4">
+    @if (_milestones.Count > 0)
+    {
+        <MudGrid Class="mt-4">
         @foreach (var milestone in _milestones.OrderBy(m => m.Order))
         {
             <MudItem xs="12" sm="6" md="4">
@@ -92,7 +99,9 @@ else
                     {
                         <MudText Typo="Typo.caption">@string.Format(L["MoreTasks"].Value, milestoneTasks.Count - 3)</MudText>
                     }
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1"
+                               data-testid="@($"open-milestone-{milestone.Id:D}")"
+                               OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
                     @if (milestone.ClosedAt is not null)
                     {
                         var orphans = MilestoneOrphanLint.OpenTaskCount(
@@ -120,7 +129,31 @@ else
                 </MudPaper>
             </MudItem>
         }
-    </MudGrid>
+        </MudGrid>
+    }
+
+    @if (_deletedMilestones.Count > 0)
+    {
+        <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-4">
+            <MudExpansionPanel Text="@($"{L["DeletedContent"]} ({_deletedMilestones.Count})")">
+                @foreach (var deleted in _deletedMilestones)
+                {
+                    <MudPaper @key="deleted.TargetId" Elevation="0" Outlined="true" Class="pa-3 mb-2">
+                        <MudText Typo="Typo.subtitle1">@deleted.Title</MudText>
+                        <MudText Typo="Typo.caption">
+                            @L["Deleted"] · rev. @deleted.DeletedRevision · <LocalTime Value="deleted.DeletedAt" Format="g" />
+                        </MudText>
+                        <MarkdownView Text="@MilestoneSnapshotDescription(deleted.SourceContentJson)" MaxHeight="100" />
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   Disabled="_busy" OnClick="() => RestoreDeletedMilestone(deleted)">
+                            @L["RestoreRevision"]
+                        </MudButton>
+                    </MudPaper>
+                }
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+
     <MudDialog @bind-Visible="_detailOpen" Options="_dialogOptions">
         <TitleContent>
             <MudText Typo="Typo.h6">@_open?.Name</MudText>
@@ -144,6 +177,31 @@ else
                         <MudButton Variant="Variant.Text" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
                     }
                 }
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
+                    <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_milestoneHistory.Count})")">
+                        @if (_milestoneHistory.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
+                        }
+                        @foreach (var version in _milestoneHistory)
+                        {
+                            <MudPaper @key="version.Id" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">rev. @version.Revision</MudText>
+                                    <MudSpacer />
+                                    <LocalTime Value="version.At" Format="g" />
+                                </MudStack>
+                                <MarkdownView Text="@MilestoneHistoryMarkdown(version.ContentJson)" MaxHeight="140" />
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           data-testid="@($"restore-milestone-revision-{version.Revision}")"
+                                           Disabled="_busy || version.Revision == _open.Revision"
+                                           OnClick="() => RestoreMilestoneVersion(version)">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
             }
         </DialogContent>
     </MudDialog>
@@ -151,22 +209,28 @@ else
 
 @code {
     private List<MilestoneDto> _milestones = [];
+    private List<DeletedContentTargetDto> _deletedMilestones = [];
     private List<TaskItemDto> _tasks = [];
     private ProjectDto? _project;
+    private ActorContext _actor = ActorContext.Anonymous;
     private bool _loading = true;
+    private bool _busy;
     private bool _showCreateForm;
     private Guid? _editingId;
     private MilestoneDto? _open;
+    private List<ContentVersionDto> _milestoneHistory = [];
     private bool _detailOpen;
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
     private string? _editName;
     private string? _editDescription;
     private int _editOrder;
     private int _newOrder;
+    private int? _editRevision;
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -181,8 +245,15 @@ else
             return;
         }
 
-        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(
+            new ListProjectMilestonesRequest(_project.Id), _actor));
         _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
+        _deletedMilestones = deleted.Success
+            ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.Milestone).ToList()
+            : [];
+        if (!deleted.Success)
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
         var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
         _tasks = tasks.Success ? tasks.Value!.ToList() : [];
     }
@@ -192,9 +263,57 @@ else
         _newOrder = _milestones.Count + 1;
         _showCreateForm = true;
         _editingId = null;
+        _editRevision = null;
     }
 
     private void HideCreateForm() => _showCreateForm = false;
+
+    private async Task RestoreDeletedMilestone(DeletedContentTargetDto deleted)
+    {
+        if (_project is null || _busy)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _project.Id,
+                deleted.SourceVersionId,
+                deleted.DeletedRevision,
+                _actor,
+                ContentTargetKind.Milestone,
+                deleted.TargetId));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string MilestoneSnapshotDescription(string json)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("description", out var description)
+                && description.ValueKind == System.Text.Json.JsonValueKind.String)
+                return description.GetString() ?? string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // The title/id remains visible; a damaged snapshot cannot be previewed.
+        }
+
+        return string.Empty;
+    }
 
     private async Task CreateMilestone()
     {
@@ -208,7 +327,7 @@ else
             string.IsNullOrWhiteSpace(_editName) ? L["Milestone"].Value : _editName,
             _editDescription,
             _project.Id,
-            _newOrder)));
+            _newOrder), _actor));
         if (!created.Success)
         {
             Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
@@ -227,6 +346,7 @@ else
         _editName = milestone.Name;
         _editDescription = milestone.Description;
         _editOrder = milestone.Order;
+        _editRevision = milestone.Revision;
         _showCreateForm = false;
     }
 
@@ -234,28 +354,114 @@ else
     {
         if (_editingId is null) return;
         var updated = await UpdateMilestoneHandler.HandleAsync(new UpdateMilestoneCommand(new UpdateMilestoneRequest(
-            _editingId.Value, _editName, _editDescription, _editOrder)));
+            _editingId.Value, _editName, _editDescription, _editOrder, _editRevision, _project?.Id), _actor));
         if (!updated.Success)
         {
             Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
         _editingId = null;
+        _editRevision = null;
         Snackbar.Add(L["MilestoneUpdated"].Value, Severity.Success);
         await Reload();
     }
 
-    private void CancelEdit() => _editingId = null;
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editRevision = null;
+    }
 
-    private void OpenMilestone(MilestoneDto milestone)
+    private async Task OpenMilestone(MilestoneDto milestone)
     {
         _open = milestone;
         _detailOpen = true;
+        await ReloadMilestoneHistory(milestone.Id);
+    }
+
+    private async Task ReloadMilestoneHistory(Guid milestoneId)
+    {
+        if (_project is null)
+        {
+            _milestoneHistory = [];
+            return;
+        }
+
+        var history = await ContentVersions.HandleAsync(
+            _project.Id, ContentTargetKind.Milestone, milestoneId, _actor, 50);
+        _milestoneHistory = history.Success ? history.Value!.ToList() : [];
+        if (!history.Success)
+            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreMilestoneVersion(ContentVersionDto version)
+    {
+        if (_project is null || _open is null || _busy)
+            return;
+
+        var milestoneId = _open.Id;
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _project.Id,
+                version.Id,
+                _open.Revision,
+                _actor,
+                ContentTargetKind.Milestone,
+                milestoneId));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            _open = _milestones.FirstOrDefault(item => item.Id == milestoneId);
+            if (_open is not null)
+                await ReloadMilestoneHistory(milestoneId);
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string MilestoneHistoryMarkdown(string json)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var name = root.TryGetProperty("name", out var nameValue)
+                ? nameValue.GetString() ?? string.Empty
+                : string.Empty;
+            var description = root.TryGetProperty("description", out var descriptionValue)
+                && descriptionValue.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? descriptionValue.GetString() ?? string.Empty
+                    : string.Empty;
+            var order = root.TryGetProperty("order", out var orderValue)
+                ? orderValue.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : "—";
+            var closed = root.TryGetProperty("closedAt", out var closedValue)
+                && closedValue.ValueKind != System.Text.Json.JsonValueKind.Null;
+            return $"**{name}** · order {order}" +
+                (closed ? Environment.NewLine + Environment.NewLine + "Closed" : string.Empty) +
+                (string.IsNullOrWhiteSpace(description)
+                    ? string.Empty
+                    : Environment.NewLine + Environment.NewLine + description);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private async Task CloseMilestone(MilestoneDto milestone)
     {
-        var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)));
+        var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(
+            new CloseMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -267,7 +473,8 @@ else
 
     private async Task ReopenMilestone(MilestoneDto milestone)
     {
-        var result = await ReopenMilestoneHandler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)));
+        var result = await ReopenMilestoneHandler.HandleAsync(new ReopenMilestoneCommand(
+            new ReopenMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -284,7 +491,7 @@ else
             yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true)
             return;
-        var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id)));
+        var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

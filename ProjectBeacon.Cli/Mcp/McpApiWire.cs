@@ -7,8 +7,9 @@ using Domain.Enums;
 internal static partial class McpApiTools
 {
     private static async Task<McpToolText> SendAsync(
-        BeaconApiClient api, HttpMethod method, string path, JsonNode? body, CancellationToken ct)
-        => Format(await api.SendAsync(method, path, body, ct));
+        BeaconApiClient api, HttpMethod method, string path, JsonNode? body, CancellationToken ct,
+        int? ifMatchRevision = null)
+        => Format(await api.SendAsync(method, path, body, ct, ifMatchRevision));
 
     private static async Task<McpToolText> SendRawAsync(
         BeaconApiClient api, HttpMethod method, string path, JsonNode? body, CancellationToken ct)

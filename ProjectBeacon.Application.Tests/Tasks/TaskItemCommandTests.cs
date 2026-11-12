@@ -36,6 +36,7 @@ public sealed class TaskItemCommandTests
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal("Updated", command.Request.Title);
         Assert.Equal(TaskPriority.Critical, command.Request.Priority);
+        Assert.Null(command.Request.ExpectedContentRevision);
     }
 
     [Fact]

@@ -1,6 +1,9 @@
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Application.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AddReviewNotesHandler AddReviewNotes
+@inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
 
 <section class="beacon-panel beacon-surface-section">
@@ -36,7 +39,9 @@
     {
         if (Task is null || string.IsNullOrWhiteSpace(_draft))
             return;
-        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(Task.Id, _draft.Trim())));
+        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(
+            new AddReviewNotesRequest(Task.Id, _draft.Trim(), Task.ContentRevision), actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

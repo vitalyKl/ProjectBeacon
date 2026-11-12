@@ -89,6 +89,42 @@ public sealed class ActorRequirementMatrixHttpTests
     }
 
     [Fact]
+    public async Task TaskContentHistory_RequiresTaskReadAndRejectsContextReadOnlyToken()
+    {
+        await using var ctx = await SetupAsync();
+        var task = await PostJson(
+            ctx.Client,
+            $"/v1/projects/{ctx.ProjectId}/tasks",
+            new
+            {
+                title = "Task history capability fixture",
+                projectId = ctx.ProjectId,
+                priority = 1,
+                type = 3
+            });
+        var taskId = task.GetProperty("id").GetGuid();
+        var humanAuthorization = ctx.Client.DefaultRequestHeaders.Authorization;
+
+        var taskReadToken = await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead);
+        ctx.Client.DefaultRequestHeaders.Authorization = humanAuthorization;
+        var contextReadToken = await CreateTokenAsync(ctx.Client, ctx.ProjectId, ContextRead);
+
+        var taskClient = ctx.Factory.CreateClient();
+        taskClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", taskReadToken);
+        var history = await taskClient.GetAsync(
+            $"/v1/projects/{ctx.ProjectId}/tasks/{taskId}/content-versions",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+
+        var contextClient = ctx.Factory.CreateClient();
+        contextClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", contextReadToken);
+        var forbidden = await contextClient.GetAsync(
+            $"/v1/projects/{ctx.ProjectId}/tasks/{taskId}/content-versions",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
     public async Task ApiToken_NoContextRead_HumanOrApiToken_ContextRead_Returns403()
     {
         await using var ctx = await SetupAsync();

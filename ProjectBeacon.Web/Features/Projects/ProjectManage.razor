@@ -6,8 +6,11 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Proposals
+@using ProjectBeacon.Application.Persistence
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject GetCurrentProjectHandler CurrentProject
@@ -17,6 +20,12 @@
 @inject AttachRuntimeHandler AttachRuntime
 @inject ListMyProjectsHandler MyProjects
 @inject UpdateProjectHandler UpdateProject
+@inject ListContentVersionsHandler ContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
+@inject ListProposalPoliciesHandler ListProposalPolicies
+@inject SetProposalPolicyHandler SetProposalPolicy
+@inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
+@inject IBeaconDbFactory DbFactory
 @inject DeleteProjectHandler DeleteProject
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
 @inject GetProjectGitSyncCommandHandler GetGitSyncCommand
@@ -79,11 +88,102 @@ else
         <div class="beacon-form">
             <MudTextField @bind-Value="_projectName" InputId="project-name" Label="@L["ProjectName"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
             <MarkdownEditor @bind-Value="_projectDescription" Label="@L["Description"]" Lines="5" Class="mt-3" />
+            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.History"
+                       OnClick="LoadProjectDescriptionHistory" Disabled="_busy">
+                @L["ContentHistory"]
+            </MudButton>
+            @if (_showProjectDescriptionHistory)
+            {
+                <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-2">
+                    <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_projectDescriptionHistory.Count})")" Expanded="true">
+                        @if (_projectDescriptionHistory.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
+                        }
+                        @foreach (var version in _projectDescriptionHistory)
+                        {
+                            <MudPaper @key="version.Id" Elevation="0" Outlined="true" Class="pa-2 mb-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">rev. @version.Revision</MudText>
+                                    <MudSpacer />
+                                    <LocalTime Value="version.At" Format="g" />
+                                </MudStack>
+                                <MarkdownView Text="@ProjectDescriptionSnapshotMarkdown(version.ContentJson)" MaxHeight="140" />
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           data-testid="@($"restore-project-description-revision-{version.Revision}")"
+                                           Disabled="_busy || version.Revision == _projectRevision"
+                                           OnClick="() => RestoreProjectDescriptionVersion(version)">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
             <div class="beacon-field-row">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProject" Disabled="_busy">@L["Save"]</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>
             </div>
         </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProposalPoliciesTitle"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ProposalPoliciesHelp"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_proposalPolicies.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ProposalPoliciesUnavailable"]</MudText>
+        }
+        else
+        {
+            <MudTable Items="_proposalPolicies" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>@L["TargetKind"]</MudTh>
+                    <MudTh>@L["Operation"]</MudTh>
+                    <MudTh>@L["DecisionMode"]</MudTh>
+                    <MudTh>@L["PolicyRestriction"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="@L["TargetKind"]">@context.TargetKind</MudTd>
+                    <MudTd DataLabel="@L["Operation"]">@context.Operation</MudTd>
+                    <MudTd DataLabel="@L["DecisionMode"]">
+                        <MudSelect T="ProposalDecisionMode"
+                                   Value="@GetProposalPolicyMode(context)"
+                                   ValueChanged="@(mode => SetProposalPolicyMode(context, mode))"
+                                   Disabled="@(!_canEditProposalPolicies || !context.AutoAllowed || _proposalPolicyBusy)"
+                                   Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined">
+                            <MudSelectItem T="ProposalDecisionMode" Value="ProposalDecisionMode.Manual">@L["Manual"]</MudSelectItem>
+                            @if (context.AutoAllowed)
+                            {
+                                <MudSelectItem T="ProposalDecisionMode" Value="ProposalDecisionMode.Auto">@L["Auto"]</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd DataLabel="@L["PolicyRestriction"]">
+                        @if (!string.IsNullOrWhiteSpace(context.RestrictionReason))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.RestrictionReason</MudText>
+                        }
+                        else if (!_canEditProposalPolicies)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@L["GovernanceOwnerAdminOnly"]</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   Disabled="@(!_canEditProposalPolicies || !context.Supported || !context.AutoAllowed || _proposalPolicyBusy || GetProposalPolicyMode(context) == context.Mode)"
+                                   OnClick="@(() => SaveProposalPolicy(context))">
+                            @L["Save"]
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            @if (!_canEditProposalPolicies)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">@L["ProposalPoliciesOwnerAdminHint"]</MudText>
+            }
+        }
     </MudPaper>
 
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectFolder"]</MudText>
@@ -181,9 +281,16 @@ else
     private bool _isAdmin;
     private ActorContext _actor = ActorContext.Anonymous;
     private bool _busy;
+    private bool _canEditProposalPolicies;
+    private bool _proposalPolicyBusy;
+    private List<ProposalPolicyDto> _proposalPolicies = [];
+    private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
     private string _projectDescription = string.Empty;
+    private int _projectRevision;
+    private bool _showProjectDescriptionHistory;
+    private List<ContentVersionDto> _projectDescriptionHistory = [];
     private Guid? _folderDeviceId;
     private string _folderPath = string.Empty;
     private GitSyncResultDto? _gitSyncResult;
@@ -233,7 +340,75 @@ else
         _projectId = current.Value.Id;
         _projectName = current.Value.Name;
         _projectDescription = current.Value.Description ?? string.Empty;
+        _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
+        await ReloadProposalPolicies();
+    }
+
+    private async Task ReloadProposalPolicies()
+    {
+        _proposalPolicies = [];
+        _proposalPolicyEdits.Clear();
+        _canEditProposalPolicies = false;
+        if (_projectId is not { } projectId)
+            return;
+
+        var result = await ListProposalPolicies.HandleAsync(projectId, _actor);
+        if (!result.Success || result.Value is null)
+        {
+            Snackbar.Add(result.Error ?? L["ProposalPoliciesUnavailable"].Value, Severity.Warning);
+            return;
+        }
+
+        _proposalPolicies = result.Value.ToList();
+        foreach (var policy in _proposalPolicies)
+            _proposalPolicyEdits[ProposalPolicyKey(policy)] = policy.Mode;
+
+        await using var db = DbFactory.CreateDbContext();
+        var permission = await Authorization.CanAsync(
+            db, _actor, ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        _canEditProposalPolicies = permission.Success;
+    }
+
+    private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
+        $"{policy.TargetKind}:{policy.Operation}";
+
+    private ProposalDecisionMode GetProposalPolicyMode(ProposalPolicyDto policy) =>
+        _proposalPolicyEdits.TryGetValue(ProposalPolicyKey(policy), out var mode) ? mode : policy.Mode;
+
+    private void SetProposalPolicyMode(ProposalPolicyDto policy, ProposalDecisionMode mode)
+    {
+        if (policy.AutoAllowed && _canEditProposalPolicies)
+            _proposalPolicyEdits[ProposalPolicyKey(policy)] = mode;
+    }
+
+    private async Task SaveProposalPolicy(ProposalPolicyDto policy)
+    {
+        if (_projectId is not { } projectId || !_canEditProposalPolicies || _proposalPolicyBusy)
+            return;
+        var selected = GetProposalPolicyMode(policy);
+        if (selected == policy.Mode)
+            return;
+
+        _proposalPolicyBusy = true;
+        try
+        {
+            var saved = await SetProposalPolicy.HandleAsync(new SetProposalPolicyCommand(
+                projectId, policy.TargetKind, policy.Operation, selected, policy.PolicyRevision, _actor));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                await ReloadProposalPolicies();
+                return;
+            }
+
+            Snackbar.Add(L["ProposalPolicySaved"].Value, Severity.Success);
+            await ReloadProposalPolicies();
+        }
+        finally
+        {
+            _proposalPolicyBusy = false;
+        }
     }
 
     private async Task ReloadProjects()
@@ -249,6 +424,75 @@ else
         Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl={Uri.EscapeDataString("/project/settings")}", forceLoad: true);
     }
 
+    private async Task LoadProjectDescriptionHistory()
+    {
+        if (_projectId is not { } projectId)
+            return;
+
+        _showProjectDescriptionHistory = true;
+        var history = await ContentVersions.HandleAsync(
+            projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
+        _projectDescriptionHistory = history.Success ? history.Value!.ToList() : [];
+        if (!history.Success)
+            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+    }
+
+    private async Task RestoreProjectDescriptionVersion(ContentVersionDto version)
+    {
+        if (_projectId is not { } projectId || _busy)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                projectId,
+                version.Id,
+                _projectRevision,
+                _actor,
+                ContentTargetKind.ProjectDescription,
+                projectId));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var current = await CurrentProject.HandleAsync(_actor);
+            if (!current.Success || current.Value is null)
+            {
+                Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            _projectName = current.Value.Name;
+            _projectDescription = current.Value.Description ?? string.Empty;
+            _projectRevision = current.Value.Revision;
+            await LoadProjectDescriptionHistory();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string ProjectDescriptionSnapshotMarkdown(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("description", out var description)
+                && description.ValueKind == JsonValueKind.String)
+                return description.GetString() ?? string.Empty;
+            return string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
     private async Task SaveProject()
     {
         if (_projectId is not { } projectId || _busy)
@@ -262,7 +506,7 @@ else
         try
         {
             var saved = await UpdateProject.HandleAsync(new UpdateProjectCommand(
-                new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription), _actor));
+                new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription, null, _projectRevision), _actor));
             if (!saved.Success)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
@@ -270,6 +514,7 @@ else
             }
             _projectName = saved.Value!.Name;
             _projectDescription = saved.Value.Description ?? string.Empty;
+            _projectRevision = saved.Value.Revision;
             Snackbar.Add(L["ProjectRenamed"].Value, Severity.Success);
             await ReloadProjects();
         }

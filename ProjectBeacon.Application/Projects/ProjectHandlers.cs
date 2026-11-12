@@ -18,12 +18,23 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService? _auth;
     private readonly ITenantContext _tenant;
+    private readonly ContentWriter _contentWriter;
 
     public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant)
+        : this(dbFactory, auth, tenant, new ContentWriter())
+    {
+    }
+
+    public CreateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService? auth,
+        ITenantContext tenant,
+        ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _tenant = tenant;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -53,7 +64,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (command.Actor.UserId is { } ownerId)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
-        await writeDb.SaveChangesAsync(ct);
+        var saved = await _contentWriter.SaveAsync(
+            writeDb,
+            project,
+            command.Actor.UserId is null ? null : "Human",
+            command.Actor.UserId?.ToString(),
+            ct);
+        if (!saved.Success)
+            return Result.Failure<ProjectDto>(saved.Error ?? "Project description version could not be saved.", ErrorKind.Conflict);
 
         return Result.Ok(MapToDto(project));
     }
@@ -79,7 +97,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand, project.Revision);
 
     private static void SeedStarterLabels(IBeaconDb db, Guid projectId)
     {
@@ -103,11 +121,18 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly ContentWriter _contentWriter;
 
     public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+        : this(dbFactory, auth, new ContentWriter())
+    {
+    }
+
+    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth, ContentWriter contentWriter)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _contentWriter = contentWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
@@ -130,14 +155,31 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
                 return Result.Failure<ProjectDto>("Project name is required.");
         }
 
+        var descriptionChanged = command.Request.Description is not null
+            && !string.Equals(project.Description, command.Request.Description, StringComparison.Ordinal);
+        if (descriptionChanged && command.Request.ExpectedRevision != project.Revision)
+            return Result.Failure<ProjectDto>(
+                "Project description changed since it was loaded. Refresh the project and retry.",
+                ErrorKind.Conflict);
+
         project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
-        await db.SaveChangesAsync(ct);
+        if (descriptionChanged)
+        {
+            var saved = await _contentWriter.SaveAsync(
+                db, project, "Human", command.Actor.UserId?.ToString(), ct);
+            if (!saved.Success)
+                return Result.Failure<ProjectDto>(saved.Error ?? "Project description conflict.", ErrorKind.Conflict);
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         return Result.Ok(MapToDto(project));
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand, project.Revision);
 }
 /// <summary>
 /// Loads one project in the current tenant.
@@ -159,7 +201,7 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand, project.Revision);
 }
 /// <summary>
 /// Lists projects in the current tenant, optionally for one org.
@@ -180,7 +222,7 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
         var projects = await query
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectDto(
-                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt, p.ReviewCheckCommand))
+                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt, p.ReviewCheckCommand, p.Revision))
             .ToListAsync(ct);
 
         return Result.Ok((IList<ProjectDto>)projects);

@@ -33,6 +33,7 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
+    [InlineData(WorkstationCommandKind.ApplyProposalPatch)]
     public void IsAtMostOnce_IdempotentKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
         Assert.False(CommandDelivery.IsAtMostOnce(kind));
@@ -53,6 +54,7 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
+    [InlineData(WorkstationCommandKind.ApplyProposalPatch)]
     public void IsIdempotent_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {
         Assert.True(CommandDelivery.IsIdempotent(kind));
@@ -100,6 +102,7 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RunPipelineSession)]
     [InlineData(WorkstationCommandKind.ChatSwitchAgent)]
     [InlineData(WorkstationCommandKind.ChatReplyForm)]
+    [InlineData(WorkstationCommandKind.ApplyProposalPatch)]
     public void IsReconcileBacked_OtherKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
         Assert.False(CommandDelivery.IsReconcileBacked(kind));
@@ -113,9 +116,9 @@ public sealed class CommandDeliveryTests
         var idempotent = all.Where(CommandDelivery.IsIdempotent).ToHashSet();
         var reconcile = all.Where(CommandDelivery.IsReconcileBacked).ToHashSet();
 
-        Assert.Equal(23, all.Length);
+        Assert.Equal(24, all.Length);
         Assert.Equal(8, atMostOnce.Count);
-        Assert.Equal(15, idempotent.Count);
+        Assert.Equal(16, idempotent.Count);
         Assert.Equal(5, reconcile.Count);
 
         Assert.Empty(atMostOnce.Intersect(idempotent));

@@ -108,6 +108,52 @@ public sealed class GitSyncServiceTests
     }
 
     [Fact]
+    public async Task Status_RemainsAvailableWhileAgentSnapshotIsActive()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        var created = await AgentSessionWorktree.CreateAsync(repo.Root, Guid.NewGuid(), CancellationToken.None);
+        Assert.NotNull(created.Workspace);
+        Assert.Null(created.Error);
+        await using var workspace = created.Workspace!;
+
+        var result = await ExecuteAsync(repo, GitSyncMode.Status);
+
+        Assert.Equal(GitSyncOutcome.UpToDate, result.Outcome);
+        Assert.True(result.Clean);
+    }
+
+    [Fact]
+    public async Task ConcurrentSnapshotCreationAndPullFastForwardAreSerialized()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var createTask = AgentSessionWorktree.CreateAsync(
+            repo.Root, Guid.NewGuid(), CancellationToken.None);
+        var pullTask = ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        var created = await createTask;
+        Assert.NotNull(created.Workspace);
+        Assert.Null(created.Error);
+        await using var workspace = created.Workspace!;
+        var result = await pullTask;
+
+        if (result.Outcome == GitSyncOutcome.FastForwarded)
+        {
+            Assert.True(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+            Assert.Equal("upstream change", await File.ReadAllTextAsync(
+                Path.Combine(workspace.WorkingDirectory, "remote.txt")));
+        }
+        else
+        {
+            Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+            Assert.Equal(GitSyncRefusalCode.ActiveSessions, result.ReasonCode);
+            Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+            Assert.False(File.Exists(Path.Combine(workspace.WorkingDirectory, "remote.txt")));
+        }
+    }
+
+    [Fact]
     public async Task PullFastForward_DisablesPostMergeHooks()
     {
         if (OperatingSystem.IsWindows())

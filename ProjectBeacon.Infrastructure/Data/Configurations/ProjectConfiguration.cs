@@ -13,9 +13,18 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.HasKey(e => e.Id);
         entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
         entity.Property(e => e.Description).HasMaxLength(2000);
+        entity.Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken().IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.UpdatedAt);
         entity.Property(e => e.McpServersCipher).IsRequired().HasColumnType("text");
+        entity.Property(e => e.ProposalPoliciesJson)
+            .IsRequired()
+            .HasColumnType("jsonb")
+            .HasDefaultValue("{}");
+        entity.Property(e => e.ProposalPolicyRevision)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .HasDefaultValue(1);
 
         entity.HasOne(e => e.Org)
             .WithMany(e => e.Projects)

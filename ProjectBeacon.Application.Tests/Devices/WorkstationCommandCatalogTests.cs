@@ -28,7 +28,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.RunEvalTurn,
             WorkstationCommandKind.RunReviewCheck,
             WorkstationCommandKind.RunPipelineSession,
-            WorkstationCommandKind.GitSync
+            WorkstationCommandKind.GitSync,
+            WorkstationCommandKind.ApplyProposalPatch
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())

@@ -16,7 +16,8 @@ public sealed record AgentProfileOverrideDto(
     bool CommandsEnabled,
     bool ReportsDiff,
     string SizeHint,
-    string Effort);
+    string Effort,
+    string ApplyPolicy = "Review");
 
 public sealed record GetAgentProfileOverridesCommand(Guid UserId)
     : ICommand<Result<IReadOnlyList<AgentProfileOverrideDto>>>;
@@ -31,7 +32,8 @@ public sealed record SaveAgentProfileOverrideRequest(
     bool CommandsEnabled,
     bool ReportsDiff,
     string SizeHint,
-    string Effort);
+    string Effort,
+    string ApplyPolicy = "Review");
 
 public sealed record SaveAgentProfileOverrideCommand(SaveAgentProfileOverrideRequest Request)
     : ICommand<Result<AgentProfileOverrideDto>>;

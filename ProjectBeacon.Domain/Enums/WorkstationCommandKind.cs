@@ -28,5 +28,6 @@ public enum WorkstationCommandKind
     RunPipelineSession,
     CheckClientUpdate,
     UpdateClient,
-    GitSync
+    GitSync,
+    ApplyProposalPatch
 }

@@ -63,10 +63,15 @@ public sealed record OrganizationEntitlement(
 /// A feature or capacity check expressed in product terms. Limit keys and feature keys are
 /// owned by ProjectBeacon, never copied from a payment provider's API.
 /// </summary>
+/// <summary>
+/// A feature or capacity check expressed in product terms. CurrentUsage is the observed
+/// usage at the time of the check; callers must obtain it from the authoritative resource store.
+/// </summary>
 public sealed record EntitlementRequirement(
     string FeatureKey,
     string? LimitKey = null,
-    long RequestedUnits = 1);
+    long RequestedUnits = 1,
+    long CurrentUsage = 0);
 
 public sealed record EntitlementDecision(
     bool Allowed,

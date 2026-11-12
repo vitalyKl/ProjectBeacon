@@ -9,6 +9,7 @@ public class Milestone : Entity, IProjectScoped
 {
     public Milestone() { }
 
+    public int Revision { get; private set; } = 1;
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public Guid ProjectId { get; private set; }
@@ -31,28 +32,93 @@ public class Milestone : Entity, IProjectScoped
         return milestone;
     }
 
+    /// <summary>Creates a milestone with an id reserved by a pending Create proposal.</summary>
+    public static Milestone CreateWithId(Guid id, string name, string? description, Guid projectId, int order)
+    {
+        if (id == Guid.Empty)
+            throw new ArgumentException("Milestone id is required.", nameof(id));
+        var milestone = Create(name, description, projectId, order);
+        milestone.Id = id;
+        return milestone;
+    }
+
+    /// <summary>Recreates a deleted milestone from history, continuing after its tombstone revision.</summary>
+    public static Milestone RestoreDeleted(
+        Guid id,
+        string name,
+        string? description,
+        Guid projectId,
+        int order,
+        int revision,
+        DateTime? closedAt,
+        DateTime? createdAt = null)
+    {
+        if (id == Guid.Empty || projectId == Guid.Empty || revision < 1)
+            throw new ArgumentException("A milestone id, project id and positive revision are required.");
+        var milestone = CreateWithId(id, name, description, projectId, order);
+        milestone.Revision = revision;
+        milestone.ClosedAt = closedAt;
+        if (createdAt is { } originalCreatedAt)
+            milestone.CreatedAt = originalCreatedAt;
+        return milestone;
+    }
+
     public void Update(string? name = null, string? description = null, int? order = null)
     {
+        var contentChanged =
+            (name is not null && !string.Equals(Name, name, StringComparison.Ordinal))
+            || (description is not null && !string.Equals(Description, description, StringComparison.Ordinal))
+            || (order is not null && Order != order.Value);
         if (name is not null) Name = name;
         if (description is not null) Description = description;
         if (order is not null) Order = order.Value;
+        if (contentChanged)
+            Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Restores milestone content, including a nullable description, from history.</summary>
+    public void RestoreContentFromHistory(
+        string name,
+        string? description,
+        int order,
+        DateTime? closedAt = null)
+    {
+        if (string.Equals(Name, name, StringComparison.Ordinal)
+            && string.Equals(Description, description, StringComparison.Ordinal)
+            && Order == order
+            && ClosedAt == closedAt)
+            return;
+
+        Name = name;
+        Description = description;
+        Order = order;
+        ClosedAt = closedAt;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void Delete()
     {
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void Close()
     {
+        if (ClosedAt is not null)
+            return;
         ClosedAt = DateTime.UtcNow;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void Reopen()
     {
+        if (ClosedAt is null)
+            return;
         ClosedAt = null;
+        Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
 }

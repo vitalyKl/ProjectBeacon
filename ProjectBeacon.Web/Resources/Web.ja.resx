@@ -2625,4 +2625,218 @@ orthstar</value>
   <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
   <data name="Characters" xml:space="preserve"><value>文字</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>提案インボックス</value>
+  </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>新しい対象</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>プロジェクト知識の提案と改訂を確認します。</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>メンバーは通常の内容を確認できます。Decision と Constraint の変更は Owner または Admin のみが実行できます。</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>競合</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>対象種別</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>作成者</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>該当する提案: {0} 件</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>選択項目を承認</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>選択を解除</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>このフィルターに一致する提案はありません。</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>リビジョンに紐づく提案</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>提案の基準リビジョンは古くなっています。</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>現在のリビジョン</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>提案の詳細</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>承認時に適用する内容（JSON）</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>基準スナップショットと比較</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>基準スナップショット</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>基準スナップショットを利用できません。</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>提案された内容</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>判断メモ</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>提案を承認して適用しました。</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>提案を却下しました。</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>一括承認: 成功 {0} 件、失敗 {1} 件。</value>
+  </data>
+  <data name="Applying" xml:space="preserve">
+    <value>適用中</value>
+  </data>
+  <data name="ProposalApplyQueued" xml:space="preserve">
+    <value>ドキュメントパッチをワークステーションのキューに追加しました。検証が完了するまで承認は確定しません。</value>
+  </data>
+  <data name="ProposalPatchQueuedCount" xml:space="preserve">
+    <value>キューに追加されたドキュメントパッチ: {0} 件。</value>
+  </data>
+  <data name="ProposalPatchApplying" xml:space="preserve">
+    <value>ワークステーションでドキュメントパッチを適用・検証しています。</value>
+  </data>
+  <data name="ProposalPatchApplied" xml:space="preserve">
+    <value>ドキュメントパッチを適用し、検証しました。</value>
+  </data>
+  <data name="RepoPatchDocumentationOnly" xml:space="preserve">
+    <value>このレビューにはドキュメントのみのパッチが含まれます。ここでは編集できません。変更するには却下して再送信してください。</value>
+  </data>
+  <data name="DocumentationPatch" xml:space="preserve">
+    <value>ドキュメントパッチ</value>
+  </data>
+  <data name="WorkstationCommand" xml:space="preserve">
+    <value>ワークステーションコマンド</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>既存のレビュー項目</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>レビュー待ちのコンテキスト下書き</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>既存のレビュー項目はありません。</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>提案された Decision</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>提案された Constraint</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>ガバナンス項目の判断は、プロジェクトまたは組織の Owner/Admin のみが実行できます。</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>コンテキスト下書きを承認しました。</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>コンテキスト下書きを却下し、履歴に保存しました。</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>このインボックスを表示するにはプロジェクトへの参加が必要です。</value>
+  </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>削除済みコンテンツ</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>削除済み</value>
+  </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>コンテンツ履歴</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>この項目の履歴はありません。</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>このリビジョンを復元</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>選択したスナップショットから新しいリビジョンを作成しました。</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>提案</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>このタスクの作業中にエージェントが送信した提案を確認します。</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>このタスクに提案はありません。</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>提案インボックスを開く</value>
+  </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>提案ポリシー</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>自動適用できる対応済みコンテンツ更新を選択します。既定は手動です。Decision と Constraint は常に Owner/Admin の承認が必要です。</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>提案ポリシーを読み込めませんでした。</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>承認モード</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>制限</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>手動</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>自動</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>ポリシーを変更できるのはプロジェクトまたは組織の Owner/Admin のみです。</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>提案ポリシーを保存しました。</value>
+  </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>内容の行単位比較</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>テキストの変更はありません。</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>ドキュメント変更の適用</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review では人による承認を待ちます。Auto では、このプロファイルの許可されたパス内のドキュメント変更のみを適用します。</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review（人による承認）</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto（ドキュメントパッチを適用）</value>
+  </data>
+  <data name="All" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>適用済みリビジョン</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>サブタスク ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>タスク ID</value>
+  </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>最後の Git チェックでは、リポジトリがブランチ「{1}」で {0} 件遅れていました。現在のプロジェクトスナップショットを使用する前に同期してください。</value></data>
 </root>

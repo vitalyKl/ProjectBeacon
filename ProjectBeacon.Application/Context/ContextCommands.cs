@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 /// <summary>
 /// One context section, including scope, source, and body.
@@ -23,7 +24,8 @@ public record ContextSectionDto(
     ContextReviewState ReviewState,
     string? UpdatedByType,
     string? UpdatedById,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    int Revision);
 /// <summary>
 /// Fields for creating or replacing a context section. Source defaults to Native in the handler when omitted on the wire.
 /// </summary>
@@ -38,11 +40,12 @@ public record UpsertContextNodeRequest(
     Guid? TaskId,
     string? Path,
     ContextSource Source,
-    string? SourcePath);
+    string? SourcePath,
+    int? ExpectedRevision = null);
 /// <summary>
 /// Command for upsert context node.
 /// </summary>
-public record UpsertContextNodeCommand(UpsertContextNodeRequest Request) : ICommand<Result<ContextSectionDto>>;
+public record UpsertContextNodeCommand(UpsertContextNodeRequest Request, ActorContext? Actor = null) : ICommand<Result<ContextSectionDto>>;
 /// <summary>
 /// Fields for list context nodes.
 /// </summary>
@@ -66,4 +69,4 @@ public record DeleteContextNodeRequest(Guid ProjectId, Guid NodeId);
 /// <summary>
 /// Command for delete context node.
 /// </summary>
-public record DeleteContextNodeCommand(DeleteContextNodeRequest Request) : ICommand<Result>;
+public record DeleteContextNodeCommand(DeleteContextNodeRequest Request, ActorContext? Actor = null) : ICommand<Result>;

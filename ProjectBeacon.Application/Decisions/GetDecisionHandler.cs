@@ -18,7 +18,7 @@ public sealed class GetDecisionHandler
         var decision = await db.Decisions.AsNoTracking()
             .Where(item => item.ProjectId == projectId && item.Id == decisionId)
             .Select(item => new DecisionDto(item.Id, item.Title, item.Context, item.DecisionBody,
-                item.Consequences, item.Status, item.ProjectId, item.SupersededById))
+                item.Consequences, item.Status, item.ProjectId, item.SupersededById, item.Revision))
             .FirstOrDefaultAsync(ct);
         return decision is null
             ? Result.Failure<DecisionDto>("Decision not found.", ErrorKind.NotFound)

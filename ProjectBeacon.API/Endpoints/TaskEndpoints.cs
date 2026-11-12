@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API;
 
 using Application.Common;
+using Application.Context;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
 using Application.Persistence;
@@ -31,6 +32,10 @@ public static class TaskEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/tasks", ListTasks).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", GetTaskInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/tasks/{taskId:guid}", GetTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions", ListTaskContentVersions)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions/{versionId:guid}/restore", RestoreTaskContentVersion)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/status", ChangeStatusInProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/status", ChangeStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -69,16 +74,50 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
+    private static async Task<IResult> ListTaskContentVersions(
+        Guid projectId,
+        Guid taskId,
+        [FromQuery] int? limit,
+        HttpContext ctx,
+        ListContentVersionsHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            projectId, ContentTargetKind.TaskDescription, taskId, ctx.GetActor(), limit ?? 50, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> RestoreTaskContentVersion(
+        Guid projectId,
+        Guid taskId,
+        Guid versionId,
+        [FromBody] ContextEndpoints.RestoreContentVersionRequest request,
+        HttpContext ctx,
+        RestoreContentVersionHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestoreContentVersionCommand(
+            projectId,
+            versionId,
+            request.ExpectedRevision,
+            ctx.GetActor(),
+            ContentTargetKind.TaskDescription,
+            taskId), ct);
+
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
     private static async Task<IResult> UpdateTask(
         Guid taskId,
         [FromBody] UpdateTaskRequest request,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request), ct);
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -87,11 +126,12 @@ public static class TaskEndpoints
 
     private static async Task<IResult> DeleteTask(
         Guid taskId,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         var result = await dispatcher.SendAsync<Result>(
-            new DeleteTaskCommand(new DeleteTaskRequest(taskId)), ct);
+            new DeleteTaskCommand(new DeleteTaskRequest(taskId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.NoContent()
@@ -197,9 +237,15 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
+    private static async Task<IResult> AddReviewNotes(
+        Guid taskId,
+        [FromBody] string reviewNotes,
+        [FromHeader(Name = "If-Match")] int? expectedContentRevision,
+        HttpContext ctx,
+        AddReviewNotesHandler handler)
     {
-        var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
+        var result = await handler.HandleAsync(new AddReviewNotesCommand(
+            new AddReviewNotesRequest(taskId, reviewNotes, expectedContentRevision), ctx.GetActor()));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -209,7 +255,7 @@ public static class TaskEndpoints
     private static TaskItemDto MapTaskResponse(TaskItemDto dto) =>
         new(dto.Id, dto.Title, dto.Description, dto.Status, dto.Priority, dto.Type, dto.SubStage,
             dto.ProjectId, dto.LabelId, dto.MilestoneId, dto.ReviewNotes, dto.CreatedAt, dto.CompletedAt,
-            dto.Comments, dto.Dependencies);
+            dto.Comments, dto.Dependencies, dto.ContentRevision);
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);

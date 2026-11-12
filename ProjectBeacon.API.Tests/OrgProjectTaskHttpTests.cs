@@ -132,6 +132,7 @@ public sealed class OrgProjectTaskHttpTests
             type = 3
         });
         var taskId = created.GetProperty("id").GetGuid();
+        Assert.Equal(1, created.GetProperty("contentRevision").GetInt32());
         var other = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
         {
             title = "B",
@@ -155,9 +156,46 @@ public sealed class OrgProjectTaskHttpTests
             title = "A2",
             description = "two",
             priority = 2,
-            type = 3
+            type = 3,
+            expectedContentRevision = 1
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updatedBody.GetProperty("contentRevision").GetInt32());
+
+        var staleUpdate = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}", new
+        {
+            taskId,
+            title = "A3",
+            description = "stale",
+            priority = 2,
+            type = 3,
+            expectedContentRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleUpdate.StatusCode);
+
+        client.DefaultRequestHeaders.TryAddWithoutValidation("If-Match", "2");
+        var notesResponse = await client.PatchAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/review-notes",
+            "Review approved",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, notesResponse.StatusCode);
+        var notesBody = await notesResponse.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(3, notesBody.GetProperty("contentRevision").GetInt32());
+        client.DefaultRequestHeaders.Remove("If-Match");
+
+        var staleNotesResponse = await client.PatchAsJsonAsync(
+            $"/v1/projects/{projectId}/tasks/{taskId}/review-notes",
+            "Stale review",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleNotesResponse.StatusCode);
+
+        var taskHistory = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(3, taskHistory.GetArrayLength());
+        Assert.Equal(3, taskHistory[0].GetProperty("revision").GetInt32());
+
         var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}", TestContext.Current.CancellationToken);
         Assert.Equal("A2", got.GetProperty("title").GetString());
 
@@ -182,6 +220,11 @@ public sealed class OrgProjectTaskHttpTests
 
         var deleteDependent = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{taskId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, deleteDependent.StatusCode);
+        var retainedHistory = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/tasks/{taskId}/content-versions",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(4, retainedHistory.GetArrayLength());
+        Assert.Contains("deleted", retainedHistory[0].GetProperty("contentJson").GetString());
         var delete = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{otherId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }
@@ -240,6 +283,154 @@ public sealed class OrgProjectTaskHttpTests
         });
         Assert.Contains("## Tools for this task", compile.GetProperty("briefMarkdown").GetString());
         Assert.True(compile.GetProperty("tokenEstimate").GetInt32() > 0);
+    }
+
+    [Fact]
+    public async Task ContextUpsert_RequiresAndChecksExpectedRevision()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Context Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Context Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var url = $"/v1/projects/{projectId}/context/nodes";
+
+        var created = await PostJson(client, url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Initial",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0
+        });
+        Assert.Equal(1, created.GetProperty("revision").GetInt32());
+
+        var update = await client.PostAsJsonAsync(url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Updated",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0,
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updated.GetProperty("revision").GetInt32());
+
+        var stale = await client.PostAsJsonAsync(url, new
+        {
+            title = "Goals",
+            bodyMarkdown = "Stale overwrite",
+            sectionId = "goals",
+            scopeType = 0,
+            source = 0,
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var current = await client.GetFromJsonAsync<JsonElement>(url, TestContext.Current.CancellationToken);
+        Assert.Equal("Updated", current[0].GetProperty("bodyMarkdown").GetString());
+        Assert.Equal(2, current[0].GetProperty("revision").GetInt32());
+
+        var sectionId = created.GetProperty("id").GetGuid();
+        var history = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/content-versions?targetKind=0&targetId={sectionId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(2, history.GetArrayLength());
+        Assert.Equal(2, history[0].GetProperty("revision").GetInt32());
+        Assert.Equal("Human", history[0].GetProperty("changedByType").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(history[0].GetProperty("changedById").GetString()));
+
+        var originalVersionId = history[1].GetProperty("id").GetGuid();
+        var restore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var restored = await restore.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(3, restored.GetProperty("revision").GetInt32());
+        Assert.True(restored.GetProperty("changed").GetBoolean());
+
+        current = await client.GetFromJsonAsync<JsonElement>(url, TestContext.Current.CancellationToken);
+        Assert.Equal("Initial", current[0].GetProperty("bodyMarkdown").GetString());
+        Assert.Equal(3, current[0].GetProperty("revision").GetInt32());
+
+        var staleRestore = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/content-versions/{originalVersionId}/restore",
+            new { expectedRevision = 2 },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, staleRestore.StatusCode);
+
+        var draftsUrl = $"/v1/projects/{projectId}/context/drafts";
+        var draft = await PostJson(client, draftsUrl, new
+        {
+            title = "Agent notes",
+            bodyMarkdown = "First draft",
+            sectionId = "agent_notes",
+            scopeType = 0,
+            source = 0,
+            sourcePath = "task/123"
+        });
+        Assert.Equal(1, draft.GetProperty("revision").GetInt32());
+
+        var draftUpdate = await client.PostAsJsonAsync(draftsUrl, new
+        {
+            title = "Agent notes",
+            bodyMarkdown = "Updated draft",
+            sectionId = "agent_notes",
+            scopeType = 0,
+            source = 0,
+            sourcePath = "task/123",
+            expectedRevision = 1
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, draftUpdate.StatusCode);
+        var updatedDraft = await draftUpdate.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(2, updatedDraft.GetProperty("revision").GetInt32());
+    }
+
+    [Fact]
+    public async Task ContextImport_RecordsAuthenticatedHumanAttribution()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var userId = me.GetProperty("id").GetGuid();
+        var org = await PostJson(client, "/v1/orgs", new { name = "Import Attribution Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Import Attribution Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var imported = await PostJson(client, $"/v1/projects/{projectId}/context/import", new[]
+        {
+            new
+            {
+                fileName = "AGENTS.md",
+                content = "# Imported instructions\n\nPreserve source attribution.",
+                sourcePath = "AGENTS.md"
+            }
+        });
+        Assert.Equal(1, imported.GetProperty("created").GetInt32());
+
+        var nodes = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
+        var importedNode = nodes.EnumerateArray()
+            .Single(node => node.GetProperty("sectionId").GetString() == "agents");
+        var targetId = importedNode.GetProperty("id").GetGuid();
+
+        var history = await client.GetFromJsonAsync<JsonElement>(
+            $"/v1/projects/{projectId}/content-versions?targetKind=0&targetId={targetId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, history.GetArrayLength());
+        Assert.Equal("Human", history[0].GetProperty("changedByType").GetString());
+        Assert.Equal(userId.ToString("D"), history[0].GetProperty("changedById").GetString());
     }
 
     [Fact]

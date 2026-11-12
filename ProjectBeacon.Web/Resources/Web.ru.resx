@@ -2607,4 +2607,218 @@
   <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
   <data name="Characters" xml:space="preserve"><value>символов</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>Входящие предложения</value>
+  </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>Новая цель</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>Проверка предложений и изменений проектной базы знаний.</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>Участники могут рассматривать обычные изменения. Решения и ограничения утверждают только владельцы и администраторы.</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>Конфликт</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>Тип цели</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>Автор</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>Подходящих предложений: {0}.</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>Принять выбранные</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>Снять выделение</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>По выбранным фильтрам предложений нет.</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>Предложения с привязкой к ревизии</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>Предложение основано на устаревшей ревизии.</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>Текущая ревизия</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>Подробности предложения</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>Содержимое для применения при принятии (JSON)</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>Сравнить с исходным снимком</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>Исходный снимок</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>Исходный снимок больше недоступен.</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>Предлагаемое содержимое</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>Комментарий к решению</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>Предложение принято и применено.</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>Предложение отклонено.</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>Пакетное принятие: успешно — {0}, ошибок — {1}.</value>
+  </data>
+  <data name="Applying" xml:space="preserve">
+    <value>Применяется</value>
+  </data>
+  <data name="ProposalApplyQueued" xml:space="preserve">
+    <value>Патч документации поставлен в очередь workstation; принятие ожидает проверки результата.</value>
+  </data>
+  <data name="ProposalPatchQueuedCount" xml:space="preserve">
+    <value>Патчей документации поставлено в очередь: {0}.</value>
+  </data>
+  <data name="ProposalPatchApplying" xml:space="preserve">
+    <value>Патч документации применяется и проверяется на workstation.</value>
+  </data>
+  <data name="ProposalPatchApplied" xml:space="preserve">
+    <value>Патч документации применён и проверен.</value>
+  </data>
+  <data name="RepoPatchDocumentationOnly" xml:space="preserve">
+    <value>Это предложение содержит патч только документации. Здесь его нельзя редактировать; для изменения отклоните предложение и отправьте новое.</value>
+  </data>
+  <data name="DocumentationPatch" xml:space="preserve">
+    <value>Патч документации</value>
+  </data>
+  <data name="WorkstationCommand" xml:space="preserve">
+    <value>Команда workstation</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>Ранее существовавшие элементы на проверке</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>Черновики контекста, ожидающие проверки</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>Элементов на проверке нет.</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>Предлагаемые решения</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>Предлагаемые ограничения</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>Решения по управленческим элементам принимают только владельцы и администраторы проекта или организации.</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>Черновик контекста утверждён.</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>Черновик контекста отклонён и сохранён в истории.</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>Для просмотра входящих предложений требуется членство в проекте.</value>
+  </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>Удалённое содержимое</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>Удалено</value>
+  </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>История содержимого</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>История для этого элемента пока отсутствует.</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>Восстановить эту ревизию</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>Из выбранного снимка создана новая ревизия.</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>Предложения</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>Просмотр предложений, отправленных агентами при работе над задачей.</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>У этой задачи нет предложений.</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>Открыть входящие предложения</value>
+  </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>Политики принятия предложений</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>Выберите, какие поддерживаемые изменения содержимого можно применять автоматически. По умолчанию используется ручное принятие; для решений и ограничений всегда требуется Owner/Admin.</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>Не удалось загрузить настройки политик предложений.</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>Режим принятия</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>Ограничение</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>Вручную</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>Автоматически</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>Менять эти политики может только владелец или администратор проекта либо организации.</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>Политика предложений сохранена.</value>
+  </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>Построчное сравнение содержимого</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>Текстовых изменений нет.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>Применение изменений документации</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Режим Review оставляет изменения документации на проверку человеком. Auto применяет только документальные патчи этого профиля в разрешённых путях.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review (проверка человеком)</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto (применять патч документации)</value>
+  </data>
+  <data name="All" xml:space="preserve">
+    <value>Все</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>Применённая ревизия</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>Операция</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>ID подзадачи</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>ID задачи</value>
+  </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Синхронизируйте его перед работой с текущим снимком проекта.</value></data>
 </root>

@@ -10,11 +10,16 @@ public class Project : Entity, IOrgScoped
 {
     public Project() { }
 
+    public int Revision { get; private set; } = 1;
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public string? ReviewCheckCommand { get; private set; }
     /// <summary>Encrypted JSON containing this project's MCP server definitions and credentials.</summary>
     public string McpServersCipher { get; private set; } = string.Empty;
+    /// <summary>JSON map of target/operation proposal decisions; missing entries are Manual.</summary>
+    public string ProposalPoliciesJson { get; private set; } = "{}";
+    /// <summary>Optimistic-concurrency token for proposal policy edits, independent of content revision.</summary>
+    public int ProposalPolicyRevision { get; private set; } = 1;
     public Guid OrgId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -44,10 +49,35 @@ public class Project : Entity, IOrgScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Replaces the project proposal policy map without changing the project description revision.</summary>
+    public void SetProposalPoliciesJson(string policiesJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policiesJson);
+        ProposalPoliciesJson = policiesJson;
+        ProposalPolicyRevision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Restores the nullable description from a historical content snapshot.</summary>
+    public void RestoreDescriptionFromHistory(string? description)
+    {
+        if (string.Equals(Description, description, StringComparison.Ordinal))
+            return;
+
+        Description = description;
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Update(string? name = null, string? description = null, string? reviewCheckCommand = null)
     {
         if (name is not null) Name = name;
-        if (description is not null) Description = description;
+        if (description is not null)
+        {
+            if (!string.Equals(Description, description, StringComparison.Ordinal))
+                Revision++;
+            Description = description;
+        }
         if (reviewCheckCommand is not null)
             ReviewCheckCommand = string.IsNullOrWhiteSpace(reviewCheckCommand) ? null : reviewCheckCommand.Trim();
         UpdatedAt = DateTime.UtcNow;

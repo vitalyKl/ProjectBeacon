@@ -119,6 +119,77 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     }
 
     [Fact]
+    public async Task ConcurrentTaskContentWrites_ConflictsInsteadOfLeakingDuplicateRevision()
+    {
+        _postgres.RequirePostgres();
+        var (projectId, taskId) = await SeedTaskAsync("content revision race");
+
+        // Create revision 1 before both writers load the same task revision.
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var task = await seed.Tasks.SingleAsync(
+                    item => item.Id == taskId, TestContext.Current.CancellationToken);
+                new ContentWriter().AddVersion(seed, task, "System", "race-test-seed");
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var factory = _postgres.CreateFactory();
+        var bothWritersLoaded = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var loadedWriters = 0;
+        var ct = TestContext.Current.CancellationToken;
+
+        async Task<Result<int>> Run(string description)
+        {
+            using (TenantScope.EnterProjectScope(projectId))
+            {
+                await using var db = factory.CreateDbContext();
+                var task = await db.Tasks.SingleAsync(
+                    item => item.Id == taskId, ct);
+
+                Assert.Equal(1, task.ContentRevision);
+                task.Update(description: description);
+
+                if (Interlocked.Increment(ref loadedWriters) == 2)
+                    bothWritersLoaded.TrySetResult(true);
+
+                await bothWritersLoaded.Task.WaitAsync(ct);
+                return await new ContentWriter().SaveAsync(
+                    db, task, "Human", "concurrent-content-writer", ct);
+            }
+        }
+
+        var results = await Task.WhenAll(
+            Run("writer A"),
+            Run("writer B"));
+
+        Assert.Equal(1, results.Count(result => result.Success));
+        var conflict = Assert.Single(results, result => !result.Success);
+        Assert.Equal(ErrorKind.Conflict, conflict.Kind);
+
+        await using var verify = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var current = await verify.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == taskId, ct);
+            Assert.Equal(2, current.ContentRevision);
+            Assert.Contains(current.Description, new[] { "writer A", "writer B" });
+
+            var history = await verify.ContentVersions.AsNoTracking()
+                .Where(version => version.ProjectId == projectId
+                    && version.TargetKind == ContentTargetKind.TaskDescription
+                    && version.TargetId == taskId)
+                .OrderBy(version => version.Revision)
+                .ToListAsync(ct);
+            Assert.Equal(new[] { 1, 2 }, history.Select(version => version.Revision).ToArray());
+            Assert.Equal(2, history.Count);
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentReviewVerdict_OnlyOneRecords()
     {
         _postgres.RequirePostgres();

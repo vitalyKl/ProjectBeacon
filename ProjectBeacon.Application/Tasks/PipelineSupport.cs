@@ -46,6 +46,31 @@ internal static class PipelineSupport
     public static Task<TaskItem?> FindTaskAsync(IBeaconDb db, Guid taskId, CancellationToken ct)
         => db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
+    /// <summary>
+    /// Adds a non-blocking proposal Inbox snapshot to pipeline close notes. Expired pending
+    /// rows are excluded even when their durable status transition has not yet been materialized.
+    /// </summary>
+    public static async Task<string> AppendProposalInboxSummaryAsync(
+        IBeaconDb db,
+        Guid projectId,
+        Guid taskId,
+        string notes,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var pending = await db.Proposals.CountAsync(proposal =>
+            proposal.ProjectId == projectId
+            && proposal.TaskId == taskId
+            && proposal.Status == ProposalStatus.Pending
+            && proposal.ExpiresAt > now, ct);
+        var conflicted = await db.Proposals.CountAsync(proposal =>
+            proposal.ProjectId == projectId
+            && proposal.TaskId == taskId
+            && proposal.Status == ProposalStatus.Conflicted, ct);
+        return notes.TrimEnd()
+            + $"\n\nProposal Inbox at pipeline close (informational; does not block completion): {pending} Pending; {conflicted} Conflicted.";
+    }
+
     public static Task<string?> RoleInstructionsAsync(
         IBeaconDb db, Guid projectId, PipelineRole role, CancellationToken ct)
         => db.RoleBindings.AsNoTracking()

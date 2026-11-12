@@ -17,7 +17,7 @@
         @foreach (var comment in Task.Comments.OrderBy(c => c.CreatedAt))
         {
             <div class="beacon-task-comment mt-3">
-                <ChatMarkdown Text="@comment.Content" />
+                <MarkdownView Text="@comment.Content" />
                 <MudText Typo="Typo.caption"><LocalTime Value="comment.CreatedAt" Format="d" /></MudText>
             </div>
         }

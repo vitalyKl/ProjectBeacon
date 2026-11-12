@@ -35,6 +35,9 @@ public class TaskItem : Entity, IProjectScoped
     /// </summary>
     public int StateRevision { get; private set; }
 
+    /// <summary>Optimistic-concurrency token for Description and ReviewNotes content only.</summary>
+    public int ContentRevision { get; private set; } = 1;
+
     public Project Project { get; private set; } = null!;
     public Label? Label { get; private set; }
     public Milestone? Milestone { get; private set; }
@@ -42,7 +45,7 @@ public class TaskItem : Entity, IProjectScoped
     public ICollection<TaskDependency> Dependencies { get; private set; } = [];
     public ICollection<Subtask> Subtasks { get; private set; } = [];
 
-    public static TaskItem Create(string title, Guid projectId, TaskPriority priority = TaskPriority.Medium, TaskType type = TaskType.Task)
+    public static TaskItem Create(string title, Guid projectId, TaskPriority priority = TaskPriority.Medium, TaskType type = TaskType.Task, string? description = null)
     {
         var task = Entity.New<TaskItem>();
         task.Title = title;
@@ -50,6 +53,7 @@ public class TaskItem : Entity, IProjectScoped
         task.Status = TaskItemStatus.Todo;
         task.Priority = priority;
         task.Type = type;
+        task.Description = description;
         task.CreatedAt = DateTime.UtcNow;
         return task;
     }
@@ -57,9 +61,25 @@ public class TaskItem : Entity, IProjectScoped
     public void Update(string? title = null, string? description = null, TaskPriority? priority = null, TaskType? type = null)
     {
         if (title is not null) Title = title;
-        if (description is not null) Description = description;
+        if (description is not null && !string.Equals(Description, description, StringComparison.Ordinal))
+        {
+            Description = description;
+            ContentRevision++;
+        }
         if (priority is not null) Priority = priority.Value;
         if (type is not null) Type = type.Value;
+    }
+
+    /// <summary>Restores nullable description and review notes from a historical content snapshot.</summary>
+    public void RestoreContentFromHistory(string? description, string? reviewNotes)
+    {
+        if (string.Equals(Description, description, StringComparison.Ordinal)
+            && string.Equals(ReviewNotes, reviewNotes, StringComparison.Ordinal))
+            return;
+
+        Description = description;
+        ReviewNotes = reviewNotes;
+        ContentRevision++;
     }
 
     public void AssignLabel(Guid? labelId)
@@ -125,7 +145,11 @@ public class TaskItem : Entity, IProjectScoped
         if (string.IsNullOrWhiteSpace(notes))
             throw new ArgumentException("Review notes cannot be empty when moving to review.", nameof(notes));
 
-        ReviewNotes = notes;
+        if (!string.Equals(ReviewNotes, notes, StringComparison.Ordinal))
+        {
+            ReviewNotes = notes;
+            ContentRevision++;
+        }
     }
 
     /// <summary>Returns the task to Todo and clears <see cref="CompletedAt"/>.</summary>
@@ -169,6 +193,31 @@ public class TaskItem : Entity, IProjectScoped
                 throw new InvalidOperationException($"Unknown status: {target}");
         }
     }
+
+    /// <summary>Appends a system note to the task description and advances its content revision.</summary>
+    public void AppendDescription(string note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            throw new ArgumentException("Description note cannot be empty.", nameof(note));
+        var updated = string.IsNullOrEmpty(Description) ? note : Description + "\n\n" + note;
+        if (!string.Equals(Description, updated, StringComparison.Ordinal))
+        {
+            Description = updated;
+            ContentRevision++;
+        }
+    }
+
+    private void ClearReviewNotes()
+    {
+        if (ReviewNotes is not null)
+        {
+            ReviewNotes = null;
+            ContentRevision++;
+        }
+    }
+
+    /// <summary>Advances the content stream when a revisioned task target is deleted.</summary>
+    public void MarkContentDeleted() => ContentRevision++;
 
     private string StageName => PipelineStage?.ToString() ?? TaskPipelineStage.None.ToString();
 
@@ -226,7 +275,7 @@ public class TaskItem : Entity, IProjectScoped
             throw new ArgumentException("Review notes cannot be empty when closing the pipeline.", nameof(reviewNotes));
         if (PipelineStage is not (TaskPipelineStage.Approved or TaskPipelineStage.ReopenedForRevision))
             throw new InvalidOperationException($"Cannot close pipeline from stage {StageName}");
-        ReviewNotes = reviewNotes;
+        SetReviewNotes(reviewNotes);
         PipelineStage = TaskPipelineStage.Closed;
         if (Status != TaskItemStatus.Done)
             TransitionTo(TaskItemStatus.Done);
@@ -244,7 +293,7 @@ public class TaskItem : Entity, IProjectScoped
         PipelineStage = TaskPipelineStage.Cancelled;
         Status = TaskItemStatus.Todo;
         SubStage = default;
-        ReviewNotes = null;
+        ClearReviewNotes();
         CompletedAt = null;
         StateRevision++;
     }
@@ -255,7 +304,7 @@ public class TaskItem : Entity, IProjectScoped
         PipelineStage = null;
         Status = TaskItemStatus.Todo;
         SubStage = default;
-        ReviewNotes = null;
+        ClearReviewNotes();
         CompletedAt = null;
         StateRevision++;
     }

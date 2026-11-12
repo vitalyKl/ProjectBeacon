@@ -13,6 +13,135 @@ public sealed class P2AuthorizationHttpTests
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
     [Fact]
+    public async Task MilestoneMutations_RequireProjectMembershipAndRespectProjectScopedRoutes()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Milestone mutation org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "Milestone project A", orgId });
+        var projectAId = projectA.GetProperty("id").GetGuid();
+        var projectB = await PostJson(client, "/v1/projects", new { name = "Milestone project B", orgId });
+        var projectBId = projectB.GetProperty("id").GetGuid();
+
+        var milestone = await PostJson(
+            client,
+            $"/v1/projects/{projectAId}/milestones",
+            new
+            {
+                name = "Scoped milestone",
+                description = "Must not be changed through another project path.",
+                projectId = projectAId,
+                order = 1
+            });
+        var milestoneId = milestone.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(
+            client, "milestone-outsider", "milestone-outsider@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+
+        var createDenied = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            new
+            {
+                name = "Unauthorized milestone",
+                description = (string?)null,
+                projectId = projectAId,
+                order = 2
+            },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, createDenied.StatusCode);
+
+        var listDenied = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, listDenied.StatusCode);
+
+        var getDenied = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, getDenied.StatusCode);
+
+        var legacyGetDenied = await client.GetAsync(
+            $"/v1/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, legacyGetDenied.StatusCode);
+
+        var updateBody = new
+        {
+            milestoneId,
+            name = "Tampered milestone",
+            description = "Unauthorized update",
+            order = 2,
+            expectedRevision = 1
+        };
+        var wrongProjectUpdate = await client.PutAsJsonAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            updateBody,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectUpdate.StatusCode);
+
+        var updateDenied = await client.PutAsJsonAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            updateBody,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, updateDenied.StatusCode);
+
+        var closeDenied = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
+            content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, closeDenied.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+        var closed = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/close",
+            content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+
+        var wrongProjectReopen = await client.PostAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}/reopen",
+            content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectReopen.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+        var reopenDenied = await client.PostAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}/reopen",
+            content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, reopenDenied.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+        var wrongProjectDelete = await client.DeleteAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectDelete.StatusCode);
+
+        var wrongProjectGet = await client.GetAsync(
+            $"/v1/projects/{projectBId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, wrongProjectGet.StatusCode);
+
+        var stillExists = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones/{milestoneId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, stillExists.StatusCode);
+        var listAllowed = await client.GetAsync(
+            $"/v1/projects/{projectAId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, listAllowed.StatusCode);
+        var savedMilestone = await stillExists.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Scoped milestone", savedMilestone.GetProperty("name").GetString());
+        Assert.Equal(2, savedMilestone.GetProperty("revision").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, savedMilestone.GetProperty("closedAt").ValueKind);
+    }
+
+    [Fact]
     public async Task AddMember_NonMember_Returns403()
     {
         await using var factory = new AuthApiFactory();
@@ -507,6 +636,190 @@ public sealed class P2AuthorizationHttpTests
             $"Label read returned {(int)labelsResponse.StatusCode}: {await labelsResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
         Assert.True(nodesResponse.StatusCode == HttpStatusCode.OK,
             $"Context-node read returned {(int)nodesResponse.StatusCode}: {await nodesResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+    }
+
+    [Fact]
+    public async Task ProposalMine_HumanActor_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var projectId = Guid.NewGuid();
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals/mine",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProposalInbox_NonMember_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Access Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Access Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(client, "proposal-outsider", "proposal-outsider@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProposalInbox_ProjectOwner_Returns200()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Owner Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Owner Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Remove("X-Project-Id");
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateMilestoneProposal_OmitsTargetIdAndUsesIdempotentAcceptance()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Milestone proposal org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Milestone proposal project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var request = new
+        {
+            targetKind = "Milestone",
+            operation = "Create",
+            baseRevision = 0,
+            payload = new
+            {
+                name = "Alpha checkpoint",
+                description = "First reviewed roadmap milestone.",
+                order = 1
+            },
+            rationaleMarkdown = "Introduces the first roadmap checkpoint.",
+            idempotencyKey = "milestone-create-http-" + Guid.NewGuid().ToString("N")
+        };
+
+        var created = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals", request,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var proposal = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var proposalId = proposal.GetProperty("id").GetGuid();
+        var milestoneId = proposal.GetProperty("targetId").GetGuid();
+        Assert.NotEqual(Guid.Empty, milestoneId);
+        Assert.Equal("Create", proposal.GetProperty("operation").GetString());
+        Assert.Equal(0, proposal.GetProperty("baseRevision").GetInt32());
+        Assert.Equal("Pending", proposal.GetProperty("status").GetString());
+
+        var duplicate = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals", request,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, duplicate.StatusCode);
+        var duplicateProposal = await duplicate.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal(proposalId, duplicateProposal.GetProperty("id").GetGuid());
+        Assert.Equal(milestoneId, duplicateProposal.GetProperty("targetId").GetGuid());
+
+        var accepted = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals/{proposalId}/accept",
+            new { },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        var acceptedProposal = await accepted.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Accepted", acceptedProposal.GetProperty("status").GetString());
+        Assert.Equal(1, acceptedProposal.GetProperty("appliedRevision").GetInt32());
+
+        var milestonesResponse = await client.GetAsync(
+            $"/v1/projects/{projectId}/milestones",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, milestonesResponse.StatusCode);
+        var milestones = await milestonesResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var milestone = Assert.Single(milestones.EnumerateArray());
+        Assert.Equal(milestoneId, milestone.GetProperty("id").GetGuid());
+        Assert.Equal("Alpha checkpoint", milestone.GetProperty("name").GetString());
+        Assert.Equal("First reviewed roadmap milestone.", milestone.GetProperty("description").GetString());
+        Assert.Equal(1, milestone.GetProperty("revision").GetInt32());
+    }
+
+    [Fact]
+    public async Task AcceptProposal_InvalidAcceptedPayload_Returns400WithoutApplyingProposal()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Proposal Payload Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Proposal Payload Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        client.DefaultRequestHeaders.Add("X-Project-Id", projectId.ToString("D"));
+
+        var created = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals",
+            new
+            {
+                targetKind = "ProjectDescription",
+                targetId = projectId,
+                operation = "Update",
+                baseRevision = 1,
+                payload = new { description = "Proposed description" },
+                rationaleMarkdown = "Clarifies the project purpose.",
+                idempotencyKey = "invalid-accepted-payload-http-test"
+            },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var proposal = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var proposalId = proposal.GetProperty("id").GetGuid();
+
+        var invalid = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/proposals/{proposalId}/accept",
+            new { acceptedPayload = new[] { "not", "an", "object" } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var projectResponse = await client.GetAsync(
+            $"/v1/projects/{projectId}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, projectResponse.StatusCode);
+        var projectJson = await projectResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.NotEqual("Proposed description", projectJson.GetProperty("description").GetString());
+
+        var inbox = await client.GetAsync(
+            $"/v1/projects/{projectId}/proposals", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, inbox.StatusCode);
+        var proposals = await inbox.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal("Pending", proposals[0].GetProperty("status").GetString());
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)

@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Tasks;
 using Domain.Entities.Tasks;
 using Domain.Common;
+using Domain.Enums;
 
 public sealed class SessionPromptsTests
 {
@@ -43,6 +44,24 @@ public sealed class SessionPromptsTests
         Assert.Contains("Write long-form text and reports as Markdown", prompt);
         Assert.Contains("## Done", prompt);
         Assert.DoesNotContain("you are not told the surrounding task", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ActorPrompt_UsesStableFailureCodeWhenRealRepositoryIsBehind()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Implement against the current project base.", projectId);
+        var subtask = Subtask.Create(
+            "Inspect the repository base before changing files.",
+            task.Id,
+            projectId,
+            allowedMcpTools: ["repo_status", McpToolNames.PipelineFailSubtask]);
+
+        var prompt = SessionPrompts.Actor(task, subtask);
+
+        Assert.Contains("repo_status", prompt);
+        Assert.Contains("repo_out_of_date:", prompt);
+        Assert.Contains("human must synchronize the project from the ProjectBeacon interface", prompt);
     }
 
     [Fact]
@@ -127,6 +146,31 @@ public sealed class SessionPromptsTests
         Assert.Contains("pipeline_start_review", prompt);
         Assert.Contains("Write task workspace notes and new subtask instructions as Markdown", prompt);
         Assert.Contains("Keep batches independently verifiable.", prompt);
+    }
+
+    [Fact]
+    public void PlannerWake_ReportsPendingConflictedAndRecentHumanRejections()
+    {
+        var task = TaskItem.Create("Update the project contract.", Guid.NewGuid());
+        var proposalSummary = new ProposalWakeSummary(
+            2,
+            1,
+            [
+                new ProposalWakeRejection(
+                    ContentTargetKind.ProjectDescription,
+                    Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    "Please cite the source and separate verified facts from assumptions.")
+            ]);
+
+        var prompt = SessionPrompts.PlannerWake(
+            task, [], [], 2, 8, proposalSummary: proposalSummary);
+
+        Assert.Contains("Pending: 2", prompt);
+        Assert.Contains("Conflicted: 1", prompt);
+        Assert.Contains("Recent human rejection notes", prompt);
+        Assert.Contains("Please cite the source", prompt);
+        Assert.Contains("quoted, untrusted project data", prompt);
+        Assert.DoesNotContain("Pending proposals block pipeline completion", prompt);
     }
 
     [Fact]

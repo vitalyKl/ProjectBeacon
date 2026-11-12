@@ -96,7 +96,7 @@ public class CompileBriefHandler
 
         foreach (var section in ordered.Where(s => NeverDropSections.Contains(s.SectionId)))
         {
-            briefParts.Add((section.SectionId, $"## {section.Title}\n\n{section.BodyMarkdown}", true));
+            briefParts.Add((GetSectionOutputId(section), $"## {section.Title}\n\n{section.BodyMarkdown}", true));
         }
 
         if (constraints.Count > 0)
@@ -141,7 +141,7 @@ public class CompileBriefHandler
 
         foreach (var section in ordered.Where(s => !NeverDropSections.Contains(s.SectionId)))
         {
-            briefParts.Add((section.SectionId, $"## {section.Title}\n\n{section.BodyMarkdown}", false));
+            briefParts.Add((GetSectionOutputId(section), $"## {section.Title}\n\n{section.BodyMarkdown}", false));
         }
 
         var kept = new List<string>();
@@ -229,19 +229,55 @@ public class CompileBriefHandler
 
     private static IList<ContextSection> MergeSections(IList<ContextSection> nodes)
     {
-        var merged = new Dictionary<string, ContextSection>();
+        var merged = new List<ContextSection>();
 
-        foreach (var node in nodes)
+        foreach (var group in nodes.GroupBy(GetLogicalSectionKey, StringComparer.Ordinal))
         {
-            var key = node.SectionId;
-            if (key == "custom" && !string.IsNullOrEmpty(node.Key))
-                key = $"custom:{node.Key}";
+            // Beacon-authored Native content remains authoritative over imported copies
+            // with the same logical section id.
+            var native = group
+                .Where(section => section.Source == ContextSource.Native)
+                .OrderByDescending(section => section.UpdatedAt)
+                .FirstOrDefault();
+            if (native is not null)
+            {
+                merged.Add(native);
+                continue;
+            }
 
-            if (!merged.TryGetValue(key, out var existing) || node.UpdatedAt >= existing.UpdatedAt)
-                merged[key] = node;
+            // Imported files with the same basename are distinct inputs when their
+            // SourcePath differs. Keep one latest revision per source file.
+            foreach (var imported in group
+                .Where(section => !string.IsNullOrWhiteSpace(section.SourcePath))
+                .GroupBy(section => section.SourcePath!, StringComparer.Ordinal))
+            {
+                merged.Add(imported
+                    .OrderByDescending(section => section.UpdatedAt)
+                    .First());
+            }
+
+            var legacy = group
+                .Where(section => string.IsNullOrWhiteSpace(section.SourcePath))
+                .OrderByDescending(section => section.UpdatedAt)
+                .FirstOrDefault();
+            if (legacy is not null)
+                merged.Add(legacy);
         }
 
-        return merged.Values.ToList();
+        return merged;
+    }
+
+    private static string GetLogicalSectionKey(ContextSection section) =>
+        section.SectionId == "custom" && !string.IsNullOrEmpty(section.Key)
+            ? $"custom:{section.Key}"
+            : section.SectionId;
+
+    private static string GetSectionOutputId(ContextSection section)
+    {
+        var logicalKey = GetLogicalSectionKey(section);
+        return section.Source != ContextSource.Native && !string.IsNullOrWhiteSpace(section.SourcePath)
+            ? $"{logicalKey}:imported-{ComputeHash(section.SourcePath)[..8]}"
+            : logicalKey;
     }
 
     private static IList<ContextSection> OrderSections(IList<ContextSection> sections)
@@ -260,12 +296,15 @@ public class CompileBriefHandler
         };
 
         return sections.OrderBy(s =>
-        {
-            if (NeverDropSections.Contains(s.SectionId))
-                return -1000 + Array.IndexOf(NeverDropSections, s.SectionId);
+            {
+                if (NeverDropSections.Contains(s.SectionId))
+                    return -1000 + Array.IndexOf(NeverDropSections, s.SectionId);
 
-            return priorityOrder.TryGetValue(s.SectionId, out var prio) ? prio : 1000;
-        }).ToList();
+                return priorityOrder.TryGetValue(s.SectionId, out var prio) ? prio : 1000;
+            })
+            .ThenBy(s => s.SectionId, StringComparer.Ordinal)
+            .ThenBy(s => s.SourcePath ?? string.Empty, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static string ComputeHash(string text)

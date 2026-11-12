@@ -44,7 +44,7 @@ public static class WorkEndpoints
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),
             request.ReviewTranscriptRef,
-            request.ReviewRunId));
+            request.ReviewRunId), actor);
 
         var result = await handler.HandleAsync(command, ct);
 

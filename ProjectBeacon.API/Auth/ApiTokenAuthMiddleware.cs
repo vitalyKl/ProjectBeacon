@@ -201,7 +201,8 @@ public sealed class ApiTokenAuthMiddleware
             launchSessionTaskId,
             launchSessionRole,
             launchSessionStatus,
-            scope.AllowedMcpTools);
+            scope.AllowedMcpTools,
+            scope.ProfileKey);
         if (!allowed)
             return false;
 
@@ -292,7 +293,7 @@ public sealed class ApiTokenAuthMiddleware
                         return null;
                     return new HarnessCommandScope(
                         kind, projectId, pipeline.TaskId, pipeline.SessionId,
-                        pipeline.Role, pipeline.SubtaskId, actorSubtask.AllowedMcpTools);
+                        pipeline.Role, pipeline.SubtaskId, actorSubtask.AllowedMcpTools, actorSubtask.ProfileKey);
                 }
                 else if (pipeline.SubtaskId is not null)
                 {
@@ -342,7 +343,8 @@ public sealed class ApiTokenAuthMiddleware
         Guid? launchSessionTaskId = null,
         PipelineRole? launchSessionRole = null,
         SessionStatus? launchSessionStatus = null,
-        IReadOnlyList<string>? allowedMcpTools = null)
+        IReadOnlyList<string>? allowedMcpTools = null,
+        string? actorProfileKey = null)
     {
         if (projectId == Guid.Empty || string.IsNullOrWhiteSpace(path))
             return false;
@@ -384,7 +386,20 @@ public sealed class ApiTokenAuthMiddleware
                 return IsMcpToolGranted(allowedMcpTools, actorReadTool);
 
             if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
+            {
+                // Legacy Proposed/NeedsReview writes belong to knowledge-curator only.
+                // Re-check the persisted profile as well as the tool grant so old active
+                // subtasks cannot retain grants after the profile contract is tightened.
+                if (knowledgeWriteTool is McpToolNames.ContextCreateDraft
+                    or McpToolNames.ConstraintPropose
+                    or McpToolNames.DecisionPropose)
+                {
+                    if (!string.Equals(actorProfileKey, "knowledge-curator", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
                 return IsMcpToolGranted(allowedMcpTools, knowledgeWriteTool);
+            }
 
             if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
@@ -505,6 +520,8 @@ public sealed class ApiTokenAuthMiddleware
             return McpToolNames.GetConstraint;
         if (segments.Length == 5 && segments[3] == "context" && segments[4] == "nodes")
             return McpToolNames.ListContextNodes;
+        if (segments.Length == 5 && segments[3] == "proposals" && segments[4] == "mine")
+            return McpToolNames.KnowledgeProposals;
         if (segments.Length == 6 && segments[3] == "context" && segments[4] == "nodes"
             && Guid.TryParse(segments[5], out _))
             return McpToolNames.GetContextNode;
@@ -513,9 +530,17 @@ public sealed class ApiTokenAuthMiddleware
 
     private static string? ActorKnowledgeWriteToolForRequest(string[] segments, Guid projectId, string method)
     {
-        if (method != HttpMethods.Post || segments.Length != 5
+        if (method != HttpMethods.Post || segments.Length < 4
             || segments[0] != "v1" || segments[1] != "projects"
             || !GuidSegmentEquals(segments, 2, projectId))
+            return null;
+
+        if (segments.Length == 4 && segments[3] == "proposals")
+            return McpToolNames.KnowledgePropose;
+        if (segments.Length == 6 && segments[3] == "proposals"
+            && Guid.TryParse(segments[4], out _) && segments[5] == "withdraw")
+            return McpToolNames.KnowledgeWithdraw;
+        if (segments.Length != 5)
             return null;
 
         return (segments[3], segments[4]) switch
@@ -704,5 +729,6 @@ public sealed class ApiTokenAuthMiddleware
         Guid? SessionId,
         PipelineRole? Role,
         Guid? SubtaskId,
-        IReadOnlyList<string>? AllowedMcpTools = null);
+        IReadOnlyList<string>? AllowedMcpTools = null,
+        string? ProfileKey = null);
 }

@@ -9,6 +9,96 @@ using ProjectBeacon.Domain.Common;
 public sealed class McpApiToolsTests
 {
     [Fact]
+    public async Task ContentWriteTools_PassExpectedRevisionsToHttpApi()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var upsert = await McpApiTools.CallAsync(
+            McpToolNames.UpsertContextNode,
+            new JsonObject
+            {
+                ["title"] = "Goals",
+                ["bodyMarkdown"] = "Updated goals",
+                ["scopeType"] = "Project",
+                ["sectionId"] = "goals",
+                ["expectedRevision"] = 4
+            }, api, env);
+        Assert.False(upsert.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/context/nodes"
+            && call.Body.Contains("\"expectedRevision\":4", StringComparison.Ordinal));
+
+        var draft = await McpApiTools.CallAsync(
+            McpToolNames.ContextCreateDraft,
+            new JsonObject
+            {
+                ["title"] = "Agent notes",
+                ["bodyMarkdown"] = "Updated draft",
+                ["scopeType"] = "Project",
+                ["sectionId"] = "agent_notes",
+                ["expectedRevision"] = 2
+            }, api, env);
+        Assert.False(draft.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/context/drafts"
+            && call.Body.Contains("\"expectedRevision\":2", StringComparison.Ordinal));
+
+        var updateTask = await McpApiTools.CallAsync(
+            McpToolNames.UpdateTask,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["description"] = "Updated task",
+                ["expectedContentRevision"] = 7
+            }, api, env);
+        Assert.False(updateTask.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "PUT" && call.Path == $"/v1/projects/{projectId:D}/tasks/{taskId:D}"
+            && call.Body.Contains("\"expectedContentRevision\":7", StringComparison.Ordinal));
+
+        var notes = await McpApiTools.CallAsync(
+            McpToolNames.AddReviewNotes,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["reviewNotes"] = "Reviewed",
+                ["expectedContentRevision"] = 8
+            }, api, env);
+        Assert.False(notes.IsError);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "PATCH" && call.Path == $"/v1/projects/{projectId:D}/tasks/{taskId:D}/review-notes"
+            && call.IfMatchRevision == "8");
+    }
+
+    [Fact]
+    public async Task TaskUpdate_RequiresExpectedContentRevisionWhenDescriptionChanges()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.UpdateTask,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["description"] = "Changed without a base revision"
+            }, api, env);
+
+        Assert.True(result.IsError);
+        Assert.Contains("expectedContentRevision", result.Text, StringComparison.Ordinal);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
     public async Task TaskAttachFile_UploadsWorkspaceFileToCurrentTask()
     {
         var root = TempRoot();
@@ -338,6 +428,225 @@ public sealed class McpApiToolsTests
         }
     }
 
+    [Fact]
+    public async Task KnowledgePropose_UsesStableSubtaskBoundIdempotencyKey()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var targetId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ProjectDescription",
+            ["targetId"] = targetId.ToString("D"),
+            ["baseRevision"] = 3,
+            ["payload"] = new JsonObject { ["description"] = "Proposed Markdown description" },
+            ["rationaleMarkdown"] = "Clarifies the project purpose."
+        };
+
+        var first = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        var retry = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+
+        Assert.False(first.IsError, first.Text);
+        Assert.False(retry.IsError, retry.Text);
+
+        args["rationaleMarkdown"] = "Adds the missing audience and constraints.";
+        var revisedRationale = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.False(revisedRationale.IsError, revisedRationale.Text);
+
+        var calls = handler.Calls.Where(call => call.Path == $"/v1/projects/{projectId:D}/proposals").ToArray();
+        Assert.Equal(3, calls.Length);
+        Assert.All(calls, call => Assert.Equal("POST", call.Method));
+        var firstBody = JsonNode.Parse(calls[0].Body)!.AsObject();
+        var retryBody = JsonNode.Parse(calls[1].Body)!.AsObject();
+        var revisedBody = JsonNode.Parse(calls[2].Body)!.AsObject();
+        var firstKey = firstBody["idempotencyKey"]!.GetValue<string>();
+        Assert.Equal(firstKey, retryBody["idempotencyKey"]!.GetValue<string>());
+        Assert.NotEqual(firstKey, revisedBody["idempotencyKey"]!.GetValue<string>());
+        Assert.Equal("Adds the missing audience and constraints.", revisedBody["rationaleMarkdown"]!.GetValue<string>());
+        Assert.StartsWith("knowledge-propose:", firstKey, StringComparison.Ordinal);
+        Assert.Equal("Update", firstBody["operation"]!.GetValue<string>());
+        Assert.Equal(3, firstBody["baseRevision"]!.GetValue<int>());
+        Assert.Equal("Proposed Markdown description", firstBody["payload"]!["description"]!.GetValue<string>());
+        Assert.Equal(projectId.ToString("D"), calls[0].ProjectHeader);
+    }
+
+    [Fact]
+    public async Task KnowledgePropose_PreservesContextSectionHeadingEditsPayload()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var targetId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ContextSection",
+            ["targetId"] = targetId.ToString("D"),
+            ["baseRevision"] = 4,
+            ["payload"] = new JsonObject
+            {
+                ["edits"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["heading"] = "## Security",
+                        ["op"] = "replace",
+                        ["content"] = "Updated security details."
+                    }
+                }
+            },
+            ["rationaleMarkdown"] = "Updates only the security subsection."
+        };
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose, args, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls, item =>
+            item.Method == "POST" && item.Path == $"/v1/projects/{projectId:D}/proposals");
+        var body = JsonNode.Parse(call.Body)!.AsObject();
+        Assert.Equal("ContextSection", body["targetKind"]!.GetValue<string>());
+        Assert.Equal("Update", body["operation"]!.GetValue<string>());
+        Assert.Equal(4, body["baseRevision"]!.GetValue<int>());
+        Assert.Equal(targetId, Guid.Parse(body["targetId"]!.GetValue<string>()));
+        Assert.Equal("## Security", body["payload"]!["edits"]![0]!["heading"]!.GetValue<string>());
+        Assert.Equal("replace", body["payload"]!["edits"]![0]!["op"]!.GetValue<string>());
+        Assert.Equal("Updated security details.", body["payload"]!["edits"]![0]!["content"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task KnowledgePropose_RequiresActorSubtaskAndRejectsUnsupportedOperations()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var args = new JsonObject
+        {
+            ["targetKind"] = "ProjectDescription",
+            ["targetId"] = "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            ["baseRevision"] = 1,
+            ["payload"] = new JsonObject { ["description"] = "Updated" },
+            ["rationaleMarkdown"] = "A valid reason."
+        };
+
+        var missingScope = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.True(missingScope.IsError);
+        Assert.Contains("BEACON_SUBTASK_ID", missingScope.Text, StringComparison.Ordinal);
+
+        env.Set("BEACON_SUBTASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        args["operation"] = "Delete";
+        var unsupported = await McpApiTools.CallAsync(McpToolNames.KnowledgePropose, args, api, env);
+        Assert.True(unsupported.IsError);
+        Assert.Contains("Delete is supported for ContextSection", unsupported.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task KnowledgePropose_SupportsMilestoneCreateAndReviewedDelete()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var sectionId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var create = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose,
+            new JsonObject
+            {
+                ["targetKind"] = "Milestone",
+                ["operation"] = "Create",
+                ["baseRevision"] = 0,
+                ["payload"] = new JsonObject
+                {
+                    ["name"] = "Alpha milestone",
+                    ["description"] = "First milestone",
+                    ["order"] = 1
+                },
+                ["rationaleMarkdown"] = "Creates the first roadmap checkpoint."
+            },
+            api,
+            env);
+
+        Assert.False(create.IsError, create.Text);
+
+        var delete = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgePropose,
+            new JsonObject
+            {
+                ["targetKind"] = "ContextSection",
+                ["targetId"] = sectionId.ToString("D"),
+                ["operation"] = "Delete",
+                ["baseRevision"] = 4,
+                ["payload"] = new JsonObject(),
+                ["rationaleMarkdown"] = "Removes an obsolete reviewed section."
+            },
+            api,
+            env);
+
+        Assert.False(delete.IsError, delete.Text);
+        var calls = handler.Calls
+            .Where(call => call.Path == $"/v1/projects/{projectId:D}/proposals")
+            .ToArray();
+        Assert.Equal(2, calls.Length);
+
+        var createBody = JsonNode.Parse(calls[0].Body)!.AsObject();
+        Assert.Equal("Create", createBody["operation"]!.GetValue<string>());
+        Assert.Equal(0, createBody["baseRevision"]!.GetValue<int>());
+        Assert.False(createBody.ContainsKey("targetId"));
+        Assert.Equal("Alpha milestone", createBody["payload"]!["name"]!.GetValue<string>());
+
+        var deleteBody = JsonNode.Parse(calls[1].Body)!.AsObject();
+        Assert.Equal("Delete", deleteBody["operation"]!.GetValue<string>());
+        Assert.Equal(4, deleteBody["baseRevision"]!.GetValue<int>());
+        Assert.Equal(sectionId, Guid.Parse(deleteBody["targetId"]!.GetValue<string>()));
+        Assert.Empty(deleteBody["payload"]!.AsObject());
+        Assert.All(calls, call => Assert.Equal("POST", call.Method));
+    }
+
+    [Fact]
+    public async Task KnowledgeProposalsAndWithdraw_UseActorScopedRoutes()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var proposalId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_SUBTASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var listed = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgeProposals,
+            new JsonObject { ["status"] = "Rejected" }, api, env);
+        var withdrawn = await McpApiTools.CallAsync(
+            McpToolNames.KnowledgeWithdraw,
+            new JsonObject { ["proposalId"] = proposalId.ToString("D") }, api, env);
+
+        Assert.False(listed.IsError, listed.Text);
+        Assert.False(withdrawn.IsError, withdrawn.Text);
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "GET" && call.Path == $"/v1/projects/{projectId:D}/proposals/mine?status=Rejected");
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/proposals/{proposalId:D}/withdraw");
+    }
+
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
@@ -401,14 +710,15 @@ public sealed class McpApiToolsTests
 
     private sealed class RecordingHandler : HttpMessageHandler
     {
-        public List<(string Method, string Path, string Body, string? ProjectHeader)> Calls { get; } = [];
+        public List<(string Method, string Path, string Body, string? ProjectHeader, string? IfMatchRevision)> Calls { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             var project = request.Headers.TryGetValues("X-Project-Id", out var values) ? values.Single() : null;
+            var ifMatch = request.Headers.TryGetValues("If-Match", out var ifMatchValues) ? ifMatchValues.Single() : null;
             var path = request.RequestUri!.PathAndQuery;
-            Calls.Add((request.Method.Method, path, body, project));
+            Calls.Add((request.Method.Method, path, body, project, ifMatch));
 
             var payload = path switch
             {

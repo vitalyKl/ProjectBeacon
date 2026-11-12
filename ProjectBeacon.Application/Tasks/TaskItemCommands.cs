@@ -30,11 +30,12 @@ public record UpdateTaskRequest(
     TaskPriority? Priority,
     TaskType? Type,
     Guid? LabelId,
-    Guid? MilestoneId);
+    Guid? MilestoneId,
+    int? ExpectedContentRevision = null);
 /// <summary>
 /// Command for update task.
 /// </summary>
-public record UpdateTaskCommand(UpdateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
+public record UpdateTaskCommand(UpdateTaskRequest Request, ActorContext? Actor = null) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Fields for delete task.
 /// </summary>
@@ -42,7 +43,7 @@ public record DeleteTaskRequest(Guid TaskId);
 /// <summary>
 /// Command for delete task.
 /// </summary>
-public record DeleteTaskCommand(DeleteTaskRequest Request) : ICommand<Result>;
+public record DeleteTaskCommand(DeleteTaskRequest Request, ActorContext? Actor = null) : ICommand<Result>;
 /// <summary>
 /// Task and the in-progress sub-stage. The domain rejects this unless the task is InProgress.
 /// </summary>
@@ -70,11 +71,11 @@ public record SetDependenciesCommand(SetDependenciesRequest Request) : ICommand<
 /// <summary>
 /// Task and the review notes. Empty notes are rejected.
 /// </summary>
-public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes);
+public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes, int? ExpectedContentRevision = null);
 /// <summary>
 /// Command for add review notes.
 /// </summary>
-public record AddReviewNotesCommand(AddReviewNotesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record AddReviewNotesCommand(AddReviewNotesRequest Request, ActorContext? Actor = null) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the target status. Done fails unless a completed review run exists.
 /// </summary>
@@ -88,7 +89,8 @@ public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : IComman
 /// </summary>
 public record FinishWorkReview(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);
 /// <summary>
-/// Result is done, failed, skipped, or partial. ActorId is the principal user id supplied by the host, not a client body field. Done requires ReviewRunId.
+/// Result is done, failed, skipped, or partial. ActorId is retained for legacy access validation;
+/// the trusted caller identity is supplied separately on FinishWorkCommand. Done requires ReviewRunId.
 /// </summary>
 public record FinishWorkRequest(
     string TaskId,
@@ -101,7 +103,7 @@ public record FinishWorkRequest(
 /// <summary>
 /// Command for finish work.
 /// </summary>
-public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
+public record FinishWorkCommand(FinishWorkRequest Request, ActorContext? Actor = null) : ICommand<Result>;
 /// <summary>
 /// A task row, including status, priority, review notes, and timestamps.
 /// </summary>
@@ -120,7 +122,8 @@ public record TaskItemDto(
     DateTime CreatedAt,
     DateTime? CompletedAt,
     IList<TaskCommentDto> Comments,
-    IList<Guid> Dependencies);
+    IList<Guid> Dependencies,
+    int ContentRevision = 1);
 /// <summary>
 /// A comment, its author, and timestamps.
 /// </summary>

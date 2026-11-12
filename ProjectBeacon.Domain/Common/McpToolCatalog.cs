@@ -71,6 +71,9 @@ public static class McpToolNames
     public const string ContextCreateDraft = "context_create_draft";
     public const string ConstraintPropose = "constraint_propose";
     public const string DecisionPropose = "decision_propose";
+    public const string KnowledgePropose = "knowledge_propose";
+    public const string KnowledgeProposals = "knowledge_proposals";
+    public const string KnowledgeWithdraw = "knowledge_withdraw";
     public const string ListContextNodes = "list_context_nodes";
     public const string GetContextNode = "get_context_node";
     public const string UpsertContextNode = "upsert_context_node";
@@ -121,6 +124,8 @@ public static class McpToolNames
     public const string GetSignatures = "get_signatures";
     public const string GetCallers = "get_callers";
     public const string HashRange = "hash_range";
+    public const string HashFile = "hash_file";
+    public const string HashText = "hash_text";
     public const string ModelBind = "model_bind";
     public const string ModelStatus = "model_status";
     public const string TaskCreateSubtask = "task_create_subtask";
@@ -199,7 +204,10 @@ public static class McpToolCatalog
             // Pipeline knowledge authors can only create reviewable drafts and Proposed records.
             // The API role guard checks each dedicated proposal route against the subtask grant.
             ..Api(McpToolScope.Write, ApiTokenCapability.ContextRead,
-                McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose),
+                McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
+                McpToolNames.KnowledgePropose, McpToolNames.KnowledgeWithdraw),
+            ..Api(McpToolScope.Read, ApiTokenCapability.ContextRead,
+                McpToolNames.KnowledgeProposals),
 
             // Catalog and roadmap reads/writes.
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
@@ -226,7 +234,7 @@ public static class McpToolCatalog
             ..Workspace(McpToolScope.Read,
                 McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode,
                 McpToolNames.GetChangedScope, McpToolNames.GetSignatures, McpToolNames.GetCallers,
-                McpToolNames.HashRange),
+                McpToolNames.HashRange, McpToolNames.HashFile, McpToolNames.HashText),
             ..Workspace(McpToolScope.Write, McpToolNames.WriteFile, McpToolNames.ApplyPatch),
 
             // Session tools are dispatched by the MCP server's session handlers.

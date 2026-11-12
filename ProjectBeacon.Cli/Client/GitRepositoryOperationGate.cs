@@ -8,7 +8,9 @@ internal static class GitRepositoryOperationGate
     private sealed class RepositoryState
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
+        public object SessionSync { get; } = new();
         public int ActiveSessions;
+        public TaskCompletionSource<bool>? SessionsIdle;
     }
 
     private static readonly ConcurrentDictionary<string, RepositoryState> States =
@@ -24,14 +26,34 @@ internal static class GitRepositoryOperationGate
     public static IDisposable RegisterSession(string repositoryRoot)
     {
         var state = GetState(repositoryRoot);
-        Interlocked.Increment(ref state.ActiveSessions);
+        lock (state.SessionSync)
+        {
+            if (state.ActiveSessions == 0)
+                state.SessionsIdle = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            state.ActiveSessions++;
+        }
         return new SessionLease(state);
+    }
+
+    /// <summary>Waits for all sessions registered before and during this wait to release their leases.</summary>
+    public static Task WaitForNoSessionsAsync(string repositoryRoot, CancellationToken ct)
+    {
+        var state = GetState(repositoryRoot);
+        Task idle;
+        lock (state.SessionSync)
+        {
+            if (state.ActiveSessions == 0)
+                return Task.CompletedTask;
+            idle = state.SessionsIdle!.Task;
+        }
+        return idle.WaitAsync(ct);
     }
 
     public static bool HasActiveSessions(string repositoryRoot)
     {
         var state = GetState(repositoryRoot);
-        return Volatile.Read(ref state.ActiveSessions) > 0;
+        lock (state.SessionSync)
+            return state.ActiveSessions > 0;
     }
 
     public static string NormalizeRoot(string repositoryRoot)
@@ -65,8 +87,22 @@ internal static class GitRepositoryOperationGate
         public void Dispose()
         {
             var current = Interlocked.Exchange(ref _state, null);
-            if (current is not null)
-                Interlocked.Decrement(ref current.ActiveSessions);
+            if (current is null)
+                return;
+
+            TaskCompletionSource<bool>? idle = null;
+            lock (current.SessionSync)
+            {
+                if (current.ActiveSessions <= 0)
+                    throw new InvalidOperationException("Repository session lease count is invalid.");
+                current.ActiveSessions--;
+                if (current.ActiveSessions == 0)
+                {
+                    idle = current.SessionsIdle;
+                    current.SessionsIdle = null;
+                }
+            }
+            idle?.TrySetResult(true);
         }
     }
 }

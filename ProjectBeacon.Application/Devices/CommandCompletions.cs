@@ -1,11 +1,15 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using Application.Audit;
+using Application.Authorization;
+using Domain.Entities.Content;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Proposals;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +22,7 @@ internal static class CommandCompletions
 {
     private static readonly ICommandCompletion[] Effects =
     [
+        new RepoPatchCompletion(),
         new EvalRunCompletion(),
         new ReviewCheckCompletion(),
         new DesiredStateCompletion(),
@@ -40,6 +45,128 @@ internal static class CommandCompletions
     /// </summary>
     public static bool AcceptsGeneration(WorkstationCommand row, int? generation) =>
         generation is null ? row.Attempts == 0 : generation == row.Attempts + 1;
+}
+
+internal sealed class RepoPatchCompletion : ICommandCompletion
+{
+    public async Task ApplyAsync(
+        IBeaconDb db,
+        WorkstationCommand row,
+        bool success,
+        string? resultJson,
+        string? error,
+        CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.ApplyProposalPatch || row.ProjectId is not { } projectId)
+            return;
+
+        Guid? proposalId = null;
+        try
+        {
+            using var payload = JsonDocument.Parse(row.PayloadJson);
+            if (payload.RootElement.TryGetProperty("proposalId", out var rawId)
+                && rawId.ValueKind == JsonValueKind.String
+                && Guid.TryParse(rawId.GetString(), out var parsedId)
+                && parsedId != Guid.Empty)
+                proposalId = parsedId;
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+        if (proposalId is null)
+            return;
+
+        var proposal = await db.Proposals.FirstOrDefaultAsync(item =>
+            item.Id == proposalId.Value && item.ProjectId == projectId, ct);
+        if (proposal is null
+            || proposal.Status != ProposalStatus.Applying
+            || proposal.ApplyCommandId != row.Id)
+            return;
+
+        var now = DateTime.UtcNow;
+        var applied = success && IsConfirmedResult(proposal, resultJson);
+        if (applied)
+            proposal.CompleteApply(now);
+        else
+            proposal.ConflictApply(success ? "ApplyResultInvalid" : "WorkstationApplyFailed", now);
+
+        var orgId = await db.Projects
+            .Where(project => project.Id == projectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is { } resolvedOrgId)
+        {
+            var actor = new ActorContext(
+                ActorType.Worker, null, false, null, null, projectId, resolvedOrgId, ApiTokenCapability.None);
+            db.AuditEvents.Add(AuditEventFactory.ForActor(
+                actor,
+                applied ? "proposal.patch.applied" : "proposal.patch.apply_conflicted",
+                "Proposal",
+                proposal.Id.ToString("D"),
+                resolvedOrgId,
+                projectId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    newState = proposal.Status.ToString(),
+                    resultCode = applied ? "Verified" : success ? "InvalidResult" : "ApplyFailed"
+                })));
+        }
+    }
+
+    private static bool IsConfirmedResult(Proposal proposal, string? resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson)
+            || !RepoPatchValidation.TryRead(proposal.PayloadJson, out _, out var expectedFiles))
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("projectId", out var projectElement)
+                || projectElement.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(projectElement.GetString(), out var resultProjectId)
+                || resultProjectId != proposal.ProjectId
+                || !root.TryGetProperty("proposalId", out var idElement)
+                || idElement.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(idElement.GetString(), out var resultId)
+                || resultId != proposal.Id
+                || !root.TryGetProperty("applied", out var appliedElement)
+                || appliedElement.ValueKind != JsonValueKind.True
+                || !root.TryGetProperty("files", out var filesElement)
+                || filesElement.ValueKind != JsonValueKind.Array
+                || filesElement.GetArrayLength() != expectedFiles.Count)
+                return false;
+
+            foreach (var expected in expectedFiles)
+            {
+                var actual = filesElement.EnumerateArray().SingleOrDefault(file =>
+                    file.ValueKind == JsonValueKind.Object
+                    && file.TryGetProperty("projectPath", out var path)
+                    && path.ValueKind == JsonValueKind.String
+                    && string.Equals(path.GetString(), expected.ProjectPath, StringComparison.Ordinal));
+                if (actual.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (expected.ResultHash is null)
+                {
+                    if (!actual.TryGetProperty("deleted", out var deleted) || deleted.ValueKind != JsonValueKind.True)
+                        return false;
+                }
+                else if (!actual.TryGetProperty("resultHash", out var hash)
+                    || hash.ValueKind != JsonValueKind.String
+                    || !string.Equals(hash.GetString(), expected.ResultHash, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            return true;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
 }
 
 internal sealed class ChatSessionCompletion : ICommandCompletion

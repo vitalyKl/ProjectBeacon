@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
+using Application.Proposals;
 using Domain.Entities.Context;
 using Domain.Enums;
 using Application.Persistence;
@@ -11,8 +13,18 @@ using Microsoft.EntityFrameworkCore;
 public class UpsertContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     public Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
         => HandleCoreAsync(command, isDraft: false, authorId: null, ct);
@@ -28,6 +40,23 @@ public class UpsertContextNodeHandler
             return Result.Failure<ContextSectionDto>("Title and bodyMarkdown are required.");
 
         await using var db = _dbFactory.CreateDbContext();
+        if (isDraft)
+        {
+            if (command.Actor is not { } draftActor
+                || !await ProposalProjectAuthorization.CanSubmitAsync(
+                    db, draftActor, command.Request.ProjectId, ct))
+                return Result.Forbidden<ContextSectionDto>(
+                    "Project membership or a project-bound ContextRead Actor token is required to create a context draft.");
+        }
+        else if (command.Actor is { } humanActor
+            && (!humanActor.IsHuman
+                || !await ProposalProjectAuthorization.CanWriteAsync(
+                    db, humanActor, command.Request.ProjectId, ct)))
+        {
+            return Result.Forbidden<ContextSectionDto>(
+                "Project membership is required to edit reviewed context.");
+        }
+
         var path = command.Request.Path ?? string.Empty;
         var sectionId = command.Request.SectionId
             ?? command.Request.Title.ToLowerInvariant().Replace(" ", "_");
@@ -53,6 +82,19 @@ public class UpsertContextNodeHandler
                     "An agent draft may only update its own NeedsReview section; reviewed or other-author sections are protected.",
                     ErrorKind.Forbidden);
 
+            var contentChanged =
+                !string.Equals(existing.Title, command.Request.Title, StringComparison.Ordinal)
+                || !string.Equals(existing.BodyMarkdown, command.Request.BodyMarkdown, StringComparison.Ordinal)
+                || (isDraft
+                    && (existing.Source != ContextSource.Native
+                        || !string.Equals(existing.SourcePath, command.Request.SourcePath, StringComparison.Ordinal)
+                        || existing.ReviewState != ContextReviewState.NeedsReview));
+            if (contentChanged
+                && command.Request.ExpectedRevision != existing.Revision)
+                return Result.Failure<ContextSectionDto>(
+                    "Context section changed since it was loaded. Refresh the section and retry.",
+                    ErrorKind.Conflict);
+
             if (isDraft)
                 existing.UpdateDraft(command.Request.Title, command.Request.BodyMarkdown,
                     command.Request.SourcePath, authorId);
@@ -61,7 +103,26 @@ public class UpsertContextNodeHandler
                     title: command.Request.Title,
                     bodyMarkdown: command.Request.BodyMarkdown,
                     updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
-                    updatedById: command.Request.SourcePath);
+                    updatedById: isDraft ? authorId : command.Actor?.UserId?.ToString("D") ?? command.Request.SourcePath);
+
+            if (contentChanged)
+            {
+                var attribution = isDraft
+                    ? ("Agent", authorId)
+                    : command.Actor is not null
+                        ? ContentAttribution.FromActor(command.Actor)
+                        : command.Request.Source == ContextSource.Native
+                            ? ("Human", command.Request.SourcePath)
+                            : ("System", command.Request.SourcePath);
+                var saved = await _contentWriter.SaveAsync(
+                    db, existing, attribution.Item1, attribution.Item2, ct);
+                if (!saved.Success)
+                    return Result.Failure<ContextSectionDto>(saved.Error ?? "Content revision conflict.", ErrorKind.Conflict);
+            }
+            else
+            {
+                await db.SaveChangesAsync(ct);
+            }
 
             savedId = existing.Id;
         }
@@ -81,9 +142,20 @@ public class UpsertContextNodeHandler
                 source: isDraft ? ContextSource.Native : command.Request.Source,
                 sourcePath: command.Request.SourcePath,
                 updatedByType: isDraft ? "agent" : command.Request.Source == ContextSource.Native ? "user" : "system",
-                updatedById: isDraft ? authorId : command.Request.SourcePath);
+                updatedById: isDraft ? authorId : command.Actor?.UserId?.ToString("D") ?? command.Request.SourcePath);
 
             db.ContextSections.Add(section);
+            var attribution = isDraft
+                ? ("Agent", authorId)
+                : command.Actor is not null
+                    ? ContentAttribution.FromActor(command.Actor)
+                    : command.Request.Source == ContextSource.Native
+                        ? ("Human", command.Request.SourcePath)
+                        : ("System", command.Request.SourcePath);
+            var saved = await _contentWriter.SaveAsync(
+                db, section, attribution.Item1, attribution.Item2, ct);
+            if (!saved.Success)
+                return Result.Failure<ContextSectionDto>(saved.Error ?? "Content version could not be saved.");
             savedId = section.Id;
         }
 
@@ -117,6 +189,7 @@ public class UpsertContextNodeHandler
             section.ReviewState,
             section.UpdatedByType,
             section.UpdatedById,
-            section.UpdatedAt);
+            section.UpdatedAt,
+            section.Revision);
     }
 }

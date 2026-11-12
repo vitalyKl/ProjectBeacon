@@ -14,6 +14,7 @@
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Application.Proposals
 @using ProjectBeacon.API.Endpoints
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -21,6 +22,7 @@
 @inject GetCurrentProjectHandler CurrentProject
 @inject ListDevicesHandler Devices
 @inject GetLivePipelineTaskHandler LivePipeline
+@inject GetProposalInboxSummaryHandler InboxSummary
 @inject IJSRuntime JS
 @inject BeaconThemeState Theme
 
@@ -108,6 +110,12 @@
                 <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">
                     @L["AgentChat"]
                 </MudNavLink>
+                <MudNavLink Href="/inbox" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inbox">
+                    <MudBadge Content="@_inboxAttentionCount" Visible="@(_inboxAttentionCount > 0)"
+                              Color="Color.Warning" Overlap="true" Bordered="true">
+                        @L["ProposalInbox"]
+                    </MudBadge>
+                </MudNavLink>
                 <div class="beacon-nav-label">@L["NavGovern"]</div>
                 <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
                     @L["Projects"]
@@ -149,6 +157,7 @@
     {
         <a href="@_pipelineHref" class="@MobileActive("pipeline")"><MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" /><span>@L["Pipeline"]</span></a>
     }
+    <a href="/inbox" class="@MobileActive("inbox")"><MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Small" /><span>@L["ProposalInbox"]</span>@if (_inboxAttentionCount > 0) { <span class="beacon-mobile-badge">@_inboxAttentionCount</span> }</a>
     <a href="/chat" class="@MobileActive("chat")"><MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Small" /><span>@L["Chat"]</span></a>
     <a href="/settings" class="@MobileActive("settings")"><MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" /><span>@L["Settings"]</span></a>
 </nav>
@@ -172,6 +181,7 @@
     private bool _watchingSystem;
     private int _fleetTotal;
     private int _fleetOnline;
+    private int _inboxAttentionCount;
     private DotNetObjectReference<MainLayout>? _dotNet;
 
     private bool HasLivePipeline => _pipelineHref.StartsWith("/task/", StringComparison.OrdinalIgnoreCase);
@@ -205,6 +215,7 @@
             commands.Add(Cmd(L["Workstations"], L["NavIntelligence"], "/settings/workstations", Icons.Material.Filled.Computer));
             commands.Add(Cmd(L["Context"], L["NavIntelligence"], "/context", Icons.Material.Filled.MenuBook));
             commands.Add(Cmd(L["AgentChat"], L["NavIntelligence"], "/chat", Icons.Material.Filled.Chat));
+            commands.Add(Cmd(L["ProposalInbox"], L["NavGovern"], "/inbox", Icons.Material.Filled.Inbox));
             commands.Add(Cmd(L["Decisions"], L["NavGovern"], "/decisions", Icons.Material.Filled.Gavel));
             commands.Add(Cmd(L["Reports"], L["NavGovern"], "/reports", Icons.Material.Filled.Assessment));
             commands.Add(Cmd(L["ProjectSettings"], L["NavGovern"], "/project/settings", Icons.Material.Filled.Folder));
@@ -338,7 +349,6 @@
             return;
         var state = await AuthState;
         var actor = ActorContextFactory.FromPrincipal(state.User);
-        await TenantBinder.BindUserAsync(actor);
         await LoadProfile(state);
         if (actor.UserId is not Guid userId)
             return;
@@ -354,6 +364,15 @@
 
         if (project.Value?.Id is Guid projectId)
         {
+            var inbox = await InboxSummary.HandleAsync(projectId, actor);
+            _inboxAttentionCount = inbox.Success && inbox.Value is not null
+                ? inbox.Value.PendingProposals
+                    + inbox.Value.ConflictedProposals
+                    + inbox.Value.ProposedDecisions
+                    + inbox.Value.ProposedConstraints
+                    + inbox.Value.NeedsReviewContextSections
+                : 0;
+
             var livePipeline = await LivePipeline.HandleAsync(
                 new GetLivePipelineTaskCommand(new GetLivePipelineTaskRequest(projectId)));
             if (livePipeline.Success && livePipeline.Value is Guid liveTaskId)
@@ -372,8 +391,46 @@
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        RebuildChrome();
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            RebuildChrome();
+            await RefreshInboxAttentionAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshInboxAttentionAsync()
+    {
+        if (AuthState is null)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        var state = await AuthState;
+        var actor = ActorContextFactory.FromPrincipal(state.User);
+        if (actor.UserId is null)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        await TenantBinder.BindUserAsync(actor);
+        var project = await CurrentProject.HandleAsync(actor);
+        if (project.Value?.Id is not Guid projectId)
+        {
+            _inboxAttentionCount = 0;
+            return;
+        }
+
+        var inbox = await InboxSummary.HandleAsync(projectId, actor);
+        _inboxAttentionCount = inbox.Success && inbox.Value is not null
+            ? inbox.Value.PendingProposals
+                + inbox.Value.ConflictedProposals
+                + inbox.Value.ProposedDecisions
+                + inbox.Value.ProposedConstraints
+                + inbox.Value.NeedsReviewContextSections
+            : 0;
     }
 
     private void RebuildChrome()
@@ -391,6 +448,7 @@
             "backlog" => (L["Backlog"].Value, L["ShellHintBacklog"].Value),
             "roadmap" => (L["Roadmap"].Value, L["ShellHintRoadmap"].Value),
             "context" => (L["Context"].Value, L["ShellHintContext"].Value),
+            "inbox" => (L["ProposalInbox"].Value, L["ShellHintProposalInbox"].Value),
             "decisions" => (L["Decisions"].Value, L["ShellHintDecisions"].Value),
             "chat" => (L["AgentChat"].Value, L["ShellHintChat"].Value),
             "reports" => (L["Reports"].Value, L["ShellHintReports"].Value),
@@ -435,6 +493,7 @@
             "board" => segment is "board" or "task",
             "pipeline" => segment == "task" && _pipelineHref.Contains(path, StringComparison.OrdinalIgnoreCase),
             "chat" => segment == "chat",
+            "inbox" => segment == "inbox",
             "settings" => segment == "settings" && !path.StartsWith("settings/agents", StringComparison.OrdinalIgnoreCase)
                 && !path.StartsWith("settings/workstations", StringComparison.OrdinalIgnoreCase),
             _ => false

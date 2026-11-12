@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Application.Runtime;
+using Application.Tasks;
 using Application.Security;
 using Application.Authorization;
 using Application.Common;
@@ -23,7 +24,7 @@ public sealed record IssueHarnessTokenCommand(Guid CommandId, int Generation, Ac
     : ICommand<Result<HarnessTokenDto>>;
 
 /// <summary>Ephemeral credential returned only to the authenticated workstation.</summary>
-public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null, IReadOnlyList<McpServerConfiguration>? McpServers = null);
+public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null, IReadOnlyList<McpServerConfiguration>? McpServers = null, IReadOnlyList<string>? AllowedPaths = null, string? ProfileKey = null, string ApplyPolicy = "Review");
 
 public sealed class IssueHarnessTokenHandler(
     IBeaconDbFactory dbFactory,
@@ -72,6 +73,9 @@ public sealed class IssueHarnessTokenHandler(
             return Result.Failure<HarnessTokenDto>("The command belongs to a different workstation process instance.", ErrorKind.Forbidden);
 
         IReadOnlyList<string>? allowedMcpTools = null;
+        IReadOnlyList<string>? allowedPaths = null;
+        string? profileKey = null;
+        var applyPolicy = "Review";
         if (work.Kind == WorkstationCommandKind.ChatPrompt)
         {
             if (!WorkstationCommandPayloads.TryReadChatPrompt(work.PayloadJson, out var chatPayload))
@@ -117,6 +121,35 @@ public sealed class IssueHarnessTokenHandler(
                     return Result.Failure<HarnessTokenDto>("The Actor subtask is not active for this pipeline session.", ErrorKind.Forbidden);
 
                 allowedMcpTools = subtask.AllowedMcpTools.ToArray();
+                profileKey = subtask.ProfileKey;
+
+                var profile = BuiltInAgentProfiles.Resolve(subtask.ProfileKey, subtask.ProfileSnapshotJson);
+                if (string.Equals(subtask.ProfileKey, "docs-writer", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (profile is null
+                        || !string.Equals(profile.Key, "docs-writer", StringComparison.OrdinalIgnoreCase)
+                        || profile.PathPolicy != AgentProfilePathPolicy.Defaults
+                        || profile.DefaultPaths.Count == 0)
+                        return Result.Failure<HarnessTokenDto>("The docs-writer profile has no safe documentation path grant.", ErrorKind.Forbidden);
+
+                    var selectedPaths = subtask.AllowedPaths.Count == 0
+                        ? profile.DefaultPaths
+                        : subtask.AllowedPaths;
+                    if (selectedPaths.Any(path => !BuiltInAgentProfiles.IsWithinDefaults(path, profile.DefaultPaths)))
+                        return Result.Failure<HarnessTokenDto>("The docs-writer subtask contains a path outside its documentation-only defaults.", ErrorKind.Forbidden);
+
+                    allowedPaths = selectedPaths.ToArray();
+                    if (!Enum.TryParse<AgentProfileApplyPolicy>(profile.ApplyPolicy, true, out var selectedPolicy)
+                        || !Enum.IsDefined(selectedPolicy))
+                        return Result.Failure<HarnessTokenDto>("The docs-writer apply policy is invalid.", ErrorKind.Forbidden);
+                    applyPolicy = selectedPolicy.ToString();
+                }
+                else
+                {
+                    // Non-documentation profiles can never opt into RepoPatch or Auto apply.
+                    allowedPaths = subtask.AllowedPaths.ToArray();
+                    applyPolicy = "Review";
+                }
             }
             else
             {
@@ -202,7 +235,7 @@ public sealed class IssueHarnessTokenHandler(
         db.ApiTokens.Add(tokenRow);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools, mcpServers));
+        return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools, mcpServers, allowedPaths, profileKey, applyPolicy));
     }
 
 }

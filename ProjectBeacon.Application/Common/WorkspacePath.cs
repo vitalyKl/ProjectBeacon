@@ -162,22 +162,15 @@ public static class WorkspacePath
         {
             try
             {
-                if (Directory.Exists(current))
-                {
-                    // LinkTarget uses lstat on Unix, so it detects the link itself even
-                    // when GetAttributes reports the target's metadata.
-                    if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint) ||
-                        new DirectoryInfo(current).LinkTarget is not null)
-                    {
-                        return true;
-                    }
-                }
-                else if (File.Exists(current) &&
-                    (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint) ||
-                     new FileInfo(current).LinkTarget is not null))
-                {
+                // Check LinkTarget before Exists: both Exists APIs return false for a dangling
+                // symbolic link, but writes through that link can still create a file outside root.
+                if (new FileInfo(current).LinkTarget is not null
+                    || new DirectoryInfo(current).LinkTarget is not null)
                     return true;
-                }
+
+                if ((Directory.Exists(current) || File.Exists(current))
+                    && File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint))
+                    return true;
             }
             catch (IOException)
             {

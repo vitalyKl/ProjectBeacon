@@ -54,6 +54,16 @@ else
                     }
                     <MudCheckBox T="bool" @bind-Value="profile.ReportsDiff"
                                  Label="@L["ExecutionProfileReportsDiff"]" />
+                    @if (string.Equals(profile.Basis.Key, "docs-writer", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <MudSelect T="string" @bind-Value="profile.ApplyPolicy"
+                                   Label="@L["ExecutionProfileApplyPolicy"]"
+                                   HelperText="@L["ExecutionProfileApplyPolicyHint"]"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
+                            <MudSelectItem Value="@("Review")">@L["ExecutionProfileApplyPolicyReview"]</MudSelectItem>
+                            <MudSelectItem Value="@("Auto")">@L["ExecutionProfileApplyPolicyAuto"]</MudSelectItem>
+                        </MudSelect>
+                    }
                     <MudDivider Class="my-2" />
                     <MudText Typo="Typo.subtitle2">@L["ExecutionProfileTools"]</MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ExecutionProfileToolHint"]</MudText>
@@ -168,7 +178,8 @@ else
             var result = await SaveOverride.HandleAsync(new SaveAgentProfileOverrideCommand(
                 new SaveAgentProfileOverrideRequest(
                     UserId, profile.Basis.Key, profile.Name, profile.Description, profile.Instruction,
-                    profile.Tools, profile.CommandsEnabled, profile.ReportsDiff, profile.SizeHint, profile.Effort)));
+                    profile.Tools, profile.CommandsEnabled, profile.ReportsDiff, profile.SizeHint, profile.Effort,
+                    profile.ApplyPolicy)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -220,6 +231,7 @@ else
             ReportsDiff = custom?.ReportsDiff ?? basis.ReportsDiff;
             SizeHint = custom?.SizeHint ?? basis.SizeHint;
             Effort = custom?.Effort ?? basis.Effort;
+            ApplyPolicy = custom?.ApplyPolicy ?? basis.ApplyPolicy;
         }
 
         public BuiltInAgentProfile Basis { get; }
@@ -232,5 +244,6 @@ else
         public bool ReportsDiff { get; set; }
         public string SizeHint { get; set; }
         public string Effort { get; set; }
+        public string ApplyPolicy { get; set; }
     }
 }

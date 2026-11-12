@@ -37,7 +37,7 @@
         .UseEmphasisExtras()
         .DisableHtml()
         .Build();
-    private static readonly ConcurrentDictionary<string, string> RenderCache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Lazy<string>> RenderCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentQueue<string> CacheOrder = new();
     private static readonly Regex AnchorTag = new("<a\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex LinkTargetAttributes = new("\\s+(?:target|rel)\\s*=\\s*(?:\"[^\"]*\"|'[^']*')", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -79,29 +79,41 @@
                 UseChatCodeActions ? "chat-code" : "plain", collapse, expand, copy);
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
 
-            if (RenderCache.TryGetValue(key, out var cached))
-                return cached;
+            var proposed = new Lazy<string>(() =>
+            {
+                var writer = new StringWriter();
+                var renderer = new Markdig.Renderers.HtmlRenderer(writer);
+                Pipeline.Setup(renderer);
+                if (UseChatCodeActions)
+                    renderer.ObjectRenderers.Insert(0, new ChatCodeBlockRenderer(collapse, expand, copy));
 
-            var writer = new StringWriter();
-            var renderer = new Markdig.Renderers.HtmlRenderer(writer);
-            Pipeline.Setup(renderer);
-            if (UseChatCodeActions)
-                renderer.ObjectRenderers.Insert(0, new ChatCodeBlockRenderer(collapse, expand, copy));
+                renderer.Render(Markdown.Parse(Text, Pipeline));
+                var html = ShiftHeadings(Sanitize(writer.ToString()));
+                if (Inline)
+                    html = ParagraphTags.Replace(html, string.Empty);
 
-            renderer.Render(Markdown.Parse(Text, Pipeline));
-            var html = ShiftHeadings(Sanitize(writer.ToString()));
-            if (Inline)
-                html = ParagraphTags.Replace(html, string.Empty);
+                Interlocked.Increment(ref _cacheMissCount);
+                return html;
+            }, LazyThreadSafetyMode.ExecutionAndPublication);
 
-            Interlocked.Increment(ref _cacheMissCount);
-            if (RenderCache.TryAdd(key, html))
+            var cached = RenderCache.GetOrAdd(key, proposed);
+            if (ReferenceEquals(cached, proposed))
             {
                 CacheOrder.Enqueue(key);
                 while (RenderCache.Count > CacheCapacity && CacheOrder.TryDequeue(out var oldest))
                     RenderCache.TryRemove(oldest, out _);
             }
 
-            return html;
+            try
+            {
+                return cached.Value;
+            }
+            catch
+            {
+                if (RenderCache.TryGetValue(key, out var current) && ReferenceEquals(current, cached))
+                    RenderCache.TryRemove(key, out _);
+                throw;
+            }
         }
     }
 

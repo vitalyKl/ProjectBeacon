@@ -25,12 +25,18 @@ public static class AuditEventFactory
             _ => throw new ArgumentOutOfRangeException(nameof(actor), "Unknown actor type.")
         };
 
+        // AuditEvent stores one principal per event. An API-token ActorContext may
+        // retain the owning user id for authorization, but the audit identity is the token.
+        var actorUserId = actor.Type == ActorType.Human ? actor.UserId : null;
+        var actorTokenId = actor.Type == ActorType.ApiToken ? actor.TokenId : null;
+        var actorDeviceId = actor.Type == ActorType.Device ? actor.DeviceId : null;
+
         return AuditEvent.Create(
             DateTime.UtcNow,
             actorKind,
-            actor.UserId,
-            actor.TokenId,
-            actor.DeviceId,
+            actorUserId,
+            actorTokenId,
+            actorDeviceId,
             action,
             targetType,
             targetId,

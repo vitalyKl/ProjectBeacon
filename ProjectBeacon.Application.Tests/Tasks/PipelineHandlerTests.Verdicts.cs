@@ -255,7 +255,8 @@ public sealed partial class PipelineHandlerTests
             Assert.True(asAdmin.Success, asAdmin.Error);
             Assert.Equal(TaskPipelineStage.Closed, asAdmin.Value!.Stage);
             Assert.Equal(TaskItemStatus.Done, asAdmin.Value.Status);
-            Assert.Equal("force-closed without review: obsolete", asAdmin.Value.ReviewNotes);
+            Assert.StartsWith("force-closed without review: obsolete", asAdmin.Value.ReviewNotes);
+            Assert.Contains("Proposal Inbox at pipeline close", asAdmin.Value.ReviewNotes);
         }
     }
 
@@ -278,7 +279,8 @@ public sealed partial class PipelineHandlerTests
                     new ForceClosePipelineRequest(done.Task.Id, "bcn_test_worker_token")), TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Error);
             Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
-            Assert.Equal("force-closed without review", result.Value.ReviewNotes);
+            Assert.StartsWith("force-closed without review", result.Value.ReviewNotes);
+            Assert.Contains("Proposal Inbox at pipeline close", result.Value.ReviewNotes);
         }
     }
     [Fact]

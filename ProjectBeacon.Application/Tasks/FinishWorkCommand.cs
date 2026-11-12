@@ -19,8 +19,18 @@ using System.Text;
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ContentWriter _contentWriter;
 
-    public FinishWorkHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public FinishWorkHandler(IBeaconDbFactory dbFactory)
+        : this(dbFactory, new ContentWriter())
+    {
+    }
+
+    public FinishWorkHandler(IBeaconDbFactory dbFactory, ContentWriter contentWriter)
+    {
+        _dbFactory = dbFactory;
+        _contentWriter = contentWriter;
+    }
 
     /// <summary>
     /// <c>done</c> requires a review run id for a run of this task that is not failed and is check proof, plus review notes or output. Unfixed regressions block done.
@@ -44,6 +54,7 @@ public class FinishWorkHandler
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
         var expectedRevision = task.StateRevision;
+        var expectedContentRevision = task.ContentRevision;
         var guardedTransition = resultType is "done" or "failed" or "error";
         var failedNote = resultType is "failed" or "error"
             ? "Failed: " + (command.Request.Output ?? "No output provided")
@@ -130,6 +141,7 @@ public class FinishWorkHandler
                     if (task.Status == TaskItemStatus.Todo && HasNote(task.Description, failedNote!))
                         return Result.Ok();
                     task.ResetToTodo();
+                    task.AppendDescription(failedNote!);
                     break;
 
                 case "skipped":
@@ -138,11 +150,21 @@ public class FinishWorkHandler
                         var note = "Note: " + (command.Request.Output ?? "No output provided");
                         // No state transition. The note appends atomically in SQL so concurrent
                         // reports both land instead of clobbering each other.
-                        await db.Tasks
+                        var appended = await db.Tasks
                             .Where(t => t.Id == taskId)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(t => t.Description,
-                                    t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note), ct);
+                                    t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note)
+                                .SetProperty(t => t.ContentRevision, t => t.ContentRevision + 1), ct);
+                        if (appended == 0)
+                            return Result.Failure("Task not found.");
+                        var currentTask = await db.Tasks.AsNoTracking()
+                            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+                        if (currentTask is null)
+                            return Result.Failure("Task not found.");
+                        var attribution = ResolveContentAttribution(command);
+                        _contentWriter.AddVersion(
+                            db, currentTask, attribution.Type, attribution.Id);
                         break;
                     }
 
@@ -159,20 +181,24 @@ public class FinishWorkHandler
                 // its stale revision is what rejects it at the database.
                 var updated = failedNote is null
                     ? await db.Tasks
-                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision && t.ContentRevision == expectedContentRevision)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(t => t.Status, task.Status)
                             .SetProperty(t => t.CompletedAt, task.CompletedAt)
                             .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                            .SetProperty(t => t.ContentRevision, task.ContentRevision)
                             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
                     : await db.Tasks
-                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .Where(t => t.Id == taskId
+                            && t.Status == expectedStatus
+                            && t.StateRevision == expectedRevision
+                            && t.ContentRevision == expectedContentRevision)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(t => t.Status, task.Status)
                             .SetProperty(t => t.CompletedAt, task.CompletedAt)
                             .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                            .SetProperty(t => t.Description,
-                                t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote)
+                            .SetProperty(t => t.Description, task.Description)
+                            .SetProperty(t => t.ContentRevision, task.ContentRevision)
                             .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct);
                 if (updated == 0)
                 {
@@ -198,6 +224,12 @@ public class FinishWorkHandler
                     await tx.RollbackAsync(ct);
                     return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
                 }
+            }
+
+            if (guardedTransition && task.ContentRevision != expectedContentRevision)
+            {
+                var attribution = ResolveContentAttribution(command);
+                _contentWriter.AddVersion(db, task, attribution.Type, attribution.Id);
             }
 
             if (Guid.TryParse(command.Request.ActorId, out var userId))
@@ -230,6 +262,19 @@ public class FinishWorkHandler
             }
             return Result.Ok();
         });
+    }
+
+    private static (string? Type, string? Id) ResolveContentAttribution(FinishWorkCommand command)
+    {
+        var trusted = ContentAttribution.FromActor(command.Actor);
+        if (trusted.Type is not null)
+            return trusted;
+
+        // Legacy internal worker-token callers remain supported for authorization,
+        // but the secret itself must never be copied into the immutable history.
+        return Guid.TryParse(command.Request.ActorId, out var userId)
+            ? ("Human", userId.ToString("D"))
+            : ("Worker", "worker");
     }
 
     private static async Task<Domain.Entities.Evals.ReviewRun?> FindReviewRun(

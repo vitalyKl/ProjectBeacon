@@ -1,14 +1,15 @@
 namespace ProjectBeacon.Application.Milestones;
 
+using Application.Authorization;
 using Application.Common;
 /// <summary>
 /// Fields for get milestone.
 /// </summary>
-public record GetMilestoneRequest(Guid MilestoneId);
+public record GetMilestoneRequest(Guid MilestoneId, Guid? ProjectId = null);
 /// <summary>
 /// Command for get milestone.
 /// </summary>
-public record GetMilestoneCommand(GetMilestoneRequest Request) : ICommand<Result<MilestoneDto>>;
+public record GetMilestoneCommand(GetMilestoneRequest Request, ActorContext Actor) : ICommand<Result<MilestoneDto>>;
 /// <summary>
 /// Fields for list project milestones.
 /// </summary>
@@ -16,4 +17,4 @@ public record ListProjectMilestonesRequest(Guid ProjectId);
 /// <summary>
 /// Command for list project milestones.
 /// </summary>
-public record ListProjectMilestonesCommand(ListProjectMilestonesRequest Request) : ICommand<Result<IList<MilestoneDto>>>;
+public record ListProjectMilestonesCommand(ListProjectMilestonesRequest Request, ActorContext Actor) : ICommand<Result<IList<MilestoneDto>>>;

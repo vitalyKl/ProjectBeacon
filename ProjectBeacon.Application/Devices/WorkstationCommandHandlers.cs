@@ -34,6 +34,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         if (command.Request.Kind == WorkstationCommandKind.GitSync)
             return Result.Forbidden<WorkstationCommandDto>(
                 "GitSync must be requested through the project GitSync endpoint.");
+        if (command.Request.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            return Result.Forbidden<WorkstationCommandDto>(
+                "Proposal patches can only be queued by the proposal review workflow.");
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
@@ -352,6 +355,20 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
                         .FirstOrDefaultAsync(ct);
                 }
             }
+            else if (row.Kind == WorkstationCommandKind.ApplyProposalPatch)
+            {
+                var proposalId = DevicePayloadReader.ReadGuid(row.PayloadJson, "proposalId");
+                if (proposalId is { } appliedProposalId)
+                {
+                    var proposalScope = await db.Proposals.IgnoreQueryFilters()
+                        .Where(proposal => proposal.Id == appliedProposalId
+                            && proposal.ProjectId == row.ProjectId)
+                        .Select(proposal => new { proposal.TaskId, proposal.SessionId })
+                        .FirstOrDefaultAsync(ct);
+                    dispatchTaskId = proposalScope?.TaskId;
+                    completedSessionId = proposalScope?.SessionId;
+                }
+            }
 
             try
             {
@@ -440,13 +457,36 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             .FirstOrDefaultAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
         if (row is null)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        if (row.Kind is not (WorkstationCommandKind.UpdateClient or WorkstationCommandKind.RunPipelineSession or WorkstationCommandKind.ChatPrompt))
+        if (row.Kind is not (WorkstationCommandKind.UpdateClient or WorkstationCommandKind.RunPipelineSession
+            or WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.ApplyProposalPatch))
             return Result.Failure<WorkstationCommandDto>("Progress reporting is not supported for this command.", ErrorKind.Conflict);
         if (row.Status != WorkstationCommandStatus.Running || row.Attempts + 1 != request.Generation)
             return Result.Failure<WorkstationCommandDto>("Command is no longer running in this generation.", ErrorKind.Conflict);
 
         if (row.Kind == WorkstationCommandKind.RunPipelineSession)
             return await ReportPipelineProgressAsync(db, request, waitingForUser, ct);
+
+        if (row.Kind == WorkstationCommandKind.ApplyProposalPatch)
+        {
+            // Applying an approved patch may wait for an active isolated Actor worktree
+            // to finish. Renew the lease and persist a small activity snapshot so that
+            // long waits are not mistaken for a lost daemon command.
+            var leaseExpiresAt = DateTime.UtcNow + CommandLease.For(row.Kind);
+            var renewedPatchCommand = await db.WorkstationCommands
+                .Where(commandRow => commandRow.Id == request.CommandId
+                    && commandRow.DeviceId == request.DeviceId
+                    && commandRow.Status == WorkstationCommandStatus.Running
+                    && commandRow.Attempts + 1 == request.Generation)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(commandRow => commandRow.LeaseExpiresAt, leaseExpiresAt)
+                    .SetProperty(commandRow => commandRow.ResultJson, request.ProgressJson), ct);
+            if (renewedPatchCommand != 1)
+                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
+            var currentPatchCommand = await db.WorkstationCommands.AsNoTracking()
+                .FirstAsync(commandRow => commandRow.Id == request.CommandId
+                    && commandRow.DeviceId == request.DeviceId, ct);
+            return Result.Ok(EnqueueCommandHandler.MapCommand(currentPatchCommand));
+        }
 
         if (row.Kind == WorkstationCommandKind.ChatPrompt)
         {

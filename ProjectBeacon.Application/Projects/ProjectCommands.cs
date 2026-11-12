@@ -14,7 +14,7 @@ public record CreateProjectCommand(CreateProjectRequest Request, ActorContext Ac
 /// Project to rename. An empty name fails. Requires project administer.
 /// ReviewCheckCommand is the trusted shell command for token review checks: null keeps the current value, empty clears it.
 /// </summary>
-public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Description, string? ReviewCheckCommand = null);
+public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Description, string? ReviewCheckCommand = null, int? ExpectedRevision = null);
 /// <summary>
 /// Command for update project.
 /// </summary>
@@ -49,4 +49,5 @@ public record ProjectDto(
     Guid OrgId,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    string? ReviewCheckCommand = null);
+    string? ReviewCheckCommand = null,
+    int Revision = 1);

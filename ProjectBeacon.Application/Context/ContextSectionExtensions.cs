@@ -27,7 +27,8 @@ public static class ContextSectionExtensions
             section.ReviewState,
             section.UpdatedByType,
             section.UpdatedById,
-            section.UpdatedAt);
+            section.UpdatedAt,
+            section.Revision);
     }
 
     public static IList<ContextSectionDto> MapToDtos(this IList<ContextSection> sections)

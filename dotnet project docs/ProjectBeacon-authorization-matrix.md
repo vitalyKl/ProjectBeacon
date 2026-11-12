@@ -136,7 +136,7 @@ Legend for the actor columns:
 | **Pipeline** | get = A / T(TaskRead) | start/subtask/review = A / T(TaskWrite) | — | — | approve/force-close | force-close = T(Admin) + H | `REVIEW REQUIRED`: pipeline **approve** needs only `TaskWrite`; `force-close` additionally needs `Admin` cap + human |
 | **Context / brief** | all nodes/constraints = A | upsert/import/constraints = A | — | node = A | compile/export = A | — | `REVIEW REQUIRED`: **no capability, no role gate** on the whole group |
 | **Decisions** | list/get = A | create = A | accept/deprecate/supersede = A | — | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
-| **Milestones** | list/get = A | create = A | update/close/reopen = A | delete = A | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
+| **Milestones** | list/get = Human project member or inherited org Owner/Admin | create/update/close/reopen/delete = same membership gate | — | — | — | `RequireHuman` plus explicit project membership in all handlers; project-scoped reads verify the URL ProjectId |
 | **Labels** | list/match = A | — | add-path = A | — | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
 | **Reports** | list/get/context-cost = A | generate = A | — | — | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
 | **Chat** | sessions/parts = H | session = H | prompt/abort = H | — | append-part/idle/usage = **D** (`RequireDevice`) | — | Human for drive; device-only stream ingestion routes are explicitly marked `RequireDevice` |
@@ -145,6 +145,7 @@ Legend for the actor columns:
 | **Model backends** | registry/proxy = H (registry) | upsert = H | bind/unbind/reload = A (no cap) | delete = H | proxy drive | — | `REVIEW REQUIRED`: bind/unbind/reload/proxy have **no capability and no role gate** |
 | **Eval** | — | run = H | — | — | — | — | Human-only (`UserId is null → 401`) |
 | **Work (finish_work)** | — | — | — | — | finish = H | — | `REVIEW REQUIRED`: `finish_work` needs only a human id — no task/project role check |
+| **Content proposals / policies** | list = H (project member); mine = T(ContextRead, own live Actor) | H (project member) / T(ContextRead, project-bound live Actor) | withdraw = original author only; policy = H-manage | — | accept/reject = H (project member); Decision/Constraint = H-manage | H-manage changes policy | List is human-only; token submission/withdrawal is bound to its active Actor task/subtask/session; RepoPatch is docs-writer-only and applies through a device command after approval. |
 | **Worker** | — | — | — | — | — | — | **Not an HTTP actor.** DB role + unscoped RLS, all projects. `BEACON_WORKER_TOKEN` is only an `ActorId` for finish-work / force-close (constant-time compare), never a bearer. |
 
 ---
@@ -222,6 +223,8 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 | DELETE | `/v1/tasks/{tid}` | TaskEndpoints.cs:24 | Any-auth | TaskWrite | none | — | `REVIEW REQUIRED` |
 | GET | `/v1/projects/{pid}/tasks` | TaskEndpoints.cs:25 | Any-auth | TaskRead | none | project | |
 | GET | `/v1/projects/{pid}/tasks/{tid}` | TaskEndpoints.cs:26 | Any-auth | TaskRead | none | project | |
+| GET | `/v1/projects/{pid}/tasks/{tid}/content-versions` | TaskEndpoints.cs:35 | Human or API token | TaskRead | exact project binding + TaskRead/Admin; task and project IDs are checked by the handler | task/project | Task history read is separate from ContextRead history. |
+| POST | `/v1/projects/{pid}/tasks/{tid}/content-versions/{vid}/restore` | TaskEndpoints.cs:37 | Human-only | — | project membership; handler verifies TaskDescription kind, route task ID, expected revision and project scope | task/project | Restore appends a new Task content revision; API tokens may read history but cannot restore it. |
 | GET | `/v1/tasks/{tid}` | TaskEndpoints.cs:27 | Any-auth | **none** | RLS only | — | `REVIEW REQUIRED`: single-task read has **no capability gate** (siblings do) |
 | PATCH | `/v1/projects/{pid}/tasks/{tid}/status` | TaskEndpoints.cs:28 | Any-auth | TaskWrite | none | project | |
 | PATCH | `/v1/tasks/{tid}/status` | TaskEndpoints.cs:29 | Any-auth | TaskWrite | none | — | |
@@ -266,7 +269,7 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 | GET | `/v1/projects/{pid}/context/nodes` | ContextEndpoints.cs:14 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
 | POST | `/v1/projects/{pid}/context/nodes` | ContextEndpoints.cs:15 | Any-auth | none | none | project | `REVIEW REQUIRED` (upsert/write) |
 | GET | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:16 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| DELETE | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:17 | Any-auth | none | none | project | `REVIEW REQUIRED` |
+| DELETE | `/v1/projects/{pid}/context/nodes/{nid}` | ContextEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler requires project membership or inherited org Owner/Admin | project | Writes a tombstone ContentVersion and `content.deleted` audit event before deleting the section; restore is Human/member-only. |
 | POST | `/v1/projects/{pid}/context/import` | ContextEndpoints.cs:18 | Any-auth | none | none | project | `REVIEW REQUIRED` (file import) |
 | GET | `/v1/projects/{pid}/context/export/agents-md` | ContextEndpoints.cs:19 | Any-auth | none | none | project | `REVIEW REQUIRED` |
 | POST | `/v1/projects/{pid}/context/compile` | ContextEndpoints.cs:20 | Any-auth | none | none | project | `REVIEW REQUIRED` |
@@ -293,16 +296,16 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
-| POST | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:16 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| PUT | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:17 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| PUT | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:18 | Any-auth | none | none | — | `REVIEW REQUIRED` |
-| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:19 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:20 | Any-auth | none | none | — | `REVIEW REQUIRED` |
-| GET | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:21 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| GET | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:22 | Any-auth | none | RLS only | project | `REVIEW REQUIRED` |
-| GET | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:23 | Any-auth | none | RLS only | — | `REVIEW REQUIRED` |
-| POST | `/v1/projects/{pid}/milestones/{mid}/close` | MilestoneEndpoints.cs:24 | Any-auth | none | none | project | `REVIEW REQUIRED` |
-| POST | `/v1/projects/{pid}/milestones/{mid}/reopen` | MilestoneEndpoints.cs:25 | Any-auth | none | none | project | `REVIEW REQUIRED` |
+| POST | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:23 | Human-only | — | Human project member or inherited org Owner/Admin; enforced by `CreateMilestoneHandler` | project | Creates initial ContentVersion atomically with the milestone. |
+| PUT | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:24 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Revision-checked update; appends ContentVersion. |
+| PUT | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:25 | Human-only | — | Human project member or inherited org Owner/Admin after resolving the milestone project | project (resolved) | Legacy route; same revision and membership checks as the project-scoped update. |
+| DELETE | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:26 | Human-only | — | `RequireHuman`; handler checks expected projectId and requires project membership or inherited org Owner/Admin | project | A mismatched projectId returns NotFound without deletion; writes a tombstone ContentVersion and `content.deleted` audit atomically. |
+| DELETE | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:27 | Human-only | — | `RequireHuman`; handler resolves the milestone project and requires project membership or inherited org Owner/Admin | project (resolved) | Legacy route; same tombstone, audit and restore semantics as project-scoped delete. |
+| GET | `/v1/projects/{pid}/milestones` | MilestoneEndpoints.cs:28 | Human-only | — | Human project member or inherited org Owner/Admin; the handler checks membership before querying across tenant filters | project | Lists only the requested project's milestones. |
+| GET | `/v1/projects/{pid}/milestones/{mid}` | MilestoneEndpoints.cs:29 | Human-only | — | Human project member or inherited org Owner/Admin; handler matches route ProjectId and checks membership before returning the row | project | A mismatched project/target pair returns NotFound. |
+| GET | `/v1/milestones/{mid}` | MilestoneEndpoints.cs:30 | Human-only | — | Human project member or inherited org Owner/Admin after resolving the target project | project (resolved) | Legacy route; membership is enforced in the handler. |
+| POST | `/v1/projects/{pid}/milestones/{mid}/close` | MilestoneEndpoints.cs:31 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Appends a ContentVersion when the state changes; repeated close is idempotent. |
+| POST | `/v1/projects/{pid}/milestones/{mid}/reopen` | MilestoneEndpoints.cs:32 | Human-only | — | Human project member or inherited org Owner/Admin; handler also verifies the URL projectId matches the milestone | project | Appends a ContentVersion when the state changes; repeated reopen is idempotent. |
 
 ### 4.9 Labels (`LabelEndpoints.cs`)
 
@@ -404,6 +407,28 @@ Capability gate `TaskWrite`/`TaskRead` on the route. Registry/proxy reads are hu
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
 | POST | `/v1/work/finish_work` | WorkEndpoints.cs:15 | Human-only | — | `UserId is null → 401` (:27) | task | `REVIEW REQUIRED`: `finish_work` only needs a human id — **no** task/project role or capability check; completes any task by `TaskId` |
+
+---
+
+### 4.17 Proposals (`ProposalEndpoints.cs`)
+
+| Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
+|---|---|---|---|---|---|---|---|
+| POST | `/v1/projects/{projectId}/proposals` | ProposalEndpoints.cs | Any-auth | ContextRead | Human: project membership; token: project-bound ContextRead plus live Actor claims/profile grant | project | RepoPatch additionally requires the built-in docs-writer Actor profile and its documentation-only path grant. |
+| GET | `/v1/projects/{projectId}/proposals` | ProposalEndpoints.cs | Human-only | — | project membership / inherited org Owner/Admin / system admin | project | Lists proposals visible in the project; API tokens and devices are blocked. |
+| GET | `/v1/projects/{projectId}/proposals/mine` | ProposalEndpoints.cs | API token only | ContextRead | Project-bound token plus matching live Actor task/subtask/session and profile grant | task / subtask / session | Returns only the current token's proposals for its active Actor session. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/accept` | ProposalEndpoints.cs | Human-only | — | project membership; Decision/Constraint additionally require Project Administer (project/org Owner/Admin or system admin) | project | RepoPatch acceptance queues ApplyProposalPatch; workstation revalidates local paths and hashes. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/reject` | ProposalEndpoints.cs | Human-only | — | project membership; Decision/Constraint additionally require Project Administer | project | Only Pending proposals can be rejected. |
+| POST | `/v1/projects/{projectId}/proposals/{proposalId}/withdraw` | ProposalEndpoints.cs | Human or ApiToken | ContextRead | Original Human author with project access, or same project-bound token + original live Actor task/subtask/session | project / Actor session | Only the original author may withdraw its own Pending proposal. |
+| GET | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | project membership / inherited org Owner/Admin / system admin | project | Members may inspect the policy matrix. |
+| PUT | `/v1/projects/{projectId}/proposal-policies` | ProposalEndpoints.cs | Human-only | — | Project Administer; project/org Owner/Admin or system admin; optimistic policy revision | project | Auto is supported only for RepoPatch Update and still requires the documentation profile's explicit Auto setting. |
+
+**Supported proposal operation pairs:** Update applies to the revisioned content targets and RepoPatch. Create is supported only for a new Milestone: MCP omits targetId, uses BaseRevision 0, and the server reserves the actual target ID before persisting the proposal. Delete is supported only for ContextSection, Milestone, Decision and Constraint. ContextSection/Milestone are physically removed after an immutable deletion snapshot is appended; Decision transitions to Deprecated and Constraint to Rejected. Decision/Constraint review still requires Project Administer. New Decision/Constraint records and new ContextSection drafts continue to use their existing Proposed/NeedsReview paths. RepoPatch is Update-only. Create/Delete are always Manual; Auto remains RepoPatch Update-only.
+
+Deleted ContextSection/Milestone targets are listed through the project-scoped human-only history query. Restore requires project membership, the expected target kind/ID, and the latest target revision to be the matching tombstone; it recreates the same target ID from the previous immutable snapshot as a new revision. Decision/Constraint history restore similarly appends a new revision and restores the historical lifecycle status. API tokens and devices cannot inspect or restore deleted content.
+The generic `GET /v1/projects/{projectId}/content-versions` route also performs Application-level scope checks: Human callers must be project members or inherited Owner/Admin; ApiToken callers must be bound to the exact route project and hold ContextRead or Admin. TaskDescription is excluded and must use its dedicated TaskRead-scoped history read route. Task restore is Human-only at both the route and handler, despite TaskWrite being available for other task mutations. The route middleware and RLS remain additional isolation layers, not substitutes for the handler check.
+
+> ApplyProposalPatch is a workstation command, not an HTTP endpoint. It is never available through generic device-command enqueue and is created only by a human acceptance or the explicitly enabled RepoPatch Auto policy.
 
 ---
 

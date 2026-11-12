@@ -8,6 +8,7 @@ public class Constraint : Entity, IProjectScoped
 {
     public Constraint() { }
 
+    public int Revision { get; private set; } = 1;
     public string Body { get; private set; } = string.Empty;
     public string ScopePath { get; private set; } = string.Empty;
     public ConstraintKind Kind { get; private set; }
@@ -27,11 +28,31 @@ public class Constraint : Entity, IProjectScoped
         return constraint;
     }
 
+    /// <summary>Updates all editable constraint content as one revision.</summary>
+    public void UpdateContent(string body, string? scopePath)
+    {
+        var normalizedPath = scopePath ?? string.Empty;
+        if (string.Equals(Body, body, StringComparison.Ordinal)
+            && string.Equals(ScopePath, normalizedPath, StringComparison.Ordinal))
+            return;
+
+        Body = body;
+        ScopePath = normalizedPath;
+        Revision++;
+    }
+
+    public void UpdateBody(string body) => UpdateContent(body, ScopePath);
+
+    /// <summary>Restores the editable body and scope path from a historical content snapshot.</summary>
+    public void RestoreContentFromHistory(string body, string scopePath)
+        => UpdateContent(body, scopePath);
+
     public void Activate()
     {
         if (Status == ConstraintStatus.Active)
             return;
         Status = ConstraintStatus.Active;
+        Revision++;
     }
 
     public void Reject()
@@ -39,10 +60,23 @@ public class Constraint : Entity, IProjectScoped
         if (Status == ConstraintStatus.Rejected)
             return;
         Status = ConstraintStatus.Rejected;
+        Revision++;
     }
 
-    public void SetScopePath(string path)
+    /// <summary>Restores content and lifecycle status from a historical snapshot as a new revision.</summary>
+    public void RestoreFromHistory(string body, string scopePath, ConstraintStatus status)
     {
-        ScopePath = path ?? string.Empty;
+        var normalizedPath = scopePath ?? string.Empty;
+        if (string.Equals(Body, body, StringComparison.Ordinal)
+            && string.Equals(ScopePath, normalizedPath, StringComparison.Ordinal)
+            && Status == status)
+            return;
+
+        Body = body;
+        ScopePath = normalizedPath;
+        Status = status;
+        Revision++;
     }
+
+    public void SetScopePath(string path) => UpdateContent(Body, path);
 }

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Mcp;
 
+using System.Security.Cryptography;
 using Application.Common;
 /// <summary>A bounded character page from a workspace file.</summary>
 public sealed record FileReadPage(string Content, int Offset, int Limit, int TotalCharacters, int NextOffset)
@@ -71,6 +72,33 @@ public sealed class FileWorkspace
 
         var content = text[start..end];
         return Result.Ok(new FileReadPage(content, start, limit, text.Length, end));
+    }
+
+    /// <summary>Computes SHA-256 over the exact file bytes without returning file content.</summary>
+    public Result<string> HashFile(string relativePath)
+    {
+        var resolved = WorkspacePath.ResolveInsideRoot(Root, relativePath);
+        if (!resolved.Success || resolved.Value is null)
+            return Result.Failure<string>(resolved.Error ?? "invalid path");
+        if (!File.Exists(resolved.Value))
+            return Result.Failure<string>("file not found");
+
+        try
+        {
+            using var stream = new FileStream(
+                resolved.Value,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 64 * 1024,
+                options: FileOptions.SequentialScan);
+            var hash = SHA256.HashData(stream);
+            return Result.Ok(Convert.ToHexString(hash).ToLowerInvariant());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return Result.Failure<string>("file could not be hashed safely");
+        }
     }
 
     public Result WriteFile(string relativePath, string content)

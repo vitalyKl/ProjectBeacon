@@ -417,3 +417,35 @@
     content: attr(data-error);
 }
 
+.proposal-diff {
+    max-height: 420px;
+    overflow: auto;
+    background: var(--color-bg-surface);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+    font-size: 0.82rem;
+}
+.proposal-diff-line {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.1rem 0.45rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.proposal-diff-line code {
+    font: inherit;
+    color: inherit;
+    white-space: pre-wrap;
+}
+.proposal-diff-line.is-added {
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    color: var(--color-text-primary);
+}
+.proposal-diff-line.is-removed {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    color: var(--color-text-primary);
+}
+.proposal-diff-prefix {
+    opacity: 0.8;
+    user-select: none;
+}

@@ -471,6 +471,28 @@
         color: var(--color-accent);
     }
 
+    .beacon-mobile-nav a {
+        position: relative;
+    }
+
+    .beacon-mobile-badge {
+        position: absolute;
+        top: -2px;
+        right: calc(50% - 22px);
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--color-warning);
+        color: var(--color-text-on-accent);
+        font-size: 10px;
+        line-height: 1;
+        font-weight: 700;
+    }
+
     .beacon-mobile-nav a:focus-visible {
         outline: 2px solid var(--color-accent);
         outline-offset: -2px;

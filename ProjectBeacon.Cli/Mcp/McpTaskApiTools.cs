@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Domain.Common;
@@ -26,10 +25,11 @@ internal static partial class McpApiTools
             () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
                 ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
                 ("path", "string", false), ("projectId", "string", false)), TaskCreate),
-        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone.",
+        new(McpToolNames.UpdateTask, "Update a task title, description, priority, type, label, or milestone. When changing description, pass expectedContentRevision from get_task; stale or missing revisions are rejected.",
             () => Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
                 ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
-                ("milestoneId", "string", false), ("projectId", "string", false)), TaskUpdate),
+                ("milestoneId", "string", false), ("projectId", "string", false),
+                ("expectedContentRevision", "integer", false)), TaskUpdate),
         new(McpToolNames.SetTaskStatus, "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
             () => Props(("taskId", "string", true), ("status", "string", true), ("projectId", "string", false)), TaskStatus),
         new(McpToolNames.SetTaskSubstage, "Set the in-progress sub-stage shown on the board.",
@@ -43,7 +43,7 @@ internal static partial class McpApiTools
         new(McpToolNames.SetTaskDependencies, "Replace the tasks this task depends on.",
             () => Props(("taskId", "string", true), ("dependentTaskIds", "array", true)), TaskDependencies),
         new(McpToolNames.AddReviewNotes, "Save review notes required before a task can move to Done.",
-            () => Props(("taskId", "string", true), ("reviewNotes", "string", true)), TaskReviewNotes),
+            () => Props(("taskId", "string", true), ("reviewNotes", "string", true), ("expectedContentRevision", "integer", true)), TaskReviewNotes),
         new(McpToolNames.ListTaskSteps, "List checklist steps on a task.",
             () => Props(("taskId", "string", true)), StepsList),
         new(McpToolNames.AddTaskStep, "Add a checklist step.",
@@ -243,11 +243,17 @@ internal static partial class McpApiTools
             return new McpToolText(true, "missing or invalid 'taskId'");
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "title", Text(args, "title"));
-        Put(body, "description", Text(args, "description"));
+        var description = Text(args, "description");
+        var expectedContentRevision = IntArg(args, "expectedContentRevision");
+        if (description is not null && (expectedContentRevision is null or < 1))
+            return new McpToolText(true, "missing or invalid 'expectedContentRevision' (read it from get_task first)");
+        Put(body, "description", description);
         Put(body, "priority", Text(args, "priority"));
         Put(body, "type", Text(args, "type"));
         Put(body, "labelId", Text(args, "labelId"));
         Put(body, "milestoneId", Text(args, "milestoneId"));
+        if (expectedContentRevision is not null)
+            body["expectedContentRevision"] = expectedContentRevision.Value;
         if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Put, $"v1/tasks/{taskId:D}", body, ct);
         return await SendAsync(api, HttpMethod.Put, $"v1/projects/{projectId:D}/tasks/{taskId:D}", body, ct);
@@ -325,9 +331,12 @@ internal static partial class McpApiTools
         var notes = Text(args, "reviewNotes");
         if (string.IsNullOrWhiteSpace(notes))
             return new McpToolText(true, "missing 'reviewNotes'");
+        var expectedContentRevision = IntArg(args, "expectedContentRevision");
+        if (expectedContentRevision is null or < 1)
+            return new McpToolText(true, "missing or invalid 'expectedContentRevision' (read it from get_task first)");
         if (!TryProject(env, args, out var projectId, out _))
-            return await SendAsync(api, HttpMethod.Patch, $"v1/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct);
-        return await SendAsync(api, HttpMethod.Patch, $"v1/projects/{projectId:D}/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct);
+            return await SendAsync(api, HttpMethod.Patch, $"v1/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct, expectedContentRevision);
+        return await SendAsync(api, HttpMethod.Patch, $"v1/projects/{projectId:D}/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct, expectedContentRevision);
     }
 
     private static async Task<McpToolText> StepsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)

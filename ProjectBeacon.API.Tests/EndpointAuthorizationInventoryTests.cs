@@ -27,11 +27,79 @@ public sealed class EndpointAuthorizationInventoryTests
         Assert.Contains(routes, route =>
             route.Method == "GET" && route.Route == "/v1/auth/me" && route.Policy == "Human");
         Assert.Contains(routes, route =>
+            route.Method == "POST"
+            && route.Route == "/v1/projects/{projectId:guid}/tasks/{taskId:guid}/content-versions/{versionId:guid}/restore"
+            && route.Policy == "Human");
+
+        Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/devices/me/heartbeat" && route.Policy == "Device");
         Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/chat/sessions/{id:guid}/parts" && route.Policy == "Device");
         Assert.Contains(routes, route =>
             route.Method == "GET" && route.Route == "/v1/devices/me/provider-connections" && route.Policy == "Device");
+
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/proposals"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/proposals"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/proposals/mine"
+            && route.Policy == "API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/accept"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/reject"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/proposals/{proposalId:guid}/withdraw"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/proposal-policies"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "PUT" && route.Route == "/v1/projects/{projectId:guid}/proposal-policies"
+            && route.Policy == "Human");
+
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId}/context/nodes"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId}/context/drafts"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/decisions/propose"
+            && route.Policy == "Human or API token (ContextRead)");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/constraints/propose"
+            && route.Policy == "Human or API token (ContextRead)");
+
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "PUT" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "DELETE" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/milestones"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "GET" && route.Route == "/v1/milestones/{milestoneId:guid}"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close"
+            && route.Policy == "Human");
+        Assert.Contains(routes, route =>
+            route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen"
+            && route.Policy == "Human");
 
         Assert.Contains(routes, route =>
             route.Method == "POST" && route.Route == "/v1/projects/{projectId:guid}/git-sync" && route.Policy == "Human");

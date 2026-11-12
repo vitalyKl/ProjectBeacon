@@ -30,6 +30,10 @@ public static class ContextEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/constraints", ListConstraints).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}", GetConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapGet("/v1/projects/{projectId:guid}/content-versions", ListContentVersions)
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+        app.MapPost("/v1/projects/{projectId:guid}/content-versions/{versionId:guid}/restore", RestoreContentVersion)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/constraints/propose", ProposeConstraint)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -56,7 +60,7 @@ public static class ContextEndpoints
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             projectId, request.Title, request.BodyMarkdown, request.SectionId,
             request.ScopeType, request.Key, request.RepoId, request.TaskId,
-            request.Path, ContextSource.Native, request.SourcePath));
+            request.Path, ContextSource.Native, request.SourcePath, request.ExpectedRevision), actor);
         var result = await handler.HandleDraftAsync(command, authorId, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
@@ -70,8 +74,11 @@ public static class ContextEndpoints
     {
         if (!IsHumanOrActorKnowledgeWriter(context))
             return Results.Forbid();
+        var actor = context.GetActor();
+        var agentId = context.User.FindFirst("pipeline_subtask_id")?.Value
+            ?? context.User.FindFirst("pipeline_session_id")?.Value;
         var result = await handler.HandleProposalAsync(
-            new CreateConstraintRequest(projectId, body.Body, body.Kind), ct);
+            new CreateConstraintRequest(projectId, body.Body, body.Kind, actor, agentId), ct);
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints/propose", result.Value)
             : result.FromResult();
@@ -89,9 +96,10 @@ public static class ContextEndpoints
     private static async Task<IResult> ImportFiles(
         Guid projectId,
         [FromBody] IList<ImportFileRequest> files,
+        HttpContext context,
         ImportFilesHandler handler)
     {
-        var command = new ImportFilesCommand(projectId, files);
+        var command = new ImportFilesCommand(projectId, files, context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -128,6 +136,7 @@ public static class ContextEndpoints
     private static async Task<IResult> UpsertNode(
         Guid projectId,
         [FromBody] UpsertNodeRequest request,
+        HttpContext context,
         UpsertContextNodeHandler handler)
     {
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
@@ -141,7 +150,8 @@ public static class ContextEndpoints
             request.TaskId,
             request.Path,
             request.Source,
-            request.SourcePath));
+            request.SourcePath,
+            request.ExpectedRevision), context.GetActor());
 
         var result = await handler.HandleAsync(command);
 
@@ -166,9 +176,10 @@ public static class ContextEndpoints
     private static async Task<IResult> DeleteNode(
         Guid projectId,
         Guid nodeId,
+        HttpContext context,
         DeleteContextNodeHandler handler)
     {
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId));
+        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(projectId, nodeId), context.GetActor());
         var result = await handler.HandleAsync(command);
 
         return result.Success
@@ -213,25 +224,64 @@ public static class ContextEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)
+
+    private static async Task<IResult> ListContentVersions(
+        Guid projectId,
+        ContentTargetKind targetKind,
+        Guid targetId,
+        int? limit,
+        HttpContext context,
+        ListContentVersionsHandler handler,
+        CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind));
+        // Task history has its own TaskRead capability and endpoint. Do not let a token
+        // holding only ContextRead enumerate task descriptions through this generic route.
+        if (targetKind == ContentTargetKind.TaskDescription)
+            return Results.Forbid();
+
+        var result = await handler.HandleAsync(
+            projectId, targetKind, targetId, context.GetActor(), limit ?? 50, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> RestoreContentVersion(
+        Guid projectId,
+        Guid versionId,
+        [FromBody] RestoreContentVersionRequest request,
+        HttpContext context,
+        RestoreContentVersionHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new RestoreContentVersionCommand(
+            projectId, versionId, request.ExpectedRevision, context.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
+    private static async Task<IResult> CreateConstraint(
+        Guid projectId,
+        [FromBody] CreateConstraintBody body,
+        HttpContext context,
+        CreateConstraintHandler handler)
+    {
+        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind, context.GetActor()));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints", result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, ActivateConstraintHandler handler)
+    private static async Task<IResult> ActivateConstraint(
+        Guid projectId, Guid constraintId, HttpContext context, ActivateConstraintHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, RejectConstraintHandler handler)
+    private static async Task<IResult> RejectConstraint(
+        Guid projectId, Guid constraintId, HttpContext context, RejectConstraintHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(constraintId);
+        var result = await handler.HandleAsync(constraintId, context.GetActor(), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
@@ -240,6 +290,9 @@ public static class ContextEndpoints
     /// Body for proposing a constraint: text and kind.
     /// </summary>
     public record CreateConstraintBody(string Body, ConstraintKind Kind);
+
+    /// <summary>Expected current revision when restoring a historical content snapshot.</summary>
+    public record RestoreContentVersionRequest(int ExpectedRevision);
     /// <summary>
     /// Body for creating or updating a context section. Title, body, and scope are required by the handler.
     /// </summary>
@@ -253,7 +306,8 @@ public static class ContextEndpoints
         Guid? TaskId,
         string? Path,
         ContextSource Source,
-        string? SourcePath);
+        string? SourcePath,
+        int? ExpectedRevision = null);
     /// <summary>
     /// Body for compiling a brief: optional repo, path, task, token budget, and which capsules to include.
     /// </summary>

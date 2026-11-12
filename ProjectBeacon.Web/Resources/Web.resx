@@ -2816,4 +2816,218 @@ No Beacon-hosted coding agent.</value>
   <data name="MarkdownExpand" xml:space="preserve"><value>Show more</value></data>
   <data name="MarkdownCollapse" xml:space="preserve"><value>Show less</value></data>
   <data name="Characters" xml:space="preserve"><value>characters</value></data>
+  <data name="ProposalInbox" xml:space="preserve">
+    <value>Proposal inbox</value>
+  </data>
+  <data name="NewContent" xml:space="preserve">
+    <value>New target</value>
+  </data>
+  <data name="ShellHintProposalInbox" xml:space="preserve">
+    <value>Review proposed project knowledge and revisions.</value>
+  </data>
+  <data name="ProposalInboxMemberHint" xml:space="preserve">
+    <value>Members can review ordinary content. Decision and Constraint transitions require an Owner or Admin.</value>
+  </data>
+  <data name="Conflicted" xml:space="preserve">
+    <value>Conflicted</value>
+  </data>
+  <data name="TargetKind" xml:space="preserve">
+    <value>Target type</value>
+  </data>
+  <data name="ProposalAuthor" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="ProposalFilterResults" xml:space="preserve">
+    <value>Showing {0} matching proposals.</value>
+  </data>
+  <data name="AcceptSelected" xml:space="preserve">
+    <value>Accept selected</value>
+  </data>
+  <data name="ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="NoPendingProposals" xml:space="preserve">
+    <value>No proposals match these filters.</value>
+  </data>
+  <data name="RevisionBoundProposals" xml:space="preserve">
+    <value>Revision-bound proposals</value>
+  </data>
+  <data name="ProposalConflict" xml:space="preserve">
+    <value>The proposal is based on an older revision.</value>
+  </data>
+  <data name="CurrentRevision" xml:space="preserve">
+    <value>Current revision</value>
+  </data>
+  <data name="ProposalDetails" xml:space="preserve">
+    <value>Proposal details</value>
+  </data>
+  <data name="AcceptedPayload" xml:space="preserve">
+    <value>Payload to apply when accepted (JSON)</value>
+  </data>
+  <data name="CompareBaseRevision" xml:space="preserve">
+    <value>Compare with base snapshot</value>
+  </data>
+  <data name="BaseRevision" xml:space="preserve">
+    <value>Base snapshot</value>
+  </data>
+  <data name="BaseSnapshotMissing" xml:space="preserve">
+    <value>The base snapshot is no longer available.</value>
+  </data>
+  <data name="ProposedContent" xml:space="preserve">
+    <value>Proposed content</value>
+  </data>
+  <data name="DecisionNote" xml:space="preserve">
+    <value>Decision note</value>
+  </data>
+  <data name="ProposalAccepted" xml:space="preserve">
+    <value>Proposal accepted and applied.</value>
+  </data>
+  <data name="ProposalRejected" xml:space="preserve">
+    <value>Proposal rejected.</value>
+  </data>
+  <data name="BatchAcceptResults" xml:space="preserve">
+    <value>Batch accept: {0} succeeded, {1} failed.</value>
+  </data>
+  <data name="Applying" xml:space="preserve">
+    <value>Applying</value>
+  </data>
+  <data name="ProposalApplyQueued" xml:space="preserve">
+    <value>Documentation patch queued on the workstation; acceptance is pending verification.</value>
+  </data>
+  <data name="ProposalPatchQueuedCount" xml:space="preserve">
+    <value>Documentation patches queued: {0}.</value>
+  </data>
+  <data name="ProposalPatchApplying" xml:space="preserve">
+    <value>The documentation patch is being applied and verified on the workstation.</value>
+  </data>
+  <data name="ProposalPatchApplied" xml:space="preserve">
+    <value>The documentation patch was applied and verified.</value>
+  </data>
+  <data name="RepoPatchDocumentationOnly" xml:space="preserve">
+    <value>This review contains a documentation-only patch. Its payload cannot be edited here; reject and resubmit to change it.</value>
+  </data>
+  <data name="DocumentationPatch" xml:space="preserve">
+    <value>Documentation patch</value>
+  </data>
+  <data name="WorkstationCommand" xml:space="preserve">
+    <value>Workstation command</value>
+  </data>
+  <data name="LegacyReviewItems" xml:space="preserve">
+    <value>Existing review items</value>
+  </data>
+  <data name="NeedsReviewContext" xml:space="preserve">
+    <value>Context drafts awaiting review</value>
+  </data>
+  <data name="NoLegacyReviewItems" xml:space="preserve">
+    <value>No existing review items.</value>
+  </data>
+  <data name="ProposedDecisions" xml:space="preserve">
+    <value>Proposed decisions</value>
+  </data>
+  <data name="ProposedConstraints" xml:space="preserve">
+    <value>Proposed constraints</value>
+  </data>
+  <data name="GovernanceOwnerAdminOnly" xml:space="preserve">
+    <value>Only a project or organization Owner/Admin may decide governance items.</value>
+  </data>
+  <data name="ContextDraftApproved" xml:space="preserve">
+    <value>Context draft approved.</value>
+  </data>
+  <data name="ContextDraftRejected" xml:space="preserve">
+    <value>Context draft rejected and archived.</value>
+  </data>
+  <data name="ProjectAccessRequired" xml:space="preserve">
+    <value>Project membership is required to view this inbox.</value>
+  </data>
+  <data name="DeletedContent" xml:space="preserve">
+    <value>Deleted content</value>
+  </data>
+  <data name="Deleted" xml:space="preserve">
+    <value>Deleted</value>
+  </data>
+  <data name="ContentHistory" xml:space="preserve">
+    <value>Content history</value>
+  </data>
+  <data name="NoHistory" xml:space="preserve">
+    <value>No history is available for this item.</value>
+  </data>
+  <data name="RestoreRevision" xml:space="preserve">
+    <value>Restore this revision</value>
+  </data>
+  <data name="RestoredRevision" xml:space="preserve">
+    <value>A new revision was created from the selected snapshot.</value>
+  </data>
+  <data name="TaskProposals" xml:space="preserve">
+    <value>Proposals</value>
+  </data>
+  <data name="TaskProposalsHint" xml:space="preserve">
+    <value>Review proposals submitted by actors while working on this task.</value>
+  </data>
+  <data name="NoTaskProposals" xml:space="preserve">
+    <value>This task has no proposals.</value>
+  </data>
+  <data name="OpenProposalInbox" xml:space="preserve">
+    <value>Open proposal inbox</value>
+  </data>
+  <data name="ProposalPoliciesTitle" xml:space="preserve">
+    <value>Proposal decision policies</value>
+  </data>
+  <data name="ProposalPoliciesHelp" xml:space="preserve">
+    <value>Choose which supported content updates may be applied automatically. Manual is the default; Decision and Constraint always require an Owner/Admin.</value>
+  </data>
+  <data name="ProposalPoliciesUnavailable" xml:space="preserve">
+    <value>Proposal policy settings could not be loaded.</value>
+  </data>
+  <data name="DecisionMode" xml:space="preserve">
+    <value>Decision mode</value>
+  </data>
+  <data name="PolicyRestriction" xml:space="preserve">
+    <value>Restriction</value>
+  </data>
+  <data name="Manual" xml:space="preserve">
+    <value>Manual</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="ProposalPoliciesOwnerAdminHint" xml:space="preserve">
+    <value>Only a project or organization Owner/Admin can change these policies.</value>
+  </data>
+  <data name="ProposalPolicySaved" xml:space="preserve">
+    <value>Proposal policy saved.</value>
+  </data>
+  <data name="ProposalDiff" xml:space="preserve">
+    <value>Line-by-line content diff</value>
+  </data>
+  <data name="NoTextualChanges" xml:space="preserve">
+    <value>No textual changes.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicy" xml:space="preserve">
+    <value>Documentation patch handling</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyHint" xml:space="preserve">
+    <value>Review keeps documentation changes pending for human approval. Auto applies documentation-only patches from this profile, limited to its allowed paths.</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyReview" xml:space="preserve">
+    <value>Review (human approval)</value>
+  </data>
+  <data name="ExecutionProfileApplyPolicyAuto" xml:space="preserve">
+    <value>Auto (apply documentation patch)</value>
+  </data>
+  <data name="All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="AppliedRevision" xml:space="preserve">
+    <value>Applied revision</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>Operation</value>
+  </data>
+  <data name="SubtaskId" xml:space="preserve">
+    <value>Subtask ID</value>
+  </data>
+  <data name="TaskId" xml:space="preserve">
+    <value>Task ID</value>
+  </data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>The last Git check found this repository {0} commit(s) behind on branch '{1}'. Synchronize it before relying on the current project snapshot.</value></data>
 </root>

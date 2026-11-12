@@ -10,6 +10,8 @@ using Application.Devices;
 using Application.Evals;
 using Application.Identity;
 using Application.Projects;
+using Application.Proposals;
+using Application.Persistence;
 using Application.Tasks;
 using Application.Milestones;
 using Application.Context;
@@ -127,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetProjectPulseHandler>();
         services.AddTransient<ListLabelsHandler>();
         services.AddScoped<TenantContextBinder>();
+        services.AddTransient<ContentWriter>();
 
         services.AddTransient<UpsertContextNodeHandler>();
         services.AddTransient<ListContextNodesHandler>();
@@ -141,6 +144,19 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ActivateConstraintHandler>();
         services.AddTransient<RejectConstraintHandler>();
         services.AddTransient<ListContextRevisionsHandler>();
+        services.AddTransient<ListContentVersionsHandler>();
+        services.AddTransient<ListDeletedContentTargetsHandler>();
+        services.AddTransient<RestoreContentVersionHandler>();
+        services.AddTransient<CreateProposalHandler>();
+        services.AddTransient<AcceptProposalHandler>();
+        services.AddTransient<RejectProposalHandler>();
+        services.AddTransient<WithdrawProposalHandler>();
+        services.AddTransient<ListProposalsHandler>();
+        services.AddTransient<ListOwnProposalsHandler>();
+        services.AddTransient<GetProposalInboxSummaryHandler>();
+        services.AddTransient<ReviewContextDraftHandler>();
+        services.AddTransient<ListProposalPoliciesHandler>();
+        services.AddTransient<SetProposalPolicyHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();

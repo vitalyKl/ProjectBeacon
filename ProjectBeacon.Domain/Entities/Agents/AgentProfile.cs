@@ -24,6 +24,7 @@ public sealed class AgentProfile : Entity
     public bool ReportsDiff { get; private set; }
     public string SizeHint { get; private set; } = string.Empty;
     public string Effort { get; private set; } = "medium";
+    public string ApplyPolicy { get; private set; } = "Review";
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -34,7 +35,7 @@ public sealed class AgentProfile : Entity
         Guid userId, string key, string name, string description, string instruction,
         string mode, IReadOnlyList<string> tools, string pathPolicy,
         IReadOnlyList<string> defaultPaths, bool commandsEnabled, bool reportsDiff,
-        string sizeHint, string effort)
+        string sizeHint, string effort, string applyPolicy = "Review")
     {
         var now = DateTime.UtcNow;
         var profile = Entity.New<AgentProfile>();
@@ -42,14 +43,14 @@ public sealed class AgentProfile : Entity
         profile.Key = key;
         profile.CreatedAt = now;
         profile.Update(name, description, instruction, mode, tools, pathPolicy, defaultPaths,
-            commandsEnabled, reportsDiff, sizeHint, effort);
+            commandsEnabled, reportsDiff, sizeHint, effort, applyPolicy);
         return profile;
     }
 
     public void Update(
         string name, string description, string instruction, string mode,
         IReadOnlyList<string> tools, string pathPolicy, IReadOnlyList<string> defaultPaths,
-        bool commandsEnabled, bool reportsDiff, string sizeHint, string effort)
+        bool commandsEnabled, bool reportsDiff, string sizeHint, string effort, string applyPolicy = "Review")
     {
         Name = name.Trim();
         Description = description.Trim();
@@ -62,6 +63,7 @@ public sealed class AgentProfile : Entity
         ReportsDiff = reportsDiff;
         SizeHint = sizeHint.Trim();
         Effort = effort;
+        ApplyPolicy = applyPolicy;
         UpdatedAt = DateTime.UtcNow;
     }
 

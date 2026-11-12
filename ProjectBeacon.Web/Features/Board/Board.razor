@@ -98,6 +98,7 @@ else if (_error)
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
     private ProjectDto? _project;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private MudDropContainer<TaskItemDto>? _container;
     private bool _loading = true;
     private bool _error;
@@ -107,7 +108,8 @@ else if (_error)
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        _actorContext = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(_actorContext);
         _project = current.Value;
         await ReloadTasks();
         _loading = false;
@@ -196,7 +198,7 @@ else if (_error)
         _allTasks = listed.Value!.ToList();
         var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_project.Id));
         _labels = labels.Success ? labels.Value!.ToList() : [];
-        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id), _actorContext));
         _milestones = milestones.Success ? milestones.Value!.ToList() : [];
         _container?.Refresh();
     }

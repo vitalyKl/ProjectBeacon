@@ -211,7 +211,7 @@ else
             @foreach (var section in _pulse.BriefSections)
             {
                 <MudText Typo="Typo.caption">@ChromeLabels.Section(L, section.SectionId)</MudText>
-                <ChatMarkdown Text="@section.BodyMarkdown" />
+                <MarkdownView Text="@section.BodyMarkdown" />
             }
         }
         @if (_pulse.OpenMilestones == 0)

@@ -4,7 +4,9 @@
 @layout MainLayout
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Milestones
+@using ProjectBeacon.Application.Proposals
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
@@ -15,6 +17,9 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
+@inject ListProposalsHandler ListProposals
+@inject ListContentVersionsHandler ListContentVersions
+@inject RestoreContentVersionHandler RestoreContentVersion
 @inject WorkspaceIndexHandler WorkspaceIndex
 @inject WorkspaceReadHandler WorkspaceRead
 @inject WorkspaceWriteHandler WorkspaceWrite
@@ -65,7 +70,7 @@ else
             {
                 <div class="beacon-task-goal">
                     <strong>@L["Goal"]</strong>
-                    <ChatMarkdown Text="@_task.Description" />
+                    <MarkdownView Text="@_task.Description" />
                 </div>
             }
         </div>
@@ -116,6 +121,74 @@ else
             }
         </div>
     </header>
+    @if (_pipeline?.Preflight is { LastKnownRepositoryBehind: > 0 } repositoryStatus)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
+                  data-testid="repository-behind-warning">
+            @string.Format(
+                L["GitSyncRepositoryBehindWarning"].Value,
+                repositoryStatus.LastKnownRepositoryBehind!.Value,
+                repositoryStatus.LastKnownRepositoryBranch ?? "—")
+            <a href="/project/settings">@L["GitSyncTitle"]</a>
+        </MudAlert>
+    }
+    <section class="beacon-task-content-history">
+        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.History"
+                   OnClick="LoadTaskContentHistory" Disabled="_busy || _taskHistoryLoading"
+                   data-testid="task-content-history">
+            @L["ContentHistory"]
+        </MudButton>
+        @if (_showTaskContentHistory)
+        {
+            <MudPaper Outlined="true" Elevation="0" Class="beacon-panel mt-2">
+                <MudText Typo="Typo.subtitle2">@L["ContentHistory"] (@_taskContentHistory.Count)</MudText>
+                @if (_taskHistoryLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="my-2" />
+                }
+                else if (_taskContentHistory.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">@L["NoHistory"]</MudText>
+                }
+                else
+                {
+                    <MudExpansionPanels>
+                    @foreach (var version in _taskContentHistory)
+                    {
+                        <MudExpansionPanel Text="@($"{L["Revision"]} {version.Revision} · {version.At.ToLocalTime():g}")"
+                                             data-testid="@($"task-history-panel-{version.Revision}")">
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @version.ChangedByType · @version.ChangedById
+                                </MudText>
+                                <MudText Typo="Typo.subtitle2">@L["Description"]</MudText>
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryDescription(version)))
+                                {
+                                    <MarkdownView Text="@TaskHistoryDescription(version)" />
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(TaskHistoryReviewNotes(version)))
+                                {
+                                    <MudText Typo="Typo.subtitle2">@L["ReviewNotes"]</MudText>
+                                    <MarkdownView Text="@TaskHistoryReviewNotes(version)" />
+                                }
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                           Disabled="_busy || _task is null || version.Revision >= _task.ContentRevision"
+                                           OnClick="@(() => RestoreTaskContentVersion(version))"
+                                           data-testid="@($"restore-task-revision-{version.Revision}")">
+                                    @L["RestoreRevision"]
+                                </MudButton>
+                            </MudStack>
+                        </MudExpansionPanel>
+                    }
+                    </MudExpansionPanels>
+                }
+            </MudPaper>
+        }
+    </section>
     <div class="beacon-task-grid">
         <main class="beacon-task-main">
             <section class="beacon-task-workflow">
@@ -230,6 +303,47 @@ else
     <MudTabPanel Text="@L["Context"]">
         <TaskContextPanel Task="_task" />
     </MudTabPanel>
+    <MudTabPanel Text="@($"{L["TaskProposals"]} ({_taskProposals.Count})")">
+        <MudStack Spacing="2" Class="pa-2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.body2">@L["TaskProposalsHint"]</MudText>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ReloadTaskProposals" Disabled="_busy">
+                    @L["Refresh"]
+                </MudButton>
+            </MudStack>
+            @if (_taskProposals.Count == 0)
+            {
+                <EmptyState>@L["NoTaskProposals"]</EmptyState>
+            }
+            @foreach (var proposal in _taskProposals)
+            {
+                <MudPaper @key="proposal.Id" Elevation="0" Outlined="true" Class="pa-3">
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.subtitle2">@proposal.TargetKind</MudText>
+                            <StatusChip Color="@TaskProposalColor(proposal.Status)" Label="@TaskProposalStatus(proposal.Status)" />
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption">rev. @proposal.BaseRevision</MudText>
+                        </MudStack>
+                        <MarkdownView Text="@proposal.RationaleMarkdown" />
+                        @if (proposal.Status == ProposalStatus.Conflicted)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">
+                                @L["ProposalConflict"]: @proposal.ConflictReason
+                            </MudAlert>
+                        }
+                        @if (proposal.Status == ProposalStatus.Accepted)
+                        {
+                            <MudText Typo="Typo.caption">@L["AppliedRevision"]: @(proposal.AppliedRevision?.ToString() ?? "—")</MudText>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+            <MudButton Href="/inbox" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inbox">
+                @L["OpenProposalInbox"]
+            </MudButton>
+        </MudStack>
+    </MudTabPanel>
     <MudTabPanel Text="@L["TaskWorkspace"]">
         <MudStack Spacing="3" Class="pa-2">
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
@@ -304,6 +418,11 @@ else
     private bool _busy;
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
+    private List<ProposalDto> _taskProposals = [];
+    private List<ContentVersionDto> _taskContentHistory = [];
+    private bool _showTaskContentHistory;
+    private bool _taskHistoryLoading;
+
     private List<TaskWorkspaceSectionSummaryDto> _workspaceSections = [];
     private TaskWorkspaceSectionDto? _selectedWorkspace;
     private string _workspaceKey = "notes/human-input";
@@ -453,8 +572,122 @@ else
         {
             var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
             _labels = labels.Success ? labels.Value!.ToList() : [];
-            var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId)));
+            var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
             _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+            await ReloadTaskProposals();
+        }
+    }
+
+    private async Task ReloadTaskProposals()
+    {
+        if (_task is null || !_actorContext.IsHuman)
+        {
+            _taskProposals = [];
+            return;
+        }
+
+        var proposals = await ListProposals.HandleAsync(
+            new ListProposalsQuery(_task.ProjectId, TaskId: TaskId, Limit: 100),
+            _actorContext);
+        _taskProposals = proposals.Success ? proposals.Value!.ToList() : [];
+    }
+
+    private string TaskProposalStatus(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Pending => L["Pending"].Value,
+        ProposalStatus.Conflicted => L["Conflicted"].Value,
+        _ => L[status.ToString()].Value
+    };
+
+    private static Color TaskProposalColor(ProposalStatus status) => status switch
+    {
+        ProposalStatus.Pending => Color.Warning,
+        ProposalStatus.Conflicted => Color.Error,
+        ProposalStatus.Accepted => Color.Success,
+        _ => Color.Default
+    };
+
+    private async Task LoadTaskContentHistory()
+    {
+        if (_task is null || _taskHistoryLoading)
+            return;
+
+        _showTaskContentHistory = true;
+        _taskHistoryLoading = true;
+        try
+        {
+            var result = await ListContentVersions.HandleAsync(
+                _task.ProjectId,
+                ContentTargetKind.TaskDescription,
+                _task.Id,
+                _actorContext,
+                limit: 50);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+                _taskContentHistory = [];
+                return;
+            }
+
+            _taskContentHistory = result.Value!.ToList();
+        }
+        finally
+        {
+            _taskHistoryLoading = false;
+        }
+    }
+
+    private async Task RestoreTaskContentVersion(ContentVersionDto version)
+    {
+        if (_task is null || _busy || version.TargetKind != ContentTargetKind.TaskDescription
+            || version.TargetId != _task.Id || version.Revision >= _task.ContentRevision)
+            return;
+
+        _busy = true;
+        try
+        {
+            var restored = await RestoreContentVersion.HandleAsync(new RestoreContentVersionCommand(
+                _task.ProjectId,
+                version.Id,
+                _task.ContentRevision,
+                _actorContext,
+                ContentTargetKind.TaskDescription,
+                _task.Id));
+            if (!restored.Success)
+            {
+                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            await Reload();
+            await LoadTaskContentHistory();
+            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string TaskHistoryDescription(ContentVersionDto version) =>
+        TaskHistoryField(version.ContentJson, "description");
+
+    private static string TaskHistoryReviewNotes(ContentVersionDto version) =>
+        TaskHistoryField(version.ContentJson, "reviewNotes");
+
+    private static string TaskHistoryField(string json, string propertyName)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(propertyName, out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? value.GetString() ?? string.Empty
+                    : string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
         }
     }
 
@@ -666,7 +899,7 @@ else
         try
         {
             var result = await CancelPipeline.HandleAsync(
-                new CancelPipelineCommand(new CancelPipelineRequest(TaskId)));
+                new CancelPipelineCommand(new CancelPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -693,7 +926,7 @@ else
         try
         {
             var result = await RestartPipeline.HandleAsync(
-                new RestartPipelineCommand(new RestartPipelineRequest(TaskId)));
+                new RestartPipelineCommand(new RestartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -770,7 +1003,7 @@ else
         try
         {
             var result = await DeleteTask.HandleAsync(
-                new DeleteTaskCommand(new DeleteTaskRequest(TaskId)));
+                new DeleteTaskCommand(new DeleteTaskRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
