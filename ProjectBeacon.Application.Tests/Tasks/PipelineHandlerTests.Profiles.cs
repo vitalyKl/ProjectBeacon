@@ -21,7 +21,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(planner.Success, planner.Error);
 
         var created = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Change behaviour")),
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Change behaviour"), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
@@ -76,7 +76,7 @@ public sealed partial class PipelineHandlerTests
         var handler = new CreateSubtaskHandler(factory);
         var created = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Implement a feature", AllowedPaths: ["src/"],
-            Profile: "implementer", OptionalMcpTools: [McpToolNames.TaskAttachFile])),
+            Profile: "implementer", OptionalMcpTools: [McpToolNames.TaskAttachFile]), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal("implementer", created.Value!.ProfileKey);
@@ -86,20 +86,20 @@ public sealed partial class PipelineHandlerTests
 
         var expansion = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Try to expand grants", AllowedMcpTools: [McpToolNames.TaskAttachFile],
-            AllowedPaths: ["src/"], Profile: "implementer")),
+            AllowedPaths: ["src/"], Profile: "implementer"), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(expansion.Success);
         Assert.Contains("cannot expand", expansion.Error!, StringComparison.OrdinalIgnoreCase);
 
         var optionalExpansion = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Try an unknown optional grant", AllowedPaths: ["src/"],
-            Profile: "implementer", OptionalMcpTools: [McpToolNames.PipelineStartReview])),
+            Profile: "implementer", OptionalMcpTools: [McpToolNames.PipelineStartReview]), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(optionalExpansion.Success);
         Assert.Contains("optional grant", optionalExpansion.Error!, StringComparison.OrdinalIgnoreCase);
 
         var unknown = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-            task.Id, "Unknown profile", Profile: "unknown")),
+            task.Id, "Unknown profile", Profile: "unknown"), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(unknown.Success);
         Assert.Contains("Unknown subtask profile", unknown.Error);

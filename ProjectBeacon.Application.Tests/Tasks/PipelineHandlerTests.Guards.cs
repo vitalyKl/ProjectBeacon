@@ -20,7 +20,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var subBeforeStart = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "early")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "early"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(subBeforeStart.Success);
         Assert.Equal("Pipeline is not started.", subBeforeStart.Error);
 
@@ -38,7 +38,7 @@ public sealed partial class PipelineHandlerTests
         Assert.False(reviewTooEarly.Success);
 
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
 
         var reviewWithPending = await new StartReviewHandler(factory, spawner)
@@ -95,7 +95,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
 
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok")), TestContext.Current.CancellationToken);

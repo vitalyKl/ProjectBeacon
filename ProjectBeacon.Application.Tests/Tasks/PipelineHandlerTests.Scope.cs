@@ -65,7 +65,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(start.Success, start.Error);
 
         var sub1 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "one")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "one"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub1.Success, sub1.Error);
         var afterFirst = await new GetPipelineHandler(factory)
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
@@ -73,7 +73,7 @@ public sealed partial class PipelineHandlerTests
         Assert.Equal(TaskPipelineStage.Executing, afterFirst.Value!.Stage);
 
         var sub2 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "two")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "two"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub2.Success, sub2.Error);
         var afterSecond = await new GetPipelineHandler(factory)
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
@@ -147,9 +147,9 @@ public sealed partial class PipelineHandlerTests
         Assert.True(start.Success, start.Error);
 
         var sub1 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "done work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "done work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var sub2 = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "failed work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "failed work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub1.Success, sub1.Error);
         Assert.True(sub2.Success, sub2.Error);
 
