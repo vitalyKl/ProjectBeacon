@@ -86,49 +86,49 @@ internal sealed class NativeAgentToolExecutor(
                 {
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner" } repoAuthorization)
                     {
-            isError = true;
-            toolResult = "Tool error: repo_status is available only to native pipeline Actor and Planner sessions.";
+                        isError = true;
+                        toolResult = "Tool error: repo_status is available only to native pipeline Actor and Planner sessions.";
                     }
                     else
                     {
-            toolResult = await ProjectBeacon.Cli.Client.GitSyncService.ReadStatusForAgentAsync(
-                repoAuthorization.ProjectRoot ?? repoAuthorization.WorkingDirectory, ct);
+                        toolResult = await ProjectBeacon.Cli.Client.GitSyncService.ReadStatusForAgentAsync(
+                            repoAuthorization.ProjectRoot ?? repoAuthorization.WorkingDirectory, ct);
                     }
                 }
                 else if (string.Equals(call.Name, "suggest_command_prefixes", StringComparison.Ordinal))
                 {
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } suggestionAuthorization)
                     {
-            isError = true;
-            toolResult = "Tool error: command suggestions require an isolated project workspace.";
+                        isError = true;
+                        toolResult = "Tool error: command suggestions require an isolated project workspace.";
                     }
                     else if (!NativeAgentCommandApprovalService.TryReadCommandPrefixSuggestions(parsedArguments!, out var agentSuggestions))
                     {
-            isError = true;
-            toolResult = "Tool error: additionalPrefixes must be an array of strings.";
+                        isError = true;
+                        toolResult = "Tool error: additionalPrefixes must be an array of strings.";
                     }
                     else
                     {
-            var projectRoot = suggestionAuthorization.ProjectRoot ?? suggestionAuthorization.WorkingDirectory;
-            var suggestions = CommandExecutionPolicy.GetCommandSuggestions(
-                suggestionAuthorization.WorkingDirectory,
-                agentSuggestions);
-            if (suggestions.Count == 0)
-            {
-                toolResult = "No safe command prefixes were detected in the project manifests or CI workflows. Use run_command to request approval for a specific argv command.";
-            }
-            else
-            {
-                var result = await _commandApproval.RequestCommandSuggestionsAsync(
-                    session,
-                    projectRoot,
-                    suggestionAuthorization.WorkingDirectory,
-                    suggestions,
-                    taskLease,
-                    ct);
-                isError = result.IsError;
-                toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-            }
+                        var projectRoot = suggestionAuthorization.ProjectRoot ?? suggestionAuthorization.WorkingDirectory;
+                        var suggestions = CommandExecutionPolicy.GetCommandSuggestions(
+                            suggestionAuthorization.WorkingDirectory,
+                            agentSuggestions);
+                        if (suggestions.Count == 0)
+                        {
+                            toolResult = "No safe command prefixes were detected in the project manifests or CI workflows. Use run_command to request approval for a specific argv command.";
+                        }
+                        else
+                        {
+                            var result = await _commandApproval.RequestCommandSuggestionsAsync(
+                                session,
+                                projectRoot,
+                                suggestionAuthorization.WorkingDirectory,
+                                suggestions,
+                                taskLease,
+                                ct);
+                            isError = result.IsError;
+                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        }
                     }
                 }
                 else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
@@ -138,62 +138,62 @@ internal sealed class NativeAgentToolExecutor(
             || controls?.HarnessAuthorization is not { IsolatedWorkspace: true } commandAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(commandAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: run_command is disabled by the workstation policy or execution role.";
+                        isError = true;
+                        toolResult = "Tool error: run_command is disabled by the workstation policy or execution role.";
                     }
                     else if (!NativeAgentCommandApprovalService.TryReadCommandArgv(parsedArguments!, out var commandArgv))
                     {
-            isError = true;
-            toolResult = "Tool error: run_command requires argv as a non-empty array of strings.";
+                        isError = true;
+                        toolResult = "Tool error: run_command requires argv as a non-empty array of strings.";
                     }
                     else if (!CommandExecutionPolicy.TryValidate(commandArgv, commandAuthorization.WorkingDirectory, out var commandError))
                     {
-            isError = true;
-            toolResult = "Tool error: " + commandError;
+                        isError = true;
+                        toolResult = "Tool error: " + commandError;
                     }
                     else
                     {
-            var approvalProjectRoot = commandAuthorization.ProjectRoot ?? commandAuthorization.WorkingDirectory;
-            var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory);
-            var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
-                approvalProjectRoot, executionManifestFingerprint);
-            var manifestUnchanged = string.Equals(
-                manifestFingerprint,
-                executionManifestFingerprint,
-                StringComparison.Ordinal);
-            var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
-                ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
-                : Array.Empty<string>();
-            var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manuallyApproved)
-                || CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manifestPrefixes);
-            (bool Allowed, string? Error) permission = (true, null);
-            if (policy == CommandExecutionPolicy.Ask && !isApproved)
-                permission = await _commandApproval.RequestCommandPermissionAsync(
-                    session,
-                    commandAuthorization.WorkingDirectory,
-                    approvalProjectRoot,
-                    commandArgv,
-                    taskLease,
-                    ct);
+                        var approvalProjectRoot = commandAuthorization.ProjectRoot ?? commandAuthorization.WorkingDirectory;
+                        var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory);
+                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
+                            approvalProjectRoot, executionManifestFingerprint);
+                        var manifestUnchanged = string.Equals(
+                            manifestFingerprint,
+                            executionManifestFingerprint,
+                            StringComparison.Ordinal);
+                        var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
+                            ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
+                            : Array.Empty<string>();
+                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manuallyApproved)
+                            || CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manifestPrefixes);
+                        (bool Allowed, string? Error) permission = (true, null);
+                        if (policy == CommandExecutionPolicy.Ask && !isApproved)
+                            permission = await _commandApproval.RequestCommandPermissionAsync(
+                                session,
+                                commandAuthorization.WorkingDirectory,
+                                approvalProjectRoot,
+                                commandArgv,
+                                taskLease,
+                                ct);
 
-            if (!permission.Allowed)
-            {
-                isError = true;
-                toolResult = permission.Error is null
-                    ? "Tool error: the user denied this command. Do not retry it or change its arguments to bypass the decision."
-                    : "Tool error: " + permission.Error;
-            }
-            else
-            {
-                var result = await NativeCommandRunner.ExecuteAsync(
-                    commandAuthorization.WorkingDirectory,
-                    session.Id,
-                    parsedArguments!,
-                    ct,
-                    commandAuthorization.ProjectId.ToString("N"));
-                isError = result.IsError;
-                toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-            }
+                        if (!permission.Allowed)
+                        {
+                            isError = true;
+                            toolResult = permission.Error is null
+                                ? "Tool error: the user denied this command. Do not retry it or change its arguments to bypass the decision."
+                                : "Tool error: " + permission.Error;
+                        }
+                        else
+                        {
+                            var result = await NativeCommandRunner.ExecuteAsync(
+                                commandAuthorization.WorkingDirectory,
+                                session.Id,
+                                parsedArguments!,
+                                ct,
+                                commandAuthorization.ProjectId.ToString("N"));
+                            isError = result.IsError;
+                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        }
                     }
                 }
                 else if (string.Equals(call.Name, "run_log", StringComparison.Ordinal))
@@ -201,14 +201,14 @@ internal sealed class NativeAgentToolExecutor(
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } logAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(logAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: run_log is not authorized for this execution role.";
+                        isError = true;
+                        toolResult = "Tool error: run_log is not authorized for this execution role.";
                     }
                     else
                     {
-            var result = await NativeCommandRunner.ReadLogAsync(session.Id, parsedArguments!, ct);
-            isError = result.IsError;
-            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        var result = await NativeCommandRunner.ReadLogAsync(session.Id, parsedArguments!, ct);
+                        isError = result.IsError;
+                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                     }
                 }
                 else if (string.Equals(call.Name, "service_start", StringComparison.Ordinal))
@@ -218,61 +218,61 @@ internal sealed class NativeAgentToolExecutor(
             || controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(serviceAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: service_start is disabled by the workstation policy or execution role.";
+                        isError = true;
+                        toolResult = "Tool error: service_start is disabled by the workstation policy or execution role.";
                     }
                     else if (!NativeAgentCommandApprovalService.TryReadCommandArgv(parsedArguments!, out var serviceArgv))
                     {
-            isError = true;
-            toolResult = "Tool error: service_start requires argv as a non-empty array of strings.";
+                        isError = true;
+                        toolResult = "Tool error: service_start requires argv as a non-empty array of strings.";
                     }
                     else if (!CommandExecutionPolicy.TryValidate(serviceArgv, serviceAuthorization.WorkingDirectory, out var serviceCommandError))
                     {
-            isError = true;
-            toolResult = "Tool error: " + serviceCommandError;
+                        isError = true;
+                        toolResult = "Tool error: " + serviceCommandError;
                     }
                     else
                     {
-            var approvalProjectRoot = serviceAuthorization.ProjectRoot ?? serviceAuthorization.WorkingDirectory;
-            var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory);
-            var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
-                approvalProjectRoot, executionManifestFingerprint);
-            var manifestUnchanged = string.Equals(
-                manifestFingerprint,
-                executionManifestFingerprint,
-                StringComparison.Ordinal);
-            var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
-                ? CommandExecutionPolicy.DetectManifestPrefixes(serviceAuthorization.WorkingDirectory)
-                : Array.Empty<string>();
-            var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manuallyApproved)
-                || CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manifestPrefixes);
-            (bool Allowed, string? Error) permission = (true, null);
-            if (policy == CommandExecutionPolicy.Ask && !isApproved)
-                permission = await _commandApproval.RequestCommandPermissionAsync(
-                    session,
-                    serviceAuthorization.WorkingDirectory,
-                    approvalProjectRoot,
-                    serviceArgv,
-                    taskLease,
-                    ct);
+                        var approvalProjectRoot = serviceAuthorization.ProjectRoot ?? serviceAuthorization.WorkingDirectory;
+                        var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory);
+                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
+                            approvalProjectRoot, executionManifestFingerprint);
+                        var manifestUnchanged = string.Equals(
+                            manifestFingerprint,
+                            executionManifestFingerprint,
+                            StringComparison.Ordinal);
+                        var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
+                            ? CommandExecutionPolicy.DetectManifestPrefixes(serviceAuthorization.WorkingDirectory)
+                            : Array.Empty<string>();
+                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manuallyApproved)
+                            || CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manifestPrefixes);
+                        (bool Allowed, string? Error) permission = (true, null);
+                        if (policy == CommandExecutionPolicy.Ask && !isApproved)
+                            permission = await _commandApproval.RequestCommandPermissionAsync(
+                                session,
+                                serviceAuthorization.WorkingDirectory,
+                                approvalProjectRoot,
+                                serviceArgv,
+                                taskLease,
+                                ct);
 
-            if (!permission.Allowed)
-            {
-                isError = true;
-                toolResult = permission.Error is null
-                    ? "Tool error: the user denied this service command. Do not retry it or change its arguments to bypass the decision."
-                    : "Tool error: " + permission.Error;
-            }
-            else
-            {
-                var result = await _services.StartAsync(
-                    session.Id,
-                    serviceAuthorization.WorkingDirectory,
-                    parsedArguments!,
-                    ct);
-                isError = result.IsError;
-                toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-            }
+                        if (!permission.Allowed)
+                        {
+                            isError = true;
+                            toolResult = permission.Error is null
+                                ? "Tool error: the user denied this service command. Do not retry it or change its arguments to bypass the decision."
+                                : "Tool error: " + permission.Error;
+                        }
+                        else
+                        {
+                            var result = await _services.StartAsync(
+                                session.Id,
+                                serviceAuthorization.WorkingDirectory,
+                                parsedArguments!,
+                                ct);
+                            isError = result.IsError;
+                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        }
                     }
                 }
                 else if (string.Equals(call.Name, "service_status", StringComparison.Ordinal))
@@ -280,14 +280,14 @@ internal sealed class NativeAgentToolExecutor(
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(serviceAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: service_status is not authorized for this execution role.";
+                        isError = true;
+                        toolResult = "Tool error: service_status is not authorized for this execution role.";
                     }
                     else
                     {
-            var result = _services.Status(session.Id, parsedArguments!);
-            isError = result.IsError;
-            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        var result = _services.Status(session.Id, parsedArguments!);
+                        isError = result.IsError;
+                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                     }
                 }
                 else if (string.Equals(call.Name, "service_logs", StringComparison.Ordinal))
@@ -295,14 +295,14 @@ internal sealed class NativeAgentToolExecutor(
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(serviceAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: service_logs is not authorized for this execution role.";
+                        isError = true;
+                        toolResult = "Tool error: service_logs is not authorized for this execution role.";
                     }
                     else
                     {
-            var result = await _services.LogsAsync(session.Id, parsedArguments!, ct);
-            isError = result.IsError;
-            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        var result = await _services.LogsAsync(session.Id, parsedArguments!, ct);
+                        isError = result.IsError;
+                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                     }
                 }
                 else if (string.Equals(call.Name, "service_stop", StringComparison.Ordinal))
@@ -310,14 +310,14 @@ internal sealed class NativeAgentToolExecutor(
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
             || !NativeAgentToolPolicy.IsRunCommandAuthorized(serviceAuthorization))
                     {
-            isError = true;
-            toolResult = "Tool error: service_stop is not authorized for this execution role.";
+                        isError = true;
+                        toolResult = "Tool error: service_stop is not authorized for this execution role.";
                     }
                     else
                     {
-            var result = await _services.StopAsync(session.Id, parsedArguments!, ct);
-            isError = result.IsError;
-            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                        var result = await _services.StopAsync(session.Id, parsedArguments!, ct);
+                        isError = result.IsError;
+                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                     }
                 }
                 else if (mcpClient is null)
