@@ -102,19 +102,19 @@ public record CreateSubtaskCommand(CreateSubtaskRequest Request, ActorContext Ac
 public record StartActorSessionRequest(Guid TaskId, Guid SubtaskId);
 
 /// <summary>Starts an actor session for a subtask.</summary>
-public record StartActorSessionCommand(StartActorSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartActorSessionCommand(StartActorSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Identifies a pipeline session to launch.</summary>
 public record LaunchSessionRequest(Guid SessionId);
 
 /// <summary>Launches an existing pipeline session.</summary>
-public record LaunchSessionCommand(LaunchSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record LaunchSessionCommand(LaunchSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Identifies a failed or closed session attempt to retry.</summary>
 public record RetryPipelineSessionRequest(Guid SessionId);
 
 /// <summary>Creates a new attempt using the original session prompt and role.</summary>
-public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Diff reference and summary reported for a subtask.</summary>
 public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary, string? Abstract = null);
