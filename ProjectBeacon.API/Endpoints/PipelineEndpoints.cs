@@ -153,32 +153,32 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> StartActorSession(Guid taskId, Guid subtaskId, [FromBody] ActorSessionBody body, StartActorSessionHandler handler, CancellationToken ct)
+    private static async Task<IResult> StartActorSession(Guid taskId, Guid subtaskId, [FromBody] ActorSessionBody body, HttpContext ctx, StartActorSessionHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId || subtaskId != body.SubtaskId)
             return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
-        var result = await handler.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(body.TaskId, body.SubtaskId)), ct);
+        var result = await handler.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(body.TaskId, body.SubtaskId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> LaunchSession(Guid sessionId, [FromBody] LaunchSessionBody body, LaunchSessionHandler handler, CancellationToken ct)
+    private static async Task<IResult> LaunchSession(Guid sessionId, [FromBody] LaunchSessionBody body, HttpContext ctx, LaunchSessionHandler handler, CancellationToken ct)
     {
         if (sessionId != body.SessionId)
             return ProblemResults.Bad("SessionId mismatch.");
 
-        var result = await handler.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(body.SessionId)), ct);
+        var result = await handler.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(body.SessionId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> RetryPipelineSession(Guid sessionId, RetryPipelineSessionHandler handler, CancellationToken ct)
+    private static async Task<IResult> RetryPipelineSession(Guid sessionId, HttpContext ctx, RetryPipelineSessionHandler handler, CancellationToken ct)
     {
         var result = await handler.HandleAsync(
-            new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId)), ct);
+            new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId), ctx.GetActor()), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
