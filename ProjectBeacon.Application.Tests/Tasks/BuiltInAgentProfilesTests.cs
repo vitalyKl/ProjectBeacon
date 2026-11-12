@@ -95,6 +95,8 @@ public sealed class BuiltInAgentProfilesTests
         Assert.Contains("targetKind RepoPatch", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("only RepoPatch Update proposals", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("Use the knowledge-curator profile", docs.Instruction, StringComparison.Ordinal);
+        Assert.Contains("Do not submit ProjectDescription, ContextSection, Decision, Constraint, Milestone, TaskDescription, Create or Delete proposals", docs.Instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("For ContextSection updates", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_file", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("hash_text", docs.Instruction, StringComparison.Ordinal);
         Assert.Contains("for a new file set baseHash to null", docs.Instruction, StringComparison.Ordinal);
