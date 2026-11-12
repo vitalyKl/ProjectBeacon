@@ -93,6 +93,28 @@ public sealed class PipelineControlAuthorizationTests : IDisposable
     }
 
     [Fact]
+    public async Task NonMemberCannotProbeOrCancelPipelineSession()
+    {
+        var session = PipelineSession.Create(
+            _taskId, _projectId, PipelineRole.Planner,
+            "private planner context", null, null, null);
+        _db.PipelineSessions.Add(session);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var stranger = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, null, null, ApiTokenCapability.None);
+        var result = await new CancelPipelineSessionHandler(_factory, _authorization).HandleAsync(
+            new CancelPipelineSessionCommand(
+                new CancelPipelineSessionRequest(_taskId, session.Id), stranger),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        var persisted = await _db.PipelineSessions.AsNoTracking()
+            .SingleAsync(item => item.Id == session.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(SessionStatus.Ready, persisted.Status);
+    }
+
+    [Fact]
     public async Task SessionDriveTokenMustBeBoundToTheTaskProject()
     {
         var token = new ActorContext(
