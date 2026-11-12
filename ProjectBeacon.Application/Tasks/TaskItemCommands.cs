@@ -34,7 +34,7 @@ public record UpdateTaskRequest(
 /// <summary>
 /// Command for update task.
 /// </summary>
-public record UpdateTaskCommand(UpdateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
+public record UpdateTaskCommand(UpdateTaskRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Fields for delete task.
 /// </summary>
@@ -42,7 +42,7 @@ public record DeleteTaskRequest(Guid TaskId);
 /// <summary>
 /// Command for delete task.
 /// </summary>
-public record DeleteTaskCommand(DeleteTaskRequest Request) : ICommand<Result>;
+public record DeleteTaskCommand(DeleteTaskRequest Request, ActorContext Actor) : ICommand<Result>;
 /// <summary>
 /// Task and the in-progress sub-stage. The domain rejects this unless the task is InProgress.
 /// </summary>
@@ -50,7 +50,7 @@ public record ChangeSubStageRequest(Guid TaskId, TaskSubStage SubStage);
 /// <summary>
 /// Command for change sub stage.
 /// </summary>
-public record ChangeSubStageCommand(ChangeSubStageRequest Request) : ICommand<Result<TaskItemDto>>;
+public record ChangeSubStageCommand(ChangeSubStageRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and comment text. The author is the caller on the command, not a field here.
 /// </summary>
@@ -66,7 +66,7 @@ public record SetDependenciesRequest(Guid TaskId, IList<Guid> DependentTaskIds);
 /// <summary>
 /// Command for set dependencies.
 /// </summary>
-public record SetDependenciesCommand(SetDependenciesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record SetDependenciesCommand(SetDependenciesRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the review notes. Empty notes are rejected.
 /// </summary>
@@ -74,7 +74,7 @@ public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes);
 /// <summary>
 /// Command for add review notes.
 /// </summary>
-public record AddReviewNotesCommand(AddReviewNotesRequest Request) : ICommand<Result<TaskItemDto>>;
+public record AddReviewNotesCommand(AddReviewNotesRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Task and the target status. Done fails unless a completed review run exists.
 /// </summary>
@@ -82,26 +82,30 @@ public record ChangeTaskStatusRequest(Guid TaskId, TaskItemStatus Status, Guid? 
 /// <summary>
 /// Command for change task status.
 /// </summary>
-public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : ICommand<Result<TaskItemDto>>;
+public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 /// <summary>
 /// Optional review counts. ReviewerRun alone is not proof that the work is done.
 /// </summary>
 public record FinishWorkReview(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);
 /// <summary>
-/// Result is done, failed, skipped, or partial. ActorId is the principal user id supplied by the host, not a client body field. Done requires ReviewRunId.
+/// Result is done, failed, skipped, or partial. Caller identity is supplied separately
+/// through the server-resolved ActorContext on FinishWorkCommand. Done requires ReviewRunId.
 /// </summary>
 public record FinishWorkRequest(
     string TaskId,
     string Result,
     string? Output,
-    string ActorId,
     FinishWorkReview? Review = null,
     string? ReviewTranscriptRef = null,
     Guid? ReviewRunId = null);
 /// <summary>
-/// Command for finish work.
+/// Command for finish work. Actor identity is resolved at the trusted HTTP or worker boundary,
+/// never copied from a request DTO.
 /// </summary>
-public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
+public record FinishWorkCommand(
+    FinishWorkRequest Request,
+    ActorContext Actor,
+    string? WorkerToken = null) : ICommand<Result>;
 /// <summary>
 /// A task row, including status, priority, review notes, and timestamps.
 /// </summary>
@@ -141,7 +145,7 @@ public record ListTaskStepsRequest(Guid TaskId);
 /// <summary>
 /// Command for list task steps.
 /// </summary>
-public record ListTaskStepsCommand(ListTaskStepsRequest Request) : ICommand<Result<IList<TaskStepDto>>>;
+public record ListTaskStepsCommand(ListTaskStepsRequest Request, ActorContext Actor) : ICommand<Result<IList<TaskStepDto>>>;
 /// <summary>
 /// Fields for add task step.
 /// </summary>
@@ -149,7 +153,7 @@ public record AddTaskStepRequest(Guid TaskId, string Title);
 /// <summary>
 /// Command for add task step.
 /// </summary>
-public record AddTaskStepCommand(AddTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+public record AddTaskStepCommand(AddTaskStepRequest Request, ActorContext Actor) : ICommand<Result<TaskStepDto>>;
 /// <summary>
 /// Step id and whether it is done.
 /// </summary>
@@ -157,7 +161,7 @@ public record ToggleTaskStepRequest(Guid StepId, bool Done);
 /// <summary>
 /// Command for toggle task step.
 /// </summary>
-public record ToggleTaskStepCommand(ToggleTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+public record ToggleTaskStepCommand(ToggleTaskStepRequest Request, ActorContext Actor) : ICommand<Result<TaskStepDto>>;
 /// <summary>
 /// Fields for delete task step.
 /// </summary>
@@ -165,4 +169,4 @@ public record DeleteTaskStepRequest(Guid StepId);
 /// <summary>
 /// Command for delete task step.
 /// </summary>
-public record DeleteTaskStepCommand(DeleteTaskStepRequest Request) : ICommand<Result>;
+public record DeleteTaskStepCommand(DeleteTaskStepRequest Request, ActorContext Actor) : ICommand<Result>;

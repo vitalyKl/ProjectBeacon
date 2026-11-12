@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Common;
 using Domain.Enums;
 /// <summary>
@@ -67,7 +68,7 @@ public record RuntimeDiagnostics(
 /// <summary>
 /// Name, fingerprint, and owning user. TotpCode is required when that user has TOTP enabled.
 /// </summary>
-public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, string? TotpCode = null);
+public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, string? TotpCode = null, ActorContext Actor = default);
 /// <summary>
 /// Command for create device.
 /// </summary>
@@ -83,7 +84,7 @@ public record ListDevicesCommand(ListDevicesRequest Request) : ICommand<Result<I
 /// <summary>
 /// Fields for revoke device.
 /// </summary>
-public record RevokeDeviceRequest(Guid DeviceId, Guid UserId);
+public record RevokeDeviceRequest(Guid DeviceId, Guid UserId, ActorContext Actor = default);
 /// <summary>
 /// Command for revoke device.
 /// </summary>
@@ -154,7 +155,7 @@ public record ListCommandsCommand(ListCommandsRequest Request) : ICommand<Result
 /// <summary>
 /// Project, device, user, and the local root to bind.
 /// </summary>
-public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot);
+public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot, ActorContext? Actor = null);
 /// <summary>
 /// Command for attach runtime.
 /// </summary>
@@ -170,7 +171,7 @@ public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result
 /// <summary>
 /// User and runtime id for detach runtime.
 /// </summary>
-public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
+public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId, ActorContext? Actor = null);
 /// <summary>
 /// Command for detach runtime.
 /// </summary>

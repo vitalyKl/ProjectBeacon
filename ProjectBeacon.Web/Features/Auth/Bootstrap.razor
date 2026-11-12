@@ -1,6 +1,8 @@
-@page "/bootstrap"
+@page "/control/bootstrap"
 @layout AuthLayout
 @using Microsoft.AspNetCore.Authorization
+@using ProjectBeacon.Web.Authentication
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @attribute [AllowAnonymous]
 @using Microsoft.Extensions.Localization
 @using MudBlazor
@@ -13,6 +15,8 @@
 
 <PageTitle>@L["Bootstrap"]</PageTitle>
 
+@if (!_blocked)
+{
 <MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
     <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Bootstrap"]</MudText>
 
@@ -30,7 +34,7 @@
         </MudAlert>
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   OnClick="@(() => Navigation.NavigateTo("/control/login"))"
                    Class="w-100">
             @L["GoToLogin"]
         </MudButton>
@@ -57,9 +61,19 @@
         </MudAlert>
     }
 </MudPaper>
+}
 
 @code {
     private bool _success;
+    private bool _blocked;
+
+    protected override void OnInitialized()
+    {
+        _blocked = !ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration);
+        if (_blocked)
+            Navigation.NavigateTo("/", forceLoad: true);
+    }
+
     private string _password = string.Empty;
     private string _token = string.Empty;
     private string? _error;
@@ -67,6 +81,12 @@
 
     private async Task HandleBootstrap()
     {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
         _error = null;
         _loading = true;
         StateHasChanged();

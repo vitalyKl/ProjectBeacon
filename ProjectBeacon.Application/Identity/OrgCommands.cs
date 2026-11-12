@@ -17,7 +17,7 @@ public record UpdateOrgRequest(Guid OrgId, string? Name, string? Description);
 /// <summary>
 /// Command for update org.
 /// </summary>
-public record UpdateOrgCommand(UpdateOrgRequest Request) : ICommand<Result<OrgDto>>;
+public record UpdateOrgCommand(UpdateOrgRequest Request, ActorContext Actor) : ICommand<Result<OrgDto>>;
 /// <summary>
 /// Fields for get org.
 /// </summary>
@@ -25,7 +25,7 @@ public record GetOrgRequest(Guid OrgId);
 /// <summary>
 /// Command for get org.
 /// </summary>
-public record GetOrgCommand(GetOrgRequest Request) : ICommand<Result<OrgDto>>;
+public record GetOrgCommand(GetOrgRequest Request, ActorContext Actor) : ICommand<Result<OrgDto>>;
 /// <summary>
 /// Fields for list orgs.
 /// </summary>
@@ -33,7 +33,7 @@ public record ListOrgsRequest;
 /// <summary>
 /// Command for list orgs.
 /// </summary>
-public record ListOrgsCommand(ListOrgsRequest Request) : ICommand<Result<IList<OrgDto>>>;
+public record ListOrgsCommand(ListOrgsRequest Request, ActorContext Actor) : ICommand<Result<IList<OrgDto>>>;
 /// <summary>
 /// An org's id, name, description, and timestamps.
 /// </summary>

@@ -1,0 +1,175 @@
+@page "/billing/invoices/{InvoiceId:guid}"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using MudBlazor
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Billing
+@inject AuthenticationStateProvider Auth
+@inject BillingInvoiceCustomerService InvoiceService
+@inject IJSRuntime JS
+@inject TimeProvider Clock
+
+<PageTitle>Invoice record</PageTitle>
+
+@if (_loading)
+{
+    <LoadingState />
+}
+else if (_forbidden || _notFound)
+{
+    <MudAlert Severity="Severity.Warning">
+        This invoice is unavailable in the current organization.
+    </MudAlert>
+    <MudButton Href="/billing" Variant="Variant.Text" Class="mt-2 no-print">Back to billing</MudButton>
+}
+else if (_error)
+{
+    <MudAlert Severity="Severity.Error">
+        The invoice record could not be loaded. Refresh the page or contact support.
+    </MudAlert>
+    <MudButton Href="/billing" Variant="Variant.Text" Class="mt-2 no-print">Back to billing</MudButton>
+}
+else if (_invoice is not null)
+{
+    <div class="billing-print-actions no-print">
+        <MudButton Href="/billing" Variant="Variant.Text">Back to billing</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                   OnClick="Print">Print / Save PDF</MudButton>
+    </div>
+
+    <MudPaper Outlined="true" Elevation="0" Class="billing-print-document">
+        <div class="billing-print-header">
+            <div>
+                <div class="billing-print-brand">ProjectBeacon</div>
+                <div class="billing-print-caption">Manual invoice record</div>
+            </div>
+            <div class="billing-print-number">
+                <div class="billing-print-caption">Invoice number</div>
+                <strong>@_invoice.Invoice.Number</strong>
+            </div>
+        </div>
+
+        <div class="billing-print-rule"></div>
+
+        <div class="billing-print-section">
+            <div class="billing-print-caption">Billed organization</div>
+            <strong>@_invoice.OrganizationName</strong>
+        </div>
+
+        <div class="billing-print-grid">
+            <div>
+                <div class="billing-print-caption">Issue date (UTC)</div>
+                <strong>@UtcDate(_invoice.Invoice.IssuedAtUtc)</strong>
+            </div>
+            <div>
+                <div class="billing-print-caption">Due date (UTC)</div>
+                <strong>@UtcDate(_invoice.Invoice.DueAtUtc)</strong>
+            </div>
+            <div>
+                <div class="billing-print-caption">Status</div>
+                <strong>@StatusLabel(_invoice.Invoice)</strong>
+            </div>
+        </div>
+
+        <div class="billing-print-rule"></div>
+
+        <div class="billing-print-caption">Description</div>
+        <div class="billing-print-description">@_invoice.Invoice.Description</div>
+
+        <div class="billing-print-total">
+            <span>Recorded amount</span>
+            <strong>@FormatAmount(_invoice.Invoice)</strong>
+        </div>
+
+        @if (_invoice.Invoice.PaidAtUtc is { } paidAt)
+        {
+            <div class="billing-print-section">
+                <div class="billing-print-caption">Payment recorded (UTC)</div>
+                <strong>@paidAt.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)</strong>
+                @if (_invoice.Invoice.PaymentReference is { } reference)
+                {
+                    <div class="billing-print-caption mt-1">External receipt reference: @reference</div>
+                }
+            </div>
+        }
+
+        <div class="billing-print-notice">
+            This is a copy of a manual invoice record stored in ProjectBeacon. It is not a tax or fiscal invoice.
+            ProjectBeacon does not collect payment details, verify funds received, or reconcile external receipts.
+            A Paid status indicates that an operator recorded the external receipt reference shown above.
+        </div>
+
+        <div class="billing-print-footer">
+            Generated from ProjectBeacon on @Clock.GetUtcNow().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
+        </div>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public Guid InvoiceId { get; set; }
+
+    private bool _loading = true;
+    private bool _forbidden;
+    private bool _notFound;
+    private bool _error;
+    private CustomerBillingInvoice? _invoice;
+
+    protected override Task OnParametersSetAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _forbidden = false;
+        _notFound = false;
+        _error = false;
+        _invoice = null;
+
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            var actor = ActorContextFactory.FromPrincipal(principal);
+            _invoice = await InvoiceService.GetAsync(InvoiceId, actor, CancellationToken.None);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (KeyNotFoundException)
+        {
+            _notFound = true;
+        }
+        catch
+        {
+            _error = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task Print() => JS.InvokeVoidAsync("window.print").AsTask();
+
+    private string FormatAmount(BillingInvoice invoice) =>
+        $"{invoice.Currency} {invoice.AmountMinor.ToString("N0", CultureInfo.InvariantCulture)} minor units";
+
+    private string UtcDate(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private string StatusLabel(BillingInvoice invoice) =>
+        invoice.Status == BillingInvoiceStatus.Open && invoice.DueAtUtc < Clock.GetUtcNow()
+            ? "Overdue"
+            : invoice.Status switch
+            {
+                BillingInvoiceStatus.Draft => "Draft",
+                BillingInvoiceStatus.Open => "Open",
+                BillingInvoiceStatus.Paid => "Paid",
+                BillingInvoiceStatus.Void => "Void",
+                BillingInvoiceStatus.Uncollectible => "Uncollectible",
+                _ => "Unknown"
+            };
+}

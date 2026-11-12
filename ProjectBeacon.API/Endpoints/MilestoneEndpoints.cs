@@ -34,68 +34,68 @@ public static class MilestoneEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateMilestone(Guid projectId, [FromBody] CreateMilestoneRequest request, CreateMilestoneHandler handler)
+    private static async Task<IResult> CreateMilestone(Guid projectId, [FromBody] CreateMilestoneRequest request, HttpContext context, CreateMilestoneHandler handler)
     {
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var result = await handler.HandleAsync(new CreateMilestoneCommand(request));
+        var result = await handler.HandleAsync(new CreateMilestoneCommand(request, context.GetActor()));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value!.Id}", MapMilestoneResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> UpdateMilestone(Guid milestoneId, [FromBody] UpdateMilestoneRequest request, UpdateMilestoneHandler handler)
+    private static async Task<IResult> UpdateMilestone(Guid milestoneId, [FromBody] UpdateMilestoneRequest request, HttpContext context, UpdateMilestoneHandler handler)
     {
         if (milestoneId != request.MilestoneId)
             return ProblemResults.Bad("MilestoneId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateMilestoneCommand(request));
+        var result = await handler.HandleAsync(new UpdateMilestoneCommand(request, context.GetActor()));
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteMilestone(Guid milestoneId, DeleteMilestoneHandler handler)
+    private static async Task<IResult> DeleteMilestone(Guid milestoneId, HttpContext context, DeleteMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestoneId), context.GetActor()));
 
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListMilestones(Guid projectId, CancellationToken ct, ListProjectMilestonesHandler handler)
+    private static async Task<IResult> ListMilestones(Guid projectId, HttpContext context, CancellationToken ct, ListProjectMilestonesHandler handler)
     {
-        var result = await handler.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(projectId)), ct);
+        var result = await handler.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(projectId), context.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(result.Value!.Select(MapMilestoneResponse))
             : result.FromResult();
     }
 
-    private static async Task<IResult> GetMilestone(Guid milestoneId, GetMilestoneHandler handler)
+    private static async Task<IResult> GetMilestone(Guid milestoneId, HttpContext context, GetMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new GetMilestoneCommand(new GetMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new GetMilestoneCommand(new GetMilestoneRequest(milestoneId), context.GetActor()));
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> CloseMilestone(Guid projectId, Guid milestoneId, CloseMilestoneHandler handler)
+    private static async Task<IResult> CloseMilestone(Guid projectId, Guid milestoneId, HttpContext context, CloseMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId), context.GetActor()));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ReopenMilestone(Guid projectId, Guid milestoneId, ReopenMilestoneHandler handler)
+    private static async Task<IResult> ReopenMilestone(Guid projectId, Guid milestoneId, HttpContext context, ReopenMilestoneHandler handler)
     {
-        var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId)));
+        var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId), context.GetActor()));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);

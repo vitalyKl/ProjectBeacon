@@ -8,6 +8,7 @@ using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Web.Extensions;
+using ProjectBeacon.Application.Identity;
 
 namespace ProjectBeacon.Web.Tests;
 
@@ -80,6 +81,53 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     }
 
     [Fact]
+    public async Task OrganizationOnlyMembership_KeepsSessionAndBindsOrganization()
+    {
+        var org = Org.Create("Org-only circuit");
+        var user = User.Create("org-only-circuit", "org-only-circuit@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(null, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope,
+            Principal(user.Id, isAdmin: false, projectId: null),
+            null,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(ok);
+        Assert.Null(circuit.Tenant.ProjectId);
+        Assert.Equal(org.Id, circuit.Tenant.OrgId);
+        Assert.True(circuit.Tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Active, circuit.Tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task ProjectMembershipRemoved_ButOrganizationMembershipKept_RebindsToOrganization()
+    {
+        var (org, user, project) = await SeedUserInProjectAsync();
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.ProjectMembers.Remove(_db.ProjectMembers.Single(member => member.ProjectId == project.Id && member.UserId == user.Id));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, org.Id);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope,
+            Principal(user.Id, isAdmin: false, projectId: project.Id),
+            null,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(ok);
+        Assert.Null(circuit.Tenant.ProjectId);
+        Assert.Equal(org.Id, circuit.Tenant.OrgId);
+        Assert.Equal(OrganizationLifecycleStatus.Active, circuit.Tenant.LifecycleStatus);
+    }
+
+    [Fact]
     public async Task MembershipRemoved_OtherMembershipKept_RebindsTenant()
     {
         var (org, user, current) = await SeedUserInProjectAsync();
@@ -97,6 +145,56 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
 
         Assert.True(ok);
         Assert.Equal(other.Id, circuit.Tenant.ProjectId);
+    }
+
+    [Fact]
+    public async Task SuspendedCurrentOrganization_KeepsSessionAndMarksTenantInactive()
+    {
+        var (org, user, project) = await SeedUserInProjectAsync();
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(project.Id, org.Id);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id),
+            null, TestContext.Current.CancellationToken);
+
+        Assert.True(ok);
+        Assert.Equal(project.Id, circuit.Tenant.ProjectId);
+        Assert.Equal(org.Id, circuit.Tenant.OrgId);
+        Assert.True(circuit.Tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, circuit.Tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task ActivePreferredProject_CanBeSelectedWhenCurrentOrganizationIsSuspended()
+    {
+        var (suspendedOrg, user, currentProject) = await SeedUserInProjectAsync();
+        suspendedOrg.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        var activeOrg = Org.Create("Other active organization");
+        var activeProject = Project.Create("Other active project", null, activeOrg.Id);
+        _db.Orgs.Add(activeOrg);
+        _db.Projects.Add(activeProject);
+        _db.ProjectMembers.Add(ProjectMember.Create(activeProject.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(currentProject.Id, suspendedOrg.Id);
+        var scope = new TenantContext();
+        scope.Assign(null, null, unscoped: true);
+        await using var lookupDb = new BeaconDbFactory(_options, scope).CreateDbContext(scope);
+        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
+            lookupDb, user.Id, isAdmin: false, preferredProjectId: activeProject.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(activeProject.Id, projectId);
+        Assert.Equal(activeOrg.Id, orgId);
+
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: activeProject.Id),
+            null, TestContext.Current.CancellationToken);
+        Assert.True(ok);
+        Assert.Equal(activeProject.Id, circuit.Tenant.ProjectId);
+        Assert.Equal(activeOrg.Id, circuit.Tenant.OrgId);
+        Assert.Equal(OrganizationLifecycleStatus.Active, circuit.Tenant.LifecycleStatus);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using ProjectBeacon.Application;
+using ProjectBeacon.Application.Operations;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Http;
@@ -28,6 +29,8 @@ var jwtSecret = JwtSecretPolicy.EnsureConfigured(
 DataKeyPolicy.ResolveDataKeys(builder.Configuration, builder.Environment.EnvironmentName);
 
 builder.Services.AddInfrastructure(connectionString);
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddPlatformHeartbeat(PlatformServiceKind.Api, builder.Environment.EnvironmentName);
 builder.Services.AddApplicationHandlers();
 
 builder.Services.AddAuthentication(options =>
@@ -108,6 +111,8 @@ builder.Services.AddRateLimiter(options =>
         rateLimitWindowSeconds,
         rateLimitReadPerWindow,
         attachmentUploadRateLimit));
+builder.Services.AddSingleton(new ApiTokenIdentityRateLimiter(
+    rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow, attachmentUploadRateLimit));
 
 var app = builder.Build();
 
@@ -122,12 +127,22 @@ if (!app.Environment.IsEnvironment("Testing") && PostgresConnection.IsPostgresBa
 }
 
 app.UseBeaconExceptionHandler();
+// Keep proxy trust validation before routing and rate limiting. Untrusted forwarded
+// headers are ignored by the shared factory's explicit KnownProxies/KnownNetworks list.
+app.UseForwardedHeaders(ForwardedHeadersOptionsFactory.Create(app.Configuration));
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
+// The standalone API host never serves operator-console or bootstrap/recovery routes.
+app.UseMiddleware<PublicApiOperatorRouteMiddleware>();
+// Wrap token/device boundaries, tenant isolation and endpoint authorization so every
+// explicit HTTP 403 on a versioned API route is observed.
+app.UseMiddleware<AuditDeniedRequestMiddleware>();
 app.UseMiddleware<ApiTokenAuthMiddleware>();
+app.UseMiddleware<ApiTokenIdentityRateLimitMiddleware>();
 app.UseMiddleware<DeviceActorBoundaryMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
+app.UseMiddleware<OrganizationEntitlementMiddleware>();
 app.UseAuthorization();
 
 app.MapBeaconApi();

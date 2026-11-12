@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Enums;
 using Application.Persistence;
@@ -11,18 +12,23 @@ using Microsoft.EntityFrameworkCore;
 public class UpsertContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpsertContextNodeHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
-        => HandleCoreAsync(command, isDraft: false, authorId: null, ct);
+        => HandleCoreAsync(command, command.Actor, isDraft: false, authorId: null, ct);
 
     public Task<Result<ContextSectionDto>> HandleDraftAsync(
-        UpsertContextNodeCommand command, string? authorId, CancellationToken ct = default)
-        => HandleCoreAsync(command, isDraft: true, authorId, ct);
+        UpsertContextNodeCommand command, string? authorId, ActorContext actor, CancellationToken ct = default)
+        => HandleCoreAsync(command, actor, isDraft: true, authorId, ct);
 
     private async Task<Result<ContextSectionDto>> HandleCoreAsync(
-        UpsertContextNodeCommand command, bool isDraft, string? authorId, CancellationToken ct)
+        UpsertContextNodeCommand command, ActorContext actor, bool isDraft, string? authorId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Request.Title) || string.IsNullOrWhiteSpace(command.Request.BodyMarkdown))
             return Result.Failure<ContextSectionDto>("Title and bodyMarkdown are required.");
@@ -40,6 +46,17 @@ public class UpsertContextNodeHandler
                 s.TaskId == command.Request.TaskId &&
                 s.SectionId == sectionId &&
                 s.Path == path, ct);
+
+        var action = existing is null ? AuthAction.Create : AuthAction.Update;
+        var permission = isDraft
+            ? await KnowledgeWriteAuthorization.CanWriteAsync(
+                db, _authorization, actor, ResourceType.Context, action,
+                command.Request.ProjectId, ct)
+            : await _authorization.CanAsync(
+                db, actor, ResourceType.Context, action,
+                projectId: command.Request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<ContextSectionDto>(permission);
 
         Guid savedId;
 

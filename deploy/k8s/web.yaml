@@ -52,6 +52,8 @@ spec:
               value: "false"
             - name: BEACON_GIT_SHA
               value: unknown
+            - name: CONTROL_HOST
+              value: control.projectbeacon.tech
             # TLS terminates at the ingress. Set the ingress pod CIDR so the app
             # trusts X-Forwarded-Proto/For (Secure cookies, rate-limit keying).
             # - name: FORWARDEDHEADERS__KNOWNNETWORKS__0
@@ -134,6 +136,8 @@ spec:
               value: "false"
             - name: BEACON_GIT_SHA
               value: unknown
+            - name: CONTROL_HOST
+              value: control.projectbeacon.tech
             # TLS terminates at the ingress. Set the ingress pod CIDR so the app
             # trusts X-Forwarded-Proto/For (Secure cookies, rate-limit keying).
             # - name: FORWARDEDHEADERS__KNOWNNETWORKS__0

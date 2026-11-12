@@ -1,10 +1,11 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Persistence;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 /// <summary>
-/// Sets the request tenant from the actor's current project. Does nothing when a project is already bound or the scope is unscoped.
+/// Sets the request tenant from the actor's current project or organization membership. Does nothing when a tenant is already bound or the scope is unscoped.
 /// </summary>
 public sealed class TenantContextBinder
 {
@@ -19,13 +20,30 @@ public sealed class TenantContextBinder
 
     public async Task BindUserAsync(ActorContext actor, CancellationToken ct = default)
     {
-        if (_tenant.ProjectId is not null || _tenant.Unscoped)
+        if (_tenant.ProjectId is not null || _tenant.OrgId is not null || _tenant.Unscoped)
             return;
         if (actor.UserId is null)
             return;
 
-        await using var db = _dbFactory.CreateDbContext();
-        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
+        var lookupTenant = new TenantContext();
+        lookupTenant.Assign(null, null, unscoped: true);
+        await using var db = _dbFactory.CreateDbContext(lookupTenant);
+        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
+            db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
+
+        OrganizationLifecycleStatus? lifecycleStatus = null;
+        if (orgId is { } resolvedOrgId && resolvedOrgId != Guid.Empty)
+        {
+            lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(org => org.Id == resolvedOrgId)
+                .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                .FirstOrDefaultAsync(ct);
+        }
+
         _tenant.Assign(projectId, orgId, unscoped: false);
+        _tenant.SetLifecycleStatus(
+            lifecycleStatus,
+            enforced: orgId is { } tenantOrgId && tenantOrgId != Guid.Empty);
     }
 }

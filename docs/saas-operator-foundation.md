@@ -1,6 +1,6 @@
 # ProjectBeacon SaaS operator foundation
 
-**Status:** foundation contracts and SaaS registration defaults. This document does not claim that the operator UI, billing persistence, provider adapters, or access enforcement are implemented.
+**Status:** The isolated Control Plane, A1 audit console, platform SMTP settings, B1 organization/owner-invitation/Alpha-entitlement workflow, persisted SystemAdministrator/Support/Billing/Auditor roles, TOTP step-up and one-time recovery codes for every operator role are implemented in the current development stack. B4 metadata-only Web/API/Worker heartbeats and the OperationsRead dashboard are implemented. The Docker Compose/VPS container-log path is implemented through OpsAgent and a separate DockerLogProxy on a private bridge network; only DockerLogProxy receives the read-only Docker socket mount. Live VPS verification and Kubernetes-native pod-log access remain future work. B2 has a persisted provider-neutral BillingPlan catalog and Control Plane editor. B3 now persists organization subscriptions and an append-only billing ledger under tenant/operator FORCE RLS and implements an atomic Alpha → Production entitlement conversion with TOTP elevation, audit writes and idempotent replay. B3 also includes an operator-only manual invoice workflow with server-generated invoice numbers, due dates, and Open/Paid/Void/Uncollectible states. Invoice state transitions write billing-ledger entries and audit events in the same transaction. Marking an invoice paid stores an operator-entered external receipt reference only; it does not verify funds received or reconcile payments. Customer billing is available to active-organization Owners/Admins at `/billing`, with a tenant-bound invoice detail view and browser Print / Save PDF flow. The print page is a copy of the manual record, not a tax/fiscal invoice; server-generated PDF artifact delivery, payment-method storage and provider adapters remain incomplete. The `projects` capacity key is enforced atomically at project creation. The `members` key reserves active organization members plus unexpired org invitations, including operator-issued owner invitations; customer and Control Plane invite create/accept/revoke plus anonymous invite registration share one organization lock, and every membership acceptance rechecks the member limit before adding membership. Omitted keys are unmetered; explicit zero blocks new usage. Broader per-module feature gates and additional usage counters remain incomplete. Owner/Admin-requested ZIP export v1 is available from customer Settings and covers organization/workspace content and provider-neutral subscription, invoice and billing-ledger snapshots (including task phases, task workspace sections, project review commands and role bindings, chat content and task attachments). It excludes credential stores, provider/customer/subscription identifiers, local workstation paths, pipeline/review/evaluation history and platform audit/security internals. Individual data-subject export, deletion workflows, retention schedules and physical/pseudonymous erasure remain incomplete. The primary SystemAdministrator retains break-glass recovery protected by an independent `ADMIN_RECOVERY_TOKEN` (not the initial `BOOTSTRAP_ADMIN_TOKEN`).
 
 ## Product boundary
 
@@ -20,7 +20,7 @@ Organization lifecycle, access entitlement, and billing are separate concerns:
 - Entitlement answers which product capabilities and limits are currently available to that organization.
 - Subscription and invoices answer the commercial relationship, price, payment state, and billing periods.
 
-Alpha and Production both resolve to the same effective entitlement contract. The Application contract exposes `IEntitlementService.ConvertAlphaToProductionAsync` as the one-action transition. It replaces the active AlphaProgram grant with a Subscription-backed grant; it is not an organization migration. The implementation must atomically persist the subscription state and billing event, close the alpha grant, create the production entitlement, and stage the operator audit entry in one database transaction. Failed transitions must leave the existing alpha access unchanged. The operation must be idempotent on its request key so a retry does not double-activate or double-charge.
+Alpha and Production both resolve to the same effective entitlement contract. `IEntitlementService.ConvertAlphaToProductionAsync` is implemented as one atomic application operation. It locks the active organization, requires a persisted EntitlementsManage operator plus current TOTP elevation, verifies an active product plan and an effective AlphaProgram grant, creates a ManualInvoice subscription, replaces the Alpha entitlement with a Subscription-backed entitlement, appends a billing ledger activation event, and stages audit events in one PostgreSQL transaction. Exact retries return the original entitlement; conflicting idempotency-key reuse fails. The operation stores an operator-supplied manual invoice/receipt reference only: it does not itself verify receipt of funds or create an invoice document. Failed transitions roll back without dropping alpha access.
 
 ## Operator authorization contract
 
@@ -30,11 +30,29 @@ Application contracts live in ProjectBeacon.Application/Admin:
 - AdminActor is the verified operator identity passed to privileged handlers. Its constructor is internal; callers obtain it only from IAdminGate.
 - IAdminGate is responsible for resolving a human actor against current database state and checking requested permissions and elevation.
 
-For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.CurrentSystemAdministrator`. Stable role keys are reserved now: `SystemAdministrator`, `Support`, `Billing`, and `Auditor`. Their starter permission sets live in `OperatorRolePermissionSets`; Support has customer/account and operational support but no billing mutation, Billing has commercial/entitlement operations but no account administration, and Auditor is read-only. Only SystemAdministrator is assignable through the existing `IsAdmin` flag in the alpha; the other roles are not persisted or assignable yet.
+For the alpha, the existing `User.IsAdmin` flag maps to `OperatorPermissionSets.CurrentSystemAdministrator`. Stable role keys are reserved now: `SystemAdministrator`, `Support`, `Billing`, and `Auditor`. Their starter permission sets live in `OperatorRolePermissionSets`; Support has customer/account and operational support but no billing mutation, Billing has commercial/entitlement operations but no account administration, and Auditor is read-only. All four roles are persisted on the user account and assignable through the Control Plane by an elevated SystemAdministrator. The legacy `IsAdmin` flag remains set only for SystemAdministrator; `IAdminGate` resolves the persisted role and derives the effective permission set on every request. Role changes invalidate the target account sessions. The last active SystemAdministrator cannot be removed or demoted, and an operator cannot change their own role.
 
-Future role assignment should be stored and changed in one authorization component. Handlers must continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
+Role assignment is stored on the user account and changed only through `OperatorRoleAdminService`. Handlers continue asking for a permission, not checking a role name or User.IsAdmin directly. Project MemberRole and ApiTokenCapability remain unrelated security domains. API tokens, devices, and workers never receive operator permissions.
 
-Sensitive mutations require an elevated AdminActor. The future gate must validate the current user and session version in the database on each invocation; a Blazor page authorization attribute is only a UI guard.
+Sensitive mutations require an elevated AdminActor. The database-backed gate validates the current operator account, its persisted TOTP-enabled state, and the signed Control Plane elevation expiry on each invocation; a Blazor page authorization attribute is only a UI guard.
+
+## Trusted proxy and sensitive endpoint limits
+
+The Web and standalone API hosts use the same ForwardedHeadersOptionsFactory. Forwarded headers
+are processed before routing, authentication and rate limiting. Without an explicit trust list,
+the framework loopback-only defaults remain in force. When one or more
+ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks entries are configured,
+they replace the defaults completely; only those proxy addresses/networks may supply
+X-Forwarded-For and X-Forwarded-Proto. Never enable
+ASPNETCORE_FORWARDEDHEADERS_ENABLED, which bypasses this trust boundary.
+
+Sensitive authentication and attachment-upload endpoints use fixed-window buckets partitioned by
+the resolved client IP and, for authenticated human sessions, an additional user-identity bucket.
+The buckets are independent for auth, auth-read and attachment-upload; exhausting one
+policy does not consume another policy's allowance. Anonymous endpoints remain IP-limited because
+no verified user identity exists yet. The attachment-upload allowance is separate from the
+general authentication allowance. If forwarded headers are not trusted correctly, the IP bucket
+will collapse to the proxy address, so production must configure the actual ingress/Caddy network.
 
 ## Organization entitlements
 
@@ -50,7 +68,7 @@ Do not choose commercial units prematurely. Limits are keyed values so the produ
 
 Alpha access is a time-bounded or open-ended AlphaProgram entitlement issued by an operator. It is not a special organization type and does not depend on a payment provider.
 
-When paid subscriptions arrive, the billing event handler creates or updates the Subscription-backed entitlement. The effective-access resolver remains the same. The conversion operation must be atomic: close/replace the active alpha grant, persist the subscription state and billing event, and publish the new entitlement in one database transaction. Failed transitions must leave the existing alpha access unchanged.
+The manual Alpha → Production conversion is implemented as one atomic application operation: it locks the active organization, requires a persisted operator permission and current TOTP elevation, creates a ManualInvoice subscription, replaces the Alpha entitlement, appends a billing-ledger activation event and stages audit writes in one PostgreSQL transaction. Exact retries return the original result; conflicting idempotency-key reuse fails. Future provider-backed subscription events must preserve the same effective-access boundary and transactional invariant.
 
 ## Billing provider contract
 
@@ -79,25 +97,28 @@ Application contracts live in ProjectBeacon.Application/Auth/RegistrationPolicy.
 - ApprovalRequired reserves a flow in which a request remains pending until an operator approves it.
 - OpenWithVerifiedEmail reserves future self-service registration and must require verified email before an account or organization is activated.
 
-Only InviteOnly is implemented in RegisterHandler today. Every deployed environment is fail-closed and ignores the legacy AUTH_LOCAL_INVITE_ONLY opt-out. A narrowly scoped opt-out is available only when ASPNETCORE_ENVIRONMENT is explicitly Testing; it exists to support isolated API integration tests and cannot be activated in Development, Staging, or Production. The enum values for future modes are contracts only; do not expose them as configuration options until their complete handlers, email verification, rate limits, abuse controls, tenant-creation rules, audit events, and tests exist.
+Only InviteOnly is implemented in RegisterHandler today. The general-purpose customer `POST /v1/orgs` endpoint also rejects self-service organization creation whenever InviteOnly is active; deployed environments cannot disable this policy. New Alpha organizations are provisioned through the operator Control Plane, which creates the owner invitation in the same transaction. Every deployed environment is fail-closed and ignores the legacy AUTH_LOCAL_INVITE_ONLY opt-out. A narrowly scoped opt-out is available only when ASPNETCORE_ENVIRONMENT is explicitly Testing; it exists to support isolated API integration tests and cannot be activated in Development, Staging, or Production. The enum values for future modes are contracts only; do not expose them as configuration options until their complete handlers, email verification, rate limits, abuse controls, tenant-creation rules, audit events, and tests exist.
 
 The alpha flow is operator-created organization → organization-owner invitation → invited owner registration. Creating a user without a valid invitation is not an alpha onboarding path.
 
 ## Data and extension points for later phases
 
-The following persistence models are not created by this contract-only change. When implementing billing, add them with EF configurations, migrations, RLS/grants, and PostgreSQL tests:
+Alpha entitlement grants now have PostgreSQL persistence in `OrganizationEntitlements`, an operator/tenant RLS policy, transactional grant/revoke writes, and audit events. Every operator-issued grant must include the stable `core` feature. The table is managed through the PostgreSQL entitlement service rather than an EF entity; it is covered by the runtime-role RLS tests.
+
+The provider-neutral `BillingPlan` catalog is implemented in `BillingPlans` with operator-only FORCE RLS, a Control Plane editor and SQLite/PostgreSQL authorization coverage. Organization subscription and billing-ledger persistence are implemented in `OrganizationSubscriptions` and `BillingLedgerEntries`; both use tenant/operator FORCE RLS. The ledger also has provider-event/idempotency uniqueness, a same-organization subscription FK and a database append-only trigger. The remaining commercial persistence models are listed below; future work must include reviewed migrations, RLS/grants and PostgreSQL tests:
 
 | Future model | Responsibility | Required invariant |
-|---|---|---|
-| OrganizationEntitlements | Versioned access grants for an organization | Source, status and effective period are explicit; no implicit access from Org existence |
-| Plan | Product-owned plan key, public name, cadence and limits | Price may be unset in alpha; provider price IDs are never the plan identity |
-| Subscription | Commercial state, source and billing period | At most one effective subscription per organization |
-| BillingEvent | Verified payment/subscription facts | Append-only and provider-event idempotency |
-| Invoice | Manual invoice and payment reference | Amount/currency/date/status are explicit; no payment credential data |
-| PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
+|---|---|
+| ~~Plan~~ | Implemented as `BillingPlan` / `BillingPlans`; price and currency remain nullable and no provider IDs are stored | Product-owned key, features and limits; provider identifiers never define plan identity |
+| ~~Subscription~~ | Implemented as `OrganizationSubscriptions`; source, status, product plan and current period are stored | At most one non-terminal subscription per organization; tenant/operator RLS |
+| ~~BillingEvent~~ | Implemented as append-only `BillingLedgerEntries`; supports application and future provider event types | Immutable trigger, provider-event idempotency, operation idempotency and tenant/operator RLS |
+| ~~Invoice record~~ | Implemented as `BillingInvoices`: generated `PB-YYYY-######` number, description, amount/currency, issue/due dates and Open/Paid/Void/Uncollectible states; state transitions write ledger and audit events atomically | Paid state stores an operator-entered external reference only; it does not verify receipt of funds or reconcile payments |
+| Invoice document/delivery | Implemented: tenant-bound printable customer invoice record at `/billing/invoices/{id}` with browser Print / Save PDF. Not implemented: server-generated PDF artifact and email delivery | Printed copy is informational, not a tax/fiscal invoice; delivery retries and jurisdiction-specific invoice requirements remain future work |
 | PaymentMethodReference | Provider reference and masked metadata | No PAN/CVV or provider secret token |
 
-RLS must scope all organization-owned billing and entitlement rows by OrgId. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
+RLS scopes Alpha entitlement grants by OrgId. Future organization-owned billing rows must use the same isolation rule. Operator-wide reads must use the reviewed admin data-access boundary, not switch the current Blazor tenant. Audit writes for operator mutations and billing state transitions must be atomic with the corresponding database change.
+
+The organization ZIP exporter is built on `IBeaconDbFactory` and the Application-owned `IBeaconDb` persistence port. Infrastructure helper methods must accept that port rather than assume the concrete `BeaconDbContext` returned by a particular implementation. Raw ADO.NET reads of billing rows must enlist in the active EF transaction (`GetDbTransaction`) so the archive remains one consistent snapshot.
 
 ## Delivery order
 
@@ -105,29 +126,41 @@ RLS must scope all organization-owned billing and entitlement rows by OrgId. Ope
 2. **A1 — audit core:** append-only AuditEvents, transactional Stage writes, redaction and security-event coverage.
 3. **A2 — operator gate:** database-backed IAdminGate, AdminActor creation, TOTP/elevation, admin-only navigation and the system overview.
 4. **B1 — alpha onboarding:** organization creation, owner invitation, customer search/card, alpha grant/renew/revoke. This is the first operator-console acceptance milestone.
-5. **B4 — operations and support:** error events, service heartbeats, container-log access through a restricted external ops boundary, and traceId search.
-6. **B2/B3 — commercial conversion:** plans, subscriptions, invoices, billing event ledger, entitlement enforcement, owner billing page and a one-action alpha-to-production transition.
+5. **B4 — operations and support:** audit/error-event and traceId search, metadata-only service heartbeats and the `/admin/operations` overview are implemented. Restricted container-log tails for Web/Worker/Migrate are implemented through OpsAgent and DockerLogProxy in the single-VPS Compose topology; the proxy is reachable only on a dedicated internal network and is the only container with the read-only Docker socket. Kubernetes-native pod-log access and live VPS smoke tests remain future work.
+6. **B2/B3 — commercial conversion:** the provider-neutral operator plan catalog at `/admin/billing/plans`, tenant-scoped subscription persistence, append-only billing ledger, operator-only manual invoice lifecycle and atomic/idempotent Alpha → Production conversion are implemented. Server-generated PDF invoice generation/delivery, provider-backed funds verification/reconciliation and provider adapters remain future work. Atomic `projects` and `members` capacity keys are enforced; per-module feature gates and additional usage counters remain future work. The customer `/billing` page and browser print view expose only current-organization invoices to Owners/Admins.
 7. **B5 — provider integration:** choose a provider after product/commercial/legal decisions; implement the adapter, signed webhook and reconciliation.
-8. **B6 — data lifecycle:** export and deletion workflows, retention and operator correction reporting.
+8. **B6 — data lifecycle:** Owner/Admin organization workspace ZIP export v1 is implemented with scoped content, attachments, redaction and limits. Individual data-subject export, deletion/erasure workflows, retention/purge policy and operator correction reporting remain open.
 
-The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. Every privileged mutation is authorized, elevated where required, and audited.
+The first customer-alpha acceptance criterion is operational, not architectural: an operator can create an organization, invite its owner, grant access, inspect metadata and support the customer without editing the database manually. The current B1 slice provides the organization list/search, customer detail, organization creation with owner invitation, additional owner invitations, invitation revocation, member/invitation visibility, a read-only project inventory, a safe workstation inventory for operators with `UsersRead`, and Alpha grant/renew/revoke with limits, features, effective dates and audit history. Owner/member identity details are withheld unless the actor has `UsersRead`; counts remain visible without exposing personal data. Expired invitations are not counted as pending. Full account operations and entitlement enforcement beyond the atomic `projects` and `members` capacity caps remain subsequent work. High-risk operator mutations now require signed ten-minute TOTP step-up elevation and are checked again in the server-side services.
 
 ## Current implementation status of this foundation
 
 Implemented in the foundation branch:
 
-- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, and IAdminGate port.
-- Entitlement source/status/limit/snapshot contracts, IEntitlementService port, and the atomic Alpha → Production conversion contract.
-- Provider-neutral plan/subscription/invoice/ledger snapshots; checkout, webhook and subscription contracts; hosted payment-method setup/lifecycle; IBillingProvider, resolver and payment-reference store port.
+- Operator permission flags, reserved SystemAdministrator/Support/Billing/Auditor role keys and permission sets, an immutable AdminActor contract, database-backed IAdminGate authorization, TOTP enrollment at `/control/security`, one-time SHA-256-hashed recovery codes with rotation and recovery for every operator role, and signed ten-minute step-up elevation for high-risk mutations.
+- An isolated Control Plane origin (`control.projectbeacon.tech`) with a host allowlist, separate host-only operator cookie, dedicated sign-in, and Control Plane-only bootstrap/recovery/audit routes.
+- PostgreSQL-backed Alpha entitlements with tenant/operator RLS, atomic replace/grant/revoke operations and transactional audit records; Alpha → Production conversion is implemented in `PostgresEntitlementService` as described below.
+- Provider-neutral billing contracts (`IBillingProvider`, resolver, checkout/webhook and payment-method-reference ports) are defined, but no provider adapter is registered or selected. Persistence exists for plans, subscriptions, manual invoices and append-only ledger entries; payment-method-reference persistence remains future work.
 - Registration mode/policy contracts.
 - Invite-only registration enforced as the current runtime policy.
+- Operator organization management: paginated/searchable customer list, organization detail, member/invitation metadata, organization creation with owner invitation, invite reissue/revocation, member-role changes, and global account disable/enable with owner-protection and session invalidation.
+- Organization lifecycle transitions (Active/Suspended/Closed) with a reason, TOTP step-up, row locking and atomic audit records. Suspended and closed tenants are blocked across API entitlement checks, ordinary EF tenant filters, shared Application authorization checks, and invite preview/redemption. Existing global user sessions remain valid; a user can switch to another active organization. Permanent closure is terminal and reserved for SystemAdministrators.
+- Persisted organization entitlements with operator list/grant/renew/revoke, replacement history, transactionally staged audit events, tenant RLS and an active-grant uniqueness constraint.
+- First-party Web/API/Worker processes publish metadata-only heartbeats every 30 seconds. The `/admin/operations` overview is permission-gated by `OperationsRead` and marks instances stale after 90 seconds; it exposes no hostnames or log content. A separate `ContainerLogsRead` permission gates bounded Web/Worker/Migrate log tails; Compose routes Web → OpsAgent → DockerLogProxy over private service networks.
+- The provider-neutral `BillingPlan` catalog is persisted in `BillingPlans` under FORCE RLS, with `/admin/billing/plans` gated by `BillingRead` for reads and `BillingManage` plus TOTP step-up for mutations. Price and currency are optional; the catalog does not create subscriptions or contact a payment provider.
+- `OrganizationSubscriptions` stores provider-neutral subscription status/source, plan key and period with one non-terminal subscription per organization; tenant and operator reads/writes are enforced by FORCE RLS.
+- `BillingLedgerEntries` is tenant/operator FORCE-RLS protected and database append-only. Provider event IDs and idempotency keys are unique; a composite FK prevents linking a ledger row to a subscription belonging to another organization.
+- Alpha → Production conversion is implemented in `PostgresEntitlementService`: a persisted operator permission plus TOTP step-up, active-org locking, exact idempotent replay, plan-feature/limit copy, atomic Alpha grant replacement, ManualInvoice subscription creation, ledger activation event and three audit records in one transaction. PostgreSQL runtime-role integration tests cover the conversion and replay.
+- The conversion stores an operator-supplied manual invoice/receipt reference as part of the idempotent conversion record; it does not itself prove that funds were received or issue an invoice. Separately, `/admin/billing/invoices` provides numbered manual invoice issuance and Open/Paid/Void/Uncollectible lifecycle management. Marking an invoice paid stores an external receipt reference but does not verify receipt of funds or perform reconciliation. `/billing` exposes invoices to the active organization's Owner/Admin through a tenant-bound read-only service; ordinary members and inactive tenants are denied.
+- Sensitive organization, user and entitlement mutations require TOTP step-up and are independently checked by the Application services.
 - SaaS-only product boundary documented in README and AGENTS.
 
 Not implemented by this foundation:
 
-- AdminGate implementation, access revocation, audit storage, elevation/TOTP flow, Admin UI, organization creation or alpha-grant persistence.
-- Any billing database table, provider adapter, checkout, webhook route, payment-method storage implementation or customer billing UI.
+- A separate operator identity/credential store is deferred; operators currently reuse customer `User` accounts with persisted role keys. Role assignment and removal are implemented through `/admin/operators`. All operator roles can rotate one-time recovery codes from `/control/security` while their authenticator is available and use a saved code to disable a lost authenticator; recovery consumes one code, revokes the remaining codes and invalidates active sessions. The primary SystemAdministrator also retains break-glass recovery protected by the separate `ADMIN_RECOVERY_TOKEN`; it fails closed when that secret is not configured and never accepts the bootstrap secret.
+- Tenant-scoped API requests now fail closed unless the organization has an active entitlement containing `core`; this applies to human, API-token and device requests. Login, password recovery, and invitation redemption remain available so access can be restored. The product-owned `projects` capacity key is enforced atomically when creating projects. The `members` key reserves organization members plus valid org invitations and is checked when org/project invites are accepted. An omitted key is unmetered and an explicit zero blocks new usage. Other module feature gates and usage counters remain future work.
+- Server-generated PDF artifact generation and delivery; payment-method-reference persistence; payment-provider adapters, checkout/portal, verified webhooks, funds verification, refunds and automated settlement reconciliation. The browser print/Save PDF view is implemented as an informational copy of the manual record, not a tax/fiscal invoice. Manual invoice state transitions and operator-attested receipt references are implemented, but they do not prove funds were received. The `/billing` customer view is read-only and limited to organization Owners/Admins. Alpha-to-production conversion is already implemented as described above; provider-backed renewal and lifecycle flows remain future work.
 - Approval-request and verified-email registration handlers.
-- Production deployment of an ops-agent or external log stack.
+- Kubernetes-native pod-log access and centralized external log aggregation. The Docker Compose/VPS OpsAgent + DockerLogProxy deployment path is implemented, but the real VPS socket/network smoke test remains outstanding.
 
 Do not treat a contract interface as a shipped feature. Each later phase must add persistence, DI registration, UI/API entry points, authorization tests, PostgreSQL/RLS tests and operational documentation together.

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Web.Tests;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -31,6 +32,65 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
+    public async Task BrowserLogout_ClearsOnlyCurrentCookieAndKeepsJwtSessionValid()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var password = await WebTestFactory.GetBootstrapPasswordAsync(client);
+
+        using var cookieLogin = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/cookie-login");
+        cookieLogin.Headers.Host = "app.projectbeacon.tech";
+        cookieLogin.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = "admin",
+            ["password"] = password
+        });
+        var cookieLoginResponse = await client.SendAsync(
+            cookieLogin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, cookieLoginResponse.StatusCode);
+        Assert.Contains(cookieLoginResponse.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith("BeaconAuth=", StringComparison.Ordinal));
+
+        using var jwtLogin = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/login");
+        jwtLogin.Headers.Host = "app.projectbeacon.tech";
+        jwtLogin.Content = System.Net.Http.Json.JsonContent.Create(new
+        {
+            Login = "admin",
+            Password = password
+        });
+        var jwtLoginResponse = await client.SendAsync(jwtLogin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, jwtLoginResponse.StatusCode);
+        var jwtJson = await jwtLoginResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var jwt = jwtJson.GetProperty("token").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(jwt));
+
+        using var logout = new HttpRequestMessage(HttpMethod.Get, "/logout");
+        logout.Headers.Host = "app.projectbeacon.tech";
+        var logoutResponse = await client.SendAsync(logout, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
+        Assert.Equal("/login", logoutResponse.Headers.Location?.ToString());
+        Assert.Contains(logoutResponse.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith("BeaconAuth=", StringComparison.Ordinal)
+                && value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+
+        using var cookieCheck = new HttpRequestMessage(HttpMethod.Get, "/v1/auth/me");
+        cookieCheck.Headers.Host = "app.projectbeacon.tech";
+        var cookieResponse = await client.SendAsync(cookieCheck, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, cookieResponse.StatusCode);
+
+        using var jwtCheck = new HttpRequestMessage(HttpMethod.Get, "/v1/auth/me");
+        jwtCheck.Headers.Host = "app.projectbeacon.tech";
+        jwtCheck.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+        var jwtResponse = await client.SendAsync(jwtCheck, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, jwtResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Landing_Anonymous_Ok_NotPermanentRedirect()
     {
         await using var factory = new WebTestFactory();
@@ -41,11 +101,14 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
-    public async Task RecoverPage_AccessibleToAnonymous()
+    public async Task ControlRecoverPage_HasDedicatedRoute()
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient();
-        var response = await client.GetAsync("/recover", cancellationToken: TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/control/recover",
+            cancellationToken: TestContext.Current.CancellationToken);
+
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -171,11 +234,13 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
 
     public const string BootstrapToken = "web-test-bootstrap-token";
+    public const string RecoveryToken = "web-test-admin-recovery-token";
 
     public WebTestFactory()
     {
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
         Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
+        Environment.SetEnvironmentVariable("ADMIN_RECOVERY_TOKEN", RecoveryToken);
         _connection.Open();
     }
 
@@ -187,6 +252,7 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
         // v1 material is bridged from JWT:Secret, mirroring the rollout phase.
         builder.UseSetting("DATA_PROTECTION_KEY", "ProjectBeacon-Data-Protection-Key-Must-Be-At-Least-32-Chars");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
+        builder.UseSetting("ADMIN_RECOVERY_TOKEN", RecoveryToken);
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())
@@ -219,7 +285,10 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
 
     public static async Task<string> GetBootstrapPasswordAsync(HttpClient client)
     {
+        // Bootstrap is a Control Plane-only operation. The subsequent cookie-login
+        // request in these tests intentionally uses the customer host.
         var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+        request.Headers.Host = "control.projectbeacon.tech";
         request.Content = System.Net.Http.Json.JsonContent.Create(new { });
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", BootstrapToken);
         var boot = await client.SendAsync(request);

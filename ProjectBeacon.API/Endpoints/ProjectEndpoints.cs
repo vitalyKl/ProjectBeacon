@@ -21,13 +21,13 @@ using Microsoft.Extensions.Configuration;
 /// </summary>
 public static class ProjectEndpoints
 {
-    /// <summary>Maps project, membership, invite, and token routes. Project detail reads also allow scoped TaskRead tokens; administrative operations remain human-only.</summary>
+    /// <summary>Maps project, membership, invite, and token routes. Project metadata is Human-only; agent tokens are limited to the explicitly exposed work/context resources.</summary>
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}", DeleteProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
@@ -78,25 +78,28 @@ public static class ProjectEndpoints
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler)
+    private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetProjectCommand(new GetProjectRequest(projectId)));
+        var result = await handler.HandleAsync(
+            new GetProjectCommand(new GetProjectRequest(projectId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler)
+    private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(orgId)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(orgId), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapProjectResponse));
     }
 
-    private static async Task<IResult> ListAllProjects(ListProjectsHandler handler)
+    private static async Task<IResult> ListAllProjects(ListProjectsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListProjectsCommand(new ListProjectsRequest(null)));
+        var result = await handler.HandleAsync(
+            new ListProjectsCommand(new ListProjectsRequest(null), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapProjectResponse));
     }

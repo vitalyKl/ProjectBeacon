@@ -1,13 +1,14 @@
 namespace ProjectBeacon.Application.Admin;
 
 /// <summary>
-/// Central mapping from future operator roles to permission sets. Handlers depend on
-/// permissions only; role assignment and persistence can be introduced without changing them.
+/// Central mapping from persisted operator roles to permission sets. Handlers depend on
+/// permissions only and never branch on role names.
 /// </summary>
 public static class OperatorRolePermissionSets
 {
     private const OperatorPermission SupportPermissions =
         OperatorPermission.OrganizationsRead
+        | OperatorPermission.OrganizationsManage
         | OperatorPermission.UsersRead
         | OperatorPermission.UsersManage
         | OperatorPermission.EntitlementsRead

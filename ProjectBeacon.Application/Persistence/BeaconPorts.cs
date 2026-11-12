@@ -4,16 +4,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Domain.Entities.Agents;
+using Domain.Entities.Billing;
 using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
+using Domain.Entities.Email;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Reports;
 using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
+using Domain.Enums;
 
 // Owned by Application so handlers do not reference the Infrastructure assembly.
 // The EF context in Infrastructure implements this port.
@@ -49,6 +52,9 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<AgentTemplate> AgentTemplates { get; }
     DbSet<AgentProfile> AgentProfiles { get; }
     DbSet<AuditEvent> AuditEvents { get; }
+    DbSet<PlatformEmailSettings> PlatformEmailSettings { get; }
+    DbSet<EmailDeliveryLog> EmailDeliveryLogs { get; }
+    DbSet<BillingPlan> BillingPlans { get; }
     DbSet<TaskKind> TaskKinds { get; }
     DbSet<TaskKindPhase> TaskKindPhases { get; }
     DbSet<TaskPhase> TaskPhases { get; }
@@ -98,7 +104,10 @@ public interface ITenantContext
     Guid? ProjectId { get; }
     Guid? OrgId { get; }
     bool Unscoped { get; }
+    OrganizationLifecycleStatus? LifecycleStatus { get; }
+    bool LifecycleEnforced { get; }
     void Assign(Guid? projectId, Guid? orgId, bool unscoped);
+    void SetLifecycleStatus(OrganizationLifecycleStatus? status, bool enforced);
 }
 
 /// <summary>Mutable <see cref="ITenantContext"/> whose <c>Assign</c> replaces the project, org, and unscoped flag.</summary>
@@ -107,11 +116,21 @@ public sealed class TenantContext : ITenantContext
     public Guid? ProjectId { get; private set; }
     public Guid? OrgId { get; private set; }
     public bool Unscoped { get; private set; }
+    public OrganizationLifecycleStatus? LifecycleStatus { get; private set; }
+    public bool LifecycleEnforced { get; private set; }
 
     public void Assign(Guid? projectId, Guid? orgId, bool unscoped)
     {
         ProjectId = projectId;
         OrgId = orgId;
         Unscoped = unscoped;
+        LifecycleStatus = null;
+        LifecycleEnforced = false;
+    }
+
+    public void SetLifecycleStatus(OrganizationLifecycleStatus? status, bool enforced)
+    {
+        LifecycleStatus = status;
+        LifecycleEnforced = enforced;
     }
 }

@@ -37,6 +37,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       BEACON_MIGRATE_ON_START: "false"
+      CONTROL_HOST: ${CONTROL_HOST:-control.projectbeacon.tech}
       # Application role is beacon_app (NOSUPERUSER NOBYPASSRLS); migrations use beacon (superuser).
       # The superuser password doubles as the beacon_app password (EnsureAppRoleAsync bootstraps it).
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
@@ -46,6 +47,10 @@ services:
       # (Secure cookies, HTTPS redirect) and for per-client-IP rate limiting.
       FORWARDEDHEADERS__KNOWNNETWORKS__0: "172.29.0.0/16"
       BEACON_PUBLIC_URL: "https://${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}"
+      OpsAgent__BaseUrl: "http://ops-agent:8080"
+      OpsAgent__SharedSecret: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
+      # Do not expose the raw agent secret to the Web process under an alternate key.
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +62,11 @@ services:
     stop_grace_period: 45s
     mem_limit: 512m
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   worker:
@@ -68,6 +78,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,6 +90,69 @@ services:
     stop_grace_period: 45s
     mem_limit: 256m
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # Narrow relay between Web and the DockerLogProxy. It has no host mount or Docker socket.
+  ops-agent:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-ops-agent
+    command: ["dotnet", "/app/ops-agent/ProjectBeacon.OpsAgent.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:8080"
+      HOME: /tmp
+      OPS_AGENT_SHARED_SECRET: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
+      OPS_AGENT_DOCKER_PROXY_URL: "http://docker-log-proxy:8081"
+    depends_on:
+      docker-log-proxy:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    mem_limit: 128m
+    networks: [beacon-alpha-internal, beacon-alpha-ops-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    restart: unless-stopped
+
+  # The only service with Docker Engine socket access. It has no published ports
+  # and is reachable only from OpsAgent on the dedicated internal bridge network.
+  docker-log-proxy:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-docker-log-proxy
+    command: ["dotnet", "/app/docker-log-proxy/ProjectBeacon.DockerLogProxy.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:8081"
+      HOME: /tmp
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_LOG_PROXY_COMPOSE_PROJECT: beacon-alpha
+      DOCKER_LOG_PROXY_SHARED_SECRET: ${OPS_AGENT_SHARED_SECRET:?set OPS_AGENT_SHARED_SECRET in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    mem_limit: 128m
+    networks: [beacon-alpha-ops-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
     restart: unless-stopped
 
   # One-shot schema migration + data-key re-encryption + role bootstrap.
@@ -95,6 +169,7 @@ services:
       BEACON_MIGRATE_THEN_EXIT: "true"
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      OPS_AGENT_SHARED_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,6 +180,11 @@ services:
     security_opt: [no-new-privileges]
     restart: "no"
     networks: [beacon-alpha-internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     # Pinned tag; verify the amd64 digest on first pull and record it in README evidence.
@@ -121,6 +201,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       BEACON_DOMAIN: ${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}
+      CONTROL_HOST: ${CONTROL_HOST:-control.projectbeacon.tech}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
     depends_on:
       - web
@@ -147,3 +228,9 @@ networks:
     ipam:
       config:
         - subnet: 172.29.0.0/16
+  beacon-alpha-ops-internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

@@ -19,6 +19,7 @@ public static class TaskEndpoints
 {
     /// <summary>
     /// Maps <c>GET /v1/projects/{projectId:guid}/tasks</c>, <c>GET /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>GET /v1/tasks/{taskId:guid}</c>, and <c>GET /v1/tasks/{taskId:guid}/steps</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
+    /// Task comments and step toggling/deletion require Human identity; TaskWrite tokens may add steps but cannot impersonate comment or step authors.
     /// Maps <c>POST /v1/projects/{projectId:guid}/tasks</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>PUT /v1/tasks/{taskId:guid}</c>, <c>DELETE /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>DELETE /v1/tasks/{taskId:guid}</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim</c>, <c>PATCH /v1/tasks/{taskId:guid}/claim</c>, <c>POST /v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments</c>, <c>POST /v1/tasks/{taskId:guid}/comments</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies</c>, <c>PUT /v1/tasks/{taskId:guid}/dependencies</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes</c>, <c>PATCH /v1/tasks/{taskId:guid}/review-notes</c>, <c>POST /v1/tasks/{taskId:guid}/steps</c>, <c>PATCH /v1/steps/{stepId:guid}</c>, and <c>DELETE /v1/steps/{stepId:guid}</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>. Task deletion requires a human user.
     /// </summary>
     public static IEndpointRouteBuilder MapTaskEndpoints(this IEndpointRouteBuilder app)
@@ -37,16 +38,16 @@ public static class TaskEndpoints
         app.MapPatch("/v1/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPut("/v1/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/tasks/{taskId:guid}/steps", ListSteps).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/steps", AddStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/steps/{stepId:guid}", DeleteStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/steps/{stepId:guid}", DeleteStep).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
     }
@@ -72,13 +73,15 @@ public static class TaskEndpoints
     private static async Task<IResult> UpdateTask(
         Guid taskId,
         [FromBody] UpdateTaskRequest request,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request), ct);
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(
+            new UpdateTaskCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -87,11 +90,12 @@ public static class TaskEndpoints
 
     private static async Task<IResult> DeleteTask(
         Guid taskId,
+        HttpContext ctx,
         ICommandDispatcher dispatcher,
         CancellationToken ct)
     {
         var result = await dispatcher.SendAsync<Result>(
-            new DeleteTaskCommand(new DeleteTaskRequest(taskId)), ct);
+            new DeleteTaskCommand(new DeleteTaskRequest(taskId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.NoContent()
@@ -135,17 +139,19 @@ public static class TaskEndpoints
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ChangeStatus(Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
+    private static async Task<IResult> ChangeStatus(Guid taskId, [FromBody] ChangeTaskStatusBody body, HttpContext ctx, ChangeTaskStatusHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status)));
+        var result = await handler.HandleAsync(
+            new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> ChangeStatusInProject(Guid projectId, Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
+    private static async Task<IResult> ChangeStatusInProject(Guid projectId, Guid taskId, [FromBody] ChangeTaskStatusBody body, HttpContext ctx, ChangeTaskStatusHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId)));
+        var result = await handler.HandleAsync(
+            new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId), ctx.GetActor()), ct);
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
@@ -154,19 +160,22 @@ public static class TaskEndpoints
     /// <summary>JSON body for the task status PATCH routes.</summary>
     public record ChangeTaskStatusBody(TaskItemStatus Status);
 
-    private static async Task<IResult> ChangeSubStage(Guid taskId, [FromBody] TaskSubStage subStage, ChangeSubStageHandler handler)
+    private static async Task<IResult> ChangeSubStage(Guid taskId, [FromBody] TaskSubStage subStage, HttpContext ctx, ChangeSubStageHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, subStage)));
+        var result = await handler.HandleAsync(
+            new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, subStage), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, ClaimTaskHandler handler)
+    private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, HttpContext ctx, ClaimTaskHandler handler, CancellationToken ct)
     {
-        var targetProject = projectId != Guid.Empty ? projectId : tenant.ProjectId ?? Guid.Empty;
-        var result = await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject)));
+        var actor = ctx.GetActor();
+        var targetProject = projectId != Guid.Empty ? projectId : tenant.ProjectId ?? actor.ProjectId ?? Guid.Empty;
+        var result = await handler.HandleAsync(
+            new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject), actor), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -185,21 +194,22 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> SetDependencies(Guid taskId, [FromBody] SetDependenciesRequest request, SetDependenciesHandler handler)
+    private static async Task<IResult> SetDependencies(Guid taskId, [FromBody] SetDependenciesRequest request, HttpContext ctx, SetDependenciesHandler handler, CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new SetDependenciesCommand(request));
+        var result = await handler.HandleAsync(new SetDependenciesCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
+    private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, HttpContext ctx, AddReviewNotesHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
+        var result = await handler.HandleAsync(
+            new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
@@ -214,18 +224,18 @@ public static class TaskEndpoints
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
 
-    private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
+    private static async Task<IResult> ListSteps(Guid taskId, HttpContext ctx, ListTaskStepsHandler handler)
     {
-        var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
+        var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId), ctx.GetActor()));
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/steps</c>.</summary>
     public record AddStepBody(string Title);
 
-    private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, AddTaskStepHandler handler)
+    private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, HttpContext ctx, AddTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title)));
+        var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title), ctx.GetActor()));
         return result.Success
             ? Results.Created($"/v1/steps/{result.Value!.Id}", result.Value)
             : result.FromResult();
@@ -234,15 +244,15 @@ public static class TaskEndpoints
     /// <summary>JSON body for <c>PATCH /v1/steps/{stepId:guid}</c>.</summary>
     public record ToggleStepBody(bool Done);
 
-    private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, ToggleTaskStepHandler handler)
+    private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, HttpContext ctx, ToggleTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done)));
+        var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done), ctx.GetActor()));
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteStep(Guid stepId, DeleteTaskStepHandler handler)
+    private static async Task<IResult> DeleteStep(Guid stepId, HttpContext ctx, DeleteTaskStepHandler handler)
     {
-        var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId)));
+        var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId), ctx.GetActor()));
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Security;
 
@@ -35,10 +36,12 @@ public static class CircuitTenantRevalidation
         // The scoped assignment wins over the AsyncLocal captured at handshake time,
         // so read the scoped value first to get the tenant the circuit is actually using.
         var currentProjectId = tenant.Unscoped ? null : (tenant.ProjectId ?? TenantScope.CurrentProjectId);
-        // Guid.Empty is the fail-closed sentinel the isolation middleware applies for an
-        // authenticated user with no project; treat it as "no project ever", not a lost one.
+        var currentOrgId = tenant.Unscoped ? null : tenant.OrgId;
+        // Guid.Empty is the fail-closed sentinel applied when a user has no tenant membership.
         if (currentProjectId == Guid.Empty)
             currentProjectId = null;
+        if (currentOrgId == Guid.Empty)
+            currentOrgId = null;
 
         try
         {
@@ -56,16 +59,35 @@ public static class CircuitTenantRevalidation
                     return false;
 
                 var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
-                    db, actor.UserId.Value, actor.IsAdmin, currentProjectId, ct);
-                // "The project was lost" (the circuit had a project, none remain) forces
-                // sign-out. "No project ever" (the circuit never held one, e.g. a freshly
-                // registered user or the bootstrap admin) keeps the session; the scoped
-                // tenant stays fail-closed with a null project until one appears.
-                if (projectId is null)
-                    return currentProjectId is null;
+                    db,
+                    actor.UserId.Value,
+                    actor.IsAdmin,
+                    currentProjectId,
+                    ct,
+                    currentOrgId);
+
+                // A user may legitimately have organization membership before being added
+                // to any project. Keep that org-only session; sign out only when a previously
+                // scoped user has lost every remaining project and organization membership.
+                if (projectId is null && orgId is null)
+                    return currentProjectId is null && currentOrgId is null;
 
                 if (!tenant.Unscoped)
+                {
                     tenant.Assign(projectId, orgId, unscoped: false);
+                    OrganizationLifecycleStatus? lifecycleStatus = null;
+                    if (orgId is { } resolvedOrgId && resolvedOrgId != Guid.Empty)
+                    {
+                        lifecycleStatus = await db.Orgs.IgnoreQueryFilters()
+                            .AsNoTracking()
+                            .Where(org => org.Id == resolvedOrgId)
+                            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+                            .FirstOrDefaultAsync(ct);
+                    }
+                    tenant.SetLifecycleStatus(
+                        lifecycleStatus,
+                        enforced: orgId is { } tenantOrgId && tenantOrgId != Guid.Empty);
+                }
             }
         }
         catch (Exception ex)

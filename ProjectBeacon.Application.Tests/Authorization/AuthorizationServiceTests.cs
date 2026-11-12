@@ -13,11 +13,22 @@ public sealed partial class AuthorizationServiceTests : IDisposable
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
     private readonly AuthorizationService _auth;
+    private readonly Guid _orgId;
+    private readonly Guid _projectId;
 
     public AuthorizationServiceTests()
     {
         (_connection, _db, _unscoped) = HandlerSqlite.Open();
         _auth = new AuthorizationService();
+
+        var org = Org.Create("Authorization test organization");
+        _db.Orgs.Add(org);
+        _db.SaveChanges();
+        var project = Domain.Entities.Projects.Project.Create("Authorization test project", null, org.Id);
+        _db.Projects.Add(project);
+        _db.SaveChanges();
+        _orgId = org.Id;
+        _projectId = project.Id;
     }
 
     public void Dispose()
@@ -39,11 +50,50 @@ public sealed partial class AuthorizationServiceTests : IDisposable
     private static ActorContext Human(Guid userId) =>
         new(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
 
-    private static ActorContext Token(ApiTokenCapability caps = ApiTokenCapability.None, Guid? projectId = null) =>
-        new(ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null, caps);
+    private ActorContext Token(ApiTokenCapability caps = ApiTokenCapability.None, Guid? projectId = null) =>
+        new(ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId ?? _projectId, _orgId, caps);
 
+    private async Task<Guid> SeedProjectMemberAsync(MemberRole role)
+    {
+        var user = User.Create($"member-{Guid.NewGuid():N}", $"member-{Guid.NewGuid():N}@example.test", "hash");
+        _db.Users.Add(user);
+        _db.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(_projectId, user.Id, role));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return user.Id;
+    }
 
+    [Fact]
+    public async Task InactiveOrganizationBlocksProjectAndOrgAdminAccess_IncludingSystemAdmin()
+    {
+        var org = Org.Create("Suspended org");
+        var project = Domain.Entities.Projects.Project.Create("Suspended project", null, org.Id);
+        var owner = User.Create("owner", "owner@example.test", "hash");
+        var systemAdmin = User.Create("system-admin", "admin@example.test", "hash", isAdmin: true);
+        _db.Orgs.Add(org);
+        _db.Projects.Add(project);
+        _db.Users.AddRange(owner, systemAdmin);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, owner.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var ownerProject = await _auth.CanAsync(_db, Human(owner.Id),
+            ResourceType.Project, AuthAction.Administer, projectId: project.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(ownerProject.Success);
+        Assert.Equal(ErrorKind.Forbidden, ownerProject.Kind);
+
+        var adminOrg = await _auth.CanAsync(_db, Admin(systemAdmin.Id),
+            ResourceType.Org, AuthAction.Administer, orgId: org.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(adminOrg.Success);
+        Assert.Equal(ErrorKind.Forbidden, adminOrg.Kind);
+
+        var adminProject = await _auth.CanAsync(_db, Admin(systemAdmin.Id),
+            ResourceType.Project, AuthAction.Administer, projectId: project.Id,
+            ct: TestContext.Current.CancellationToken);
+        Assert.False(adminProject.Success);
+        Assert.Equal(ErrorKind.Forbidden, adminProject.Kind);
+    }
 }
-
-

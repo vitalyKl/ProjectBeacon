@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Tests;
 
+using Application.Authorization;
 using Application.Projects;
 using Application.Tasks;
 using Domain.Entities.Identity;
@@ -20,23 +21,30 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid taskId, projectId;
+        Guid taskId, projectId, userId;
         await using (var seed = _postgres.CreateContext())
         {
             var org = Org.Create("Atomic Test Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Atomic Test Project", null, org.Id);
+            var user = User.Create("atomic-claim-user", "atomic-claim-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("Atomic Claim Task", project.Id, TaskPriority.Medium, TaskType.Task);
             seed.Tasks.Add(task);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
+            userId = user.Id;
         }
 
-        var results = await Task.WhenAll(ClaimTaskAsync(taskId, projectId), ClaimTaskAsync(taskId, projectId), ClaimTaskAsync(taskId, projectId));
+        var results = await Task.WhenAll(
+            ClaimTaskAsync(taskId, projectId, userId),
+            ClaimTaskAsync(taskId, projectId, userId),
+            ClaimTaskAsync(taskId, projectId, userId));
 
         Assert.Equal(1, results.Count(r => r.Success));
         Assert.Equal(2, results.Count(r => !r.Success));
@@ -50,24 +58,28 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid taskId, projectId;
+        Guid taskId, projectId, userId;
         await using (var seed = _postgres.CreateContext())
         {
             var org = Org.Create("Sequential Test Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Sequential Test Project", null, org.Id);
+            var user = User.Create("sequential-claim-user", "sequential-claim-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("Sequential Claim Task", project.Id, TaskPriority.Low, TaskType.Task);
             seed.Tasks.Add(task);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
+            userId = user.Id;
         }
 
-        var result1 = await ClaimTaskAsync(taskId, projectId);
-        var result2 = await ClaimTaskAsync(taskId, projectId);
+        var result1 = await ClaimTaskAsync(taskId, projectId, userId);
+        var result2 = await ClaimTaskAsync(taskId, projectId, userId);
 
         Assert.True(result1.Success);
         Assert.Equal("InProgress", result1.Value!.Status);
@@ -80,7 +92,7 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid projectAId, projectBId, taskId;
+        Guid projectAId, projectBId, taskId, userAId, userBId;
         await using (var seed = _postgres.CreateContext())
         {
             var org = Org.Create("Claim Isolation Org", null);
@@ -104,23 +116,29 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
             projectAId = projectA.Id;
             projectBId = projectB.Id;
             taskId = task.Id;
+            userAId = userA.Id;
+            userBId = userB.Id;
         }
 
-        var foreign = await ClaimTaskAsync(taskId, projectAId);
+        var foreign = await ClaimTaskAsync(taskId, projectAId, userAId);
         Assert.False(foreign.Success);
         Assert.Equal("Task not found or already claimed.", foreign.Error);
 
-        var own = await ClaimTaskAsync(taskId, projectBId);
+        var own = await ClaimTaskAsync(taskId, projectBId, userBId);
         Assert.True(own.Success);
         Assert.Equal("InProgress", own.Value!.Status);
     }
 
-    private async Task<Application.Common.Result<TaskItemDto>> ClaimTaskAsync(Guid taskId, Guid projectId)
+    private async Task<Application.Common.Result<TaskItemDto>> ClaimTaskAsync(Guid taskId, Guid projectId, Guid userId)
     {
         using (TenantScope.EnterUnscoped())
         {
-            var handler = new ClaimTaskHandler(_postgres.CreateFactory());
-            return await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.NewGuid(), projectId)));
+            var handler = new ClaimTaskHandler(_postgres.CreateFactory(), new AuthorizationService());
+            var actor = new ActorContext(
+                ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+            return await handler.HandleAsync(
+                new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.NewGuid(), projectId), actor),
+                TestContext.Current.CancellationToken);
         }
     }
 }

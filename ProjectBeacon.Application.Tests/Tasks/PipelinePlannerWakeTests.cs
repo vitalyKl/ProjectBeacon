@@ -15,7 +15,7 @@ public sealed partial class PipelineHandlerTests
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var spawner = new FakeSpawner();
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
 
@@ -105,7 +105,7 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
 
@@ -121,7 +121,7 @@ public sealed partial class PipelineHandlerTests
         var first = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
                 task.Id, "Explore the relevant implementation.",
-                WakePlannerAfter: wakePlannerAfter)),
+                WakePlannerAfter: wakePlannerAfter), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
 
@@ -130,20 +130,20 @@ public sealed partial class PipelineHandlerTests
         {
             var pending = await new CreateSubtaskHandler(factory)
                 .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-                    task.Id, "Implement the next batch after the checkpoint.")),
+                    task.Id, "Implement the next batch after the checkpoint."), PipelineTestActor.AdminFor(task.ProjectId)),
                     TestContext.Current.CancellationToken);
             Assert.True(pending.Success, pending.Error);
             pendingId = pending.Value!.Id;
         }
 
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, first.Value!.Id)),
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, first.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
 
         var report = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
-                task.Id, first.Value.Id, string.Empty, "Exploration report: implementation boundaries identified.")),
+                task.Id, first.Value.Id, string.Empty, "Exploration report: implementation boundaries identified."), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(report.Success, report.Error);
 

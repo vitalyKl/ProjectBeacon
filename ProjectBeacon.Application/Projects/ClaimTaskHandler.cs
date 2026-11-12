@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
 using Application.Tasks;
 using Domain.Entities.Tasks;
@@ -12,8 +13,13 @@ using Microsoft.EntityFrameworkCore;
 public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ClaimTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ClaimTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(ClaimTaskCommand command, CancellationToken ct = default)
     {
@@ -39,6 +45,15 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
             {
                 await tx.RollbackAsync(ct);
                 return Result.Failure<TaskItemDto>("Task not found or already claimed.");
+            }
+
+            var permission = await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Task, AuthAction.Update,
+                projectId: task.ProjectId, ct: ct);
+            if (!permission.Success)
+            {
+                await tx.RollbackAsync(ct);
+                return Result.Failure<TaskItemDto>(permission);
             }
 
             task.MoveToNextStatus();

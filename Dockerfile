@@ -12,14 +12,22 @@ COPY ProjectBeacon.Application/ProjectBeacon.Application.csproj ProjectBeacon.Ap
 COPY ProjectBeacon.API/ProjectBeacon.API.csproj ProjectBeacon.API/
 COPY ProjectBeacon.Web/ProjectBeacon.Web.csproj ProjectBeacon.Web/
 COPY ProjectBeacon.Worker/ProjectBeacon.Worker.csproj ProjectBeacon.Worker/
+COPY ProjectBeacon.OpsAgent/ProjectBeacon.OpsAgent.csproj ProjectBeacon.OpsAgent/
+COPY ProjectBeacon.DockerLogProxy/ProjectBeacon.DockerLogProxy.csproj ProjectBeacon.DockerLogProxy/
 RUN dotnet restore ProjectBeacon.Web/ProjectBeacon.Web.csproj
 RUN dotnet restore ProjectBeacon.Worker/ProjectBeacon.Worker.csproj
+RUN dotnet restore ProjectBeacon.OpsAgent/ProjectBeacon.OpsAgent.csproj
+RUN dotnet restore ProjectBeacon.DockerLogProxy/ProjectBeacon.DockerLogProxy.csproj
 COPY . .
 ARG BEACON_GIT_SHA=unknown
 ARG BEACON_VERSION=0.1.0
 RUN dotnet publish ProjectBeacon.Web/ProjectBeacon.Web.csproj -c Release -o /app --no-restore \
     -p:Version=${BEACON_VERSION} \
  && dotnet publish ProjectBeacon.Worker/ProjectBeacon.Worker.csproj -c Release -o /app/worker --no-restore \
+    -p:Version=${BEACON_VERSION} \
+ && dotnet publish ProjectBeacon.OpsAgent/ProjectBeacon.OpsAgent.csproj -c Release -o /app/ops-agent --no-restore \
+    -p:Version=${BEACON_VERSION} \
+ && dotnet publish ProjectBeacon.DockerLogProxy/ProjectBeacon.DockerLogProxy.csproj -c Release -o /app/docker-log-proxy --no-restore \
     -p:Version=${BEACON_VERSION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim AS runtime

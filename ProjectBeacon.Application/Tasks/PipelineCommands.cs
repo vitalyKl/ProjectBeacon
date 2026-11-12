@@ -83,7 +83,7 @@ public record GetLivePipelineTaskCommand(GetLivePipelineTaskRequest Request) : I
 public record StartPipelineRequest(Guid TaskId);
 
 /// <summary>Starts the pipeline for a task and returns the created session.</summary>
-public record StartPipelineCommand(StartPipelineRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartPipelineCommand(StartPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Instructions and optional tool and path limits for a new subtask.</summary>
 public record CreateSubtaskRequest(
@@ -96,49 +96,49 @@ public record CreateSubtaskRequest(
     IReadOnlyList<string>? OptionalMcpTools = null);
 
 /// <summary>Creates a subtask on a task.</summary>
-public record CreateSubtaskCommand(CreateSubtaskRequest Request, ActorContext? Actor = null) : ICommand<Result<SubtaskDto>>;
+public record CreateSubtaskCommand(CreateSubtaskRequest Request, ActorContext Actor) : ICommand<Result<SubtaskDto>>;
 
 /// <summary>Identifies the subtask an actor session should run.</summary>
 public record StartActorSessionRequest(Guid TaskId, Guid SubtaskId);
 
 /// <summary>Starts an actor session for a subtask.</summary>
-public record StartActorSessionCommand(StartActorSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartActorSessionCommand(StartActorSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Identifies a pipeline session to launch.</summary>
 public record LaunchSessionRequest(Guid SessionId);
 
 /// <summary>Launches an existing pipeline session.</summary>
-public record LaunchSessionCommand(LaunchSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record LaunchSessionCommand(LaunchSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Identifies a failed or closed session attempt to retry.</summary>
 public record RetryPipelineSessionRequest(Guid SessionId);
 
 /// <summary>Creates a new attempt using the original session prompt and role.</summary>
-public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Diff reference and summary reported for a subtask.</summary>
 public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary, string? Abstract = null);
 
 /// <summary>Records a subtask result and returns pipeline state.</summary>
-public record ReportSubtaskResultCommand(ReportSubtaskResultRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ReportSubtaskResultCommand(ReportSubtaskResultRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Reason a subtask failed.</summary>
 public record FailSubtaskRequest(Guid TaskId, Guid SubtaskId, string Reason, string? Abstract = null);
 
 /// <summary>Marks a subtask failed and returns pipeline state.</summary>
-public record FailSubtaskCommand(FailSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record FailSubtaskCommand(FailSubtaskRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Identifies the task whose review stage should start.</summary>
 public record StartReviewRequest(Guid TaskId, bool AutoLaunch = false);
 
 /// <summary>Starts the review session for a task.</summary>
-public record StartReviewCommand(StartReviewRequest Request) : ICommand<Result<PipelineSessionDto>>;
+public record StartReviewCommand(StartReviewRequest Request, ActorContext Actor) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Verdict kind, note, and optional subtask for a review.</summary>
 public record RecordReviewVerdictRequest(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
 
 /// <summary>Records a review verdict and returns pipeline state.</summary>
-public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Device, actor, and check command used to record a review check. CheckCommand is supplied only by human actors; token actors leave it empty and the project's pinned ReviewCheckCommand is used.</summary>
 public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId, string? CheckCommand, string? Path = null);
@@ -150,32 +150,32 @@ public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorCo
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null);
 
 /// <summary>Approves a pipeline and returns its state.</summary>
-public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ApprovePipelineCommand(ApprovePipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Task to force-close, the actor id, and an optional reason.</summary>
 public record ForceClosePipelineRequest(Guid TaskId, string ActorId, string? Reason = null);
 
 /// <summary>Force-closes a pipeline and returns its state.</summary>
-public record ForceClosePipelineCommand(ForceClosePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record ForceClosePipelineCommand(ForceClosePipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops one planner or review session (Actor work is cancelled by subtask).</summary>
 public record CancelPipelineSessionRequest(Guid TaskId, Guid SessionId);
-public record CancelPipelineSessionCommand(CancelPipelineSessionRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelPipelineSessionCommand(CancelPipelineSessionRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops an Actor subtask and returns it to Pending.</summary>
 public record CancelSubtaskRequest(Guid TaskId, Guid SubtaskId);
-public record CancelSubtaskCommand(CancelSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelSubtaskCommand(CancelSubtaskRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Stops all current work and marks the pipeline cancelled.</summary>
 public record CancelPipelineRequest(Guid TaskId);
-public record CancelPipelineCommand(CancelPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record CancelPipelineCommand(CancelPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Clears the current pipeline output and makes the task startable from Planning again.</summary>
 public record RestartPipelineRequest(Guid TaskId);
-public record RestartPipelineCommand(RestartPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record RestartPipelineCommand(RestartPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Identifies the task whose pipeline state is requested.</summary>
 public record GetPipelineRequest(Guid TaskId);
 
 /// <summary>Loads pipeline state for a task.</summary>
-public record GetPipelineCommand(GetPipelineRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record GetPipelineCommand(GetPipelineRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;

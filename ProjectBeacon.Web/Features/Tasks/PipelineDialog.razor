@@ -1,6 +1,7 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
+@using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CreateSubtaskHandler CreateSubtask
 @inject GetAgentProfileOverridesHandler GetAgentProfileOverrides
@@ -9,6 +10,7 @@
 @inject RecordReviewVerdictHandler RecordVerdict
 @inject ApprovePipelineHandler ApprovePipeline
 @inject ForceClosePipelineHandler ForceClosePipeline
+@inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
 
 @switch (Params.Mode)
@@ -85,12 +87,16 @@
     private string _note = string.Empty;
     private SubtaskDto? _reopenTarget;
     private bool _saving;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private IReadOnlyDictionary<string, AgentProfileOverrideDto> _profileOverrides =
         new Dictionary<string, AgentProfileOverrideDto>(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
-        if (!Guid.TryParse(Params.ActorId, out var userId) || userId == Guid.Empty)
+        var authentication = await Auth.GetAuthenticationStateAsync();
+        _actorContext = ActorContextFactory.FromPrincipal(authentication.User);
+
+        if (!_actorContext.IsHuman || _actorContext.UserId is not { } userId)
             return;
 
         var result = await GetAgentProfileOverrides.HandleAsync(new GetAgentProfileOverridesCommand(userId));
@@ -112,10 +118,6 @@
         ? null
         : _allowedPaths.Split(new[] { '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-    private ActorContext ProfileActor => Guid.TryParse(Params.ActorId, out var userId)
-        ? new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None)
-        : ActorContext.Anonymous;
 
     private IReadOnlyList<SubtaskDto> Reopenable =>
         Params.Subtasks?.Where(s => s.Status is SubtaskStatus.Done or SubtaskStatus.Failed).ToList()
@@ -155,43 +157,43 @@
                             Params.TaskId, _instructions.Trim(),
                             AllowedPaths: ParsedAllowedPaths,
                             Profile: string.IsNullOrWhiteSpace(_profileKey) ? null : _profileKey),
-                        ProfileActor));
+                        _actorContext));
                     outcome = (result.Success, result.Error, L["SubtaskCreated"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReportResult:
                 {
-                    var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim())));
+                    var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["ResultReported"].Value);
                     break;
                 }
                 case PipelineDialogMode.FailSubtask:
                 {
-                    var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim())));
+                    var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["SubtaskFailedMsg"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewApprove:
                 {
-                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim())));
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["VerdictRecorded"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewReopen:
                 {
-                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id)));
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id), _actorContext));
                     outcome = (result.Success, result.Error, L["SubtaskReopened"].Value);
                     break;
                 }
                 case PipelineDialogMode.ConfirmClose:
                 {
-                    var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim())));
+                    var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
                     break;
                 }
                 default:
                 {
-                    var result = await ForceClosePipeline.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(Params.TaskId, Params.ActorId ?? string.Empty, _reason.Trim())));
+                    var result = await ForceClosePipeline.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(Params.TaskId, _actorContext.UserId?.ToString() ?? string.Empty, _reason.Trim()), _actorContext));
                     outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
                     break;
                 }

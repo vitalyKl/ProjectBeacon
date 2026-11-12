@@ -1,9 +1,18 @@
 namespace ProjectBeacon.Application.Mail;
 
-/// <summary>Sends a plain-text message. <see cref="IsConfigured"/> reports whether a sender is set up.</summary>
+/// <summary>Sends plain-text mail. The purpose overload records safe delivery metadata.</summary>
 public interface IEmailSender
 {
     bool IsConfigured { get; }
 
     Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default);
+
+    Task TestConnectionAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+    /// <summary>
+    /// Sends mail with a short purpose code. The default implementation preserves compatibility
+    /// with fake senders that implement only the original method.
+    /// </summary>
+    Task SendAsync(string to, string subject, string textBody, string purpose, CancellationToken ct = default)
+        => SendAsync(to, subject, textBody, ct);
 }

@@ -1,0 +1,496 @@
+@page "/admin/billing/invoices"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Billing
+@using ProjectBeacon.Application.Organizations
+@using ProjectBeacon.Web.Authentication
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject BillingInvoiceAdminService InvoiceAdmin
+@inject IOrganizationAdminService OrganizationAdmin
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject TimeProvider Clock
+
+<PageTitle>Control — Billing invoices</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Billing invoices" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Manual invoice records and operator-entered receipt references. ProjectBeacon does not collect payment details or verify funds received.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">BillingRead permission is required to view invoices.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            Amounts are entered as integer currency minor units. Marking an invoice paid records an external receipt reference only; it does not move money, contact a payment provider, or validate the receipt.
+        </MudAlert>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+                <MudText Typo="Typo.h6">Invoices</MudText>
+                <div class="d-flex gap-2">
+                    <MudButton Variant="Variant.Text" OnClick="Reload" Disabled="_busy">Refresh</MudButton>
+                    @if (_canManage)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="BeginIssue" Disabled="_busy">
+                            Issue invoice
+                        </MudButton>
+                    }
+                </div>
+            </div>
+
+            @if (_busy && _invoices.Count == 0)
+            {
+                <LoadingState />
+            }
+            else if (_invoices.Count == 0)
+            {
+                <EmptyState>No manual invoices have been issued.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="_invoices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Number</MudTh>
+                        <MudTh>Organization</MudTh>
+                        <MudTh>Description</MudTh>
+                        <MudTh>Amount</MudTh>
+                        <MudTh>Issued</MudTh>
+                        <MudTh>Due</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Number"><MudText Class="font-monospace" Typo="Typo.body2">@context.Number</MudText></MudTd>
+                        <MudTd DataLabel="Organization"><MudText Typo="Typo.body2">@OrganizationName(context.OrgId)</MudText></MudTd>
+                        <MudTd DataLabel="Description">@context.Description</MudTd>
+                        <MudTd DataLabel="Amount">@FormatAmount(context)</MudTd>
+                        <MudTd DataLabel="Issued">@context.IssuedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</MudTd>
+                        <MudTd DataLabel="Due">@context.DueAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.Status == BillingInvoiceStatus.Paid ? Color.Success
+                                         : context.Status == BillingInvoiceStatus.Open && context.DueAtUtc < Clock.GetUtcNow() ? Color.Warning
+                                         : context.Status == BillingInvoiceStatus.Void || context.Status == BillingInvoiceStatus.Uncollectible ? Color.Default
+                                         : Color.Info)">
+                                @StatusLabel(context)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => SelectInvoice(context))">
+                                Details
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+                @if (_invoices.Count == 100)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                        Showing the 100 most recent invoices.
+                    </MudText>
+                }
+            }
+        </MudPaper>
+
+        @if (_issuing && _canManage)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Issue a manual invoice</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" @bind-Value="_organizationSearch" Label="Find organization"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                        <MudButton Variant="Variant.Text" OnClick="SearchOrganizations" Disabled="_saving">
+                            Search organizations
+                        </MudButton>
+                        <MudSelect T="Guid" @bind-Value="_orgId" Label="Organization"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving">
+                            <MudSelectItem T="Guid" Value="@Guid.Empty" Disabled="true">Select an organization</MudSelectItem>
+                            @foreach (var organization in _organizations)
+                            {
+                                <MudSelectItem T="Guid" Value="@organization.Id">
+                                    @organization.Name (@organization.LifecycleStatus)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" @bind-Value="_description" Label="Invoice description"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" Disabled="_saving" />
+                        <MudTextField T="string" @bind-Value="_amountMinor" Label="Amount (integer minor units)"
+                                      HelperText="Enter the agreed amount in minor units; no currency exponent is inferred."
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                        <MudTextField T="string" @bind-Value="_currency" Label="Currency (ISO 4217)"
+                                      Placeholder="EUR" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                        <MudTextField T="string" @bind-Value="_dueAtUtc" Label="Due at (UTC, ISO-8601)"
+                                      Placeholder="2026-12-01T00:00:00Z"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                    </MudItem>
+                    <MudItem xs="12" Class="d-flex gap-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="IssueInvoice" Disabled="_saving">
+                            @(_saving ? "Issuing…" : "Issue invoice")
+                        </MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="CancelIssue" Disabled="_saving">Cancel</MudButton>
+                    </MudItem>
+                </MudGrid>
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-3">
+                    Issue creates an Open invoice and an immutable ledger event. It does not activate a subscription or grant production access.
+                </MudAlert>
+            </MudPaper>
+        }
+
+        @if (_selected is not null)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+                <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+                    <MudText Typo="Typo.h6">Invoice @_selected.Number</MudText>
+                    <MudButton Variant="Variant.Text" OnClick="ClearSelection">Close</MudButton>
+                </div>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.body2">@_selected.Description</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@OrganizationName(_selected.OrgId)</MudText>
+                        <MudText Typo="Typo.body2" Class="mt-2">@FormatAmount(_selected)</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Issued @_selected.IssuedAtUtc.ToString("u", CultureInfo.InvariantCulture) · Due @_selected.DueAtUtc.ToString("u", CultureInfo.InvariantCulture)
+                        </MudText>
+                        @if (_selected.PaymentReference is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Receipt reference: @_selected.PaymentReference</MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        @if (_selected.Status == BillingInvoiceStatus.Open && _canManage)
+                        {
+                            <MudTextField T="string" @bind-Value="_paymentReference" Label="External receipt reference"
+                                          HelperText="Reference only; never enter card number, CVV, bank credentials or payment secrets."
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_saving" />
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="MarkPaid" Disabled="_saving">
+                                    Record payment
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="VoidInvoice" Disabled="_saving">
+                                    Void
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="MarkUncollectible" Disabled="_saving">
+                                    Mark uncollectible
+                                </MudButton>
+                            </div>
+                        }
+                        else if (_selected.Status != BillingInvoiceStatus.Open)
+                        {
+                            <MudText Typo="Typo.body2">Invoice is in a terminal state: @_selected.Status.</MudText>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _canManage;
+    private bool _busy;
+    private bool _saving;
+    private bool _issuing;
+    private Guid _orgId;
+    private string _organizationSearch = string.Empty;
+    private string _description = string.Empty;
+    private string _amountMinor = string.Empty;
+    private string _currency = string.Empty;
+    private string _dueAtUtc = string.Empty;
+    private string _paymentReference = string.Empty;
+    private List<OrganizationAdminListItem> _organizations = [];
+    private List<BillingInvoice> _invoices = [];
+    private BillingInvoice? _selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await EnsureControlSessionAsync())
+            return;
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var actor = ActorContextFactory.FromPrincipal(principal);
+        var read = await AdminGate.RequireAsync(actor, OperatorPermission.BillingRead);
+        if (!read.Success || read.Value is null)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _authorized = true;
+        _canManage = (await AdminGate.RequireAsync(actor, OperatorPermission.BillingManage)).Success;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (!await EnsureControlSessionAsync())
+            return;
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var read = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal), OperatorPermission.BillingRead);
+        if (!read.Success || read.Value is null)
+        {
+            _authorized = false;
+            _invoices.Clear();
+            _selected = null;
+            Snackbar.Add("BillingRead permission is no longer available.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _invoices = (await InvoiceAdmin.ListAsync(read.Value, limit: 100)).ToList();
+            if (_selected is not null)
+                _selected = _invoices.FirstOrDefault(invoice => invoice.Id == _selected.Id);
+        }
+        catch
+        {
+            Snackbar.Add("Could not load billing invoices.", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SearchOrganizations()
+    {
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var access = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal), OperatorPermission.OrganizationsRead);
+        if (!access.Success || access.Value is null)
+        {
+            Snackbar.Add("OrganizationsRead permission is required to issue an invoice.", Severity.Warning);
+            return;
+        }
+
+        var result = await OrganizationAdmin.ListAsync(access.Value, _organizationSearch, 1, 25);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? "Could not search organizations.", Severity.Error);
+            return;
+        }
+        _organizations = result.Value!.Items.ToList();
+        if (_organizations.Count == 1)
+            _orgId = _organizations[0].Id;
+    }
+
+    private void BeginIssue()
+    {
+        _issuing = true;
+        _dueAtUtc = Clock.GetUtcNow().AddDays(14).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        _description = _amountMinor = _currency = string.Empty;
+        _orgId = Guid.Empty;
+    }
+
+    private void CancelIssue()
+    {
+        _issuing = false;
+        _orgId = Guid.Empty;
+        _description = _amountMinor = _currency = _dueAtUtc = string.Empty;
+    }
+
+    private async Task IssueInvoice()
+    {
+        if (!await EnsureBillingManageAsync())
+            return;
+        if (_orgId == Guid.Empty)
+        {
+            Snackbar.Add("Select an organization first.", Severity.Warning);
+            return;
+        }
+        if (!long.TryParse(_amountMinor, NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
+        {
+            Snackbar.Add("Amount must be a whole integer in minor currency units.", Severity.Warning);
+            return;
+        }
+        if (!DateTimeOffset.TryParse(
+                _dueAtUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dueAt))
+        {
+            Snackbar.Add("Due time must be a valid ISO-8601 UTC timestamp.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
+            var invoice = await InvoiceAdmin.IssueAsync(
+                new IssueBillingInvoiceRequest(_orgId, _description, amount, _currency, dueAt),
+                actor);
+            Snackbar.Add($"Invoice {invoice.Number} issued.", Severity.Success);
+            _issuing = false;
+            await Reload();
+            SelectInvoice(invoice);
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(exception.Message, Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task MarkPaid()
+    {
+        if (_selected is null || !await EnsureBillingManageAsync())
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Record manual payment",
+            "This records the supplied external receipt reference only. It does not verify funds or collect payment details.",
+            yesText: "Record paid",
+            cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        _saving = true;
+        try
+        {
+            var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
+            _selected = await InvoiceAdmin.MarkPaidAsync(_selected.Id, _paymentReference, actor);
+            _paymentReference = string.Empty;
+            Snackbar.Add("Invoice marked paid with the supplied receipt reference.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(exception.Message, Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task VoidInvoice()
+    {
+        if (_selected is null || !await EnsureBillingManageAsync())
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Void manual invoice",
+            "The invoice will become terminal. The issued ledger event remains in the audit trail.",
+            yesText: "Void invoice",
+            cancelText: "Cancel");
+        if (confirmed != true) return;
+        var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
+        await ChangeTerminalState(() => InvoiceAdmin.VoidAsync(
+            _selected!.Id, "operator_voided", actor));
+    }
+
+    private async Task MarkUncollectible()
+    {
+        if (_selected is null || !await EnsureBillingManageAsync())
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Mark invoice uncollectible",
+            "The invoice will become terminal. The issued ledger event remains in the audit trail.",
+            yesText: "Mark uncollectible",
+            cancelText: "Cancel");
+        if (confirmed != true) return;
+        var actor = await CurrentAdminActor(OperatorPermission.BillingManage, requireElevation: true);
+        await ChangeTerminalState(() => InvoiceAdmin.MarkUncollectibleAsync(
+            _selected!.Id, "operator_uncollectible", actor));
+    }
+
+    private async Task ChangeTerminalState(Func<Task<BillingInvoice>> action)
+    {
+        _saving = true;
+        try
+        {
+            var updated = await action();
+            _selected = updated;
+            Snackbar.Add($"Invoice moved to {updated.Status}.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(exception.Message, Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task<bool> EnsureBillingManageAsync()
+    {
+        if (!await EnsureControlSessionAsync()) return false;
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var access = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal), OperatorPermission.BillingManage, requireElevation: true);
+        if (access.Success) return true;
+        Snackbar.Add("Sensitive billing actions require BillingManage and a current TOTP unlock.", Severity.Warning);
+        return false;
+    }
+
+    private async Task<AdminActor> CurrentAdminActor(
+        OperatorPermission permission, bool requireElevation = false)
+    {
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        var result = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal), permission, requireElevation);
+        return result.Value ?? throw new UnauthorizedAccessException(result.Error ?? "Operator access is no longer available.");
+    }
+
+    private async Task<bool> EnsureControlSessionAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void SelectInvoice(BillingInvoice invoice)
+    {
+        _selected = invoice;
+        _paymentReference = string.Empty;
+    }
+
+    private void ClearSelection() => _selected = null;
+    private string OrganizationName(Guid orgId) =>
+        _organizations.FirstOrDefault(item => item.Id == orgId)?.Name ?? orgId.ToString("D");
+
+    private string StatusLabel(BillingInvoice invoice) =>
+        invoice.Status == BillingInvoiceStatus.Open && invoice.DueAtUtc < Clock.GetUtcNow()
+            ? "Overdue"
+            : invoice.Status.ToString();
+
+    private static string FormatAmount(BillingInvoice invoice) =>
+        $"{invoice.AmountMinor.ToString("N0", CultureInfo.InvariantCulture)} {invoice.Currency} minor units";
+}

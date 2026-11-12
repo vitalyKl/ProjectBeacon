@@ -13,6 +13,7 @@ public static class BeaconApi
     public static IEndpointRouteBuilder MapBeaconApi(this IEndpointRouteBuilder app)
     {
         app.MapVersionEndpoints();
+        app.MapAuditEndpoints();
         app.MapAuthEndpoints();
         app.MapOrgEndpoints();
         app.MapProjectEndpoints();

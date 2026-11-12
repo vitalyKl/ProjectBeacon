@@ -4,6 +4,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Domain.Entities.Audit;
+using ProjectBeacon.Infrastructure.Data;
 
 [Collection("api-http")]
 public sealed class DeviceActorBoundaryHttpTests
@@ -22,12 +26,25 @@ public sealed class DeviceActorBoundaryHttpTests
         created.EnsureSuccessStatusCode();
         var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var token = device.GetProperty("token").GetString();
+        var deviceId = device.GetProperty("id").GetGuid();
 
         var deviceClient = factory.CreateClient();
         deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await deviceClient.GetAsync("/v1/devices", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+        {
+            var deniedEvent = await db.AuditEvents.SingleAsync(
+                item => item.Action == "security.authorization.denied"
+                    && item.ActorDeviceId == deviceId,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(AuditActorKind.Device, deniedEvent.ActorKind);
+            Assert.Equal("GET /v1/devices", deniedEvent.TargetId);
+        }
     }
 
     [Fact]

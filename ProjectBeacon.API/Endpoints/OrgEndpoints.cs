@@ -3,14 +3,18 @@ namespace ProjectBeacon.API.Endpoints;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
+using Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
+using Application.Organizations;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -19,7 +23,7 @@ using Microsoft.EntityFrameworkCore;
 public static class OrgEndpoints
 {
     /// <summary>
-    /// Maps every route in this method with <c>RequireHuman</c>: <c>POST /v1/orgs</c>, <c>PUT /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs</c>, <c>POST /v1/orgs/{orgId:guid}/invites</c>, <c>GET /v1/orgs/{orgId:guid}/invites</c>, and <c>DELETE /v1/orgs/{orgId:guid}/invites/{inviteId:guid}</c>.
+    /// Maps every route in this method with <c>RequireHuman</c>, including the owner-only data archive download at <c>GET /v1/orgs/{orgId:guid}/export.zip</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapOrgEndpoints(this IEndpointRouteBuilder app)
     {
@@ -27,6 +31,8 @@ public static class OrgEndpoints
         app.MapPut("/v1/orgs/{orgId:guid}", UpdateOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}", GetOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs", ListOrgs).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs/{orgId:guid}/export.zip", ExportOrganizationData)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman().RequireRateLimiting("auth-read");
         app.MapPost("/v1/orgs/{orgId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/orgs/{orgId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -34,8 +40,19 @@ public static class OrgEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateOrg([FromBody] CreateOrgRequest request, HttpContext ctx, CreateOrgHandler handler)
+    private static async Task<IResult> CreateOrg(
+        [FromBody] CreateOrgRequest request,
+        HttpContext ctx,
+        CreateOrgHandler handler,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
+        if (LocalAuthOptions.InviteOnly(configuration, environment.EnvironmentName))
+        {
+            return ProblemResults.Forbidden(
+                "Organizations are provisioned by the ProjectBeacon platform operator during the SaaS alpha. Contact support to request an organization.");
+        }
+
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(command: new CreateOrgCommand(request, actor));
 
@@ -44,36 +61,52 @@ public static class OrgEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> UpdateOrg(Guid orgId, [FromBody] UpdateOrgRequest request, UpdateOrgHandler handler)
+    private static async Task<IResult> UpdateOrg(Guid orgId, [FromBody] UpdateOrgRequest request, UpdateOrgHandler handler, HttpContext ctx)
     {
         if (orgId != request.OrgId)
             return ProblemResults.Bad("OrgId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateOrgCommand(request));
+        var result = await handler.HandleAsync(new UpdateOrgCommand(request, ctx.GetActor()));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler)
+    private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetOrgCommand(new GetOrgRequest(orgId)));
+        var result = await handler.HandleAsync(
+            new GetOrgCommand(new GetOrgRequest(orgId), ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, BeaconDbContext db, HttpContext ctx)
+    private static async Task<IResult> ListOrgs(ListOrgsHandler handler, HttpContext ctx, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new ListOrgsCommand(new ListOrgsRequest()));
+        var result = await handler.HandleAsync(
+            new ListOrgsCommand(new ListOrgsRequest(), ctx.GetActor()), ct);
 
         return Results.Ok(result.Value?.Select(MapOrgResponse));
     }
 
     private static OrgDto MapOrgResponse(OrgDto dto) =>
         new(dto.Id, dto.Name, dto.Description, dto.CreatedAt, dto.UpdatedAt);
+
+    private static async Task<IResult> ExportOrganizationData(
+        Guid orgId,
+        HttpContext ctx,
+        IOrganizationDataExportService exportService,
+        CancellationToken ct)
+    {
+        ctx.Response.Headers.CacheControl = "no-store";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        var result = await exportService.ExportAsync(orgId, ctx.GetActor(), ct);
+        return result.Success
+            ? Results.File(result.Value!.Content, "application/zip", result.Value.FileName)
+            : result.FromResult();
+    }
 
     private static async Task<IResult> CreateInvite(
         Guid orgId, [FromBody] CreateInviteBody body, CreateOrgInviteHandler handler, HttpContext ctx)

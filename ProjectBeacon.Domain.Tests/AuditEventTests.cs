@@ -13,6 +13,16 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsAuthenticatorResetBoolean()
+    {
+        var auditEvent = Create(detailsJson: """{"resultCode":"credentials_reset","authenticatorReset":true}""");
+
+        Assert.Equal(
+            """{"resultCode":"credentials_reset","authenticatorReset":true}""",
+            auditEvent.DetailsJson);
+    }
+
+    [Fact]
     public void Create_RejectsUnlistedSensitiveMetadataKeys()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"password":"secret"}"""));

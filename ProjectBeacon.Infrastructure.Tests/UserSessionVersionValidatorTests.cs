@@ -115,12 +115,47 @@ public sealed class UserSessionVersionValidatorTests : IDisposable
             _services, currentPrincipal, TestContext.Current.CancellationToken));
     }
 
-    private static ClaimsPrincipal Principal(User user, int sessionVersion, bool? isAdmin = null)
+    [Fact]
+    public async Task ControlPlaneOperatorCookie_DoesNotCompareWithLegacyCustomerAdminMarker()
     {
-        var identity = new ClaimsIdentity("TestAuth");
+        _user.AssignOperatorRole("Support");
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var valid = await UserSessionVersionValidator.ValidateAsync(
+            _services,
+            Principal(_user, sessionVersion: _user.SessionVersion,
+                isAdmin: true, authenticationType: "ControlCookie", controlPlane: true),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(valid);
+        Assert.False(_user.IsAdmin);
+    }
+
+    [Fact]
+    public async Task ControlPlaneOperatorCookie_StillRequiresCurrentSessionVersion()
+    {
+        _user.AssignOperatorRole("Support");
+        await _seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var stale = await UserSessionVersionValidator.ValidateAsync(
+            _services,
+            Principal(_user, sessionVersion: _user.SessionVersion - 1,
+                isAdmin: true, authenticationType: "ControlCookie", controlPlane: true),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(stale);
+    }
+
+    private static ClaimsPrincipal Principal(
+        User user, int sessionVersion, bool? isAdmin = null,
+        string authenticationType = "TestAuth", bool controlPlane = false)
+    {
+        var identity = new ClaimsIdentity(authenticationType);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
         identity.AddClaim(new Claim("sv", sessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         identity.AddClaim(new Claim("isAdmin", (isAdmin ?? user.IsAdmin).ToString()));
+        if (controlPlane)
+            identity.AddClaim(new Claim("control_plane", "true"));
         return new ClaimsPrincipal(identity);
     }
 }

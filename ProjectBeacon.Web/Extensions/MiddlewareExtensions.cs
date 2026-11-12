@@ -1,16 +1,12 @@
-using System.Globalization;
-using System.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Localization;
-using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Web.Components;
-using ProjectBeacon.Web.Extensions;
 
 namespace ProjectBeacon.Web.Extensions;
+
 /// <summary>
 /// Orders forwarded headers, the culture cookie, authentication, and the tenant middleware. Known proxies and networks come from ForwardedHeaders configuration.
 /// </summary>
@@ -27,30 +23,7 @@ public static class MiddlewareExtensions
             await next();
         });
 
-        // The configuration binder cannot convert config strings to IPAddress/IPNetwork
-        // (it silently keeps the seeded loopback defaults), so the trusted lists are parsed
-        // manually. An explicitly configured trust list is the complete trust set: the
-        // framework loopback defaults are only used when nothing is configured, which is
-        // safe for local runs.
-        var forwardedHeaders = new ForwardedHeadersOptions
-        {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-            ForwardedProtoHeaderName = "X-Forwarded-Proto"
-        };
-        var forwardedHeadersSection = app.Configuration.GetSection("ForwardedHeaders");
-        forwardedHeadersSection.Bind(forwardedHeaders);
-        var knownProxies = ForwardedHeaderValues(forwardedHeadersSection, "KnownProxies").ToList();
-        var knownNetworks = ForwardedHeaderValues(forwardedHeadersSection, "KnownNetworks").ToList();
-        if (knownProxies.Count > 0 || knownNetworks.Count > 0)
-        {
-            forwardedHeaders.KnownProxies.Clear();
-            forwardedHeaders.KnownNetworks.Clear();
-            foreach (var value in knownProxies)
-                forwardedHeaders.KnownProxies.Add(IPAddress.Parse(value));
-            foreach (var value in knownNetworks)
-                forwardedHeaders.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(value));
-        }
-        app.UseForwardedHeaders(forwardedHeaders);
+        app.UseForwardedHeaders(ForwardedHeadersOptionsFactory.Create(app.Configuration));
 
         var supportedCultures = ServiceCollectionExtensions.GetSupportedCultures();
 
@@ -66,12 +39,21 @@ public static class MiddlewareExtensions
         app.UseRequestLocalization(localizationOptions);
 
         app.UseHttpsRedirection();
+        // Run before static-file handling as well as endpoint routing so the Control Plane
+        // host allowlist also constrains existing files, not just application endpoints.
+        app.UseMiddleware<ProjectBeacon.API.Auth.ControlHostMiddleware>();
         app.UseStaticFiles();
         app.MapStaticAssets();
         app.UseRouting();
-        app.UseRateLimiter();
+        // Authenticate before rate limiting so trusted user IDs can receive independent
+        // buckets in addition to the forwarded client-IP buckets.
         app.UseAuthentication();
+        app.UseRateLimiter();
+        // Wrap token/device boundaries, tenant isolation and endpoint authorization so every
+        // explicit HTTP 403 on a versioned API route is observed.
+        app.UseMiddleware<ProjectBeacon.API.Auth.AuditDeniedRequestMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();
+        app.UseMiddleware<ProjectBeacon.Infrastructure.Http.ApiTokenIdentityRateLimitMiddleware>();
         app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
@@ -89,21 +71,5 @@ public static class MiddlewareExtensions
         });
 
         return app;
-    }
-
-    private static IEnumerable<string> ForwardedHeaderValues(IConfiguration section, string key)
-    {
-        var child = section.GetSection(key);
-        if (!string.IsNullOrWhiteSpace(child.Value))
-        {
-            yield return child.Value;
-        }
-        foreach (var entry in child.GetChildren())
-        {
-            if (!string.IsNullOrWhiteSpace(entry.Value))
-            {
-                yield return entry.Value;
-            }
-        }
     }
 }

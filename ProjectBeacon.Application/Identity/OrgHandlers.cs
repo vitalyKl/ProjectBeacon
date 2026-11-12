@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Common;
+using Application.Audit;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Enums;
 using Application.Persistence;
@@ -15,11 +17,13 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ITenantContext _tenant;
+    private readonly IAuditWriter? _auditWriter;
 
-    public CreateOrgHandler(IBeaconDbFactory dbFactory, ITenantContext tenant)
+    public CreateOrgHandler(IBeaconDbFactory dbFactory, ITenantContext tenant, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _tenant = tenant;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
@@ -32,11 +36,16 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
         var window = new TenantContext();
-        window.Assign(_tenant.ProjectId, org.Id, _tenant.Unscoped);
+        // An organization-level write must not inherit the previously selected project.
+        window.Assign(null, org.Id, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
         writeDb.Orgs.Add(org);
         if (command.Actor.UserId is { } ownerId)
             writeDb.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
+        if (command.Actor.UserId is not null)
+            _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+                command.Actor, "org.created", "Org", org.Id.ToString(), org.Id, null,
+                detailsJson: """{"newState":"Created"}"""));
         await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
@@ -51,17 +60,44 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
+    private readonly IAuditWriter? _auditWriter;
 
-    public UpdateOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateOrgHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        IAuditWriter? auditWriter = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result<OrgDto>> HandleAsync(UpdateOrgCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
+        if (!command.Actor.IsHuman || command.Actor.UserId is null)
+            return Result.Forbidden<OrgDto>();
+
+        // Rebind to the requested organization only; a previously selected project must
+        // never widen or redirect an organization-level mutation.
+        var tenant = new TenantContext();
+        tenant.Assign(null, command.Request.OrgId, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(tenant);
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Org, AuthAction.Administer,
+            orgId: command.Request.OrgId, ct: ct);
+        if (!permission.Success)
+            return Result.Forbidden<OrgDto>();
+
+        var org = await db.Orgs.FirstOrDefaultAsync(o => o.Id == command.Request.OrgId, ct);
         if (org is null)
             return Result.Failure<OrgDto>("Org not found.");
 
         org.Update(command.Request.Name, command.Request.Description);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor, "org.updated", "Org", org.Id.ToString(), org.Id, null,
+            detailsJson: """{"newState":"Updated"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
@@ -76,15 +112,36 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
 public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetOrgHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<OrgDto>> HandleAsync(GetOrgCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
+        var tenant = new TenantContext();
+        tenant.Assign(null, command.Request.OrgId, unscoped: false);
+        await using var db = _dbFactory.CreateDbContext(tenant);
+
+        // Preserve the public 404 contract for an absent organization before checking
+        // membership. Existing organizations remain protected by the role check below.
+        var exists = await db.Orgs.IgnoreQueryFilters()
+            .AnyAsync(item => item.Id == command.Request.OrgId, ct);
+        if (!exists)
+            return Result.Failure<OrgDto>("Org not found.", ErrorKind.NotFound);
+
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Org, AuthAction.Read,
+            orgId: command.Request.OrgId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<OrgDto>();
+
+        var org = await db.Orgs.FirstOrDefaultAsync(item => item.Id == command.Request.OrgId, ct);
         if (org is null)
-            return Result.Failure<OrgDto>("Org not found.");
+            return Result.Failure<OrgDto>("Org not found.", ErrorKind.NotFound);
 
         return Result.Ok(MapToDto(org));
     }
@@ -103,10 +160,35 @@ public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<Org
 
     public async Task<Result<IList<OrgDto>>> HandleAsync(ListOrgsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var orgs = await db.Orgs
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new OrgDto(o.Id, o.Name, o.Description, o.CreatedAt, o.UpdatedAt))
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Forbidden<IList<OrgDto>>();
+
+        // Keep the caller's bound tenant for member queries so PostgreSQL RLS receives
+        // the same organization scope as the request. Only a verified system admin uses
+        // the explicit unscoped operator path.
+        IBeaconDb db;
+        if (command.Actor.IsAdmin)
+        {
+            var tenant = new TenantContext();
+            tenant.Assign(null, null, unscoped: true);
+            db = _dbFactory.CreateDbContext(tenant);
+        }
+        else
+        {
+            db = _dbFactory.CreateDbContext();
+        }
+        await using var dbScope = db;
+
+        var query = db.Orgs.Where(org => org.LifecycleStatus == OrganizationLifecycleStatus.Active);
+        if (!command.Actor.IsAdmin)
+        {
+            query = query.Where(org => db.OrgMembers.IgnoreQueryFilters().Any(member =>
+                member.OrgId == org.Id && member.UserId == userId));
+        }
+
+        var orgs = await query
+            .OrderByDescending(org => org.CreatedAt)
+            .Select(org => new OrgDto(org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt))
             .ToListAsync(ct);
 
         return Result.Ok((IList<OrgDto>)orgs);

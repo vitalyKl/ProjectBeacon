@@ -1,10 +1,12 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Devices;
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
+using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -20,18 +22,18 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var subtask = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement the requested feature")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement the requested feature"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(subtask.Success, subtask.Error);
         var actor = await new StartActorSessionHandler(factory, spawner)
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
 
         var result = await new ReportSubtaskResultHandler(factory).HandleAsync(
             new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
                 task.Id, subtask.Value.Id, "diff://verified", "Implemented and verified the feature.",
-                "Implementation completed")),
+                "Implementation completed"), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
@@ -58,23 +60,23 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         await new ReportSubtaskResultHandler(factory)
-            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok")), TestContext.Current.CancellationToken);
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
 
         var noNote = await new RecordReviewVerdictHandler(factory)
-            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "  ")), TestContext.Current.CancellationToken);
+            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "  "), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(noNote.Success);
         Assert.Equal("Verdict note is required.", noNote.Error);
 
         var reopenWithoutSub = await new RecordReviewVerdictHandler(factory)
-            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.ReopenSubtask, "fix it")), TestContext.Current.CancellationToken);
+            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.ReopenSubtask, "fix it"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(reopenWithoutSub.Success);
         Assert.Contains("SubtaskId is required", reopenWithoutSub.Error);
     }
@@ -111,13 +113,13 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)));
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)));
         Assert.True(start.Success, start.Error);
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")));
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)));
         Assert.True(sub.Success, sub.Error);
         var reported = await new ReportSubtaskResultHandler(factory)
-            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok")));
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(task.Id, sub.Value!.Id, "diff://a", "ok"), PipelineTestActor.AdminFor(task.ProjectId)));
         Assert.True(reported.Success, reported.Error);
         return new DoneSubtask { ProjectId = projectId, Task = task, SubtaskId = sub.Value.Id };
     }
@@ -131,12 +133,12 @@ public sealed partial class PipelineHandlerTests
         using (new EnvGuard(ReopenCyclesEnv, null))
         {
             var review = await new StartReviewHandler(factory, spawner)
-                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(review.Success, review.Error);
 
             var reopened = await new RecordReviewVerdictHandler(factory)
                 .HandleAsync(new RecordReviewVerdictCommand(
-                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "Fix the null check", done.SubtaskId)), TestContext.Current.CancellationToken);
+                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "Fix the null check", done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(reopened.Success, reopened.Error);
             Assert.Equal(TaskPipelineStage.ReopenedForRevision, reopened.Value!.Stage);
             Assert.Equal(TaskItemStatus.InProgress, reopened.Value.Status);
@@ -147,13 +149,13 @@ public sealed partial class PipelineHandlerTests
             Assert.Single(reopened.Value.Verdicts);
 
             var actor = await new StartActorSessionHandler(factory, spawner)
-                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             Assert.Equal(TaskPipelineStage.Executing,
-                (await new GetPipelineHandler(factory).HandleAsync(new GetPipelineCommand(new GetPipelineRequest(done.Task.Id)), TestContext.Current.CancellationToken)).Value!.Stage);
+                (await new GetPipelineHandler(factory).HandleAsync(new GetPipelineCommand(new GetPipelineRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken)).Value!.Stage);
 
             var redone = await new ReportSubtaskResultHandler(factory)
-                .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://a2", "fixed")), TestContext.Current.CancellationToken);
+                .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://a2", "fixed"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(redone.Success, redone.Error);
             Assert.Equal(SubtaskStatus.Done, redone.Value!.Subtasks.Single(s => s.Id == done.SubtaskId).Status);
             using (TenantScope.EnterUnscoped())
@@ -170,11 +172,11 @@ public sealed partial class PipelineHandlerTests
             }
 
             var review2 = await new StartReviewHandler(factory, spawner)
-                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(review2.Success, review2.Error);
             var approved = await new RecordReviewVerdictHandler(factory)
                 .HandleAsync(new RecordReviewVerdictCommand(
-                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.Approve, "Good now")), TestContext.Current.CancellationToken);
+                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.Approve, "Good now"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(approved.Success, approved.Error);
             Assert.Equal(TaskPipelineStage.Approved, approved.Value!.Stage);
         }
@@ -189,24 +191,24 @@ public sealed partial class PipelineHandlerTests
         using (new EnvGuard(ReopenCyclesEnv, "1"))
         {
             await new StartReviewHandler(factory, spawner)
-                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             var first = await new RecordReviewVerdictHandler(factory)
                 .HandleAsync(new RecordReviewVerdictCommand(
-                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "note 1", done.SubtaskId)), TestContext.Current.CancellationToken);
+                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "note 1", done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(first.Success, first.Error);
             Assert.Equal(1, first.Value!.Subtasks.Single(s => s.Id == done.SubtaskId).ReopenCount);
 
             var actor = await new StartActorSessionHandler(factory, spawner)
-                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(done.Task.Id, done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             await new ReportSubtaskResultHandler(factory)
-                .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://b", "ok")), TestContext.Current.CancellationToken);
+                .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://b", "ok"), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             await new StartReviewHandler(factory, spawner)
-                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
 
             var second = await new RecordReviewVerdictHandler(factory)
                 .HandleAsync(new RecordReviewVerdictCommand(
-                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "note 2", done.SubtaskId)), TestContext.Current.CancellationToken);
+                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "note 2", done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(second.Success, second.Error);
             var subtask = second.Value!.Subtasks.Single(s => s.Id == done.SubtaskId);
             Assert.Equal(SubtaskStatus.Failed, subtask.Status);
@@ -224,34 +226,38 @@ public sealed partial class PipelineHandlerTests
         using (new EnvGuard(WorkerTokenEnv, null))
         {
             await new StartReviewHandler(factory, spawner)
-                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
             await new RecordReviewVerdictHandler(factory)
                 .HandleAsync(new RecordReviewVerdictCommand(
-                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "stuck", done.SubtaskId)), TestContext.Current.CancellationToken);
+                    new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "stuck", done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
 
             var stranger = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString(), "cleanup")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, Guid.NewGuid().ToString(), "cleanup"),
+                    new ActorContext(ActorType.Human, Guid.NewGuid(), false, null, null, done.ProjectId, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.False(stranger.Success);
-            Assert.Equal("Force close requires admin privileges.", stranger.Error);
+            Assert.Equal("Forbidden.", stranger.Error);
 
             var nonAdmin = User.Create("member", "member@example.com", "hash");
             var admin = User.Create("root", "root@example.com", "hash", isAdmin: true);
             using (TenantScope.EnterUnscoped())
             {
                 _db.Users.AddRange(nonAdmin, admin);
+                _db.ProjectMembers.Add(ProjectMember.Create(done.ProjectId, nonAdmin.Id, MemberRole.Member));
                 await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             var member = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, nonAdmin.Id.ToString(), "cleanup")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, nonAdmin.Id.ToString(), "cleanup"),
+                    new ActorContext(ActorType.Human, nonAdmin.Id, false, null, null, done.ProjectId, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.False(member.Success);
-            Assert.Equal("Force close requires admin privileges.", member.Error);
+            Assert.Equal("Forbidden.", member.Error);
 
             var asAdmin = await new ForceClosePipelineHandler(factory)
                 .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, admin.Id.ToString(), "obsolete")), TestContext.Current.CancellationToken);
+                    new ForceClosePipelineRequest(done.Task.Id, admin.Id.ToString(), "obsolete"),
+                    new ActorContext(ActorType.Human, admin.Id, true, null, null, done.ProjectId, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
             Assert.True(asAdmin.Success, asAdmin.Error);
             Assert.Equal(TaskPipelineStage.Closed, asAdmin.Value!.Stage);
             Assert.Equal(TaskItemStatus.Done, asAdmin.Value.Status);
@@ -260,26 +266,26 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task ForceClose_WorkerToken_ClosesWithoutReasonMarker()
+    public async Task ForceClose_ScopedAdminToken_ClosesWithoutReasonMarker()
     {
         var done = await SeedDoneSubtaskAsync();
         var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
         await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
         await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(
-                new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "stuck", done.SubtaskId)), TestContext.Current.CancellationToken);
+                new RecordReviewVerdictRequest(done.Task.Id, ReviewVerdictKind.ReopenSubtask, "stuck", done.SubtaskId), PipelineTestActor.AdminFor(done.Task.ProjectId)), TestContext.Current.CancellationToken);
 
-        using (new EnvGuard(WorkerTokenEnv, "bcn_test_worker_token"))
-        {
-            var result = await new ForceClosePipelineHandler(factory)
-                .HandleAsync(new ForceClosePipelineCommand(
-                    new ForceClosePipelineRequest(done.Task.Id, "bcn_test_worker_token")), TestContext.Current.CancellationToken);
-            Assert.True(result.Success, result.Error);
-            Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
-            Assert.Equal("force-closed without review", result.Value.ReviewNotes);
-        }
+        var tokenId = Guid.NewGuid();
+        var result = await new ForceClosePipelineHandler(factory)
+            .HandleAsync(new ForceClosePipelineCommand(
+                new ForceClosePipelineRequest(done.Task.Id, tokenId.ToString()),
+                new ActorContext(ActorType.ApiToken, null, false, tokenId, null,
+                    done.ProjectId, null, ApiTokenCapability.Admin)), TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(TaskPipelineStage.Closed, result.Value!.Stage);
+        Assert.Equal("force-closed without review", result.Value.ReviewNotes);
     }
     [Fact]
     public async Task LaunchSession_DoubleLaunch_Fails()
@@ -289,19 +295,19 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner(backendId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
 
         var first = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value!.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value!.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
         var second = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(start.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(second.Success);
         Assert.Contains("Cannot launch", second.Error);
 
         var missing = await new LaunchSessionHandler(factory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid())), TestContext.Current.CancellationToken);
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(Guid.NewGuid()), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(missing.Success);
         Assert.Equal("Session not found.", missing.Error);
     }

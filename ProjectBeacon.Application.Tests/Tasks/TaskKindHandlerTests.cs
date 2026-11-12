@@ -63,7 +63,7 @@ public sealed class TaskKindHandlerTests : IDisposable
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId, orgId));
         var actor = new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
-        var created = await new CreateTaskHandler(factory).HandleAsync(new CreateTaskCommand(
+        var created = await new CreateTaskHandler(factory, new AuthorizationService()).HandleAsync(new CreateTaskCommand(
             new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null), actor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
@@ -71,9 +71,9 @@ public sealed class TaskKindHandlerTests : IDisposable
         Assert.Equal(new[] { "understand", "do", "check" }, phases.Value!.Select(p => p.Key).ToList());
 
         await new StartPipelineHandler(factory, new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog()))
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id), PipelineTestActor.AdminFor(created.Value.ProjectId)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory).HandleAsync(
-            new CreateSubtaskCommand(new CreateSubtaskRequest(created.Value.Id, "Review the settings screen")), TestContext.Current.CancellationToken);
+            new CreateSubtaskCommand(new CreateSubtaskRequest(created.Value.Id, "Review the settings screen"), PipelineTestActor.AdminFor(created.Value.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         Assert.Equal(phases.Value!.Single(p => p.Key == "do").Id, sub.Value!.TaskPhaseId);
     }

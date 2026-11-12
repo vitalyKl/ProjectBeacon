@@ -101,13 +101,16 @@ else if (_error)
     private MudDropContainer<TaskItemDto>? _container;
     private bool _loading = true;
     private bool _error;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private int _todoCount => _allTasks.Count(t => t.Status == "Todo");
     private int _inProgressCount => _allTasks.Count(t => t.Status == "InProgress");
     private int _doneCount => _allTasks.Count(t => t.Status == "Done");
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        var authState = await Auth.GetAuthenticationStateAsync();
+        _actorContext = ActorContextFactory.FromPrincipal(authState.User);
+        var current = await CurrentProject.HandleAsync(_actorContext);
         _project = current.Value;
         await ReloadTasks();
         _loading = false;
@@ -138,7 +141,7 @@ else if (_error)
         _container?.Refresh();
 
         var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier))));
+            new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier)), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
@@ -162,7 +165,7 @@ else if (_error)
         _container?.Refresh();
 
         var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(task.Id, status)));
+            new ChangeTaskStatusRequest(task.Id, status), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);

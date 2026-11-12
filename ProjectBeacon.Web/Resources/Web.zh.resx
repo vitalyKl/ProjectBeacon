@@ -2134,7 +2134,6 @@ orthstar</value>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>掌控你的 AI 工作流</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>启动自己的 ProjectBeacon 主机并连接工作站。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>面向 AI 辅助开发的本地优先控制平面</value></data>
-
   <data name="AgentModeHint" xml:space="preserve">
     <value>用于设置工作站交互式聊天所使用的 AgentProvider 配置。任务流水线的默认模型请在“任务类型”中单独配置。</value>
   </data>
@@ -2590,39 +2589,135 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>每行输入一个相对于仓库的路径。此配置要求填写。</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>平台管理</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>审计日志</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>跨组织和项目的安全及运营操作记录。事件时间按浏览器本地时区显示；日期筛选和 CSV 时间戳使用 UTC。</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>操作代码</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>主体类型</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>用户 ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>目标</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>范围</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>时间（本地）</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>组织 ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>项目 ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>开始时间 (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>结束时间 (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>应用筛选</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>导出 CSV</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>上一页</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>下一页</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>第 {0} 页</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>事件数：{0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>没有符合筛选条件的审计事件。</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>没有读取平台审计日志的权限。</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>其中一个标识符不是有效的 GUID。</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>请检查主体、结果和 UTC 日期筛选条件。</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>操作者 API 令牌 ID</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>操作者设备 ID</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>目标类型</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>目标 ID</value>
+  </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>跟踪 ID</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>规划</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>执行</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>模型</value></data>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>所选模型的上下文大小必须大于零。请在启动会话前配置上下文窗口。</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回复 Token 预留量（0 = 自动）</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>当提示词用量超过上下文窗口的 82% 与“窗口大小减去预留量”两者中的较小值时开始压缩。设置为 0 时自动预留 25%。</value></data>
-  <data name="GitSyncTitle" xml:space="preserve"><value>Git 仓库</value></data>
-  <data name="GitSyncHelp" xml:space="preserve"><value>检查仓库状态，或对当前分支执行 fast-forward。同步在已连接的工作站上执行，不会覆盖本地修改。</value></data>
-  <data name="GitSyncCheck" xml:space="preserve"><value>检查状态</value></data>
-  <data name="GitSyncNow" xml:space="preserve"><value>同步</value></data>
-  <data name="GitSyncWorking" xml:space="preserve"><value>正在等待工作站完成 Git 操作…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。请刷新页面并重新检查仓库状态。</value></data>
-  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>此项目没有连接支持 GitSync 的在线工作站。</value></data>
-  <data name="GitSyncBranch" xml:space="preserve"><value>分支</value></data>
-  <data name="GitSyncUpstream" xml:space="preserve"><value>上游</value></data>
-  <data name="GitSyncAhead" xml:space="preserve"><value>领先</value></data>
-  <data name="GitSyncBehind" xml:space="preserve"><value>落后</value></data>
-  <data name="GitSyncClean" xml:space="preserve"><value>工作区干净</value></data>
-  <data name="GitSyncDirty" xml:space="preserve"><value>工作区包含本地修改</value></data>
-  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>仓库状态已检查。</value></data>
-  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>仓库已成功 fast-forward 更新。</value></data>
-  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同步被拒绝；工作区未发生更改。</value></data>
-  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git 同步失败。</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同步前请先提交或暂存本地修改。</value></data>
-  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>有原生代理会话正在运行。请等待会话结束后再同步。</value></data>
-  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>本地分支与上游分支已分叉，无法 fast-forward。</value></data>
-  <data name="GitSyncReasonDetached" xml:space="preserve"><value>仓库处于 detached HEAD 状态。</value></data>
-  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>当前分支未配置上游分支。</value></data>
-  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>无法获取跟踪的上游分支。请检查工作站上的 remote 和凭据。</value></data>
-  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作超时。</value></data>
-  <data name="MarkdownEdit" xml:space="preserve"><value>编辑</value></data>
-  <data name="MarkdownPreview" xml:space="preserve"><value>预览</value></data>
-  <data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
-  <data name="MarkdownCollapse" xml:space="preserve"><value>收起</value></data>
-  <data name="Characters" xml:space="preserve"><value>字符</value></data>
+<data name="GitSyncTitle" xml:space="preserve"><value>Git 仓库</value></data>
+<data name="GitSyncHelp" xml:space="preserve"><value>检查仓库状态，或对当前分支执行 fast-forward。同步在已连接的工作站上执行，不会覆盖本地修改。</value></data>
+<data name="GitSyncCheck" xml:space="preserve"><value>检查状态</value></data>
+<data name="GitSyncNow" xml:space="preserve"><value>同步</value></data>
+<data name="GitSyncWorking" xml:space="preserve"><value>正在等待工作站完成 Git 操作…</value></data>
+<data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。请刷新页面并重新检查仓库状态。</value></data>
+<data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>此项目没有连接支持 GitSync 的在线工作站。</value></data>
+<data name="GitSyncBranch" xml:space="preserve"><value>分支</value></data>
+<data name="GitSyncUpstream" xml:space="preserve"><value>上游</value></data>
+<data name="GitSyncAhead" xml:space="preserve"><value>领先</value></data>
+<data name="GitSyncBehind" xml:space="preserve"><value>落后</value></data>
+<data name="GitSyncClean" xml:space="preserve"><value>工作区干净</value></data>
+<data name="GitSyncDirty" xml:space="preserve"><value>工作区包含本地修改</value></data>
+<data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>仓库状态已检查。</value></data>
+<data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>仓库已成功 fast-forward 更新。</value></data>
+<data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同步被拒绝；工作区未发生更改。</value></data>
+<data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git 同步失败。</value></data>
+<data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同步前请先提交或暂存本地修改。</value></data>
+<data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>有原生代理会话正在运行。请等待会话结束后再同步。</value></data>
+<data name="GitSyncReasonDiverged" xml:space="preserve"><value>本地分支与上游分支已分叉，无法 fast-forward。</value></data>
+<data name="GitSyncReasonDetached" xml:space="preserve"><value>仓库处于 detached HEAD 状态。</value></data>
+<data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>当前分支未配置上游分支。</value></data>
+<data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>无法获取跟踪的上游分支。请检查工作站上的 remote 和凭据。</value></data>
+<data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作超时。</value></data>
+<data name="MarkdownEdit" xml:space="preserve"><value>编辑</value></data>
+<data name="MarkdownPreview" xml:space="preserve"><value>预览</value></data>
+<data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
+<data name="MarkdownCollapse" xml:space="preserve"><value>收起</value></data>
+<data name="Characters" xml:space="preserve"><value>字符</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>组织数据</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>下载组织工作区、成员、发票和账单历史记录的快照。导出中不包含凭据和服务提供商标识。</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>下载组织数据包 (ZIP)</value></data>
 </root>

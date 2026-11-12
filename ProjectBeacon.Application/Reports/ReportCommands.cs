@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Reports;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Projects;
 using Domain.Entities.Reports;
 using Domain.Entities.Tasks;
@@ -36,19 +37,19 @@ public record ReportDto(
 /// <summary>
 /// Project and the creator type and id to stamp on a new board snapshot.
 /// </summary>
-public record GenerateReportRequest(Guid ProjectId, string CreatedByType, string CreatedById);
+public record GenerateReportRequest(Guid ProjectId);
 /// <summary>
 /// Command for generate report.
 /// </summary>
-public record GenerateReportCommand(GenerateReportRequest Request) : ICommand<Result<ReportDto>>;
+public record GenerateReportCommand(GenerateReportRequest Request, ActorContext Actor) : ICommand<Result<ReportDto>>;
 /// <summary>
 /// Fields for list reports.
 /// </summary>
-public record ListReportsRequest(Guid ProjectId);
+public record ListReportsRequest(Guid ProjectId, ActorContext Actor);
 /// <summary>
 /// Fields for get report.
 /// </summary>
-public record GetReportRequest(Guid ProjectId, Guid ReportId);
+public record GetReportRequest(Guid ProjectId, Guid ReportId, ActorContext Actor);
 /// <summary>
 /// Stores a board snapshot report for a project.
 /// </summary>
@@ -60,15 +61,29 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
     };
 
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GenerateReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GenerateReportHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ReportDto>> HandleAsync(GenerateReportCommand command, CancellationToken ct = default)
     {
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } creatorId || creatorId == Guid.Empty)
+            return Result.Forbidden<ReportDto>();
+
         await using var db = _dbFactory.CreateDbContext();
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Report, AuthAction.Create,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<ReportDto>();
+
         var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
-            return Result.Failure<ReportDto>("Project not found.");
+            return Result.Failure<ReportDto>("Project not found.", ErrorKind.NotFound);
 
         var tasks = await db.Tasks
             .Where(t => t.ProjectId == command.Request.ProjectId)
@@ -97,18 +112,15 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
 
         var body = BuildMarkdown(project.Name, snapshot, tasks);
         var title = $"{project.Name} development report";
-        var createdByType = string.IsNullOrWhiteSpace(command.Request.CreatedByType)
-            ? "user"
-            : command.Request.CreatedByType.Trim();
-        var createdById = command.Request.CreatedById ?? string.Empty;
-
+        // Attribution is security metadata. It always comes from the authenticated
+        // server-side actor; the request contract contains no creator fields.
         var report = Report.Create(
             title,
             body,
             JsonSerializer.Serialize(snapshot, Json),
             project.Id,
-            createdByType,
-            createdById);
+            "user",
+            creatorId.ToString("D"));
         db.Reports.Add(report);
         await db.SaveChangesAsync(ct);
         return Result.Ok(Map(report));
@@ -163,12 +175,23 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
 public class ListReportsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ListReportsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListReportsHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<IList<ReportDto>>> HandleAsync(ListReportsRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var access = await _authorization.CanAsync(
+            db, request.Actor, ResourceType.Report, AuthAction.Read,
+            projectId: request.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<IList<ReportDto>>();
+
         var items = await db.Reports
             .Where(r => r.ProjectId == request.ProjectId)
             .OrderByDescending(r => r.CreatedAt)
@@ -185,12 +208,23 @@ public class ListReportsHandler
 public class GetReportHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetReportHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ReportDto>> HandleAsync(GetReportRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var access = await _authorization.CanAsync(
+            db, request.Actor, ResourceType.Report, AuthAction.Read,
+            projectId: request.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<ReportDto>();
+
         var report = await db.Reports
             .FirstOrDefaultAsync(r => r.Id == request.ReportId && r.ProjectId == request.ProjectId, ct);
         if (report is null)

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -12,12 +13,27 @@ using Microsoft.EntityFrameworkCore;
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CreateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(CreateTaskCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Task,
+            AuthAction.Create,
+            projectId: command.Request.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
+
         var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<TaskItemDto>("Project not found.");
@@ -82,8 +98,13 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public UpdateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(UpdateTaskCommand command, CancellationToken ct = default)
     {
@@ -94,6 +115,16 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Task,
+            AuthAction.Update,
+            projectId: task.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         if (command.Request.LabelId is not null)
         {
@@ -142,8 +173,13 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public DeleteTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
@@ -157,6 +193,16 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure("Task not found.");
+
+            var permission = await _authorization.CanAsync(
+                db,
+                command.Actor,
+                ResourceType.Task,
+                AuthAction.Delete,
+                projectId: task.ProjectId,
+                ct: ct);
+            if (!permission.Success)
+                return Result.Failure(permission);
 
             var sessions = await db.PipelineSessions.IgnoreQueryFilters()
                 .Where(session => session.ProjectId == task.ProjectId && session.TaskId == task.Id)
@@ -200,8 +246,13 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ChangeSubStageHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ChangeSubStageHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(ChangeSubStageCommand command, CancellationToken ct = default)
     {
@@ -209,6 +260,12 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Task, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         // Unguarded by design: this writer never touches StateRevision, so it cannot
         // create a second finish-work winner. Under a race with finish_work it may leave
@@ -251,8 +308,13 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public AddReviewNotesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AddReviewNotesHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(AddReviewNotesCommand command, CancellationToken ct = default)
     {
@@ -260,6 +322,12 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Task, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         try
         {

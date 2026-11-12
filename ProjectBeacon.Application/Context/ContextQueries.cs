@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -10,12 +11,23 @@ using Microsoft.EntityFrameworkCore;
 public class ListContextNodesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ListContextNodesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListContextNodesHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<IList<ContextSectionDto>>> HandleAsync(ListContextNodesCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Context, AuthAction.Read,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<IList<ContextSectionDto>>(permission);
+
         var sections = await db.ContextSections
             .Where(s => s.ProjectId == command.Request.ProjectId)
             .OrderByDescending(s => s.UpdatedAt)
@@ -30,12 +42,23 @@ public class ListContextNodesHandler
 public class GetContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetContextNodeHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<ContextSectionDto>> HandleAsync(GetContextNodeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Context, AuthAction.Read,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<ContextSectionDto>(permission);
+
         var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 
@@ -51,12 +74,23 @@ public class GetContextNodeHandler
 public class DeleteContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public DeleteContextNodeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeleteContextNodeHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Context, AuthAction.Delete,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure(permission);
+
         var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 

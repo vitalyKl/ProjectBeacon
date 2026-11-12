@@ -4,7 +4,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Application.Auth;
 using Infrastructure.Data;
+using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -24,6 +28,47 @@ public sealed class AuthHttpTests
 
         var fail = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = "nope" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, fail.StatusCode);
+    }
+
+    [Fact]
+    public async Task Bootstrap_ParallelRequests_CreateExactlyOneAdminAndAuditTheRest()
+    {
+        await using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+        {
+            using var request = BootstrapRequest(AuthApiFactory.BootstrapToken);
+            return await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+        }));
+
+        try
+        {
+            Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+            Assert.Equal(3, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+
+            // The one-time transition remains closed after the concurrent winner commits.
+            using var secondRequest = BootstrapRequest(AuthApiFactory.BootstrapToken);
+            using var secondResponse = await client.SendAsync(
+                secondRequest, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+        }
+        finally
+        {
+            foreach (var response in responses)
+                response.Dispose();
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.Equal(1, await db.Users.CountAsync(user => user.IsAdmin, TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.AuditEvents.CountAsync(
+                item => item.Action == "platform.bootstrap.completed", TestContext.Current.CancellationToken));
+            Assert.Equal(4, await db.AuditEvents.CountAsync(
+                item => item.Action == "platform.bootstrap.denied", TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]
@@ -88,6 +133,78 @@ public sealed class AuthHttpTests
         Assert.Contains('.', version);
     }
 
+
+    [Fact]
+    public async Task OrganizationCreation_IsBlockedByInviteOnlySaaSAlpha()
+    {
+        await using var factory = new AuthApiFactory(inviteOnly: true);
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        using var response = await client.PostAsJsonAsync(
+            "/v1/orgs",
+            new { name = "Self-service must be disabled" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("provisioned by the ProjectBeacon platform operator", body, StringComparison.Ordinal);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+            Assert.Empty(await db.Orgs.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GenerateReport_UsesAuthenticatedActorInsteadOfBodySuppliedCreator()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        Guid adminId;
+        using (TenantScope.EnterUnscoped())
+            adminId = await db.Users.Where(user => user.IsAdmin)
+                .Select(user => user.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+
+        using var orgResponse = await client.PostAsJsonAsync(
+            "/v1/orgs",
+            new { name = "Report attribution" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        orgResponse.EnsureSuccessStatusCode();
+        var org = await orgResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var orgId = org.GetProperty("id").GetGuid();
+
+        using var projectResponse = await client.PostAsJsonAsync(
+            "/v1/projects",
+            new { name = "Attribution test", orgId },
+            cancellationToken: TestContext.Current.CancellationToken);
+        projectResponse.EnsureSuccessStatusCode();
+        var project = await projectResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var forgedCreatorId = Guid.NewGuid();
+        using var reportResponse = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId:D}/reports",
+            new
+            {
+                createdByType = "system",
+                createdById = forgedCreatorId.ToString("D")
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, reportResponse.StatusCode);
+
+        var report = await reportResponse.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal("user", report.GetProperty("createdByType").GetString());
+        Assert.Equal(adminId.ToString("D"), report.GetProperty("createdById").GetString());
+        Assert.NotEqual(forgedCreatorId.ToString("D"), report.GetProperty("createdById").GetString());
+    }
+
     [Fact]
     public async Task Register_Open_CreatesUser()
     {
@@ -118,6 +235,19 @@ public sealed class AuthHttpTests
 
         var after = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        using (TenantScope.EnterUnscoped())
+        {
+            var logoutEvent = await db.AuditEvents.SingleAsync(
+                item => item.Action == "account.logout",
+                TestContext.Current.CancellationToken);
+            Assert.Equal(ProjectBeacon.Domain.Entities.Audit.AuditActorKind.Human, logoutEvent.ActorKind);
+            Assert.Equal("User", logoutEvent.TargetType);
+            Assert.NotNull(logoutEvent.ActorUserId);
+            Assert.Equal(logoutEvent.ActorUserId.Value.ToString(), logoutEvent.TargetId);
+        }
     }
 
     [Fact]
@@ -203,7 +333,7 @@ public sealed class AuthHttpTests
         var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var oldPassword = bootJson.GetProperty("password").GetString()!;
 
-        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         recover.EnsureSuccessStatusCode();
         var recoverJson = await recover.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var newPassword = recoverJson.GetProperty("password").GetString()!;
@@ -214,6 +344,22 @@ public sealed class AuthHttpTests
 
         var newLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = newPassword }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoverAdmin_BootstrapTokenIsNotAccepted()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var bootstrap = await client.SendAsync(
+            BootstrapRequest(AuthApiFactory.BootstrapToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        bootstrap.EnsureSuccessStatusCode();
+
+        var response = await client.SendAsync(
+            RecoverRequest(AuthApiFactory.BootstrapToken),
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -233,16 +379,16 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
     public async Task RecoverAdmin_TokenNotConfigured_Unauthorized()
     {
-        await using var factory = new AuthApiFactory(false);
+        await using var factory = new AuthApiFactory(configureRecoveryToken: false);
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.RecoveryToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -265,15 +411,24 @@ public sealed class AuthHttpTests
 public class AuthApiFactory : WebApplicationFactory<Program>
 {
     public const string BootstrapToken = "test-bootstrap-token";
+    public const string RecoveryToken = "test-admin-recovery-token";
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly bool _configureBootstrapToken;
+    private readonly bool _configureRecoveryToken;
+    private readonly bool _inviteOnly;
 
-    public AuthApiFactory(bool configureBootstrapToken = true)
+    public AuthApiFactory(
+        bool configureBootstrapToken = true,
+        bool inviteOnly = false,
+        bool configureRecoveryToken = true)
     {
         _configureBootstrapToken = configureBootstrapToken;
+        _configureRecoveryToken = configureRecoveryToken;
+        _inviteOnly = inviteOnly;
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
         Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
+        Environment.SetEnvironmentVariable("ADMIN_RECOVERY_TOKEN", _configureRecoveryToken ? RecoveryToken : "");
         _connection.Open();
     }
 
@@ -283,7 +438,8 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ASPNETCORE_ENVIRONMENT", "Testing");
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
-        builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", "false");
+        builder.UseSetting("ADMIN_RECOVERY_TOKEN", _configureRecoveryToken ? RecoveryToken : "");
+        builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", _inviteOnly ? "true" : "false");
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())
@@ -301,6 +457,10 @@ public class AuthApiFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<BeaconDbContext>(o => o.UseSqlite(_connection));
             services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>();
+
+            foreach (var descriptor in services.Where(x => x.ServiceType == typeof(IEntitlementService)).ToList())
+                services.Remove(descriptor);
+            services.AddSingleton<IEntitlementService, AllowAllEntitlementService>();
             using var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<BeaconDbContext>().Database.EnsureCreated();
@@ -314,3 +474,28 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
     }
 }
+
+internal sealed class AllowAllEntitlementService : IEntitlementService
+{
+    public Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<OrganizationEntitlement?>(null));
+
+    public Task<Result<OrganizationEntitlement?>> GetForOperatorAsync(AdminActor actor, Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<OrganizationEntitlement?>(null));
+
+    public Task<Result<IReadOnlyList<OrganizationEntitlement>>> ListForOperatorAsync(AdminActor actor, Guid orgId, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok<IReadOnlyList<OrganizationEntitlement>>(Array.Empty<OrganizationEntitlement>()));
+
+    public Task<Result<EntitlementDecision>> EvaluateAsync(Guid orgId, EntitlementRequirement requirement, CancellationToken ct = default)
+        => Task.FromResult(Result.Ok(new EntitlementDecision(true)));
+
+    public Task<Result<OrganizationEntitlement>> GrantAsync(GrantOrganizationEntitlementRequest request, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure<OrganizationEntitlement>("Not supported by the API test entitlement stub."));
+
+    public Task<Result> RevokeAsync(Guid entitlementId, string reason, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure("Not supported by the API test entitlement stub."));
+
+    public Task<Result<OrganizationEntitlement>> ConvertAlphaToProductionAsync(ConvertAlphaToProductionRequest request, AdminActor actor, CancellationToken ct = default)
+        => Task.FromResult(Result.Failure<OrganizationEntitlement>("Not supported by the API test entitlement stub."));
+}
+

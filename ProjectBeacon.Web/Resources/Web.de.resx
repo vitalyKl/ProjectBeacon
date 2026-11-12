@@ -2134,7 +2134,6 @@ orthstar</value>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>ÜBERNEHMEN SIE DIE KONTROLLE ÜBER IHREN KI-WORKFLOW</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Starten Sie mit Ihrem eigenen ProjectBeacon-Host und verbinden Sie eine Workstation.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first-Steuerungsebene für KI-gestützte Entwicklung</value></data>
-
 <data name="AgentModeHint" xml:space="preserve"><value>Steuert das auf der Workstation angewendete AgentProvider-Profil für den interaktiven Chat. Standardmodelle für Aufgaben-Pipelines werden separat unter „Aufgabenarten“ konfiguriert.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Dies sind workstationweite Rollenvorgaben und AgentProvider-Einstellungen. Pipeline-Sitzungen verwenden die Rollenbindungen nur, wenn für die jeweilige Aufgabenphase kein eigenes Modell festgelegt ist.</value></data>
 <data name="PipelineStartHint" xml:space="preserve"><value>Startet den Planner, der diese Aufgabe analysiert und einen Ausführungsplan vorbereitet.</value></data>
@@ -2582,39 +2581,135 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Relative Repository-Pfade eingeben, einen pro Zeile. Für dieses Profil erforderlich.</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>Plattformverwaltung</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>Auditprotokoll</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>Sicherheits- und Operatoraktivitäten über Organisationen und Projekte hinweg. Ereigniszeiten werden in der lokalen Browser-Zeitzone angezeigt; Datumsfilter und CSV-Zeitstempel verwenden UTC.</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>Aktionscode</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>Akteurstyp</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>Benutzer-ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>Ergebnis</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>Ziel</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>Geltungsbereich</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>Zeit (lokal)</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>Organisations-ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>Projekt-ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>Von (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>Bis (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>Filter anwenden</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>Filter löschen</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>CSV exportieren</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>Zurück</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>Weiter</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>Seite {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>Ereignisse: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>Keine Auditereignisse für diese Filter.</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>Keine Berechtigung zum Lesen des Plattform-Auditprotokolls.</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Eine Kennung hat kein gültiges GUID-Format.</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>Akteurstyp, Ergebnis und UTC-Daten prüfen.</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>API-Token-ID des Akteurs</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>Geräte-ID des Akteurs</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>Zieltyp</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>Ziel-ID</value>
+  </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>Trace-ID</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>Planung</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>Ausführung</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>Modell</value></data>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Die Kontextgröße des ausgewählten Modells muss größer als null sein. Konfigurieren Sie das Kontextfenster vor dem Start.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Tokenreserve für die Antwort (0 = automatisch)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Die Komprimierung beginnt beim kleineren Wert aus 82 % des Kontextfensters und Fenstergröße minus Reserve. Bei 0 werden automatisch 25 % reserviert.</value></data>
-  <data name="GitSyncTitle" xml:space="preserve"><value>Git-Repository</value></data>
-  <data name="GitSyncHelp" xml:space="preserve"><value>Prüfen Sie den Repository-Status oder führen Sie einen Fast-Forward des aktuellen Branches aus. Die Synchronisierung erfolgt auf der verbundenen Workstation und überschreibt keine lokalen Änderungen.</value></data>
-  <data name="GitSyncCheck" xml:space="preserve"><value>Status prüfen</value></data>
-  <data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
-  <data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Aktualisieren Sie die Seite und prüfen Sie den Repository-Status erneut.</value></data>
-  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
-  <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
-  <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
-  <data name="GitSyncAhead" xml:space="preserve"><value>Voraus</value></data>
-  <data name="GitSyncBehind" xml:space="preserve"><value>Zurück</value></data>
-  <data name="GitSyncClean" xml:space="preserve"><value>Arbeitsverzeichnis ist sauber</value></data>
-  <data name="GitSyncDirty" xml:space="preserve"><value>Arbeitsverzeichnis enthält lokale Änderungen</value></data>
-  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Repository-Status geprüft.</value></data>
-  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Repository wurde erfolgreich per Fast-Forward aktualisiert.</value></data>
-  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Synchronisierung abgelehnt; das Arbeitsverzeichnis blieb unverändert.</value></data>
-  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git-Synchronisierung fehlgeschlagen.</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Übernehmen oder stashen Sie lokale Änderungen vor der Synchronisierung.</value></data>
-  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Eine native Agentensitzung ist aktiv. Warten Sie, bis sie beendet ist.</value></data>
-  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>Lokaler und Upstream-Branch sind auseinander gelaufen. Fast-Forward ist nicht möglich.</value></data>
-  <data name="GitSyncReasonDetached" xml:space="preserve"><value>Das Repository befindet sich im Detached-HEAD-Zustand.</value></data>
-  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Für den aktuellen Branch ist kein Upstream konfiguriert.</value></data>
-  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Der Upstream konnte nicht abgerufen werden. Prüfen Sie Remote und Zugangsdaten auf der Workstation.</value></data>
-  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Zeitüberschreitung beim Git-Vorgang.</value></data>
-  <data name="MarkdownEdit" xml:space="preserve"><value>Bearbeiten</value></data>
-  <data name="MarkdownPreview" xml:space="preserve"><value>Vorschau</value></data>
-  <data name="MarkdownExpand" xml:space="preserve"><value>Mehr anzeigen</value></data>
-  <data name="MarkdownCollapse" xml:space="preserve"><value>Weniger anzeigen</value></data>
-  <data name="Characters" xml:space="preserve"><value>Zeichen</value></data>
+<data name="GitSyncTitle" xml:space="preserve"><value>Git-Repository</value></data>
+<data name="GitSyncHelp" xml:space="preserve"><value>Prüfen Sie den Repository-Status oder führen Sie einen Fast-Forward des aktuellen Branches aus. Die Synchronisierung erfolgt auf der verbundenen Workstation und überschreibt keine lokalen Änderungen.</value></data>
+<data name="GitSyncCheck" xml:space="preserve"><value>Status prüfen</value></data>
+<data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
+<data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
+<data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Aktualisieren Sie die Seite und prüfen Sie den Repository-Status erneut.</value></data>
+<data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
+<data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
+<data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+<data name="GitSyncAhead" xml:space="preserve"><value>Voraus</value></data>
+<data name="GitSyncBehind" xml:space="preserve"><value>Zurück</value></data>
+<data name="GitSyncClean" xml:space="preserve"><value>Arbeitsverzeichnis ist sauber</value></data>
+<data name="GitSyncDirty" xml:space="preserve"><value>Arbeitsverzeichnis enthält lokale Änderungen</value></data>
+<data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Repository-Status geprüft.</value></data>
+<data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Repository wurde erfolgreich per Fast-Forward aktualisiert.</value></data>
+<data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Synchronisierung abgelehnt; das Arbeitsverzeichnis blieb unverändert.</value></data>
+<data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git-Synchronisierung fehlgeschlagen.</value></data>
+<data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Übernehmen oder stashen Sie lokale Änderungen vor der Synchronisierung.</value></data>
+<data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Eine native Agentensitzung ist aktiv. Warten Sie, bis sie beendet ist.</value></data>
+<data name="GitSyncReasonDiverged" xml:space="preserve"><value>Lokaler und Upstream-Branch sind auseinander gelaufen. Fast-Forward ist nicht möglich.</value></data>
+<data name="GitSyncReasonDetached" xml:space="preserve"><value>Das Repository befindet sich im Detached-HEAD-Zustand.</value></data>
+<data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Für den aktuellen Branch ist kein Upstream konfiguriert.</value></data>
+<data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Der Upstream konnte nicht abgerufen werden. Prüfen Sie Remote und Zugangsdaten auf der Workstation.</value></data>
+<data name="GitSyncReasonTimeout" xml:space="preserve"><value>Zeitüberschreitung beim Git-Vorgang.</value></data>
+<data name="MarkdownEdit" xml:space="preserve"><value>Bearbeiten</value></data>
+<data name="MarkdownPreview" xml:space="preserve"><value>Vorschau</value></data>
+<data name="MarkdownExpand" xml:space="preserve"><value>Mehr anzeigen</value></data>
+<data name="MarkdownCollapse" xml:space="preserve"><value>Weniger anzeigen</value></data>
+<data name="Characters" xml:space="preserve"><value>Zeichen</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>Organisationsdaten</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>Laden Sie einen Snapshot des Arbeitsbereichs, der Mitglieder, Rechnungen und Abrechnungshistorie Ihrer Organisation herunter. Zugangsdaten und Anbieterkennungen werden ausgeschlossen.</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>Organisationsexport herunterladen (ZIP)</value></data>
 </root>

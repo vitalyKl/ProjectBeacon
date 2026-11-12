@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Persistence;
+using Application.Authorization;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -175,17 +176,20 @@ public sealed class PipelineActorQueueDispatcher
             if (nextSubtaskId is null)
                 return;
 
+            var dispatcherActor = DispatcherActor(task.ProjectId, task.Id);
             var started = await new StartActorSessionHandler(_dbFactory, _spawner)
                 .HandleAsync(new StartActorSessionCommand(
-                    new StartActorSessionRequest(taskId, nextSubtaskId.Value)), ct);
+                    new StartActorSessionRequest(taskId, nextSubtaskId.Value), dispatcherActor), ct);
             if (!started.Success || started.Value is null)
                 return;
             sessionId = started.Value.Id;
         }
 
         // If no native executor is online, the session stays Ready for the human fallback.
+        var dispatcherActorForTask = DispatcherActor(task.ProjectId, task.Id);
         await new LaunchSessionHandler(_dbFactory)
-            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(sessionId)), ct);
+            .HandleAsync(new LaunchSessionCommand(
+                new LaunchSessionRequest(sessionId), dispatcherActorForTask), ct);
     }
 
     private async Task WakePlannerAsync(Guid taskId, string trigger, CancellationToken ct)
@@ -291,8 +295,18 @@ public sealed class PipelineActorQueueDispatcher
         }
 
         if (plannerSessionId is { } sessionId)
+        {
+            await using var dispatchDb = _dbFactory.CreateDbContext();
+            var task = await dispatchDb.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(candidate => candidate.Id == taskId, ct);
+            if (task is null)
+                return;
+
+            var dispatcherActor = DispatcherActor(task.ProjectId, task.Id);
             await new LaunchSessionHandler(_dbFactory)
-                .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(sessionId)), ct);
+                .HandleAsync(new LaunchSessionCommand(
+                    new LaunchSessionRequest(sessionId), dispatcherActor), ct);
+        }
     }
 
     private async Task AddPlannerNoOpAttentionIfNeededAsync(Guid taskId, Guid plannerSessionId, CancellationToken ct)
@@ -356,6 +370,18 @@ public sealed class PipelineActorQueueDispatcher
                 .SetProperty(section => section.Revision, section => section.Revision + 1)
                 .SetProperty(section => section.UpdatedAt, now), ct);
     }
+
+    private static ActorContext DispatcherActor(Guid projectId, Guid taskId) =>
+        new(
+            ActorType.Worker,
+            UserId: null,
+            IsAdmin: false,
+            TokenId: null,
+            DeviceId: null,
+            ProjectId: projectId,
+            OrgId: null,
+            Capabilities: ApiTokenCapability.None,
+            PipelineTaskId: taskId);
 
     private static int MaxPlannerWakeups()
     {

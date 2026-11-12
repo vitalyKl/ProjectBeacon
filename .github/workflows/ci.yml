@@ -46,6 +46,8 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Verify VPS Docker log topology
+        run: bash deploy/compose/verify-topology.sh
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
@@ -80,7 +82,7 @@ jobs:
         timeout-minutes: 8
         run: |
           mkdir -p TestResults/ProjectBeacon.Cli.Tests
-          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -result-trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
@@ -134,7 +136,7 @@ jobs:
           BASE = "TestResults"
           EXPECTED_MODULES = 7
           # Exact current total across the 7 modules; bump when tests are added.
-          MIN_TOTAL = 1543
+          MIN_TOTAL = 2155
           # The only tests allowed to be NotExecuted on Linux: platform-conditional
           # skips that cannot execute there. Anything else (e.g. a Postgres opt-out
           # leaking into this authoritative lane) fails the guard.
@@ -217,11 +219,11 @@ jobs:
       - name: Test — API
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
@@ -229,18 +231,44 @@ jobs:
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+
+      - name: Report failed test details from TRX
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          failures = 0
+          for path in sorted(glob.glob("TestResults/**/*.trx", recursive=True)):
+              root = ET.parse(path).getroot()
+              for result in root.iter():
+                  if not result.tag.endswith("UnitTestResult") or result.get("outcome") != "Failed":
+                      continue
+                  failures += 1
+                  name = result.get("testName", "<unknown test>")
+                  print(f"::group::FAILED TEST: {name} ({path})")
+                  for node in result.iter():
+                      tag = node.tag.rsplit("}", 1)[-1]
+                      if tag in ("Message", "StackTrace") and node.text:
+                          print(f"{tag}:\\n{node.text}")
+                  print("::endgroup::")
+          if failures == 0:
+              print("No failed tests found in TRX reports.")
+          PY
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051

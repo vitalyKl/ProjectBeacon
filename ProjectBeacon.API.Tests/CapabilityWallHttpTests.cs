@@ -103,8 +103,10 @@ public sealed class CapabilityWallHttpTests
         var tasks = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, tasks.StatusCode);
 
+        // Even an Admin-capability API token is not a human operator and cannot
+        // inspect or administer the personal model registry.
         var models = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, models.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, models.StatusCode);
 
         var orgs = await client.GetAsync("/v1/orgs", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, orgs.StatusCode);

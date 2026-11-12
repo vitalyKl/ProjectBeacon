@@ -2,6 +2,7 @@ namespace ProjectBeacon.API.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Domain.Entities.Billing;
 using Domain.Entities.Context;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -11,6 +12,14 @@ using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.API.Auth;
+using ProjectBeacon.Application.Admin;
+using ProjectBeacon.Application.Authorization;
+using ProjectBeacon.Application.Billing;
+using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Entitlements;
 using Npgsql;
 
 /// <summary>
@@ -25,11 +34,11 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // xUnit instantiates this class once per test, so the heavy isolated-DB setup
     // (drop/create + full MigrateAsync + seed) must run only once per process. The
-    // static guard makes InitializeAsync idempotent across the 5 test instances.
+    // static guard makes InitializeAsync idempotent across all test instances.
     private static bool _initialized;
     private static string s_adminConn = string.Empty;
     private static string s_appConn = string.Empty;
-    private static Guid s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
+    private static Guid s_orgA, s_orgB, s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
     private static Guid s_user, s_commentA, s_commentB, s_depOwn, s_depCross, s_decisionA, s_decisionB;
     private static string s_apiToken = string.Empty;
 
@@ -130,6 +139,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     seed.DecisionTasks.Add(DecisionTask.Create(decisionB.Id, tB.Id));
                     await seed.SaveChangesAsync();
 
+                    s_orgA = orgA.Id;
+                    s_orgB = orgB.Id;
                     s_projectA = projA.Id;
                     s_projectB = projB.Id;
                     s_taskA1 = tA1.Id;
@@ -144,6 +155,9 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     s_decisionB = decisionB.Id;
                 }
             }
+
+            await InsertEntitlementSeedAsync(appConn, s_orgA);
+            await InsertEntitlementSeedAsync(appConn, s_orgB);
 
             s_adminConn = adminConn;
             s_appConn = appConn;
@@ -166,6 +180,92 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _decisionB = s_decisionB;
     }
 
+    [Fact]
+    public async Task Rls_RuntimeRole_OrganizationEntitlements_AreScopedByOrgAndAllowOperatorScope()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(1, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, s_orgB, "false");
+        Assert.Equal(1, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "false");
+        Assert.Equal(0, await CountEntitlementsRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(2, await CountEntitlementsRawAsync(conn));
+    }
+
+    [Fact]
+    public async Task EntitlementEvaluation_BindsLifecycleAndGrantReadsToRequestedOrganization()
+    {
+        _postgres.RequirePostgres();
+
+        await using (var connection = new NpgsqlConnection(_appConn))
+        {
+            await connection.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await SetOrgScopeAsync(connection, Guid.Empty, "true");
+            await using var update = new NpgsqlCommand(
+                """
+                UPDATE "OrganizationEntitlements"
+                SET "FeaturesJson" = '["core"]'::jsonb,
+                    "LimitsJson" = '{"projects":1}'::jsonb
+                WHERE "OrgId" = @org_id
+                """, connection);
+            update.Parameters.AddWithValue("org_id", s_orgA);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+        }
+
+        // The factory's ambient tenant deliberately belongs to org B. Evaluating org A
+        // must create a target-bound context for both lifecycle and entitlement reads.
+        var currentTenant = new TenantContext();
+        currentTenant.Assign(null, s_orgB, unscoped: false);
+        var factory = new BeaconDbFactory(NewAppOptions(_appConn), currentTenant);
+        var service = new PostgresEntitlementService(factory, new EfAuditWriter(), TimeProvider.System);
+
+        var result = await service.EvaluateAsync(
+            s_orgA,
+            new EntitlementRequirement(
+                EntitlementFeatureKeys.Core,
+                EntitlementLimitKeys.Projects,
+                RequestedUnits: 1,
+                CurrentUsage: 0),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.Value?.Allowed == true);
+        Assert.Equal(0L, result.Value?.CurrentUsage);
+        Assert.Equal(1L, result.Value?.Limit);
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_OrganizationEntitlements_RejectsCrossOrgInsertAndUpdate()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertEntitlementRawAsync(conn, Guid.NewGuid(), s_orgB));
+        Assert.Equal("42501", exception.SqlState);
+
+        await using var command = new NpgsqlCommand(
+            """
+            UPDATE "OrganizationEntitlements"
+            SET "Reason" = 'cross_org_mutation'
+            WHERE "OrgId" = @org_id
+            """, conn);
+        command.Parameters.AddWithValue("org_id", s_orgB);
+        Assert.Equal(0, await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+    }
+
     public ValueTask DisposeAsync()
     {
         // Do not drop the DB per test: the isolated DB is created once per process
@@ -174,6 +274,350 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         // reset on the next test's first read. The DB is recreated from scratch on
         // the next process run by the DROP at the top of InitializeAsync.
         return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ConvertAlphaToProduction_IsAtomicAndIdempotent()
+    {
+        _postgres.RequirePostgres();
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var planKey = $"convert-{suffix}";
+        var now = DateTimeOffset.UtcNow;
+        var operatorUser = User.Create(
+            $"conversion-operator-{suffix}",
+            $"conversion-operator-{suffix}@example.test",
+            "test-password-hash",
+            isAdmin: true);
+        operatorUser.AssignOperatorRole(OperatorRole.SystemAdministrator.ToString());
+        operatorUser.BeginTotp("conversion-test-totp-secret");
+        operatorUser.ConfirmTotp();
+
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: false);
+        var factory = new BeaconDbFactory(NewAppOptions(_appConn), tenant);
+        Guid orgId;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var seed = new BeaconDbContext(NewAppOptions(_appConn));
+            var org = Org.Create($"Conversion Org {suffix}");
+            var plan = BillingPlan.Create(
+                planKey,
+                "Conversion test plan",
+                (short)BillingCadence.Monthly,
+                priceMinor: null,
+                currency: null,
+                limitsJson: """{"seats":5}""",
+                featuresJson: """["core","chat"]""",
+                isActive: true,
+                nowUtc: now);
+            seed.Orgs.Add(org);
+            seed.Users.Add(operatorUser);
+            seed.BillingPlans.Add(plan);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            orgId = org.Id;
+        }
+
+        await using (var seedConnection = new NpgsqlConnection(_appConn))
+        {
+            await seedConnection.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await SetOrgScopeAsync(seedConnection, Guid.Empty, "true");
+            await InsertEntitlementRawAsync(seedConnection, Guid.NewGuid(), orgId);
+        }
+
+        var gate = new DatabaseAdminGate(factory);
+        var actorContext = new ActorContext(
+            ActorType.Human,
+            operatorUser.Id,
+            IsAdmin: true,
+            null,
+            null,
+            null,
+            null,
+            ApiTokenCapability.None,
+            DateTimeOffset.UtcNow.AddMinutes(5));
+        Result<AdminActor> gateResult;
+        using (TenantScope.EnterUnscoped())
+        {
+            gateResult = await gate.RequireAsync(
+                actorContext,
+                OperatorPermission.EntitlementsManage,
+                requireElevation: true,
+                ct: TestContext.Current.CancellationToken);
+        }
+        Assert.True(gateResult.Success, gateResult.Error);
+
+        var service = new PostgresEntitlementService(factory, new EfAuditWriter(), TimeProvider.System);
+        var request = new ConvertAlphaToProductionRequest(
+            orgId,
+            planKey,
+            $"manual-invoice-{suffix}",
+            now.AddMinutes(-1),
+            now.AddDays(30),
+            "verified_manual_invoice",
+            $"alpha-conversion-{suffix}");
+
+        var converted = await service.ConvertAlphaToProductionAsync(
+            request, gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.True(converted.Success, converted.Error);
+        Assert.Equal(EntitlementSource.Subscription, converted.Value!.Source);
+        Assert.Contains("core", converted.Value.Features);
+        Assert.Contains("chat", converted.Value.Features);
+        Assert.Equal(5, converted.Value.Limits["seats"]);
+
+        var replay = await service.ConvertAlphaToProductionAsync(
+            request, gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.True(replay.Success, replay.Error);
+        Assert.Equal(converted.Value.Id, replay.Value!.Id);
+
+        var conflictingReplay = await service.ConvertAlphaToProductionAsync(
+            request with { PlanKey = "different-plan" },
+            gateResult.Value!,
+            TestContext.Current.CancellationToken);
+        Assert.False(conflictingReplay.Success);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var effective = await service.GetEffectiveAsync(orgId, TestContext.Current.CancellationToken);
+            Assert.True(effective.Success, effective.Error);
+            Assert.Equal(converted.Value.Id, effective.Value!.Id);
+            Assert.Equal(EntitlementSource.Subscription, effective.Value.Source);
+        }
+
+        await using var verify = new NpgsqlConnection(_appConn);
+        await verify.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(verify, Guid.Empty, "true");
+
+        Assert.Equal(1, await CountForOrgRawAsync(
+            verify, "OrganizationSubscriptions", orgId));
+        Assert.Equal(1, await CountForOrgRawAsync(
+            verify, "BillingLedgerEntries", orgId));
+        Assert.Equal(2, await CountForOrgRawAsync(
+            verify, "OrganizationEntitlements",
+            orgId,
+            """("Source" = 0 AND "Status" = 4) OR ("Source" = 1 AND "Status" = 1)"""));
+        Assert.Equal(3, await CountForOrgRawAsync(
+            verify, "AuditEvents", orgId,
+            "\"Action\" IN ('organization.entitlement.replaced', "
+            + "'organization.entitlement.converted', "
+            + "'organization.subscription.activated')"));
+    }
+
+    [Fact]
+    public async Task ManualBillingInvoices_AreIssuedPaidAndTerminalWithRlsAndLedger()
+    {
+        _postgres.RequirePostgres();
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var now = DateTimeOffset.UtcNow;
+        var org = Org.Create($"Manual Billing Org {suffix}");
+        var operatorUser = User.Create(
+            $"invoice-operator-{suffix}",
+            $"invoice-operator-{suffix}@example.test",
+            "test-password-hash",
+            isAdmin: true);
+        operatorUser.AssignOperatorRole(OperatorRole.SystemAdministrator.ToString());
+        operatorUser.BeginTotp("invoice-test-totp-secret");
+        operatorUser.ConfirmTotp();
+
+        var tenant = new TenantContext();
+        tenant.Assign(null, null, unscoped: false);
+        var factory = new BeaconDbFactory(NewAppOptions(_appConn), tenant);
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var seed = new BeaconDbContext(NewAppOptions(_appConn));
+            seed.Orgs.Add(org);
+            seed.Users.Add(operatorUser);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var gate = new DatabaseAdminGate(factory);
+        var actorContext = new ActorContext(
+            ActorType.Human,
+            operatorUser.Id,
+            IsAdmin: true,
+            null,
+            null,
+            null,
+            null,
+            ApiTokenCapability.None,
+            DateTimeOffset.UtcNow.AddMinutes(5));
+        Result<AdminActor> gateResult;
+        using (TenantScope.EnterUnscoped())
+        {
+            gateResult = await gate.RequireAsync(
+                actorContext,
+                OperatorPermission.BillingManage,
+                requireElevation: true,
+                ct: TestContext.Current.CancellationToken);
+        }
+        Assert.True(gateResult.Success, gateResult.Error);
+
+        var service = new BillingInvoiceAdminService(factory, new EfAuditWriter(), TimeProvider.System);
+        var dueAt = now.AddDays(30);
+        var first = await service.IssueAsync(
+            new IssueBillingInvoiceRequest(
+                org.Id, "Hosted SaaS service", 12500, "EUR", dueAt),
+            gateResult.Value!,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(BillingInvoiceStatus.Open, first.Status);
+        Assert.StartsWith($"PB-{now:yyyy}-", first.Number, StringComparison.Ordinal);
+
+        var paid = await service.MarkPaidAsync(
+            first.Id, $"bank-receipt-{suffix}", gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.Equal(BillingInvoiceStatus.Paid, paid.Status);
+        Assert.NotNull(paid.PaidAtUtc);
+        Assert.Equal($"bank-receipt-{suffix}", paid.PaymentReference);
+
+        // Same receipt reference is an idempotent replay and must not append another event.
+        var paidReplay = await service.MarkPaidAsync(
+            first.Id, $"bank-receipt-{suffix}", gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.Equal(paid.Id, paidReplay.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.MarkPaidAsync(first.Id, "different-receipt", gateResult.Value!,
+                TestContext.Current.CancellationToken));
+
+        var voidInvoice = await service.IssueAsync(
+            new IssueBillingInvoiceRequest(
+                org.Id, "Additional service", 2500, "EUR", dueAt),
+            gateResult.Value!,
+            TestContext.Current.CancellationToken);
+        var voided = await service.VoidAsync(
+            voidInvoice.Id, "operator_voided", gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.Equal(BillingInvoiceStatus.Void, voided.Status);
+        var voidReplay = await service.VoidAsync(
+            voidInvoice.Id, "operator_voided", gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.Equal(BillingInvoiceStatus.Void, voidReplay.Status);
+
+        var uncollectibleInvoice = await service.IssueAsync(
+            new IssueBillingInvoiceRequest(
+                org.Id, "One-time onboarding", 5000, "EUR", dueAt),
+            gateResult.Value!,
+            TestContext.Current.CancellationToken);
+        var uncollectible = await service.MarkUncollectibleAsync(
+            uncollectibleInvoice.Id, "payment_failed", gateResult.Value!, TestContext.Current.CancellationToken);
+        Assert.Equal(BillingInvoiceStatus.Uncollectible, uncollectible.Status);
+
+        var listed = await service.ListAsync(
+            gateResult.Value!, org.Id, 25, TestContext.Current.CancellationToken);
+        Assert.Equal(3, listed.Count);
+        Assert.Contains(listed, invoice => invoice.Id == first.Id && invoice.Status == BillingInvoiceStatus.Paid);
+        Assert.Contains(listed, invoice => invoice.Id == voidInvoice.Id && invoice.Status == BillingInvoiceStatus.Void);
+        Assert.Contains(listed, invoice => invoice.Id == uncollectibleInvoice.Id
+            && invoice.Status == BillingInvoiceStatus.Uncollectible);
+
+        await using var verify = new NpgsqlConnection(_appConn);
+        await verify.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(verify, Guid.Empty, "true");
+        Assert.Equal(3, await CountForOrgRawAsync(verify, "BillingInvoices", org.Id));
+        Assert.Equal(6, await CountForOrgRawAsync(
+            verify, "BillingLedgerEntries", org.Id, "\"InvoiceId\" IS NOT NULL"));
+        Assert.Equal(6, await CountForOrgRawAsync(
+            verify, "AuditEvents", org.Id,
+            "\"Action\" IN ('organization.billing_invoice.issued', "
+            + "'organization.billing_invoice.paid', "
+            + "'organization.billing_invoice.voided', "
+            + "'organization.billing_invoice.uncollectible')"));
+
+        await SetOrgScopeAsync(verify, org.Id, "false");
+        Assert.Equal(1, await CountInvoiceByIdRawAsync(verify, first.Id));
+        Assert.Equal(2, await CountLedgerByInvoiceIdRawAsync(verify, first.Id));
+
+        await SetOrgScopeAsync(verify, s_orgA, "false");
+        Assert.Equal(0, await CountInvoiceByIdRawAsync(verify, first.Id));
+        Assert.Equal(0, await CountLedgerByInvoiceIdRawAsync(verify, first.Id));
+
+        // RLS blocks a direct insert carrying another organization's invoice row.
+        var crossTenantInvoice = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertInvoiceCrossTenantRawAsync(verify, Guid.NewGuid(), org.Id, operatorUser.Id, now));
+        Assert.Equal("42501", crossTenantInvoice.SqlState);
+
+        // Even inside operator scope, a ledger row cannot point to an invoice owned by a different org.
+        await SetOrgScopeAsync(verify, Guid.Empty, "true");
+        var crossTenantReference = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertInvoiceLedgerReferenceProbeAsync(
+                verify, Guid.NewGuid(), s_orgA, first.Id, now));
+        Assert.Equal("23503", crossTenantReference.SqlState);
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_BillingPlans_AreVisibleOnlyInOperatorScope()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var planKey = $"rls-plan-visible-{Guid.NewGuid():N}";
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), planKey);
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(0, await CountBillingPlansRawAsync(conn, planKey));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(1, await CountBillingPlansRawAsync(conn, planKey));
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        var denied = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertBillingPlanRawAsync(conn, Guid.NewGuid(), "rls-plan-denied"));
+        Assert.Equal("42501", denied.SqlState);
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_SubscriptionsAndLedger_AreTenantScopedAndLedgerIsAppendOnly()
+    {
+        _postgres.RequirePostgres();
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+
+        var planKey = $"rls-subscription-{Guid.NewGuid():N}";
+        await InsertBillingPlanRawAsync(conn, Guid.NewGuid(), planKey);
+        var subscriptionA = Guid.NewGuid();
+        var subscriptionB = Guid.NewGuid();
+        var ledgerA = Guid.NewGuid();
+        var ledgerB = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await InsertBillingSubscriptionRawAsync(conn, subscriptionA, s_orgA, planKey, now);
+        await InsertBillingSubscriptionRawAsync(conn, subscriptionB, s_orgB, planKey, now);
+        await InsertBillingLedgerRawAsync(conn, ledgerA, s_orgA, subscriptionA, "rls-a");
+        await InsertBillingLedgerRawAsync(conn, ledgerB, s_orgB, subscriptionB, "rls-b");
+
+        await SetOrgScopeAsync(conn, s_orgA, "false");
+        Assert.Equal(1, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(1, await CountBillingLedgerRawAsync(conn));
+
+        var crossOrgInsert = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertBillingSubscriptionRawAsync(conn, Guid.NewGuid(), s_orgB, planKey, now, status: 4));
+        Assert.Equal("42501", crossOrgInsert.SqlState);
+
+        await using (var update = new NpgsqlCommand(
+            """
+            UPDATE "BillingLedgerEntries"
+            SET "Note" = 'tampered'
+            WHERE "Id" = @id
+            """, conn))
+        {
+            update.Parameters.AddWithValue("id", ledgerA);
+            var immutable = await Assert.ThrowsAsync<PostgresException>(() =>
+                update.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            Assert.Equal("55000", immutable.SqlState);
+        }
+
+        await SetOrgScopeAsync(conn, s_orgB, "false");
+        Assert.Equal(1, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(1, await CountBillingLedgerRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "false");
+        Assert.Equal(0, await CountBillingSubscriptionsRawAsync(conn));
+        Assert.Equal(0, await CountBillingLedgerRawAsync(conn));
+
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        Assert.Equal(2, await CountBillingSubscriptionsForOrgsRawAsync(conn, s_orgA, s_orgB));
+        Assert.Equal(2, await CountBillingLedgerForOrgsRawAsync(conn, s_orgA, s_orgB));
     }
 
     [Fact]
@@ -527,7 +971,11 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "TaskKindPhases",       // catalog child of TaskKinds
             "DaemonDevices",        // user-owned devices, not tenant-filtered
             "DeviceHostSamples",    // device-scoped host metrics
-            "DataProtectionKeys"    // sealed key ring; rows are sealed blobs, no tenant scope
+            "DataProtectionKeys",   // sealed key ring; rows are sealed blobs, no tenant scope
+            "PlatformEmailSettings", // global operator SMTP configuration; policy requires unscoped
+            "EmailDeliveryLogs",      // global operator delivery metadata; policy requires unscoped
+            "PlatformServiceHeartbeats", // global service liveness metadata; migration FORCE-RLS policy permits only unscoped platform access
+            "BillingPlans" // global product catalog; migration FORCE-RLS policy permits only unscoped operator access
         };
 
         // Carries a ProjectId column but is device-scoped: the ProjectId is optional
@@ -624,6 +1072,233 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         }
 
         Assert.True(violations.Count == 0, string.Join("; ", violations));
+    }
+
+    private static async Task InsertEntitlementSeedAsync(string connectionString, Guid orgId)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await SetOrgScopeAsync(conn, Guid.Empty, "true");
+        await InsertEntitlementRawAsync(conn, Guid.NewGuid(), orgId);
+    }
+
+    private static async Task InsertEntitlementRawAsync(NpgsqlConnection conn, Guid id, Guid orgId)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "OrganizationEntitlements"
+                ("Id", "OrgId", "Source", "Status", "StartsAtUtc", "EndsAtUtc",
+                 "LimitsJson", "FeaturesJson", "SourceReference", "GrantedByUserId",
+                 "Reason", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @org_id, 0, 1, @now, NULL, '{}'::jsonb, '[]'::jsonb,
+                 NULL, NULL, 'rls_test', @now, @now)
+            """, conn);
+        var now = DateTimeOffset.UtcNow;
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingPlanRawAsync(NpgsqlConnection conn, Guid id, string key)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingPlans"
+                ("Id", "Key", "Name", "Cadence", "PriceMinor", "Currency",
+                 "LimitsJson", "FeaturesJson", "IsActive", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @key, 'RLS test plan', 1, NULL, NULL,
+                 '{}'::jsonb, '["core"]'::jsonb, TRUE, @now, @now)
+            """, conn);
+        var now = DateTimeOffset.UtcNow;
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("key", key);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingSubscriptionRawAsync(
+        NpgsqlConnection conn, Guid id, Guid orgId, string planKey, DateTimeOffset now, short status = 1)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "OrganizationSubscriptions"
+                ("Id", "OrgId", "PlanKey", "Status", "Source", "TrialEndsAtUtc",
+                 "CurrentPeriodStartsAtUtc", "CurrentPeriodEndsAtUtc", "CancelAtPeriodEnd",
+                 "GraceUntilUtc", "ProviderKey", "ExternalCustomerReference",
+                 "ExternalSubscriptionReference", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @org_id, @plan_key, @status, 0, NULL, @now, @period_end, FALSE,
+                 NULL, NULL, NULL, NULL, @now, @now)
+            """, conn);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("plan_key", planKey);
+        command.Parameters.AddWithValue("status", status);
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("period_end", now.AddDays(30));
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertBillingLedgerRawAsync(
+        NpgsqlConnection conn, Guid id, Guid orgId, Guid subscriptionId, string suffix)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingLedgerEntries"
+                ("Id", "OccurredAtUtc", "OrgId", "EventType", "Source",
+                 "AmountMinor", "Currency", "ProviderKey", "ProviderEventId",
+                 "Reference", "ActorUserId", "Note", "IdempotencyKey", "SubscriptionId")
+            VALUES
+                (@id, @occurred, @org_id, 4, 0, NULL, NULL, NULL, NULL,
+                 @reference, NULL, 'rls_test', @idempotency, @subscription_id)
+            """, conn);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("occurred", DateTimeOffset.UtcNow);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("reference", $"manual-{suffix}");
+        command.Parameters.AddWithValue("idempotency", $"idempotency-{suffix}");
+        command.Parameters.AddWithValue("subscription_id", subscriptionId);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> CountBillingSubscriptionsRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"OrganizationSubscriptions\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingLedgerRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"BillingLedgerEntries\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingPlansRawAsync(NpgsqlConnection conn, string planKey)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingPlans\" WHERE \"Key\" = @key", conn);
+        command.Parameters.AddWithValue("key", planKey);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingSubscriptionsForOrgsRawAsync(
+        NpgsqlConnection conn, Guid orgA, Guid orgB)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"OrganizationSubscriptions\" WHERE \"OrgId\" IN (@a, @b)", conn);
+        command.Parameters.AddWithValue("a", orgA);
+        command.Parameters.AddWithValue("b", orgB);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountBillingLedgerForOrgsRawAsync(
+        NpgsqlConnection conn, Guid orgA, Guid orgB)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingLedgerEntries\" WHERE \"OrgId\" IN (@a, @b)", conn);
+        command.Parameters.AddWithValue("a", orgA);
+        command.Parameters.AddWithValue("b", orgB);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountInvoiceByIdRawAsync(NpgsqlConnection conn, Guid invoiceId)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingInvoices\" WHERE \"Id\" = @id", conn);
+        command.Parameters.AddWithValue("id", invoiceId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<int> CountLedgerByInvoiceIdRawAsync(NpgsqlConnection conn, Guid invoiceId)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM \"BillingLedgerEntries\" WHERE \"InvoiceId\" = @id", conn);
+        command.Parameters.AddWithValue("id", invoiceId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task InsertInvoiceCrossTenantRawAsync(
+        NpgsqlConnection conn, Guid invoiceId, Guid orgId, Guid actorUserId, DateTimeOffset now)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingInvoices"
+                ("Id", "OrgId", "Number", "Description", "AmountMinor", "Currency",
+                 "IssuedAtUtc", "DueAtUtc", "Status", "PaidAtUtc", "PaymentReference",
+                 "ProviderKey", "ExternalInvoiceReference", "CreatedByUserId", "CreatedAtUtc", "UpdatedAtUtc")
+            VALUES
+                (@id, @org_id, @number, 'cross tenant probe', 100, 'EUR',
+                 @now, @due, 1, NULL, NULL, NULL, NULL, @actor_id, @now, @now)
+            """, conn);
+        command.Parameters.AddWithValue("id", invoiceId);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("number", "RLS-" + invoiceId.ToString("N")[..20]);
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("due", now.AddDays(1));
+        command.Parameters.AddWithValue("actor_id", actorUserId);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task InsertInvoiceLedgerReferenceProbeAsync(
+        NpgsqlConnection conn, Guid ledgerId, Guid orgId, Guid invoiceId, DateTimeOffset now)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "BillingLedgerEntries"
+                ("Id", "OccurredAtUtc", "OrgId", "EventType", "Source",
+                 "AmountMinor", "Currency", "ProviderKey", "ProviderEventId",
+                 "Reference", "ActorUserId", "Note", "IdempotencyKey", "SubscriptionId", "InvoiceId")
+            VALUES
+                (@id, @now, @org_id, 0, 0, 100, 'EUR', NULL, NULL,
+                 'cross-tenant-invoice', NULL, 'rls_probe', NULL, NULL, @invoice_id)
+            """, conn);
+        command.Parameters.AddWithValue("id", ledgerId);
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("invoice_id", invoiceId);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> CountForOrgRawAsync(
+        NpgsqlConnection conn, string table, Guid orgId, string? predicate = null)
+    {
+        var allowedTables = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "OrganizationSubscriptions",
+            "BillingLedgerEntries",
+            "BillingInvoices",
+            "OrganizationEntitlements",
+            "AuditEvents"
+        };
+        if (!allowedTables.Contains(table))
+            throw new ArgumentException("Unsupported verification table.", nameof(table));
+
+        var filter = predicate is null ? string.Empty : $" AND ({predicate})";
+        await using var command = new NpgsqlCommand(
+            $"SELECT count(*) FROM \"{table}\" WHERE \"OrgId\" = @org_id{filter}", conn);
+        command.Parameters.AddWithValue("org_id", orgId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+
+    private static async Task<int> CountEntitlementsRawAsync(NpgsqlConnection conn)
+    {
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM \"OrganizationEntitlements\"", conn);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task SetOrgScopeAsync(NpgsqlConnection conn, Guid orgId, string unscoped)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_project_id', '', false)," +
+            "       set_config('app.tenant_org_id', @org, false)," +
+            "       set_config('app.tenant_unscoped', @uns, false)", conn);
+        command.Parameters.AddWithValue("org", orgId == Guid.Empty ? string.Empty : orgId.ToString());
+        command.Parameters.AddWithValue("uns", unscoped);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
     private static async Task SetTenantScopeAsync(NpgsqlConnection conn, string projectGuc, string unscoped)

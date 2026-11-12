@@ -1,5 +1,9 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
+using Application.Tasks;
+using Domain.Common;
+using Domain.Enums;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -34,4 +38,57 @@ public sealed class PipelineFormDeviceQueryTests
             Assert.Equal(active.Id, matches[0]);
         }
     }
+
+    [Fact]
+    public async Task ReplyPipelineForm_RejectsApiTokenEvenWhenItCarriesAUserId()
+    {
+        var actor = new ActorContext(
+            ActorType.ApiToken, Guid.NewGuid(), false, Guid.NewGuid(), null,
+            null, null, ApiTokenCapability.TaskRead);
+        var handler = new ReplyPipelineFormHandler(null!, null!);
+
+        var result = await handler.HandleAsync(new ReplyPipelineFormCommand(
+            new ReplyPipelineFormRequest(
+                Guid.NewGuid(), Guid.NewGuid(), "question", "{}"),
+            actor), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
+    public async Task ListWaitingPipelineTasks_RejectsAnotherMembersUserId()
+    {
+        var actorUserId = Guid.NewGuid();
+        var requestedUserId = Guid.NewGuid();
+        var actor = new ActorContext(
+            ActorType.Human, actorUserId, false, null, null,
+            null, null, ApiTokenCapability.None);
+        var handler = new ListWaitingPipelineTasksHandler(null!);
+
+        var result = await handler.HandleAsync(new ListWaitingPipelineTasksCommand(
+            new ListWaitingPipelineTasksRequest(requestedUserId), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
+    public async Task ListWaitingPipelineTasks_RejectsApiTokenWithCreatorUserId()
+    {
+        var userId = Guid.NewGuid();
+        var actor = new ActorContext(
+            ActorType.ApiToken, userId, false, Guid.NewGuid(), null,
+            null, null, ApiTokenCapability.TaskRead);
+        var handler = new ListWaitingPipelineTasksHandler(null!);
+
+        var result = await handler.HandleAsync(new ListWaitingPipelineTasksCommand(
+            new ListWaitingPipelineTasksRequest(userId), actor),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
 }

@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using Domain.Common;
 using Application.Agents;
 using Application.Auth;
+using Application.Audit;
 using Application.Common;
 using Application.Security;
 using Domain.Entities.Devices;
@@ -18,12 +19,18 @@ using System.Text.Json;
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<RuntimeDiagnostics>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter? _auditWriter;
 
-    public AttachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AttachRuntimeHandler(IBeaconDbFactory dbFactory, IAuditWriter? auditWriter = null)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result<RuntimeDiagnostics>> HandleAsync(AttachRuntimeCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
+        var actor = request.Actor;
         if (string.IsNullOrWhiteSpace(request.LocalRoot) || request.LocalRoot.Trim().Length > 1000)
             return Result.Failure<RuntimeDiagnostics>("LocalRoot is required (max 1000 characters).");
 
@@ -37,17 +44,39 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         if (device is null || device.IsRevoked || device.UserId != request.UserId)
             return Result.Failure<RuntimeDiagnostics>("Device not found.");
 
+        if (_auditWriter is not null && actor is not null
+            && (db.FilterProjectId != request.ProjectId || db.FilterOrgId is null))
+            return Result.Failure<RuntimeDiagnostics>("Project not found.");
+
         var existing = await db.ProjectRuntimes.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.ProjectId == request.ProjectId && r.DeviceId == request.DeviceId, ct);
         if (existing is not null)
         {
             existing.SetLocalRoot(request.LocalRoot);
+            if (actor is { } runtimeUpdater)
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    runtimeUpdater,
+                    "project.runtime.updated",
+                    "ProjectRuntime",
+                    existing.Id.ToString(),
+                    db.FilterOrgId,
+                    request.ProjectId,
+                    detailsJson: """{"reasonCode":"local-root-updated"}"""));
             await db.SaveChangesAsync(ct);
             return Result.Ok(MapDiagnostics(existing, device, DateTime.UtcNow));
         }
 
         var runtime = ProjectRuntime.Create(request.ProjectId, request.DeviceId, request.LocalRoot);
         db.ProjectRuntimes.Add(runtime);
+        if (actor is { } runtimeCreator)
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                runtimeCreator,
+                "project.runtime.attached",
+                "ProjectRuntime",
+                runtime.Id.ToString(),
+                db.FilterOrgId,
+                request.ProjectId,
+                detailsJson: """{"newState":"Attached"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok(MapDiagnostics(runtime, device, DateTime.UtcNow));
     }
@@ -102,11 +131,17 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
 public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter? _auditWriter;
 
-    public DetachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DetachRuntimeHandler(IBeaconDbFactory dbFactory, IAuditWriter? auditWriter = null)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
+        var actor = command.Request.Actor;
         await using var db = _dbFactory.CreateDbContext();
         var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
@@ -116,7 +151,20 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
         if (!member)
             return Result.Failure("Runtime not found.");
+        if (_auditWriter is not null && actor is not null
+            && (db.FilterProjectId != runtime.ProjectId || db.FilterOrgId is null))
+            return Result.Failure("Runtime not found.");
+
         db.ProjectRuntimes.Remove(runtime);
+        if (actor is { } runtimeDetacher)
+            _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                runtimeDetacher,
+                "project.runtime.detached",
+                "ProjectRuntime",
+                runtime.Id.ToString(),
+                db.FilterOrgId,
+                runtime.ProjectId,
+                detailsJson: """{"newState":"Detached"}"""));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }

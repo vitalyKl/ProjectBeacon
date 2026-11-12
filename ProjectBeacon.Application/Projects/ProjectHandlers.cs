@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
+using Application.Audit;
 using Application.Common;
+using Application.Entitlements;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -16,14 +18,23 @@ using Microsoft.EntityFrameworkCore;
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly IAuthorizationService? _auth;
+    private readonly IAuthorizationService _auth;
     private readonly ITenantContext _tenant;
+    private readonly IAuditWriter? _auditWriter;
+    private readonly IEntitlementEvaluator? _entitlements;
 
-    public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant)
+    public CreateProjectHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService auth,
+        ITenantContext tenant,
+        IAuditWriter? auditWriter = null,
+        IEntitlementEvaluator? entitlements = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
         _tenant = tenant;
+        _auditWriter = auditWriter;
+        _entitlements = entitlements;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
@@ -42,40 +53,81 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         var window = new TenantContext();
         window.Assign(_tenant.ProjectId, orgId, _tenant.Unscoped);
         await using var authDb = _dbFactory.CreateDbContext(window);
-        if (!await CanCreateInOrgAsync(authDb, command.Actor, orgId, ct))
+        var permission = await _auth.CanAsync(
+            authDb,
+            command.Actor,
+            ResourceType.Org,
+            AuthAction.Administer,
+            orgId: orgId,
+            ct: ct);
+        if (!permission.Success)
             return Result.Forbidden<ProjectDto>("You need Owner or Admin rights in this org to create a project.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, orgId);
 
         window.Assign(project.Id, orgId, _tenant.Unscoped);
         await using var writeDb = _dbFactory.CreateDbContext(window);
+        await using var transaction = await writeDb.Database.BeginTransactionAsync(ct);
+
+        // Share the organization capacity lock with seat reservation/acceptance flows.
+        await EntitlementCapacityLock.AcquireOrganizationAsync(
+            writeDb.Database, transaction, orgId, ct);
+        var lifecycleStatus = await writeDb.Orgs.AsNoTracking()
+            .Where(org => org.Id == orgId)
+            .Select(org => (OrganizationLifecycleStatus?)org.LifecycleStatus)
+            .FirstOrDefaultAsync(ct);
+        if (lifecycleStatus != OrganizationLifecycleStatus.Active)
+            return Result.Failure<ProjectDto>(
+                "Projects can only be created for active organizations.",
+                ErrorKind.Conflict);
+
+        if (_entitlements is not null)
+        {
+            var currentUsage = await writeDb.Projects
+                .LongCountAsync(existing => existing.OrgId == orgId, ct);
+            var evaluation = await _entitlements.EvaluateAsync(
+                orgId,
+                new EntitlementRequirement(
+                    EntitlementFeatureKeys.Core,
+                    EntitlementLimitKeys.Projects,
+                    RequestedUnits: 1,
+                    CurrentUsage: currentUsage),
+                ct);
+            if (!evaluation.Success)
+                return Result.Failure<ProjectDto>(
+                    "Organization project capacity could not be verified.",
+                    ErrorKind.Unavailable);
+            var decision = evaluation.Value;
+            if (decision is null || !decision.Allowed)
+            {
+                if (decision?.ReasonCode == "limit_exceeded")
+                {
+                    var usage = decision.CurrentUsage ?? currentUsage;
+                    var limit = decision.Limit is { } maximum ? $" of {maximum}" : string.Empty;
+                    return Result.Failure<ProjectDto>(
+                        $"The organization project limit has been reached ({usage}{limit}).",
+                        "entitlement_limit_exceeded",
+                        ErrorKind.Conflict);
+                }
+
+                return Result.Failure<ProjectDto>(
+                    "The organization is not entitled to create projects.",
+                    "entitlement_feature_required",
+                    ErrorKind.Forbidden);
+            }
+        }
+
         writeDb.Projects.Add(project);
         if (command.Actor.UserId is { } ownerId)
             writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(writeDb, project.Id);
+        _auditWriter?.Stage(writeDb, AuditEventFactory.ForActor(
+            command.Actor, "project.created", "Project", project.Id.ToString(), orgId, project.Id,
+            detailsJson: """{"newState":"Created"}"""));
         await writeDb.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return Result.Ok(MapToDto(project));
-    }
-
-    // The membership rows are tenant-scoped, so the check must run inside the RLS window
-    // for the target org. Delegates to IAuthorizationService when one was injected; a
-    // direct construction without it (e.g. tests) applies the same rule: org Owner/Admin
-    // or system admin.
-    private async Task<bool> CanCreateInOrgAsync(IBeaconDb db, ActorContext actor, Guid orgId, CancellationToken ct)
-    {
-        if (actor.UserId is not { } userId)
-            return false;
-
-        if (_auth is not null)
-            return (await _auth.CanAsync(db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct)).Success;
-
-        if (await db.OrgMembers.IgnoreQueryFilters()
-                .AnyAsync(m => m.OrgId == orgId && m.UserId == userId
-                    && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct))
-            return true;
-        return await db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
@@ -103,11 +155,13 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
@@ -131,6 +185,9 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
         }
 
         project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor, "project.updated", "Project", project.Id.ToString(), project.OrgId, project.Id,
+            detailsJson: """{"newState":"Updated"}"""));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
@@ -145,21 +202,42 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ProjectDto>> HandleAsync(GetProjectCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
-        if (project is null)
-            return Result.Failure<ProjectDto>("Project not found.");
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Read,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<ProjectDto>();
 
-        return Result.Ok(MapToDto(project));
+        var project = await db.Projects.FirstOrDefaultAsync(
+            item => item.Id == command.Request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<ProjectDto>("Project not found.", ErrorKind.NotFound);
+
+        // The trusted review command is executable configuration, not ordinary project
+        // metadata. Only project/org managers and system administrators may read it.
+        var canManage = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Administer,
+            projectId: project.Id, ct: ct);
+        return Result.Ok(MapToDto(project, includeReviewCommand: canManage.Success));
     }
 
-    private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
+    private static ProjectDto MapToDto(
+        Domain.Entities.Projects.Project project,
+        bool includeReviewCommand) =>
+        new(project.Id, project.Name, project.Description, project.OrgId,
+            project.CreatedAt, project.UpdatedAt,
+            includeReviewCommand ? project.ReviewCheckCommand : null);
 }
 /// <summary>
 /// Lists projects in the current tenant, optionally for one org.
@@ -172,18 +250,60 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var query = db.Projects.AsQueryable();
-        if (command.Request.OrgId is { } orgId)
-            query = query.Where(p => p.OrgId == orgId);
+        if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Forbidden<IList<ProjectDto>>();
 
-        var projects = await query
-            .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new ProjectDto(
-                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt, p.ReviewCheckCommand))
-            .ToListAsync(ct);
+        IBeaconDb db;
+        if (command.Request.OrgId is not null || command.Actor.IsAdmin)
+        {
+            var tenant = new TenantContext();
+            tenant.Assign(
+                null,
+                command.Request.OrgId,
+                unscoped: command.Actor.IsAdmin && command.Request.OrgId is null);
+            db = _dbFactory.CreateDbContext(tenant);
+        }
+        else
+        {
+            db = _dbFactory.CreateDbContext();
+        }
 
-        return Result.Ok((IList<ProjectDto>)projects);
+        await using (db)
+        {
+            var query = db.Projects.AsQueryable()
+                .Where(project => db.Orgs.IgnoreQueryFilters().Any(org =>
+                    org.Id == project.OrgId
+                    && org.LifecycleStatus == OrganizationLifecycleStatus.Active));
+
+            if (command.Request.OrgId is { } orgId)
+            {
+                query = query.Where(project => project.OrgId == orgId);
+            }
+
+            if (!command.Actor.IsAdmin)
+            {
+                // Project members can see only projects they belong to. Org Owners/Admins
+                // can see project metadata across their organization; Org Members do not
+                // inherit project access merely from organization membership.
+                query = query.Where(project =>
+                    db.ProjectMembers.IgnoreQueryFilters().Any(member =>
+                        member.ProjectId == project.Id && member.UserId == userId)
+                    || db.OrgMembers.IgnoreQueryFilters().Any(member =>
+                        member.OrgId == project.OrgId
+                        && member.UserId == userId
+                        && (member.Role == MemberRole.Owner || member.Role == MemberRole.Admin)));
+            }
+
+            var projects = await query
+                .OrderByDescending(project => project.CreatedAt)
+                .Select(project => new ProjectDto(
+                    project.Id, project.Name, project.Description, project.OrgId,
+                    project.CreatedAt, project.UpdatedAt,
+                    null))
+                .ToListAsync(ct);
+
+            return Result.Ok((IList<ProjectDto>)projects);
+        }
     }
 }
 /// <summary>
@@ -193,11 +313,13 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditWriter? _auditWriter;
 
-    public DeleteProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    public DeleteProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth, IAuditWriter? auditWriter = null)
     {
         _dbFactory = dbFactory;
         _auth = auth;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
@@ -211,6 +333,10 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
         if (project is null)
             return Result.Failure<bool>("Project not found.");
+
+        // Bulk cleanup commands execute immediately, so keep them and the audit insert
+        // inside one transaction. A failed audit insert must not leave a half-deleted project.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
         await db.TaskDependencies.IgnoreQueryFilters()
@@ -235,12 +361,17 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
             .ExecuteDeleteAsync(ct);
 
         db.Projects.Remove(project);
+        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+            command.Actor, "project.deleted", "Project", project.Id.ToString(), project.OrgId, project.Id,
+            detailsJson: """{"newState":"Deleted"}"""));
         try
         {
             await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException)
         {
+            await transaction.RollbackAsync(ct);
             return Result.Failure<bool>("Project could not be deleted.");
         }
 

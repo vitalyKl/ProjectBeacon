@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Decisions;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -28,15 +29,26 @@ public record CreateDecisionRequest(Guid ProjectId, string Title, string Context
 public class CreateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CreateDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
-    public async Task<Result<DecisionDto>> HandleAsync(CreateDecisionRequest request, CancellationToken ct = default)
+    public async Task<Result<DecisionDto>> HandleAsync(CreateDecisionRequest request, ActorContext actor, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<DecisionDto>("Title and body are required.");
 
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Decision, AuthAction.Create,
+            projectId: request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<DecisionDto>(permission);
+
         var decision = Decision.Create(
             request.Title.Trim(),
             request.Context.Trim(),
@@ -48,12 +60,18 @@ public class CreateDecisionHandler
         return Result.Ok(Map(decision));
     }
 
-    public async Task<Result<DecisionDto>> HandleProposalAsync(CreateDecisionRequest request, CancellationToken ct = default)
+    public async Task<Result<DecisionDto>> HandleProposalAsync(CreateDecisionRequest request, ActorContext actor, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<DecisionDto>("Title and body are required.");
 
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await KnowledgeWriteAuthorization.CanWriteAsync(
+            db, _authorization, actor, ResourceType.Decision, AuthAction.Create,
+            request.ProjectId, ct);
+        if (!permission.Success)
+            return Result.Failure<DecisionDto>(permission);
+
         var title = request.Title.Trim();
         var context = request.Context?.Trim() ?? string.Empty;
         var body = request.Body.Trim();
@@ -80,12 +98,23 @@ public class CreateDecisionHandler
 public class ListDecisionsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ListDecisionsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListDecisionsHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
-    public async Task<Result<IList<DecisionDto>>> HandleAsync(Guid projectId, CancellationToken ct = default)
+    public async Task<Result<IList<DecisionDto>>> HandleAsync(Guid projectId, ActorContext actor, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Decision, AuthAction.Read,
+            projectId: projectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<IList<DecisionDto>>(permission);
+
         var items = await db.Decisions
             .Where(d => d.ProjectId == projectId)
             .OrderByDescending(d => d.CreatedAt)
@@ -100,15 +129,25 @@ public class ListDecisionsHandler
 public class AcceptDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public AcceptDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AcceptDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
+    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, ActorContext actor, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Decision, AuthAction.Execute,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<DecisionDto>(permission);
         decision.Accept();
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
@@ -122,15 +161,25 @@ public class AcceptDecisionHandler
 public class DeprecateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public DeprecateDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public DeprecateDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
+    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, ActorContext actor, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Decision, AuthAction.Execute,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<DecisionDto>(permission);
         decision.Deprecate();
         await db.SaveChangesAsync(ct);
         return Result.Ok(Map(decision));
@@ -145,10 +194,15 @@ public class DeprecateDecisionHandler
 public class SupersedeDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public SupersedeDecisionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public SupersedeDecisionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
-    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, Guid replacementId, CancellationToken ct = default)
+    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, Guid replacementId, ActorContext actor, CancellationToken ct = default)
     {
         if (decisionId == replacementId)
             return Result.Failure<DecisionDto>("Replacement must be a different decision.");
@@ -160,6 +214,12 @@ public class SupersedeDecisionHandler
         var replacement = await db.Decisions.FindAsync([replacementId], ct);
         if (replacement is null || replacement.ProjectId != decision.ProjectId)
             return Result.Failure<DecisionDto>("Replacement not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, actor, ResourceType.Decision, AuthAction.Execute,
+            projectId: decision.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<DecisionDto>(permission);
 
         try
         {

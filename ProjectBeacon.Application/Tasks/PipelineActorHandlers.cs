@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
+using Application.Authorization;
 using Domain.Common;
 using Domain.Entities.Agents;
 using Domain.Entities.Tasks;
@@ -16,8 +17,13 @@ using Microsoft.EntityFrameworkCore;
 public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result<SubtaskDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CreateSubtaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateSubtaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<SubtaskDto>> HandleAsync(CreateSubtaskCommand command, CancellationToken ct = default)
     {
@@ -29,6 +35,11 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<SubtaskDto>("Task not found.");
+
+        var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+            db, _authorization, command.Actor, task, PipelineRole.Planner, requiredSubtaskId: null, ct);
+        if (!permission.Success)
+            return Result.Failure<SubtaskDto>(permission);
 
         if (task.PipelineStage is not (TaskPipelineStage.Planning or TaskPipelineStage.Executing))
             return Result.Failure<SubtaskDto>(task.PipelineStage is null
@@ -48,7 +59,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
                     $"Unknown subtask profile '{profileKey}'. Available profiles: {string.Join(", ", BuiltInAgentProfiles.All.Select(p => p.Key))}.");
 
             AgentProfile? customProfile = null;
-            if (command.Actor?.UserId is { } profileOwnerId)
+            if (command.Actor.UserId is { } profileOwnerId)
                 customProfile = await db.AgentProfiles.FirstOrDefaultAsync(
                     profileRow => profileRow.UserId == profileOwnerId && profileRow.Key == profileKey, ct);
             profile = BuiltInAgentProfiles.ApplyOverride(profile, customProfile)!;
@@ -145,11 +156,16 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public StartActorSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public StartActorSessionHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartActorSessionCommand command, CancellationToken ct = default)
@@ -164,6 +180,16 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var permission = command.Actor.IsWorker
+                ? PipelineExecutionAuthorization.CanDispatchInternally(command.Actor, task)
+                : command.Actor.IsApiToken && command.Actor.PipelineRole is not null
+                    ? Result.Forbidden()
+                    : await PipelineExecutionAuthorization.CanDriveAsync(
+                        db, _authorization, command.Actor, task,
+                        PipelineRole.Planner, requiredSubtaskId: null, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             var subtask = await db.Subtasks.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
@@ -271,7 +297,13 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
 public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    public ReportSubtaskResultHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    private readonly IAuthorizationService _authorization;
+
+    public ReportSubtaskResultHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ReportSubtaskResultCommand command, CancellationToken ct = default)
     {
@@ -297,6 +329,12 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
                 .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
             if (subtask is null)
                 return Result.Failure<PipelineStateDto>("Subtask not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+                db, _authorization, command.Actor, task, PipelineRole.Actor, subtask.Id, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineStateDto>(permission);
+
             if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
                 return Result.Failure<PipelineStateDto>("Subtask is already finished.");
 
@@ -346,11 +384,16 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly PipelineActorQueueDispatcher? _pipelineQueue;
+    private readonly IAuthorizationService _authorization;
 
-    public FailSubtaskHandler(IBeaconDbFactory dbFactory, PipelineActorQueueDispatcher? pipelineQueue = null)
+    public FailSubtaskHandler(
+        IBeaconDbFactory dbFactory,
+        PipelineActorQueueDispatcher? pipelineQueue = null,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _pipelineQueue = pipelineQueue;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(FailSubtaskCommand command, CancellationToken ct = default)
@@ -377,6 +420,12 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
                 .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
             if (subtask is null)
                 return Result.Failure<PipelineStateDto>("Subtask not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanDriveAsync(
+                db, _authorization, command.Actor, task, PipelineRole.Actor, subtask.Id, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineStateDto>(permission);
+
             if (subtask.Status == SubtaskStatus.Done)
                 return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
             if (subtask.Status == SubtaskStatus.Failed)

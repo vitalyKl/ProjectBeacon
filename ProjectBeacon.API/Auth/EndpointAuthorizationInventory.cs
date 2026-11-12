@@ -83,9 +83,9 @@ public static class EndpointAuthorizationInventory
                 : label;
         }
 
-        return endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count > 0
-            ? "Authenticated"
-            : "UNCLASSIFIED";
+        // A bare RequireAuthorization() does not say which actor may use the route.
+        // Only anonymous or typed actor metadata is a complete route classification.
+        return "UNCLASSIFIED";
     }
 
     private static string Escape(string value) =>

@@ -5,7 +5,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Domain.Entities.Evals;
+using Domain.Entities.Audit;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 [Collection("api-http")]
@@ -145,6 +147,117 @@ public sealed class CapabilityAndWorkHttpTests
                 var entity = await db.Tasks.FindAsync([taskId], cancellationToken: TestContext.Current.CancellationToken);
                 Assert.NotNull(entity);
                 Assert.Equal(Domain.Enums.TaskItemStatus.Done, entity.Status);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task FinishWork_ApiTokenMustBeBoundToTargetProject()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "Agent project", orgId });
+        var projectAId = projectA.GetProperty("id").GetGuid();
+        var projectB = await PostJson(client, "/v1/projects", new { name = "Other project", orgId });
+        var projectBId = projectB.GetProperty("id").GetGuid();
+
+        var taskA = await PostJson(client, $"/v1/projects/{projectAId}/tasks", new
+        {
+            title = "Scoped task",
+            projectId = projectAId,
+            priority = 1,
+            type = 3
+        });
+        var taskB = await PostJson(client, $"/v1/projects/{projectBId}/tasks", new
+        {
+            title = "Foreign task",
+            projectId = projectBId,
+            priority = 1,
+            type = 3
+        });
+        var tokenResponse = await PostJson(client, $"/v1/projects/{projectAId}/tokens", new
+        {
+            projectId = projectAId,
+            name = "finish-work-token",
+            capabilities = (int)Domain.Enums.ApiTokenCapability.TaskWrite
+        });
+        var apiToken = tokenResponse.GetProperty("token").GetString()!;
+        var creator = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var forgedActorId = creator.GetProperty("id").GetGuid().ToString();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+
+        // TaskWrite explicitly permits adding task content, but does not grant session
+        // execution, human-authored comments, or modification/removal of human checklist steps.
+        var taskAId = taskA.GetProperty("id").GetGuid();
+        var addedStep = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/steps",
+            new { title = "Agent-created step" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, addedStep.StatusCode);
+        var addedStepJson = await addedStep.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var stepId = addedStepJson.GetProperty("id").GetGuid();
+
+        var toggleStep = await client.PatchAsJsonAsync(
+            $"/v1/steps/{stepId}", new { done = true },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var deleteStep = await client.DeleteAsync(
+            $"/v1/steps/{stepId}", TestContext.Current.CancellationToken);
+        var comment = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/comments",
+            new { taskId = taskAId, content = "Token comment" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var pipelineStart = await client.PostAsJsonAsync(
+            $"/v1/tasks/{taskAId}/pipeline/start",
+            new { taskId = taskAId },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, toggleStep.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, deleteStep.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, comment.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, pipelineStart.StatusCode);
+
+
+        var foreign = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskB.GetProperty("id").GetGuid().ToString(),
+            result = "failed",
+            output = "must not cross project",
+            actorId = forgedActorId
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
+
+        var scoped = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskA.GetProperty("id").GetGuid().ToString(),
+            result = "failed",
+            output = "scoped token may finish this task",
+            actorId = Guid.NewGuid().ToString()
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, scoped.StatusCode);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                var audit = await db.AuditEvents.IgnoreQueryFilters()
+                    .Where(item => item.Action == "work.finished"
+                        && item.TargetId == taskA.GetProperty("id").GetGuid().ToString())
+                    .OrderByDescending(item => item.At)
+                    .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+                Assert.NotNull(audit);
+                Assert.Equal(AuditActorKind.ApiToken, audit.ActorKind);
+                Assert.Equal(projectAId, audit.ProjectId);
+                Assert.Null(audit.ActorUserId);
+                Assert.NotNull(audit.ActorTokenId);
+                Assert.Contains("\"resultCode\":\"failed\"", audit.DetailsJson ?? string.Empty);
             }
         }
     }

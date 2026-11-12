@@ -30,6 +30,18 @@ public sealed class ModelHttpTests
         });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
+        var tokenRead = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, tokenRead.StatusCode);
+        var tokenWrite = await client.PostAsJsonAsync("/v1/models", new
+        {
+            name = "agent-model",
+            backendType = "LlamaCpp",
+            launchCommand = "llama-server"
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, tokenWrite.StatusCode);
+
+        // Model configuration belongs to the human operator, not project agent tokens.
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         var empty = await client.GetFromJsonAsync<JsonElement>("/v1/models", TestContext.Current.CancellationToken);
         Assert.Equal(0, empty.GetProperty("backends").GetArrayLength());
 
@@ -71,17 +83,18 @@ public sealed class ModelHttpTests
         var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "planner", modelBackendId = modelId }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, bind.StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
+        var tokenDelete = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, tokenDelete.StatusCode);
 
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         var blocked = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
         Assert.Equal("conflict", blockedBody.GetProperty("code").GetString());
 
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         var unbind = await client.DeleteAsync("/v1/models/bind/planner", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, unbind.StatusCode);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var del = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
@@ -97,7 +110,7 @@ public sealed class ModelHttpTests
     }
 
     [Fact]
-    public async Task ReadToken_CannotWriteModels()
+    public async Task ReadToken_CannotReadOrWriteModels()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -117,7 +130,7 @@ public sealed class ModelHttpTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var read = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
 
         var write = await client.PostAsJsonAsync("/v1/models", new
         {
@@ -131,7 +144,7 @@ public sealed class ModelHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, bind.StatusCode);
 
         var status = await client.GetAsync("/v1/models/proxy/status", cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, status.StatusCode);
 
         var reload = await client.PostAsync("/v1/models/proxy/reload", null, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, reload.StatusCode);

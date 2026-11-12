@@ -9,7 +9,7 @@ public sealed class OpsAgentSignatureMiddleware(
     ReplayNonceStore nonceStore,
     TimeProvider timeProvider)
 {
-    private static readonly TimeSpan MaximumClockSkew = TimeSpan.FromSeconds(30);
+    private const long MaximumClockSkewSeconds = 30;
     private const string TimestampHeader = "X-Beacon-Ops-Timestamp";
     private const string NonceHeader = "X-Beacon-Ops-Nonce";
     private const string SignatureHeader = "X-Beacon-Ops-Signature";
@@ -17,7 +17,7 @@ public sealed class OpsAgentSignatureMiddleware(
     public async Task InvokeAsync(HttpContext context)
     {
         if (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Equals("/healthz", StringComparison.Ordinal))
+            && string.Equals(context.Request.Path.Value, "/healthz", StringComparison.Ordinal))
         {
             await next(context);
             return;
@@ -32,16 +32,17 @@ public sealed class OpsAgentSignatureMiddleware(
         if (!HttpMethods.IsGet(context.Request.Method))
         {
             context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
-            context.Response.Headers.Allow = HttpMethods.Get;
+            context.Response.Headers["Allow"] = HttpMethods.Get;
             return;
         }
 
         var timestamp = context.Request.Headers[TimestampHeader].ToString();
         var nonce = context.Request.Headers[NonceHeader].ToString();
         var signature = context.Request.Headers[SignatureHeader].ToString();
+        var nowUnixSeconds = timeProvider.GetUtcNow().ToUnixTimeSeconds();
         if (!long.TryParse(timestamp, NumberStyles.None, CultureInfo.InvariantCulture, out var unixSeconds)
-            || Math.Abs(timeProvider.GetUtcNow().ToUnixTimeSeconds() - unixSeconds)
-                > MaximumClockSkew.TotalSeconds
+            || unixSeconds < nowUnixSeconds - MaximumClockSkewSeconds
+            || unixSeconds > nowUnixSeconds + MaximumClockSkewSeconds
             || nonce.Length != 32
             || nonce.Any(character => !Uri.IsHexDigit(character))
             || !PlatformLogRequestSignature.Verify(
@@ -49,7 +50,7 @@ public sealed class OpsAgentSignatureMiddleware(
                 timestamp,
                 nonce,
                 context.Request.Method,
-                context.Request.Path + context.Request.QueryString,
+                $"{context.Request.Path.Value}{context.Request.QueryString.Value}",
                 signature))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;

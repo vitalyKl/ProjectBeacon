@@ -4,12 +4,15 @@ using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
 using Application.Auth;
+using Application.Audit;
+using Application.Persistence;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
 using Application.Security;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
+using Domain.Entities.Audit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -79,7 +82,8 @@ public static class AuthEndpoints
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
-                result.Value.Password
+                result.Value.Password,
+                result.Value.AuthenticatorReset
             });
 
         return result.FromResult();
@@ -162,11 +166,15 @@ public static class AuthEndpoints
     public record ChangePasswordBody(string CurrentPassword, string NewPassword);
 
     private static async Task<IResult> Logout(
-        BeaconDbContext db,
+        IBeaconDbFactory dbFactory,
+        IAuditWriter auditWriter,
         HttpContext ctx,
         IUserSessionVersionCache sessionVersions)
     {
         var actor = ctx.GetActor();
+        var globalTenant = new TenantContext();
+        globalTenant.Assign(null, null, unscoped: true);
+        await using var db = dbFactory.CreateDbContext(globalTenant);
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == actor.UserId!.Value);
         if (user is null)
@@ -179,6 +187,14 @@ public static class AuthEndpoints
         foreach (var session in sessions)
             session.Deactivate();
 
+        auditWriter.Stage(db, AuditEventFactory.ForActor(
+            actor,
+            "account.logout",
+            "User",
+            user.Id.ToString(),
+            null,
+            null,
+            detailsJson: """{"authMethod":"session"}"""));
         await db.SaveChangesAsync();
         sessionVersions.Invalidate(user.Id);
         return Results.Ok();

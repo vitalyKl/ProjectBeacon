@@ -1,7 +1,24 @@
-namespace ProjectBeacon.Application.Entitlements;
-
 using ProjectBeacon.Application.Admin;
 using ProjectBeacon.Application.Common;
+
+namespace ProjectBeacon.Application.Entitlements;
+
+/// <summary>Stable product-owned capability keys required by the runtime access boundary.</summary>
+public static class EntitlementFeatureKeys
+{
+    /// <summary>Baseline entitlement required for any tenant-scoped ProjectBeacon API operation.</summary>
+    public const string Core = "core";
+}
+
+/// <summary>Product-owned capacity keys understood by runtime enforcement.</summary>
+public static class EntitlementLimitKeys
+{
+    /// <summary>Maximum number of projects an organization may own.</summary>
+    public const string Projects = "projects";
+    /// <summary>Maximum number of organization memberships, including reserved valid invites.</summary>
+    public const string Members = "members";
+}
+
 
 /// <summary>The origin of an organization's effective access grant.</summary>
 public enum EntitlementSource
@@ -66,7 +83,8 @@ public sealed record OrganizationEntitlement(
 public sealed record EntitlementRequirement(
     string FeatureKey,
     string? LimitKey = null,
-    long RequestedUnits = 1);
+    long RequestedUnits = 1,
+    long CurrentUsage = 0);
 
 public sealed record EntitlementDecision(
     bool Allowed,
@@ -101,20 +119,34 @@ public sealed record ConvertAlphaToProductionRequest(
     string Reason,
     string IdempotencyKey);
 
+/// <summary>Read-only evaluator used by product mutations before consuming a capability or capacity.</summary>
+public interface IEntitlementEvaluator
+{
+    Task<Result<EntitlementDecision>> EvaluateAsync(
+        Guid orgId,
+        EntitlementRequirement requirement,
+        CancellationToken ct = default);
+}
+
 /// <summary>
 /// Central read/write boundary for organization access. Implementations must make grant,
 /// revoke and source-transition writes auditable and transactional. Conversion to a paid
 /// plan is one operation so alpha access cannot be dropped before production access exists.
 /// </summary>
-public interface IEntitlementService
+public interface IEntitlementService : IEntitlementEvaluator
 {
     Task<Result<OrganizationEntitlement?>> GetEffectiveAsync(
         Guid orgId,
         CancellationToken ct = default);
 
-    Task<Result<EntitlementDecision>> EvaluateAsync(
+    Task<Result<OrganizationEntitlement?>> GetForOperatorAsync(
+        AdminActor actor,
         Guid orgId,
-        EntitlementRequirement requirement,
+        CancellationToken ct = default);
+
+    Task<Result<IReadOnlyList<OrganizationEntitlement>>> ListForOperatorAsync(
+        AdminActor actor,
+        Guid orgId,
         CancellationToken ct = default);
 
     Task<Result<OrganizationEntitlement>> GrantAsync(

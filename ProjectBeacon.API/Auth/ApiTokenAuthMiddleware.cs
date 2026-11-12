@@ -21,12 +21,6 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public sealed class ApiTokenAuthMiddleware
 {
-    private const ApiTokenCapability ChatAndPipelineCapabilities =
-        ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite;
-
-    private const ApiTokenCapability EvalCapabilities =
-        ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead;
-
     private readonly RequestDelegate _next;
     private readonly TimeProvider _timeProvider;
 
@@ -150,9 +144,7 @@ public sealed class ApiTokenAuthMiddleware
             || leaseExpiresAt <= utcNow)
             return false;
 
-        var expectedCapabilities = work.Kind == WorkstationCommandKind.RunEvalTurn
-            ? EvalCapabilities
-            : ChatAndPipelineCapabilities;
+        var expectedCapabilities = HarnessApiTokenCapabilities.For(work.Kind);
         if (token.Capabilities != expectedCapabilities)
             return false;
 
@@ -449,12 +441,15 @@ public sealed class ApiTokenAuthMiddleware
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
-            return method == HttpMethods.Post
-                && segments.Length == 5
-                && segments[1] == "tasks"
-                && GuidSegmentEquals(segments, 2, scopedTaskId)
-                && segments[3] == "pipeline"
-                && segments[4] is "verdict" or "approve";
+            if (method != HttpMethods.Post
+                || segments.Length < 5
+                || segments[1] != "tasks"
+                || !GuidSegmentEquals(segments, 2, scopedTaskId)
+                || segments[3] != "pipeline")
+                return false;
+
+            return (segments.Length == 5 && segments[4] == "verdict")
+                || (segments.Length == 6 && segments[4] == "review" && segments[5] == "check");
         }
 
         return false;

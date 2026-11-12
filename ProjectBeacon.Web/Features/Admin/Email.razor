@@ -1,0 +1,374 @@
+@page "/admin/email"
+@layout ControlLayout
+@attribute [Authorize(AuthenticationSchemes = ControlAuthenticationDefaults.Scheme)]
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Admin
+@using ProjectBeacon.Application.Mail
+@using ProjectBeacon.Web.Authentication
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject AuthenticationStateProvider Auth
+@inject IAdminGate AdminGate
+@inject PlatformEmailAdminService EmailAdmin
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Control — Email</PageTitle>
+
+@if (!_blocked)
+{
+    <PageHeader Title="Outgoing email" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Platform-wide SMTP configuration for organization/project invitations and password-reset messages.
+    </MudText>
+
+    @if (!_authorized)
+    {
+        <MudAlert Severity="Severity.Error">You do not have permission to view platform email settings.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+                <MudText Typo="Typo.h6">SMTP configuration</MudText>
+                <MudChip T="string" Size="Size.Small" Color="@(_enabled ? Color.Success : Color.Default)">
+                    @(_enabled ? "Enabled" : "Disabled")
+                </MudChip>
+            </div>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_enabled" Label="Enable outgoing email" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12" md="8">
+                    <MudTextField T="string" @bind-Value="_host" Label="SMTP host" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="int" @bind-Value="_port" Label="Port" Min="1" Max="65535" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="_username" Label="SMTP username" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="_fromAddress" Label="Sender address" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string"
+                                  @bind-Value="_password"
+                                  Label="@(_hasPassword ? "SMTP password (blank keeps current)" : "SMTP password")"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="@(!_canManage || _saving)" />
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">The stored password is encrypted and is never displayed.</MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox T="bool" @bind-Value="_useStartTls" Label="Use STARTTLS" Disabled="@(!_canManage || _saving)" />
+                    <MudCheckBox T="bool" @bind-Value="_clearPassword" Label="Clear saved password" Disabled="@(!_canManage || _saving)" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Configuration source: @_source. Port 587 with STARTTLS is recommended. Port 25 without STARTTLS is supported only for a trusted relay without SMTP authentication. Authenticated SMTP requires STARTTLS. Implicit TLS on port 465 is not supported by the current SMTP transport.
+                    </MudText>
+                    @if (_updatedAt is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Last updated: <LocalTime Value="_updatedAt.Value" Format="g" />
+                        </MudText>
+                    }
+                </MudItem>
+                <MudItem xs="12" Class="d-flex flex-wrap gap-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@(!_canManage || _saving)">
+                        @(_saving ? "Saving…" : "Save settings")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="Reload" Disabled="@_saving">Reload</MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">SMTP connection check</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Opens an SMTP connection, negotiates STARTTLS when enabled, and authenticates when credentials are configured. No email is sent.
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="TestConnection"
+                       Disabled="@(!_canManage || _testingConnection || !_enabled || !_hasConfig)">
+                @(_testingConnection ? "Checking…" : "Test connection")
+            </MudButton>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Test email</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Sends a real message to verify that the SMTP relay accepts outgoing mail.
+            </MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="8">
+                    <MudTextField T="string" @bind-Value="_testRecipient" Label="Send test email to"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Disabled="@(!_canManage || _testingEmail)" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SendTest"
+                               Disabled="@(!_canManage || _testingEmail || !_enabled || !_hasConfig)">
+                        @(_testingEmail ? "Sending…" : "Send test email")
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-4">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+                <MudText Typo="Typo.h6">Recent delivery attempts</MudText>
+                <MudButton Variant="Variant.Text" OnClick="ReloadLogs" Disabled="@_loadingLogs">Refresh</MudButton>
+            </div>
+            @if (_logs.Count == 0)
+            {
+                <EmptyState>No email delivery attempts have been recorded.</EmptyState>
+            }
+            else
+            {
+                <MudTable Items="_logs" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Time</MudTh>
+                        <MudTh>Recipient</MudTh>
+                        <MudTh>Purpose</MudTh>
+                        <MudTh>Result</MudTh>
+                        <MudTh>Error code</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Time"><LocalTime Value="context.AtUtc" Format="g" /></MudTd>
+                        <MudTd DataLabel="Recipient">@context.Recipient</MudTd>
+                        <MudTd DataLabel="Purpose">@context.Purpose</MudTd>
+                        <MudTd DataLabel="Result">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.Status switch { "Sent" => Color.Success, "Failed" => Color.Error, _ => Color.Default })">
+                                @context.Status
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Error code">@context.ErrorCode</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _blocked;
+    private bool _authorized;
+    private bool _canManage;
+    private bool _saving;
+    private bool _testingConnection;
+    private bool _testingEmail;
+    private bool _loadingLogs;
+    private bool _enabled;
+    private bool _useStartTls = true;
+    private bool _hasPassword;
+    private bool _clearPassword;
+    private string _host = string.Empty;
+    private string _username = string.Empty;
+    private string _fromAddress = string.Empty;
+    private string _password = string.Empty;
+    private string _testRecipient = string.Empty;
+    private string _source = "not_configured";
+    private int _port = 587;
+    private DateTime? _updatedAt;
+    private bool _hasConfig;
+    private List<EmailDeliveryLogDto> _logs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return;
+        }
+
+        _authorized = await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead);
+        if (!_authorized)
+            return;
+
+        _canManage = await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage);
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead))
+            return;
+
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            var settings = await EmailAdmin.GetAsync(ActorContextFactory.FromPrincipal(principal));
+            _enabled = settings.Enabled;
+            _host = settings.Host;
+            _port = settings.Port;
+            _username = settings.Username;
+            _fromAddress = settings.FromAddress;
+            _useStartTls = settings.UseStartTls;
+            _hasPassword = settings.HasPassword;
+            _source = settings.Source;
+            _updatedAt = settings.UpdatedAtUtc;
+            _hasConfig = !string.IsNullOrWhiteSpace(settings.Host) && !string.IsNullOrWhiteSpace(settings.FromAddress);
+            _password = string.Empty;
+            _clearPassword = false;
+            await ReloadLogs();
+        }
+        catch
+        {
+            Snackbar.Add("Could not load SMTP settings.", Severity.Error);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
+            return;
+
+        _saving = true;
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            var actor = ActorContextFactory.FromPrincipal(principal);
+            var request = new SavePlatformEmailSettingsRequest(
+                _enabled, _host, _port, _username, _fromAddress, _useStartTls, _password, _clearPassword);
+            await EmailAdmin.SaveAsync(request, actor);
+            Snackbar.Add("SMTP settings saved.", Severity.Success);
+            await Reload();
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch
+        {
+            Snackbar.Add("Could not save SMTP settings.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
+            return;
+
+        _testingConnection = true;
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            await EmailAdmin.TestConnectionAsync(ActorContextFactory.FromPrincipal(principal));
+            Snackbar.Add("SMTP connection and authentication succeeded.", Severity.Success);
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _testingConnection = false;
+        }
+    }
+
+    private async Task SendTest()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsManage, requireElevation: true))
+            return;
+
+        _testingEmail = true;
+        try
+        {
+            var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            await EmailAdmin.SendTestAsync(_testRecipient, ActorContextFactory.FromPrincipal(principal));
+            Snackbar.Add("Test email accepted by the SMTP server.", Severity.Success);
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _testingEmail = false;
+            await ReloadLogs();
+        }
+    }
+
+    private async Task<bool> EnsurePermissionAsync(OperatorPermission permission, bool requireElevation = false)
+    {
+        if (!ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/", forceLoad: true);
+            return false;
+        }
+
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true
+            || !string.Equals(principal.FindFirst("control_plane")?.Value, "true", StringComparison.Ordinal))
+        {
+            _blocked = true;
+            Navigation.NavigateTo("/control/login", forceLoad: true);
+            return false;
+        }
+
+        var access = await AdminGate.RequireAsync(
+            ActorContextFactory.FromPrincipal(principal),
+            permission, requireElevation);
+
+        if (access.Success)
+            return true;
+
+        if (permission == OperatorPermission.EmailSettingsRead)
+            _authorized = false;
+        if (permission == OperatorPermission.EmailSettingsManage && !requireElevation)
+            _canManage = false;
+
+        Snackbar.Add(requireElevation
+            ? "SMTP changes and test messages require an active TOTP unlock. Enter a current authenticator code in the top bar."
+            : "Operator permission is no longer available. Reload the Control Plane session.", Severity.Warning);
+        return false;
+    }
+
+    private async Task ReloadLogs()
+    {
+        if (!await EnsurePermissionAsync(OperatorPermission.EmailSettingsRead))
+            return;
+
+        _loadingLogs = true;
+        try
+        {
+                        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+            _logs = (await EmailAdmin.ListRecentAsync(ActorContextFactory.FromPrincipal(principal))).ToList();
+        }
+        catch
+        {
+            Snackbar.Add("Could not load email delivery history.", Severity.Error);
+        }
+        finally
+        {
+            _loadingLogs = false;
+        }
+    }
+}

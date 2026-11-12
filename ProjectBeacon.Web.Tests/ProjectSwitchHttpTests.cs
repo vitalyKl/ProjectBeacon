@@ -4,6 +4,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Application.Persistence;
+using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Infrastructure.Data;
 
 public sealed class ProjectSwitchHttpTests
 {
@@ -71,16 +78,23 @@ public sealed class ProjectSwitchHttpTests
         var login = await client.PostAsync("/v1/auth/cookie-login", form);
         Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
 
-        var org = await client.PostAsJsonAsync("/v1/orgs", new { name = "Org", description = (string?)null });
-        org.EnsureSuccessStatusCode();
-        var orgJson = await org.Content.ReadFromJsonAsync<JsonElement>();
-        var orgId = orgJson.GetProperty("id").GetGuid();
+        Guid projectId;
+        using (TenantScope.EnterUnscoped())
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            var admin = await db.Users.SingleAsync(
+                user => user.Login == "admin", TestContext.Current.CancellationToken);
+            var org = Org.Create("Org");
+            var project = Project.Create("Alpha", null, org.Id);
+            db.Orgs.Add(org);
+            db.Projects.Add(project);
+            db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+            db.ProjectMembers.Add(ProjectMember.Create(project.Id, admin.Id, MemberRole.Owner));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            projectId = project.Id;
+        }
 
-        var project = await client.PostAsJsonAsync("/v1/projects",
-            new { name = "Alpha", description = (string?)null, orgId = orgId.ToString() });
-        project.EnsureSuccessStatusCode();
-        var projectJson = await project.Content.ReadFromJsonAsync<JsonElement>();
-
-        return (factory, client, projectJson.GetProperty("id").GetGuid());
+        return (factory, client, projectId);
     }
 }

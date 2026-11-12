@@ -1,9 +1,18 @@
 # ProjectBeacon — Hardening & Technical Debt Roadmap
 
 **Исходная дата:** 2026-10-02  
-**Актуализация:** 2026-10-17  
+**Актуализация:** 2026-11-11  
 **Актуальная база анализа:** `main`, commit `54464f9` (проверка кода 2026-10-17 поверх аудита `d426ef3`)  
 **Назначение:** единый Hardening Roadmap; текущий статус и приоритеты обновлены по свежему аудиту. Старые разделы ниже сохраняются как описание целевого состояния, но их утверждения о текущих проблемах нужно читать с учётом разделов «Актуализация 2026-10-17» и «Актуализация 2026-10-10».
+
+---
+
+# Актуализация 2026-11-11 — trusted-proxy rate limiting (M7)
+
+- Shared ForwardedHeadersOptionsFactory is now used by Web and standalone API hosts. Forwarded headers run before routing, authentication and rate limiting. An explicit KnownProxies/KnownNetworks list replaces framework loopback defaults; without an explicit list, the framework loopback-only default remains.
+- Sensitive auth, auth-read and attachment-upload policies combine a trusted client-IP fixed-window bucket with an additional authenticated-human identity bucket. The buckets are isolated by policy. Anonymous login/bootstrap/recovery/invitation requests remain IP-only until identity is verified.
+- Regression tests cover shared and distinct client IPs, authenticated identity across IP changes, independent policy buckets, attachment-upload identity limits, untrusted X-Forwarded-For spoofing, explicit allowlist replacing default loopback trust, and fallback to the proxy remote IP.
+- The code and tests are on the current SaaS implementation branch. Full CI validation for the current branch head is required before marking this finding CI-verified.
 
 ---
 
@@ -16,7 +25,7 @@
 - **P1.1 (M2, ключ шифрования) — closed 2026-10-16.** `323ee1b`: `DATA_PROTECTION_KEY` отделён от `JWT:Secret`, v2 AES-GCM (HKDF-SHA256, AAD), fail-closed в Production, `DataKeyMigration` в place. Доказательства см. в пункте 4 ниже (включая прогон 1353/1351).
 - **P1.4 (M1, зависшие `Running`) — resolved 2026-10-16.** `25b67ce`: long-stale tier возвращает зависшие `Running` команды на живом daemon (30-мин lease grace).
 - **P1.5 (M3/M4/M5, RLS/tenant) — resolved 2026-10-17.** `TenantRebindRlsTests` + Playwright p15 E2E 4/4 (Blazor circuit rebind, 2026-10-14). **`bc49dd5` (CI-verified, run `39025332248` attempts 1+2):** `RlsIsolationTests` переписаны на изолированную БД с реальными миграциями (собственный RLS DDL удалён), `RlsRuntimeRoleTests` получили поведенческие тесты для дочерних таблиц и drift-guard по всем tenant-таблицам (включая FK-дети); добавлена миграция `20261016214912_EnableRlsChildTables` (TaskComments / TaskDependencies / DecisionTasks, политики через `EXISTS` к родителю; `Down()` корректен).
-- **P1.6 (M6/M7) — cookie и concurrency закрыты, proxy rate limit остался.** `d0b1dd3` — fail-closed Secure auth cookie в Production; `f67d160`, `b3cf1fe`, `47a6b4e` — реальные Postgres-concurrency-тесты guarded transitions. Forwarded headers: `bddc1b7` (явный trust list = полный set), покрыт тестами. **Остаток:** rate limit за прокси (IP key + identity-based) — `REVIEW REQUIRED`.
+- **P1.6 (M6/M7) — cookie, concurrency и rate limiting за прокси реализованы.** `d0b1dd3` — fail-closed Secure auth cookie в Production; `f67d160`, `b3cf1fe`, `47a6b4e` — реальные Postgres-concurrency-тесты guarded transitions; `bddc1b7` — явный forwarded-header trust list. На текущей SaaS-ветке общий Web/API forwarded-header factory и IP + per-human identity rate-limit buckets закрывают остаток M7; новые HTTP regression tests описаны в актуализации 2026-11-11. CI proof для нового HEAD фиксируется после завершения текущего полного matrix run.
 - **P1.7 (M6, finish_work/SOC) — resolved 2026-10-15/16.** `982004a`, `e1779b7`, `4ffbfce`, `20aef35`: StateRevision CAS с 409 для проигравшего, атомарность finish_work-заметок (включая rollback/fault-injection тесты), OCC SaveWorkstation.
 - **H1 (Postgres роль) — закрыто 2026-10-17.** Fail-closed guard реализован 2026-10-16 (`5b79039`); условие закрытия — верификация H12 — выполнено: два последовательных зелёных CI-запуска на `bc49dd5` (run `39025332248`, attempts 1+2).
 - **H14 (документация) — 2026-10-17 (`bc49dd5`, CI-verified, run `39025332248` attempts 1+2):** добавлен `SECURITY.md` (trust boundaries, токены, RLS и его явные ограничения, separation ключей, открытые лимиты).
@@ -42,7 +51,7 @@
 3. **Long-poll** — `GET /v1/devices/me/commands?wait=25`: держать соединение 25 с; LISTEN/NOTIFY — только после измерения нагрузки.
 4. **Крупные Razor-компоненты** — Agents 736 строк, TaskDetail 660, Dashboard 494, MainLayout 494, Workstations 452. Разбивать при прикосновении, без косметического рефакторинга в security-коммитах.
 5. **«Лишний continue» и «избыточная запись токенов»** — неподтверждённые находки из аудита; не исправлять без отдельного audit (возможны ложные срабатывания).
-6. **Rate limit за прокси** (H11 остаток) и `REVIEW REQUIRED` endpoints — см. авторизационную матрицу.
+6. **Rate limit за прокси — implementation closed on SaaS branch (M7).** The Web/API hosts share trusted forwarded-header parsing; IP buckets run before auth/token lookup, human-user buckets run after cookie/JWT authentication, and API-token creator buckets run after `bcn_` validation. Regression tests cover trusted proxy spoofing, IP isolation, human/API-token identity partitioning, and policy separation. Remaining authorization `REVIEW REQUIRED` entries are a separate H1.2 decision pass.
 
 ## Изменения статуса фаз (2026-10-17)
 
@@ -67,7 +76,7 @@
 | H8 — Desired/Applied Reconciliation | Есть новая подтверждённая проблема с вечными `Running` командами | Приоритетный ремонтный путь/реапер и тесты потери completion |
 | H9 — Application Architecture | Остался namespace leakage и `IBeaconDb` с `DbSet<T>` | Переносить application-owned ports постепенно, без массового переписывания EF |
 | H10 — Runtime / Device Permissions | Не подтверждено свежим аудитом как закрыто | Проверить ownership/permissions отдельным verification pass |
-| H11 — Authentication Hardening | **Обновлено 2026-10-17:** ключ шифрования закрыт (`323ee1b`, P1.1 closed 2026-10-16); cookie Secure закрыт (`d0b1dd3`); forwarded headers покрыты тестами (`bddc1b7`). **Остаток:** rate limit за прокси (IP key + identity-based) — `REVIEW REQUIRED` | Закрыть rate-limit-behind-proxy; блок не закрывается до этого |
+| H11 — Authentication Hardening | **M7 (trusted proxy + IP + authenticated identity rate limits) implemented** on the SaaS branch: shared Web/API forwarded-header parser; IP gate before token lookup; human per-user partition after cookie/JWT auth; API-token per-creator partition after token validation; regression coverage for proxy spoofing and partition isolation. **H11.1 Bootstrap** uses a retry-strategy-safe transaction plus PostgreSQL transaction-scoped advisory lock and has missing/wrong/repeat/parallel-call tests. **H11.2 Recovery** uses a dedicated `ADMIN_RECOVERY_TOKEN`, independent from `BOOTSTRAP_ADMIN_TOKEN`; there is no fallback, and unit/HTTP tests prove the bootstrap secret cannot recover the administrator and missing recovery configuration fails closed. **H11.3 Logout** distinguishes customer-browser and Control Plane cookie logout from account-wide JWT/session revocation. Targeted revocation of one JWT is not supported by the current account-wide `SessionVersion` contract and remains explicitly out of scope until a per-session token id is introduced. Current-head CI proof is pending after the final compile fix. | Verify current-head CI; record targeted single-JWT revocation as a documented limitation rather than claiming it exists |
 | H12 — CI / Security / Concurrency | **Закрыто 2026-10-17.** RLS-тесты применяются на реальных миграциях, закоммичено `bc49dd5` и верифицировано двумя последовательными зелёными CI-запусками (run `39025332248` attempts 1+2, TRX `OK: 1360 results, 1 platform-conditional skips, 7 modules`): `RlsIsolationTests` на изолированной БД, `RlsRuntimeRoleTests` — поведенческие тесты дочерних таблиц + drift-guard по всем tenant-таблицам; concurrency покрытие усилено (`f67d160`, `e1779b7`, `4ffbfce`, `20aef35`) | Блок закрыт 2026-10-17: commit `bc49dd5` + два последовательных green CI runs (run `39025332248`) |
 | H13 — Visual Regression | Статус по свежему аудиту не подтверждён | Оставить после устранения P0/P1; проверить фактическое подключение к CI |
 | H14 — Documentation Reconciliation | **Обновлено 2026-10-17 (`bc49dd5`, CI-verified, run `39025332248` attempts 1+2):** добавлен `SECURITY.md` (trust boundaries control plane/workstation/DB, токены `bcn_`/`bcd_`/`bci_`/`bcr_`/JWT/bootstrap/`BEACON_WORKER_TOKEN`, роли Postgres и fail-closed guard, RLS через GUC `app.tenant_*` + явное ограничение «RLS не защищает от произвольного SQL роли `beacon_app`», separation `DATA_PROTECTION_KEY`/`JWT:Secret`, открытые лимиты); статусы H11/H12/H14 и P1.x обновлены в этой же сессии по коду+тестам | Блок остаётся открытым: сверка остальных canonical docs (authorization matrix, endpoint classification) отдельным pass |
@@ -87,7 +96,7 @@
 4. **Finding M2 — ключ шифрования секретов имеет константный fallback.** Удалить `beacon-dev-data-key` для Production; выделить отдельный `DATA_PROTECTION_KEY`, получать его из единого механизма конфигурации, использовать HKDF с контекстом/назначением ключа и завершать Production startup без валидного ключа. Предусмотреть документированную ротацию/миграцию зашифрованных данных. ✅ **P1.1 scope resolved 2026-10-12.** Убран константный fallback: ключ теперь читается из единого `IConfiguration["JWT:Secret"]` (не из env vars напрямую), `DataKeyPolicy` завершает Production и все небезопасные окружения fail-closed (ключ непустой, ≥ 32 символов); dev-fallback `beacon-dev-data-key` только в Development/Testing при пустом значении. Проверка выполняется при старте (API и Web) и повторно в конструкторе `AesSecretProtector`. Формат/алгоритм ciphertext (SHA256 → AES-GCM) не изменён — старые записи остаются читаемыми. Выделение отдельного `DATA_PROTECTION_KEY`, HKDF и ротация/миграция зашифрованных данных отложены в отдельную задачу с планом миграции (текущая ротация `JWT:Secret` несовместима с существующими ciphertext без миграции). ✅ **Полный scope closed 2026-10-16.** Ключ шифрования данных отделён от JWT: `DATA_PROTECTION_KEY` (обязателен в небезопасных окружениях, ≥ 32 символов; Production fail-closed без него и без legacy-материала при выключенных v2-записях), `JWT:Secret` — только подпись токенов. v2-формат: `v2:` + Base64(nonce‖tag‖cipher), ключ — HKDF-SHA256(`DATA_PROTECTION_KEY`, salt `ProjectBeacon/DataProtection/salt-v1`, info `ProjectBeacon/DataProtection/AesGcm/v2`), AAD `beacon/dp/v2`; выбор версии строго по префиксу, битый v2 никогда не переоткрывается как v1. Чтение v1 — только через `DATA_PROTECTION_LEGACY_KEY` (явно) или временный мост через `JWT:Secret` (warning в лог). `DATA_PROTECTION_WRITE_V2` (по умолчанию off) переключает записи на v2. Разовый idempotent-проход `DataKeyMigration` (500 строк/батч, `Users.TotpSecretCipher` и `OpenCodeConnections.ApiKeyCipher`) перешифрует v1→v2 только после успешного decrypt+re-seal; упавшие строки сохраняют исходный ciphertext и учитываются в `failed`, отчёт: `migrated`/`remaining_v1`/`failed`/legacy-доступность; при `WRITE_V2=false` проход no-op. Хук запуска: Web после `MigrateDatabase` (Development при старте; Production — только migrate Job с `BEACON_MIGRATE_THEN_EXIT`). Тесты: Infrastructure.Tests (policy, protector, SecretBox v1/v2/коррупция/nonce), Application.Tests (TOTP/OpenCode handlers на v1+v2 без legacy, миграция: mixed/idempotent/failed/без legacy/сохранение TotpEnabled), Web.Tests Production-фабрика с явным `DATA_PROTECTION_KEY`; решение 1353/1351 passed / 2 skipped (pre-existing Windows symlink), 0 failed. Ротация задокументирована в `deploy/README.md` (Data-key rotation).
 5. **Finding M3/M4/M5 — RLS и tenant isolation.** Перестроить интеграционный тест так, чтобы он применял настоящие миграции; проверять cross-tenant SELECT/INSERT/UPDATE/DELETE под не-суперпользовательской ролью. Добавить автоматический тест покрытия: каждая таблица с `ProjectId`/`OrgId` обязана иметь RLS policy либо находиться в явном allowlist исключений с обоснованием. Проверить tenant scope в Blazor circuit при смене проекта и долгоживущем контексте. **PARTIAL.** 2026-10-14: Blazor-circuit rebind покрыт `TenantRebindRlsTests` + Playwright p15 E2E 4/4. **2026-10-17 (`bc49dd5`, CI-verified, run `39025332248` attempts 1+2):** `RlsIsolationTests` переписаны на изолированную БД `beacon_rls_isolation` с реальными миграциями (весь ручной RLS DDL удалён); `RlsRuntimeRoleTests` получили поведенческие cross-tenant тесты для дочерних таблиц (SELECT скрыт, unscoped видит всё, INSERT отклонён 42501, UPDATE/DELETE — 0 строк) и drift-guard `Migration_RlsPolicy_CoversEveryTenantScopedTable` (все таблицы `public`, классификация по прямому `ProjectId`/`OrgId` + FK на tenant-таблицы через `pg_constraint`, проверка `relrowsecurity`/`relforcerowsecurity` и `qual`/`with_check` политик); новая миграция `20261016214912_EnableRlsChildTables` покрывает TaskComments/TaskDependencies/DecisionTasks через `EXISTS` к родителю (`Down()` корректен, `has-pending-model-changes` — «No changes»).
 6. **Finding M6 — конкурентные переходы состояния.** В рамках H12.3 добавить concurrency guard/optimistic concurrency для задач, pipeline и review runs там, где возможны конкурирующие записи; отдельно проверить `CompleteCommandHandler` при двух одновременных completion POST. Не расширять concurrency-механику вслепую на все сущности — сначала описать инварианты и тестовые interleavings. ✅ **P1.6/P1.7 resolved 2026-10-15/16.** `982004a` (OCC SaveWorkstation, атомарные finish_work-заметки, hardening guarded transitions), `e1779b7` (StateRevision CAS: один победитель, проигравший — 409 без side effects, идемпотентный Ok при совпавшем эффекте), `4ffbfce` (rollback/fault-injection тесты атомарности finish_work), `20aef35` (SaveWorkstation guard-update + command insert в одной короткой транзакции), `f67d160` (реальные Postgres-concurrency тесты guarded transitions), `b3cf1fe`, `47a6b4e`.
-7. **Finding M7 — cookie/proxy security.** Для Production выставлять cookie `SecurePolicy=Always`. Явно конфигурировать доверенные `KnownProxies`/`KnownNetworks` для ingress и проверять корректность forwarded headers. Пересмотреть rate limiting: IP key за прокси не должен приводить к общему лимиту для всех пользователей; добавить защиту по аккаунту/identity там, где это уместно. **PARTIAL.** ✅ 2026-10-15: `d0b1dd3` — fail-closed Secure auth cookie в Production; `bddc1b7` — явный forwarded-headers trust list как полный trust set (покрыто тестами). **Остаток (`REVIEW REQUIRED`):** rate limiting за прокси — IP key + identity-based лимиты.
+7. **Finding M7 — cookie/proxy security.** ✅ Cookie `SecurePolicy=Always` для Production (`d0b1dd3`); явный forwarded-header trust list как полный trust set (`bddc1b7`). Остаток rate limiting реализован на SaaS-ветке: Web/API используют общий trust-list parser до auth/rate limiting; чувствительные endpoint policies имеют independent per-IP + per-human identity buckets; anonymous requests остаются IP-only. Regression tests cover trusted proxy IP, rejected spoofed XFF, explicit-list replacement of loopback defaults, policy separation and uploads. Full CI proof is tracked against the current branch head in the 2026-11-11 validation run.
 8. **Release gate:** проверить CI на `d426ef3` и выполнить два последовательных полных green CI-equivalent runs. ✅ **VERIFIED (2026-10-17):** два последовательных полных green CI-запуска на код-коммите `bc49dd5` (run `39025332248` attempts 1+2: linux 5m34s/5m35s, windows 6m53s/5m4s, macos 5m49s/5m42s) и два последовательных green-запуска на док-коммите `b92f4fc` (run `39026717425` attempts 1+2: linux 5m34s/5m29s, windows 6m55s/5m54s, macos 5m28s/6m22s); TRX-guard во всех четырёх: `OK: 1360 results, 1 platform-conditional skips, 7 modules, symlink gates Passed`; `has-pending-model-changes`: «No changes». Локальные прогоны 2026-10-17 см. в разделе «Актуализация 2026-10-17».
 
 ### P2 — после P0/P1
@@ -805,21 +814,10 @@ Route/header override → `403`.
 
 ### H1.1 Permission matrix
 
-Создать документ:
-
-```text
-docs/authorization-matrix.md
-```
-
-Зафиксировать доступ для:
-
-- Human;
-- Owner;
-- Admin;
-- Member;
-- ApiToken;
-- Device;
-- Worker.
+- Current behavior and evidence baseline: `dotnet project docs/ProjectBeacon-authorization-matrix.md`.
+- Target decisions for roles, resources and token capabilities: `dotnet project docs/ProjectBeacon-authorization-target-matrix.md`.
+- The target matrix is the implementation contract for H1.2–H1.4. It keeps current behavior separate and records role/capability decisions, scope rules, denial semantics and implementation sequence.
+- **H1.1 document deliverable: drafted.** Runtime enforcement is not complete until H1.2–H1.4 and the H1 gate are proven.
 
 ### H1.2 Authorization service
 
@@ -1184,39 +1182,39 @@ System admin
 
 ## H11.1 Bootstrap
 
-Добавить race-safe tests:
-
-```text
-missing token
-wrong token
-correct token
-second bootstrap
-parallel bootstrap
-```
+<escape>**Implemented:**</escape> transaction plus process-local gate and PostgreSQL transaction-scoped advisory lock. The work unit runs inside the provider execution strategy; the generated admin identity/password stay stable across retries. Tests cover missing token, wrong token, first success, replay conflict, and parallel first-bootstrap requests (exactly one admin).
 
 ## H11.2 Recovery
 
-Разделить bootstrap/recovery secret или реализовать explicit break-glass mechanism.
+<escape>**Implemented:**</escape> `ADMIN_RECOVERY_TOKEN` is a separate deployment secret from `BOOTSTRAP_ADMIN_TOKEN`. Recovery fails closed when unset, never falls back to the bootstrap secret, remains available only through the Control Plane origin, and resets only an active SystemAdministrator. Success clears TOTP/recovery codes and invalidates previous credentials; denied/failed/successful attempts are audited without recording the supplied secret. Unit and HTTP tests cover bootstrap-secret rejection, missing recovery secret, invalid token, and successful recovery.
 
 ## H11.3 Logout
 
-Документировать и реализовать:
+**Implemented contract:**
 
-```text
-current browser logout
-current session logout
-logout all
-JWT policy
-```
+- `GET /logout` clears only the current customer browser cookie; it does not revoke other
+  sessions.
+- `POST /control/logout` audits and clears only the current operator Control Plane cookie.
+- `POST /v1/auth/logout` is account-wide: it bumps `SessionVersion`, deactivates all active
+  `UserSession` rows, and invalidates previously issued customer JWT/cookie credentials.
+- API-token revocation remains a separate token-management operation; browser logout does not
+  revoke API tokens.
+
+There is no targeted revoke-one-JWT operation. A future per-session JWT id/revocation store is
+required before that can be offered; do not describe account-wide invalidation as current-session
+logout.
 
 ### Gate H11
 
 ```text
-[ ] Bootstrap is fail-closed
-[ ] Bootstrap is race-safe
-[ ] Recovery is explicit
-[ ] Logout semantics are documented and tested
+[x] Bootstrap is fail-closed
+[x] Bootstrap is race-safe (including Postgres multi-replica lock and retry strategy)
+[x] Recovery is explicit and uses an independent ADMIN_RECOVERY_TOKEN
+[x] Logout semantics are documented and tested
+[ ] Full matrix green on the final current HEAD
 ```
+
+Known limitation: customer JWT revocation is account-wide via `SessionVersion`; the application does not yet expose a revoke-one-session/JWT operation. Browser logout and Control Plane cookie logout remain origin-local.
 
 ---
 

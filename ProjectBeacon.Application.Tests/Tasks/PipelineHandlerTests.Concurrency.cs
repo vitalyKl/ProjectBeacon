@@ -47,10 +47,10 @@ public sealed partial class PipelineHandlerTests
         var start = new StartPipelineHandler(factory, spawner);
 
         // First start claims the Planning stage and then waits inside the spawner.
-        var first = Task.Run(() => start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id))));
+        var first = Task.Run(() => start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId))));
         await spawner.Entered;
 
-        var second = await start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var second = await start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(second.Success);
 
         spawner.Release();
@@ -74,9 +74,9 @@ public sealed partial class PipelineHandlerTests
         var (projectId, task) = await SeedTaskAsync("T");
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         await new StartPipelineHandler(factory, new FakeSpawner())
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work"), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
 
         var next = Subtask.Create("next", task.Id, projectId);
@@ -90,7 +90,7 @@ public sealed partial class PipelineHandlerTests
         }
 
         var result = await new StartActorSessionHandler(factory, new FailingSpawner())
-            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, next.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, next.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
         Assert.Equal("spawn exploded", result.Error);
 

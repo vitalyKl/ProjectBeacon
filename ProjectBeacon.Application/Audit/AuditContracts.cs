@@ -30,7 +30,12 @@ public sealed record AuditQuery(
     Guid? ActorUserId = null,
     AuditOutcome? Outcome = null,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    Guid? ActorTokenId = null,
+    Guid? ActorDeviceId = null,
+    string? TargetType = null,
+    string? TargetId = null,
+    string? TraceId = null);
 
 public sealed record AuditEntry(
     Guid Id,

@@ -6,6 +6,8 @@
 
 ---
 
+> **Target policy:** H1.1 decisions are recorded separately in [ProjectBeacon-authorization-target-matrix.md](ProjectBeacon-authorization-target-matrix.md). This file remains the current-behavior/evidence baseline; its `REVIEW REQUIRED` notes are not approved target permissions.
+
 ## 1. Purpose and status taxonomy
 
 This matrix is the single reference for authorization across the `ProjectBeacon.API` control plane. It exists to:

@@ -50,7 +50,9 @@ public enum BillingLedgerEventType
     SubscriptionSuspended = 7,
     ManualMarkedPaid = 8,
     GraceExtended = 9,
-    ComplimentaryAccessGranted = 10
+    ComplimentaryAccessGranted = 10,
+    InvoiceVoided = 11,
+    InvoiceMarkedUncollectible = 12
 }
 
 /// <summary>
@@ -79,7 +81,7 @@ public sealed record OrganizationSubscription(
     SubscriptionSource Source,
     DateTimeOffset? TrialEndsAtUtc,
     DateTimeOffset CurrentPeriodStartsAtUtc,
-    DateTimeOffset CurrentPeriodEndsAtUtc,
+    DateTimeOffset? CurrentPeriodEndsAtUtc,
     bool CancelAtPeriodEnd,
     DateTimeOffset? GraceUntilUtc,
     string? ProviderKey,
@@ -96,6 +98,7 @@ public sealed record BillingInvoice(
     Guid Id,
     Guid OrgId,
     string Number,
+    string Description,
     long AmountMinor,
     string Currency,
     DateTimeOffset IssuedAtUtc,
@@ -122,4 +125,7 @@ public sealed record BillingLedgerEntry(
     string? ProviderEventId,
     string? Reference,
     Guid? ActorUserId,
-    string? Note);
+    string? Note,
+    Guid? SubscriptionId = null,
+    string? IdempotencyKey = null,
+    Guid? InvoiceId = null);

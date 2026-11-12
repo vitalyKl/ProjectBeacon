@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
@@ -24,7 +25,7 @@ public record CompileBriefRequest(
 /// <summary>
 /// Command for compile brief.
 /// </summary>
-public record CompileBriefCommand(CompileBriefRequest Request) : ICommand<Result<CompileBriefResult>>;
+public record CompileBriefCommand(CompileBriefRequest Request, ActorContext Actor) : ICommand<Result<CompileBriefResult>>;
 /// <summary>
 /// Compiled brief markdown, hash, revision, and token estimate.
 /// </summary>
@@ -49,12 +50,23 @@ public class CompileBriefHandler
         ["non_goals", "security", "definition_of_done"];
 
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CompileBriefHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CompileBriefHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<CompileBriefResult>> HandleAsync(CompileBriefCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Context, AuthAction.Execute,
+            projectId: command.Request.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<CompileBriefResult>(permission);
+
         var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
 

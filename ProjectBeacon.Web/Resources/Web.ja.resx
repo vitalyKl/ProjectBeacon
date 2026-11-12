@@ -2134,7 +2134,6 @@ orthstar</value>
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>AIワークフローを自分の手に</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>自分の ProjectBeacon ホストを用意し、ワークステーションを接続してください。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>AI開発のためのローカルファーストなコントロールプレーン</value></data>
-
   <data name="AgentModeHint" xml:space="preserve">
     <value>ワークステーションで対話チャットに使用する AgentProvider プロファイルを設定します。タスクパイプラインの既定モデルは「タスク種別」で個別に設定します。</value>
   </data>
@@ -2590,39 +2589,135 @@ orthstar</value>
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>リポジトリ相対パスを1行に1つ入力してください。このプロファイルでは必須です。</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>プラットフォーム管理</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>監査ログ</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>組織とプロジェクト全体のセキュリティおよび運用者の操作です。イベント時刻はブラウザーの現地タイムゾーンで表示され、日付フィルターと CSV は UTC を使用します。</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>アクションコード</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>実行者の種類</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>ユーザー ID</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>結果</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>対象</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>範囲</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>時刻（現地）</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>組織 ID</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>プロジェクト ID</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>開始 (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>終了 (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>フィルターを適用</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>フィルターをクリア</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>CSV をエクスポート</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>前へ</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>次へ</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>ページ {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>イベント数: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>条件に一致する監査イベントはありません。</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>プラットフォーム監査ログを読む権限がありません。</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>ID の GUID 形式が正しくありません。</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>実行者、結果、UTC 日付のフィルターを確認してください。</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>アクター API トークン ID</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>アクターデバイス ID</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>対象タイプ</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>対象 ID</value>
+  </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>トレース ID</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>計画</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>実行</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>モデル</value></data>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>選択したモデルのコンテキストサイズは 0 より大きくする必要があります。起動前にコンテキストウィンドウを設定してください。</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>回答用トークン予約数（0 = 自動）</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>コンテキスト圧縮は、ウィンドウの82%と「ウィンドウサイズ−予約数」の小さい方をプロンプトが超えたときに開始します。0の場合は25%を自動予約します。</value></data>
-  <data name="GitSyncTitle" xml:space="preserve"><value>Git リポジトリ</value></data>
-  <data name="GitSyncHelp" xml:space="preserve"><value>リポジトリの状態を確認するか、現在のブランチを Fast-Forward で更新します。同期は接続されたワークステーションで実行され、ローカル変更を上書きしません。</value></data>
-  <data name="GitSyncCheck" xml:space="preserve"><value>状態を確認</value></data>
-  <data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
-  <data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。ページを更新して、リポジトリの状態を再確認してください。</value></data>
-  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
-  <data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
-  <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
-  <data name="GitSyncAhead" xml:space="preserve"><value>先行</value></data>
-  <data name="GitSyncBehind" xml:space="preserve"><value>遅れ</value></data>
-  <data name="GitSyncClean" xml:space="preserve"><value>作業ツリーはクリーンです</value></data>
-  <data name="GitSyncDirty" xml:space="preserve"><value>作業ツリーにローカル変更があります</value></data>
-  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>リポジトリの状態を確認しました。</value></data>
-  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>リポジトリを Fast-Forward で更新しました。</value></data>
-  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同期は拒否されました。作業ツリーに変更はありません。</value></data>
-  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git の同期に失敗しました。</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同期前にローカル変更をコミットするか stash してください。</value></data>
-  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>ネイティブエージェントセッションが実行中です。終了するまでお待ちください。</value></data>
-  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>ローカルブランチと Upstream ブランチが分岐しているため、Fast-Forward できません。</value></data>
-  <data name="GitSyncReasonDetached" xml:space="preserve"><value>リポジトリは Detached HEAD 状態です。</value></data>
-  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>現在のブランチに Upstream が設定されていません。</value></data>
-  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>追跡対象の Upstream を取得できません。ワークステーションの Remote と認証情報を確認してください。</value></data>
-  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作がタイムアウトしました。</value></data>
-  <data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
-  <data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
-  <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
-  <data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
-  <data name="Characters" xml:space="preserve"><value>文字</value></data>
+<data name="GitSyncTitle" xml:space="preserve"><value>Git リポジトリ</value></data>
+<data name="GitSyncHelp" xml:space="preserve"><value>リポジトリの状態を確認するか、現在のブランチを Fast-Forward で更新します。同期は接続されたワークステーションで実行され、ローカル変更を上書きしません。</value></data>
+<data name="GitSyncCheck" xml:space="preserve"><value>状態を確認</value></data>
+<data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
+<data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
+<data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。ページを更新して、リポジトリの状態を再確認してください。</value></data>
+<data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
+<data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
+<data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+<data name="GitSyncAhead" xml:space="preserve"><value>先行</value></data>
+<data name="GitSyncBehind" xml:space="preserve"><value>遅れ</value></data>
+<data name="GitSyncClean" xml:space="preserve"><value>作業ツリーはクリーンです</value></data>
+<data name="GitSyncDirty" xml:space="preserve"><value>作業ツリーにローカル変更があります</value></data>
+<data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>リポジトリの状態を確認しました。</value></data>
+<data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>リポジトリを Fast-Forward で更新しました。</value></data>
+<data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同期は拒否されました。作業ツリーに変更はありません。</value></data>
+<data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git の同期に失敗しました。</value></data>
+<data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同期前にローカル変更をコミットするか stash してください。</value></data>
+<data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>ネイティブエージェントセッションが実行中です。終了するまでお待ちください。</value></data>
+<data name="GitSyncReasonDiverged" xml:space="preserve"><value>ローカルブランチと Upstream ブランチが分岐しているため、Fast-Forward できません。</value></data>
+<data name="GitSyncReasonDetached" xml:space="preserve"><value>リポジトリは Detached HEAD 状態です。</value></data>
+<data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>現在のブランチに Upstream が設定されていません。</value></data>
+<data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>追跡対象の Upstream を取得できません。ワークステーションの Remote と認証情報を確認してください。</value></data>
+<data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作がタイムアウトしました。</value></data>
+<data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
+<data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
+<data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
+<data name="MarkdownCollapse" xml:space="preserve"><value>折りたたむ</value></data>
+<data name="Characters" xml:space="preserve"><value>文字</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>組織データ</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>組織のワークスペース、メンバー、請求書、請求履歴のスナップショットをダウンロードします。認証情報とプロバイダー識別子は含まれません。</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>組織データをダウンロード (ZIP)</value></data>
 </root>

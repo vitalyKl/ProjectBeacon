@@ -78,6 +78,23 @@ public sealed class ActorContextFactoryTests
     }
 
     [Fact]
+    public void FromPrincipal_ParsesElevationOnlyFromControlCookie()
+    {
+        var until = DateTimeOffset.UtcNow.AddMinutes(5);
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim("isAdmin", "true"),
+            new Claim("control_elevated_until", until.ToString("O", System.Globalization.CultureInfo.InvariantCulture))
+        };
+        var control = ActorContextFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "ControlCookie")));
+        var customer = ActorContextFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies")));
+
+        Assert.Equal(until, control.OperatorElevatedUntilUtc);
+        Assert.Null(customer.OperatorElevatedUntilUtc);
+    }
+
+    [Fact]
     public void FromPrincipal_ApiToken_ReturnsApiToken()
     {
         var tokenGuidId = Guid.NewGuid();
@@ -99,6 +116,39 @@ public sealed class ActorContextFactoryTests
         Assert.Null(ctx.DeviceId);
         Assert.Equal(projectId, ctx.ProjectId);
         Assert.Equal((ApiTokenCapability)3, ctx.Capabilities);
+    }
+
+    [Fact]
+    public void FromPrincipal_HarnessApiToken_PreservesPinnedPipelineScope()
+    {
+        var tokenId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var subtaskId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, ownerId.ToString()),
+            new Claim("token_id", tokenId.ToString()),
+            new Claim("project_id", projectId.ToString()),
+            new Claim("capabilities", ((long)(ApiTokenCapability.TaskRead | ApiTokenCapability.SessionDrive)).ToString()),
+            new Claim("pipeline_role", PipelineRole.Actor.ToString()),
+            new Claim("pipeline_task_id", taskId.ToString("D")),
+            new Claim("pipeline_subtask_id", subtaskId.ToString("D")),
+            new Claim("pipeline_session_id", sessionId.ToString("D"))
+        ], ActorContextFactory.ApiTokenAuthType));
+
+        var actor = ActorContextFactory.FromPrincipal(principal);
+
+        Assert.True(actor.IsApiToken);
+        Assert.Equal(ownerId, actor.UserId);
+        Assert.Equal(projectId, actor.ProjectId);
+        Assert.Equal(ApiTokenCapability.TaskRead | ApiTokenCapability.SessionDrive, actor.Capabilities);
+        Assert.Equal(PipelineRole.Actor, actor.PipelineRole);
+        Assert.Equal(taskId, actor.PipelineTaskId);
+        Assert.Equal(subtaskId, actor.PipelineSubtaskId);
+        Assert.Equal(sessionId, actor.PipelineSessionId);
     }
 
     [Fact]

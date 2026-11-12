@@ -41,7 +41,7 @@ public sealed class CreateProjectWizardTests : IDisposable
         var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection), tenant).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor), TestContext.Current.CancellationToken);
         Assert.True(org.Success, org.Error);
 
-        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: null, tenant).HandleAsync(new CreateProjectCommand(
+        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: new AuthorizationService(), tenant).HandleAsync(new CreateProjectCommand(
             new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(project.Success, project.Error);
         Assert.Equal(org.Value.Id, project.Value!.OrgId);
@@ -67,7 +67,7 @@ public sealed class CreateProjectWizardTests : IDisposable
 
         var org = await new CreateOrgHandler(factory, scoped).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor), TestContext.Current.CancellationToken);
         Assert.True(org.Success, org.Error);
-        var project = await new CreateProjectHandler(factory, auth: null, scoped).HandleAsync(new CreateProjectCommand(new CreateProjectRequest("Beacon", null, org.Value!.Id), actor), TestContext.Current.CancellationToken);
+        var project = await new CreateProjectHandler(factory, auth: new AuthorizationService(), scoped).HandleAsync(new CreateProjectCommand(new CreateProjectRequest("Beacon", null, org.Value!.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(project.Success, project.Error);
 
         // Every tenant-keyed context ran on a separate instance, never the circuit's
@@ -110,7 +110,7 @@ public sealed class CreateProjectWizardTests : IDisposable
         Assert.True(org.Success, org.Error);
 
         var outsiderActor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
-        var result = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: null, tenant).HandleAsync(new CreateProjectCommand(
+        var result = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: new AuthorizationService(), tenant).HandleAsync(new CreateProjectCommand(
             new CreateProjectRequest("Intruder", null, org.Value!.Id), outsiderActor), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
@@ -132,7 +132,7 @@ public sealed class CreateProjectWizardTests : IDisposable
             new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor), TestContext.Current.CancellationToken);
         Assert.True(org.Success, org.Error);
 
-        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: null, tenant).HandleAsync(new CreateProjectCommand(
+        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: new AuthorizationService(), tenant).HandleAsync(new CreateProjectCommand(
             new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(project.Success, project.Error);
 

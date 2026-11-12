@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application;
 
 using Application.Agents;
 using Application.Admin;
+using Application.Billing;
 using Application.Common;
 using Application.Auth;
 using Application.Authorization;
@@ -12,6 +13,7 @@ using Application.Identity;
 using Application.Projects;
 using Application.Tasks;
 using Application.Milestones;
+using Application.Mail;
 using Application.Context;
 using Application.Decisions;
 using Application.Reports;
@@ -28,6 +30,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddScoped<IAdminGate, DatabaseAdminGate>();
+        services.AddScoped<PlatformEmailAdminService>();
+        services.AddScoped<BillingPlanAdminService>();
+        services.AddScoped<BillingInvoiceAdminService>();
+        services.AddScoped<BillingInvoiceCustomerService>();
+        services.AddScoped<OperatorRoleAdminService>();
 
         services.AddTransient<BootstrapHandler>();
         services.AddTransient<RecoverAdminHandler>();
@@ -202,6 +209,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<BeginTotpHandler>();
         services.AddTransient<ConfirmTotpHandler>();
         services.AddTransient<DisableTotpHandler>();
+        services.AddTransient<RotateOperatorTotpRecoveryCodesHandler>();
+        services.AddTransient<RecoverOperatorTotpHandler>();
         services.AddTransient<ListTaskKindsHandler>();
         services.AddTransient<SaveTaskKindHandler>();
         services.AddTransient<DeleteTaskKindHandler>();

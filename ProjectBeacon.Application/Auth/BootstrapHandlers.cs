@@ -1,50 +1,187 @@
 namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
+using Application.Audit;
 using Application.Security;
 using Domain.Entities.Identity;
+using Domain.Entities.Audit;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
+
 /// <summary>
 /// Creates the first admin when the bootstrap token matches and no admin exists yet. A second call conflicts.
 /// </summary>
 public class BootstrapHandler
 {
+    private static readonly SemaphoreSlim BootstrapGate = new(1, 1);
+
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IPasswordHasher _passwords;
     private readonly string _bootstrapToken;
+    private readonly IAuditWriter? _auditWriter;
+    private readonly ILogger<BootstrapHandler>? _logger;
 
-    public BootstrapHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration)
+    public BootstrapHandler(
+        IBeaconDbFactory dbFactory,
+        IPasswordHasher passwords,
+        IConfiguration? configuration,
+        IAuditWriter? auditWriter = null,
+        ILogger<BootstrapHandler>? logger = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _bootstrapToken = configuration?["BOOTSTRAP_ADMIN_TOKEN"] ?? string.Empty;
+        _auditWriter = auditWriter;
+        _logger = logger;
     }
 
     public async Task<Result<BootstrapResponse>> HandleAsync(string bootstrapToken, CancellationToken ct = default)
     {
         if (_bootstrapToken.Length == 0)
+        {
+            await RecordDeniedAttemptAsync("bootstrap_token_unconfigured", ct);
             return Result.Failure<BootstrapResponse>("Bootstrap token is not configured.", ErrorKind.Unauthorized);
+        }
 
         if (!FixedTimeEquals(bootstrapToken, _bootstrapToken))
+        {
+            await RecordDeniedAttemptAsync("bootstrap_token_invalid", ct);
             return Result.Failure<BootstrapResponse>("Invalid bootstrap token.", ErrorKind.Unauthorized);
+        }
 
-        await using var db = _dbFactory.CreateDbContext();
-        var exists = await db.Users.AnyAsync(u => u.IsAdmin, ct);
-        if (exists)
-            return Result.Failure<BootstrapResponse>("Bootstrap already completed.", ErrorKind.Conflict);
+        // Bootstrap is a one-time global transition. Serialize callers within this process,
+        // and use a transaction-scoped advisory lock to serialize independent Web replicas.
+        // Npgsql production options enable retries, so the whole transaction must run inside
+        // the provider execution strategy. The generated user ID and password are stable
+        // across retries: if a commit succeeds but its acknowledgement is lost, the next
+        // attempt recognizes its own user row and returns the original one-time credentials.
+        await BootstrapGate.WaitAsync(ct);
+        try
+        {
+            var globalTenant = new TenantContext();
+            globalTenant.Assign(null, null, unscoped: true);
+            await using var db = _dbFactory.CreateDbContext(globalTenant);
+            var strategy = db.Database.CreateExecutionStrategy();
 
-        var password = _passwords.GenerateRandomPassword(32);
-        var user = User.Create("admin", "admin@beacon.local",
-            _passwords.Hash(password), isAdmin: true);
+            var password = _passwords.GenerateRandomPassword(32);
+            var user = User.Create(
+                "admin",
+                "admin@beacon.local",
+                _passwords.Hash(password),
+                isAdmin: true);
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync(ct);
+            var completedEvent = _auditWriter is null
+                ? null
+                : AuditEventFactory.ForSystem(
+                    "platform.bootstrap.completed",
+                    "User",
+                    user.Id.ToString(),
+                    detailsJson: """{"newState":"Active"}""");
+            var deniedEvent = _auditWriter is null
+                ? null
+                : AuditEventFactory.ForSystem(
+                    "platform.bootstrap.denied",
+                    "AdminBootstrap",
+                    null,
+                    outcome: AuditOutcome.Denied,
+                    detailsJson: """{"reasonCode":"bootstrap_already_completed"}""");
 
-        return Result.Ok(new BootstrapResponse(
-            user.Id, user.Login, user.Email, user.IsAdmin, password));
+            return await strategy.ExecuteAsync(
+                db,
+                async (_, context, operationCancellationToken) =>
+            {
+                // A transient database failure may re-enter this delegate. Detach entities
+                // from the failed attempt before attaching the stable user/audit instances.
+                context.ChangeTracker.Clear();
+                await using var transaction = await context.Database.BeginTransactionAsync(operationCancellationToken);
+
+                if (string.Equals(
+                    context.Database.ProviderName,
+                    "Npgsql.EntityFrameworkCore.PostgreSQL",
+                    StringComparison.Ordinal))
+                {
+                    await context.Database.ExecuteSqlRawAsync(
+                        "SELECT pg_advisory_xact_lock(20261111, 97)",
+                        operationCancellationToken);
+                }
+
+                var existingAdminId = await context.Users
+                    .Where(item => item.IsAdmin)
+                    .Select(item => (Guid?)item.Id)
+                    .FirstOrDefaultAsync(operationCancellationToken);
+
+                if (existingAdminId is { } existingId)
+                {
+                    // The preceding attempt may have committed successfully but lost its
+                    // acknowledgement. In that case this is our own bootstrap, not a
+                    // competing administrator; return the same one-time password.
+                    if (existingId == user.Id)
+                    {
+                        await transaction.CommitAsync(operationCancellationToken);
+                        return Result.Ok(new BootstrapResponse(
+                            user.Id, user.Login, user.Email, user.IsAdmin, password));
+                    }
+
+                    // The denial event has a stable ID so an execution-strategy retry does
+                    // not write duplicate audit rows if the prior commit acknowledgement was
+                    // lost after the database committed it.
+                    if (deniedEvent is not null
+                        && !await context.AuditEvents.AnyAsync(item => item.Id == deniedEvent.Id, operationCancellationToken))
+                    {
+                        _auditWriter!.Stage(context, deniedEvent);
+                        await context.SaveChangesAsync(operationCancellationToken);
+                    }
+
+                    await transaction.CommitAsync(operationCancellationToken);
+                    return Result.Failure<BootstrapResponse>(
+                        "Bootstrap already completed.", ErrorKind.Conflict);
+                }
+
+                context.Users.Add(user);
+                if (completedEvent is not null)
+                    _auditWriter!.Stage(context, completedEvent);
+
+                await context.SaveChangesAsync(operationCancellationToken);
+                await transaction.CommitAsync(operationCancellationToken);
+
+                return Result.Ok(new BootstrapResponse(
+                    user.Id, user.Login, user.Email, user.IsAdmin, password));
+            },
+                verifySucceeded: null,
+                cancellationToken: ct);
+        }
+        finally
+        {
+            BootstrapGate.Release();
+        }
+    }
+
+    private async Task RecordDeniedAttemptAsync(string reasonCode, CancellationToken ct)
+    {
+        if (_auditWriter is null)
+            return;
+
+        try
+        {
+            var globalTenant = new TenantContext();
+            globalTenant.Assign(null, null, unscoped: true);
+            await using var db = _dbFactory.CreateDbContext(globalTenant);
+            _auditWriter.Stage(db, AuditEventFactory.ForSystem(
+                "platform.bootstrap.denied",
+                "AdminBootstrap",
+                null,
+                outcome: AuditOutcome.Denied,
+                detailsJson: $$"""{"reasonCode":"{{reasonCode}}"}"""));
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A failed denial-log write must not replace the original authentication result.
+            _logger?.LogWarning(ex, "Could not persist an audit record for a denied admin bootstrap attempt.");
+        }
     }
 
     private static bool FixedTimeEquals(string a, string b)

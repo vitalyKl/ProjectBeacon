@@ -3,6 +3,12 @@ using ProjectBeacon.Web.Shared;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
+[CollectionDefinition("MarkdownViewCache", DisableParallelization = true)]
+public sealed class MarkdownViewCacheCollectionDefinition
+{
+}
+
+[Collection("MarkdownViewCache")]
 public sealed class MarkdownViewTests : BUnitRenderBase
 {
     [Fact]

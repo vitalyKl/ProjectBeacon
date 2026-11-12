@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities.Agents;
+using Domain.Entities.Billing;
 using Domain.Entities.Audit;
+using Domain.Entities.Email;
 using Domain.Entities.Chat;
 using Domain.Entities.Context;
 using Domain.Entities.Devices;
@@ -48,6 +50,9 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<AgentTemplate> AgentTemplates => Set<AgentTemplate>();
     public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<PlatformEmailSettings> PlatformEmailSettings => Set<PlatformEmailSettings>();
+    public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
+    public DbSet<BillingPlan> BillingPlans => Set<BillingPlan>();
     public DbSet<TaskKind> TaskKinds => Set<TaskKind>();
     public DbSet<TaskKindPhase> TaskKindPhases => Set<TaskKindPhase>();
     public DbSet<TaskPhase> TaskPhases => Set<TaskPhase>();
@@ -81,6 +86,9 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public Guid? FilterProjectId => _tenant?.ProjectId ?? TenantScope.CurrentProjectId;
     public Guid? FilterOrgId => _tenant?.OrgId ?? TenantScope.CurrentOrgId;
     public bool FilterUnscoped => (_tenant?.Unscoped ?? false) || TenantScope.IsUnscoped;
+    public bool FilterOrganizationLifecycleAllowsAccess =>
+        _tenant?.LifecycleEnforced != true
+        || _tenant.LifecycleStatus == OrganizationLifecycleStatus.Active;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,5 +102,25 @@ public class BeaconDbContext : DbContext, IBeaconDb
             || (FilterOrgId != null
                 && e.OrgId == FilterOrgId
                 && (FilterProjectId == null || e.ProjectId == FilterProjectId)));
+
+        // A tenant-bound Web circuit must not continue reading an organization after it is
+        // suspended or closed. Explicit operator/unscoped flows continue to see all records.
+        // Show active organizations so a customer can switch away from a suspended tenant.
+        // The inactive current tenant itself stays hidden, while operator/unscoped paths
+        // can inspect every lifecycle state.
+        modelBuilder.Entity<Org>().HasQueryFilter(e =>
+            FilterUnscoped
+            || !(_tenant != null && _tenant.LifecycleEnforced)
+            || e.LifecycleStatus == OrganizationLifecycleStatus.Active);
+        modelBuilder.Entity<Project>().HasQueryFilter(e =>
+            FilterUnscoped
+            || (FilterOrgId != null
+                && e.OrgId == FilterOrgId
+                && FilterOrganizationLifecycleAllowsAccess));
+
+        // Platform configuration and outgoing mail metadata are global records.
+        modelBuilder.Entity<PlatformEmailSettings>().HasQueryFilter(e => FilterUnscoped);
+        modelBuilder.Entity<EmailDeliveryLog>().HasQueryFilter(e => FilterUnscoped);
+        modelBuilder.Entity<BillingPlan>().HasQueryFilter(plan => FilterUnscoped);
     }
 }

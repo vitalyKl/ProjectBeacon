@@ -319,13 +319,13 @@ public sealed class P0SecurityHttpTests
         });
         var taskId = task.GetProperty("id").GetGuid();
 
-        // TaskWrite token created by the admin: the token actor carries the creator's UserId,
-        // so it passes the endpoint guard and reaches the handler.
+        // SessionDrive is required for review/check execution; TaskWrite alone must not
+        // pass the pipeline capability wall.
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {
             projectId,
             name = "rc-token",
-            capabilities = 2
+            capabilities = (int)ApiTokenCapability.SessionDrive
         });
         var rawToken = token.GetProperty("token").GetString()!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", rawToken);
@@ -404,12 +404,12 @@ public sealed class P0SecurityHttpTests
             if (!attach.Success) throw new InvalidOperationException("Runtime attach failed: " + attach.Error);
         }
 
-        // TaskWrite token with empty body: should resolve from project.ReviewCheckCommand → success
+        // SessionDrive token with empty body: should resolve from project.ReviewCheckCommand → success
         var tokenResp = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {
             projectId,
             name = "rc-trust-token",
-            capabilities = 2
+            capabilities = (int)ApiTokenCapability.SessionDrive
         });
         var rawToken = tokenResp.GetProperty("token").GetString()!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", rawToken);

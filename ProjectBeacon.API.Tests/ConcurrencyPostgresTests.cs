@@ -31,6 +31,12 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
     public ConcurrencyPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
+    private static ActorContext WorkActor(Guid userId) => new(
+        ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
+
+    private static ActorContext ProjectHumanActor(Guid userId, Guid projectId) => new(
+        ActorType.Human, userId, false, null, null, projectId, null, ApiTokenCapability.None);
+
     private sealed class CountingSpawner : ISessionSpawner
     {
         private int _calls;
@@ -58,7 +64,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartPipeline_OnlyOneStarts()
     {
         _postgres.RequirePostgres();
-        var (_, taskId) = await SeedTaskAsync("start race");
+        var (projectId, taskId, userId) = await SeedTaskAsync("start race");
+        var actor = ProjectHumanActor(userId, projectId);
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
@@ -67,7 +74,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 return await new StartPipelineHandler(factory, spawner)
-                    .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(taskId)));
+                    .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(taskId), actor));
             }
         }
 
@@ -94,15 +101,17 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentTaskStatusChange_NoStaleOverwrite()
     {
         _postgres.RequirePostgres();
-        var (projectId, taskId) = await SeedTaskAsync("status race");
+        var (projectId, taskId, userId) = await SeedTaskAsync("status race");
 
         var factory = _postgres.CreateFactory();
         async Task<Result<TaskItemDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, TaskItemStatus.InProgress, projectId)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, TaskItemStatus.InProgress, projectId),
+                        WorkActor(userId)), TestContext.Current.CancellationToken);
             }
         }
 
@@ -122,14 +131,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentReviewVerdict_OnlyOneRecords()
     {
         _postgres.RequirePostgres();
-        Guid taskId, projectId;
+        Guid taskId, projectId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Verdict Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Verdict Race Project", null, org.Id);
+            var user = User.Create("verdict-race-" + Guid.NewGuid().ToString("N")[..8],
+                $"verdict-race-{Guid.NewGuid():N}@beacon.local", "hash");
             seed.Projects.Add(project);
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("verdict race", project.Id);
             task.StartPipeline();
             task.EnterExecuting();
@@ -139,15 +152,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
+            userId = user.Id;
         }
 
+        var actor = ProjectHumanActor(userId, projectId);
         var factory = _postgres.CreateFactory();
         async Task<Result<PipelineStateDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
             {
                 return await new RecordReviewVerdictHandler(factory)
-                    .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(taskId, ReviewVerdictKind.Approve, "looks good")));
+                    .HandleAsync(new RecordReviewVerdictCommand(
+                        new RecordReviewVerdictRequest(taskId, ReviewVerdictKind.Approve, "looks good"), actor));
             }
         }
 
@@ -174,14 +190,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentSubtaskReport_OnlyOneReports()
     {
         _postgres.RequirePostgres();
-        Guid taskId, subtaskId;
+        Guid taskId, subtaskId, projectId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Subtask Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Subtask Race Project", null, org.Id);
+            var user = User.Create("subtask-race-" + Guid.NewGuid().ToString("N")[..8],
+                $"subtask-race-{Guid.NewGuid():N}@beacon.local", "hash");
             seed.Projects.Add(project);
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("subtask race", project.Id);
             task.StartPipeline();
             task.EnterExecuting();
@@ -192,15 +212,19 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            projectId = project.Id;
+            userId = user.Id;
         }
 
+        var actor = ProjectHumanActor(userId, projectId);
         var factory = _postgres.CreateFactory();
         async Task<Result<PipelineStateDto>> Run(string summary)
         {
             using (TenantScope.EnterUnscoped())
             {
                 return await new ReportSubtaskResultHandler(factory)
-                    .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(taskId, subtaskId, "diff-ref", summary)));
+                    .HandleAsync(new ReportSubtaskResultCommand(
+                        new ReportSubtaskResultRequest(taskId, subtaskId, "diff-ref", summary), actor));
             }
         }
 
@@ -489,7 +513,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartActorSession_OnlyOneSpawn_OneActorSession()
     {
         _postgres.RequirePostgres();
-        Guid taskId, subtaskId;
+        Guid taskId, subtaskId, projectId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Actor Race Org", null);
@@ -506,16 +530,20 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            projectId = project.Id;
         }
 
         var spawner = new CountingSpawner();
         var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.SessionDrive);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
             {
                 return await new StartActorSessionHandler(factory, spawner)
-                    .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(taskId, subtaskId)));
+                    .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(taskId, subtaskId), actor));
             }
         }
 
@@ -546,7 +574,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid taskId, subtaskId, sessionId, commandId, deviceId, modelBackendId;
+        Guid taskId, subtaskId, sessionId, commandId, deviceId, modelBackendId, projectId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var user = User.Create("actor-retry-" + Guid.NewGuid().ToString("N"), "actor-retry-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
@@ -599,12 +627,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             taskId = task.Id;
             subtaskId = subtask.Id;
             sessionId = session.Id;
+            projectId = project.Id;
             commandId = command.Id;
             deviceId = device.Id;
             modelBackendId = backend.Id;
         }
 
         var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null,
+            projectId, null, ApiTokenCapability.SessionDrive);
         Result<WorkstationCommandDto> completion;
         using (TenantScope.EnterUnscoped())
         {
@@ -638,7 +670,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             retry = await new RetryPipelineSessionHandler(factory, new RetrySpawner(modelBackendId))
                 .HandleAsync(
-                    new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId)),
+                    new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId), actor),
                     TestContext.Current.CancellationToken);
         }
         Assert.True(retry.Success, retry.Error);
@@ -667,14 +699,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentChangeTaskStatus_ToDone_BothOk()
     {
         _postgres.RequirePostgres();
-        Guid taskId;
+        Guid taskId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Done Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Done Race Project", null, org.Id);
+            var user = User.Create("done-race-user", "done-race-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("done race", project.Id);
             task.SetReviewNotes("reviewed");
             seed.Tasks.Add(task);
@@ -683,6 +719,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ReviewRuns.Add(run);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
+            userId = user.Id;
         }
 
         var factory = _postgres.CreateFactory();
@@ -690,8 +727,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, TaskItemStatus.Done, null)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, TaskItemStatus.Done, null), WorkActor(userId)),
+                        TestContext.Current.CancellationToken);
             }
         }
 
@@ -712,13 +751,15 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentChangeTaskStatus_MixedTargets_ClassifiedDeterministically()
     {
         _postgres.RequirePostgres();
-        Guid taskId;
+        Guid taskId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Mix Race Org", null);
             seed.Orgs.Add(org);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Mix Race Project", null, org.Id);
+            var user = User.Create("mixed-race-user", "mixed-race-user@beacon.local", "hash");
+            seed.Users.Add(user);
             seed.Projects.Add(project);
             var task = TaskItem.Create("mixed race", project.Id);
             task.SetReviewNotes("reviewed");
@@ -728,7 +769,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
+            userId = user.Id;
         }
 
         var factory = _postgres.CreateFactory();
@@ -736,8 +780,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new ChangeTaskStatusHandler(factory)
-                    .HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, target, null)));
+                return await new ChangeTaskStatusHandler(factory, new AuthorizationService())
+                    .HandleAsync(new ChangeTaskStatusCommand(
+                        new ChangeTaskStatusRequest(taskId, target, null), WorkActor(userId)),
+                        TestContext.Current.CancellationToken);
             }
         }
 
@@ -797,9 +843,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", output, userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", output, ReviewRunId: runId), WorkActor(userId)));
             }
         }
 
@@ -845,9 +890,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", output, userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", output), WorkActor(userId)));
             }
         }
 
@@ -923,18 +967,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "done-output", ReviewRunId: runId), WorkActor(userId)));
             }
         }
         async Task<Result> RunFailed()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1031,18 +1073,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "done-output", ReviewRunId: runId), WorkActor(userId)));
             }
         }
         async Task<Result> RunFailed()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1127,9 +1167,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1167,7 +1206,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentReviewVerdictVsFailed_FromReviewing_NoStaleResurrection()
     {
         _postgres.RequirePostgres();
-        Guid taskId, userId;
+        Guid taskId, projectId, userId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var org = Org.Create("Verdict Failed Org", null);
@@ -1186,25 +1225,27 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.PipelineSessions.Add(PipelineSession.Create(task.Id, project.Id, PipelineRole.Review, "review prompt"));
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
+            projectId = project.Id;
             userId = user.Id;
         }
 
+        var actor = ProjectHumanActor(userId, projectId);
         var factory = _postgres.CreateFactory();
         async Task<Result<PipelineStateDto>> RunVerdict()
         {
             using (TenantScope.EnterUnscoped())
             {
                 return await new RecordReviewVerdictHandler(factory)
-                    .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(taskId, ReviewVerdictKind.Approve, "looks good")));
+                    .HandleAsync(new RecordReviewVerdictCommand(
+                        new RecordReviewVerdictRequest(taskId, ReviewVerdictKind.Approve, "looks good"), actor));
             }
         }
         async Task<Result> RunFailed()
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "X", userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "X"), WorkActor(userId)));
             }
         }
 
@@ -1273,9 +1314,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                return await new FinishWorkHandler(factory)
-                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "skipped", output, userId.ToString())));
+                return await new FinishWorkHandler(factory, new AuthorizationService())
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", output), WorkActor(userId)));
             }
         }
 
@@ -1342,9 +1382,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "done", "injectFail", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "injectFail", ReviewRunId: proofId), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The state write rolled back with the failed comment: the row is exactly
@@ -1365,9 +1404,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands exactly once.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "clean retry", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "done", "clean retry", ReviewRunId: proofId), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
@@ -1433,9 +1471,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "failed", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "injectFail"), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment: the row is unchanged.
@@ -1454,9 +1491,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands the note once, with one comment.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "failed", "clean retry"), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
@@ -1522,9 +1558,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             using (TenantScope.EnterUnscoped())
             {
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
-                    new FinishWorkHandler(factory).HandleAsync(
-                        new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "skipped", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
+                    new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "injectFail"), WorkActor(userId)), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment; status never moves for skipped.
@@ -1543,9 +1578,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             // The same request after the fault is gone lands the note once, with one comment.
             using (TenantScope.EnterUnscoped())
             {
-                var retry = await new FinishWorkHandler(factory).HandleAsync(
-                    new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "skipped", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
+                var retry = await new FinishWorkHandler(factory, new AuthorizationService()).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(taskId.ToString(), "skipped", "clean retry"), WorkActor(userId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
@@ -1569,18 +1603,23 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         }
     }
 
-    private async Task<(Guid ProjectId, Guid TaskId)> SeedTaskAsync(string title)
+    private async Task<(Guid ProjectId, Guid TaskId, Guid UserId)> SeedTaskAsync(string title)
     {
         await using var seed = _postgres.CreateAdminContext();
         var org = Org.Create("Race Org", null);
         seed.Orgs.Add(org);
-        await seed.SaveChangesAsync();
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("Race Project", null, org.Id);
+        var user = User.Create("race-owner-" + Guid.NewGuid().ToString("N")[..8],
+            "race-owner-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
+        seed.Users.Add(user);
         seed.Projects.Add(project);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
         var task = TaskItem.Create(title, project.Id);
         seed.Tasks.Add(task);
-        await seed.SaveChangesAsync();
-        return (project.Id, task.Id);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return (project.Id, task.Id, user.Id);
     }
 
     /// <summary>Seeds an online chat device with an attached runtime so the chat handlers can run.</summary>

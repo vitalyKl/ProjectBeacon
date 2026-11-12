@@ -467,7 +467,7 @@ else
         try
         {
             var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
-                new ChangeTaskStatusRequest(_task.Id, status, _task.ProjectId)));
+                new ChangeTaskStatusRequest(_task.Id, status, _task.ProjectId), _actorContext));
             if (!result.Success)
             {
                 _status = previous;
@@ -505,7 +505,7 @@ else
 
     private async Task ReloadPipeline()
     {
-        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)));
+        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId), _actorContext));
         _pipeline = result.Success ? result.Value : null;
     }
 
@@ -588,7 +588,7 @@ else
 
     private async Task ReloadSteps()
     {
-        var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId)));
+        var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId), _actorContext));
         _steps = result.Success ? result.Value!.ToList() : [];
         var phases = await ListPhases.HandleAsync(new ListTaskPhasesCommand(TaskId));
         _phases = phases.Success ? phases.Value!.ToList() : [];
@@ -604,7 +604,7 @@ else
         _busy = true;
         try
         {
-            var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle)));
+            var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -621,7 +621,7 @@ else
 
     private async Task OnToggleStep(TaskStepDto step, bool done)
     {
-        var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done)));
+        var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -632,7 +632,7 @@ else
 
     private async Task OnDeleteStep(TaskStepDto step)
     {
-        var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id)));
+        var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id), _actorContext));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -666,7 +666,7 @@ else
         try
         {
             var result = await CancelPipeline.HandleAsync(
-                new CancelPipelineCommand(new CancelPipelineRequest(TaskId)));
+                new CancelPipelineCommand(new CancelPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -693,7 +693,7 @@ else
         try
         {
             var result = await RestartPipeline.HandleAsync(
-                new RestartPipelineCommand(new RestartPipelineRequest(TaskId)));
+                new RestartPipelineCommand(new RestartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -720,7 +720,7 @@ else
         try
         {
             var result = await CancelPipelineSession.HandleAsync(
-                new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(TaskId, session.Id)));
+                new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(TaskId, session.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -745,7 +745,7 @@ else
         try
         {
             var result = await CancelSubtask.HandleAsync(
-                new CancelSubtaskCommand(new CancelSubtaskRequest(TaskId, subtask.Id)));
+                new CancelSubtaskCommand(new CancelSubtaskRequest(TaskId, subtask.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -769,8 +769,10 @@ else
         _busy = true;
         try
         {
+            var authentication = await Auth.GetAuthenticationStateAsync();
+            var actor = ActorContextFactory.FromPrincipal(authentication.User);
             var result = await DeleteTask.HandleAsync(
-                new DeleteTaskCommand(new DeleteTaskRequest(TaskId)));
+                new DeleteTaskCommand(new DeleteTaskRequest(TaskId), actor));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -795,14 +797,14 @@ else
                 Snackbar.Add(PlannerPreflightMessage, Severity.Warning);
                 return;
             }
-            var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
+            var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -822,14 +824,14 @@ else
         _busy = true;
         try
         {
-            var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id)));
+            var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -848,7 +850,7 @@ else
         _busy = true;
         try
         {
-            var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)));
+            var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -870,7 +872,7 @@ else
         try
         {
             var result = await RetrySession.HandleAsync(
-                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
+                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -878,7 +880,7 @@ else
             }
 
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else
@@ -902,14 +904,14 @@ else
                 Snackbar.Add(ReviewPreflightMessage, Severity.Warning);
                 return;
             }
-            var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
+            var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId), _actorContext));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
-                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id), _actorContext));
             if (!launch.Success)
                 Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
             else

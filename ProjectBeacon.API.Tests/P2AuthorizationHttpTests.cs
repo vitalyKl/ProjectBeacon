@@ -6,6 +6,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Domain.Entities.Identity;
+using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Infrastructure.Data;
 
 [Collection("api-http")]
 public sealed class P2AuthorizationHttpTests
@@ -447,6 +451,173 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
+    public async Task GetProject_OrgMemberWithoutProjectMembership_IsForbidden()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Read Scope Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Private Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var memberJwt = await RegisterAndLogin(client, "org-only-reader", "org-only-reader@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberJwt);
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var memberId = me.GetProperty("id").GetGuid();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                db.OrgMembers.Add(OrgMember.Create(orgId, memberId, MemberRole.Member));
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetProject_ProjectMemberCanReadMetadataButNotTrustedReviewCommand()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Project Read Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Member Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var update = await client.PutAsJsonAsync($"/v1/projects/{projectId}", new
+        {
+            projectId,
+            name = "Member Project",
+            description = "Visible metadata",
+            reviewCheckCommand = "dotnet test --dangerous-shell-option"
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(update.IsSuccessStatusCode,
+            await update.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        var memberJwt = await RegisterAndLogin(client, "project-reader", "project-reader@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberJwt);
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var memberId = me.GetProperty("id").GetGuid();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                db.ProjectMembers.Add(ProjectMember.Create(projectId, memberId, MemberRole.Member));
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var response = await client.GetAsync(
+            $"/v1/projects/{projectId}",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("Member Project", body.GetProperty("name").GetString());
+        Assert.Null(body.GetProperty("reviewCheckCommand").GetString());
+    }
+
+    [Fact]
+    public async Task ListProjects_OrgMemberSeesOnlyExplicitProjectMemberships()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Project Listing Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "Assigned", orgId });
+        var projectB = await PostJson(client, "/v1/projects", new { name = "Not Assigned", orgId });
+        var projectAId = projectA.GetProperty("id").GetGuid();
+        var projectBId = projectB.GetProperty("id").GetGuid();
+
+        var memberJwt = await RegisterAndLogin(client, "org-project-reader", "org-project-reader@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberJwt);
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var memberId = me.GetProperty("id").GetGuid();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                db.OrgMembers.Add(OrgMember.Create(orgId, memberId, MemberRole.Member));
+                db.ProjectMembers.Add(ProjectMember.Create(projectAId, memberId, MemberRole.Member));
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var response = await client.GetAsync(
+            $"/v1/orgs/{orgId}/projects",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var projects = await response.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var ids = projects.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToArray();
+        Assert.Contains(projectAId, ids);
+        Assert.DoesNotContain(projectBId, ids);
+    }
+
+    [Fact]
+    public async Task GetOrg_NonMember_IsForbiddenAndListOrgsReturnsOnlyMemberships()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var first = await PostJson(client, "/v1/orgs", new { name = "Visible Org" });
+        var firstId = first.GetProperty("id").GetGuid();
+        var second = await PostJson(client, "/v1/orgs", new { name = "Hidden Org" });
+        var secondId = second.GetProperty("id").GetGuid();
+
+        var memberJwt = await RegisterAndLogin(client, "single-org-reader", "single-org-reader@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberJwt);
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
+        var memberId = me.GetProperty("id").GetGuid();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                db.OrgMembers.Add(OrgMember.Create(firstId, memberId, MemberRole.Member));
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var visible = await client.GetAsync("/v1/orgs", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, visible.StatusCode);
+        var orgs = await visible.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var ids = orgs.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToArray();
+        Assert.Contains(firstId, ids);
+        Assert.DoesNotContain(secondId, ids);
+
+        var hidden = await client.GetAsync($"/v1/orgs/{secondId}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, hidden.StatusCode);
+    }
+
+    [Fact]
     public async Task ModelRoleBinding_NonAdminHuman_IsForbiddenByHttpRoute()
     {
         await using var factory = new AuthApiFactory();
@@ -475,7 +646,41 @@ public sealed class P2AuthorizationHttpTests
     }
 
     [Fact]
-    public async Task ApiToken_WithReadCapabilities_CanReadProjectLabelsAndContextNodes()
+    public async Task ApiToken_TaskCapabilities_CannotReadOrAdministerModelRegistryOrProxy()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Model API Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Model API Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "task-capability-model-deny",
+            capabilities = (int)(Domain.Enums.ApiTokenCapability.TaskRead | Domain.Enums.ApiTokenCapability.TaskWrite)
+        });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", token.GetProperty("token").GetString());
+
+        var registry = await client.GetAsync("/v1/models", TestContext.Current.CancellationToken);
+        var proxyStatus = await client.GetAsync("/v1/models/proxy/status", TestContext.Current.CancellationToken);
+        var reload = await client.PostAsync("/v1/models/proxy/reload", content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var unload = await client.PostAsync("/v1/models/proxy/unload", content: null,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, registry.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, proxyStatus.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, reload.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, unload.StatusCode);
+    }
+
+    [Fact]
+    public async Task ApiToken_WithReadCapabilities_CanReadLabelsAndContextNodes_ButNotProjectMetadata()
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
@@ -487,7 +692,8 @@ public sealed class P2AuthorizationHttpTests
         var project = await PostJson(client, "/v1/projects", new { name = "Read API Project", orgId });
         var projectId = project.GetProperty("id").GetGuid();
 
-        // TaskRead grants project metadata and label reads; ContextRead grants context-node reads.
+        // TaskRead grants explicitly exposed label reads; ContextRead grants context reads.
+        // Neither capability grants project metadata.
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {
             projectId,
@@ -501,12 +707,25 @@ public sealed class P2AuthorizationHttpTests
         var labelsResponse = await client.GetAsync($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
         var nodesResponse = await client.GetAsync($"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
 
-        Assert.True(projectResponse.StatusCode == HttpStatusCode.OK,
-            $"Project read returned {(int)projectResponse.StatusCode}: {await projectResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+        Assert.Equal(HttpStatusCode.Forbidden, projectResponse.StatusCode);
         Assert.True(labelsResponse.StatusCode == HttpStatusCode.OK,
             $"Label read returned {(int)labelsResponse.StatusCode}: {await labelsResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
         Assert.True(nodesResponse.StatusCode == HttpStatusCode.OK,
             $"Context-node read returned {(int)nodesResponse.StatusCode}: {await nodesResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+
+        var draftWrite = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/context/drafts", new { },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var constraintProposal = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/constraints/propose", new { },
+            cancellationToken: TestContext.Current.CancellationToken);
+        var decisionProposal = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/decisions/propose", new { },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, draftWrite.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, constraintProposal.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, decisionProposal.StatusCode);
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)

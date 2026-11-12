@@ -156,7 +156,9 @@ else
             yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true)
             return;
-        var deleted = await DeleteTaskHandler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId)));
+        var authentication = await Auth.GetAuthenticationStateAsync();
+        var actor = ActorContextFactory.FromPrincipal(authentication.User);
+        var deleted = await DeleteTaskHandler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId), actor));
         if (!deleted.Success)
         {
             Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);

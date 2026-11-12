@@ -1,0 +1,43 @@
+@inherits LayoutComponentBase
+@using MudBlazor
+@using ProjectBeacon.Web.Theme
+
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout Class="beacon-theme-dark">
+    <MudAppBar Elevation="0" Class="beacon-appbar">
+        <img class="beacon-app-mark" src="brand/beacon-mark.svg" alt="" aria-hidden="true" />
+        <MudText Typo="Typo.h6" Class="ml-2">ProjectBeacon Control</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mr-4">Platform operator console</MudText>
+        <MudButton Href="/admin/organizations" Variant="Variant.Text" Color="Color.Inherit">Organizations</MudButton>
+        <MudButton Href="/admin/billing/plans" Variant="Variant.Text" Color="Color.Inherit">Billing plans</MudButton>
+        <MudButton Href="/admin/billing/invoices" Variant="Variant.Text" Color="Color.Inherit">Invoices</MudButton>
+        <MudButton Href="/admin/audit" Variant="Variant.Text" Color="Color.Inherit">Audit</MudButton>
+        <MudButton Href="/admin/operations" Variant="Variant.Text" Color="Color.Inherit">Operations</MudButton>
+        <MudButton Href="/admin/email" Variant="Variant.Text" Color="Color.Inherit">Email</MudButton>
+        <MudButton Href="/admin/operators" Variant="Variant.Text" Color="Color.Inherit">Operators</MudButton>
+        <MudButton Href="/control/security" Variant="Variant.Text" Color="Color.Inherit">Security</MudButton>
+        <form method="post" action="/control/elevate" class="d-flex align-center gap-2">
+            <input name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   autocomplete="one-time-code" required aria-label="Authenticator code"
+                   placeholder="TOTP" style="width:84px;min-width:84px;padding:6px 8px;border-radius:6px;" />
+            <button type="submit" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-inherit">Unlock 10 min</button>
+        </form>
+        <form method="post" action="/control/logout">
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Inherit">
+                Sign out
+            </MudButton>
+        </form>
+    </MudAppBar>
+    <MudMainContent>
+        <div class="beacon-main">
+            <div class="beacon-content-max">
+                @Body
+            </div>
+        </div>
+    </MudMainContent>
+</MudLayout>

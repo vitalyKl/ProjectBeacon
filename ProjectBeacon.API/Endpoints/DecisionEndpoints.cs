@@ -14,13 +14,13 @@ using Microsoft.AspNetCore.Mvc;
 public static class DecisionEndpoints
 {
     /// <summary>
-    /// Maps <c>POST /v1/projects/{projectId:guid}/decisions</c>, <c>GET /v1/projects/{projectId:guid}/decisions</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate</c>, and <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede</c> with <c>RequireHuman</c>.
+    /// Create and lifecycle decisions are Human-only. Proposals allow Humans or task-scoped Actor tokens; list/get allow scoped <c>ContextRead</c> tokens.
     /// </summary>
     public static IEndpointRouteBuilder MapDecisionEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/decisions/propose", Propose)
-            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
+            .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.SessionDrive);
         app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
         app.MapGet("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}", Get)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -40,7 +40,7 @@ public static class DecisionEndpoints
         if (!IsHumanOrActorKnowledgeWriter(context))
             return Results.Forbid();
         var result = await handler.HandleProposalAsync(new CreateDecisionRequest(
-            projectId, body.Title, body.Context ?? string.Empty, body.Body, body.Consequences), ct);
+            projectId, body.Title, body.Context ?? string.Empty, body.Body, body.Consequences), context.GetActor(), ct);
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/decisions/propose", result.Value)
             : result.FromResult();
@@ -55,38 +55,38 @@ public static class DecisionEndpoints
                 PipelineRole.Actor.ToString(), StringComparison.Ordinal);
     }
 
-    private static async Task<IResult> Create(Guid projectId, [FromBody] CreateDecisionBody body, CreateDecisionHandler handler)
+    private static async Task<IResult> Create(Guid projectId, [FromBody] CreateDecisionBody body, HttpContext context, CreateDecisionHandler handler)
     {
         var result = await handler.HandleAsync(new CreateDecisionRequest(
-            projectId, body.Title, body.Context ?? "", body.Body, body.Consequences));
+            projectId, body.Title, body.Context ?? "", body.Body, body.Consequences), context.GetActor());
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/decisions", result.Value)
             : result.FromResult();
     }
 
-    private static async Task<IResult> List(Guid projectId, ListDecisionsHandler handler)
+    private static async Task<IResult> List(Guid projectId, HttpContext context, ListDecisionsHandler handler)
     {
-        var result = await handler.HandleAsync(projectId);
-        return Results.Ok(result.Value);
+        var result = await handler.HandleAsync(projectId, context.GetActor());
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
-    private static async Task<IResult> Get(Guid projectId, Guid decisionId, GetDecisionHandler handler, CancellationToken ct)
+    private static async Task<IResult> Get(Guid projectId, Guid decisionId, HttpContext context, GetDecisionHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(projectId, decisionId, ct);
+        var result = await handler.HandleAsync(projectId, decisionId, context.GetActor(), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
-    private static async Task<IResult> Accept(Guid projectId, Guid decisionId, AcceptDecisionHandler handler)
+    private static async Task<IResult> Accept(Guid projectId, Guid decisionId, HttpContext context, AcceptDecisionHandler handler)
     {
-        var result = await handler.HandleAsync(decisionId);
+        var result = await handler.HandleAsync(decisionId, context.GetActor());
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> Deprecate(Guid projectId, Guid decisionId, DeprecateDecisionHandler handler)
+    private static async Task<IResult> Deprecate(Guid projectId, Guid decisionId, HttpContext context, DeprecateDecisionHandler handler)
     {
-        var result = await handler.HandleAsync(decisionId);
+        var result = await handler.HandleAsync(decisionId, context.GetActor());
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult(404);
@@ -96,9 +96,10 @@ public static class DecisionEndpoints
         Guid projectId,
         Guid decisionId,
         [FromBody] SupersedeBody body,
+        HttpContext context,
         SupersedeDecisionHandler handler)
     {
-        var result = await handler.HandleAsync(decisionId, body.ReplacementId);
+        var result = await handler.HandleAsync(decisionId, body.ReplacementId, context.GetActor());
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();

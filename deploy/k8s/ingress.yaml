@@ -11,8 +11,23 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - beacon.example.com
+        - control.projectbeacon.tech
+      secretName: beacon-web-tls
   rules:
     - host: beacon.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beacon-web
+                port:
+                  name: http
+    - host: control.projectbeacon.tech
       http:
         paths:
           - path: /

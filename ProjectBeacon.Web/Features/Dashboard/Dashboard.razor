@@ -5,6 +5,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
@@ -239,6 +240,7 @@ else
     private bool _loading = true;
     private bool _error;
     private Guid _userId;
+    private ActorContext _actorContext = ActorContext.Anonymous;
     private CancellationTokenSource? _poll;
     private List<DeviceHostSampleDto> _samples = [];
     private List<ChartSeries<double>> _loadSeries = [];
@@ -296,6 +298,7 @@ else
     {
         var state = await Auth.GetAuthenticationStateAsync();
         var user = state.User;
+        _actorContext = ActorContextFactory.FromPrincipal(user);
         if (user.Identity?.IsAuthenticated != true
             || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
         {
@@ -349,7 +352,7 @@ else
         _lead = null;
         if (_running.Count > 0)
         {
-            var lead = await Pipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(_running[0].Id)));
+            var lead = await Pipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(_running[0].Id), _actorContext));
             if (lead.Success && lead.Value?.Stage is not null && lead.Value.Stage != TaskPipelineStage.None)
                 _lead = lead.Value;
         }

@@ -738,4 +738,32 @@
         animation: none;
     }
 }
+/* Printable customer billing records. Keep navigation and shell chrome out of hard copies. */
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 16mm;
+    }
 
+    body {
+        color: #17212b !important;
+        background: #fff !important;
+    }
+
+    .mud-main-content,
+    .beacon-main,
+    .beacon-content-max {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    .beacon-appbar,
+    .beacon-drawer,
+    .beacon-mobile-nav,
+    .mud-overlay,
+    .mud-snackbar-provider {
+        display: none !important;
+    }
+}

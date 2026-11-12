@@ -1,6 +1,6 @@
 # Control-plane deploy (Kubernetes blue-green)
 
-Ships **Web** (Blazor + `/v1`) as one image. Postgres is shared and is not blue-green. `beacon client` on developer machines is **not** auto-updated.
+Ships **Web** (Blazor + `/v1`) as one image. It serves the customer application on the existing public host and the isolated operator Control Plane on `control.projectbeacon.tech`; both ingress hosts target the Web service, while host middleware keeps their route surfaces separate. Postgres is shared and is not blue-green. `beacon client` on developer machines is **not** auto-updated.
 
 ## Image
 
@@ -32,7 +32,9 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
 ## First apply
 
 1. `kubectl apply -f deploy/k8s/namespace.yaml`
-2. Create the secret (see `secret.yaml.example`). Do not commit real secrets.
+2. Create the secret (see `secret.yaml.example`). Set `BEACON_PUBLIC_URL` to the customer
+   application hostname (the ingress customer host), not `control.projectbeacon.tech`.
+   Do not commit real secrets.
 3. Replace `OWNER` with your GHCR owner and `__PINNED_TAG__` with the immutable version tag in `deploy/k8s/*.yaml`, then:
    ```
    kubectl apply --dry-run=server -f deploy/k8s/web.yaml -f deploy/k8s/ingress.yaml
@@ -40,7 +42,18 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
    ```
    The `--dry-run=server` pass is required: client-side YAML checks do not validate against the cluster's admission policies (`restricted` PSA) or the API schema.
 4. Run a migrate Job once (`BEACON_MIGRATE_ON_START=true`, `BEACON_MIGRATE_THEN_EXIT=true`).
-5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits.
+5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits. Before sending traffic, provision the TLS secret `beacon-web-tls` in namespace `beacon`; its certificate SANs must include both the customer hostname (`beacon.example.com` in the sample manifest) and `control.projectbeacon.tech`. Use the cluster's existing cert-manager/ACME issuer or your certificate-management process; this repository does not assume a cluster issuer.
+
+The ingress manifest includes both the existing customer host and `control.projectbeacon.tech`,
+routed to the same Web service. Configure DNS records for both hostnames to the ingress address
+(an A/AAAA record or a CNAME where appropriate). The TLS section references `beacon-web-tls`,
+which must contain a certificate covering both hostnames. Set `CONTROL_HOST=control.projectbeacon.tech`
+and `BEACON_PUBLIC_URL=https://<customer-hostname>` in the `beacon-web` secret/environment.
+`BEACON_PUBLIC_URL` is the customer-facing origin used to build invite and password-reset links;
+never set it to the Control Plane host. Production invitation creation fails closed if this origin
+is missing, not HTTPS, or points to the Control Plane. The application returns `404` for Control Plane paths
+on the customer host; the standalone public API host independently rejects operator, bootstrap,
+and recovery endpoints.
 
 ## Switch
 
@@ -54,7 +67,7 @@ Breaking schema changes need expand/contract across two releases. Additive EF mi
 
 ## Data-key rotation
 
-Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY`, separate from the JWT signing key. New writes use the v2 format (`v2:` prefix, HKDF-derived AES-GCM key) only when `DATA_PROTECTION_WRITE_V2=true`; otherwise they stay v1, which is read with `DATA_PROTECTION_LEGACY_KEY`. Rotating the key is a multi-step rollout because v2 ciphertexts are unreadable without the key that wrote them:
+Stored secrets (TOTP, OpenCode API keys, SMTP password) are encrypted with `DATA_PROTECTION_KEY`, separate from the JWT signing key. New writes use the v2 format (`v2:` prefix, HKDF-derived AES-GCM key) only when `DATA_PROTECTION_WRITE_V2=true`; otherwise they stay v1, which is read with `DATA_PROTECTION_LEGACY_KEY`. Rotating the key is a multi-step rollout because v2 ciphertexts are unreadable without the key that wrote them:
 
 1. Add `DATA_PROTECTION_KEY=<new key>` and `DATA_PROTECTION_LEGACY_KEY=<old key>` to the secret. Deploy. Writes stay v1; old rows remain readable through the legacy key.
 2. Set `DATA_PROTECTION_WRITE_V2="true"` in the secret and deploy. New writes are v2; v1 rows are still read via the legacy key.
@@ -65,7 +78,8 @@ Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY
 
 ## Data Protection key ring
 
-The ASP.NET Data Protection key ring (which protects the `BeaconAuth` cookie)
+The ASP.NET Data Protection key ring (which protects both the customer `BeaconAuth` and operator
+`BeaconControlAuth` cookies)
 lives in the shared Postgres database (`DataProtectionKeys` table), not on the
 pod file system. Each row is sealed with key material derived from
 `DATA_PROTECTION_KEY` (AES-GCM); rows sealed before a key change stay readable
@@ -113,6 +127,19 @@ invalidated once; no application data is touched.
    advisory lock serializes parallel first starts) and all users are logged
    out once.
 
+## Platform email settings
+
+The optional `MAIL__Host`, `MAIL__Port`, `MAIL__User`, `MAIL__Password`, and `MAIL__From`
+environment variables remain a bootstrap/fallback path. Once an operator saves SMTP settings in
+the Control Plane, the database configuration takes precedence on every Web replica and applies
+without a container restart. The SMTP password is encrypted with `DATA_PROTECTION_KEY`; all Web
+replicas must share the same data-protection key configuration. A saved disabled configuration
+intentionally overrides and disables the environment fallback.
+
+Use the Control Plane's connection check to validate DNS, TCP, STARTTLS, and SMTP authentication
+without sending a message. Use the separate test-email action to verify that the relay accepts an
+actual message.
+
 ## TLS termination and forwarded headers
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app
@@ -131,11 +158,31 @@ FORWARDEDHEADERS__KNOWNNETWORKS__0=<pod CIDR, e.g. 10.244.0.0/16>
 or pin exact ingress pod IPs with `FORWARDEDHEADERS__KNOWNPROXIES__0=<ingress pod IP>`. For multiple
 entries append `__1`, `__2`, ... Check the source address the web pods actually see with
 `kubectl get pods -n ingress-nginx -o wide`. Set the variables in the `env:` list of
-`deploy/k8s/web.yaml` or in the `beacon-web` secret (`envFrom`).
+`deploy/k8s/web.yaml` or in the `beacon-web` secret (`envFrom`), for **both** blue and green Web
+deployments.
+
+This is required for the Control Plane on Kubernetes, not merely an optimization: its login and
+logout endpoints compare the browser's exact `Origin` with the request scheme and host, and reject
+the request with `403` when they differ. Since the ingress terminates TLS, the browser sends an
+`https://...` Origin while the pod otherwise sees the upstream request as `http://...`. Trusting
+the actual ingress source restores `Request.Scheme=https` before the origin check. In Production,
+authentication cookies remain `Secure` independently because their cookie policy is
+`SecurePolicy.Always`; that flag does not replace correct forwarded-header handling.
+
+Sensitive authentication endpoints and task attachment uploads apply fixed-window limits per
+trusted client IP. After customer cookie/JWT authentication, humans also consume a separate
+per-user bucket. After `bcn_` validation, API tokens consume a per-creator bucket, falling back
+to token id for tokens without a creator. The API token identity limiter runs after token
+validation, while the IP limiter remains before token lookup. The `auth`, `auth-read` and
+`attachment-upload` policies have independent allowances. Anonymous bootstrap, login,
+registration and recovery requests remain IP-limited because no verified identity exists yet.
+This prevents authenticated humans and agent tokens behind a shared ingress from consuming one
+common account allowance, but it does not replace the trusted-proxy configuration above.
 
 Do not set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` — it bypasses the trust lists and would honor
-forwarded headers from any client. Without the variables, forwarded headers are ignored and the app
-behaves as before (plain HTTP, no `Secure` flag).
+forwarded headers from any client. Without the variables, forwarded headers are ignored: the
+application sees the internal HTTP request, and Control Plane form login/logout fail closed with
+`403`.
 
 ## CI
 

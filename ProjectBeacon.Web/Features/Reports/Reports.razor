@@ -75,10 +75,13 @@ else
     private bool _busy;
     private bool _loading = true;
     private static readonly JsonSerializerOptions SnapshotJson = new() { PropertyNameCaseInsensitive = true };
+    private ActorContext _actor = ActorContext.Anonymous;
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        var authState = await Auth.GetAuthenticationStateAsync();
+        _actor = ActorContextFactory.FromPrincipal(authState.User);
+        var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -88,7 +91,7 @@ else
     {
         if (_project is null)
             return;
-        var listed = await ListReports.HandleAsync(new ListReportsRequest(_project.Id));
+        var listed = await ListReports.HandleAsync(new ListReportsRequest(_project.Id, _actor));
         _reports = listed.Success ? listed.Value!.ToList() : [];
     }
 
@@ -98,7 +101,7 @@ else
             return;
         _busy = true;
         var result = await GenerateReport.HandleAsync(new GenerateReportCommand(
-            new GenerateReportRequest(_project.Id, "user", "web")));
+            new GenerateReportRequest(_project.Id), _actor));
         _busy = false;
         if (!result.Success)
         {
@@ -112,7 +115,7 @@ else
     {
         if (_project is null)
             return;
-        var result = await GetReport.HandleAsync(new GetReportRequest(_project.Id, report.Id));
+        var result = await GetReport.HandleAsync(new GetReportRequest(_project.Id, report.Id, _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["AnErrorOccurred"], Severity.Error);

@@ -16,29 +16,29 @@ public sealed partial class PipelineHandlerTests
         var spawner = new FakeSpawner();
 
         var planner = await new StartPipelineHandler(factory, spawner)
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(planner.Success, planner.Error);
 
         var created = await new CreateSubtaskHandler(factory)
-            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Change behaviour")),
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Change behaviour"), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
         var reported = await new ReportSubtaskResultHandler(factory)
             .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
-                task.Id, created.Value!.Id, string.Empty, "Initial implementation completed")),
+                task.Id, created.Value!.Id, string.Empty, "Initial implementation completed"), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(reported.Success, reported.Error);
 
         var review = await new StartReviewHandler(factory, spawner)
-            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)),
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
 
         var verdict = await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(
-                task.Id, ReviewVerdictKind.ReopenSubtask, "Please fix the reported edge case.", created.Value.Id)),
+                task.Id, ReviewVerdictKind.ReopenSubtask, "Please fix the reported edge case.", created.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.ReopenedForRevision, verdict.Value!.Stage);
@@ -69,14 +69,14 @@ public sealed partial class PipelineHandlerTests
         var (projectId, task) = await SeedTaskAsync("Create profile-scoped subtasks");
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var started = await new StartPipelineHandler(factory, new FakeSpawner())
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)),
                 TestContext.Current.CancellationToken);
         Assert.True(started.Success, started.Error);
 
         var handler = new CreateSubtaskHandler(factory);
         var created = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Implement a feature", AllowedPaths: ["src/"],
-            Profile: "implementer", OptionalMcpTools: [McpToolNames.TaskAttachFile])),
+            Profile: "implementer", OptionalMcpTools: [McpToolNames.TaskAttachFile]), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal("implementer", created.Value!.ProfileKey);
@@ -86,20 +86,20 @@ public sealed partial class PipelineHandlerTests
 
         var expansion = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Try to expand grants", AllowedMcpTools: [McpToolNames.TaskAttachFile],
-            AllowedPaths: ["src/"], Profile: "implementer")),
+            AllowedPaths: ["src/"], Profile: "implementer"), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(expansion.Success);
         Assert.Contains("cannot expand", expansion.Error!, StringComparison.OrdinalIgnoreCase);
 
         var optionalExpansion = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             task.Id, "Try an unknown optional grant", AllowedPaths: ["src/"],
-            Profile: "implementer", OptionalMcpTools: [McpToolNames.PipelineStartReview])),
+            Profile: "implementer", OptionalMcpTools: [McpToolNames.PipelineStartReview]), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(optionalExpansion.Success);
         Assert.Contains("optional grant", optionalExpansion.Error!, StringComparison.OrdinalIgnoreCase);
 
         var unknown = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
-            task.Id, "Unknown profile", Profile: "unknown")),
+            task.Id, "Unknown profile", Profile: "unknown"), PipelineTestActor.AdminFor(task.ProjectId)),
             TestContext.Current.CancellationToken);
         Assert.False(unknown.Success);
         Assert.Contains("Unknown subtask profile", unknown.Error);

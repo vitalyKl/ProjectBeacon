@@ -1,5 +1,9 @@
 namespace ProjectBeacon.Infrastructure;
 
+using ProjectBeacon.Application.Entitlements;
+using ProjectBeacon.Application.Organizations;
+using ProjectBeacon.Application.Operations;
+using ProjectBeacon.Infrastructure.Operations;
 using Application.Mail;
 using Application.Audit;
 using Application.Persistence;
@@ -7,6 +11,7 @@ using Application.Runtime;
 using Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.LlamaSwap;
@@ -14,6 +19,8 @@ using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Infrastructure.Attachments;
 using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Entitlements;
+using ProjectBeacon.Infrastructure.Organizations;
 /// <summary>
 /// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
 /// </summary>
@@ -23,6 +30,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddMemoryCache();
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IUserSessionVersionCache, UserSessionVersionCache>();
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null))
@@ -32,7 +40,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAttachmentService, DatabaseAttachmentService>();
         services.AddSingleton<IAuditWriter, EfAuditWriter>();
         services.AddScoped<IAuditReader, EfAuditReader>();
-        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
+        services.AddScoped<IEntitlementService, PostgresEntitlementService>();
+        services.AddScoped<IEntitlementEvaluator>(sp => sp.GetRequiredService<IEntitlementService>());
+        services.AddScoped<IOrganizationAdminService, EfOrganizationAdminService>();
+        services.AddScoped<IOrganizationDataExportService, EfOrganizationDataExportService>();
+        services.AddScoped<IPlatformOperationsService, PlatformOperationsService>();
+        services.AddHttpClient<IPlatformContainerLogClient, HttpPlatformContainerLogClient>(client =>
+            client.Timeout = TimeSpan.FromSeconds(12));
 
         return services;
     }

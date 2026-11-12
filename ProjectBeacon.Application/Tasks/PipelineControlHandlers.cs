@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
 using Domain.Enums;
@@ -9,21 +10,34 @@ using Microsoft.EntityFrameworkCore;
 public sealed class CancelPipelineSessionHandler : ICommandHandler<CancelPipelineSessionCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CancelPipelineSessionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CancelPipelineSessionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(CancelPipelineSessionCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var session = await db.PipelineSessions
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.TaskId == command.Request.TaskId, ct);
-        if (session is null)
-            return Result.Failure<PipelineStateDto>("Pipeline session not found.");
-
         var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        // Authorize the parent resource before looking up the session id. Otherwise an
+        // unrelated project member could use 404 vs 200/409 behavior to probe session ids.
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
+
+        var session = await db.PipelineSessions
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.TaskId == task.Id, ct);
+        if (session is null)
+            return Result.Failure<PipelineStateDto>("Pipeline session not found.");
 
         await using (var transaction = await db.Database.BeginTransactionAsync(ct))
         {
@@ -59,8 +73,13 @@ public sealed class CancelPipelineSessionHandler : ICommandHandler<CancelPipelin
 public sealed class CancelSubtaskHandler : ICommandHandler<CancelSubtaskCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CancelSubtaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CancelSubtaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(CancelSubtaskCommand command, CancellationToken ct = default)
     {
@@ -69,6 +88,12 @@ public sealed class CancelSubtaskHandler : ICommandHandler<CancelSubtaskCommand,
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         var subtask = await db.Subtasks
             .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
@@ -100,8 +125,13 @@ public sealed class CancelSubtaskHandler : ICommandHandler<CancelSubtaskCommand,
 public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public CancelPipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CancelPipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(CancelPipelineCommand command, CancellationToken ct = default)
     {
@@ -116,6 +146,13 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");
+
+            var permission = await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Pipeline, AuthAction.Update,
+                projectId: task.ProjectId, ct: ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineStateDto>(permission);
+
             if (task.PipelineStage is null or TaskPipelineStage.None)
                 return Result.Failure<PipelineStateDto>("Pipeline is not started.");
             if (task.PipelineStage == TaskPipelineStage.Cancelled)
@@ -185,8 +222,13 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
 public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public RestartPipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RestartPipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RestartPipelineCommand command, CancellationToken ct = default)
     {
@@ -201,6 +243,13 @@ public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineComm
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");
+
+            var permission = await _authorization.CanAsync(
+                db, command.Actor, ResourceType.Pipeline, AuthAction.Update,
+                projectId: task.ProjectId, ct: ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineStateDto>(permission);
+
             if (task.PipelineStage is null or TaskPipelineStage.None)
                 return Result.Failure<PipelineStateDto>("Pipeline has not been initialized.");
 

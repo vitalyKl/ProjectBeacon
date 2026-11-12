@@ -2157,7 +2157,6 @@
 <data name="LandingCtaEyebrow" xml:space="preserve"><value>ВОЗЬМИТЕ AI-ПРОЦЕСС ПОД СВОЙ КОНТРОЛЬ</value></data>
 <data name="LandingCtaBody" xml:space="preserve"><value>Разверните собственный сервер ProjectBeacon и подключите рабочую станцию.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
-
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
@@ -2572,39 +2571,135 @@
   <data name="AllowedPathsHint" xml:space="preserve">
     <value>Укажите относительные пути репозитория, по одному на строку. Для этого профиля они обязательны.</value>
   </data>
+  <data name="PlatformAdmin" xml:space="preserve">
+    <value>Администрирование платформы</value>
+  </data>
+  <data name="AuditLog" xml:space="preserve">
+    <value>Журнал аудита</value>
+  </data>
+  <data name="AuditLead" xml:space="preserve">
+    <value>События безопасности и действия операторов по организациям и проектам. Время отображается в часовом поясе браузера; фильтры дат и CSV используют UTC.</value>
+  </data>
+  <data name="AuditAction" xml:space="preserve">
+    <value>Код действия</value>
+  </data>
+  <data name="AuditActorKind" xml:space="preserve">
+    <value>Тип субъекта</value>
+  </data>
+  <data name="AuditActorUser" xml:space="preserve">
+    <value>ID пользователя</value>
+  </data>
+  <data name="AuditOutcome" xml:space="preserve">
+    <value>Результат</value>
+  </data>
+  <data name="AuditTarget" xml:space="preserve">
+    <value>Цель</value>
+  </data>
+  <data name="AuditScope" xml:space="preserve">
+    <value>Область</value>
+  </data>
+  <data name="AuditWhen" xml:space="preserve">
+    <value>Время (местное)</value>
+  </data>
+  <data name="AuditOrgId" xml:space="preserve">
+    <value>ID организации</value>
+  </data>
+  <data name="AuditProjectId" xml:space="preserve">
+    <value>ID проекта</value>
+  </data>
+  <data name="AuditFromUtc" xml:space="preserve">
+    <value>С (UTC)</value>
+  </data>
+  <data name="AuditToUtc" xml:space="preserve">
+    <value>По (UTC)</value>
+  </data>
+  <data name="AuditApplyFilters" xml:space="preserve">
+    <value>Применить фильтры</value>
+  </data>
+  <data name="AuditClearFilters" xml:space="preserve">
+    <value>Сбросить фильтры</value>
+  </data>
+  <data name="AuditExport" xml:space="preserve">
+    <value>Экспорт CSV</value>
+  </data>
+  <data name="AuditPreviousPage" xml:space="preserve">
+    <value>Назад</value>
+  </data>
+  <data name="AuditNextPage" xml:space="preserve">
+    <value>Далее</value>
+  </data>
+  <data name="AuditPage" xml:space="preserve">
+    <value>Страница {0}</value>
+  </data>
+  <data name="AuditTotal" xml:space="preserve">
+    <value>Событий: {0}</value>
+  </data>
+  <data name="AuditNoEvents" xml:space="preserve">
+    <value>По заданным фильтрам событий нет.</value>
+  </data>
+  <data name="AuditAccessDenied" xml:space="preserve">
+    <value>Недостаточно прав для просмотра журнала аудита платформы.</value>
+  </data>
+  <data name="AuditInvalidGuid" xml:space="preserve">
+    <value>Один из идентификаторов имеет неверный формат GUID.</value>
+  </data>
+  <data name="AuditInvalidFilter" xml:space="preserve">
+    <value>Проверьте тип субъекта, результат и даты UTC.</value>
+  </data>
+<data name="AuditActorToken" xml:space="preserve">
+    <value>ID API-токена актора</value>
+  </data>
+<data name="AuditActorDevice" xml:space="preserve">
+    <value>ID устройства актора</value>
+  </data>
+<data name="AuditTargetType" xml:space="preserve">
+    <value>Тип объекта</value>
+  </data>
+<data name="AuditTargetId" xml:space="preserve">
+    <value>ID объекта</value>
+  </data>
+
+<data name="AuditTraceId" xml:space="preserve">
+
+  <value>Идентификатор трассировки</value>
+
+</data>
   <data name="ExecutionProfilePlan" xml:space="preserve"><value>Планирование</value></data>
   <data name="ExecutionProfileAct" xml:space="preserve"><value>Выполнение</value></data>
   <data name="ExecutionProfileModel" xml:space="preserve"><value>Модель</value></data>
   <data name="PipelineContextSizeInvalid" xml:space="preserve"><value>Для выбранной модели размер контекста должен быть больше нуля. Укажите размер контекстного окна перед запуском сессии.</value></data>
   <data name="ContextResponseReserveTokens" xml:space="preserve"><value>Резерв токенов для ответа (0 — автоматически)</value></data>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
-  <data name="GitSyncTitle" xml:space="preserve"><value>Git-репозиторий</value></data>
-  <data name="GitSyncHelp" xml:space="preserve"><value>Проверьте состояние репозитория или выполните fast-forward текущей ветки. Операция выполняется на подключённой станции и не перезаписывает локальные изменения.</value></data>
-  <data name="GitSyncCheck" xml:space="preserve"><value>Проверить состояние</value></data>
-  <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
-  <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
-  <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
-  <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
-  <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
-  <data name="GitSyncAhead" xml:space="preserve"><value>Впереди</value></data>
-  <data name="GitSyncBehind" xml:space="preserve"><value>Позади</value></data>
-  <data name="GitSyncClean" xml:space="preserve"><value>Рабочее дерево чистое</value></data>
-  <data name="GitSyncDirty" xml:space="preserve"><value>В рабочем дереве есть локальные изменения</value></data>
-  <data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Состояние репозитория проверено.</value></data>
-  <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Репозиторий успешно обновлён fast-forward.</value></data>
-  <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Синхронизация отклонена; рабочее дерево не изменено.</value></data>
-  <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Ошибка синхронизации Git.</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Перед синхронизацией закоммитьте или уберите локальные изменения в stash.</value></data>
-  <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Активна нативная сессия агента. Дождитесь её завершения.</value></data>
-  <data name="GitSyncReasonDiverged" xml:space="preserve"><value>Локальная и upstream-ветки разошлись. Fast-forward невозможен.</value></data>
-  <data name="GitSyncReasonDetached" xml:space="preserve"><value>Репозиторий находится в состоянии detached HEAD.</value></data>
-  <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Для текущей ветки не настроен upstream.</value></data>
-  <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Не удалось получить данные upstream. Проверьте remote и учётные данные на рабочей станции.</value></data>
-  <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Время выполнения Git-операции истекло.</value></data>
-  <data name="MarkdownEdit" xml:space="preserve"><value>Редактировать</value></data>
-  <data name="MarkdownPreview" xml:space="preserve"><value>Просмотр</value></data>
-  <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
-  <data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
-  <data name="Characters" xml:space="preserve"><value>символов</value></data>
+<data name="GitSyncTitle" xml:space="preserve"><value>Git-репозиторий</value></data>
+<data name="GitSyncHelp" xml:space="preserve"><value>Проверьте состояние репозитория или выполните fast-forward текущей ветки. Операция выполняется на подключённой станции и не перезаписывает локальные изменения.</value></data>
+<data name="GitSyncCheck" xml:space="preserve"><value>Проверить состояние</value></data>
+<data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
+<data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
+<data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
+<data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
+<data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
+<data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
+<data name="GitSyncAhead" xml:space="preserve"><value>Впереди</value></data>
+<data name="GitSyncBehind" xml:space="preserve"><value>Позади</value></data>
+<data name="GitSyncClean" xml:space="preserve"><value>Рабочее дерево чистое</value></data>
+<data name="GitSyncDirty" xml:space="preserve"><value>В рабочем дереве есть локальные изменения</value></data>
+<data name="GitSyncOutcomeUpToDate" xml:space="preserve"><value>Состояние репозитория проверено.</value></data>
+<data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Репозиторий успешно обновлён fast-forward.</value></data>
+<data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Синхронизация отклонена; рабочее дерево не изменено.</value></data>
+<data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Ошибка синхронизации Git.</value></data>
+<data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Перед синхронизацией закоммитьте или уберите локальные изменения в stash.</value></data>
+<data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Активна нативная сессия агента. Дождитесь её завершения.</value></data>
+<data name="GitSyncReasonDiverged" xml:space="preserve"><value>Локальная и upstream-ветки разошлись. Fast-forward невозможен.</value></data>
+<data name="GitSyncReasonDetached" xml:space="preserve"><value>Репозиторий находится в состоянии detached HEAD.</value></data>
+<data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Для текущей ветки не настроен upstream.</value></data>
+<data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Не удалось получить данные upstream. Проверьте remote и учётные данные на рабочей станции.</value></data>
+<data name="GitSyncReasonTimeout" xml:space="preserve"><value>Время выполнения Git-операции истекло.</value></data>
+<data name="MarkdownEdit" xml:space="preserve"><value>Редактировать</value></data>
+<data name="MarkdownPreview" xml:space="preserve"><value>Просмотр</value></data>
+<data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
+<data name="MarkdownCollapse" xml:space="preserve"><value>Свернуть</value></data>
+<data name="Characters" xml:space="preserve"><value>символов</value></data>
+<data name="OrganizationData" xml:space="preserve"><value>Данные организации</value></data>
+<data name="OrganizationDataExportLead" xml:space="preserve"><value>Скачайте снимок рабочего пространства организации, участников, счетов и истории биллинга. Пароли, секреты и идентификаторы платёжных провайдеров не включаются.</value></data>
+<data name="DownloadOrganizationExport" xml:space="preserve"><value>Скачать архив организации (ZIP)</value></data>
 </root>

@@ -15,6 +15,24 @@ public sealed class HarnessApiAuthorizationTests
     private readonly Guid _subtaskId = Guid.NewGuid();
 
     [Fact]
+    public void HarnessTokenCapabilities_AreCommandSpecificAndLeastPrivilege()
+    {
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.ChatPrompt));
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead
+                | ApiTokenCapability.TaskWrite | ApiTokenCapability.SessionDrive,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.RunPipelineSession));
+        Assert.Equal(
+            ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead,
+            HarnessApiTokenCapabilities.For(WorkstationCommandKind.RunEvalTurn));
+
+        Assert.False(HarnessApiTokenCapabilities.Chat.HasFlag(ApiTokenCapability.SessionDrive));
+        Assert.True(HarnessApiTokenCapabilities.Pipeline.HasFlag(ApiTokenCapability.SessionDrive));
+    }
+
+    [Fact]
     public void ActorToken_IsBoundToItsOwnSubtaskLifecycleRoutes()
     {
         var resultPath = $"/v1/tasks/{_taskId:D}/subtasks/{_subtaskId:D}/result";
@@ -143,6 +161,11 @@ public sealed class HarnessApiAuthorizationTests
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/verdict", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/review/check", _taskId));
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Review, _projectId, _taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{Guid.NewGuid():D}/pipeline/review/check"));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/approve", _taskId));
 
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,

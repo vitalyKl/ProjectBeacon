@@ -58,6 +58,71 @@ public sealed class TenantContextBinderTests : IDisposable
         Assert.False(tenant.Unscoped);
     }
 
+
+    [Fact]
+    public async Task BindUserAsync_PrefersActiveMembershipOverOlderSuspendedMembership()
+    {
+        var suspendedOrg = Org.Create("Older suspended organization");
+        suspendedOrg.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        var activeOrg = Org.Create("Newer active organization");
+        _db.Orgs.AddRange(suspendedOrg, activeOrg);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var suspendedProject = Project.Create("Suspended project", null, suspendedOrg.Id);
+        var activeProject = Project.Create("Active project", null, activeOrg.Id);
+        _db.Projects.AddRange(suspendedProject, activeProject);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var user = User.Create("active-pref", "active-pref@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var oldMembership = ProjectMember.Create(suspendedProject.Id, user.Id, MemberRole.Owner);
+        var newMembership = ProjectMember.Create(activeProject.Id, user.Id, MemberRole.Member);
+        oldMembership.GetType().GetProperty(nameof(ProjectMember.JoinedAt))!
+            .SetValue(oldMembership, DateTime.UtcNow.AddDays(-5));
+        newMembership.GetType().GetProperty(nameof(ProjectMember.JoinedAt))!
+            .SetValue(newMembership, DateTime.UtcNow.AddDays(-1));
+        _db.ProjectMembers.AddRange(oldMembership, newMembership);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Equal(activeProject.Id, tenant.ProjectId);
+        Assert.Equal(activeOrg.Id, tenant.OrgId);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Active, tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_PreservesSuspendedMarkerWhenNoActiveMembershipExists()
+    {
+        var org = Org.Create("Only suspended organization");
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var project = Project.Create("Suspended only project", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("suspended-only", "suspended-only@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Equal(project.Id, tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, tenant.LifecycleStatus);
+    }
+
     [Fact]
     public async Task BindUserAsync_AdminWithoutMembership_UsesOldestProject()
     {
@@ -81,6 +146,52 @@ public sealed class TenantContextBinderTests : IDisposable
         Assert.Equal(project.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
         Assert.False(tenant.Unscoped);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_UsesOrganizationMembershipWhenNoProjectMembershipExists()
+    {
+        var org = Org.Create("Org-only owner");
+        var user = User.Create("org-only-owner", "org-only-owner@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Null(tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.False(tenant.Unscoped);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Active, tenant.LifecycleStatus);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_PreservesSuspendedOrganizationOnlyMembership()
+    {
+        var org = Org.Create("Suspended org-only member");
+        org.ChangeLifecycleStatus(OrganizationLifecycleStatus.Suspended, DateTime.UtcNow);
+        var user = User.Create("org-only-suspended", "org-only-suspended@example.com", "hash");
+        _db.Orgs.Add(org);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, user.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
+
+        Assert.Null(tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+        Assert.True(tenant.LifecycleEnforced);
+        Assert.Equal(OrganizationLifecycleStatus.Suspended, tenant.LifecycleStatus);
     }
 
     [Fact]

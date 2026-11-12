@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Data.Configurations;
 
 using Domain.Entities.Identity;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 /// <summary>
@@ -15,6 +16,9 @@ public class OrgConfiguration : IEntityTypeConfiguration<Org>
         entity.Property(e => e.Description).HasMaxLength(2000);
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.UpdatedAt);
+        entity.Property(e => e.LifecycleStatus)
+            .HasConversion<int>()
+            .HasDefaultValue(OrganizationLifecycleStatus.Active);
 
         entity.HasMany(e => e.Members)
             .WithOne(e => e.Org)

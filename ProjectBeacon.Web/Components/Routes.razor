@@ -3,8 +3,10 @@
 @using MudBlazor
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
+@using ProjectBeacon.Web.Authentication
 @inject IStringLocalizer<Web> L
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(App).Assembly">
@@ -22,6 +24,10 @@
                     @if (context.User.Identity?.IsAuthenticated == true)
                     {
                         <RedirectTo "/" />
+                    }
+                    else if (ControlPlaneHostGuard.IsCurrentHost(Navigation, Configuration))
+                    {
+                        <RedirectTo "/control/login" />
                     }
                     else
                     {

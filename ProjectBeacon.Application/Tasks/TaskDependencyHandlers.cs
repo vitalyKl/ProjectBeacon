@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -11,8 +12,13 @@ using Microsoft.EntityFrameworkCore;
 public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public SetDependenciesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public SetDependenciesHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(SetDependenciesCommand command, CancellationToken ct = default)
     {
@@ -23,6 +29,12 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
 
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Task, AuthAction.Update,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         var existingIds = task.Dependencies.Select(d => d.DependentTaskId).ToList();
         var toRemove = existingIds.Except(command.Request.DependentTaskIds);

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Application.Agents;
+using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Tasks;
@@ -18,11 +19,16 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public StartPipelineHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public StartPipelineHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartPipelineCommand command, CancellationToken ct = default)
@@ -32,6 +38,19 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
+
+        if (!command.Actor.IsHuman && !command.Actor.IsApiToken)
+            return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+        // A short-lived role-pinned harness token cannot create a new pipeline; it can
+        // only operate within the active session it was issued for.
+        if (command.Actor.IsApiToken && command.Actor.PipelineRole is not null)
+            return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Execute,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineSessionDto>(permission);
 
         var expectedStatus = task.Status;
         try
@@ -91,8 +110,13 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
 public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public LaunchSessionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public LaunchSessionHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(LaunchSessionCommand command, CancellationToken ct = default)
     {
@@ -114,6 +138,11 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var permission = await PipelineExecutionAuthorization.CanLaunchAsync(
+                db, _authorization, command.Actor, task, session, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             if (session.Role == PipelineRole.Actor)
             {
@@ -256,8 +285,13 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ApprovePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ApprovePipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ApprovePipelineCommand command, CancellationToken ct = default)
     {
@@ -266,6 +300,12 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Pipeline, AuthAction.Administer,
+            projectId: task.ProjectId, ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         if (task.PipelineStage != TaskPipelineStage.Approved)
             return Result.Failure<PipelineStateDto>("Pipeline is not approved.");
@@ -322,8 +362,13 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
 public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ForceClosePipelineHandler(IBeaconDbFactory dbFactory, IAuthorizationService? authorization = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization ?? new AuthorizationService();
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(ForceClosePipelineCommand command, CancellationToken ct = default)
     {
@@ -333,8 +378,15 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
-        if (!await PipelineSupport.IsPrivilegedAsync(db, command.Request.ActorId, ct))
-            return Result.Failure<PipelineStateDto>("Force close requires admin privileges.");
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Pipeline,
+            AuthAction.Administer,
+            projectId: task.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<PipelineStateDto>(permission);
 
         var reason = command.Request.Reason?.Trim();
         var marker = string.IsNullOrEmpty(reason)
@@ -377,11 +429,16 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ISessionSpawner _spawner;
+    private readonly IAuthorizationService _authorization;
 
-    public RetryPipelineSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    public RetryPipelineSessionHandler(
+        IBeaconDbFactory dbFactory,
+        ISessionSpawner spawner,
+        IAuthorizationService? authorization = null)
     {
         _dbFactory = dbFactory;
         _spawner = spawner;
+        _authorization = authorization ?? new AuthorizationService();
     }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(RetryPipelineSessionCommand command, CancellationToken ct = default)
@@ -404,6 +461,14 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
                 .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            if (previous.ProjectId != task.ProjectId)
+                return Result.Failure<PipelineSessionDto>("Forbidden.", ErrorKind.Forbidden);
+
+            var permission = await PipelineExecutionAuthorization.CanManageLifecycleAsync(
+                db, _authorization, command.Actor, task, ct);
+            if (!permission.Success)
+                return Result.Failure<PipelineSessionDto>(permission);
 
             var expectedStage = previous.Role switch
             {

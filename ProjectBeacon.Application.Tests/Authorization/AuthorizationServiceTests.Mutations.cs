@@ -125,10 +125,9 @@ public sealed partial class AuthorizationServiceTests
     {
         var (_, projectId, ownerUserId) = await SeedProjectWithMembers(MemberRole.Owner);
         var r = await _auth.CanRemoveMemberAsync(_db, Human(ownerUserId), projectId, ownerUserId, TestContext.Current.CancellationToken);
-        // Self-removal check fires first, so this returns Ok.
-        // To test last-owner guard, use a different owner.
-        // Actually self-removal returns Ok before the owner check, so let's test with two owners.
-        Assert.True(r.Success);
+        Assert.False(r.Success);
+        Assert.Equal(ErrorKind.Conflict, r.Kind);
+        Assert.Contains("last project Owner", r.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -159,7 +158,7 @@ public sealed partial class AuthorizationServiceTests
 
         var r = await _auth.CanRemoveMemberAsync(_db, Human(adminId), projectId, owner.Id, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
-        Assert.Contains("Owner", r.Error);
+        Assert.Equal(ErrorKind.Forbidden, r.Kind);
     }
 
     [Fact]
@@ -252,9 +251,16 @@ public sealed partial class AuthorizationServiceTests
     }
 
     [Fact]
-    public void HasCapability_Worker_ReturnsTrue()
+    public void HasCapability_Worker_ReturnsFalse()
     {
-        Assert.True(_auth.HasCapability(Worker(), ApiTokenCapability.Admin));
+        Assert.False(_auth.HasCapability(Worker(), ApiTokenCapability.Admin));
+    }
+
+    [Fact]
+    public void HasCapability_UnknownOrEmptyRequirement_ReturnsFalse()
+    {
+        Assert.False(_auth.HasCapability(Human(Guid.NewGuid()), ApiTokenCapability.None));
+        Assert.False(_auth.HasCapability(Token(ApiTokenCapability.Admin), (ApiTokenCapability)(1L << 20)));
     }
 
     [Fact]

@@ -60,7 +60,9 @@ public sealed class IgnoreQueryFiltersAllowlistTests
         foreach (var entry in expected.Values)
         {
             Assert.False(string.IsNullOrWhiteSpace(entry.Reason), $"{entry.Path} needs a rationale.");
-            Assert.Equal(entry.Count, actual[entry.Path]);
+            var actualCount = actual[entry.Path];
+            Assert.True(entry.Count == actualCount,
+                $"Unexpected IgnoreQueryFilters() count in {entry.Path}: expected {entry.Count}, actual {actualCount}.");
         }
     }
 
