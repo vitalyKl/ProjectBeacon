@@ -98,8 +98,13 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public UpdateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateTaskHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<TaskItemDto>> HandleAsync(UpdateTaskCommand command, CancellationToken ct = default)
     {
@@ -110,6 +115,16 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+
+        var permission = await _authorization.CanAsync(
+            db,
+            command.Actor,
+            ResourceType.Task,
+            AuthAction.Update,
+            projectId: task.ProjectId,
+            ct: ct);
+        if (!permission.Success)
+            return Result.Failure<TaskItemDto>(permission);
 
         if (command.Request.LabelId is not null)
         {
