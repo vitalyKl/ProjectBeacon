@@ -72,7 +72,7 @@ public sealed partial class PipelineHandlerTests
         Assert.False(secondVerdict.Success);
 
         var uncheckedClose = await new ApprovePipelineHandler(factory)
-            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id), PipelineTestActor.Admin), TestContext.Current.CancellationToken);
         Assert.False(uncheckedClose.Success);
 
         await ProveReviewAsync(projectId, task.Id, factory, 0);
