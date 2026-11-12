@@ -120,6 +120,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         string? lastGitSyncResultJson = null;
         DateTime? lastGitSyncCompletedAt = null;
         var repositorySyncInProgress = false;
+        GitSyncRefusalCode? lastKnownRepositoryReasonCode = null;
+        var repositorySyncBlocked = false;
         if (selectedPipelineDeviceId is { } selectedDeviceId)
         {
             repositorySyncInProgress = await db.WorkstationCommands.AsNoTracking()
@@ -160,8 +162,6 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         int? lastKnownRepositoryBehind = null;
         string? lastKnownRepositoryBranch = null;
-        GitSyncRefusalCode? lastKnownRepositoryReasonCode = null;
-        var repositorySyncBlocked = false;
         if (!string.IsNullOrWhiteSpace(lastGitSyncResultJson))
         {
             try
