@@ -132,82 +132,116 @@ internal sealed class RepoPatchApplyService
                 filesToApply.Add(file);
             }
 
-            if (filesToApply.Count > 0)
+            var applyAttempted = false;
+            try
             {
-                var patchToApply = FilterPatch(request.Patch, filesToApply);
-                if (string.IsNullOrWhiteSpace(patchToApply))
-                    return (false, null, "RepoPatchConflict: InvalidPatchManifest");
-
-                var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], patchToApply, ct);
-                if (check.TimedOut)
-                    return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
-                if (check.ExitCode != 0)
-                    return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
-
-                var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], patchToApply, ct);
-                if (applied.TimedOut || applied.ExitCode != 0)
+                if (filesToApply.Count > 0)
                 {
-                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                    var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
-                    return (false, null, restored
-                        ? $"RepoPatchConflict: {reason}"
-                        : $"RepoPatchConflict: {reason}:RollbackFailed");
-                }
-            }
+                    var patchToApply = FilterPatch(request.Patch, filesToApply);
+                    if (string.IsNullOrWhiteSpace(patchToApply))
+                        return (false, null, "RepoPatchConflict: InvalidPatchManifest");
 
-            var results = new List<object>(request.Files.Count);
-            foreach (var file in request.Files)
-            {
-                var resolved = ResolveSafeFile(root, file.ProjectPath);
-                if (resolved is null)
-                {
-                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                    return (false, null, restored
-                        ? "RepoPatchConflict: PostApplyPathInvalid"
-                        : "RepoPatchConflict: PostApplyPathInvalid:RollbackFailed");
-                }
+                    var check = await RunGitAsync(repositoryRoot, ["apply", "--check", "--whitespace=nowarn"], patchToApply, ct);
+                    if (check.TimedOut)
+                        return (false, null, "RepoPatchConflict: GitApplyCheckTimeout");
+                    if (check.ExitCode != 0)
+                        return (false, null, "RepoPatchConflict: GitApplyCheckFailed");
 
-                if (file.ResultHash is null)
-                {
-                    if (File.Exists(resolved) || Directory.Exists(resolved))
+                    // From this point onward, cancellation or an unexpected verification
+                    // exception must restore the exact pre-attempt bytes before it escapes.
+                    applyAttempted = true;
+                    var applied = await RunGitAsync(repositoryRoot, ["apply", "--whitespace=nowarn"], patchToApply, ct);
+                    if (applied.TimedOut || applied.ExitCode != 0)
                     {
                         var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                        applyAttempted = false;
+                        var reason = applied.TimedOut ? "GitApplyTimeout" : "GitApplyFailed";
                         return (false, null, restored
-                            ? "RepoPatchConflict: DeleteVerificationFailed"
-                            : "RepoPatchConflict: DeleteVerificationFailed:RollbackFailed");
+                            ? $"RepoPatchConflict: {reason}"
+                            : $"RepoPatchConflict: {reason}:RollbackFailed");
                     }
-                    results.Add(new { projectPath = file.ProjectPath, deleted = true });
-                    continue;
+
+                    if (reportProgress is not null)
+                    {
+                        await reportProgress(
+                            "Documentation patch applied; verifying result hashes.",
+                            ct);
+                    }
+                    ct.ThrowIfCancellationRequested();
                 }
 
-                if (!File.Exists(resolved) || IsLinkOrReparsePoint(resolved))
+                var results = new List<object>(request.Files.Count);
+                foreach (var file in request.Files)
                 {
-                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                    return (false, null, restored
-                        ? "RepoPatchConflict: ResultFileMissing"
-                        : "RepoPatchConflict: ResultFileMissing:RollbackFailed");
+                    var resolved = ResolveSafeFile(root, file.ProjectPath);
+                    if (resolved is null)
+                    {
+                        var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                        applyAttempted = false;
+                        return (false, null, restored
+                            ? "RepoPatchConflict: PostApplyPathInvalid"
+                            : "RepoPatchConflict: PostApplyPathInvalid:RollbackFailed");
+                    }
+
+                    if (file.ResultHash is null)
+                    {
+                        if (File.Exists(resolved) || Directory.Exists(resolved))
+                        {
+                            var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                            applyAttempted = false;
+                            return (false, null, restored
+                                ? "RepoPatchConflict: DeleteVerificationFailed"
+                                : "RepoPatchConflict: DeleteVerificationFailed:RollbackFailed");
+                        }
+                        results.Add(new { projectPath = file.ProjectPath, deleted = true });
+                        continue;
+                    }
+
+                    if (!File.Exists(resolved) || IsLinkOrReparsePoint(resolved))
+                    {
+                        var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                        applyAttempted = false;
+                        return (false, null, restored
+                            ? "RepoPatchConflict: ResultFileMissing"
+                            : "RepoPatchConflict: ResultFileMissing:RollbackFailed");
+                    }
+
+                    var resultHash = Hash(await File.ReadAllBytesAsync(resolved, ct));
+                    if (!FixedEquals(resultHash, file.ResultHash))
+                    {
+                        var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                        applyAttempted = false;
+                        return (false, null, restored
+                            ? "RepoPatchConflict: ResultHashMismatch"
+                            : "RepoPatchConflict: ResultHashMismatch:RollbackFailed");
+                    }
+                    results.Add(new { projectPath = file.ProjectPath, resultHash });
                 }
 
-                var resultHash = Hash(await File.ReadAllBytesAsync(resolved, ct));
-                if (!FixedEquals(resultHash, file.ResultHash))
+                var resultJson = JsonSerializer.Serialize(new
                 {
-                    var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
-                    return (false, null, restored
-                        ? "RepoPatchConflict: ResultHashMismatch"
-                        : "RepoPatchConflict: ResultHashMismatch:RollbackFailed");
-                }
-                results.Add(new { projectPath = file.ProjectPath, resultHash });
+                    projectId = request.ProjectId,
+                    proposalId = request.ProposalId,
+                    applied = true,
+                    alreadyApplied = filesToApply.Count == 0,
+                    files = results
+                });
+                return (true, resultJson, null);
             }
-
-            var resultJson = JsonSerializer.Serialize(new
+            catch (OperationCanceledException) when (applyAttempted)
             {
-                projectId = request.ProjectId,
-                proposalId = request.ProposalId,
-                applied = true,
-                alreadyApplied = filesToApply.Count == 0,
-                files = results
-            });
-            return (true, resultJson, null);
+                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                if (!restored)
+                    throw new IOException("RepoPatchConflict: CancelledApply:RollbackFailed");
+                throw;
+            }
+            catch (Exception exception) when (applyAttempted)
+            {
+                var restored = await RestoreAsync(root, snapshots, CancellationToken.None);
+                if (!restored)
+                    throw new IOException("RepoPatchConflict: ApplyInterrupted:RollbackFailed", exception);
+                throw;
+            }
         }
     }
 
