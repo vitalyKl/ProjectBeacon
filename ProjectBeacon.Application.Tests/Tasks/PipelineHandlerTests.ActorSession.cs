@@ -382,7 +382,7 @@ public sealed partial class PipelineHandlerTests
                 .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.True(actor.Success, actor.Error);
             var after = await new GetPipelineHandler(factory)
-                .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+                .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id), PipelineTestActor.AdminFor(task.ProjectId)), TestContext.Current.CancellationToken);
             Assert.Equal(TaskPipelineStage.Executing, after.Value!.Stage);
             Assert.Equal(SubtaskStatus.InProgress,
                 after.Value.Subtasks.Single(s => s.Id == sub.Value.Id).Status);
