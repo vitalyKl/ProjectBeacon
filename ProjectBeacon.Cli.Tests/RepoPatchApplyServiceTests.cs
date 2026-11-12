@@ -138,6 +138,95 @@ public sealed class RepoPatchApplyServiceTests
     }
 
     [Fact]
+    public async Task Execute_RejectsFileSymlinkToOutsideProjectWithoutModifyingTarget()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
+        const string path = "docs/guide.md";
+        const string before = "Before.\\n";
+        const string after = "Approved.\\n";
+        await repo.WriteCommittedAsync(path, before);
+        var patch = await repo.CreatePatchAsync(path, after);
+        var payload = Payload(repo.ProjectId, patch, path, before, after);
+
+        var outsideRoot = Path.Combine(Path.GetTempPath(), "beacon-repo-patch-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideRoot);
+        var outsideFile = Path.Combine(outsideRoot, "protected.md");
+        await File.WriteAllTextAsync(outsideFile, before);
+        var projectFile = Path.Combine(repo.ProjectRoot, path);
+        File.Delete(projectFile);
+
+        try
+        {
+            try
+            {
+                File.CreateSymbolicLink(projectFile, outsideFile);
+            }
+            catch (Exception exception) when (OperatingSystem.IsWindows()
+                && exception is (UnauthorizedAccessException or IOException))
+            {
+                Assert.Skip($"File symbolic links are unavailable on this Windows runner: {exception.GetType().Name}.");
+            }
+
+            var result = await _service.ExecuteAsync(
+                repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+
+            Assert.False(result.Ok);
+            Assert.Contains("UnsafeDocumentationPath", result.Error);
+            Assert.Equal(before, await File.ReadAllTextAsync(outsideFile));
+        }
+        finally
+        {
+            File.Delete(projectFile);
+            Directory.Delete(outsideRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Execute_RejectsParentDirectorySymlinkToOutsideProjectWithoutModifyingTarget()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync(nestedProject: false);
+        const string path = "docs/guide.md";
+        const string before = "Before.\\n";
+        const string after = "Approved.\\n";
+        await repo.WriteCommittedAsync(path, before);
+        var patch = await repo.CreatePatchAsync(path, after);
+        var payload = Payload(repo.ProjectId, patch, path, before, after);
+
+        var outsideRoot = Path.Combine(Path.GetTempPath(), "beacon-repo-patch-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideRoot);
+        var outsideFile = Path.Combine(outsideRoot, "guide.md");
+        await File.WriteAllTextAsync(outsideFile, before);
+        var projectDocs = Path.Combine(repo.ProjectRoot, "docs");
+        Directory.Delete(projectDocs, recursive: true);
+
+        try
+        {
+            try
+            {
+                Directory.CreateSymbolicLink(projectDocs, outsideRoot);
+            }
+            catch (Exception exception) when (OperatingSystem.IsWindows()
+                && exception is (UnauthorizedAccessException or IOException))
+            {
+                Assert.Skip($"Directory symbolic links are unavailable on this Windows runner: {exception.GetType().Name}.");
+            }
+
+            var result = await _service.ExecuteAsync(
+                repo.ProjectRoot, repo.ProjectId, payload, CancellationToken.None);
+
+            Assert.False(result.Ok);
+            Assert.Contains("UnsafeDocumentationPath", result.Error);
+            Assert.Equal(before, await File.ReadAllTextAsync(outsideFile));
+        }
+        finally
+        {
+            if (Directory.Exists(projectDocs))
+                Directory.Delete(projectDocs);
+            Directory.Delete(outsideRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Execute_ResolvesGitPathAgainstNestedProjectRuntime()
     {
         await using var repo = await RepositoryFixture.CreateAsync(nestedProject: true);
