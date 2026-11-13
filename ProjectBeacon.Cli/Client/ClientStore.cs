@@ -127,6 +127,10 @@ public sealed class WorkstationSettings
     public int ContextResponseReserveTokens { get; set; }
     /// <summary>Abort a pipeline turn after this many minutes without transcript/tool/form progress.</summary>
     public int PipelineIdleTimeoutMinutes { get; set; } = 15;
+    /// <summary>Agent workspace strategy. Snapshot remains the default until task branch workspaces are enabled explicitly.</summary>
+    public string WorkspaceMode { get; set; } = WorkstationWorkspaceMode.Snapshot;
+    /// <summary>Persistent root for task worktrees. Blank uses the per-user ProjectBeacon worktree directory.</summary>
+    public string? WorktreeRoot { get; set; }
     public string? AgentDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
     public string? BeaconPath { get; set; }
@@ -200,4 +204,14 @@ public sealed class WorkstationSettings
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+}
+
+/// <summary>Supported local agent workspace strategies.</summary>
+internal static class WorkstationWorkspaceMode
+{
+    public const string Snapshot = "Snapshot";
+    public const string Branch = "Branch";
+
+    public static bool UsesTaskBranches(string? value) =>
+        string.Equals(value?.Trim(), Branch, StringComparison.OrdinalIgnoreCase);
 }

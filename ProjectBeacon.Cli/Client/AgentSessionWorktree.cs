@@ -10,7 +10,7 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 /// user's current index, tracked edits and untracked files without changing the user's index.
 /// Only the agent's delta is applied back after a successful turn.
 /// </summary>
-internal sealed class AgentSessionWorktree : IAsyncDisposable
+internal sealed class AgentSessionWorktree : IAgentSessionWorktree
 {
     private readonly string _repositoryRoot;
     private readonly string _originalWorkingDirectory;
@@ -287,6 +287,14 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     /// Applies only the changes made by the agent, leaving the user's staged/unstaged snapshot
     /// intact. A conflict preserves the worktree and its commit for manual recovery.
     /// </summary>
+    public async Task<(bool Success, string? Error, string? CommitSha)> CompleteChangesAsync(
+        string commitMessage,
+        CancellationToken ct)
+    {
+        var applied = await ApplyChangesAsync(ct);
+        return (applied.Success, applied.Error, null);
+    }
+
     public async Task<(bool Success, string? Error)> ApplyChangesAsync(CancellationToken ct)
     {
         // Patch-back mutates the real project checkout. Serialize it with snapshot creation,
@@ -502,7 +510,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         return false;
     }
 
-    private static string[] ParseFilterDriverNames(string configKeys)
+    internal static string[] ParseFilterDriverNames(string configKeys)
     {
         var drivers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in configKeys.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -536,7 +544,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             _ = await RunGitAsync(repositoryRoot, CancellationToken.None, disabledFilterDrivers, "worktree", "prune");
     }
 
-    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitAsync(
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitAsync(
         string workingDirectory,
         CancellationToken ct,
         IReadOnlyCollection<string> disabledFilterDrivers,
@@ -559,6 +567,28 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         info.ArgumentList.Insert(0, "commit.gpgsign=false");
         info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "core.hooksPath=" + hooksDirectory);
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.sshCommand=ssh");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.askPass=");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "credential.helper=");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.file.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.ssh.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.https.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.http.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.allow=never");
+        info.ArgumentList.Insert(0, "-c");
+        info.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        info.Environment["GCM_INTERACTIVE"] = "never";
+        info.Environment["GIT_PAGER"] = "cat";
+        info.Environment["PAGER"] = "cat";
+        info.ArgumentList.Insert(0, "core.fsmonitor=false");
         info.ArgumentList.Insert(0, "-c");
 
         // Git clean/smudge/process filters are external executables. Attributes are repository
