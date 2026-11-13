@@ -135,7 +135,7 @@ internal static class ProjectGitSyncPreflight
 
         if (verificationIndex < 0 || result is null)
         {
-            var reason = attempts[0].Status is WorkstationCommandStatus.Failed
+            GitSyncRefusalCode? reason = attempts[0].Status is WorkstationCommandStatus.Failed
                 or WorkstationCommandStatus.Succeeded
                     ? GitSyncRefusalCode.FetchFailed
                     : null;
