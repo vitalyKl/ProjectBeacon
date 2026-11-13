@@ -84,9 +84,9 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     public void AdvanceSnapshotBaseline(string commit)
     {
         if (commit is not { Length: 40 or 64 }
-            || commit.Any(character => character is not (>= '0' and <= '9')
-                and not (>= 'a' and <= 'f')
-                and not (>= 'A' and <= 'F')))
+            || commit.Any(character => !((character >= '0' && character <= '9')
+                || (character >= 'a' && character <= 'f')
+                || (character >= 'A' && character <= 'F'))))
             throw new ArgumentException("A valid Git commit id is required.", nameof(commit));
 
         _snapshotCommit = commit;
