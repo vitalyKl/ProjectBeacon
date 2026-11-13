@@ -226,7 +226,7 @@ public sealed partial class PipelineHandlerTests
                 .SingleAsync(row => row.TaskId == task.Id && row.Role == PipelineRole.Actor,
                     TestContext.Current.CancellationToken);
             Assert.Equal(nextSubtask.Value.Id, actor.SubtaskId);
-            Assert.Equal(SessionStatus.Ready, actor.Status);
+            Assert.Equal(SessionStatus.Active, actor.Status);
         }
     }
 

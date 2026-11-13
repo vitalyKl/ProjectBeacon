@@ -89,14 +89,10 @@ public sealed partial class PipelineHandlerTests : IDisposable
 
     private async Task<Guid> SeedNativeRuntimeAsync(Guid projectId)
     {
+        // Seed an additional backend for the scenario. SeedTaskAsync already creates
+        // the one native workstation/runtime used by the project; adding another runtime
+        // here makes single-workstation assertions nondeterministic.
         var user = User.Create("native", $"native-{Guid.NewGuid():N}@beacon.local", "hash");
-        var device = DaemonDevice.Create(
-            "native workstation",
-            user.Id,
-            "fp-" + Guid.NewGuid().ToString("N"),
-            "hash-" + Guid.NewGuid().ToString("N"),
-            "bcd_" + Guid.NewGuid().ToString("N"));
-        device.Heartbeat("{}", """{"agentRuntime":"native"}""");
         var backend = LocalModelBackend.Create(
             "native-test-model",
             ModelBackendType.LlamaCpp,
@@ -104,14 +100,11 @@ public sealed partial class PipelineHandlerTests : IDisposable
             8192,
             60,
             user.Id);
-        var runtime = ProjectRuntime.Create(projectId, device.Id, "/workspace/native");
 
         using (TenantScope.EnterUnscoped())
         {
             _db.Users.Add(user);
-            _db.DaemonDevices.Add(device);
             _db.LocalModelBackends.Add(backend);
-            _db.ProjectRuntimes.Add(runtime);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -123,20 +116,26 @@ public sealed partial class PipelineHandlerTests : IDisposable
         DaemonDevice device;
         using (TenantScope.EnterUnscoped())
         {
-            user = User.Create("rev", $"rev-{Guid.NewGuid():N}@beacon.local", "hash");
-            _db.Users.Add(user);
-            _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
-            device = DaemonDevice.Create("review", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash", "bcd_" + Guid.NewGuid().ToString("N"));
-            _db.DaemonDevices.Add(device);
-            await _db.SaveChangesAsync();
-        }
+            // Use the native workstation already attached by SeedTaskAsync. Runtime links
+            // are intentionally immutable while pipeline sessions are open; this helper
+            // must not attach a second workstation after the pipeline has started.
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(item => item.ProjectId == projectId)
+                .OrderBy(item => item.CreatedAt)
+                .ThenBy(item => item.DeviceId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            device = await _db.DaemonDevices.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == runtime.DeviceId, TestContext.Current.CancellationToken);
+            user = await _db.Users.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == device.UserId, TestContext.Current.CancellationToken);
 
-        var beat = await new HeartbeatDeviceHandler(factory).HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")));
-        Assert.True(beat.Success, beat.Error);
-        var attach = await new AttachRuntimeHandler(factory).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, user.Id, @"A:\work\review")));
-        Assert.True(attach.Success, attach.Error);
+            var hasMembership = await _db.ProjectMembers.IgnoreQueryFilters()
+                .AnyAsync(item => item.ProjectId == projectId && item.UserId == user.Id,
+                    TestContext.Current.CancellationToken);
+            if (!hasMembership)
+                _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var check = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
             .HandleAsync(new RecordReviewCheckCommand(

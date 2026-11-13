@@ -5,6 +5,8 @@ using Application.Agents;
 using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Identity;
+using Domain.Entities.Agents;
+using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -69,6 +71,32 @@ public sealed class TaskKindHandlerTests : IDisposable
 
         var phases = await new ListTaskPhasesHandler(factory).HandleAsync(new ListTaskPhasesCommand(created.Value!.Id), TestContext.Current.CancellationToken);
         Assert.Equal(new[] { "understand", "do", "check" }, phases.Value!.Select(p => p.Key).ToList());
+
+        var device = DaemonDevice.Create(
+            "kind-native-workstation",
+            userId,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash-" + Guid.NewGuid().ToString("N"),
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        device.Heartbeat("{}", """{"agentRuntime":"native"}""");
+        var plannerBackend = LocalModelBackend.Create(
+            "kind-planner-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            userId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.DaemonDevices.Add(device);
+            _db.LocalModelBackends.Add(plannerBackend);
+            _db.ProjectRuntimes.Add(ProjectRuntime.Create(projectId, device.Id, Path.GetTempPath()));
+            var understand = await _db.TaskPhases.IgnoreQueryFilters()
+                .SingleAsync(phase => phase.TaskId == created.Value.Id && phase.Key == "understand",
+                    TestContext.Current.CancellationToken);
+            understand.SetModel(plannerBackend.Id);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var pipeline = await new StartPipelineHandler(factory, new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog()))
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id)), TestContext.Current.CancellationToken);
