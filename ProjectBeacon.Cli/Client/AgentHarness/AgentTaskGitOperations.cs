@@ -106,6 +106,10 @@ internal static class AgentTaskGitOperations
         JsonObject arguments,
         CancellationToken ct)
     {
+        if (!PipelineToolPolicy.GitToolsForRole(authorization.PipelineRole)
+            .Contains(toolName, StringComparer.Ordinal))
+            return Error("The current execution role is not authorized for this structured Git operation.");
+
         var opened = await OpenAsync(authorization, ct);
         if (opened.Context is null)
             return Error(opened.Error ?? "The task branch workspace is unavailable.");
@@ -526,9 +530,16 @@ internal static class AgentTaskGitOperations
         {
             var local = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
                 "rev-parse", "--verify", $"refs/heads/{context.BaseBranch}");
-            if (!Succeeded(local))
+            if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
                 return (null, "No origin remote or local recorded base branch is available.");
-            targetRef = $"refs/heads/{context.BaseBranch}";
+
+            // Keep one task-specific integration target so continue can verify and persist
+            // the exact base SHA even when this repository has no origin remote.
+            var updateLocalTarget = await Git(
+                context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", targetRef, local.StdOut.Trim());
+            if (!Succeeded(updateLocalTarget))
+                return (null, "Could not record the local base branch commit for integration.");
         }
 
         var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", targetRef);
