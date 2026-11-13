@@ -106,6 +106,71 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void TaskDetail_DoesNotBlockPipelineForGitSyncOnAnotherWorkstation()
+    {
+        var task = DbContext.Tasks.First();
+        var project = DbContext.Projects.Single();
+        var user = DbContext.Users.Single();
+
+        var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        auth.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false"),
+                new Claim("project_id", project.Id.ToString("D")),
+                new Claim("org_id", project.OrgId.ToString("D"))
+            },
+            "TestAuth");
+
+        var plannerBackend = LocalModelBackend.Create(
+            "task-detail-planner-other-sync",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        DbContext.LocalModelBackends.Add(plannerBackend);
+        DbContext.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, plannerBackend.Id, project.Id));
+
+        var selectedDevice = DbContext.Set<DaemonDevice>().Single();
+        selectedDevice.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
+        DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, selectedDevice.Id, "/workspace/selected"));
+
+        var otherUser = ProjectBeacon.Domain.Entities.Identity.User.Create(
+            "other-workstation", "other-workstation@example.test", "hash");
+        var otherDevice = DaemonDevice.Create(
+            "other-workstation",
+            otherUser.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash-" + Guid.NewGuid().ToString("N"),
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        otherDevice.Heartbeat(
+            """{"capabilities":["git-sync-v1"]}""",
+            """{"agentRuntime":"external"}""");
+        DbContext.Users.Add(otherUser);
+        DbContext.DaemonDevices.Add(otherDevice);
+        DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, otherDevice.Id, "/workspace/other"));
+        var command = WorkstationCommand.Create(
+            otherDevice.Id,
+            WorkstationCommandKind.GitSync,
+            System.Text.Json.JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+            project.Id,
+            user.Id);
+        command.Claim(TimeSpan.FromMinutes(5), "other-workstation-instance");
+        DbContext.WorkstationCommands.Add(command);
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
+            builder => builder.Add(component => component.TaskId, task.Id));
+
+        Assert.Contains("task-repository-sync", cut.Markup);
+        Assert.False(cut.Find("[data-testid='task-pipeline-start']").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void TaskDetail_ShowsNonBlockingWarningWhenLastGitStatusIsBehind()
     {
         var task = DbContext.Tasks.First();

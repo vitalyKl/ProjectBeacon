@@ -864,11 +864,12 @@ else
                 task.ProjectId,
                 _actorContext,
                 targetDeviceId: preflight.PipelineDeviceId);
-            if (pending.Success && pending.Value is { } command)
+            if (pending.Success && pending.Value is { } command
+                && command.DeviceId == preflight.PipelineDeviceId)
             {
                 _gitSyncCommandId = command.Id;
                 _gitSyncProjectId = task.ProjectId;
-                _gitSyncTargetDeviceId = preflight.PipelineDeviceId;
+                _gitSyncTargetDeviceId = command.DeviceId;
                 _gitSyncCommandPending = true;
             }
             else if (!pending.Success)
