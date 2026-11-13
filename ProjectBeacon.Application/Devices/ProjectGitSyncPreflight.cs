@@ -173,18 +173,25 @@ internal static class ProjectGitSyncPreflight
             _ => false
         };
 
-        GitSyncRefusalCode? reasonCode = newerAttemptFailed
-            ? GitSyncRefusalCode.FetchFailed
-            : result.ReasonCode
-                ?? (result.Detached ? GitSyncRefusalCode.Detached
-                    : !result.HasUpstream ? GitSyncRefusalCode.NoUpstream
-                    : result.Diverged ? GitSyncRefusalCode.Diverged
-                    : (result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded)
-                        && !result.Clean
-                        ? GitSyncRefusalCode.DirtyWorkingTree
-                    : inconsistentSuccess || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused
-                        ? GitSyncRefusalCode.FetchFailed
-                        : null);
+        GitSyncRefusalCode? reasonCode;
+        if (newerAttemptFailed)
+            reasonCode = GitSyncRefusalCode.FetchFailed;
+        else if (result.ReasonCode is { } reportedReason)
+            reasonCode = reportedReason;
+        else if (result.Detached)
+            reasonCode = GitSyncRefusalCode.Detached;
+        else if (!result.HasUpstream)
+            reasonCode = GitSyncRefusalCode.NoUpstream;
+        else if (result.Diverged)
+            reasonCode = GitSyncRefusalCode.Diverged;
+        else if ((result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded)
+            && !result.Clean)
+            reasonCode = GitSyncRefusalCode.DirtyWorkingTree;
+        else if (inconsistentSuccess
+            || (result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused))
+            reasonCode = GitSyncRefusalCode.FetchFailed;
+        else
+            reasonCode = null;
 
         if (runtimeVersionAt is null
             || verification.CompletedAt is null
