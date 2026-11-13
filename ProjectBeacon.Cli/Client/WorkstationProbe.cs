@@ -22,9 +22,7 @@ public static class WorkstationProbe
             ["dotnet"] = Which("dotnet"),
             ["os"] = Environment.OSVersion.ToString(),
             ["machine"] = Environment.MachineName,
-            ["capabilities"] = gitPath is null
-                ? Array.Empty<string>()
-                : new[] { WorkstationCapabilities.GitSyncV1 },
+            ["capabilities"] = AdvertisedCapabilities(gitPath),
             ["clientVersion"] = typeof(WorkstationProbe).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                 ?? typeof(WorkstationProbe).Assembly.GetName().Version?.ToString()
                 ?? "0"
@@ -36,6 +34,39 @@ public static class WorkstationProbe
         if (agentRuntimeStatus is not null)
             probe["agentRuntime"] = agentRuntimeStatus;
         return JsonSerializer.Serialize(probe);
+    }
+
+    private static string[] AdvertisedCapabilities(string? gitPath)
+    {
+        if (gitPath is null)
+            return Array.Empty<string>();
+        var capabilities = new List<string> { WorkstationCapabilities.GitSyncV1 };
+        var (settings, error) = WorkstationSettings.TryRead();
+        if (error is null && WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
+        {
+            try
+            {
+                var info = new ProcessStartInfo
+                {
+                    FileName = gitPath,
+                    WorkingDirectory = Environment.CurrentDirectory,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                info.ArgumentList.Add("--version");
+                var (exitCode, stdout, _, timedOut) = ProcessRunner.RunAsync(
+                    info, TimeSpan.FromSeconds(5), CancellationToken.None).GetAwaiter().GetResult();
+                if (exitCode == 0 && !timedOut && AgentTaskWorktree.SupportsBranchWorkflow(stdout))
+                    capabilities.Add(WorkstationCapabilities.GitLandV1);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+            {
+                // Missing or unresponsive Git means the daemon must not receive GitLand commands.
+            }
+        }
+        return capabilities.ToArray();
     }
 
     public static string? Which(string name, string? path = null)
