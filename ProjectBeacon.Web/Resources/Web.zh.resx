@@ -2614,7 +2614,8 @@ orthstar</value>
   <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>仓库已成功 fast-forward 更新。</value></data>
   <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同步被拒绝；工作区未发生更改。</value></data>
   <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git 同步失败。</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同步前请先提交或暂存本地修改。</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>工作区中存在本地修改。GitSync 不会覆盖这些修改；流水线仍可按当前状态使用此本地检出。</value></data>
+  <data name="GitSyncReasonNeverSynced" xml:space="preserve"><value>此仓库尚未检查。流水线仍可使用当前本地检出；需要与上游比较时，再运行 Git Status 或同步。</value></data>
   <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>有原生代理会话正在运行。请等待会话结束后再同步。</value></data>
   <data name="GitSyncReasonDiverged" xml:space="preserve"><value>本地分支与上游分支已分叉，无法 fast-forward。</value></data>
   <data name="GitSyncReasonDetached" xml:space="preserve"><value>仓库处于 detached HEAD 状态。</value></data>
@@ -2840,7 +2841,7 @@ orthstar</value>
   <data name="TaskId" xml:space="preserve">
     <value>任务 ID</value>
   </data>
-  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>上次 Git 检查发现此仓库在分支“{1}”落后 {0} 个提交。使用当前项目快照前请先同步。</value></data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>上次 Git 检查发现此仓库在分支“{1}”落后 {0} 个提交。流水线仍会按当前状态使用此本地检出；如需包含上游更改，请执行同步。</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>项目仓库落后于其跟踪的上游分支。启动流水线前请先同步仓库。</value></data>
   <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
     <value>此项目仍有仓库同步正在运行。请等待同步完成后再启动流水线。</value>
@@ -2850,6 +2851,6 @@ orthstar</value>
     <value>Git 同步命令已在另一台工作站结束。Pipeline 所选工作站的仓库仍需要同步。</value>
   </data>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
-    <value>上次 Git 检查成功后，已连接的本地仓库路径发生了变化。请在启动流水线前重新检查 Git 状态或再次同步。</value>
+    <value>上次 Git 检查成功后，已连接的本地仓库路径发生了变化。当前状态尚未验证；流水线仍会使用配置路径下的检出。运行 Git Status 或同步即可更新此警告。</value>
   </data>
 </root>
