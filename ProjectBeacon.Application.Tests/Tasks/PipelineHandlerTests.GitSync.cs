@@ -86,7 +86,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task StartPipeline_StartsAfterFailedGitSyncAttempt()
     {
-        var (projectId, task) = await SeedTaskAsync("GitSync required before start");
+        var (projectId, task) = await SeedTaskAsync("GitSync required before start", seedPipelinePrerequisites: false);
         var plannerOwner = User.Create("git-sync-planner", $"git-sync-planner-{Guid.NewGuid():N}@beacon.local", "hash");
         var plannerBackend = LocalModelBackend.Create(
             "git-sync-planner-model",
@@ -134,7 +134,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task StartPipeline_StartsWithoutPriorGitSyncVerification()
     {
-        var (projectId, task) = await SeedTaskAsync("First run without GitSync");
+        var (projectId, task) = await SeedTaskAsync("First run without GitSync", seedPipelinePrerequisites: false);
         var plannerOwner = User.Create("first-sync-planner", $"first-sync-planner-{Guid.NewGuid():N}@beacon.local", "hash");
         var plannerBackend = LocalModelBackend.Create(
             "first-sync-planner-model",
@@ -171,7 +171,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task StartPipeline_StartsWhenRepositoryIsBehindUpstream()
     {
-        var (projectId, task) = await SeedTaskAsync("Run with an outdated local repository");
+        var (projectId, task) = await SeedTaskAsync("Run with an outdated local repository", seedPipelinePrerequisites: false);
         var plannerOwner = User.Create("behind-planner", $"behind-planner-{Guid.NewGuid():N}@beacon.local", "hash");
         var plannerBackend = LocalModelBackend.Create(
             "behind-planner-model",
@@ -222,7 +222,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task StartPipeline_DoesNotEnterPlanningWhenPlannerModelIsNotConfigured()
     {
-        var (projectId, task) = await SeedTaskAsync("Missing Planner model");
+        var (projectId, task) = await SeedTaskAsync("Missing Planner model", seedPipelinePrerequisites: false);
         var user = User.Create("missing-planner", $"missing-planner-{Guid.NewGuid():N}@beacon.local", "hash");
         var device = DaemonDevice.Create(
             "legacy-native-workstation",
@@ -261,7 +261,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task LaunchSession_DoesNotRequirePriorGitSyncVerification()
     {
-        var (projectId, task) = await SeedTaskAsync("GitSync race at launch");
+        var (projectId, task) = await SeedTaskAsync("GitSync race at launch", seedPipelinePrerequisites: false);
         var user = User.Create("launch-sync", $"launch-sync-{Guid.NewGuid():N}@beacon.local", "hash");
         var device = DaemonDevice.Create(
             "git-sync workstation",

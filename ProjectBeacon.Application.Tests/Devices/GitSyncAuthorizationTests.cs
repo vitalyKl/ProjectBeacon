@@ -286,9 +286,9 @@ public sealed class GitSyncAuthorizationTests
             Assert.NotEqual(malformed.Id, result.Value!.Id);
             using (TenantScope.EnterUnscoped())
             {
-                var oldCommand = await db.WorkstationCommands.IgnoreQueryFilters()
+                var oldCommand = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
                     .SingleAsync(command => command.Id == malformed.Id, TestContext.Current.CancellationToken);
-                var newCommand = await db.WorkstationCommands.IgnoreQueryFilters()
+                var newCommand = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
                     .SingleAsync(command => command.Id == result.Value.Id, TestContext.Current.CancellationToken);
                 Assert.Equal(WorkstationCommandStatus.Cancelled, oldCommand.Status);
                 Assert.Equal(WorkstationCommandStatus.Pending, newCommand.Status);
@@ -682,10 +682,10 @@ public sealed class GitSyncAuthorizationTests
     }
 
     [Fact]
-    public async Task ConcurrentEnqueueAcrossWorkstations_CreatesOnlyOneActiveProjectCommand()
+    public async Task EnqueueAcrossWorkstations_RetargetsSingleActiveProjectCommand()
     {
         var databasePath = Path.Combine(
-            Path.GetTempPath(), "beacon-gitsync-concurrency-" + Guid.NewGuid().ToString("N") + ".db");
+            Path.GetTempPath(), "beacon-gitsync-retarget-" + Guid.NewGuid().ToString("N") + ".db");
         try
         {
             var options = new DbContextOptionsBuilder<BeaconDbContext>()
@@ -705,8 +705,12 @@ public sealed class GitSyncAuthorizationTests
                 "fp-" + Guid.NewGuid().ToString("N"),
                 "hash-" + Guid.NewGuid().ToString("N"),
                 "bcd_" + Guid.NewGuid().ToString("N"));
-            firstDevice.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
-            secondDevice.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
+            firstDevice.Heartbeat(
+                """{"capabilities":["git-sync-v1"]}""",
+                """{"agentRuntime":"native"}""");
+            secondDevice.Heartbeat(
+                """{"capabilities":["git-sync-v1"]}""",
+                """{"agentRuntime":"native"}""");
 
             await using (var seed = new BeaconDbContext(options))
             {
@@ -733,25 +737,42 @@ public sealed class GitSyncAuthorizationTests
             var firstEnqueue = new EnqueueProjectGitSyncHandler(factory, authorization);
             var secondEnqueue = new EnqueueProjectGitSyncHandler(factory, authorization);
 
-            var results = await Task.WhenAll(
-                firstEnqueue.HandleAsync(
-                    project.Id, actor, GitSyncMode.PullFastForward,
-                    TestContext.Current.CancellationToken, firstDevice.Id),
-                secondEnqueue.HandleAsync(
-                    project.Id, actor, GitSyncMode.PullFastForward,
-                    TestContext.Current.CancellationToken, secondDevice.Id));
+            // SQLite is not a faithful test of PostgreSQL row-lock serialization. This test
+            // verifies the deterministic state transition; the parallel race is tested on PostgreSQL.
+            var first = await firstEnqueue.HandleAsync(
+                project.Id, actor, GitSyncMode.PullFastForward,
+                TestContext.Current.CancellationToken, firstDevice.Id);
+            var second = await secondEnqueue.HandleAsync(
+                project.Id, actor, GitSyncMode.PullFastForward,
+                TestContext.Current.CancellationToken, secondDevice.Id);
 
-            Assert.Single(results, result => result.Success);
-            Assert.Single(results, result => !result.Success && result.Kind == ErrorKind.Conflict);
+            Assert.True(first.Success, first.Error);
+            Assert.True(second.Success, second.Error);
+            Assert.NotNull(first.Value);
+            Assert.NotNull(second.Value);
+            Assert.NotEqual(first.Value!.Id, second.Value!.Id);
 
             await using var verify = factory.CreateDbContext();
             var activeCommands = await verify.WorkstationCommands.IgnoreQueryFilters()
+                .AsNoTracking()
                 .Where(command => command.ProjectId == project.Id
                     && command.Kind == WorkstationCommandKind.GitSync
                     && (command.Status == WorkstationCommandStatus.Pending
                         || command.Status == WorkstationCommandStatus.Running))
                 .ToListAsync(TestContext.Current.CancellationToken);
             Assert.Single(activeCommands);
+            Assert.Equal(second.Value.Id, activeCommands[0].Id);
+
+            var allCommands = await verify.WorkstationCommands.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(command => command.ProjectId == project.Id
+                    && command.Kind == WorkstationCommandKind.GitSync)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, allCommands.Count);
+            Assert.Contains(allCommands, command => command.Id == first.Value.Id
+                && command.Status == WorkstationCommandStatus.Cancelled);
+            Assert.Contains(allCommands, command => command.Id == second.Value.Id
+                && command.Status == WorkstationCommandStatus.Pending);
         }
         finally
         {

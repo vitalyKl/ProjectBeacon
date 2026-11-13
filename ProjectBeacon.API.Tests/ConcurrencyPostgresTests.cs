@@ -124,6 +124,104 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     }
 
     [Fact]
+    public async Task ConcurrentGitSyncEnqueueAcrossWorkstations_LeavesSingleActiveProjectCommand()
+    {
+        _postgres.RequirePostgres();
+        Guid projectId, orgId, userId;
+        Guid firstDeviceId, secondDeviceId;
+
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var org = Org.Create("GitSync race org", null);
+                seed.Orgs.Add(org);
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+                var project = Project.Create("GitSync race project", null, org.Id);
+                var owner = User.Create(
+                    "git-sync-race-" + Guid.NewGuid().ToString("N"),
+                    $"git-sync-race-{Guid.NewGuid():N}@beacon.local",
+                    "hash");
+                var firstDevice = DaemonDevice.Create(
+                    "git-sync-race-first",
+                    owner.Id,
+                    "fp-" + Guid.NewGuid().ToString("N"),
+                    "hash-" + Guid.NewGuid().ToString("N"),
+                    "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+                var secondDevice = DaemonDevice.Create(
+                    "git-sync-race-second",
+                    owner.Id,
+                    "fp-" + Guid.NewGuid().ToString("N"),
+                    "hash-" + Guid.NewGuid().ToString("N"),
+                    "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+                firstDevice.Heartbeat(
+                    """{"capabilities":["git-sync-v1"]}""",
+                    """{"agentRuntime":"native"}""");
+                secondDevice.Heartbeat(
+                    """{"capabilities":["git-sync-v1"]}""",
+                    """{"agentRuntime":"native"}""");
+
+                seed.Projects.Add(project);
+                seed.Users.Add(owner);
+                seed.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+                seed.DaemonDevices.AddRange(firstDevice, secondDevice);
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, firstDevice.Id, "/workspace/first"));
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, secondDevice.Id, "/workspace/second"));
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+                projectId = project.Id;
+                orgId = org.Id;
+                userId = owner.Id;
+                firstDeviceId = firstDevice.Id;
+                secondDeviceId = secondDevice.Id;
+            }
+        }
+
+        var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.Human, userId, false, null, null, projectId, orgId, ApiTokenCapability.None);
+        var firstEnqueue = new EnqueueProjectGitSyncHandler(factory, new AuthorizationService());
+        var secondEnqueue = new EnqueueProjectGitSyncHandler(factory, new AuthorizationService());
+
+        async Task<Result<WorkstationCommandDto>> Enqueue(Guid deviceId, EnqueueProjectGitSyncHandler handler)
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await handler.HandleAsync(
+                    projectId,
+                    actor,
+                    GitSyncMode.PullFastForward,
+                    TestContext.Current.CancellationToken,
+                    targetDeviceId: deviceId);
+            }
+        }
+
+        var results = await Task.WhenAll(
+            Enqueue(firstDeviceId, firstEnqueue),
+            Enqueue(secondDeviceId, secondEnqueue));
+
+        // Both callers may receive the command they requested before the second transaction
+        // safely retargets it. Only one Pending/Running command may remain project-wide.
+        Assert.All(results, result => Assert.True(result.Success, result.Error));
+        Assert.NotEqual(results[0].Value!.Id, results[1].Value!.Id);
+
+        await using var verify = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var commands = await verify.WorkstationCommands.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(command => command.ProjectId == projectId
+                    && command.Kind == WorkstationCommandKind.GitSync)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, commands.Count);
+            Assert.Single(commands.Where(command =>
+                command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running));
+            Assert.Single(commands.Where(command => command.Status == WorkstationCommandStatus.Cancelled));
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentTaskStatusChange_NoStaleOverwrite()
     {
         _postgres.RequirePostgres();
