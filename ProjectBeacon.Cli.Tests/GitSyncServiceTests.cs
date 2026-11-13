@@ -244,7 +244,7 @@ public sealed class GitSyncServiceTests
             return;
 
         await using var repo = await RepositoryFixture.CreateAsync();
-        await File.WriteAllTextAsync(Path.Combine(repo.Root, ".gitignore"), "ignored-link/\n");
+        await File.WriteAllTextAsync(Path.Combine(repo.Root, ".gitignore"), "ignored-link\n");
         await Git(repo.Root, "add", ".gitignore");
         await Git(repo.Root, "commit", "-m", "ignore local symlink directory");
         await Git(repo.Root, "push", "origin", "main");
