@@ -28,28 +28,58 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
             return Result.Failure<RuntimeDiagnostics>("LocalRoot is required (max 1000 characters).");
 
         await using var db = _dbFactory.CreateDbContext();
-        var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
-        if (!member)
-            return Result.Failure<RuntimeDiagnostics>("Project not found.");
-
-        var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == request.DeviceId, ct);
-        if (device is null || device.IsRevoked || device.UserId != request.UserId)
-            return Result.Failure<RuntimeDiagnostics>("Device not found.");
-
-        var existing = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.ProjectId == request.ProjectId && r.DeviceId == request.DeviceId, ct);
-        if (existing is not null)
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            existing.SetLocalRoot(request.LocalRoot);
-            await db.SaveChangesAsync(ct);
-            return Result.Ok(MapDiagnostics(existing, device, DateTime.UtcNow));
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        var runtime = ProjectRuntime.Create(request.ProjectId, request.DeviceId, request.LocalRoot);
-        db.ProjectRuntimes.Add(runtime);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(MapDiagnostics(runtime, device, DateTime.UtcNow));
+            var member = await db.ProjectMembers.IgnoreQueryFilters()
+                .AnyAsync(m => m.ProjectId == request.ProjectId && m.UserId == request.UserId, ct);
+            if (!member)
+                return Result.Failure<RuntimeDiagnostics>("Project not found.");
+
+            var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == request.DeviceId, ct);
+            if (device is null || device.IsRevoked || device.UserId != request.UserId)
+                return Result.Failure<RuntimeDiagnostics>("Device not found.");
+
+            // Serialize runtime-root changes with GitSync enqueue and pipeline start/launch.
+            // If GitSync was queued first, its immutable LocalRoot cannot be invalidated by
+            // changing this runtime while the workstation is reading or updating that checkout.
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, request.ProjectId, ct))
+                return Result.Failure<RuntimeDiagnostics>("Project not found.");
+
+            var existing = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.ProjectId == request.ProjectId && r.DeviceId == request.DeviceId, ct);
+            var normalizedRoot = request.LocalRoot.Trim();
+            if (existing is not null && string.Equals(
+                existing.LocalRoot,
+                normalizedRoot,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
+                await transaction.CommitAsync(ct);
+                return Result.Ok(MapDiagnostics(existing, device, DateTime.UtcNow));
+            }
+
+            if (await ProjectRuntimeMutationGate.HasActiveRepositoryOperationAsync(db, request.ProjectId, ct))
+                return Result.Failure<RuntimeDiagnostics>(
+                    "A repository synchronization is pending or running for this project. Wait for GitSync to finish before changing or attaching a local directory.",
+                    ErrorKind.Conflict);
+
+            if (existing is not null)
+            {
+                existing.SetLocalRoot(normalizedRoot);
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return Result.Ok(MapDiagnostics(existing, device, DateTime.UtcNow));
+            }
+
+            var runtime = ProjectRuntime.Create(request.ProjectId, request.DeviceId, request.LocalRoot);
+            db.ProjectRuntimes.Add(runtime);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok(MapDiagnostics(runtime, device, DateTime.UtcNow));
+        });
     }
 
     internal static RuntimeSummary MapSummary(ProjectRuntime runtime, DaemonDevice device, DateTime utcNow) =>
@@ -108,17 +138,44 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
     public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
-        if (runtime is null)
-            return Result.Failure("Runtime not found.");
-        var member = await db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
-        if (!member)
-            return Result.Failure("Runtime not found.");
-        db.ProjectRuntimes.Remove(runtime);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
+            if (runtime is null)
+                return Result.Failure("Runtime not found.");
+
+            var member = await db.ProjectMembers.IgnoreQueryFilters()
+                .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
+            if (!member)
+                return Result.Failure("Runtime not found.");
+
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, runtime.ProjectId, ct))
+                return Result.Failure("Runtime not found.");
+
+            if (await ProjectRuntimeMutationGate.HasActiveRepositoryOperationAsync(db, runtime.ProjectId, ct))
+                return Result.Failure(
+                    "The project repository is currently being synchronized on this workstation. Wait for GitSync to finish before detaching the runtime.",
+                    ErrorKind.Conflict);
+
+            // Re-read after acquiring the project lock so concurrent detach/reattach requests
+            // cannot delete a runtime row that has already been replaced.
+            var current = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId
+                    && r.ProjectId == runtime.ProjectId
+                    && r.DeviceId == runtime.DeviceId, ct);
+            if (current is null)
+                return Result.Failure("Runtime not found.");
+
+            db.ProjectRuntimes.Remove(current);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok();
+        });
     }
 }
 /// <summary>
@@ -222,5 +279,59 @@ public class ListHostSamplesHandler : ICommandHandler<ListHostSamplesCommand, Re
         return Result.Ok((IList<DeviceHostSampleDto>)samples.Select(s => new DeviceHostSampleDto(
             s.Id, s.DeviceId, s.SampledAt, s.CpuPercent, s.RamUsedBytes, s.RamTotalBytes,
             s.GpuName, s.GpuUtilizationPercent, s.GpuMemoryUsedBytes, s.GpuMemoryTotalBytes)).ToList());
+    }
+}
+
+
+internal static class ProjectRuntimeMutationGate
+{
+    private static readonly WorkstationCommandKind[] RepositoryUsingCommands =
+    [
+        WorkstationCommandKind.InitProject,
+        WorkstationCommandKind.ChatEnsureSession,
+        WorkstationCommandKind.ChatPrompt,
+        WorkstationCommandKind.RunEvalTurn,
+        WorkstationCommandKind.RunReviewCheck,
+        WorkstationCommandKind.RunPipelineSession,
+        WorkstationCommandKind.GitSync,
+        WorkstationCommandKind.ApplyProposalPatch
+    ];
+
+    public static async Task<bool> TryLockProjectAsync(
+        IBeaconDb db,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        var locked = await db.Projects.IgnoreQueryFilters()
+            .Where(project => project.Id == projectId)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(project => project.Revision, project => project.Revision), ct);
+        return locked == 1;
+    }
+
+    public static async Task<bool> HasActiveRepositoryOperationAsync(
+        IBeaconDb db,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        var hasActiveCommand = await db.WorkstationCommands.AsNoTracking()
+            .AnyAsync(command => command.ProjectId == projectId
+                && RepositoryUsingCommands.Contains(command.Kind)
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running), ct);
+        if (hasActiveCommand)
+            return true;
+
+        var hasActivePipelineSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(session => session.ProjectId == projectId
+                && (session.Status == SessionStatus.Ready
+                    || session.Status == SessionStatus.Active
+                    || session.Status == SessionStatus.WaitingForUser), ct);
+        if (hasActivePipelineSession)
+            return true;
+
+        return await db.ChatSessions.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(session => session.ProjectId == projectId
+                && session.Status == ChatSessionStatus.Streaming, ct);
     }
 }

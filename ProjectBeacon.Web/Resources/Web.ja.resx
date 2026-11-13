@@ -2598,10 +2598,11 @@ orthstar</value>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>コンテキスト圧縮は、ウィンドウの82%と「ウィンドウサイズ−予約数」の小さい方をプロンプトが超えたときに開始します。0の場合は25%を自動予約します。</value></data>
   <data name="GitSyncTitle" xml:space="preserve"><value>Git リポジトリ</value></data>
   <data name="GitSyncHelp" xml:space="preserve"><value>リポジトリの状態を確認するか、現在のブランチを Fast-Forward で更新します。同期は接続されたワークステーションで実行され、ローカル変更を上書きしません。</value></data>
+  <data name="GitSyncRequiresAdmin" xml:space="preserve"><value>このリポジトリを同期できるのはプロジェクトの Owner または Admin のみです。管理者に GitSync の実行を依頼してください。</value></data>
   <data name="GitSyncCheck" xml:space="preserve"><value>状態を確認</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。ページを更新して、リポジトリの状態を再確認してください。</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。このページでは状態の確認が自動的に続行されます。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
@@ -2613,13 +2614,15 @@ orthstar</value>
   <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>リポジトリを Fast-Forward で更新しました。</value></data>
   <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>同期は拒否されました。作業ツリーに変更はありません。</value></data>
   <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git の同期に失敗しました。</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>同期前にローカル変更をコミットするか stash してください。</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>ローカル変更があります。GitSync はそれらを上書きしません。パイプラインはこのチェックアウトをそのまま使用できます。</value></data>
+  <data name="GitSyncReasonNeverSynced" xml:space="preserve"><value>このリポジトリはまだ確認されていません。パイプラインは現在のローカルチェックアウトを使用できます。Upstream と比較する必要がある場合は Git Status または同期を実行してください。</value></data>
   <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>ネイティブエージェントセッションが実行中です。終了するまでお待ちください。</value></data>
   <data name="GitSyncReasonDiverged" xml:space="preserve"><value>ローカルブランチと Upstream ブランチが分岐しているため、Fast-Forward できません。</value></data>
   <data name="GitSyncReasonDetached" xml:space="preserve"><value>リポジトリは Detached HEAD 状態です。</value></data>
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>現在のブランチに Upstream が設定されていません。</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>追跡対象の Upstream を取得できません。ワークステーションの Remote と認証情報を確認してください。</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作がタイムアウトしました。</value></data>
+  <data name="GitSyncReasonMergeFailed" xml:space="preserve"><value>Git は安全に fast-forward できませんでした。ローカルファイルの競合の詳細を確認してください。</value></data>
   <data name="MarkdownEdit" xml:space="preserve"><value>編集</value></data>
   <data name="MarkdownPreview" xml:space="preserve"><value>プレビュー</value></data>
   <data name="MarkdownExpand" xml:space="preserve"><value>もっと見る</value></data>
@@ -2838,8 +2841,16 @@ orthstar</value>
   <data name="TaskId" xml:space="preserve">
     <value>タスク ID</value>
   </data>
-  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>最後の Git チェックでは、リポジトリがブランチ「{1}」で {0} 件遅れていました。現在のプロジェクトスナップショットを使用する前に同期してください。</value></data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>最後の Git チェックでは、リポジトリがブランチ「{1}」で {0} 件遅れていました。パイプラインはこのローカルチェックアウトをそのまま使用します。Upstream の変更を取り込むには同期してください。</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>プロジェクトのリポジトリが追跡対象の Upstream より遅れています。パイプラインを開始する前に同期してください。</value></data>
-  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>選択したワークステーションでリポジトリの同期がまだ実行中です。パイプラインを開始する前に完了を待ってください。</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
+    <value>このプロジェクトではリポジトリの同期がまだ実行中です。パイプラインを開始する前に完了を待ってください。</value>
+  </data>
   <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>設定された Upstream に対してリポジトリの状態を確認できませんでした。ブランチと Upstream の設定を確認し、パイプライン開始前に同期してください。</value></data>
+  <data name="GitSyncOtherWorkstationFinished" xml:space="preserve">
+    <value>別のワークステーションで Git 同期コマンドが終了しました。パイプラインで選択されているワークステーションのリポジトリは、引き続き同期が必要です。</value>
+  </data>
+  <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
+    <value>最後に Git チェックが成功した後、接続されたローカルリポジトリのパスが変更されました。現在の状態は未確認ですが、パイプラインは設定されたパスのチェックアウトを使用します。警告を更新するには Git Status または同期を実行してください。</value>
+  </data>
 </root>

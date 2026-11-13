@@ -69,6 +69,45 @@ public sealed class AgentSessionWorktreeTests
 
 
     [Fact]
+    public async Task ApplyChanges_WaitsForTheRepositoryOperationGate()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-apply-gate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await Git(root, "init", "-b", "main");
+            await Git(root, "config", "core.autocrlf", "false");
+            await Git(root, "config", "user.name", "ProjectBeacon Tests");
+            await Git(root, "config", "user.email", "tests@projectbeacon.local");
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base\n");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+
+            var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
+            Assert.NotNull(created.Workspace);
+            Assert.Null(created.Error);
+            await using var workspace = created.Workspace!;
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-output.txt"), "agent result\n");
+
+            using var repositoryLock = await GitRepositoryOperationGate.AcquireAsync(root, CancellationToken.None);
+            var applyTask = workspace.ApplyChangesAsync(CancellationToken.None);
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+            Assert.False(applyTask.IsCompleted,
+                "Patch-back must wait until the real repository operation gate is released.");
+
+            repositoryLock.Dispose();
+            var applied = await applyTask;
+            Assert.True(applied.Success, applied.Error);
+            Assert.Equal("agent result\n", await File.ReadAllTextAsync(Path.Combine(root, "agent-output.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task CreateAndApply_IncludesConfiguredIgnoredPathsAndBuildsSafeDiffArtifact()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-include-" + Guid.NewGuid().ToString("N"));
@@ -122,6 +161,54 @@ public sealed class AgentSessionWorktreeTests
         finally
         {
             try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ApplyChanges_RejectsWritesThroughIgnoredSymlinkDirectories()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-symlink-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var outside = Path.Combine(parent, "outside");
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        try
+        {
+            await Git(root, "init", "-b", "main");
+            await Git(root, "config", "core.autocrlf", "false");
+            await Git(root, "config", "user.name", "ProjectBeacon Tests");
+            await Git(root, "config", "user.email", "tests@projectbeacon.local");
+            await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "ignored-link\n");
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base\n");
+            await Git(root, "add", ".gitignore", "README.md");
+            await Git(root, "commit", "-m", "initial");
+
+            var ignoredLink = Path.Combine(root, "ignored-link");
+            Directory.CreateSymbolicLink(ignoredLink, outside);
+
+            var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
+            Assert.NotNull(created.Workspace);
+            Assert.Null(created.Error);
+            await using var workspace = created.Workspace!;
+
+            var worktreePath = Path.Combine(workspace.WorkingDirectory, "ignored-link");
+            Directory.CreateDirectory(worktreePath);
+            await File.WriteAllTextAsync(Path.Combine(worktreePath, "escaped.txt"), "must not escape\n");
+            await Git(workspace.WorkingDirectory, "add", "-f", "ignored-link/escaped.txt");
+
+            var applied = await workspace.ApplyChangesAsync(CancellationToken.None);
+
+            Assert.False(applied.Success);
+            Assert.Contains("symbolic link", applied.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(outside, "escaped.txt")));
+            Assert.False(File.Exists(Path.Combine(root, "ignored-link", "escaped.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
         }
     }
 

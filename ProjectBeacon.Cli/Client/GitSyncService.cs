@@ -84,13 +84,58 @@ internal sealed class GitSyncService
             if (state.Error is not null)
                 return Complete(Failed(state, state.Error.Contains("timed out", StringComparison.OrdinalIgnoreCase)
                     ? GitSyncRefusalCode.Timeout : GitSyncRefusalCode.FetchFailed, state.Error));
-            if (mode == GitSyncMode.Status && (state.Detached || !state.HasUpstream))
-                return Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head));
-
             if (state.Detached)
-                return Complete(Refused(state, GitSyncRefusalCode.Detached, null, state.Head));
-            if (!state.HasUpstream || state.Remote is null || state.MergeRef is null || state.UpstreamRef is null)
-                return Complete(Refused(state, GitSyncRefusalCode.NoUpstream, null, state.Head));
+                return mode == GitSyncMode.Status
+                    ? Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head))
+                    : Complete(Refused(state, GitSyncRefusalCode.Detached, null, state.Head));
+
+            if (state.Remote is null || state.MergeRef is null)
+                return mode == GitSyncMode.Status
+                    ? Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head))
+                    : Complete(Refused(state, GitSyncRefusalCode.NoUpstream, null, state.Head));
+
+            if (state.UpstreamRef is null)
+            {
+                if (string.Equals(state.Remote, ".", StringComparison.Ordinal))
+                    return mode == GitSyncMode.Status
+                        ? Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head))
+                        : Complete(Refused(state, GitSyncRefusalCode.NoUpstream, null, state.Head));
+
+                if (!RemoteNamePattern.IsMatch(state.Remote) || !BranchRefPattern.IsMatch(state.MergeRef))
+                    return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, "The configured upstream ref is not a supported branch ref."));
+
+                // The branch may be configured to track a remote branch whose local tracking
+                // ref has not been fetched yet. Materialize only its expected remote-tracking ref;
+                // do not delegate the destination set to arbitrary local remote.*.fetch refspecs.
+                var trackingRef = "refs/remotes/" + state.Remote + "/"
+                    + state.MergeRef["refs/heads/".Length..];
+                if (!RemoteTrackingRefPattern.IsMatch(trackingRef))
+                    return Complete(Failed(state, GitSyncRefusalCode.FetchFailed,
+                        "The configured upstream ref cannot be mapped to a safe remote-tracking ref."));
+
+                var remoteUrl = await ResolveRemoteFetchUrlAsync(
+                    repositoryRoot, hooksDirectory, filters.Drivers, state.Remote, ct);
+                if (remoteUrl.Error is not null)
+                    return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, remoteUrl.Error));
+
+                var discoveryFetch = await RunGitAsync(
+                    repositoryRoot, hooksDirectory, filters.Drivers, ct,
+                    "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                    "--", remoteUrl.Url!, "+" + state.MergeRef + ":" + trackingRef);
+                if (discoveryFetch.TimedOut)
+                    return Complete(Failed(state, GitSyncRefusalCode.Timeout, discoveryFetch.StdErr));
+                if (discoveryFetch.ExitCode != 0)
+                    return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, discoveryFetch.StdErr));
+
+                state = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
+                if (state.Error is not null)
+                    return Complete(Failed(state, state.Error.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                        ? GitSyncRefusalCode.Timeout : GitSyncRefusalCode.FetchFailed, state.Error));
+                if (!state.HasUpstream || state.Remote is null || state.MergeRef is null || state.UpstreamRef is null)
+                    return mode == GitSyncMode.Status
+                        ? Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head))
+                        : Complete(Refused(state, GitSyncRefusalCode.NoUpstream, null, state.Head));
+            }
 
             if (!string.Equals(state.Remote, ".", StringComparison.Ordinal))
             {
@@ -99,10 +144,18 @@ internal sealed class GitSyncService
                     || !RemoteTrackingRefPattern.IsMatch(state.UpstreamRef))
                     return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, "The configured upstream ref is not a supported branch ref."));
 
+                var remoteUrl = await ResolveRemoteFetchUrlAsync(
+                    repositoryRoot, hooksDirectory, filters.Drivers, state.Remote, ct);
+                if (remoteUrl.Error is not null)
+                    return Complete(Failed(state, GitSyncRefusalCode.FetchFailed, remoteUrl.Error));
+
+                // Fetch by the resolved URL, not the remote name. Git applies
+                // remote.<name>.fetch refspecs when resolving a named remote; using the
+                // URL plus one explicit refspec keeps the destination set under our control.
                 var fetch = await RunGitAsync(
                     repositoryRoot, hooksDirectory, filters.Drivers, ct,
                     "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
-                    "--", state.Remote, "+" + state.MergeRef + ":" + state.UpstreamRef);
+                    "--", remoteUrl.Url!, "+" + state.MergeRef + ":" + state.UpstreamRef);
                 if (fetch.TimedOut)
                     return Complete(Failed(state, GitSyncRefusalCode.Timeout, fetch.StdErr));
                 if (fetch.ExitCode != 0)
@@ -117,20 +170,20 @@ internal sealed class GitSyncService
             if (mode == GitSyncMode.Status)
                 return Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head));
 
-            if (!state.Clean)
-                return Complete(Refused(state, GitSyncRefusalCode.DirtyWorkingTree, null, state.Head));
             if (state.Diverged)
                 return Complete(Refused(state, GitSyncRefusalCode.Diverged, null, state.Head));
             if (state.Behind == 0)
                 return Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head));
+            if (!state.Clean)
+                return Complete(Refused(state, GitSyncRefusalCode.DirtyWorkingTree, null, state.Head));
 
             var merge = await RunGitAsync(
                 repositoryRoot, hooksDirectory, filters.Drivers, ct,
-                "merge", "--ff-only", state.UpstreamRef);
+                "merge", "--ff-only", "--no-overwrite-ignore", state.UpstreamRef);
             if (merge.TimedOut)
                 return Complete(Failed(state, GitSyncRefusalCode.Timeout, merge.StdErr));
             if (merge.ExitCode != 0)
-                return Complete(Failed(state, GitSyncRefusalCode.Diverged, merge.StdErr));
+                return Complete(Refused(state, GitSyncRefusalCode.MergeFailed, merge.StdErr, state.Head));
 
             var after = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
             if (after.Error is not null)
@@ -269,27 +322,39 @@ internal sealed class GitSyncService
 
             if (upstreamError is null && remote is not null && mergeRef is not null)
             {
-                var upstreamResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                    "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
-                if (upstreamResult.TimedOut)
+                // Do not ask Git to resolve @{upstream}: that resolution follows the
+                // user-controlled remote.<name>.fetch refspec and may point at an arbitrary
+                // local destination. GitSync deliberately owns one deterministic mapping:
+                // refs/heads/<branch> -> refs/remotes/<remote>/<branch>.
+                var mergeBranch = mergeRef["refs/heads/".Length..];
+                var expectedUpstreamRef = string.Equals(remote, ".", StringComparison.Ordinal)
+                    ? mergeRef
+                    : "refs/remotes/" + remote + "/" + mergeBranch;
+
+                if (!string.Equals(remote, ".", StringComparison.Ordinal)
+                    && !RemoteTrackingRefPattern.IsMatch(expectedUpstreamRef))
                 {
-                    upstreamError = "Git upstream inspection timed out.";
+                    upstreamError = "The configured upstream ref is not a supported remote-tracking ref.";
                 }
-                else if (upstreamResult.ExitCode == 0)
+                else
                 {
-                    upstream = upstreamResult.StdOut.Trim();
-                    var upstreamRefResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                        "rev-parse", "--symbolic-full-name", "@{upstream}");
-                    if (upstreamRefResult.TimedOut)
+                    var upstreamExists = await RunGitAsync(root, hooks, filters ?? [], ct,
+                        "show-ref", "--verify", "--quiet", expectedUpstreamRef);
+                    if (upstreamExists.TimedOut)
                     {
                         upstreamError = "Git upstream inspection timed out.";
                     }
-                    else if (upstreamRefResult.ExitCode == 0)
+                    else if (upstreamExists.ExitCode == 0)
                     {
-                        upstreamRef = upstreamRefResult.StdOut.Trim();
-                        if (!string.Equals(remote, ".", StringComparison.Ordinal)
-                            && !RemoteTrackingRefPattern.IsMatch(upstreamRef))
-                            upstreamError = "The configured upstream ref is not a supported remote-tracking ref.";
+                        upstreamRef = expectedUpstreamRef;
+                        upstream = string.Equals(remote, ".", StringComparison.Ordinal)
+                            ? mergeBranch
+                            : remote + "/" + mergeBranch;
+                    }
+                    else if (upstreamExists.ExitCode != 1)
+                    {
+                        upstreamError = SanitizeStderr(upstreamExists.StdErr)
+                            ?? "Git could not inspect the configured upstream ref.";
                     }
                 }
             }
@@ -335,6 +400,25 @@ internal sealed class GitSyncService
     private static RepositoryState EmptyState(bool detached) =>
         new(null, null, null, null, null, null, 0, 0, false, detached, false, false, null);
 
+    private static async Task<(string? Url, string? Error)> ResolveRemoteFetchUrlAsync(
+        string root,
+        string hooks,
+        IReadOnlyList<string> filters,
+        string remote,
+        CancellationToken ct)
+    {
+        var result = await RunGitAsync(root, hooks, filters, ct, "remote", "get-url", remote);
+        if (result.TimedOut)
+            return (null, "Git remote URL resolution timed out.");
+        if (result.ExitCode != 0)
+            return (null, SanitizeStderr(result.StdErr) ?? "Git could not resolve the configured remote URL.");
+
+        var url = result.StdOut.Trim();
+        return string.IsNullOrWhiteSpace(url)
+            ? (null, "The configured remote has no fetch URL.")
+            : (url, null);
+    }
+
     private static async Task<(IReadOnlyList<string> Drivers, string? Error)> ReadFilterDriversAsync(
         string root, string hooks, CancellationToken ct)
     {
@@ -345,12 +429,30 @@ internal sealed class GitSyncService
             return (Array.Empty<string>(), SanitizeStderr(result.StdErr));
         var drivers = result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
-            .Where(line => line.StartsWith("filter.", StringComparison.Ordinal))
-            .Select(line => line["filter.".Length..].Split('.', 2)[0])
-            .Where(name => name.Length > 0)
+            .Select(ParseFilterDriverName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         return (drivers, null);
+    }
+
+    private static string? ParseFilterDriverName(string key)
+    {
+        const string prefix = "filter.";
+        if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        // Driver names may themselves contain dots (for example filter.beacon.test.smudge).
+        // Remove only a recognized terminal setting, never split at the first dot.
+        foreach (var suffix in new[] { ".clean", ".smudge", ".process", ".required" })
+        {
+            if (key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && key.Length > prefix.Length + suffix.Length)
+                return key[prefix.Length..^suffix.Length];
+        }
+
+        return null;
     }
 
     private static string CreateHooksDirectory()
@@ -387,6 +489,8 @@ internal sealed class GitSyncService
         info.ArgumentList.Add("-c");
         info.ArgumentList.Add("core.fsmonitor=false");
         info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("core.sshCommand=ssh");
+        info.ArgumentList.Add("-c");
         info.ArgumentList.Add("core.pager=cat");
         info.ArgumentList.Add("-c");
         info.ArgumentList.Add("diff.external=");
@@ -417,7 +521,8 @@ internal sealed class GitSyncService
             "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
             "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
             "GIT_CEILING_DIRECTORIES", "GIT_PREFIX", "GIT_SHALLOW_FILE",
-            "GIT_REPLACE_REF_BASE", "GIT_TRACE_REDACT"
+            "GIT_REPLACE_REF_BASE", "GIT_TRACE_REDACT",
+            "GIT_SSH", "GIT_SSH_COMMAND"
         })
             info.Environment.Remove(name);
         foreach (var name in info.Environment.Keys
@@ -497,6 +602,10 @@ internal sealed class GitSyncService
             return null;
         var text = value.Trim();
         text = Regex.Replace(text, @"(?i)(https?://)[^/@\s]+@", "$1[redacted]@");
+        text = Regex.Replace(
+            text,
+            @"(?i)([?&](?:access_token|refresh_token|token|password|passwd|secret|client_secret|api_key|apikey|key|auth)=)[^&\s'""<>]+",
+            "$1[redacted]");
         text = Regex.Replace(text, @"(?i)\b(Bearer\s+)[A-Za-z0-9._~+/=-]+", "$1[redacted]");
         text = Regex.Replace(text, @"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|bcd_[A-Za-z0-9_-]{20,}|bcn_[A-Za-z0-9_-]{20,})\b", "[redacted]");
         return text.Length <= 2000 ? text : text[..2000] + "…";

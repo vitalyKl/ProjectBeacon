@@ -13,6 +13,7 @@ using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests : IDisposable
 {
@@ -33,34 +34,65 @@ public sealed partial class PipelineHandlerTests : IDisposable
         _connection.Dispose();
     }
 
-    private async Task<(Guid ProjectId, TaskItem Task)> SeedTaskAsync(string title, string? description = null)
+    private async Task<(Guid ProjectId, TaskItem Task)> SeedTaskAsync(
+        string title,
+        string? description = null,
+        bool seedPipelinePrerequisites = true)
     {
         using (TenantScope.EnterUnscoped())
         {
             var org = Org.Create("PipelineOrg", null);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var project = Project.Create("PipelineProject", null, org.Id);
             _db.Projects.Add(project);
-            await _db.SaveChangesAsync();
             var task = TaskItem.Create(title, project.Id);
             task.Update(description: description);
             _db.Tasks.Add(task);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            // Most pipeline tests exercise a runnable task. Keep their fixture aligned with
+            // production prerequisites; tests for missing/offline prerequisites opt out.
+            if (seedPipelinePrerequisites)
+            {
+                var owner = User.Create(
+                    "pipeline-" + Guid.NewGuid().ToString("N"),
+                    $"pipeline-{Guid.NewGuid():N}@beacon.local",
+                    "hash");
+                var device = DaemonDevice.Create(
+                    "pipeline-native-workstation",
+                    owner.Id,
+                    "fp-" + Guid.NewGuid().ToString("N"),
+                    "hash-" + Guid.NewGuid().ToString("N"),
+                    "bcd_" + Guid.NewGuid().ToString("N"));
+                device.Heartbeat("{}", """{"agentRuntime":"native"}""");
+                var backend = LocalModelBackend.Create(
+                    "pipeline-planner-model",
+                    ModelBackendType.LlamaCpp,
+                    "llama-server -m model.gguf",
+                    8192,
+                    60,
+                    owner.Id);
+
+                _db.Users.Add(owner);
+                _db.DaemonDevices.Add(device);
+                _db.LocalModelBackends.Add(backend);
+                _db.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, Path.GetTempPath()));
+                _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, backend.Id, project.Id));
+                await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+
             return (project.Id, task);
         }
     }
 
     private async Task<Guid> SeedNativeRuntimeAsync(Guid projectId)
     {
+        // Seed an additional backend for the scenario. SeedTaskAsync already creates
+        // the one native workstation/runtime used by the project; adding another runtime
+        // here makes single-workstation assertions nondeterministic.
         var user = User.Create("native", $"native-{Guid.NewGuid():N}@beacon.local", "hash");
-        var device = DaemonDevice.Create(
-            "native workstation",
-            user.Id,
-            "fp-" + Guid.NewGuid().ToString("N"),
-            "hash-" + Guid.NewGuid().ToString("N"),
-            "bcd_" + Guid.NewGuid().ToString("N"));
-        device.Heartbeat("{}", """{"agentRuntime":"native"}""");
         var backend = LocalModelBackend.Create(
             "native-test-model",
             ModelBackendType.LlamaCpp,
@@ -68,14 +100,11 @@ public sealed partial class PipelineHandlerTests : IDisposable
             8192,
             60,
             user.Id);
-        var runtime = ProjectRuntime.Create(projectId, device.Id, "/workspace/native");
 
         using (TenantScope.EnterUnscoped())
         {
             _db.Users.Add(user);
-            _db.DaemonDevices.Add(device);
             _db.LocalModelBackends.Add(backend);
-            _db.ProjectRuntimes.Add(runtime);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -87,20 +116,26 @@ public sealed partial class PipelineHandlerTests : IDisposable
         DaemonDevice device;
         using (TenantScope.EnterUnscoped())
         {
-            user = User.Create("rev", $"rev-{Guid.NewGuid():N}@beacon.local", "hash");
-            _db.Users.Add(user);
-            _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
-            device = DaemonDevice.Create("review", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash", "bcd_" + Guid.NewGuid().ToString("N"));
-            _db.DaemonDevices.Add(device);
-            await _db.SaveChangesAsync();
-        }
+            // Use the native workstation already attached by SeedTaskAsync. Runtime links
+            // are intentionally immutable while pipeline sessions are open; this helper
+            // must not attach a second workstation after the pipeline has started.
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(item => item.ProjectId == projectId)
+                .OrderBy(item => item.CreatedAt)
+                .ThenBy(item => item.DeviceId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            device = await _db.DaemonDevices.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == runtime.DeviceId, TestContext.Current.CancellationToken);
+            user = await _db.Users.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == device.UserId, TestContext.Current.CancellationToken);
 
-        var beat = await new HeartbeatDeviceHandler(factory).HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")));
-        Assert.True(beat.Success, beat.Error);
-        var attach = await new AttachRuntimeHandler(factory).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, user.Id, @"A:\work\review")));
-        Assert.True(attach.Success, attach.Error);
+            var hasMembership = await _db.ProjectMembers.IgnoreQueryFilters()
+                .AnyAsync(item => item.ProjectId == projectId && item.UserId == user.Id,
+                    TestContext.Current.CancellationToken);
+            if (!hasMembership)
+                _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var check = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
             .HandleAsync(new RecordReviewCheckCommand(
@@ -139,10 +174,39 @@ public sealed partial class PipelineHandlerTests : IDisposable
     {
         public List<(Guid ProjectId, PipelineRole Role)> Calls { get; } = [];
 
-        public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
+        public async Task<SpawnedSession> SpawnAsync(
+            IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             Calls.Add((projectId, role));
-            return Task.FromResult(new SpawnedSession(modelBackendId, null, null));
+            var resolvedBackendId = modelBackendId;
+            if (resolvedBackendId is null)
+            {
+                var phaseKey = role switch
+                {
+                    PipelineRole.Planner => "understand",
+                    PipelineRole.Actor => "do",
+                    PipelineRole.Review => "check",
+                    _ => string.Empty
+                };
+                if (phaseKey.Length > 0)
+                {
+                    resolvedBackendId = await db.TaskPhases.AsNoTracking()
+                        .Where(phase => phase.TaskId == taskId && phase.Key == phaseKey)
+                        .Select(phase => phase.ModelBackendId)
+                        .FirstOrDefaultAsync(ct);
+                }
+
+                resolvedBackendId ??= await db.RoleBindings.AsNoTracking()
+                    .Where(binding => binding.ProjectId == projectId && binding.Role == role)
+                    .Select(binding => (Guid?)binding.ModelBackendId)
+                    .FirstOrDefaultAsync(ct);
+                resolvedBackendId ??= await db.RoleBindings.AsNoTracking()
+                    .Where(binding => binding.ProjectId == projectId && binding.Role == PipelineRole.Planner)
+                    .Select(binding => (Guid?)binding.ModelBackendId)
+                    .FirstOrDefaultAsync(ct);
+            }
+
+            return new SpawnedSession(resolvedBackendId, null, null);
         }
     }
 

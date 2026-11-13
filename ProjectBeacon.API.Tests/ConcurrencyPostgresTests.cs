@@ -31,7 +31,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
     public ConcurrencyPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    private sealed class CountingSpawner : ISessionSpawner
+    private sealed class CountingSpawner(Guid modelBackendId) : ISessionSpawner
     {
         private int _calls;
 
@@ -43,7 +43,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             lock (this) _calls++;
-            return Task.FromResult(new SpawnedSession(null, null, null));
+            return Task.FromResult(new SpawnedSession(modelBackendId, "concurrency-model", "concurrency-launch"));
         }
     }
 
@@ -58,10 +58,43 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartPipeline_OnlyOneStarts()
     {
         _postgres.RequirePostgres();
-        var (_, taskId) = await SeedTaskAsync("start race");
-
-        var spawner = new CountingSpawner();
+        var (projectId, taskId) = await SeedTaskAsync("start race");
         var factory = _postgres.CreateFactory();
+
+        // StartPipeline now enforces the same production readiness requirements as the
+        // API: a live native workstation and a configured Planner backend must exist.
+        var userKey = Guid.NewGuid().ToString("N");
+        var user = User.Create("pipeline-race-" + userKey, $"pipeline-race-{userKey}@beacon.local", "hash");
+        var device = DaemonDevice.Create(
+            "pipeline-race-workstation",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash-" + Guid.NewGuid().ToString("N"),
+            "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+        device.Heartbeat(
+            """{"capabilities":["git-sync-v1"]}""",
+            """{"agentRuntime":"native"}""");
+        var backend = LocalModelBackend.Create(
+            "pipeline-race-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                seed.Users.Add(user);
+                seed.DaemonDevices.Add(device);
+                seed.LocalModelBackends.Add(backend);
+                seed.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, backend.Id, projectId));
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(projectId, device.Id, "/workspace/native"));
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var spawner = new CountingSpawner(backend.Id);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
@@ -87,6 +120,104 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskPipelineStage.Planning, row.PipelineStage);
             Assert.Equal(TaskItemStatus.InProgress, row.Status);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentGitSyncEnqueueAcrossWorkstations_LeavesSingleActiveProjectCommand()
+    {
+        _postgres.RequirePostgres();
+        Guid projectId, orgId, userId;
+        Guid firstDeviceId, secondDeviceId;
+
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var org = Org.Create("GitSync race org", null);
+                seed.Orgs.Add(org);
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+                var project = Project.Create("GitSync race project", null, org.Id);
+                var owner = User.Create(
+                    "git-sync-race-" + Guid.NewGuid().ToString("N"),
+                    $"git-sync-race-{Guid.NewGuid():N}@beacon.local",
+                    "hash");
+                var firstDevice = DaemonDevice.Create(
+                    "git-sync-race-first",
+                    owner.Id,
+                    "fp-" + Guid.NewGuid().ToString("N"),
+                    "hash-" + Guid.NewGuid().ToString("N"),
+                    "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+                var secondDevice = DaemonDevice.Create(
+                    "git-sync-race-second",
+                    owner.Id,
+                    "fp-" + Guid.NewGuid().ToString("N"),
+                    "hash-" + Guid.NewGuid().ToString("N"),
+                    "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+                firstDevice.Heartbeat(
+                    """{"capabilities":["git-sync-v1"]}""",
+                    """{"agentRuntime":"native"}""");
+                secondDevice.Heartbeat(
+                    """{"capabilities":["git-sync-v1"]}""",
+                    """{"agentRuntime":"native"}""");
+
+                seed.Projects.Add(project);
+                seed.Users.Add(owner);
+                seed.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+                seed.DaemonDevices.AddRange(firstDevice, secondDevice);
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, firstDevice.Id, "/workspace/first"));
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, secondDevice.Id, "/workspace/second"));
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+                projectId = project.Id;
+                orgId = org.Id;
+                userId = owner.Id;
+                firstDeviceId = firstDevice.Id;
+                secondDeviceId = secondDevice.Id;
+            }
+        }
+
+        var factory = _postgres.CreateFactory();
+        var actor = new ActorContext(
+            ActorType.Human, userId, false, null, null, projectId, orgId, ApiTokenCapability.None);
+        var firstEnqueue = new EnqueueProjectGitSyncHandler(factory, new AuthorizationService());
+        var secondEnqueue = new EnqueueProjectGitSyncHandler(factory, new AuthorizationService());
+
+        async Task<Result<WorkstationCommandDto>> Enqueue(Guid deviceId, EnqueueProjectGitSyncHandler handler)
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await handler.HandleAsync(
+                    projectId,
+                    actor,
+                    GitSyncMode.PullFastForward,
+                    TestContext.Current.CancellationToken,
+                    targetDeviceId: deviceId);
+            }
+        }
+
+        var results = await Task.WhenAll(
+            Enqueue(firstDeviceId, firstEnqueue),
+            Enqueue(secondDeviceId, secondEnqueue));
+
+        // Both callers may receive the command they requested before the second transaction
+        // safely retargets it. Only one Pending/Running command may remain project-wide.
+        Assert.All(results, result => Assert.True(result.Success, result.Error));
+        Assert.NotEqual(results[0].Value!.Id, results[1].Value!.Id);
+
+        await using var verify = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var commands = await verify.WorkstationCommands.IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(command => command.ProjectId == projectId
+                    && command.Kind == WorkstationCommandKind.GitSync)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, commands.Count);
+            Assert.Single(commands, command =>
+                command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running);
+            Assert.Single(commands, command => command.Status == WorkstationCommandStatus.Cancelled);
         }
     }
 
@@ -560,11 +691,21 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartActorSession_OnlyOneSpawn_OneActorSession()
     {
         _postgres.RequirePostgres();
-        Guid taskId, subtaskId;
+        Guid taskId, subtaskId, modelBackendId;
         await using (var seed = _postgres.CreateAdminContext())
         {
+            var owner = User.Create(
+                "actor-race-" + Guid.NewGuid().ToString("N"),
+                "actor-race-" + Guid.NewGuid().ToString("N") + "@beacon.local",
+                "hash");
+            seed.Users.Add(owner);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var org = Org.Create("Actor Race Org", null);
             seed.Orgs.Add(org);
+            var backend = LocalModelBackend.Create(
+                "actor-race-model", ModelBackendType.LlamaCpp, "llama-server", 8192, 0, owner.Id);
+            seed.LocalModelBackends.Add(backend);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Actor Race Project", null, org.Id);
             seed.Projects.Add(project);
@@ -577,9 +718,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            modelBackendId = backend.Id;
         }
 
-        var spawner = new CountingSpawner();
+        var spawner = new CountingSpawner(modelBackendId);
         var factory = _postgres.CreateFactory();
         async Task<Result<PipelineSessionDto>> Run()
         {

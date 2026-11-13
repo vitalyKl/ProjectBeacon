@@ -28,130 +28,119 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartPipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineSessionDto>("Task not found.");
-
-        if (await IsRepositorySyncBlockingStartAsync(db, task.ProjectId, ct))
-            return Result.Failure<PipelineSessionDto>(
-                "PipelineRepositoryBehind", ErrorKind.Conflict);
-
-        var expectedStatus = task.Status;
-        try
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            task.StartPipeline();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineSessionDto>(ex.Message);
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        // Guarded stage claim before the spawn: only takes effect if the pipeline is not started.
-        var transition = await GuardedTransition.TryAsync(
-            db.Tasks.Where(t => t.Id == task.Id),
-            t => t.PipelineStage == null && t.Status == expectedStatus,
-            t => t.PipelineStage == task.PipelineStage && t.Status == task.Status,
-            update => update
-                .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status),
-            ct);
-        if (transition != GuardedTransitionResult.Applied)
-            return Result.Failure<PipelineSessionDto>(
-                "Pipeline state changed while starting; retry.", ErrorKind.Conflict);
+            // Resolve the project id, then lock the same project row used by GitSync enqueue
+            // and LaunchSession. The final preflight, stage transition, and Planner session
+            // creation are committed atomically with respect to repository synchronization.
+            var projectId = await db.Tasks.AsNoTracking()
+                .Where(task => task.Id == command.Request.TaskId)
+                .Select(task => (Guid?)task.ProjectId)
+                .FirstOrDefaultAsync(ct);
+            if (projectId is null)
+                return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        SpawnedSession? spawned = null;
-        Exception? spawnFailure = null;
-        try
-        {
-            spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
-        }
-        catch (Exception ex)
-        {
-            spawnFailure = ex;
-        }
-        if (spawnFailure is not null)
-        {
-            await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Planning, null, ct);
-            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
-                throw canceled;
-            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
-        }
+            var projectLocked = await db.Projects.IgnoreQueryFilters()
+                .Where(project => project.Id == projectId.Value)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(project => project.Revision, project => project.Revision), ct);
+            if (projectLocked != 1)
+                return Result.Failure<PipelineSessionDto>("Project not found.", ErrorKind.NotFound);
 
-        var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
-        var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Planner, ct);
-        var session = PipelineSession.Create(
-            task.Id, task.ProjectId, PipelineRole.Planner,
-            SessionPrompts.Planner(task, projectName, profileInstructions), null, spawned!.ModelBackendId, spawned.LaunchSpec);
-        db.PipelineSessions.Add(session);
-        await db.SaveChangesAsync(ct);
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(candidate => candidate.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        return Result.Ok(PipelineMappers.ToDto(session));
-    }
+            // Do not rely on the Web button to enforce these prerequisites: API callers
+            // must not be able to move a task into Planning when there is no online native
+            // workstation or no usable Planner backend.
+            var readiness = await PipelineSupport.StateAsync(db, task, ct);
+            if (!readiness.CanStart)
+            {
+                var message = readiness.StartBlockedReason switch
+                {
+                    "PipelineNoNativeWorkstation" => "No native workstation is attached to this project.",
+                    "PipelineNativeWorkstationOffline" => "The native pipeline workstation is offline.",
+                    "PipelineNoPlannerModelConfigured" => "No Planner model is configured for this project.",
+                    "PipelinePlannerModelMissing" => "The configured Planner model no longer exists.",
+                    "PipelineContextSizeInvalid" => "The configured Planner model has an invalid context size.",
+                    _ => "The pipeline prerequisites are not satisfied."
+                };
+                return Result.Failure<PipelineSessionDto>(message, ErrorKind.Conflict);
+            }
 
-    private static async Task<bool> IsRepositorySyncBlockingStartAsync(
-        IBeaconDb db, Guid projectId, CancellationToken ct)
-    {
-        var deviceIds = await db.ProjectRuntimes
-            .Where(runtime => runtime.ProjectId == projectId)
-            .Select(runtime => runtime.DeviceId)
-            .Distinct()
-            .ToArrayAsync(ct);
-        if (deviceIds.Length == 0)
-            return false;
+            var pipelineDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
+                db, task.ProjectId, DateTime.UtcNow, ct);
+            var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
+                db, task.ProjectId, pipelineDevice, ct);
+            if (repositorySync.InProgress)
+                return Result.Failure<PipelineSessionDto>(
+                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before starting the pipeline.",
+                    ErrorKind.Conflict);
 
-        var devices = await db.DaemonDevices
-            .Where(device => deviceIds.Contains(device.Id))
-            .ToListAsync(ct);
-        var selectedDeviceId = devices
-            .Where(device => device.IsOnline(DateTime.UtcNow))
-            .OrderByDescending(device => device.LastHeartbeatAt)
-            .Select(device => (Guid?)device.Id)
-            .FirstOrDefault();
-        if (selectedDeviceId is null)
-            return false;
+            var expectedStatus = task.Status;
+            try
+            {
+                task.StartPipeline();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Result.Failure<PipelineSessionDto>(exception.Message);
+            }
 
-        var syncIsInProgress = await db.WorkstationCommands.AsNoTracking()
-            .AnyAsync(command => command.ProjectId == projectId
-                && command.DeviceId == selectedDeviceId.Value
-                && command.Kind == WorkstationCommandKind.GitSync
-                && (command.Status == WorkstationCommandStatus.Pending
-                    || command.Status == WorkstationCommandStatus.Running), ct);
-        if (syncIsInProgress)
-            return true;
+            // Retain the guarded update as a defense against task-state changes by writers
+            // that do not participate in the project-level GitSync lock.
+            var transition = await GuardedTransition.TryAsync(
+                db.Tasks.Where(candidate => candidate.Id == task.Id),
+                candidate => candidate.PipelineStage == null && candidate.Status == expectedStatus,
+                candidate => candidate.PipelineStage == task.PipelineStage && candidate.Status == task.Status,
+                update => update
+                    .SetProperty(candidate => candidate.PipelineStage, candidate => task.PipelineStage)
+                    .SetProperty(candidate => candidate.Status, candidate => task.Status),
+                ct);
+            if (transition != GuardedTransitionResult.Applied)
+                return Result.Failure<PipelineSessionDto>(
+                    "Pipeline state changed while starting; retry.", ErrorKind.Conflict);
 
-        var lastGitSync = await db.WorkstationCommands.AsNoTracking()
-            .Where(command => command.ProjectId == projectId
-                && command.DeviceId == selectedDeviceId.Value
-                && command.Kind == WorkstationCommandKind.GitSync)
-            .OrderByDescending(command => command.CreatedAt)
-            .Select(command => new { command.Status, command.ResultJson })
-            .FirstOrDefaultAsync(ct);
-        if (lastGitSync is null)
-            return false;
-        if (lastGitSync.Status != WorkstationCommandStatus.Succeeded)
-            return true;
+            SpawnedSession spawned;
+            try
+            {
+                spawned = await _spawner.SpawnAsync(
+                    db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
+                if (spawned.ModelBackendId is null)
+                    return Result.Failure<PipelineSessionDto>(
+                        "The Planner model could not be resolved. Check the project's Planner model binding.",
+                        ErrorKind.Conflict);
+            }
+            catch (Exception exception)
+            {
+                if (exception is OperationCanceledException && ct.IsCancellationRequested)
+                    throw;
+                return Result.Failure<PipelineSessionDto>(exception.Message);
+            }
 
-        var resultJson = lastGitSync.ResultJson;
-        if (string.IsNullOrWhiteSpace(resultJson))
-            return true;
+            var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
+            var profileInstructions = await PipelineSupport.RoleInstructionsAsync(
+                db, task.ProjectId, PipelineRole.Planner, ct);
+            var session = PipelineSession.Create(
+                task.Id,
+                task.ProjectId,
+                PipelineRole.Planner,
+                SessionPrompts.Planner(task, projectName, profileInstructions),
+                null,
+                spawned.ModelBackendId,
+                spawned.LaunchSpec);
+            db.PipelineSessions.Add(session);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
 
-        try
-        {
-            var result = JsonSerializer.Deserialize<GitSyncResultDto>(
-                resultJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return result is null
-                || result.Behind > 0
-                || !result.Clean
-                || !result.HasUpstream
-                || result.Detached
-                || result.Diverged
-                || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused;
-        }
-        catch (JsonException)
-        {
-            return true;
-        }
+            return Result.Ok(PipelineMappers.ToDto(session));
+        });
     }
 }
 /// <summary>
@@ -184,6 +173,16 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
 
+            // Serialize the final repository gate and pipeline command insert with GitSync enqueue.
+            // Both operations update the same project row inside their transaction, so a new
+            // synchronization cannot slip between this check and the launch becoming durable.
+            var projectLocked = await db.Projects.IgnoreQueryFilters()
+                .Where(project => project.Id == session.ProjectId)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(project => project.Revision, project => project.Revision), ct);
+            if (projectLocked != 1)
+                return Result.Failure<PipelineSessionDto>("Project not found.", ErrorKind.NotFound);
+
             if (session.Role == PipelineRole.Actor)
             {
                 // Serialize Actor launches on the task row. Existing Ready sessions may
@@ -207,87 +206,67 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
             }
 
-            WorkstationCommand? pipelineCommand = null;
-            var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
-                .Where(r => r.ProjectId == session.ProjectId)
-                .ToListAsync(ct);
-            if (runtimes.Count > 0)
-            {
-                var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
-                var devices = await db.DaemonDevices.IgnoreQueryFilters()
-                    .Where(d => deviceIds.Contains(d.Id))
-                    .ToListAsync(ct);
-                var candidates = runtimes
-                    .Join(devices, r => r.DeviceId, d => d.Id, (runtime, device) => new { Runtime = runtime, Device = device })
-                    .ToList();
+            var selectedDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
+                db, session.ProjectId, DateTime.UtcNow, ct);
+            if (selectedDevice is null)
+                return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
 
-                if (candidates.Count > 0)
-                {
-                    var now = DateTime.UtcNow;
-                    var selected = candidates
-                        .Where(x => x.Device.IsOnline(now))
-                        .OrderByDescending(x => x.Device.LastHeartbeatAt)
-                        .FirstOrDefault();
-                    if (selected is null)
-                        return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
-
-                    if (session.ModelBackendId is not { } backendId)
-                        return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
-                    var backend = await db.LocalModelBackends
-                        .FirstOrDefaultAsync(b => b.Id == backendId, ct);
-                    if (backend is null)
-                        return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
-                    if (backend.ContextSize <= 0)
-                        return Result.Failure<PipelineSessionDto>("PipelineContextSizeInvalid");
-
-                    var model = ChatModelSelection.ResolveBackendModelId(
-                        backend.BackendType, backend.Name, backend.ProviderModelId);
-                    var profileKey = session.Role == PipelineRole.Actor && session.SubtaskId is { } actorSubtaskId
-                        ? await db.Subtasks.Where(subtask => subtask.Id == actorSubtaskId && subtask.TaskId == task.Id)
-                            .Select(subtask => subtask.ProfileKey).FirstOrDefaultAsync(ct)
-                        : null;
-                    var profile = BuiltInAgentProfiles.Resolve(profileKey, session.SubtaskId is { } subId
-                        ? await db.Subtasks.Where(subtask => subtask.Id == subId && subtask.TaskId == task.Id)
-                            .Select(subtask => subtask.ProfileSnapshotJson).FirstOrDefaultAsync(ct)
-                        : null);
-                    var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
-                    var commandsEnabled = profile?.CommandsEnabled ?? true;
-                    var reasoningEffort = profile?.Effort switch
-                    {
-                        "high" => "high",
-                        "low" or "low-medium" => "low",
-                        _ => "medium"
-                    };
-                    var payload = JsonSerializer.Serialize(new
-                    {
-                        projectId = session.ProjectId,
-                        taskId = session.TaskId,
-                        subtaskId = session.SubtaskId,
-                        sessionId = session.Id,
-                        role = session.Role.ToString(),
-                        title = $"{session.Role} · {task.Title}",
-                        prompt = session.PromptContext,
-                        model,
-                        contextLimit = backend.ContextSize,
-                        reasoningEffort,
-                        agentMode,
-                        commandsEnabled,
-                        reportsDiff = profile?.ReportsDiff ?? true
-                    });
-                    pipelineCommand = WorkstationCommand.Create(
-                        selected.Device.Id,
-                        WorkstationCommandKind.RunPipelineSession,
-                        payload,
-                        session.ProjectId,
-                        selected.Device.UserId);
-                }
-            }
-
-            // A pipeline session is executable only when a native workstation command
-            // has actually been prepared. Never report Active for a session that nobody can run.
-            if (pipelineCommand is null)
+            var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
+                db, session.ProjectId, selectedDevice, ct);
+            if (repositorySync.InProgress)
                 return Result.Failure<PipelineSessionDto>(
-                    "No online pipeline workstation is configured for this project. Assign an online workstation and configure a model for this role.");
+                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before launching the pipeline session.",
+                    ErrorKind.Conflict);
+
+            if (session.ModelBackendId is not { } backendId)
+                return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
+            var backend = await db.LocalModelBackends
+                .FirstOrDefaultAsync(b => b.Id == backendId, ct);
+            if (backend is null)
+                return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
+            if (backend.ContextSize <= 0)
+                return Result.Failure<PipelineSessionDto>("PipelineContextSizeInvalid");
+
+            var model = ChatModelSelection.ResolveBackendModelId(
+                backend.BackendType, backend.Name, backend.ProviderModelId);
+            var profileKey = session.Role == PipelineRole.Actor && session.SubtaskId is { } actorSubtaskId
+                ? await db.Subtasks.Where(subtask => subtask.Id == actorSubtaskId && subtask.TaskId == task.Id)
+                    .Select(subtask => subtask.ProfileKey).FirstOrDefaultAsync(ct)
+                : null;
+            var profile = BuiltInAgentProfiles.Resolve(profileKey, session.SubtaskId is { } subId
+                ? await db.Subtasks.Where(subtask => subtask.Id == subId && subtask.TaskId == task.Id)
+                    .Select(subtask => subtask.ProfileSnapshotJson).FirstOrDefaultAsync(ct)
+                : null);
+            var agentMode = profile?.Mode == AgentProfileMode.Plan ? "plan" : "build";
+            var commandsEnabled = profile?.CommandsEnabled ?? true;
+            var reasoningEffort = profile?.Effort switch
+            {
+                "high" => "high",
+                "low" or "low-medium" => "low",
+                _ => "medium"
+            };
+            var payload = JsonSerializer.Serialize(new
+            {
+                projectId = session.ProjectId,
+                taskId = session.TaskId,
+                subtaskId = session.SubtaskId,
+                sessionId = session.Id,
+                role = session.Role.ToString(),
+                title = $"{session.Role} · {task.Title}",
+                prompt = session.PromptContext,
+                model,
+                contextLimit = backend.ContextSize,
+                reasoningEffort,
+                agentMode,
+                commandsEnabled,
+                reportsDiff = profile?.ReportsDiff ?? true
+            });
+            var pipelineCommand = WorkstationCommand.Create(
+                selectedDevice.Id,
+                WorkstationCommandKind.RunPipelineSession,
+                payload,
+                session.ProjectId,
+                selectedDevice.UserId);
 
             try
             {
@@ -307,11 +286,8 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (launched == 0)
                 return Result.Failure<PipelineSessionDto>("Session state changed while launching; retry.");
 
-            if (pipelineCommand is not null)
-            {
-                db.WorkstationCommands.Add(pipelineCommand);
-                await db.SaveChangesAsync(ct);
-            }
+            db.WorkstationCommands.Add(pipelineCommand);
+            await db.SaveChangesAsync(ct);
 
             await transaction.CommitAsync(ct);
             return Result.Ok(PipelineMappers.ToDto(session));

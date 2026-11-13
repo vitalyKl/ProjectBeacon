@@ -10,28 +10,6 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
 {
-    /// <summary>Spawner that signals entry and then blocks until released.</summary>
-    private sealed class GateSpawner : ISessionSpawner
-    {
-        private readonly TaskCompletionSource<bool> _entered = new();
-        private readonly TaskCompletionSource<bool> _release = new();
-
-        public Task Entered => _entered.Task;
-        public void Release() => _release.SetResult(true);
-
-        public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
-        {
-            _entered.TrySetResult(true);
-            return Await();
-
-            async Task<SpawnedSession> Await()
-            {
-                await _release.Task;
-                return new SpawnedSession(null, null, null);
-            }
-        }
-    }
-
     private sealed class FailingSpawner : ISessionSpawner
     {
         public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
@@ -39,30 +17,32 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task StartPipeline_ConcurrentStart_LoserFails_SingleSpawnSingleSession()
+    public async Task StartPipeline_SecondStartAfterCommit_LoserFails_SingleSpawnSingleSession()
     {
         var (projectId, task) = await SeedTaskAsync("T");
-        var spawner = new GateSpawner();
+        var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = new StartPipelineHandler(factory, spawner);
 
-        // First start claims the Planning stage and then waits inside the spawner.
-        var first = Task.Run(() => start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id))));
-        await spawner.Entered;
+        var first = await start.HandleAsync(
+            new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
 
-        var second = await start.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var second = await start.HandleAsync(
+            new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+            TestContext.Current.CancellationToken);
         Assert.False(second.Success);
-
-        spawner.Release();
-        var firstResult = await first;
-        Assert.True(firstResult.Success, firstResult.Error);
+        Assert.Single(spawner.Calls, call => call.Role == PipelineRole.Planner);
 
         using (TenantScope.EnterUnscoped())
         {
-            Assert.Equal(1, await _db.PipelineSessions.CountAsync(s => s.TaskId == task.Id, TestContext.Current.CancellationToken));
+            Assert.Equal(1, await _db.PipelineSessions.CountAsync(
+                session => session.TaskId == task.Id,
+                TestContext.Current.CancellationToken));
             var stage = await _db.Tasks.AsNoTracking()
-                .Where(t => t.Id == task.Id)
-                .Select(t => t.PipelineStage)
+                .Where(item => item.Id == task.Id)
+                .Select(item => item.PipelineStage)
                 .FirstAsync(TestContext.Current.CancellationToken);
             Assert.Equal(TaskPipelineStage.Planning, stage);
         }

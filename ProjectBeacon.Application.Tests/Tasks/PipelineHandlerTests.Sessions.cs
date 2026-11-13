@@ -175,8 +175,8 @@ public sealed partial class PipelineHandlerTests
         var start = await new StartPipelineHandler(factory, spawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
         Assert.True(start.Success, start.Error);
-        Assert.Null(start.Value!.ModelBackendId);
-        Assert.Null(start.Value.LaunchSpec);
+        Assert.NotNull(start.Value!.ModelBackendId);
+        Assert.Contains("--ctx-size 8192", start.Value.LaunchSpec!);
 
         var sub = await new CreateSubtaskHandler(factory)
             .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);

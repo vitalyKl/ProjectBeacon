@@ -61,15 +61,14 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         if (!resolved.Success)
             return Result.Failure<ChatSessionDto>(resolved.Error ?? ProjectFolderRequired);
 
-        var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", resolved.Value!.LocalRoot);
-
+        var title = string.IsNullOrWhiteSpace(command.Request.Title) ? "Chat" : command.Request.Title.Trim();
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             device.Id, command.Request.UserId, WorkstationCommandKind.ChatEnsureSession,
-            JsonSerializer.Serialize(new { title = session.Title }), projectId)), ct);
-        if (!queued.Success)
+            JsonSerializer.Serialize(new { title }), projectId)), ct);
+        if (!queued.Success || queued.Value is null)
             return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
 
-        var finished = await WaitAsync(queued.Value!.Id, command.Request.UserId, ct);
+        var finished = await WaitAsync(queued.Value.Id, command.Request.UserId, ct);
         if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
             return Result.Failure<ChatSessionDto>(finished?.Error ?? "OpenCode did not create a session.");
 
@@ -77,7 +76,14 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         if (string.IsNullOrWhiteSpace(externalId))
             return Result.Failure<ChatSessionDto>("OpenCode session id missing.");
 
+        // Use the LocalRoot resolved atomically with command enqueue, not the earlier display
+        // read. AttachRuntime may have changed the path between the UI lookup and queue insertion.
+        var queuedLocalRoot = queued.Value.LocalRoot;
+        if (string.IsNullOrWhiteSpace(queuedLocalRoot))
+            return Result.Failure<ChatSessionDto>(CommandSandbox.RuntimeRequired);
+
         // Persist only after the device created the session, so failed attempts leave no orphan row.
+        var session = ChatSession.Create(projectId, device.Id, title, queuedLocalRoot);
         session.SetExternalSessionId(externalId);
         db.ChatSessions.Add(session);
         await db.SaveChangesAsync(ct);
@@ -245,9 +251,22 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                         .AnyAsync(m => m.ProjectId == session.ProjectId && m.UserId == command.Request.UserId, ct);
                     if (!member)
                         return Result.Failure<ChatSessionDto>("Project not found.");
+
+                    // SendChatPrompt inserts its own project command row instead of going
+                    // through EnqueueCommandHandler. Take the shared project lock here so
+                    // Attach/Detach cannot switch LocalRoot between runtime resolution and
+                    // the durable Pending command commit.
+                    if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, session.ProjectId, ct))
+                        return Result.Failure<ChatSessionDto>("Project not found.", ErrorKind.NotFound);
+
                     var resolved = await ProjectRuntimeResolver.ResolveAsync(db, session.ProjectId, session.DeviceId, ct);
                     if (!resolved.Success)
                         return Result.Failure<ChatSessionDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+                    if (!string.IsNullOrWhiteSpace(session.LocalRoot)
+                        && !SameLocalRoot(session.LocalRoot, resolved.Value!.LocalRoot))
+                        return Result.Failure<ChatSessionDto>(
+                            "This chat session is bound to a different project directory. Create a new chat session to use the updated repository path.",
+                            ErrorKind.Conflict);
                     if (command.Request.TaskId is { } taskId)
                     {
                         var belongsToProject = await db.Tasks
@@ -316,6 +335,21 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
         }
         return Result.Failure<ChatSessionDto>("Could not send the message; try again.");
     }
+
+    private static bool SameLocalRoot(string left, string right)
+    {
+        var windowsPath = IsWindowsPath(left) || IsWindowsPath(right);
+        var comparison = windowsPath || OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(left.Trim(), right.Trim(), comparison);
+    }
+
+    private static bool IsWindowsPath(string path) =>
+        path.Length >= 3
+        && char.IsAsciiLetter(path[0])
+        && path[1] == ':'
+        && path[2] is '\\' or '/';
 }
 /// <summary>
 /// Marks the chat aborted and asks the device to stop the turn.

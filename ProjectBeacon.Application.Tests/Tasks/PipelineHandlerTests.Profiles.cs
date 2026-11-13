@@ -59,7 +59,7 @@ public sealed partial class PipelineHandlerTests
 
             Assert.Equal(TaskPipelineStage.Executing, pipelineTask.PipelineStage);
             Assert.Equal(SubtaskStatus.InProgress, reopened.Status);
-            Assert.Equal(SessionStatus.Ready, actor.Status);
+            Assert.Equal(SessionStatus.Active, actor.Status);
         }
     }
 

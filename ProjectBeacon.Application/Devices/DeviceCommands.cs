@@ -244,7 +244,10 @@ public enum GitSyncRefusalCode
     Detached = 3,
     NoUpstream = 4,
     FetchFailed = 5,
-    Timeout = 6
+    Timeout = 6,
+    MergeFailed = 7,
+    RuntimeChanged = 8,
+    NeverSynced = 9
 }
 
 /// <summary>Bounded repository state returned by the workstation. Stderr is sanitized.</summary>

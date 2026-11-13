@@ -35,6 +35,12 @@ internal static class RepoPatchProposalWorkflow
             || proposal.TargetId != proposal.ProjectId)
             return Result.Failure<WorkstationCommand>("The proposal is not a supported project RepoPatch.");
 
+        // ApplyProposalPatch is queued directly by proposal approval, not by the generic
+        // command handler. Use the same project lock as GitSync, pipeline launch and runtime
+        // mutation so the command's LocalRoot cannot become stale before the durable insert.
+        if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, proposal.ProjectId, ct))
+            return Result.Failure<WorkstationCommand>("Project not found.", ErrorKind.NotFound);
+
         if (proposal.AuthorKind != ProposalAuthorKind.Agent
             || proposal.AuthorTokenId is not { } authorTokenId
             || proposal.SubtaskId is not { } subtaskId

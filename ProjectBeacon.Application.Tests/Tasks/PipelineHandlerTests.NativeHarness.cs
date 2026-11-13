@@ -98,7 +98,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task LaunchSession_WithoutOnlineWorkstation_FailsAndLeavesSessionReady()
     {
-        var (projectId, task) = await SeedTaskAsync("Pipeline without native runtime");
+        var (projectId, task) = await SeedTaskAsync("Pipeline without native runtime", seedPipelinePrerequisites: false);
         var session = PipelineSession.Create(
             task.Id,
             projectId,
@@ -118,7 +118,7 @@ public sealed partial class PipelineHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.False(launched.Success);
-        Assert.Contains("No online pipeline workstation", launched.Error);
+        Assert.Contains("native pipeline workstation is offline", launched.Error, StringComparison.OrdinalIgnoreCase);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.PipelineSessions.AsNoTracking()

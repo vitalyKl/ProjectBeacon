@@ -33,6 +33,50 @@ public sealed class GitSyncServiceTests
     }
 
     [Fact]
+    public async Task PullFastForward_FetchesConfiguredUpstreamWhenTrackingRefIsMissing()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+
+        await Git(repo.Root, "update-ref", "-d", "refs/remotes/origin/main");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.FastForwarded, result.Outcome);
+        Assert.Equal("main", result.Branch);
+        Assert.Equal("origin/main", result.Upstream);
+        Assert.Equal(headBefore, result.HeadBefore);
+        Assert.NotEqual(headBefore, result.HeadAfter);
+        Assert.Equal(0, result.Behind);
+        Assert.Equal("upstream change", await File.ReadAllTextAsync(Path.Combine(repo.Root, "remote.txt")));
+    }
+
+    [Fact]
+    public async Task PullFastForward_DoesNotHonorCustomFetchRefspecDestinations()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+
+        await Git(repo.Root, "update-ref", "-d", "refs/remotes/origin/main");
+        await Git(repo.Root, "config", "--replace-all",
+            "remote.origin.fetch", "+refs/heads/main:refs/heads/side-effect");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.FastForwarded, result.Outcome);
+        Assert.Equal(headBefore, result.HeadBefore);
+        Assert.NotEqual(headBefore, result.HeadAfter);
+        Assert.Equal(0, result.Behind);
+        Assert.True(result.Clean);
+        Assert.Empty(await Git(repo.Root, "for-each-ref", "refs/heads/side-effect"));
+        Assert.NotEmpty(await Git(repo.Root, "for-each-ref", "refs/remotes/origin/main"));
+        Assert.True(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+        Assert.Equal("upstream change", await File.ReadAllTextAsync(Path.Combine(repo.Root, "remote.txt")));
+    }
+
+    [Fact]
     public async Task PullFastForward_RefusesDirtyWorkingTreeWithoutChangingHeadOrFile()
     {
         await using var repo = await RepositoryFixture.CreateAsync();
@@ -47,6 +91,25 @@ public sealed class GitSyncServiceTests
         Assert.Equal(head, await Git(repo.Root, "rev-parse", "HEAD"));
         Assert.Equal("local uncommitted edit", await File.ReadAllTextAsync(Path.Combine(repo.Root, "README.md")));
         Assert.False(result.Clean);
+    }
+
+    [Fact]
+    public async Task PullFastForward_WhenAlreadyUpToDate_PreservesDirtyLocalChanges()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        var readme = Path.Combine(repo.Root, "README.md");
+        await File.WriteAllTextAsync(readme, "local uncommitted edit");
+        var head = await Git(repo.Root, "rev-parse", "HEAD");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.UpToDate, result.Outcome);
+        Assert.Equal(0, result.Behind);
+        Assert.False(result.Clean);
+        Assert.Equal(head, result.HeadBefore);
+        Assert.Equal(head, result.HeadAfter);
+        Assert.Equal(head, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.Equal("local uncommitted edit", await File.ReadAllTextAsync(readme));
     }
 
     [Fact]
@@ -154,6 +217,88 @@ public sealed class GitSyncServiceTests
     }
 
     [Fact]
+    public async Task PullFastForward_RefusesToOverwriteIgnoredLocalFiles()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        var exclude = Path.Combine(repo.Root, ".git", "info", "exclude");
+        await File.AppendAllTextAsync(exclude, Environment.NewLine + "remote.txt" + Environment.NewLine);
+        var ignoredPath = Path.Combine(repo.Root, "remote.txt");
+        await File.WriteAllTextAsync(ignoredPath, "local ignored data");
+        var head = await Git(repo.Root, "rev-parse", "HEAD");
+
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.MergeFailed, result.ReasonCode);
+        Assert.Equal(head, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.Equal("local ignored data", await File.ReadAllTextAsync(ignoredPath));
+        Assert.Contains("remote.txt", result.Stderr ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PullFastForward_RefusesToWriteThroughIgnoredSymlinkDirectories()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Root, ".gitignore"), "ignored-link\n");
+        await Git(repo.Root, "add", ".gitignore");
+        await Git(repo.Root, "commit", "-m", "ignore local symlink directory");
+        await Git(repo.Root, "push", "origin", "main");
+        await Git(repo.Seed, "pull", "--ff-only");
+
+        var remoteDirectory = Path.Combine(repo.Seed, "ignored-link");
+        Directory.CreateDirectory(remoteDirectory);
+        var remoteFile = Path.Combine(remoteDirectory, "escaped.txt");
+        await File.WriteAllTextAsync(remoteFile, "remote file");
+        await Git(repo.Seed, "add", "-f", "ignored-link/escaped.txt");
+        await Git(repo.Seed, "commit", "-m", "add file under ignored path");
+        await Git(repo.Seed, "push", "origin", "main");
+
+        var outside = Path.Combine(repo.Parent, "outside");
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(Path.Combine(repo.Root, "ignored-link"), outside);
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.MergeFailed, result.ReasonCode);
+        Assert.Equal(headBefore, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.False(File.Exists(Path.Combine(outside, "escaped.txt")));
+    }
+
+    [Fact]
+    public async Task PullFastForward_DisablesSmudgeFiltersWithDottedDriverNames()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await File.WriteAllTextAsync(
+            Path.Combine(repo.Root, ".gitattributes"),
+            "remote.txt filter=beacon.test\n");
+        await Git(repo.Root, "add", ".gitattributes");
+        await Git(repo.Root, "commit", "-m", "configure dotted filter driver");
+        await Git(repo.Root, "push", "origin", "main");
+        await Git(repo.Seed, "pull", "--ff-only");
+
+        var marker = Path.Combine(repo.Parent, "smudge-filter-ran");
+        await Git(repo.Root, "config", "filter.beacon.test.smudge",
+            "sh -c 'printf ran > " + marker.Replace("'", "'\\''", StringComparison.Ordinal) + "; cat'");
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var result = await ExecuteAsync(repo, GitSyncMode.PullFastForward);
+
+        Assert.Equal(GitSyncOutcome.FastForwarded, result.Outcome);
+        Assert.False(File.Exists(marker));
+        Assert.Equal("upstream change", await File.ReadAllTextAsync(Path.Combine(repo.Root, "remote.txt")));
+    }
+
+    [Fact]
     public async Task PullFastForward_DisablesPostMergeHooks()
     {
         if (OperatingSystem.IsWindows())
@@ -192,6 +337,43 @@ public sealed class GitSyncServiceTests
         Assert.Contains("invalid", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task Execute_RedactsCredentialQueryParametersFromRemoteErrors()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        const string secret = "super-secret-query-token";
+        await Git(repo.Root, "remote", "set-url", "origin",
+            "http://127.0.0.1:1/project.git?access_token=" + secret);
+
+        var result = await ExecuteAsync(repo, GitSyncMode.Status);
+
+        Assert.Equal(GitSyncOutcome.Failed, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.FetchFailed, result.ReasonCode);
+        Assert.DoesNotContain(secret, result.Stderr ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", result.Stderr ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Execute_DoesNotRunRepositoryConfiguredSshCommand()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        await using var repo = await RepositoryFixture.CreateAsync();
+        var marker = Path.Combine(repo.Parent, "ssh-command-executed");
+        await Git(repo.Root, "remote", "set-url", "origin", "ssh://git@127.0.0.1:1/project.git");
+        var maliciousCommand = "sh -c 'printf ran > "
+            + marker.Replace("'", "'\\''", StringComparison.Ordinal)
+            + "; exit 1'";
+        await Git(repo.Root, "config", "core.sshCommand", maliciousCommand);
+
+        var result = await ExecuteAsync(repo, GitSyncMode.Status);
+
+        Assert.Equal(GitSyncOutcome.Failed, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.FetchFailed, result.ReasonCode);
+        Assert.False(File.Exists(marker));
+    }
 
     [Fact]
     public async Task Execute_RejectsExternalRemoteHelpers()

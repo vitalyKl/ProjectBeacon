@@ -9,9 +9,15 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(App).Assembly">
         <Found Context="routeData">
-            <ErrorBoundary @key="Navigation.Uri">
-                <ErrorContent>
-                    <MudAlert Severity="Severity.Error">@L["AnErrorOccurred"]</MudAlert>
+            <LoggingErrorBoundary @key="Navigation.Uri">
+                <ErrorContent Context="exception">
+                    <MudAlert Severity="Severity.Error">
+                        @L["AnErrorOccurred"]
+                        @if (exception.Data["ProjectBeaconDiagnosticId"] is string diagnosticId)
+                        {
+                            <MudText Typo="Typo.caption">ID: @diagnosticId</MudText>
+                        }
+                    </MudAlert>
                     <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true))">
                         @L["Back"]
                     </MudButton>
@@ -33,7 +39,7 @@
                 </Authorizing>
             </AuthorizeRouteView>
                 </ChildContent>
-            </ErrorBoundary>
+            </LoggingErrorBoundary>
         </Found>
         <NotFound>
             <AuthorizeView>
@@ -51,3 +57,4 @@
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
+
