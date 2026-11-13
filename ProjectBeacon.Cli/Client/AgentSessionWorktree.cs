@@ -568,6 +568,12 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
         info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "core.hooksPath=" + hooksDirectory);
         info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.sshCommand=ssh");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.askPass=");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "credential.helper=");
+        info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "protocol.file.allow=always");
         info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "protocol.ssh.allow=always");
