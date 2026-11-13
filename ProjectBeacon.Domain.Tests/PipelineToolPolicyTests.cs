@@ -46,4 +46,28 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(McpToolNames.KnowledgeWithdraw, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Empty(PipelineToolPolicy.ToolsForRole("Unknown"));
     }
+
+    [Fact]
+    public void StructuredGitTools_AreRestrictedByPipelineRole()
+    {
+        Assert.Equal(
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate },
+            PipelineToolPolicy.GitToolsForRole("Planner"));
+        Assert.Equal(
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate },
+            PipelineToolPolicy.GitToolsForRole("Actor"));
+        Assert.Equal(
+            new[] { PipelineToolPolicy.GitInfo },
+            PipelineToolPolicy.GitToolsForRole("Review"));
+        Assert.Empty(PipelineToolPolicy.GitToolsForRole("Eval"));
+        Assert.Empty(PipelineToolPolicy.GitToolsForRole(null));
+    }
+
+    [Fact]
+    public void InteractivePlan_AllowsGitInspectionButDeniesGitMutation()
+    {
+        Assert.Contains(PipelineToolPolicy.GitInfo, PipelineToolPolicy.InteractivePlanTools);
+        Assert.Contains(PipelineToolPolicy.GitCommit, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.Contains(PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.PipelinePlanDeniedTools);
+    }
 }
