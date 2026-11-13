@@ -38,6 +38,8 @@ public static class PipelineEndpoints
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/verdict", RecordReviewVerdict).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/check", RecordReviewCheck).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/approve", ApprovePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land", RequestLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/revert", RevertLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.Admin);
 
         return app;
@@ -269,6 +271,32 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
+    private static async Task<IResult> RequestLanding(
+        Guid taskId,
+        [FromBody] LandingRequestBody body,
+        HttpContext ctx,
+        RequestLandingHandler handler,
+        CancellationToken ct)
+    {
+        if (taskId != body.TaskId)
+            return ProblemResults.Bad("TaskId mismatch.");
+        var result = await handler.HandleAsync(
+            new RequestLandingCommand(new RequestLandingRequest(taskId, body.Rationale), ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> RevertLanding(
+        Guid taskId,
+        Guid attemptId,
+        HttpContext ctx,
+        RevertLandingHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            new RevertLandingCommand(new RevertLandingRequest(taskId, attemptId), ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
     private static async Task<IResult> ForceClosePipeline(Guid taskId, [FromBody] ForceCloseBody body, HttpContext ctx, ForceClosePipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
@@ -331,6 +359,9 @@ public static class PipelineEndpoints
     /// API tokens must omit it and the project's pinned ReviewCheckCommand is used instead.
     /// </summary>
     public record ReviewCheckBody(Guid TaskId, Guid DeviceId, string? CheckCommand, string? Path = null);
+
+    /// <summary>JSON body for requesting a task branch landing preview.</summary>
+    public record LandingRequestBody(Guid TaskId, string Rationale);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c>.</summary>
     public record ApproveBody(Guid TaskId, string? Note = null);
