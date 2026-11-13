@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
 using System.Diagnostics;
+using Domain.Common;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.ModelSwapping;
@@ -316,6 +317,23 @@ internal sealed class NativeAgentToolExecutor(
                     else
                     {
                         var result = await _services.StopAsync(session.Id, parsedArguments!, ct);
+                        isError = result.IsError;
+                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                    }
+                }
+                else if (AgentTaskGitOperations.IsGitTool(call.Name))
+                {
+                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true, GitWorkspace: not null } gitAuthorization
+                        || !PipelineToolPolicy.GitToolsForRole(gitAuthorization.PipelineRole)
+                            .Contains(call.Name!, StringComparer.Ordinal))
+                    {
+                        isError = true;
+                        toolResult = "Tool error: this structured Git operation is not authorized for the current role or workspace.";
+                    }
+                    else
+                    {
+                        var result = await AgentTaskGitOperations.ExecuteAsync(
+                            gitAuthorization, call.Name!, parsedArguments!, ct);
                         isError = result.IsError;
                         toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                     }
