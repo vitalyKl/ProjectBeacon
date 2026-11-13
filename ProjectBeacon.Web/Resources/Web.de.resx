@@ -2606,7 +2606,8 @@ orthstar</value>
   <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Repository wurde erfolgreich per Fast-Forward aktualisiert.</value></data>
   <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Synchronisierung abgelehnt; das Arbeitsverzeichnis blieb unverändert.</value></data>
   <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git-Synchronisierung fehlgeschlagen.</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Übernehmen oder stashen Sie lokale Änderungen vor der Synchronisierung.</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Lokale Änderungen sind vorhanden. GitSync überschreibt sie nicht; die Pipeline kann dieses Checkout unverändert verwenden.</value></data>
+  <data name="GitSyncReasonNeverSynced" xml:space="preserve"><value>Dieses Repository wurde noch nicht geprüft. Die Pipeline kann dieses lokale Checkout trotzdem verwenden; führen Sie Git-Status oder Synchronisierung aus, wenn Sie es mit Upstream vergleichen möchten.</value></data>
   <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Eine native Agentensitzung ist aktiv. Warten Sie, bis sie beendet ist.</value></data>
   <data name="GitSyncReasonDiverged" xml:space="preserve"><value>Lokaler und Upstream-Branch sind auseinander gelaufen. Fast-Forward ist nicht möglich.</value></data>
   <data name="GitSyncReasonDetached" xml:space="preserve"><value>Das Repository befindet sich im Detached-HEAD-Zustand.</value></data>
@@ -2832,7 +2833,7 @@ orthstar</value>
   <data name="TaskId" xml:space="preserve">
     <value>Aufgaben-ID</value>
   </data>
-  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Die letzte Git-Prüfung zeigte, dass dieses Repository im Branch „{1}“ {0} Commit(s) zurückliegt. Synchronisieren Sie es, bevor Sie mit dem aktuellen Projektsnapshot arbeiten.</value></data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Die letzte Git-Prüfung zeigte, dass dieses Repository im Branch „{1}“ {0} Commit(s) zurückliegt. Die Pipeline verwendet dieses lokale Checkout unverändert; synchronisieren Sie es, um Upstream-Änderungen einzubeziehen.</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>Das Projekt-Repository liegt hinter seinem konfigurierten Upstream. Synchronisieren Sie es, bevor Sie die Pipeline starten.</value></data>
   <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
     <value>Für dieses Projekt läuft noch eine Repository-Synchronisierung. Warten Sie, bis sie abgeschlossen ist, bevor Sie die Pipeline starten.</value>
@@ -2842,6 +2843,6 @@ orthstar</value>
     <value>Ein Git-Synchronisierungsvorgang wurde auf einer anderen Workstation beendet. Das Repository der für die Pipeline ausgewählten Workstation muss weiterhin synchronisiert werden.</value>
   </data>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
-    <value>Der lokale Pfad des angebundenen Repositorys wurde nach der letzten erfolgreichen Git-Prüfung geändert. Führen Sie vor dem Pipeline-Start erneut eine Git-Prüfung oder Synchronisierung aus.</value>
+    <value>Der lokale Pfad des angebundenen Repositorys wurde nach der letzten erfolgreichen Git-Prüfung geändert. Der aktuelle Status ist nicht verifiziert; die Pipeline verwendet das Checkout am konfigurierten Pfad. Führen Sie Git-Status oder Synchronisierung aus, um die Warnung zu aktualisieren.</value>
   </data>
 </root>
