@@ -54,7 +54,8 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> PlannerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview,
+        McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert
     });
     public static IReadOnlyList<string> ReviewerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
