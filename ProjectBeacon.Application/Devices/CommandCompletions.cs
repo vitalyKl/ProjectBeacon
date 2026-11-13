@@ -484,6 +484,20 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha), ct);
     }
 
+    private static string? ReadString(string json, string name)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 }
