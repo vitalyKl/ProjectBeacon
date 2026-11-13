@@ -710,7 +710,7 @@ internal static class AgentTaskGitOperations
     {
         if (string.IsNullOrWhiteSpace(repositoryRelative)
             || Path.IsPathRooted(repositoryRelative)
-            || repositoryRelative.Contains('\\\\')
+            || repositoryRelative.Contains((char)92)
             || repositoryRelative.Contains(':')
             || repositoryRelative.Split('/').Any(segment =>
                 segment is "" or "." or ".."
