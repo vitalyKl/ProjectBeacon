@@ -78,7 +78,8 @@ public static class WorkstationCommandCatalog
             Device(WorkstationCommandKind.CheckClientUpdate, "device.check-client-update", "Check the latest signed-off workstation client release.", OperationRetrySemantics.ReadOnly, "{}"),
             Device(WorkstationCommandKind.UpdateClient, "device.update-client", "Download, verify, and install the latest workstation client release.", OperationRetrySemantics.AtMostOnce, "{}"),
             Project(WorkstationCommandKind.GitSync, "repository.git-sync", "Inspect or fast-forward the configured project repository.", OperationRetrySemantics.Idempotent, "{projectId:guid,mode:Status|PullFastForward}"),
-            Project(WorkstationCommandKind.ApplyProposalPatch, "repository.apply-proposal-patch", "Apply an approved documentation-only proposal patch.", OperationRetrySemantics.Idempotent, "{projectId:guid,proposalId:guid,patch:string,files:array,allowedPaths:array}", leaseDuration: TimeSpan.FromMinutes(30))
+            Project(WorkstationCommandKind.ApplyProposalPatch, "repository.apply-proposal-patch", "Apply an approved documentation-only proposal patch.", OperationRetrySemantics.Idempotent, "{projectId:guid,proposalId:guid,patch:string,files:array,allowedPaths:array}", leaseDuration: TimeSpan.FromMinutes(30)),
+            Project(WorkstationCommandKind.GitLand, "repository.git-land", "Preview, execute, or revert a verified task branch landing.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,landingAttemptId:guid,action:Preview|Execute|Revert,sourceSha:sha256,checkCommandHash:sha256,targetHeadSha?:sha,targetTreeSha?:sha,mergeCommitSha?:sha}", leaseDuration: TimeSpan.FromMinutes(30))
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);
