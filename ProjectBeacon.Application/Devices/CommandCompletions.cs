@@ -240,7 +240,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             {
                 if (commitSha is not null && sessionInfo.SubtaskId is { } completedSubtaskId)
                 {
-                    await db.Subtasks.IgnoreQueryFilters()
+                    await db.Subtasks
                         .Where(subtask => subtask.Id == completedSubtaskId
                             && subtask.TaskId == sessionInfo.TaskId
                             && subtask.ProjectId == projectId
