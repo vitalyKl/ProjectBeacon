@@ -593,11 +593,21 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartActorSession_OnlyOneSpawn_OneActorSession()
     {
         _postgres.RequirePostgres();
-        Guid taskId, subtaskId;
+        Guid taskId, subtaskId, modelBackendId;
         await using (var seed = _postgres.CreateAdminContext())
         {
+            var owner = User.Create(
+                "actor-race-" + Guid.NewGuid().ToString("N"),
+                "actor-race-" + Guid.NewGuid().ToString("N") + "@beacon.local",
+                "hash");
+            seed.Users.Add(owner);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var org = Org.Create("Actor Race Org", null);
             seed.Orgs.Add(org);
+            var backend = LocalModelBackend.Create(
+                "actor-race-model", ModelBackendType.LlamaCpp, "llama-server", 8192, 0, owner.Id);
+            seed.LocalModelBackends.Add(backend);
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Actor Race Project", null, org.Id);
             seed.Projects.Add(project);
@@ -610,9 +620,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
+            modelBackendId = backend.Id;
         }
 
-        var spawner = new CountingSpawner();
+        var spawner = new CountingSpawner(modelBackendId);
         var factory = _postgres.CreateFactory();
         async Task<Result<PipelineSessionDto>> Run()
         {
