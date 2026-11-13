@@ -145,7 +145,7 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
-    public void RepositorySyncToolIsExposedOnlyToActivePipelineAgentsInActMode()
+    public void RepositorySyncToolIsExposedToIsolatedChatAndPipelineAgentsInActMode()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-repo-sync-tool-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -182,8 +182,9 @@ public sealed class NativeAgentRuntimeTests
             {
                 HarnessAuthorization = authorization with { RepositoryBaseSynced = null }
             };
-            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(
-                catalog.Build("build", noBaselineCallback, null).Tools, "repo_sync"));
+            var noCallbackTools = catalog.Build("build", noBaselineCallback, null).Tools;
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(noCallbackTools, "repo_status"));
+            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(noCallbackTools, "repo_sync"));
 
             var interactiveChat = controls with
             {
@@ -194,8 +195,12 @@ public sealed class NativeAgentRuntimeTests
                     PipelineRole = null
                 }
             };
-            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(
-                catalog.Build("build", interactiveChat, null).Tools, "repo_sync"));
+            var chatTools = catalog.Build("build", interactiveChat, null).Tools;
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(chatTools, "repo_status"));
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(chatTools, "repo_sync"));
+
+            var chatPlanTools = catalog.Build("plan", interactiveChat, null).Tools;
+            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(chatPlanTools, "repo_sync"));
         }
         finally
         {
