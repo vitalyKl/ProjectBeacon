@@ -169,6 +169,57 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task StartPipeline_StartsWhenRepositoryIsBehindUpstream()
+    {
+        var (projectId, task) = await SeedTaskAsync("Run with an outdated local repository");
+        var plannerOwner = User.Create("behind-planner", $"behind-planner-{Guid.NewGuid():N}@beacon.local", "hash");
+        var plannerBackend = LocalModelBackend.Create(
+            "behind-planner-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            plannerOwner.Id);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(plannerOwner);
+            _db.LocalModelBackends.Add(plannerBackend);
+            _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, plannerBackend.Id, projectId));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var device = await SeedGitSyncRuntimeAsync(projectId);
+        var command = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId, mode = "Status" }),
+            projectId);
+        var sha = new string('a', 40);
+        command.Succeed(JsonSerializer.Serialize(
+            new GitSyncResultDto(
+                "main", "origin/main", 0, 2, true, false, true, false,
+                sha, sha, GitSyncOutcome.UpToDate, null, null),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new StartPipelineHandler(factory, new FakeSpawner(Guid.NewGuid()))
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskPipelineStage.Planning, persisted.PipelineStage);
+        }
+    }
+
+    [Fact]
     public async Task StartPipeline_DoesNotEnterPlanningWhenPlannerModelIsNotConfigured()
     {
         var (projectId, task) = await SeedTaskAsync("Missing Planner model");
