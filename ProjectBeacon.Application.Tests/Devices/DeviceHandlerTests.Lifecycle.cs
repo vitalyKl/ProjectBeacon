@@ -291,6 +291,7 @@ public sealed partial class DeviceHandlerTests
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();
         var projectId = project.Id;
         var userId = user.Id;
+        Guid sessionId;
         using (TenantScope.EnterUnscoped())
         {
             var runtime = await new AttachRuntimeHandler(Factory()).HandleAsync(
@@ -302,8 +303,8 @@ public sealed partial class DeviceHandlerTests
             chatSession.SetExternalSessionId("oc_test");
             _db.ChatSessions.Add(chatSession);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            sessionId = chatSession.Id;
         }
-        var sessionId = chatSession.Id;
         var factory = HandlerSqlite.Factory(_connection);
         using (TenantScope.EnterUnscoped())
         {
