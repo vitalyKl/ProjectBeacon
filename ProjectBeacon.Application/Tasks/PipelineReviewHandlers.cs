@@ -272,7 +272,8 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         var payload = new JsonObject
         {
             ["reviewRunId"] = reviewRun.Id.ToString("D"),
-            ["taskId"] = task.Id.ToString("D")
+            ["taskId"] = task.Id.ToString("D"),
+            ["checkCommandHash"] = checkCommandHash
         };
         if (!string.IsNullOrWhiteSpace(command.Request.Path))
             payload["path"] = command.Request.Path;
