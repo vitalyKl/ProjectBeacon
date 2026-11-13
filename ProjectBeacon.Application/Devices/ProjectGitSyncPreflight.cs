@@ -170,7 +170,7 @@ internal static class ProjectGitSyncPreflight
                 ?? (result.Detached ? GitSyncRefusalCode.Detached
                     : !result.HasUpstream ? GitSyncRefusalCode.NoUpstream
                     : result.Diverged ? GitSyncRefusalCode.Diverged
-                    : result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded
+                    : (result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded)
                         && !result.Clean
                         ? GitSyncRefusalCode.DirtyWorkingTree
                     : inconsistentSuccess || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused
