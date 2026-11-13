@@ -160,6 +160,129 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         attempt.ConflictFilesJson, attempt.CreatedAt, attempt.UpdatedAt);
 }
 
+/// <summary>Reads one landing attempt scoped to the requested task.</summary>
+public sealed class GetLandingAttemptHandler : ICommandHandler<GetLandingAttemptCommand, Result<LandingAttemptDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public GetLandingAttemptHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<LandingAttemptDto>> HandleAsync(GetLandingAttemptCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
+            a.TaskId == command.Request.TaskId && a.Id == command.Request.LandingAttemptId, ct);
+        return attempt is null
+            ? Result.Failure<LandingAttemptDto>("Landing attempt not found.", ErrorKind.NotFound)
+            : Result.Ok(RequestLandingHandler.ToDto(attempt));
+    }
+}
+
+/// <summary>Queues an Execute operation only for the still-current successful preview and review proof.</summary>
+public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingCommand, Result<LandingAttemptDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly EnqueueCommandHandler _enqueue;
+
+    public ExecuteLandingHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
+    {
+        _dbFactory = dbFactory;
+        _enqueue = enqueue;
+    }
+
+    public async Task<Result<LandingAttemptDto>> HandleAsync(ExecuteLandingCommand command, CancellationToken ct = default)
+    {
+        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
+            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to execute a landing.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
+            a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
+        if (attempt is null)
+            return Result.Failure<LandingAttemptDto>("Landing attempt not found.", ErrorKind.NotFound);
+        if (attempt.Status != LandingAttemptStatus.Previewed
+            || string.IsNullOrWhiteSpace(attempt.TargetBranch)
+            || string.IsNullOrWhiteSpace(attempt.TargetHeadSha)
+            || string.IsNullOrWhiteSpace(attempt.CandidateTreeSha)
+            || attempt.CandidateCheckExitCode != 0)
+            return Result.Failure<LandingAttemptDto>("Only a successful, complete preview can be executed.", ErrorKind.Conflict);
+
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == attempt.TaskId && t.ProjectId == attempt.ProjectId, ct);
+        if (task is null || task.PipelineStage != TaskPipelineStage.Approved)
+            return Result.Failure<LandingAttemptDto>("The task must remain Approved until Execute is queued.", ErrorKind.Conflict);
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
+        var checkCommand = project?.ReviewCheckCommand?.Trim();
+        if (string.IsNullOrWhiteSpace(checkCommand))
+            return Result.Failure<LandingAttemptDto>("The pinned project ReviewCheckCommand is unavailable.", ErrorKind.Conflict);
+        var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        if (!string.Equals(commandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<LandingAttemptDto>("The project's review check command changed after Preview.", ErrorKind.Conflict);
+
+        var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
+            r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
+        if (reviewRun is null || !reviewRun.IsCheckProof()
+            || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<LandingAttemptDto>("The review proof no longer matches this landing attempt.", ErrorKind.Conflict);
+
+        var latestVerdict = await db.ReviewVerdicts
+            .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
+            .OrderByDescending(v => v.CreatedAt)
+            .ThenByDescending(v => v.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
+            return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
+
+        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, userId, ct);
+        if (device is null)
+            return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
+
+        attempt.MarkExecutePending();
+        await db.SaveChangesAsync(ct);
+        var payload = new JsonObject
+        {
+            ["projectId"] = attempt.ProjectId.ToString("D"),
+            ["taskId"] = attempt.TaskId.ToString("D"),
+            ["landingAttemptId"] = attempt.Id.ToString("D"),
+            ["action"] = "Execute",
+            ["sourceSha"] = attempt.SourceSha,
+            ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["targetHeadSha"] = attempt.TargetHeadSha,
+            ["targetTreeSha"] = attempt.CandidateTreeSha
+        };
+        var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
+            new EnqueueCommandRequest(
+                device.Id, userId, WorkstationCommandKind.GitLand,
+                payload.ToJsonString(), attempt.ProjectId, checkCommand)
+            {
+                TrustedGitLand = true
+            }), ct);
+        if (!queued.Success)
+        {
+            attempt.Fail("EnqueueFailed");
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Execute.");
+        }
+
+        db.AuditEvents.Add(AuditEventFactory.ForActor(
+            command.Actor,
+            "pipeline.landing.execute_requested",
+            "LandingAttempt",
+            attempt.Id.ToString("D"),
+            project!.OrgId,
+            project.Id,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                previousState = LandingAttemptStatus.Previewed.ToString(),
+                newState = attempt.Status.ToString(),
+                resultCode = "ExecuteQueued"
+            })));
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(RequestLandingHandler.ToDto(attempt));
+    }
+}
+
 /// <summary>Server-side request to revert a landing while the target still points at its merge commit.</summary>
 public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand, Result<LandingAttemptDto>>
 {
