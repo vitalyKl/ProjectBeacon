@@ -215,9 +215,9 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                     && command.Kind == WorkstationCommandKind.GitSync)
                 .ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, commands.Count);
-            Assert.Single(commands.Where(command =>
-                command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running));
-            Assert.Single(commands.Where(command => command.Status == WorkstationCommandStatus.Cancelled));
+            Assert.Single(commands, command =>
+                command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running);
+            Assert.Single(commands, command => command.Status == WorkstationCommandStatus.Cancelled);
         }
     }
 
