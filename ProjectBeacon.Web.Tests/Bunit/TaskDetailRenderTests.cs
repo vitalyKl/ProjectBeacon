@@ -36,6 +36,8 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     {
         var task = DbContext.Tasks.First();
         var project = DbContext.Projects.Single();
+        var owner = DbContext.ProjectMembers.Single(
+            item => item.ProjectId == project.Id && item.Role == MemberRole.Owner);
         var member = ProjectBeacon.Domain.Entities.Identity.User.Create(
             "regular-member", "regular-member@example.test", "hash");
         DbContext.Users.Add(member);
@@ -50,7 +52,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             WorkstationCommandKind.GitSync,
             System.Text.Json.JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
             project.Id,
-            member.Id));
+            owner.UserId));
         DbContext.SaveChanges();
 
         var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
