@@ -2596,7 +2596,8 @@
   <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Репозиторий успешно обновлён fast-forward.</value></data>
   <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Синхронизация отклонена; рабочее дерево не изменено.</value></data>
   <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Ошибка синхронизации Git.</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Перед синхронизацией закоммитьте или уберите локальные изменения в stash.</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>В рабочем дереве есть локальные изменения. GitSync не перезаписывает их; pipeline может работать с этой локальной копией без изменений.</value></data>
+  <data name="GitSyncReasonNeverSynced" xml:space="preserve"><value>Репозиторий ещё не проверялся. Pipeline может использовать текущую локальную копию; запустите Git Status или синхронизацию, когда понадобится сравнить её с upstream.</value></data>
   <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>Активна нативная сессия агента. Дождитесь её завершения.</value></data>
   <data name="GitSyncReasonDiverged" xml:space="preserve"><value>Локальная и upstream-ветки разошлись. Fast-forward невозможен.</value></data>
   <data name="GitSyncReasonDetached" xml:space="preserve"><value>Репозиторий находится в состоянии detached HEAD.</value></data>
@@ -2822,7 +2823,7 @@
   <data name="TaskId" xml:space="preserve">
     <value>ID задачи</value>
   </data>
-  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Синхронизируйте его перед работой с текущим снимком проекта.</value></data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Pipeline продолжит работу с текущей локальной копией; синхронизируйте её, чтобы получить изменения из upstream.</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>Локальная ветка отстаёт от настроенной upstream-ветки. Синхронизируйте репозиторий перед запуском pipeline.</value></data>
   <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
     <value>Для этого проекта ещё выполняется синхронизация репозитория. Дождитесь её завершения перед запуском pipeline.</value>
@@ -2832,6 +2833,6 @@
     <value>Команда синхронизации завершилась на другой рабочей станции. Репозиторий выбранной для pipeline станции всё ещё нужно синхронизировать.</value>
   </data>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
-    <value>Путь привязанного локального репозитория изменился после последней успешной проверки Git. Повторно проверьте Git или синхронизируйте репозиторий перед запуском pipeline.</value>
+    <value>Путь привязанного локального репозитория изменился после последней успешной проверки Git. Текущее состояние не проверено; pipeline продолжит использовать локальную копию по настроенному пути. Повторите Git Status или синхронизацию, чтобы обновить предупреждение.</value>
   </data>
 </root>
