@@ -145,6 +145,70 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public void RepositorySyncToolIsExposedToIsolatedChatAndPipelineAgentsInActMode()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-repo-sync-tool-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                1,
+                root,
+                DateTime.UtcNow.AddMinutes(2),
+                Guid.NewGuid(),
+                "Actor",
+                ProjectRoot: root,
+                IsolatedWorkspace: true,
+                RepositoryBaseSynced: _ => { });
+            var controls = new AgentPromptControls(null, "medium", null)
+            {
+                HarnessAuthorization = authorization
+            };
+            var catalog = new NativeAgentToolCatalog(() => new WorkstationSettings());
+
+            var actTools = catalog.Build("build", controls, null).Tools;
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(actTools, "repo_status"));
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(actTools, "repo_sync"));
+
+            var planTools = catalog.Build("plan", controls, null).Tools;
+            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(planTools, "repo_sync"));
+
+            var noBaselineCallback = controls with
+            {
+                HarnessAuthorization = authorization with { RepositoryBaseSynced = null }
+            };
+            var noCallbackTools = catalog.Build("build", noBaselineCallback, null).Tools;
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(noCallbackTools, "repo_status"));
+            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(noCallbackTools, "repo_sync"));
+
+            var interactiveChat = controls with
+            {
+                HarnessAuthorization = authorization with
+                {
+                    TaskId = null,
+                    SubtaskId = null,
+                    PipelineRole = null
+                }
+            };
+            var chatTools = catalog.Build("build", interactiveChat, null).Tools;
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(chatTools, "repo_status"));
+            Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(chatTools, "repo_sync"));
+
+            var chatPlanTools = catalog.Build("plan", interactiveChat, null).Tools;
+            Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(chatPlanTools, "repo_sync"));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void RunCommandRequiresTasklessChatOrFullyScopedActorAuthorization()
     {
         AgentHarnessAuthorization Authorization(

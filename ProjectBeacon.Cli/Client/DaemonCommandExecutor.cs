@@ -439,7 +439,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             token.AllowedMcpTools, token.McpServers,
             sessionWorktree.ProjectRoot,
             IsolatedWorkspace: true,
-            CommandsEnabled: commandsEnabled);
+            CommandsEnabled: commandsEnabled,
+            RepositoryBaseSynced: sessionWorktree.AdvanceSnapshotBaseline);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         await runtime.SwitchAgentAsync(externalSessionId, agentMode, ct);
         var workstationSettings = _loadSettings();

@@ -111,6 +111,12 @@ internal static class NativeAgentToolPolicy
             && authorization.TaskId is null
             && authorization.SubtaskId is null;
 
+    /// <summary>Repository synchronization is available to isolated interactive chats and pipeline Actor/Planner sessions.</summary>
+    public static bool IsRepositorySyncAuthorized(AgentHarnessAuthorization authorization)
+        => authorization.IsolatedWorkspace
+            && (IsInteractiveChatAuthorization(authorization)
+                || authorization.PipelineRole is "Actor" or "Planner");
+
     public static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {
         if (!authorization.CommandsEnabled)

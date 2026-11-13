@@ -40,7 +40,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         MissingIgnoredPaths = Array.AsReadOnly(missingIgnoredPaths.ToArray());
         IncludedPaths = Array.AsReadOnly(includedPaths.ToArray());
         MissingIncludePaths = Array.AsReadOnly(missingIncludePaths.ToArray());
-        _activeSessionLease = GitRepositoryOperationGate.RegisterSession(repositoryRoot);
+        _activeSessionLease = GitRepositoryOperationGate.RegisterSession(repositoryRoot, worktreeRoot);
     }
 
     public string WorkingDirectory { get; }
@@ -76,6 +76,21 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     }
 
     public void Preserve() => _preserve = true;
+
+    /// <summary>
+    /// Moves the patch-back baseline after GitSync has safely fast-forwarded the real
+    /// repository and reset this clean isolated worktree to the resulting commit.
+    /// </summary>
+    public void AdvanceSnapshotBaseline(string commit)
+    {
+        if (commit is not { Length: 40 or 64 }
+            || commit.Any(character => !((character >= '0' && character <= '9')
+                || (character >= 'a' && character <= 'f')
+                || (character >= 'A' && character <= 'F'))))
+            throw new ArgumentException("A valid Git commit id is required.", nameof(commit));
+
+        _snapshotCommit = commit;
+    }
 
     public static async Task<(AgentSessionWorktree? Workspace, string? Error)> CreateAsync(
         string workingDirectory,
