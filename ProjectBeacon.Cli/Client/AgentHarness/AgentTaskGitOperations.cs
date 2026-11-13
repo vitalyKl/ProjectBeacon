@@ -333,11 +333,16 @@ internal static class AgentTaskGitOperations
         if (pathsError is not null)
             return Error(pathsError);
 
-        var addArgs = new List<string> { "add", "-A", "--" };
+        var addArgs = new List<string> { "add", "-A" };
         if (paths is { Count: > 0 })
+        {
+            addArgs.Add("--");
             addArgs.AddRange(paths.Select(Pathspec));
+        }
         else
+        {
             AddProjectPathspec(context, addArgs);
+        }
 
         var add = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. addArgs]);
         if (!Succeeded(add))
@@ -367,12 +372,17 @@ internal static class AgentTaskGitOperations
             "-c", "user.name=ProjectBeacon Agent",
             "-c", "user.email=projectbeacon-agent@localhost",
             "-c", "commit.gpgsign=false",
-            "commit", "--no-verify", "--only", "-m", commitMessage, "--"
+            "commit", "--no-verify", "--only", "-m", commitMessage
         };
         if (paths is { Count: > 0 })
+        {
+            commitArgs.Add("--");
             commitArgs.AddRange(paths.Select(Pathspec));
+        }
         else
+        {
             AddProjectPathspec(context, commitArgs);
+        }
 
         var commit = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. commitArgs]);
         if (!Succeeded(commit))
