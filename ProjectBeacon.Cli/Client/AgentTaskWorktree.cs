@@ -518,7 +518,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
     internal static bool IsSupportedFetchRemote(string remoteUrl)
     {
-        if (string.IsNullOrWhiteSpace(remoteUrl) || remoteUrl.Contains('\0', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(remoteUrl) || remoteUrl.Contains('\0'))
             return false;
 
         var value = remoteUrl.Trim();
@@ -533,7 +533,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
             if (separator < 0 || colon < separator)
             {
                 var prefix = value[..colon];
-                if (prefix.Contains('@', StringComparison.Ordinal))
+                if (prefix.Contains('@'))
                     return true; // SCP-style SSH URL.
                 if (!Uri.CheckSchemeName(prefix))
                     return false;
