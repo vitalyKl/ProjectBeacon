@@ -187,7 +187,18 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     }
                     else
                     {
-                        warning = "Could not fetch origin; using the local committed HEAD. " + Clip(fetch.StdErr);
+                        var cachedRemoteHead = await AgentSessionWorktree.RunGitAsync(
+                            repositoryRoot, ct, disabledFilters,
+                            "rev-parse", "--verify", $"refs/remotes/origin/{baseBranch}");
+                        if (cachedRemoteHead.ExitCode == 0 && IsGitSha(cachedRemoteHead.StdOut.Trim()))
+                        {
+                            baseSha = cachedRemoteHead.StdOut.Trim();
+                            warning = "Could not fetch origin; using the last known origin/" + baseBranch + " commit. " + Clip(fetch.StdErr);
+                        }
+                        else
+                        {
+                            warning = "Could not fetch origin; using the local committed HEAD. " + Clip(fetch.StdErr);
+                        }
                     }
                 }
                 else
@@ -241,6 +252,8 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
             var metadataPath = worktreePath + ".beacon.json";
             var leasePath = worktreePath + ".lock";
+            if (IsReparsePoint(metadataPath) || IsReparsePoint(leasePath))
+                return Fail("Task worktree metadata and lock files cannot be symbolic links or junctions.");
             try
             {
                 lease = new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
@@ -304,6 +317,8 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
             }
             else
             {
+                if (File.Exists(worktreePath))
+                    return Fail("A file already exists at the task worktree path.");
                 var branchExists = await AgentSessionWorktree.RunGitAsync(
                     repositoryRoot, ct, disabledFilters,
                     "show-ref", "--verify", "--quiet", $"refs/heads/{branchName}");
@@ -452,7 +467,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
     }
 
     private static bool IsGitSha(string value) =>
-        value.Length is 40 or 64 && value.All(Uri.IsHexDigit);
+        (value.Length == 40 || value.Length == 64) && value.All(Uri.IsHexDigit);
+
+    private static bool IsReparsePoint(string path) =>
+        (File.Exists(path) || Directory.Exists(path))
+        && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
     private static bool IsWithin(string root, string path)
     {
