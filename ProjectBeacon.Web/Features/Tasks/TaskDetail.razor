@@ -119,7 +119,7 @@ else
                         <MudText Typo="Typo.caption" Color="Color.Warning">@L["GitSyncRequiresAdmin"]</MudText>
                     }
                 }
-                @if (!CanStartPlanner && _pipeline?.Preflight?.LastKnownRepositoryBehind is not > 0)
+                @if (!CanStartPlanner && _pipeline?.Preflight?.RepositorySyncInProgress != true)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
                 }
@@ -494,11 +494,9 @@ else
             ? L["PipelineNativeWorkstationOffline"].Value
             : L["PipelinePreflightNoRoleModel"].Value;
     private string PlannerPreflightMessage =>
-        _pipeline?.Preflight?.LastKnownRepositoryReasonCode is { } repositoryReason
-            ? L["GitSyncReason" + repositoryReason].Value
-            : string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
-                ? L["PipelinePreflightNoPlannerModel"].Value
-                : L[_pipeline.StartBlockedReason].Value;
+        string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
+            ? L["PipelinePreflightNoPlannerModel"].Value
+            : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
 
     private List<LabelDto> _labels = [];
