@@ -84,15 +84,18 @@ internal static class GitLandExecutor
         if (!Succeeded(branch) || !string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
             return (false, null, "The task worktree is no longer on its assigned task branch.");
 
-        var sourceHead = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", "HEAD");
-        if (!Succeeded(sourceHead) || !string.Equals(sourceHead.StdOut.Trim(), request.SourceSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The task branch has changed since the successful review check.");
+        if (request.Action is not "Revert")
+        {
+            var sourceHead = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", "HEAD");
+            if (!Succeeded(sourceHead) || !string.Equals(sourceHead.StdOut.Trim(), request.SourceSha, StringComparison.OrdinalIgnoreCase))
+                return (false, null, "The task branch has changed since the successful review check.");
 
-        var sourceStatus = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "status", "--porcelain", "--untracked-files=all");
-        if (!Succeeded(sourceStatus))
-            return (false, null, "Could not verify task branch cleanliness.");
-        if (!string.IsNullOrWhiteSpace(sourceStatus.StdOut))
-            return (false, null, "The task branch contains uncommitted changes; commit them and repeat review before landing.");
+            var sourceStatus = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "status", "--porcelain", "--untracked-files=all");
+            if (!Succeeded(sourceStatus))
+                return (false, null, "Could not verify task branch cleanliness.");
+            if (!string.IsNullOrWhiteSpace(sourceStatus.StdOut))
+                return (false, null, "The task branch contains uncommitted changes; commit them and repeat review before landing.");
+        }
 
         var customMergeDrivers = await Git(repositoryRoot, disabledFilters, ct, "config", "--get-regexp", "^merge\\..*\\.driver$");
         if (customMergeDrivers.TimedOut || customMergeDrivers.ExitCode is not (0 or 1))
@@ -418,26 +421,29 @@ internal static class GitLandExecutor
                 : (null, "Could not read target checkout HEAD.", "TargetHeadUnavailable");
         }
 
-        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
-        if (Succeeded(local) && IsGitSha(local.StdOut.Trim()))
-            return (local.StdOut.Trim(), null, null);
-
         var remote = await Git(repo, filters, ct, "remote", "get-url", "origin");
-        if (!Succeeded(remote) || string.IsNullOrWhiteSpace(remote.StdOut))
-            return (null, "The target branch is not checked out and no origin remote is available.", "TargetUnavailable");
-        var url = remote.StdOut.Trim();
-        if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
-            return (null, "The configured origin uses an unsupported Git transport.", "UnsupportedRemote");
-        var targetRef = $"refs/beacon/landing/{attemptId:N}/target";
-        var fetch = await Git(repo, filters, ct,
-            "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
-            "--", url, $"+refs/heads/{targetBranch}:{targetRef}");
-        if (!Succeeded(fetch))
-            return (null, "Could not fetch the daemon-selected target branch.", "TargetFetchFailed");
-        var fetched = await Git(repo, filters, ct, "rev-parse", "--verify", targetRef);
-        return Succeeded(fetched) && IsGitSha(fetched.StdOut.Trim())
-            ? (fetched.StdOut.Trim(), null, null)
-            : (null, "Could not verify the fetched target branch.", "TargetHeadUnavailable");
+        if (Succeeded(remote) && !string.IsNullOrWhiteSpace(remote.StdOut))
+        {
+            var url = remote.StdOut.Trim();
+            if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
+                return (null, "The configured origin uses an unsupported Git transport.", "UnsupportedRemote");
+            var targetRef = $"refs/beacon/landing/{attemptId:N}/target";
+            var fetch = await Git(repo, filters, ct,
+                "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                "--", url, $"+refs/heads/{targetBranch}:{targetRef}");
+            if (!Succeeded(fetch))
+                return (null, "Could not fetch the daemon-selected target branch.", "TargetFetchFailed");
+            var fetched = await Git(repo, filters, ct, "rev-parse", "--verify", targetRef);
+            return Succeeded(fetched) && IsGitSha(fetched.StdOut.Trim())
+                ? (fetched.StdOut.Trim(), null, null)
+                : (null, "Could not verify the fetched target branch.", "TargetHeadUnavailable");
+        }
+        if (remote.ExitCode is not (0 or 1) || remote.TimedOut)
+            return (null, "Could not inspect the origin remote safely.", "TargetRemoteInspectionFailed");
+        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
+        return Succeeded(local) && IsGitSha(local.StdOut.Trim())
+            ? (local.StdOut.Trim(), null, null)
+            : (null, "The target branch is not checked out and no local target branch is available.", "TargetUnavailable");
     }
 
     private static async Task<(string? Error, int FileCount, int ChangedLines, bool ProtectedPath)> CheckCandidateScopeAsync(
