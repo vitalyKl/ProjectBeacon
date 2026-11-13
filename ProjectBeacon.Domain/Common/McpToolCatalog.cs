@@ -110,6 +110,8 @@ public static class McpToolNames
     public const string PipelineStartReview = "pipeline_start_review";
     public const string PipelineApprove = "pipeline_approve";
     public const string PipelineForceClose = "pipeline_force_close";
+    public const string PipelineLandRequest = "land_request";
+    public const string PipelineLandRevert = "land_revert";
     public const string ModelUpsert = "model_upsert";
     public const string ModelDelete = "model_delete";
     public const string ModelUnbind = "model_unbind";
@@ -221,7 +223,8 @@ public static class McpToolCatalog
             // Pipeline control tools; the HTTP API still checks token capability and role scope.
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite, McpToolSurface.Pipeline,
                 McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
-                McpToolNames.PipelineFailSubtask, McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove),
+                McpToolNames.PipelineFailSubtask, McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove,
+                McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert),
             ..Api(McpToolScope.Admin, ApiTokenCapability.Admin, McpToolSurface.Pipeline,
                 McpToolNames.PipelineForceClose),
 
