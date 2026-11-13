@@ -10,6 +10,7 @@ using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Domain.Entities.Tasks;
+using Domain.Common;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
