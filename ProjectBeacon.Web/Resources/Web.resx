@@ -2805,7 +2805,8 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncOutcomeFastForwarded" xml:space="preserve"><value>Repository fast-forwarded successfully.</value></data>
   <data name="GitSyncOutcomeRefused" xml:space="preserve"><value>Synchronization refused; no working-tree changes were made.</value></data>
   <data name="GitSyncOutcomeFailed" xml:space="preserve"><value>Git synchronization failed.</value></data>
-  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Commit or stash local changes before synchronizing.</value></data>
+  <data name="GitSyncReasonDirtyWorkingTree" xml:space="preserve"><value>Local changes are present. GitSync will not overwrite them; the pipeline can still use this checkout as-is.</value></data>
+  <data name="GitSyncReasonNeverSynced" xml:space="preserve"><value>This repository has not been checked yet. The pipeline can still use this local checkout; run Git status or synchronize when you need an upstream comparison.</value></data>
   <data name="GitSyncReasonActiveSessions" xml:space="preserve"><value>A native agent session is active. Wait for it to finish before synchronizing.</value></data>
   <data name="GitSyncReasonDiverged" xml:space="preserve"><value>The local and upstream branches have diverged. Fast-forward is not possible.</value></data>
   <data name="GitSyncReasonDetached" xml:space="preserve"><value>The repository is in detached HEAD state.</value></data>
@@ -3031,7 +3032,7 @@ No Beacon-hosted coding agent.</value>
   <data name="TaskId" xml:space="preserve">
     <value>Task ID</value>
   </data>
-  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>The last Git check found this repository {0} commit(s) behind on branch '{1}'. Synchronize it before relying on the current project snapshot.</value></data>
+  <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>The last Git check found this repository {0} commit(s) behind on branch '{1}'. The pipeline will use this local checkout as-is; synchronize to include upstream changes.</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>The project repository is behind its tracked upstream. Synchronize it before starting the pipeline.</value></data>
   <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
     <value>A repository synchronization is still running for this project. Wait for it to finish before starting the pipeline.</value>
@@ -3041,6 +3042,6 @@ No Beacon-hosted coding agent.</value>
     <value>A Git synchronization command finished on another workstation. The selected pipeline workstation's repository still needs synchronization.</value>
   </data>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
-    <value>The attached local repository path changed after the last successful Git check. Run Git status or synchronize the repository again before starting the pipeline.</value>
+    <value>The attached local repository path changed after the last successful Git check. Its current status is unverified; the pipeline will use this checkout as configured. Run Git status or synchronize to refresh the warning.</value>
   </data>
 </root>
