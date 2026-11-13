@@ -318,7 +318,7 @@ public static class WorkstationEval
 
         var sourceSha = checkpoint.CommitSha;
         var repositoryRoot = taskWorkspace.RepositoryRoot;
-        var relativeProject = Path.GetRelativePath(repositoryRoot, taskWorkspace.WorkingDirectory);
+        var relativeProject = Path.GetRelativePath(taskWorkspace.RecoveryPath, taskWorkspace.WorkingDirectory);
         if (Path.IsPathRooted(relativeProject)
             || relativeProject == ".."
             || relativeProject.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
