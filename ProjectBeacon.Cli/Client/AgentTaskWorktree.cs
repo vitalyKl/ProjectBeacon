@@ -401,23 +401,49 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         string commitMessage,
         CancellationToken ct)
     {
+        var projectPathspec = GetProjectPathspec();
         var status = await AgentSessionWorktree.RunGitAsync(
             _worktreeRoot, ct, _disabledFilterDrivers, "status", "--porcelain", "--untracked-files=all");
         if (status.ExitCode != 0 || status.TimedOut)
             return (false, "Could not inspect the persistent task worktree.", null);
-
         if (string.IsNullOrWhiteSpace(status.StdOut))
             return await ReadHeadAsync(ct);
 
+        // A task represents one configured project directory, which may be nested in a
+        // monorepo. Never silently include edits or untracked files belonging to a sibling
+        // project in an Actor commit or a WIP recovery commit.
+        var trackedChanges = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers, "diff", "--no-renames", "--name-only", "-z", "HEAD");
+        var untrackedFiles = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers, "ls-files", "--others", "--exclude-standard", "-z");
+        if (trackedChanges.ExitCode != 0 || trackedChanges.TimedOut
+            || untrackedFiles.ExitCode != 0 || untrackedFiles.TimedOut)
+            return (false, "Could not verify the task worktree project boundary.", null);
+
+        var outsidePaths = trackedChanges.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Concat(untrackedFiles.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            .Where(path => !IsWithinProjectDirectory(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (outsidePaths.Length > 0)
+            return (false,
+                "The task worktree contains changes outside the authorized project directory. "
+                + "They were preserved but were not committed: "
+                + string.Join(", ", outsidePaths.Take(8)),
+                null);
+
         var stage = await AgentSessionWorktree.RunGitAsync(
-            _worktreeRoot, ct, _disabledFilterDrivers, "add", "-A", "--", ".");
+            _worktreeRoot, ct, _disabledFilterDrivers, "add", "-A", "--", projectPathspec);
         if (stage.ExitCode != 0 || stage.TimedOut)
-            return (false, "Could not stage task worktree changes.", null);
+            return (false, "Could not stage task project changes.", null);
 
         var summary = await AgentSessionWorktree.RunGitAsync(
-            _worktreeRoot, ct, _disabledFilterDrivers, "diff", "--cached", "--summary", "HEAD");
+            _worktreeRoot, ct, _disabledFilterDrivers,
+            "diff", "--cached", "--summary", "HEAD", "--", projectPathspec);
         if (summary.ExitCode != 0 || summary.TimedOut)
-            return (false, "Could not inspect staged task worktree changes.", null);
+            return (false, "Could not inspect staged task project changes.", null);
+        if (string.IsNullOrWhiteSpace(summary.StdOut))
+            return await ReadHeadAsync(ct);
         if (summary.StdOut.Contains("120000", StringComparison.Ordinal))
             return (false, "Task worktree contains a symbolic link; changes remain preserved but were not committed.", null);
 
@@ -427,16 +453,37 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         if (message.Length > 180)
             message = message[..180];
 
+        // --only ensures that even a pre-existing staged path outside the project cannot
+        // leak into this task's commit.
         var commit = await AgentSessionWorktree.RunGitAsync(
             _worktreeRoot, ct, _disabledFilterDrivers,
             "-c", "user.name=ProjectBeacon",
             "-c", "user.email=projectbeacon@localhost",
             "-c", "commit.gpgsign=false",
-            "commit", "--no-verify", "-m", message);
+            "commit", "--no-verify", "--only", "-m", message, "--", projectPathspec);
         if (commit.ExitCode != 0 || commit.TimedOut)
             return (false, "Could not commit task worktree changes. " + Clip(commit.StdErr), null);
 
         return await ReadHeadAsync(ct);
+    }
+
+    private string GetProjectPathspec()
+    {
+        var relative = Path.GetRelativePath(_worktreeRoot, WorkingDirectory).Replace('\\', '/');
+        return relative == "." ? "." : ":(literal)" + relative.TrimEnd('/') + "/";
+    }
+
+    private bool IsWithinProjectDirectory(string repositoryRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryRelativePath)
+            || repositoryRelativePath.StartsWith('/', StringComparison.Ordinal)
+            || repositoryRelativePath.Split('/').Any(segment => segment is "" or "." or ".."))
+            return false;
+        var projectRelative = Path.GetRelativePath(_worktreeRoot, WorkingDirectory).Replace('\\', '/');
+        if (projectRelative == ".")
+            return true;
+        var prefix = projectRelative.TrimEnd('/') + "/";
+        return repositoryRelativePath.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     private async Task<(bool Success, string? Error, string? CommitSha)> ReadHeadAsync(CancellationToken ct)
