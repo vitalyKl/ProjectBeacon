@@ -476,7 +476,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
     private bool IsWithinProjectDirectory(string repositoryRelativePath)
     {
         if (string.IsNullOrWhiteSpace(repositoryRelativePath)
-            || repositoryRelativePath.StartsWith('/', StringComparison.Ordinal)
+            || repositoryRelativePath.StartsWith("/", StringComparison.Ordinal)
             || repositoryRelativePath.Split('/').Any(segment => segment is "" or "." or ".."))
             return false;
         var projectRelative = Path.GetRelativePath(_worktreeRoot, WorkingDirectory).Replace('\\', '/');
