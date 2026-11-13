@@ -112,6 +112,7 @@ public static class McpToolNames
     public const string PipelineForceClose = "pipeline_force_close";
     public const string PipelineLandRequest = "land_request";
     public const string PipelineLandRevert = "land_revert";
+    public const string PipelineLandStatus = "land_status";
     public const string ModelUpsert = "model_upsert";
     public const string ModelDelete = "model_delete";
     public const string ModelUnbind = "model_unbind";
@@ -225,6 +226,8 @@ public static class McpToolCatalog
                 McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
                 McpToolNames.PipelineFailSubtask, McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove,
                 McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert),
+            ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead, McpToolSurface.Pipeline,
+                McpToolNames.PipelineLandStatus),
             ..Api(McpToolScope.Admin, ApiTokenCapability.Admin, McpToolSurface.Pipeline,
                 McpToolNames.PipelineForceClose),
 
