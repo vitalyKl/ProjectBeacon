@@ -568,6 +568,8 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
         info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "core.hooksPath=" + hooksDirectory);
         info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.fsmonitor=false");
+        info.ArgumentList.Insert(0, "-c");
 
         // Git clean/smudge/process filters are external executables. Attributes are repository
         // data and may select any configured driver, so force each effective driver to be an

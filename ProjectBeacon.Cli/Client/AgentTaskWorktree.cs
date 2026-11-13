@@ -231,10 +231,12 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 || relativeWorktree.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
                 return Fail("The task worktree path escapes WorktreeRoot.");
 
+            if (Directory.Exists(worktreeRoot)
+                && (File.GetAttributes(worktreeRoot) & FileAttributes.ReparsePoint) != 0)
+                return Fail("WorktreeRoot cannot be a symbolic link or junction.");
+
             Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
-            if ((Directory.Exists(worktreeRoot)
-                    && (File.GetAttributes(worktreeRoot) & FileAttributes.ReparsePoint) != 0)
-                || HasReparsePointBetween(worktreeRoot, Path.GetDirectoryName(worktreePath)!))
+            if (HasReparsePointBetween(worktreeRoot, Path.GetDirectoryName(worktreePath)!))
                 return Fail("The configured task worktree path contains a symbolic link or junction.");
 
             var metadataPath = worktreePath + ".beacon.json";
