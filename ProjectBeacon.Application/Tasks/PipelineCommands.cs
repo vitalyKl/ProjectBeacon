@@ -177,6 +177,16 @@ public record RequestLandingRequest(Guid TaskId, string Rationale);
 public record RequestLandingCommand(RequestLandingRequest Request, ActorContext Actor)
     : ICommand<Result<LandingAttemptDto>>;
 
+/// <summary>Identifies a landing attempt to inspect, execute, or revert.</summary>
+public record GetLandingAttemptRequest(Guid TaskId, Guid LandingAttemptId);
+public record GetLandingAttemptCommand(GetLandingAttemptRequest Request)
+    : ICommand<Result<LandingAttemptDto>>;
+
+/// <summary>Requests execution of a previously reviewed and previewed task landing.</summary>
+public record ExecuteLandingRequest(Guid TaskId, Guid LandingAttemptId);
+public record ExecuteLandingCommand(ExecuteLandingRequest Request, ActorContext Actor)
+    : ICommand<Result<LandingAttemptDto>>;
+
 /// <summary>Requests a guarded revert of a previously landed attempt.</summary>
 public record RevertLandingRequest(Guid TaskId, Guid LandingAttemptId);
 public record RevertLandingCommand(RevertLandingRequest Request, ActorContext Actor)
