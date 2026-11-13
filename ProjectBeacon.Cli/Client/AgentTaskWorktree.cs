@@ -458,6 +458,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
     internal static bool SupportsBranchWorkflow(string versionOutput)
     {
+        // Phase 3 uses merge-tree --write-tree, which requires Git 2.38 or newer.
         var match = Regex.Match(versionOutput ?? string.Empty, @"(?<major>\d+)\.(?<minor>\d+)");
         if (!match.Success
             || !int.TryParse(match.Groups["major"].Value, out var major)
