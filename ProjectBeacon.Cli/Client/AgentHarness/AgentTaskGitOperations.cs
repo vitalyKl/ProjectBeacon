@@ -423,9 +423,9 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(integrate))
             {
                 var operation = await ReadOperationStateAsync(context, ct);
-                var conflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
-                if (conflicts.Count > 0)
-                    return Success(new { status = "conflict", strategy, targetSha = target.Sha, files = conflicts });
+                var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
+                if (mergeConflicts.Count > 0)
+                    return Success(new { status = "conflict", strategy, targetSha = target.Sha, files = mergeConflicts });
                 return GitFailure("Git could not integrate the task base branch. No resolvable conflict state was opened.");
             }
 
