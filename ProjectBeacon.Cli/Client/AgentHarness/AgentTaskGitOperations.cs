@@ -236,7 +236,7 @@ internal static class AgentTaskGitOperations
         var path = ReadOptionalPath(context, args, "path", out var pathError);
         if (pathError is not null)
             return Error(pathError);
-        if (kind is "show" or "blame" && path is null)
+        if ((kind is "show" or "blame") && path is null)
             return Error($"git_info kind={kind} requires a project-relative path.");
 
         switch (kind)
@@ -708,6 +708,23 @@ internal static class AgentTaskGitOperations
 
     private static bool IsProjectRelativePath(GitContext context, string repositoryRelative)
     {
+        if (string.IsNullOrWhiteSpace(repositoryRelative)
+            || Path.IsPathRooted(repositoryRelative)
+            || repositoryRelative.Contains('\\\\')
+            || repositoryRelative.Contains(':')
+            || repositoryRelative.Split('/').Any(segment =>
+                segment is "" or "." or ".."
+                || segment.Equals(".git", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var current = context.WorktreeRoot;
+        foreach (var segment in repositoryRelative.Split('/'))
+        {
+            current = Path.Combine(current, segment);
+            if (IsReparsePoint(current))
+                return false;
+        }
+
         var full = Path.GetFullPath(Path.Combine(
             context.WorktreeRoot, repositoryRelative.Replace('/', Path.DirectorySeparatorChar)));
         return IsWithin(context.ProjectRoot, full);
