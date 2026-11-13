@@ -80,7 +80,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         builder.AppendLine("Base commit: " + BaseSha);
         builder.AppendLine("Repository-relative project root: " + (relativeProjectRoot == "." ? "." : relativeProjectRoot));
         builder.AppendLine("The worktree starts from a committed base. Uncommitted changes in the user's original checkout are not included.");
-        builder.AppendLine("The daemon commits the task worktree after each completed Actor session. Do not use raw git commands or change branches.");
+        builder.AppendLine("Use git_info to inspect this task branch, its commits, status, and diff against the recorded base.");
+        builder.AppendLine("Use git_commit for deliberate checkpoints and git_integrate only to refresh this task branch from its daemon-selected base branch.");
+        builder.AppendLine("git_integrate reports conflicts as project-relative paths. Resolve them in this workspace, then call git_integrate with action=continue; use action=abort to abandon the integration.");
+        builder.AppendLine("Raw Git through run_command is read-only. Never add, commit, fetch, merge, rebase, switch branches, or change refs with run_command.");
+        builder.AppendLine("The daemon commits remaining project changes after each completed Actor session. The task branch and worktree remain persistent.");
         builder.AppendLine("The task branch and worktree are persistent. Finishing or cancelling this session does not delete them.");
         return builder.ToString().TrimEnd();
     }
