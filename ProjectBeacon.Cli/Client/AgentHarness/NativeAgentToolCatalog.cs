@@ -25,6 +25,12 @@ internal sealed class NativeAgentToolCatalog(Func<WorkstationSettings> loadSetti
                 tools.Add(tool?.DeepClone());
         }
 
+        if (controls?.HarnessAuthorization is { IsolatedWorkspace: true, GitWorkspace: not null } gitAuthorization)
+        {
+            foreach (var toolName in PipelineToolPolicy.GitToolsForRole(gitAuthorization.PipelineRole))
+                tools.Add(AgentTaskGitOperations.ToolDefinition(toolName));
+        }
+
         var commandPolicy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
         var manifestFingerprint = controls?.HarnessAuthorization is { IsolatedWorkspace: true } fingerprintAuthorization
             ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
