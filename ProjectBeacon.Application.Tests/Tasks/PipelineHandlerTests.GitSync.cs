@@ -447,7 +447,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task GetPipeline_BlocksWhileGitSyncIsPendingOnSelectedWorkstation()
+    public async Task GetPipeline_BlocksWhileGitSyncIsPendingEvenIfCapabilityIsNoLongerAdvertised()
     {
         var (projectId, task) = await SeedTaskAsync("Pending GitSync on selected workstation");
         var device = await SeedGitSyncRuntimeAsync(projectId);
@@ -456,6 +456,7 @@ public sealed partial class PipelineHandlerTests
             WorkstationCommandKind.GitSync,
             JsonSerializer.Serialize(new { projectId, mode = "PullFastForward" }),
             projectId);
+        device.Heartbeat(probeJson: "{}");
         using (TenantScope.EnterUnscoped())
         {
             _db.WorkstationCommands.Add(pending);
@@ -466,6 +467,7 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
+        Assert.False(result.Value!.Preflight!.PipelineGitSyncSupported);
         Assert.True(result.Value!.Preflight!.RepositorySyncInProgress);
         Assert.True(result.Value.Preflight.RepositorySyncBlocked);
         Assert.Equal("PipelineRepositorySyncInProgress", result.Value.StartBlockedReason);
