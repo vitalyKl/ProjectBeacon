@@ -174,7 +174,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     var fetch = await AgentSessionWorktree.RunGitAsync(
                         repositoryRoot, ct, disabledFilters,
                         "fetch", "--no-tags", "origin",
-                        $"refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");
+                        $"+refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");
                     if (fetch.ExitCode == 0 && !fetch.TimedOut)
                     {
                         var remoteHead = await AgentSessionWorktree.RunGitAsync(
