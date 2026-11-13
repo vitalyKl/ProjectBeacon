@@ -159,6 +159,91 @@ public sealed class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitCommit_WorksWhenProjectIsRepositoryRoot()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(
+                repository, withOrigin: false, projectAtRepositoryRoot: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "root-project-change.txt"),
+                "root project change\\n");
+
+            var committed = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Commit repository-root project change"}""");
+
+            Assert.False(committed.IsError, committed.Text);
+            using var document = JsonDocument.Parse(committed.Text);
+            Assert.True(document.RootElement.GetProperty("committed").GetBoolean());
+            Assert.Contains(
+                "root-project-change.txt",
+                await GitAsync(worktree.RecoveryPath, "show", "--format=", "--name-only", "HEAD"),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitIntegrate_RejectsTamperedBaseBranchMetadata()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            var metadataPath = worktree.RecoveryPath + ".beacon.json";
+            var metadata = JsonNode.Parse(await File.ReadAllTextAsync(metadataPath))!.AsObject();
+            metadata["baseBranch"] = "attacker-controlled-branch";
+            await File.WriteAllTextAsync(metadataPath, metadata.ToJsonString());
+
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge"}""");
+
+            Assert.True(result.IsError);
+            Assert.Contains("metadata does not match", result.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void ToolDefinitions_DoNotAcceptRemoteOrBranchIdentity()
     {
         foreach (var toolName in new[]
@@ -215,9 +300,12 @@ public sealed class AgentTaskGitOperationsTests
         return path;
     }
 
-    private static async Task<string> InitializeRepositoryAsync(string repository, bool withOrigin)
+    private static async Task<string> InitializeRepositoryAsync(
+        string repository, bool withOrigin, bool projectAtRepositoryRoot = false)
     {
-        var projectRoot = Path.Combine(repository, "src", "app");
+        var projectRoot = projectAtRepositoryRoot
+            ? repository
+            : Path.Combine(repository, "src", "app");
         Directory.CreateDirectory(projectRoot);
         await GitAsync(repository, "init", "-b", "main");
         await GitAsync(repository, "config", "core.autocrlf", "false");
