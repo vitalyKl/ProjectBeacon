@@ -39,6 +39,8 @@ public static class PipelineEndpoints
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/check", RecordReviewCheck).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/approve", ApprovePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land", RequestLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapGet("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}", GetLandingAttempt).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/execute", ExecuteLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/revert", RevertLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.Admin);
 
@@ -282,6 +284,29 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId mismatch.");
         var result = await handler.HandleAsync(
             new RequestLandingCommand(new RequestLandingRequest(taskId, body.Rationale), ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> GetLandingAttempt(
+        Guid taskId,
+        Guid attemptId,
+        GetLandingAttemptHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            new GetLandingAttemptCommand(new GetLandingAttemptRequest(taskId, attemptId)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ExecuteLanding(
+        Guid taskId,
+        Guid attemptId,
+        HttpContext ctx,
+        ExecuteLandingHandler handler,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(
+            new ExecuteLandingCommand(new ExecuteLandingRequest(taskId, attemptId), ctx.GetActor()), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
