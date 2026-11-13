@@ -211,6 +211,19 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         return (false, null, reviewAction.Error);
                     return (true, reviewAction.Value, null);
                 }
+                if (kind == WorkstationCommandKind.GitLand)
+                {
+                    var settings = _loadSettings();
+                    var landing = await GitLandExecutor.ExecuteAsync(
+                        command.LocalRoot,
+                        command.ProjectId ?? Guid.Empty,
+                        payload,
+                        settings,
+                        ct);
+                    return landing.Ok
+                        ? (true, landing.Result, null)
+                        : (false, landing.Result, landing.Error);
+                }
                 if (kind == WorkstationCommandKind.RunPipelineSession)
                     return await RunPipelineSessionAsync(command, payload, ct);
 
