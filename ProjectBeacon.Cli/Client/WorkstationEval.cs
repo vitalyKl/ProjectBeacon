@@ -305,12 +305,6 @@ public static class WorkstationEval
         if (!string.Equals(actualCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<string>("The trusted check command does not match its server-pinned hash.");
 
-        if (!WorkstationWorkspaceMode.UsesTaskBranches(WorkstationSettings.Load().WorkspaceMode))
-        {
-            // The caller passes the configured root explicitly below; this guard is retained
-            // by the workspace creation result when Branch mode is not enabled.
-        }
-
         var opened = await AgentTaskWorktree.CreateAsync(
             root, projectId, taskId.Value, configuredWorktreeRoot, ct);
         if (opened.Worktree is null)
