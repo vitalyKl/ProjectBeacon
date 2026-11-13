@@ -291,15 +291,15 @@ public sealed partial class DeviceHandlerTests
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();
         var projectId = project.Id;
         var userId = user.Id;
-        var runtime = await new AttachRuntimeHandler(Factory()).HandleAsync(
-            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, @"A:\work")),
-            TestContext.Current.CancellationToken);
-        Assert.True(runtime.Success, runtime.Error);
-
-        var chatSession = Domain.Entities.Chat.ChatSession.Create(projectId, deviceId, "Chat", @"A:\work");
-        chatSession.SetExternalSessionId("oc_test");
         using (TenantScope.EnterUnscoped())
         {
+            var runtime = await new AttachRuntimeHandler(Factory()).HandleAsync(
+                new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, @"A:\work")),
+                TestContext.Current.CancellationToken);
+            Assert.True(runtime.Success, runtime.Error);
+
+            var chatSession = Domain.Entities.Chat.ChatSession.Create(projectId, deviceId, "Chat", @"A:\work");
+            chatSession.SetExternalSessionId("oc_test");
             _db.ChatSessions.Add(chatSession);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
