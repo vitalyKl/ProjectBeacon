@@ -34,6 +34,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         if (command.Request.Kind == WorkstationCommandKind.GitSync)
             return Result.Forbidden<WorkstationCommandDto>(
                 "GitSync must be requested through the project GitSync endpoint.");
+        if (command.Request.Kind == WorkstationCommandKind.GitLand && !command.Request.TrustedGitLand)
+            return Result.Forbidden<WorkstationCommandDto>(
+                "GitLand commands can only be queued by the landing workflow.");
         if (command.Request.Kind == WorkstationCommandKind.ApplyProposalPatch)
             return Result.Forbidden<WorkstationCommandDto>(
                 "Proposal patches can only be queued by the proposal review workflow.");
@@ -149,11 +152,11 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 if (!sanitized.Success)
                     return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
                 var queuedPayload = sanitized.Value;
-                if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck)
+                if (command.Request.Kind is WorkstationCommandKind.RunReviewCheck or WorkstationCommandKind.GitLand)
                 {
                     if (string.IsNullOrWhiteSpace(command.Request.TrustedCheckCommand))
                         return Result.Failure<WorkstationCommandDto>(
-                            "A trusted review check command is required.", ErrorKind.Conflict);
+                            "A trusted project check command is required.", ErrorKind.Conflict);
                     var json = JsonNode.Parse(queuedPayload ?? "{}") as JsonObject ?? new JsonObject();
                     json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
                     queuedPayload = json.ToJsonString();
