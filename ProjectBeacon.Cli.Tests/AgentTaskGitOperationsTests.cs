@@ -72,7 +72,15 @@ public sealed class AgentTaskGitOperationsTests
         finally
         {
             if (worktree is not null)
+            {
+                // Keep cleanup independent from an earlier assertion. A deliberately
+                // uncommitted sibling-project file must not make DisposeAsync mask the
+                // original test failure while exercising the project boundary guard.
+                var outsideProjectFile = Path.Combine(worktree.RecoveryPath, "outside-project.txt");
+                if (File.Exists(outsideProjectFile))
+                    File.Delete(outsideProjectFile);
                 await worktree.DisposeAsync();
+            }
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
