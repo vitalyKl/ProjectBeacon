@@ -128,21 +128,21 @@ internal static class AgentTaskGitOperations
         string description,
         JsonObject properties,
         params string[] required) => new()
-    {
-        ["type"] = "function",
-        ["function"] = new JsonObject
         {
-            ["name"] = name,
-            ["description"] = description,
-            ["parameters"] = new JsonObject
+            ["type"] = "function",
+            ["function"] = new JsonObject
             {
-                ["type"] = "object",
-                ["properties"] = properties,
-                ["required"] = new JsonArray(required.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
-                ["additionalProperties"] = false
+                ["name"] = name,
+                ["description"] = description,
+                ["parameters"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = properties,
+                    ["required"] = new JsonArray(required.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                    ["additionalProperties"] = false
+                }
             }
-        }
-    };
+        };
 
     private static JsonObject EnumProperty(params string[] values) => new()
     {
@@ -254,60 +254,60 @@ internal static class AgentTaskGitOperations
                 });
 
             case "status":
-            {
-                var statusArgs = new List<string> { "status", "--short", "--branch", "--untracked-files=all" };
-                AddProjectPathspec(context, statusArgs);
-                var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. statusArgs]);
-                var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
-                if (!Succeeded(status) || !Succeeded(head))
-                    return GitFailure("Could not read task branch status.");
-                return Success(new
                 {
-                    branch = context.BranchName,
-                    baseBranch = context.BaseBranch,
-                    baseSha = context.BaseSha,
-                    head = head.StdOut.Trim(),
-                    status = Clip(status.StdOut)
-                });
-            }
+                    var statusArgs = new List<string> { "status", "--short", "--branch", "--untracked-files=all" };
+                    AddProjectPathspec(context, statusArgs);
+                    var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. statusArgs]);
+                    var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+                    if (!Succeeded(status) || !Succeeded(head))
+                        return GitFailure("Could not read task branch status.");
+                    return Success(new
+                    {
+                        branch = context.BranchName,
+                        baseBranch = context.BaseBranch,
+                        baseSha = context.BaseSha,
+                        head = head.StdOut.Trim(),
+                        status = Clip(status.StdOut)
+                    });
+                }
 
             case "log":
-            {
-                var maxCount = ReadInt(args, "maxCount") ?? 20;
-                if (maxCount is < 1 or > 40)
-                    return Error("maxCount must be between 1 and 40.");
-                var logArgs = new List<string>
                 {
-                    "log", "--oneline", "--decorate", "--no-color", "--max-count=" + maxCount,
-                    $"{context.BaseSha}..HEAD"
-                };
-                AddProjectPathspec(context, logArgs, path);
-                var log = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. logArgs]);
-                return Succeeded(log) ? Success(new { commits = Clip(log.StdOut) }) : GitFailure("Could not read task branch history.");
-            }
+                    var maxCount = ReadInt(args, "maxCount") ?? 20;
+                    if (maxCount is < 1 or > 40)
+                        return Error("maxCount must be between 1 and 40.");
+                    var logArgs = new List<string>
+                    {
+                        "log", "--oneline", "--decorate", "--no-color", "--max-count=" + maxCount,
+                        $"{context.BaseSha}..HEAD"
+                    };
+                    AddProjectPathspec(context, logArgs, path);
+                    var log = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. logArgs]);
+                    return Succeeded(log) ? Success(new { commits = Clip(log.StdOut) }) : GitFailure("Could not read task branch history.");
+                }
 
             case "diff":
-            {
-                var diffArgs = new List<string> { "diff", "--no-ext-diff", "--no-color", "--find-renames", context.BaseSha };
-                AddProjectPathspec(context, diffArgs, path);
-                var diff = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. diffArgs]);
-                return Succeeded(diff) ? Success(new { diff = Clip(diff.StdOut) }) : GitFailure("Could not read task branch diff.");
-            }
+                {
+                    var diffArgs = new List<string> { "diff", "--no-ext-diff", "--no-color", "--find-renames", context.BaseSha };
+                    AddProjectPathspec(context, diffArgs, path);
+                    var diff = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. diffArgs]);
+                    return Succeeded(diff) ? Success(new { diff = Clip(diff.StdOut) }) : GitFailure("Could not read task branch diff.");
+                }
 
             case "show":
-            {
-                var showArgs = new List<string> { "show", "--no-ext-diff", "--no-color", "--format=fuller", "--stat", "HEAD" };
-                AddProjectPathspec(context, showArgs, path);
-                var show = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. showArgs]);
-                return Succeeded(show) ? Success(new { commit = Clip(show.StdOut) }) : GitFailure("Could not read task branch commit.");
-            }
+                {
+                    var showArgs = new List<string> { "show", "--no-ext-diff", "--no-color", "--format=fuller", "--stat", "HEAD" };
+                    AddProjectPathspec(context, showArgs, path);
+                    var show = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. showArgs]);
+                    return Succeeded(show) ? Success(new { commit = Clip(show.StdOut) }) : GitFailure("Could not read task branch commit.");
+                }
 
             case "blame":
-            {
-                var blame = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "blame", "--no-ext-diff", "--no-color", "--", path!);
-                return Succeeded(blame) ? Success(new { path, blame = Clip(blame.StdOut) }) : GitFailure("Could not read file history.");
-            }
+                {
+                    var blame = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                        "blame", "--no-ext-diff", "--no-color", "--", path!);
+                    return Succeeded(blame) ? Success(new { path, blame = Clip(blame.StdOut) }) : GitFailure("Could not read file history.");
+                }
 
             default:
                 return Error("git_info kind must be one of: status, log, diff, show, blame, branches.");
