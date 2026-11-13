@@ -270,6 +270,161 @@ public static class WorkstationEval
         return Result.Ok(JsonSerializer.Serialize(result));
     }
 
+    public static async Task<Result<string>> RunReviewCheckAsync(
+        string root,
+        string payloadJson,
+        Guid projectId,
+        string? configuredWorktreeRoot,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return Result.Failure<string>("Project root is unavailable.");
+        JsonElement payload;
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            payload = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<string>("payload must be valid JSON.");
+        }
+
+        var reviewRunId = ReadGuid(payload, "reviewRunId");
+        var taskId = ReadGuid(payload, "taskId");
+        var expectedCommandHash = ReadString(payload, "checkCommandHash");
+        var checkCommand = ReadString(payload, "checkCommand");
+        if (reviewRunId is null || taskId is null)
+            return Result.Failure<string>("reviewRunId and taskId are required.");
+        if (string.IsNullOrWhiteSpace(checkCommand) || !IsSha256(expectedCommandHash))
+            return Result.Failure<string>("The trusted check command and its SHA-256 hash are required.");
+
+        var actualCommandHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(checkCommand)))
+            .ToLowerInvariant();
+        if (!string.Equals(actualCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<string>("The trusted check command does not match its server-pinned hash.");
+
+        if (!WorkstationWorkspaceMode.UsesTaskBranches(WorkstationSettings.Load().WorkspaceMode))
+        {
+            // The caller passes the configured root explicitly below; this guard is retained
+            // by the workspace creation result when Branch mode is not enabled.
+        }
+
+        var opened = await AgentTaskWorktree.CreateAsync(
+            root, projectId, taskId.Value, configuredWorktreeRoot, ct);
+        if (opened.Worktree is null)
+            return Result.Failure<string>(opened.Error ?? "The persistent task branch workspace is unavailable.");
+
+        await using var taskWorkspace = opened.Worktree;
+        var checkpoint = await taskWorkspace.CommitChangesAsync(
+            $"ProjectBeacon: task {taskId.Value:N} review checkpoint", ct);
+        if (!checkpoint.Success || string.IsNullOrWhiteSpace(checkpoint.CommitSha))
+            return Result.Failure<string>(checkpoint.Error ?? "Could not checkpoint the task branch before review.");
+
+        var sourceSha = checkpoint.CommitSha;
+        var repositoryRoot = taskWorkspace.RepositoryRoot;
+        var relativeProject = Path.GetRelativePath(repositoryRoot, taskWorkspace.WorkingDirectory);
+        if (Path.IsPathRooted(relativeProject)
+            || relativeProject == ".."
+            || relativeProject.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || relativeProject.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+            return Result.Failure<string>("The task project path escapes its repository.");
+
+        var tree = await AgentSessionWorktree.RunGitAsync(
+            taskWorkspace.WorkingDirectory, ct, [], "rev-parse", "--verify", sourceSha + "^{tree}");
+        if (tree.ExitCode != 0 || tree.TimedOut || !IsGitSha(tree.StdOut.Trim()))
+            return Result.Failure<string>("Could not resolve the checked task branch tree.");
+        var checkedTreeSha = tree.StdOut.Trim();
+
+        var filterConfig = await AgentSessionWorktree.RunGitAsync(
+            repositoryRoot, ct, [], "config", "--name-only", "--get-regexp", "^filter\\.");
+        if (filterConfig.TimedOut || filterConfig.ExitCode is not (0 or 1))
+            return Result.Failure<string>("Could not inspect Git filters safely for the review worktree.");
+        var disabledFilters = AgentSessionWorktree.ParseFilterDriverNames(filterConfig.StdOut);
+
+        var parent = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "review-check-worktrees");
+        Directory.CreateDirectory(parent);
+        var temporaryWorktree = Path.Combine(parent, reviewRunId.Value.ToString("N") + "-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var add = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, ct, disabledFilters,
+                "worktree", "add", "--detach", temporaryWorktree, sourceSha);
+            if (add.ExitCode != 0 || add.TimedOut)
+                return Result.Failure<string>("Could not create a detached review worktree: " + ClipGitError(add.StdErr));
+
+            var checkDirectory = relativeProject == "."
+                ? temporaryWorktree
+                : Path.GetFullPath(Path.Combine(temporaryWorktree, relativeProject));
+            if (!IsWithin(temporaryWorktree, checkDirectory) || !Directory.Exists(checkDirectory))
+                return Result.Failure<string>("The checked project directory is missing from its review worktree.");
+
+            var relativePath = ReadString(payload, "path");
+            var validatedPath = WorkspacePath.ResolveInRoot(checkDirectory, relativePath, relativeOnly: true);
+            if (!validatedPath.Success)
+                return Result.Failure<string>(validatedPath.Error ?? "path is not inside the task project.");
+
+            var checkResult = EvalCheck.Execute(validatedPath.Value!, checkCommand);
+            return Result.Ok(JsonSerializer.Serialize(new
+            {
+                reviewRunId,
+                taskId,
+                exitCode = checkResult.ExitCode,
+                checkOutput = checkResult.Output,
+                checkedSourceSha = sourceSha,
+                checkedTreeSha,
+                checkCommandHash = actualCommandHash
+            }));
+        }
+        finally
+        {
+            var remove = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, CancellationToken.None, disabledFilters,
+                "worktree", "remove", "--force", temporaryWorktree);
+            if (Directory.Exists(temporaryWorktree))
+            {
+                try { Directory.Delete(temporaryWorktree, recursive: true); } catch { }
+            }
+            if (remove.ExitCode != 0)
+                _ = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, CancellationToken.None, disabledFilters, "worktree", "prune");
+        }
+    }
+
+    private static Guid? ReadGuid(JsonElement payload, string name) =>
+        payload.ValueKind == JsonValueKind.Object
+        && payload.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && Guid.TryParse(value.GetString(), out var id)
+        && id != Guid.Empty ? id : null;
+
+    private static string? ReadString(JsonElement payload, string name) =>
+        payload.ValueKind == JsonValueKind.Object
+        && payload.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsWithin(string root, string path)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        return !Path.IsPathRooted(relative)
+            && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    private static string ClipGitError(string? value)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        return normalized.Length <= 500 ? normalized : normalized[..500];
+    }
+
     public static Result<string> RunReviewCheck(string root, string payloadJson)
     {
         if (string.IsNullOrWhiteSpace(root))
