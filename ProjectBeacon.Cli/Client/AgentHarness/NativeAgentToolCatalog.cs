@@ -36,8 +36,13 @@ internal sealed class NativeAgentToolCatalog(Func<WorkstationSettings> loadSetti
             && CommandExecutionPolicy.IsManifestFingerprintTrusted(
                 trustAuthorization.ProjectRoot ?? trustAuthorization.WorkingDirectory);
 
-        if (controls?.HarnessAuthorization is { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner" })
+        if (controls?.HarnessAuthorization is { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner" } repositoryAuthorization)
+        {
             tools.Add(GitSyncService.RepoStatusToolDefinition());
+            if (!string.Equals(agentMode, "plan", StringComparison.Ordinal)
+                && repositoryAuthorization.RepositoryBaseSynced is not null)
+                tools.Add(GitSyncService.RepoSyncToolDefinition());
+        }
         if (controls?.HarnessAuthorization is { IsolatedWorkspace: true })
             tools.Add(SuggestCommandPrefixesToolDefinition());
 
