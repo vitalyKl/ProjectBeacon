@@ -17,6 +17,9 @@ public class ReviewRunConfiguration : IEntityTypeConfiguration<ReviewRun>
         entity.Property(e => e.ArtifactRef).HasMaxLength(500);
         entity.Property(e => e.TranscriptRef).HasMaxLength(500).IsRequired();
         entity.Property(e => e.ReviewerActorId).HasMaxLength(100);
+        entity.Property(e => e.CheckCommandHash).HasMaxLength(64);
+        entity.Property(e => e.CheckedSourceSha).HasMaxLength(64);
+        entity.Property(e => e.CheckedTreeSha).HasMaxLength(64);
         entity.Property(e => e.StartedAt).IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.TaskId });
