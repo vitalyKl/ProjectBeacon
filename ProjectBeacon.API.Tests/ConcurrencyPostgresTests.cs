@@ -63,7 +63,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
         // StartPipeline now enforces the same production readiness requirements as the
         // API: a live native workstation and a configured Planner backend must exist.
-        var user = User.Create("pipeline-race", $"pipeline-race-{Guid.NewGuid():N}@beacon.local", "hash");
+        var userKey = Guid.NewGuid().ToString("N");
+        var user = User.Create("pipeline-race-" + userKey, $"pipeline-race-{userKey}@beacon.local", "hash");
         var device = DaemonDevice.Create(
             "pipeline-race-workstation",
             user.Id,
