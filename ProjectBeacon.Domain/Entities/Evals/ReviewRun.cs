@@ -20,6 +20,9 @@ public sealed class ReviewRun : Entity, IProjectScoped
     public string? ArtifactRef { get; private set; }
     public string TranscriptRef { get; private set; } = string.Empty;
     public string? ReviewerActorId { get; private set; }
+    public string? CheckCommandHash { get; private set; }
+    public string? CheckedSourceSha { get; private set; }
+    public string? CheckedTreeSha { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -75,6 +78,28 @@ public sealed class ReviewRun : Entity, IProjectScoped
         CompletedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Locks this run to the server-approved command before the workstation check is queued.</summary>
+    public void SetCheckCommandHash(string commandHash)
+    {
+        if (Status != ReviewRunStatus.Started || !IsSha256(commandHash))
+            throw new InvalidOperationException("A started review run and a valid SHA-256 command hash are required.");
+        if (CheckCommandHash is not null)
+            throw new InvalidOperationException("A review check command has already been assigned to this run.");
+        CheckCommandHash = commandHash.ToLowerInvariant();
+    }
+
+    /// <summary>Completes a review proof tied to the exact task branch commit and Git tree that were checked.</summary>
+    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha)
+    {
+        if (string.IsNullOrWhiteSpace(CheckCommandHash)
+            || !IsGitSha(checkedSourceSha)
+            || !IsGitSha(checkedTreeSha))
+            throw new InvalidOperationException("The approved command hash and checked Git source/tree SHAs are required.");
+        Complete(findings, artifactRef);
+        CheckedSourceSha = checkedSourceSha.ToLowerInvariant();
+        CheckedTreeSha = checkedTreeSha.ToLowerInvariant();
+    }
+
     /// <summary>
     /// Fails the run.
     /// </summary>
@@ -95,7 +120,16 @@ public sealed class ReviewRun : Entity, IProjectScoped
     public bool IsCheckProof() =>
         Status == ReviewRunStatus.Completed
         && TargetRunId is not null
-        && !string.IsNullOrWhiteSpace(ArtifactRef);
+        && !string.IsNullOrWhiteSpace(ArtifactRef)
+        && IsSha256(CheckCommandHash)
+        && IsGitSha(CheckedSourceSha)
+        && IsGitSha(CheckedTreeSha);
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     /// <summary>
     /// Starts an agent review and completes it immediately, using <paramref name="transcriptRef"/> as the artifact.
