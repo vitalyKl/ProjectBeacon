@@ -56,6 +56,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<PipelineSession> PipelineSessions => Set<PipelineSession>();
     public DbSet<ReviewVerdict> ReviewVerdicts => Set<ReviewVerdict>();
+    public DbSet<LandingAttempt> LandingAttempts => Set<LandingAttempt>();
     public DbSet<DaemonDevice> DaemonDevices => Set<DaemonDevice>();
     public DbSet<WorkstationCommand> WorkstationCommands => Set<WorkstationCommand>();
     public DbSet<ProjectRuntime> ProjectRuntimes => Set<ProjectRuntime>();
