@@ -200,7 +200,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return await RunEvalTurnAsync(command, payload, ct);
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
-                    var reviewAction = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
+                    var settings = _loadSettings();
+                    if (!WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
+                        return (false, null, "Review proof requires the persistent task branch workspace mode.");
+                    if (command.ProjectId is not { } reviewProjectId || reviewProjectId == Guid.Empty)
+                        return (false, null, "Review proof requires a project-scoped command.");
+                    var reviewAction = await WorkstationEval.RunReviewCheckAsync(
+                        command.LocalRoot, payload, reviewProjectId, settings.WorktreeRoot, ct);
                     if (!reviewAction.Success)
                         return (false, null, reviewAction.Error);
                     return (true, reviewAction.Value, null);
