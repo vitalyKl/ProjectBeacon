@@ -86,10 +86,11 @@ internal sealed class NativeAgentToolExecutor(
                 }
                 else if (string.Equals(call.Name, "repo_status", StringComparison.Ordinal))
                 {
-                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner" } repoAuthorization)
+                    if (controls?.HarnessAuthorization is not { } repoAuthorization
+                        || !NativeAgentToolPolicy.IsRepositorySyncAuthorized(repoAuthorization))
                     {
                         isError = true;
-                        toolResult = "Tool error: repo_status is available only to native pipeline Actor and Planner sessions.";
+                        toolResult = "Tool error: repo_status is available only to native interactive chat or pipeline Actor/Planner sessions with an isolated project workspace.";
                     }
                     else
                     {
@@ -101,10 +102,11 @@ internal sealed class NativeAgentToolExecutor(
                 {
                     if (string.Equals(agentMode, "plan", StringComparison.Ordinal)
                         || controls?.HarnessAuthorization is not
-                            { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner", RepositoryBaseSynced: not null } repoAuthorization)
+                            { RepositoryBaseSynced: not null } repoAuthorization
+                        || !NativeAgentToolPolicy.IsRepositorySyncAuthorized(repoAuthorization))
                     {
                         isError = true;
-                        toolResult = "Tool error: repo_sync is available only to active native pipeline Actor and Planner sessions in ACT mode.";
+                        toolResult = "Tool error: repo_sync is available only to active native interactive chat or pipeline Actor/Planner sessions in ACT mode.";
                     }
                     else
                     {
