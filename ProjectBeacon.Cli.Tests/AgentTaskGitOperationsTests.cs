@@ -117,7 +117,7 @@ public sealed class AgentTaskGitOperationsTests
             {
                 Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
                 Assert.Contains("src/app/shared.txt",
-                    document.RootElement.GetProperty("files").EnumerateArray().Select(item => item.GetString()));
+                    document.RootElement.GetProperty("files").EnumerateArray().Select(item => item.GetString() ?? string.Empty));
             }
 
             await File.WriteAllTextAsync(
@@ -162,10 +162,10 @@ public sealed class AgentTaskGitOperationsTests
         {
             var definition = AgentTaskGitOperations.ToolDefinition(toolName);
             var properties = definition["function"]!["parameters"]!["properties"]!.AsObject();
-            Assert.DoesNotContain("remote", properties.Keys, StringComparer.OrdinalIgnoreCase);
-            Assert.DoesNotContain("branch", properties.Keys, StringComparer.OrdinalIgnoreCase);
-            Assert.DoesNotContain("base", properties.Keys, StringComparer.OrdinalIgnoreCase);
-            Assert.DoesNotContain("target", properties.Keys, StringComparer.OrdinalIgnoreCase);
+            Assert.False(properties.ContainsKey("remote"));
+            Assert.False(properties.ContainsKey("branch"));
+            Assert.False(properties.ContainsKey("base"));
+            Assert.False(properties.ContainsKey("target"));
         }
     }
 
