@@ -341,7 +341,7 @@ internal static class AgentTaskGitOperations
 
         var add = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. addArgs]);
         if (!Succeeded(add))
-            return GitFailure("Could not stage task branch changes.");
+            return GitFailure("Could not stage task branch changes.", add.StdErr);
 
         var summaryArgs = new List<string> { "diff", "--cached", "--summary", "HEAD" };
         if (paths is { Count: > 0 })
@@ -350,7 +350,7 @@ internal static class AgentTaskGitOperations
             AddProjectPathspec(context, summaryArgs);
         var summary = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. summaryArgs]);
         if (!Succeeded(summary))
-            return GitFailure("Could not inspect staged task branch changes.");
+            return GitFailure("Could not inspect staged task branch changes.", summary.StdErr);
         if (summary.StdOut.Contains("120000", StringComparison.Ordinal))
             return Error("Symbolic links cannot be committed through git_commit; staged changes remain in the task worktree.");
 
@@ -376,7 +376,7 @@ internal static class AgentTaskGitOperations
 
         var commit = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. commitArgs]);
         if (!Succeeded(commit))
-            return GitFailure("Could not create the task branch commit. Ensure the selected paths contain changes.");
+            return GitFailure("Could not create the task branch commit. Ensure the selected paths contain changes.", commit.StdErr);
 
         var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
         if (!Succeeded(head) || !IsGitSha(head.StdOut.Trim()))
@@ -816,5 +816,6 @@ internal static class AgentTaskGitOperations
         new(false, JsonSerializer.Serialize(value, JsonOptions));
 
     private static McpToolResult Error(string message) => new(true, message);
-    private static McpToolResult GitFailure(string message) => new(true, message);
+    private static McpToolResult GitFailure(string message, string? detail = null) =>
+        new(true, string.IsNullOrWhiteSpace(detail) ? message : message + " " + Clip(detail.Trim()));
 }
