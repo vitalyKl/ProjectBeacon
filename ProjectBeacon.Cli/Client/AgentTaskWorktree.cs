@@ -171,33 +171,42 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     repositoryRoot, ct, disabledFilters, "remote", "get-url", "origin");
                 if (remote.ExitCode == 0 && !string.IsNullOrWhiteSpace(remote.StdOut))
                 {
-                    var fetch = await AgentSessionWorktree.RunGitAsync(
-                        repositoryRoot, ct, disabledFilters,
-                        "fetch", "--no-tags", "origin",
-                        $"+refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");
-                    if (fetch.ExitCode == 0 && !fetch.TimedOut)
+                    var remoteUrl = remote.StdOut.Trim();
+                    if (!IsSupportedFetchRemote(remoteUrl))
                     {
-                        var remoteHead = await AgentSessionWorktree.RunGitAsync(
-                            repositoryRoot, ct, disabledFilters,
-                            "rev-parse", "--verify", $"refs/remotes/origin/{baseBranch}");
-                        if (remoteHead.ExitCode == 0 && IsGitSha(remoteHead.StdOut.Trim()))
-                            baseSha = remoteHead.StdOut.Trim();
-                        else
-                            warning = "The origin branch was fetched, but its commit could not be resolved; using the local HEAD.";
+                        warning = "The origin remote uses an unsupported Git transport; using the local committed HEAD.";
                     }
                     else
                     {
-                        var cachedRemoteHead = await AgentSessionWorktree.RunGitAsync(
+                        var fetch = await AgentSessionWorktree.RunGitAsync(
                             repositoryRoot, ct, disabledFilters,
-                            "rev-parse", "--verify", $"refs/remotes/origin/{baseBranch}");
-                        if (cachedRemoteHead.ExitCode == 0 && IsGitSha(cachedRemoteHead.StdOut.Trim()))
+                            "fetch", "--no-tags", "--no-recurse-submodules",
+                            "--upload-pack=git-upload-pack", "--", remoteUrl,
+                            $"+refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");
+                        if (fetch.ExitCode == 0 && !fetch.TimedOut)
                         {
-                            baseSha = cachedRemoteHead.StdOut.Trim();
-                            warning = "Could not fetch origin; using the last known origin/" + baseBranch + " commit. " + Clip(fetch.StdErr);
+                            var remoteHead = await AgentSessionWorktree.RunGitAsync(
+                                repositoryRoot, ct, disabledFilters,
+                                "rev-parse", "--verify", $"refs/remotes/origin/{baseBranch}");
+                            if (remoteHead.ExitCode == 0 && IsGitSha(remoteHead.StdOut.Trim()))
+                                baseSha = remoteHead.StdOut.Trim();
+                            else
+                                warning = "The origin branch was fetched, but its commit could not be resolved; using the local HEAD.";
                         }
                         else
                         {
-                            warning = "Could not fetch origin; using the local committed HEAD. " + Clip(fetch.StdErr);
+                            var cachedRemoteHead = await AgentSessionWorktree.RunGitAsync(
+                                repositoryRoot, ct, disabledFilters,
+                                "rev-parse", "--verify", $"refs/remotes/origin/{baseBranch}");
+                            if (cachedRemoteHead.ExitCode == 0 && IsGitSha(cachedRemoteHead.StdOut.Trim()))
+                            {
+                                baseSha = cachedRemoteHead.StdOut.Trim();
+                                warning = "Could not fetch origin; using the last known origin/" + baseBranch + " commit. " + Clip(fetch.StdErr);
+                            }
+                            else
+                            {
+                                warning = "Could not fetch origin; using the local committed HEAD. " + Clip(fetch.StdErr);
+                            }
                         }
                     }
                 }
@@ -505,6 +514,38 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         }
 
         return Path.GetFullPath(current);
+    }
+
+    internal static bool IsSupportedFetchRemote(string remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl) || remoteUrl.Contains('\0', StringComparison.Ordinal))
+            return false;
+
+        var value = remoteUrl.Trim();
+        if (Path.IsPathRooted(value) || value.StartsWith("./", StringComparison.Ordinal)
+            || value.StartsWith("../", StringComparison.Ordinal))
+            return true;
+
+        var colon = value.IndexOf(':');
+        if (colon > 0)
+        {
+            var separator = value.IndexOfAny(['/', '\\']);
+            if (separator < 0 || colon < separator)
+            {
+                var prefix = value[..colon];
+                if (prefix.Contains('@', StringComparison.Ordinal))
+                    return true; // SCP-style SSH URL.
+                if (!Uri.CheckSchemeName(prefix))
+                    return false;
+                return prefix.Equals("http", StringComparison.OrdinalIgnoreCase)
+                    || prefix.Equals("https", StringComparison.OrdinalIgnoreCase)
+                    || prefix.Equals("ssh", StringComparison.OrdinalIgnoreCase)
+                    || prefix.Equals("file", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        // No URI scheme: treat the value as a repository-relative filesystem path.
+        return !value.Contains("::", StringComparison.Ordinal);
     }
 
     private static bool IsGitSha(string value) =>

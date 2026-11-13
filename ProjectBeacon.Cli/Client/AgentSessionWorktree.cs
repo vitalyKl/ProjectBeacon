@@ -568,6 +568,20 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
         info.ArgumentList.Insert(0, "-c");
         info.ArgumentList.Insert(0, "core.hooksPath=" + hooksDirectory);
         info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.file.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.ssh.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.https.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.http.allow=always");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "protocol.allow=never");
+        info.ArgumentList.Insert(0, "-c");
+        info.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        info.Environment["GCM_INTERACTIVE"] = "never";
+        info.Environment["GIT_PAGER"] = "cat";
+        info.Environment["PAGER"] = "cat";
         info.ArgumentList.Insert(0, "core.fsmonitor=false");
         info.ArgumentList.Insert(0, "-c");
 

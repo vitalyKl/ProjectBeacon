@@ -145,6 +145,20 @@ public sealed class AgentTaskWorktreeTests
     }
 
     [Theory]
+    [InlineData("https://github.com/owner/repo.git", true)]
+    [InlineData("ssh://git@github.com/owner/repo.git", true)]
+    [InlineData("git@github.com:owner/repo.git", true)]
+    [InlineData("/tmp/remote.git", true)]
+    [InlineData("../remote.git", true)]
+    [InlineData("ext::sh -c malicious", false)]
+    [InlineData("custom-helper://host/repo", false)]
+    [InlineData("rsync://host/repo", false)]
+    public void IsSupportedFetchRemote_RejectsCustomRemoteHelpers(string remote, bool expected)
+    {
+        Assert.Equal(expected, AgentTaskWorktree.IsSupportedFetchRemote(remote));
+    }
+
+    [Theory]
     [InlineData("git version 2.37.9", false)]
     [InlineData("git version 2.38.0", true)]
     [InlineData("git version 2.45.1.windows.1", true)]
