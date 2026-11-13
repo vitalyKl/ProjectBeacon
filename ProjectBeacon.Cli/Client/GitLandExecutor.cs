@@ -192,6 +192,13 @@ internal static class GitLandExecutor
             if (!Succeeded(head) || !IsGitSha(head.StdOut.Trim()))
                 return (false, null, "The merge ran but its resulting commit SHA could not be verified.");
             mergeCommitSha = head.StdOut.Trim();
+            var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
+            var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (!Succeeded(parents) || parentFields.Length != 3
+                || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase))
+                return (false, JsonSerializer.Serialize(new { status = "landed_metadata_mismatch", mergeCommitSha }),
+                    "The target moved while the merge was being created. The merge commit was not reset; inspect the target branch before retrying.");
         }
         else
         {
@@ -326,7 +333,7 @@ internal static class GitLandExecutor
         {
             var add = await Git(repo, filters, ct, "worktree", "add", "--detach", temp, target.Sha!);
             if (!Succeeded(add))
-                return new CandidateResult("failed", target.Sha, ErrorCode: "CandidateWorktreeFailed");
+                return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "CandidateWorktreeFailed");
 
             var merge = await Git(temp, filters, ct,
                 "-c", "user.name=ProjectBeacon",
