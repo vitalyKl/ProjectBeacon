@@ -89,7 +89,15 @@ else
                            OnClick="OnStartPipeline" Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending || _pipeline?.Preflight?.RepositorySyncInProgress == true || !CanStartPlanner"
                            data-testid="task-pipeline-start">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
-                @if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null })
+                @if (_pipeline?.Preflight?.RepositorySyncInProgress == true)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
+                    @if (_gitSyncBusy)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mt-1" />
+                    }
+                }
+                else if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null })
                 {
                     @if (_canManageRepositorySync)
                     {
@@ -109,10 +117,6 @@ else
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
                         }
-                    }
-                    else if (_pipeline.Preflight.RepositorySyncInProgress)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
                     }
                     else if (_pipeline.Preflight.RepositorySyncBlocked)
                     {
