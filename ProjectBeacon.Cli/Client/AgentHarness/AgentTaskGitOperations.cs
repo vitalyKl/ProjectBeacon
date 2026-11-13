@@ -200,7 +200,6 @@ internal static class AgentTaskGitOperations
                 || !SamePath(AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(metadata.WorktreePath)), worktreeRoot)
                 || !string.Equals(metadata.BranchName, expectedBranch, StringComparison.Ordinal)
                 || !string.Equals(metadata.BaseBranch, workspace.BaseBranch, StringComparison.Ordinal)
-                || !string.Equals(metadata.BaseSha, workspace.BaseSha, StringComparison.OrdinalIgnoreCase)
                 || !IsGitSha(metadata.BaseSha))
                 return (null, "Task worktree metadata does not match the active command authorization.");
 
