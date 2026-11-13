@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
@@ -420,30 +422,52 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
             return;
 
         if (!success)
+        {
             run.Fail(error);
+        }
         else
         {
             int? exitCode = null;
             string? output = null;
-            if (!string.IsNullOrWhiteSpace(resultJson))
+            string? sourceSha = null;
+            string? treeSha = null;
+            string? reportedCommandHash = null;
+            try
             {
-                try
-                {
-                    using var doc = JsonDocument.Parse(resultJson);
-                    exitCode = DevicePayloadReader.ReadNullableInt(doc.RootElement, "exitCode");
-                    if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
-                        output = outputElement.GetString();
-                }
-                catch (JsonException)
-                {
-                    exitCode = null;
-                }
+                using var result = JsonDocument.Parse(resultJson ?? "{}");
+                var root = result.RootElement;
+                exitCode = DevicePayloadReader.ReadNullableInt(root, "exitCode");
+                output = root.TryGetProperty("checkOutput", out var value) && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+                sourceSha = root.TryGetProperty("checkedSourceSha", out var source) && source.ValueKind == JsonValueKind.String
+                    ? source.GetString()
+                    : null;
+                treeSha = root.TryGetProperty("checkedTreeSha", out var tree) && tree.ValueKind == JsonValueKind.String
+                    ? tree.GetString()
+                    : null;
+                reportedCommandHash = root.TryGetProperty("checkCommandHash", out var hash) && hash.ValueKind == JsonValueKind.String
+                    ? hash.GetString()
+                    : null;
+            }
+            catch (JsonException)
+            {
+                exitCode = null;
             }
 
-            if (exitCode == 0)
-                run.Complete(output, $"cmd:{row.Id:D}");
+            var trustedCommand = DevicePayloadReader.ReadString(row.PayloadJson, "checkCommand");
+            var actualCommandHash = string.IsNullOrWhiteSpace(trustedCommand)
+                ? null
+                : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(trustedCommand))).ToLowerInvariant();
+            var commandMatches = actualCommandHash is not null
+                && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase);
+            if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha))
+                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!);
             else
-                run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
+                run.Fail(exitCode == 0
+                    ? "Review check result did not prove the pinned command and checked Git revision."
+                    : string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
         }
 
         // Guarded: only the first completion of the started run is stored.
@@ -454,8 +478,14 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 .SetProperty(r => r.ArtifactRef, run.ArtifactRef)
                 .SetProperty(r => r.TranscriptRef, run.TranscriptRef)
                 .SetProperty(r => r.Status, run.Status)
-                .SetProperty(r => r.CompletedAt, run.CompletedAt), ct);
+                .SetProperty(r => r.CompletedAt, run.CompletedAt)
+                .SetProperty(r => r.CheckCommandHash, run.CheckCommandHash)
+                .SetProperty(r => r.CheckedSourceSha, run.CheckedSourceSha)
+                .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha), ct);
     }
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 }
 
 internal sealed class DesiredStateCompletion : ICommandCompletion
