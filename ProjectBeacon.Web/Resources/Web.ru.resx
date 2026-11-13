@@ -2580,10 +2580,11 @@
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>Сжатие начинается при превышении меньшего порога: 82% окна или размер окна минус резерв. При значении 0 автоматически резервируется 25% окна.</value></data>
   <data name="GitSyncTitle" xml:space="preserve"><value>Git-репозиторий</value></data>
   <data name="GitSyncHelp" xml:space="preserve"><value>Проверьте состояние репозитория или выполните fast-forward текущей ветки. Операция выполняется на подключённой станции и не перезаписывает локальные изменения.</value></data>
+  <data name="GitSyncRequiresAdmin" xml:space="preserve"><value>Синхронизировать репозиторий может только владелец или администратор проекта. Попросите администратора выполнить GitSync.</value></data>
   <data name="GitSyncCheck" xml:space="preserve"><value>Проверить состояние</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Обновите страницу и повторно проверьте состояние репозитория.</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Страница продолжит автоматически отслеживать её состояние.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
@@ -2602,6 +2603,7 @@
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>Для текущей ветки не настроен upstream.</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>Не удалось получить данные upstream. Проверьте remote и учётные данные на рабочей станции.</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Время выполнения Git-операции истекло.</value></data>
+  <data name="GitSyncReasonMergeFailed" xml:space="preserve"><value>Git не смог безопасно выполнить fast-forward. Проверьте подробности конфликта с локальным файлом.</value></data>
   <data name="MarkdownEdit" xml:space="preserve"><value>Редактировать</value></data>
   <data name="MarkdownPreview" xml:space="preserve"><value>Просмотр</value></data>
   <data name="MarkdownExpand" xml:space="preserve"><value>Развернуть</value></data>
@@ -2822,6 +2824,14 @@
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Последняя проверка Git показала отставание репозитория на {0} комм. в ветке «{1}». Синхронизируйте его перед работой с текущим снимком проекта.</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>Локальная ветка отстаёт от настроенной upstream-ветки. Синхронизируйте репозиторий перед запуском pipeline.</value></data>
-  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>На выбранной рабочей станции ещё выполняется синхронизация репозитория. Дождитесь её завершения перед запуском pipeline.</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
+    <value>Для этого проекта ещё выполняется синхронизация репозитория. Дождитесь её завершения перед запуском pipeline.</value>
+  </data>
   <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>Не удалось подтвердить актуальность репозитория относительно upstream. Проверьте настройки ветки и upstream, затем синхронизируйте репозиторий перед запуском pipeline.</value></data>
+  <data name="GitSyncOtherWorkstationFinished" xml:space="preserve">
+    <value>Команда синхронизации завершилась на другой рабочей станции. Репозиторий выбранной для pipeline станции всё ещё нужно синхронизировать.</value>
+  </data>
+  <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
+    <value>Путь привязанного локального репозитория изменился после последней успешной проверки Git. Повторно проверьте Git или синхронизируйте репозиторий перед запуском pipeline.</value>
+  </data>
 </root>

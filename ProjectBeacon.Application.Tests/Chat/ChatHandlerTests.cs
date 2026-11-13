@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Common;
 using Application.Chat;
 using Application.Devices;
 using Domain.Entities.Identity;
@@ -446,6 +447,42 @@ public sealed class ChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task SendChatPrompt_RejectsSessionWhenRuntimeRootHasChanged()
+    {
+        var (projectId, userId, _, deviceId, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var runtime = await db.ProjectRuntimes.SingleAsync(
+                item => item.ProjectId == projectId && item.DeviceId == deviceId, ct);
+            runtime.SetLocalRoot(@"B:\new-checkout");
+            await db.SaveChangesAsync(ct);
+        }
+
+        var sent = await new SendChatPromptHandler(factory, new ChatEventSignal())
+            .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "hello", null)), ct);
+
+        Assert.False(sent.Success);
+        Assert.Equal(ErrorKind.Conflict, sent.Kind);
+        Assert.Contains("different project directory", sent.Error, StringComparison.OrdinalIgnoreCase);
+
+        await using var check = factory.CreateDbContext();
+        Assert.Empty(await check.ChatParts.Where(part => part.SessionId == sessionId).ToListAsync(ct));
+        Assert.Empty(await check.WorkstationCommands
+            .Where(command => command.ProjectId == projectId && command.Kind == WorkstationCommandKind.ChatPrompt)
+            .ToListAsync(ct));
+        var status = await check.ChatSessions.AsNoTracking()
+            .Where(session => session.Id == sessionId)
+            .Select(session => session.Status)
+            .SingleAsync(ct);
+        Assert.Equal(ChatSessionStatus.Idle, status);
+    }
+
+    [Fact]
     public async Task SendChatPrompt_PersistsPartCommandAndStreaming()
     {
         var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
@@ -469,6 +506,42 @@ public sealed class ChatHandlerTests : IDisposable
         Assert.Contains("hello", command.PayloadJson);
         using var payload = JsonDocument.Parse(command.PayloadJson);
         Assert.Equal(projectId, payload.RootElement.GetProperty("projectId").GetGuid());
+    }
+
+    [Fact]
+    public async Task SendChatPrompt_RejectsSessionPinnedToPreviousRuntimeDirectory()
+    {
+        var (projectId, userId, _, deviceId, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var runtime = await db.ProjectRuntimes.SingleAsync(
+                item => item.ProjectId == projectId && item.DeviceId == deviceId, ct);
+            runtime.SetLocalRoot(@"B:\new-checkout");
+            await db.SaveChangesAsync(ct);
+        }
+
+        var sent = await new SendChatPromptHandler(factory, new ChatEventSignal())
+            .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "hello", null)), ct);
+
+        Assert.False(sent.Success);
+        Assert.Equal(ErrorKind.Conflict, sent.Kind);
+        Assert.Contains("different project directory", sent.Error, StringComparison.OrdinalIgnoreCase);
+
+        await using var check = factory.CreateDbContext();
+        Assert.Empty(await check.ChatParts.Where(part => part.SessionId == sessionId).ToListAsync(ct));
+        Assert.Empty(await check.WorkstationCommands
+            .Where(command => command.ProjectId == projectId && command.Kind == WorkstationCommandKind.ChatPrompt)
+            .ToListAsync(ct));
+        var status = await check.ChatSessions.AsNoTracking()
+            .Where(session => session.Id == sessionId)
+            .Select(session => session.Status)
+            .SingleAsync(ct);
+        Assert.Equal(ChatSessionStatus.Idle, status);
     }
 
     [Fact]

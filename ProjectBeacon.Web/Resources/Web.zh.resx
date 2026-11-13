@@ -2598,10 +2598,11 @@ orthstar</value>
   <data name="ContextResponseReserveTokensHelp" xml:space="preserve"><value>当提示词用量超过上下文窗口的 82% 与“窗口大小减去预留量”两者中的较小值时开始压缩。设置为 0 时自动预留 25%。</value></data>
   <data name="GitSyncTitle" xml:space="preserve"><value>Git 仓库</value></data>
   <data name="GitSyncHelp" xml:space="preserve"><value>检查仓库状态，或对当前分支执行 fast-forward。同步在已连接的工作站上执行，不会覆盖本地修改。</value></data>
+  <data name="GitSyncRequiresAdmin" xml:space="preserve"><value>只有项目所有者或管理员可以同步此仓库。请联系管理员运行 GitSync。</value></data>
   <data name="GitSyncCheck" xml:space="preserve"><value>检查状态</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>同步</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>正在等待工作站完成 Git 操作…</value></data>
-  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。请刷新页面并重新检查仓库状态。</value></data>
+  <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。此页面将继续自动检查其状态。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>此项目没有连接支持 GitSync 的在线工作站。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>分支</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>上游</value></data>
@@ -2620,6 +2621,7 @@ orthstar</value>
   <data name="GitSyncReasonNoUpstream" xml:space="preserve"><value>当前分支未配置上游分支。</value></data>
   <data name="GitSyncReasonFetchFailed" xml:space="preserve"><value>无法获取跟踪的上游分支。请检查工作站上的 remote 和凭据。</value></data>
   <data name="GitSyncReasonTimeout" xml:space="preserve"><value>Git 操作超时。</value></data>
+  <data name="GitSyncReasonMergeFailed" xml:space="preserve"><value>Git 无法安全完成 fast-forward。请检查本地文件冲突详情。</value></data>
   <data name="MarkdownEdit" xml:space="preserve"><value>编辑</value></data>
   <data name="MarkdownPreview" xml:space="preserve"><value>预览</value></data>
   <data name="MarkdownExpand" xml:space="preserve"><value>展开</value></data>
@@ -2840,6 +2842,14 @@ orthstar</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>上次 Git 检查发现此仓库在分支“{1}”落后 {0} 个提交。使用当前项目快照前请先同步。</value></data>
   <data name="PipelineRepositoryBehind" xml:space="preserve"><value>项目仓库落后于其跟踪的上游分支。启动流水线前请先同步仓库。</value></data>
-  <data name="PipelineRepositorySyncInProgress" xml:space="preserve"><value>所选工作站仍在同步仓库。请等待同步完成后再启动流水线。</value></data>
+  <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
+    <value>此项目仍有仓库同步正在运行。请等待同步完成后再启动流水线。</value>
+  </data>
   <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>无法根据已配置的上游分支验证仓库状态。请检查分支和上游设置，并在启动流水线前同步仓库。</value></data>
+  <data name="GitSyncOtherWorkstationFinished" xml:space="preserve">
+    <value>Git 同步命令已在另一台工作站结束。Pipeline 所选工作站的仓库仍需要同步。</value>
+  </data>
+  <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
+    <value>上次 Git 检查成功后，已连接的本地仓库路径发生了变化。请在启动流水线前重新检查 Git 状态或再次同步。</value>
+  </data>
 </root>

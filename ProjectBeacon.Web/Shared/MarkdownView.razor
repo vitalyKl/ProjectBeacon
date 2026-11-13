@@ -39,6 +39,7 @@
         .Build();
     private static readonly ConcurrentDictionary<string, Lazy<string>> RenderCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentQueue<string> CacheOrder = new();
+    private static readonly ConcurrentDictionary<string, int> CacheMissCountsByKey = new(StringComparer.Ordinal);
     private static readonly Regex AnchorTag = new("<a\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex LinkTargetAttributes = new("\\s+(?:target|rel)\\s*=\\s*(?:\"[^\"]*\"|'[^']*')", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex ParagraphTags = new("</?p>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -75,9 +76,7 @@
             var collapse = UseChatCodeActions ? L["ChatCollapse"].Value : string.Empty;
             var expand = UseChatCodeActions ? L["ChatExpand"].Value : string.Empty;
             var copy = UseChatCodeActions ? L["ChatCopyCode"].Value : string.Empty;
-            var fingerprint = string.Join("\0", Text, Inline ? "inline" : "block",
-                UseChatCodeActions ? "chat-code" : "plain", collapse, expand, copy);
-            var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
+            var key = CreateCacheKey(Text, Inline, UseChatCodeActions, collapse, expand, copy);
 
             var proposed = new Lazy<string>(() =>
             {
@@ -93,6 +92,7 @@
                     html = ParagraphTags.Replace(html, string.Empty);
 
                 Interlocked.Increment(ref _cacheMissCount);
+                CacheMissCountsByKey.AddOrUpdate(key, 1, static (_, count) => count + 1);
                 return html;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -101,7 +101,10 @@
             {
                 CacheOrder.Enqueue(key);
                 while (RenderCache.Count > CacheCapacity && CacheOrder.TryDequeue(out var oldest))
+                {
                     RenderCache.TryRemove(oldest, out _);
+                    CacheMissCountsByKey.TryRemove(oldest, out _);
+                }
             }
 
             try
@@ -111,7 +114,10 @@
             catch
             {
                 if (RenderCache.TryGetValue(key, out var current) && ReferenceEquals(current, cached))
+                {
                     RenderCache.TryRemove(key, out _);
+                    CacheMissCountsByKey.TryRemove(key, out _);
+                }
                 throw;
             }
         }
@@ -177,11 +183,36 @@
         return sanitizer;
     }
 
+    private static string CreateCacheKey(
+        string text, bool inline, bool useChatCodeActions,
+        string collapse, string expand, string copy)
+    {
+        var fingerprint = string.Join("\0", text, inline ? "inline" : "block",
+            useChatCodeActions ? "chat-code" : "plain", collapse, expand, copy);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
+    }
+
     internal static int CacheMissCount => Volatile.Read(ref _cacheMissCount);
+
+    internal static int CacheMissCountForTests(string text)
+    {
+        var key = CreateCacheKey(text, inline: false, useChatCodeActions: false,
+            collapse: string.Empty, expand: string.Empty, copy: string.Empty);
+        return CacheMissCountsByKey.TryGetValue(key, out var count) ? count : 0;
+    }
+
+    internal static void ClearCacheForTests(string text)
+    {
+        var key = CreateCacheKey(text, inline: false, useChatCodeActions: false,
+            collapse: string.Empty, expand: string.Empty, copy: string.Empty);
+        RenderCache.TryRemove(key, out _);
+        CacheMissCountsByKey.TryRemove(key, out _);
+    }
 
     internal static void ClearCacheForTests()
     {
         RenderCache.Clear();
+        CacheMissCountsByKey.Clear();
         while (CacheOrder.TryDequeue(out _)) { }
         Interlocked.Exchange(ref _cacheMissCount, 0);
     }

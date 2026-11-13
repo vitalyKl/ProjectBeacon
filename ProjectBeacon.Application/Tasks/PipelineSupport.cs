@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Domain.Entities.Agents;
 using Application.Common;
+using Application.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
@@ -156,7 +157,7 @@ internal static class PipelineSupport
             : await db.DaemonDevices.IgnoreQueryFilters()
                 .Where(d => runtimeDeviceIds.Contains(d.Id))
                 .ToListAsync(ct);
-        var nativeDevices = devices.Where(d => IsNativeRuntime(d.WorkstationJson)).ToList();
+        var nativeDevices = devices.Where(d => ProjectGitSyncPreflight.IsNativeRuntime(d.WorkstationJson)).ToList();
         var hasNativeWorkstation = nativeDevices.Count > 0;
         var hasOnlineNativeWorkstation = nativeDevices.Any(d => d.IsOnline(DateTime.UtcNow));
 
@@ -387,27 +388,6 @@ internal static class PipelineSupport
         catch (JsonException)
         {
             return null;
-        }
-    }
-
-    private static bool IsNativeRuntime(string? workstationJson)
-    {
-        if (string.IsNullOrWhiteSpace(workstationJson))
-            return true;
-        try
-        {
-            using var document = JsonDocument.Parse(workstationJson);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-                return false;
-            // The workstation UI treats a missing runtime field as native for legacy devices.
-            // Keep server-side preflight and launch selection consistent with that default.
-            return !document.RootElement.TryGetProperty("agentRuntime", out var runtime)
-                || (runtime.ValueKind == JsonValueKind.String
-                    && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase));
-        }
-        catch (JsonException)
-        {
-            return false;
         }
     }
 

@@ -74,13 +74,13 @@ public sealed class MarkdownViewTests : BUnitRenderBase
     [Fact]
     public void MarkdownView_CachesRepeatedTextByContentHash()
     {
-        MarkdownView.ClearCacheForTests();
-        var before = MarkdownView.CacheMissCount;
+        var markdown = $"same **content** {Guid.NewGuid():N}";
+        MarkdownView.ClearCacheForTests(markdown);
 
-        Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, "same **content**"));
-        Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, "same **content**"));
+        Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, markdown));
+        Bunit.RenderComponent<MarkdownView>(ps => ps.Add(p => p.Text, markdown));
 
-        Assert.Equal(before + 1, MarkdownView.CacheMissCount);
+        Assert.Equal(1, MarkdownView.CacheMissCountForTests(markdown));
     }
 
     [Fact]

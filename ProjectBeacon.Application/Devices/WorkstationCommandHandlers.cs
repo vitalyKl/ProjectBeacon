@@ -115,35 +115,62 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         {
             if (command.Request.ProjectId is not { } rootedProjectId)
                 return Result.Failure<WorkstationCommandDto>(CommandSandbox.RuntimeRequired);
-            var resolved = await ProjectRuntimeResolver.ResolveAsync(db, rootedProjectId, device.Id, ct);
-            if (!resolved.Success)
-                return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
-            var runtime = resolved.Value!;
-            var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson, command.Request.Kind);
-            if (!sanitized.Success)
-                return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
-            payloadJson = sanitized.Value;
-            if (command.Request.Kind == WorkstationCommandKind.GitSync)
-            {
-                using var gitSyncPayload = JsonDocument.Parse(payloadJson);
-                if (!gitSyncPayload.RootElement.TryGetProperty("projectId", out var payloadProjectId)
-                    || payloadProjectId.ValueKind != JsonValueKind.String
-                    || !Guid.TryParse(payloadProjectId.GetString(), out var parsedProjectId)
-                    || parsedProjectId != rootedProjectId)
-                    return Result.Failure<WorkstationCommandDto>(
-                        "GitSync payload projectId must match the bound project.", ErrorKind.Validation);
-            }
-            localRoot = runtime.LocalRoot;
-            if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck)
-            {
-                if (string.IsNullOrWhiteSpace(command.Request.TrustedCheckCommand))
-                    return Result.Failure<WorkstationCommandDto>("A trusted review check command is required.", ErrorKind.Conflict);
-                var json = JsonNode.Parse(payloadJson ?? "{}") as JsonObject ?? new JsonObject();
-                json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
-                payloadJson = json.ToJsonString();
-            }
-        }
 
+            var strategy = db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                db.ChangeTracker.Clear();
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+                // Serialize project-runtime command creation with Attach/Detach, GitSync and
+                // pipeline start. Once the immutable LocalRoot is resolved and the Pending row
+                // is committed, runtime mutation sees that row and refuses to switch paths.
+                if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, rootedProjectId, ct))
+                    return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
+
+                var currentDevice = await db.DaemonDevices
+                    .FirstOrDefaultAsync(candidate => candidate.Id == command.Request.DeviceId, ct);
+                if (currentDevice is null || currentDevice.IsRevoked || currentDevice.UserId != command.Request.UserId)
+                    return Result.Failure<WorkstationCommandDto>("Device not found.");
+                if (!currentDevice.IsOnline(_timeProvider.GetUtcNow().UtcDateTime))
+                    return Result.Failure<WorkstationCommandDto>("Device is not connected.", ErrorKind.Conflict);
+
+                var member = await db.ProjectMembers.IgnoreQueryFilters()
+                    .AnyAsync(candidate => candidate.ProjectId == rootedProjectId
+                        && candidate.UserId == command.Request.UserId, ct);
+                if (!member)
+                    return Result.Failure<WorkstationCommandDto>("Project not found.");
+
+                var resolved = await ProjectRuntimeResolver.ResolveAsync(db, rootedProjectId, currentDevice.Id, ct);
+                if (!resolved.Success)
+                    return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+
+                var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson, command.Request.Kind);
+                if (!sanitized.Success)
+                    return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
+                var queuedPayload = sanitized.Value;
+                if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck)
+                {
+                    if (string.IsNullOrWhiteSpace(command.Request.TrustedCheckCommand))
+                        return Result.Failure<WorkstationCommandDto>(
+                            "A trusted review check command is required.", ErrorKind.Conflict);
+                    var json = JsonNode.Parse(queuedPayload ?? "{}") as JsonObject ?? new JsonObject();
+                    json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
+                    queuedPayload = json.ToJsonString();
+                }
+
+                var queued = WorkstationCommand.Create(
+                    currentDevice.Id,
+                    command.Request.Kind,
+                    queuedPayload,
+                    rootedProjectId,
+                    command.Request.UserId);
+                db.WorkstationCommands.Add(queued);
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return Result.Ok(MapCommand(queued, resolved.Value!.LocalRoot));
+            });
+        }
         var queued = WorkstationCommand.Create(
             device.Id,
             command.Request.Kind,

@@ -3,8 +3,10 @@ namespace ProjectBeacon.Application.Tests;
 using System.Text.Json;
 using Application.Common;
 using Application.Devices;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -114,6 +116,202 @@ public sealed partial class DeviceHandlerTests
         var detached = await new DetachRuntimeHandler(Factory()).HandleAsync(
             new DetachRuntimeCommand(new DetachRuntimeRequest(listed.Value![0].Id, user.Id)), TestContext.Current.CancellationToken);
         Assert.True(detached.Success, detached.Error);
+    }
+
+    [Fact]
+    public async Task EnqueueProjectRuntimeCommand_CapturesRootAndBlocksConcurrentRuntimeMutation()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("runtime-command-device", "fp-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+        var deviceId = created.Value!.Id;
+
+        var heartbeat = await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")),
+            TestContext.Current.CancellationToken);
+        Assert.True(heartbeat.Success, heartbeat.Error);
+
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, "/workspace/original")),
+            TestContext.Current.CancellationToken);
+        Assert.True(attached.Success, attached.Error);
+
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId,
+                user.Id,
+                WorkstationCommandKind.ChatEnsureSession,
+                JsonSerializer.Serialize(new { title = "Runtime-bound chat" }),
+                project.Id)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(queued.Success, queued.Error);
+        Assert.Equal("/workspace/original", queued.Value!.LocalRoot);
+
+        var changed = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, "/workspace/replacement")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(changed.Success);
+        Assert.Equal(ErrorKind.Conflict, changed.Kind);
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(item => item.ProjectId == project.Id && item.DeviceId == deviceId,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("/workspace/original", runtime.LocalRoot);
+            var command = await _db.WorkstationCommands.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == queued.Value.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(WorkstationCommandStatus.Pending, command.Status);
+        }
+    }
+
+    [Fact]
+    public async Task AttachRuntime_RejectsRootChangeWhileGitSyncIsPending()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(device.Success, device.Error);
+        var attach = new AttachRuntimeHandler(Factory());
+        var initial = await attach.HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Value!.Id, user.Id, "/workspace/original")),
+            TestContext.Current.CancellationToken);
+        Assert.True(initial.Success, initial.Error);
+
+        var command = WorkstationCommand.Create(
+            device.Value.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+            project.Id,
+            user.Id);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var changed = await attach.HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Value.Id, user.Id, "/workspace/replacement")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(changed.Success);
+        Assert.Equal(ErrorKind.Conflict, changed.Kind);
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(item => item.ProjectId == project.Id && item.DeviceId == device.Value.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("/workspace/original", runtime.LocalRoot);
+        }
+    }
+
+    [Fact]
+    public async Task DetachRuntime_RejectsRemovalWhileGitSyncIsRunning()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(device.Success, device.Error);
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Value!.Id, user.Id, "/workspace/project")),
+            TestContext.Current.CancellationToken);
+        Assert.True(attached.Success, attached.Error);
+
+        var command = WorkstationCommand.Create(
+            device.Value.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+            project.Id,
+            user.Id);
+        command.Claim(TimeSpan.FromMinutes(15), "git-sync-test-instance");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var detached = await new DetachRuntimeHandler(Factory()).HandleAsync(
+            new DetachRuntimeCommand(new DetachRuntimeRequest(attached.Value!.Id, user.Id)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(detached.Success);
+        Assert.Equal(ErrorKind.Conflict, detached.Kind);
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.True(await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .AnyAsync(runtime => runtime.Id == attached.Value.Id, TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public async Task AttachRuntime_RejectsRootChangeWhilePipelineSessionIsReady()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("ready-pipeline-device", "fp-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(device.Success, device.Error);
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Value!.Id, user.Id, "/workspace/original")),
+            TestContext.Current.CancellationToken);
+        Assert.True(attached.Success, attached.Error);
+
+        var task = TaskItem.Create("Ready Planner task", project.Id);
+        var session = PipelineSession.Create(task.Id, project.Id, PipelineRole.Planner, "planner prompt");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Tasks.Add(task);
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var changed = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Value.Id, user.Id, "/workspace/replacement")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(changed.Success);
+        Assert.Equal(ErrorKind.Conflict, changed.Kind);
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(item => item.ProjectId == project.Id && item.DeviceId == device.Value.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("/workspace/original", runtime.LocalRoot);
+        }
+    }
+
+    [Fact]
+    public async Task AttachRuntime_RejectsRootChangeWhileChatSessionIsStreaming()
+    {
+        var (projectId, userId, _, deviceId, sessionId) = await SeedSendableAsync();
+        var factory = HandlerSqlite.Factory(_connection);
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = factory.CreateDbContext();
+            var session = await db.ChatSessions.SingleAsync(item => item.Id == sessionId,
+                TestContext.Current.CancellationToken);
+            session.SetStreaming();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var changed = await new AttachRuntimeHandler(factory).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, @"B:\new-checkout")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(changed.Success);
+        Assert.Equal(ErrorKind.Conflict, changed.Kind);
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(item => item.ProjectId == projectId && item.DeviceId == deviceId,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(@"A:\work", runtime.LocalRoot);
+        }
     }
 
     [Fact]

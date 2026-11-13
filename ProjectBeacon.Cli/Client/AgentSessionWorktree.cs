@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
 using System.Text;
+using ProjectBeacon.Application.Common;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
 /// <summary>
@@ -288,6 +289,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     /// </summary>
     public async Task<(bool Success, string? Error)> ApplyChangesAsync(CancellationToken ct)
     {
+        // Patch-back mutates the real project checkout. Serialize it with snapshot creation,
+        // worktree cleanup, and GitSync so another agent cannot capture a half-applied patch.
+        using var repositoryLock = await GitRepositoryOperationGate.AcquireAsync(_repositoryRoot, ct);
+
         var status = await RunGitAsync(WorkingDirectory, ct, _disabledFilterDrivers, "status", "--porcelain", "--untracked-files=all");
         if (status.ExitCode != 0 || status.TimedOut)
             return (false, "Could not inspect the isolated worktree changes.");
@@ -338,6 +343,36 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             _snapshotCommit = nextSnapshot;
             _preserve = false;
             return (true, null);
+        }
+
+        // The source snapshot intentionally omits ignored local paths. A symlink in the real
+        // checkout may therefore be absent from the worktree, where an agent can create an
+        // ordinary directory at the same relative path. Validate every changed destination
+        // against the real checkout before git apply so patch-back cannot follow that symlink
+        // and write outside the repository.
+        var changedPaths = await RunGitAsync(
+            _repositoryRoot, ct, _disabledFilterDrivers,
+            "diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-textconv",
+            _snapshotCommit, nextSnapshot);
+        if (changedPaths.ExitCode != 0 || changedPaths.TimedOut)
+            return (false, $"Could not validate the agent's changed paths. The worktree was preserved at {_worktreeRoot}.");
+
+        foreach (var relativePath in changedPaths.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (relativePath.Contains('\uFFFD'))
+                return (false, $"The agent changed a path that cannot be safely decoded. The worktree was preserved at {_worktreeRoot}.");
+
+            try
+            {
+                var resolved = WorkspacePath.ResolveInsideRoot(_repositoryRoot, relativePath);
+                if (!resolved.Success)
+                    return (false, $"The agent changed '{relativePath}', which crosses a symbolic link or leaves the project root. The worktree was preserved at {_worktreeRoot}.");
+            }
+            catch (Exception exception) when (exception is ArgumentException or IOException
+                or UnauthorizedAccessException or NotSupportedException)
+            {
+                return (false, $"The agent changed a path that cannot be validated safely. The worktree was preserved at {_worktreeRoot}.");
+            }
         }
 
         var patchPath = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "agent-worktree-patches", Guid.NewGuid().ToString("N") + ".patch");
