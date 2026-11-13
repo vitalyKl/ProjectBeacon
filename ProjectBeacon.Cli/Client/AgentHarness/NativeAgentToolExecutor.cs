@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
 using System.Diagnostics;
+using System.Text.Json;
+using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.ModelSwapping;
@@ -93,6 +95,80 @@ internal sealed class NativeAgentToolExecutor(
                     {
                         toolResult = await ProjectBeacon.Cli.Client.GitSyncService.ReadStatusForAgentAsync(
                             repoAuthorization.ProjectRoot ?? repoAuthorization.WorkingDirectory, ct);
+                    }
+                }
+                else if (string.Equals(call.Name, "repo_sync", StringComparison.Ordinal))
+                {
+                    if (string.Equals(agentMode, "plan", StringComparison.Ordinal)
+                        || controls?.HarnessAuthorization is not
+                            { IsolatedWorkspace: true, PipelineRole: "Actor" or "Planner", RepositoryBaseSynced: not null } repoAuthorization)
+                    {
+                        isError = true;
+                        toolResult = "Tool error: repo_sync is available only to active native pipeline Actor and Planner sessions in ACT mode.";
+                    }
+                    else
+                    {
+                        var payload = JsonSerializer.Serialize(new
+                        {
+                            projectId = repoAuthorization.ProjectId,
+                            mode = GitSyncMode.PullFastForward.ToString()
+                        });
+                        var sync = await new GitSyncService().ExecuteAsync(
+                            repoAuthorization.ProjectRoot ?? repoAuthorization.WorkingDirectory,
+                            repoAuthorization.ProjectId,
+                            payload,
+                            ct,
+                            repoAuthorization.WorkingDirectory,
+                            repoAuthorization.RepositoryBaseSynced);
+                        if (!sync.Ok)
+                        {
+                            isError = true;
+                            toolResult = "Tool error: repository synchronization could not run. " + sync.Error;
+                        }
+                        else
+                        {
+                            GitSyncResultDto? result;
+                            try
+                            {
+                                result = JsonSerializer.Deserialize<GitSyncResultDto>(
+                                    sync.Result ?? string.Empty,
+                                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                            }
+                            catch (JsonException)
+                            {
+                                result = null;
+                            }
+
+                            if (result is null)
+                            {
+                                isError = true;
+                                toolResult = "Tool error: GitSync returned an invalid result. Do not assume the repository or agent snapshot was updated.";
+                            }
+                            else
+                            {
+                                var succeeded = result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded;
+                                isError = !succeeded;
+                                toolResult = JsonSerializer.Serialize(new
+                                {
+                                    success = succeeded,
+                                    outcome = result.Outcome.ToString(),
+                                    reason = result.ReasonCode?.ToString(),
+                                    branch = result.Branch,
+                                    upstream = result.Upstream,
+                                    ahead = result.Ahead,
+                                    behind = result.Behind,
+                                    clean = result.Clean,
+                                    headBefore = result.HeadBefore,
+                                    headAfter = result.HeadAfter,
+                                    detail = result.Stderr,
+                                    message = succeeded
+                                        ? result.Outcome == GitSyncOutcome.FastForwarded
+                                            ? "The real project checkout and this isolated agent snapshot were fast-forwarded to the same upstream commit."
+                                            : "The real project checkout and this isolated agent snapshot already match the configured upstream."
+                                        : "Repository synchronization was refused or failed. No local edits were overwritten. Do not try direct Git commands against the real project checkout."
+                                }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                            }
+                        }
                     }
                 }
                 else if (string.Equals(call.Name, "suggest_command_prefixes", StringComparison.Ordinal))
