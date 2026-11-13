@@ -31,7 +31,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
     public ConcurrencyPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    private sealed class CountingSpawner : ISessionSpawner
+    private sealed class CountingSpawner(Guid modelBackendId) : ISessionSpawner
     {
         private int _calls;
 
@@ -43,7 +43,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             lock (this) _calls++;
-            return Task.FromResult(new SpawnedSession(null, null, null));
+            return Task.FromResult(new SpawnedSession(modelBackendId, "concurrency-model", "concurrency-launch"));
         }
     }
 
@@ -58,10 +58,42 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     public async Task ConcurrentStartPipeline_OnlyOneStarts()
     {
         _postgres.RequirePostgres();
-        var (_, taskId) = await SeedTaskAsync("start race");
-
-        var spawner = new CountingSpawner();
+        var (projectId, taskId) = await SeedTaskAsync("start race");
         var factory = _postgres.CreateFactory();
+
+        // StartPipeline now enforces the same production readiness requirements as the
+        // API: a live native workstation and a configured Planner backend must exist.
+        var user = User.Create("pipeline-race", $"pipeline-race-{Guid.NewGuid():N}@beacon.local", "hash");
+        var device = DaemonDevice.Create(
+            "pipeline-race-workstation",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash-" + Guid.NewGuid().ToString("N"),
+            "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+        device.Heartbeat(
+            """{"capabilities":["git-sync-v1"]}""",
+            """{"agentRuntime":"native"}""");
+        var backend = LocalModelBackend.Create(
+            "pipeline-race-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                seed.Users.Add(user);
+                seed.DaemonDevices.Add(device);
+                seed.LocalModelBackends.Add(backend);
+                seed.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, backend.Id, projectId));
+                seed.ProjectRuntimes.Add(ProjectRuntime.Create(projectId, device.Id, "/workspace/native"));
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var spawner = new CountingSpawner(backend.Id);
         async Task<Result<PipelineSessionDto>> Run()
         {
             using (TenantScope.EnterUnscoped())
