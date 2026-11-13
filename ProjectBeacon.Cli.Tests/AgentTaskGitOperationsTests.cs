@@ -57,6 +57,11 @@ public sealed class AgentTaskGitOperationsTests
             Assert.Contains("outside-project.txt",
                 await GitAsync(worktree.RecoveryPath, "status", "--porcelain", "--untracked-files=all"),
                 StringComparison.Ordinal);
+            var refusedWip = await worktree.CompleteChangesAsync(
+                "ProjectBeacon: WIP task boundary test", CancellationToken.None);
+            Assert.False(refusedWip.Success);
+            Assert.Contains("outside the authorized project directory", refusedWip.Error ?? string.Empty, StringComparison.Ordinal);
+            File.Delete(Path.Combine(worktree.RecoveryPath, "outside-project.txt"));
 
             var traversal = await ExecuteAsync(
                 authorization, PipelineToolPolicy.GitCommit,
