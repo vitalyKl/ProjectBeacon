@@ -61,6 +61,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
     public string WorkingDirectory { get; }
     public string ProjectRoot { get; }
+    public string RepositoryRoot => _repositoryRoot;
     public string RecoveryPath => _worktreeRoot;
     public string BranchName { get; }
     public string? BaseBranch { get; }
@@ -476,7 +477,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         return major > 2 || major == 2 && minor >= 38;
     }
 
-    private static string ResolvePhysicalPath(string path)
+    internal static string ResolvePhysicalPath(string path)
     {
         var fullPath = Path.GetFullPath(path);
         var volumeRoot = Path.GetPathRoot(fullPath)
