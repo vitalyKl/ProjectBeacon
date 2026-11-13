@@ -406,10 +406,26 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return (false, null, readiness.Error ?? "The native agent runtime is not ready.");
 
         var originalProjectRoot = readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot);
-        var createdWorktree = await AgentSessionWorktree.CreateAsync(originalProjectRoot, pipelineSessionId, ct);
-        if (createdWorktree.Workspace is null)
-            return (false, null, createdWorktree.Error ?? "Could not create an isolated agent worktree.");
-        await using var sessionWorktree = createdWorktree.Workspace;
+        var workstationSettings = _loadSettings();
+        IAgentSessionWorktree sessionWorktree;
+        if (WorkstationWorkspaceMode.UsesTaskBranches(workstationSettings.WorkspaceMode))
+        {
+            var createdTaskWorktree = await AgentTaskWorktree.CreateAsync(
+                originalProjectRoot, projectId, taskId, workstationSettings.WorktreeRoot, ct);
+            if (createdTaskWorktree.Worktree is null)
+                return (false, null, createdTaskWorktree.Error ?? "Could not create the persistent task worktree.");
+            sessionWorktree = createdTaskWorktree.Worktree;
+            if (!string.IsNullOrWhiteSpace(createdTaskWorktree.Warning))
+                _state.Log("task branch workspace warning: " + createdTaskWorktree.Warning);
+        }
+        else
+        {
+            var createdSnapshot = await AgentSessionWorktree.CreateAsync(originalProjectRoot, pipelineSessionId, ct);
+            if (createdSnapshot.Workspace is null)
+                return (false, null, createdSnapshot.Error ?? "Could not create an isolated agent worktree.");
+            sessionWorktree = createdSnapshot.Workspace;
+        }
+        await using var worktreeLifetime = sessionWorktree;
 
         using var tokenResponse = await _http.PostAsJsonAsync(
             ApiRoutes.CommandHarnessToken(command.Id),
@@ -442,7 +458,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             CommandsEnabled: commandsEnabled);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         await runtime.SwitchAgentAsync(externalSessionId, agentMode, ct);
-        var workstationSettings = _loadSettings();
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
         var pipelineIdleMinutes = Math.Clamp(workstationSettings.PipelineIdleTimeoutMinutes, 1, Math.Min(30, pipelineMaxMinutes - 1));
         var pipelineIdleTimeout = TimeSpan.FromMinutes(pipelineIdleMinutes);
@@ -450,6 +465,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         string? lastProgressSignature = null;
         string? timeoutReason = null;
         var awaitingUser = false;
+        string? branchCommitSha = null;
 
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
@@ -622,7 +638,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             (bool Success, string? Error) applied;
             try
             {
-                applied = await sessionWorktree.ApplyChangesAsync(applyCt);
+                var commitMessage = subtaskId is { } commitSubtaskId
+                    ? $"ProjectBeacon: complete task {taskId:N} subtask {commitSubtaskId:N}"
+                    : $"ProjectBeacon: complete task {taskId:N} {pipelineRole.ToLowerInvariant()}";
+                var completion = await sessionWorktree.CompleteChangesAsync(commitMessage, applyCt);
+                applied = (completion.Success, completion.Error);
+                branchCommitSha = completion.CommitSha;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -710,6 +731,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 serverReportedDone = true,
                 recoveredAfterTurnError = true,
                 diffRef = reportsDiff ? $"diff/{subtaskId!.Value:N}" : null,
+                commitSha = branchCommitSha,
                 recovered.DiffArtifactError,
                 PromptTokens = recoveredUsage?.PromptTokens ?? 0,
                 CompletionTokens = recoveredUsage?.CompletionTokens ?? 0,
@@ -784,6 +806,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 finish = status.Finish,
                 serverReportedDone,
                 diffRef = subtaskId is not null && reportsDiff ? $"diff/{subtaskId.Value:N}" : null,
+                commitSha = branchCommitSha,
                 diffArtifactError = apply.DiffArtifactError,
                 usage.PromptTokens,
                 usage.CompletionTokens,

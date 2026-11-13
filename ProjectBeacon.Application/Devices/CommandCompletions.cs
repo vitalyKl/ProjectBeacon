@@ -203,6 +203,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             .Select(s => new { s.Role, s.SubtaskId, s.Id, s.TaskId })
             .FirstOrDefaultAsync(ct);
         string? externalSessionId = null;
+        var commitSha = success ? ReadCommitSha(resultJson) : null;
         if (success && !string.IsNullOrWhiteSpace(resultJson))
         {
             try
@@ -237,6 +238,17 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                     .SetProperty(x => x.FailureReason, (string?)null), ct);
             if (closed == 1 && sessionInfo?.Role == PipelineRole.Actor)
             {
+                if (commitSha is not null && sessionInfo.SubtaskId is { } completedSubtaskId)
+                {
+                    await db.Subtasks.IgnoreQueryFilters()
+                        .Where(subtask => subtask.Id == completedSubtaskId
+                            && subtask.TaskId == sessionInfo.TaskId
+                            && subtask.ProjectId == projectId
+                            && subtask.Status == SubtaskStatus.Done)
+                        .ExecuteUpdateAsync(update => update
+                            .SetProperty(subtask => subtask.DiffRef, commitSha), ct);
+                }
+
                 // A clean turn that skipped subtask_report_result must not strand InProgress.
                 await FailActorSubtaskAsync(db, projectId, sessionInfo.TaskId, sessionInfo.SubtaskId,
                     sessionInfo.Id, completedAt, "Actor session ended without reporting a subtask result.", ct);
@@ -261,6 +273,25 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                     .SetProperty(x => x.FailureReason, reason), ct);
             if (failed == 1 && sessionInfo?.Role == PipelineRole.Actor)
                 await FailActorSubtaskAsync(db, projectId, sessionInfo.TaskId, sessionInfo.SubtaskId, sessionInfo.Id, now, reason, ct);
+        }
+    }
+
+    private static string? ReadCommitSha(string? resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            if (!document.RootElement.TryGetProperty("commitSha", out var value)
+                || value.ValueKind != JsonValueKind.String)
+                return null;
+            var sha = value.GetString()?.Trim();
+            return sha is { Length: 40 or 64 } && sha.All(Uri.IsHexDigit) ? sha : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
