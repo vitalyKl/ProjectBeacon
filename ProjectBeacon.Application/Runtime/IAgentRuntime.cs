@@ -36,7 +36,8 @@ public sealed record AgentHarnessAuthorization(
     IReadOnlyList<McpServerConfiguration>? McpServers = null,
     string? ProjectRoot = null,
     bool IsolatedWorkspace = false,
-    bool CommandsEnabled = true);
+    bool CommandsEnabled = true,
+    Action<string>? RepositoryBaseSynced = null);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
