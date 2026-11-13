@@ -234,6 +234,49 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void TaskDetail_ShowsNonBlockingWarningBeforeFirstGitSync()
+    {
+        var task = DbContext.Tasks.First();
+        var project = DbContext.Projects.Single();
+        var user = DbContext.Users.Single();
+        var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        auth.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "false"),
+                new Claim("project_id", project.Id.ToString("D")),
+                new Claim("org_id", project.OrgId.ToString("D"))
+            },
+            "TestAuth");
+
+        var plannerBackend = LocalModelBackend.Create(
+            "task-detail-first-sync-planner",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        DbContext.LocalModelBackends.Add(plannerBackend);
+        DbContext.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, plannerBackend.Id, project.Id));
+
+        var device = DbContext.Set<DaemonDevice>().Single();
+        device.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
+        DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, "/workspace/project"));
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
+            builder => builder.Add(component => component.TaskId, task.Id));
+
+        Assert.Contains("repository-sync-reason", cut.Markup);
+        Assert.Contains("This repository has not been checked yet.", cut.Markup);
+        Assert.Contains("task-repository-sync", cut.Markup);
+        Assert.False(cut.Find("[data-testid='task-pipeline-start']").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void TaskDetail_ShowsNoUpstreamReasonWhenRepositoryIsNotBehind()
     {
         var task = DbContext.Tasks.First();
