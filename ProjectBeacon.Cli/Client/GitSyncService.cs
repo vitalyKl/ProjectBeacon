@@ -322,27 +322,39 @@ internal sealed class GitSyncService
 
             if (upstreamError is null && remote is not null && mergeRef is not null)
             {
-                var upstreamResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                    "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
-                if (upstreamResult.TimedOut)
+                // Do not ask Git to resolve @{upstream}: that resolution follows the
+                // user-controlled remote.<name>.fetch refspec and may point at an arbitrary
+                // local destination. GitSync deliberately owns one deterministic mapping:
+                // refs/heads/<branch> -> refs/remotes/<remote>/<branch>.
+                var mergeBranch = mergeRef["refs/heads/".Length..];
+                var expectedUpstreamRef = string.Equals(remote, ".", StringComparison.Ordinal)
+                    ? mergeRef
+                    : "refs/remotes/" + remote + "/" + mergeBranch;
+
+                if (!string.Equals(remote, ".", StringComparison.Ordinal)
+                    && !RemoteTrackingRefPattern.IsMatch(expectedUpstreamRef))
                 {
-                    upstreamError = "Git upstream inspection timed out.";
+                    upstreamError = "The configured upstream ref is not a supported remote-tracking ref.";
                 }
-                else if (upstreamResult.ExitCode == 0)
+                else
                 {
-                    upstream = upstreamResult.StdOut.Trim();
-                    var upstreamRefResult = await RunGitAsync(root, hooks, filters ?? [], ct,
-                        "rev-parse", "--symbolic-full-name", "@{upstream}");
-                    if (upstreamRefResult.TimedOut)
+                    var upstreamExists = await RunGitAsync(root, hooks, filters ?? [], ct,
+                        "show-ref", "--verify", "--quiet", expectedUpstreamRef);
+                    if (upstreamExists.TimedOut)
                     {
                         upstreamError = "Git upstream inspection timed out.";
                     }
-                    else if (upstreamRefResult.ExitCode == 0)
+                    else if (upstreamExists.ExitCode == 0)
                     {
-                        upstreamRef = upstreamRefResult.StdOut.Trim();
-                        if (!string.Equals(remote, ".", StringComparison.Ordinal)
-                            && !RemoteTrackingRefPattern.IsMatch(upstreamRef))
-                            upstreamError = "The configured upstream ref is not a supported remote-tracking ref.";
+                        upstreamRef = expectedUpstreamRef;
+                        upstream = string.Equals(remote, ".", StringComparison.Ordinal)
+                            ? mergeBranch
+                            : remote + "/" + mergeBranch;
+                    }
+                    else if (upstreamExists.ExitCode != 1)
+                    {
+                        upstreamError = SanitizeStderr(upstreamExists.StdErr)
+                            ?? "Git could not inspect the configured upstream ref.";
                     }
                 }
             }
