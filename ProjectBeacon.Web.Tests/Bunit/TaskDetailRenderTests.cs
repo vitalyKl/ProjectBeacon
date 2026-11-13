@@ -109,8 +109,9 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
             builder => builder.Add(component => component.TaskId, task.Id));
 
-        Assert.Contains("task-repository-sync", cut.Markup);
+        Assert.DoesNotContain("task-repository-sync", cut.Markup);
         Assert.Contains("The Git operation is still running. This page will keep checking its status automatically.", cut.Markup);
+        Assert.True(cut.Find("[data-testid='task-pipeline-start']").HasAttribute("disabled"));
     }
 
     [Fact]
