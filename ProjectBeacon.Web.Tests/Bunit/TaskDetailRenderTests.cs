@@ -45,6 +45,12 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         var device = DbContext.Set<DaemonDevice>().Single();
         device.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
         DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, "/workspace/project"));
+        DbContext.WorkstationCommands.Add(WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            System.Text.Json.JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+            project.Id,
+            member.Id));
         DbContext.SaveChanges();
 
         var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
@@ -64,7 +70,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             builder => builder.Add(component => component.TaskId, task.Id));
 
         Assert.DoesNotContain("task-repository-sync", cut.Markup);
-        Assert.Contains("Only a project Owner or Admin can synchronize this repository.", cut.Markup);
+        Assert.Contains("The Git operation is still running. This page will keep checking its status automatically.", cut.Markup);
     }
 
     [Fact]
