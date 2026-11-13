@@ -30,6 +30,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(result.Value.Preflight.PipelineGitSyncSupported);
         Assert.False(result.Value.Preflight.RepositorySyncBlocked);
         Assert.False(result.Value.Preflight.RepositorySyncInProgress);
+        Assert.Equal(GitSyncRefusalCode.NeverSynced, result.Value.Preflight.LastKnownRepositoryReasonCode);
         Assert.DoesNotContain("Repository", result.Value.StartBlockedReason ?? string.Empty);
     }
 
@@ -448,7 +449,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task GetPipeline_AllowsDirtyButUpToDateWorkingTree()
+    public async Task GetPipeline_ReportsDirtyButUpToDateWorkingTreeAsWarning()
     {
         var (projectId, task) = await SeedTaskAsync("Dirty fast-forward verification");
         var device = await SeedGitSyncRuntimeAsync(projectId);
@@ -473,7 +474,7 @@ public sealed partial class PipelineHandlerTests
 
         Assert.True(result.Success, result.Error);
         Assert.False(result.Value!.Preflight!.RepositorySyncBlocked);
-        Assert.Null(result.Value.Preflight.LastKnownRepositoryReasonCode);
+        Assert.Equal(GitSyncRefusalCode.DirtyWorkingTree, result.Value.Preflight.LastKnownRepositoryReasonCode);
     }
 
     [Fact]
