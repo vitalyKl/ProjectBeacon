@@ -28,7 +28,8 @@ public sealed class AgentTaskWorktreeTests
             Assert.Contains("origin", created.Warning ?? string.Empty, StringComparison.OrdinalIgnoreCase);
             var workspace = created.Worktree!;
             Assert.Equal($"beacon/task/{taskId:N}", workspace.BranchName);
-            Assert.StartsWith(worktrees, workspace.RecoveryPath, StringComparison.Ordinal);
+            Assert.Contains(Path.Combine("worktrees", projectId.ToString("N")),
+                workspace.RecoveryPath, StringComparison.Ordinal);
             Assert.Equal("committed base\n", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "README.md")));
             Assert.Equal(baseSha, await GitAsync(workspace.RecoveryPath, "rev-parse", "HEAD"));
             Assert.Equal("local uncommitted edit\n", await File.ReadAllTextAsync(Path.Combine(repository, "README.md")));
@@ -43,7 +44,7 @@ public sealed class AgentTaskWorktreeTests
 
             var reopened = await AgentTaskWorktree.CreateAsync(
                 repository, projectId, taskId, worktrees, CancellationToken.None);
-            Assert.NotNull(reopened.Worktree);
+            Assert.True(reopened.Worktree is not null, reopened.Error);
             Assert.Null(reopened.Error);
             await using var reopenedWorkspace = reopened.Worktree!;
             Assert.Equal(workspace.RecoveryPath, reopenedWorkspace.RecoveryPath);

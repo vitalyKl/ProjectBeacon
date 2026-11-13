@@ -127,13 +127,13 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
         try
         {
-            var projectRoot = Path.GetFullPath(projectDirectory);
+            var projectRoot = ResolvePhysicalPath(Path.GetFullPath(projectDirectory));
             var rootResult = await AgentSessionWorktree.RunGitAsync(
                 projectRoot, ct, [], "rev-parse", "--show-toplevel");
             if (rootResult.ExitCode != 0 || rootResult.TimedOut || string.IsNullOrWhiteSpace(rootResult.StdOut))
                 return Fail("Task branch workspaces require a Git repository.");
 
-            var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+            var repositoryRoot = ResolvePhysicalPath(Path.GetFullPath(rootResult.StdOut.Trim()));
             var prefixResult = await AgentSessionWorktree.RunGitAsync(
                 projectRoot, ct, [], "rev-parse", "--show-prefix");
             if (prefixResult.ExitCode != 0 || prefixResult.TimedOut)
@@ -225,7 +225,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 : configuredWorktreeRoot.Trim();
             if (!Path.IsPathRooted(worktreeRootSetting))
                 return Fail("WorktreeRoot must be an absolute path.");
-            var worktreeRoot = Path.GetFullPath(worktreeRootSetting);
+            var worktreeRoot = ResolvePhysicalPath(Path.GetFullPath(worktreeRootSetting));
             if (IsWithin(repositoryRoot, worktreeRoot))
                 return Fail("WorktreeRoot must be outside the source repository.");
 
@@ -465,6 +465,46 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
             || !int.TryParse(match.Groups["minor"].Value, out var minor))
             return false;
         return major > 2 || major == 2 && minor >= 38;
+    }
+
+    private static string ResolvePhysicalPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var volumeRoot = Path.GetPathRoot(fullPath)
+            ?? throw new InvalidOperationException("The path has no volume root.");
+        var current = volumeRoot;
+        var segments = fullPath[volumeRoot.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var segment in segments)
+        {
+            current = Path.Combine(current, segment);
+            if (!File.Exists(current) && !Directory.Exists(current))
+                continue;
+
+            try
+            {
+                var attributes = File.GetAttributes(current);
+                if ((attributes & FileAttributes.ReparsePoint) == 0)
+                    continue;
+
+                FileSystemInfo info = (attributes & FileAttributes.Directory) != 0
+                    ? new DirectoryInfo(current)
+                    : new FileInfo(current);
+                var target = info.ResolveLinkTarget(returnFinalTarget: true);
+                if (target is not null)
+                    current = Path.GetFullPath(target.FullName);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                or PlatformNotSupportedException)
+            {
+                throw new InvalidOperationException(
+                    "Could not resolve a symbolic link in the task worktree path.", exception);
+            }
+        }
+
+        return Path.GetFullPath(current);
     }
 
     private static bool IsGitSha(string value) =>
