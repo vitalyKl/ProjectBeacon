@@ -173,7 +173,7 @@ internal static class ProjectGitSyncPreflight
             _ => false
         };
 
-        var reasonCode = newerAttemptFailed
+        GitSyncRefusalCode? reasonCode = newerAttemptFailed
             ? GitSyncRefusalCode.FetchFailed
             : result.ReasonCode
                 ?? (result.Detached ? GitSyncRefusalCode.Detached
