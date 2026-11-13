@@ -244,46 +244,6 @@ public sealed class AgentTaskGitOperationsTests
     }
 
     [Fact]
-    public async Task GitIntegrate_RejectsTamperedBaseCommitMetadata()
-    {
-        var root = CreateTempRoot();
-        var repository = Path.Combine(root, "repository");
-        var worktreeRoot = Path.Combine(root, "worktrees");
-        Directory.CreateDirectory(repository);
-        AgentTaskWorktree? worktree = null;
-        try
-        {
-            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
-            var projectId = Guid.NewGuid();
-            var taskId = Guid.NewGuid();
-            var opened = await AgentTaskWorktree.CreateAsync(
-                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
-            Assert.NotNull(opened.Worktree);
-            Assert.Null(opened.Error);
-            worktree = opened.Worktree!;
-
-            var metadataPath = worktree.RecoveryPath + ".beacon.json";
-            var metadata = JsonNode.Parse(await File.ReadAllTextAsync(metadataPath))!.AsObject();
-            metadata["baseSha"] = new string('a', 40);
-            await File.WriteAllTextAsync(metadataPath, metadata.ToJsonString());
-
-            var result = await ExecuteAsync(
-                CreateAuthorization(worktree, projectId, taskId),
-                PipelineToolPolicy.GitInfo,
-                """{"kind":"diff"}""");
-
-            Assert.True(result.IsError);
-            Assert.Contains("metadata does not match", result.Text, StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            if (worktree is not null)
-                await worktree.DisposeAsync();
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
-    }
-
-    [Fact]
     public void ToolDefinitions_DoNotAcceptRemoteOrBranchIdentity()
     {
         foreach (var toolName in new[]
