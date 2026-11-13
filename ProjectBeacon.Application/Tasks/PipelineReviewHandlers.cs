@@ -221,25 +221,29 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
     {
         var bodyCommand = command.Request.CheckCommand?.Trim();
 
-        string checkCommand;
-        if (command.Actor.IsHuman)
-        {
-            if (string.IsNullOrEmpty(bodyCommand))
-                return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
-            checkCommand = bodyCommand;
-        }
-        else
-        {
-            if (!string.IsNullOrEmpty(bodyCommand))
-                return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; set the project ReviewCheckCommand instead.", ErrorKind.Validation);
-            checkCommand = null!;
-        }
-
         await using var db = _dbFactory.CreateDbContext();
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
+            return Result.Failure<PipelineStateDto>("A pinned project ReviewCheckCommand is required for a review proof.", ErrorKind.Conflict);
+        var checkCommand = project.ReviewCheckCommand.Trim();
+        if (command.Actor.IsHuman)
+        {
+            if (string.IsNullOrWhiteSpace(bodyCommand))
+                return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
+            if (!string.Equals(bodyCommand, checkCommand, StringComparison.Ordinal))
+                return Result.Failure<PipelineStateDto>("The requested check command must exactly match the project's pinned ReviewCheckCommand.", ErrorKind.Conflict);
+        }
+        else if (!string.IsNullOrEmpty(bodyCommand))
+        {
+            return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; the project's pinned ReviewCheckCommand is used instead.", ErrorKind.Validation);
+        }
+
+        var checkCommandHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         var reviewRun = await db.ReviewRuns.AsNoTracking()
             .Where(r => r.TaskId == task.Id && r.Status == ReviewRunStatus.Started && r.TargetRunId != null)
             .OrderByDescending(r => r.StartedAt)
@@ -259,13 +263,16 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         // Claim the run before enqueuing: a second concurrent check loses here and never enqueues.
         var claimed = await db.ReviewRuns
             .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, actorId), ct);
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.ReviewerActorId, actorId)
+                .SetProperty(r => r.CheckCommandHash, checkCommandHash), ct);
         if (claimed == 0)
             return Result.Failure<PipelineStateDto>("A review check is already in flight for this run.", ErrorKind.Conflict);
 
         var payload = new JsonObject
         {
-            ["reviewRunId"] = reviewRun.Id.ToString("D")
+            ["reviewRunId"] = reviewRun.Id.ToString("D"),
+            ["taskId"] = task.Id.ToString("D")
         };
         if (!string.IsNullOrWhiteSpace(command.Request.Path))
             payload["path"] = command.Request.Path;
@@ -282,7 +289,9 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
             // Give the run back: no check command was delivered, so it must stay claimable.
             await db.ReviewRuns
                 .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == actorId)
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, (string?)null), ct);
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.ReviewerActorId, (string?)null)
+                    .SetProperty(r => r.CheckCommandHash, (string?)null), ct);
             return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
         }
 
