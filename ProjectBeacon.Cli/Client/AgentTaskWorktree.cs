@@ -201,11 +201,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                             if (cachedRemoteHead.ExitCode == 0 && IsGitSha(cachedRemoteHead.StdOut.Trim()))
                             {
                                 baseSha = cachedRemoteHead.StdOut.Trim();
-                                warning = "Could not fetch origin; using the last known origin/" + baseBranch + " commit. " + Clip(fetch.StdErr);
+                                warning = "Could not fetch origin; using the last known origin/" + baseBranch + " commit.";
                             }
                             else
                             {
-                                warning = "Could not fetch origin; using the local committed HEAD. " + Clip(fetch.StdErr);
+                                warning = "Could not fetch origin; using the local committed HEAD.";
                             }
                         }
                     }
