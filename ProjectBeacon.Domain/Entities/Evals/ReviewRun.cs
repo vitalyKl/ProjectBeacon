@@ -5,7 +5,7 @@ using ProjectBeacon.Domain.Enums;
 
 /// <summary>
 /// A project-scoped review of a task. Starts as <see cref="ReviewRunStatus.Started"/>.
-/// <see cref="IsCheckProof"/> requires completion, a target run, and an artifact ref.
+/// <see cref="IsCheckProof"/> requires completion, a target run, an artifact ref, the approved command hash, and the checked Git source/tree SHAs.
 /// </summary>
 public sealed class ReviewRun : Entity, IProjectScoped
 {
@@ -81,8 +81,10 @@ public sealed class ReviewRun : Entity, IProjectScoped
     /// <summary>Locks this run to the server-approved command before the workstation check is queued.</summary>
     public void SetCheckCommandHash(string commandHash)
     {
-        if (Status != ReviewRunStatus.Started || !IsSha256(commandHash))
-            throw new InvalidOperationException("A started review run and a valid SHA-256 command hash are required.");
+        if (Status != ReviewRunStatus.Started)
+            throw new InvalidOperationException("Only a started review run can be bound to a check command.");
+        if (!IsSha256(commandHash))
+            throw new ArgumentException("A valid SHA-256 command hash is required.", nameof(commandHash));
         if (CheckCommandHash is not null)
             throw new InvalidOperationException("A review check command has already been assigned to this run.");
         CheckCommandHash = commandHash.ToLowerInvariant();
@@ -115,7 +117,7 @@ public sealed class ReviewRun : Entity, IProjectScoped
     }
 
     /// <summary>
-    /// True when the run is completed, <see cref="TargetRunId"/> is set, and <see cref="ArtifactRef"/> is not white space.
+    /// True only when completion proves the pinned command and exact checked Git source/tree.
     /// </summary>
     public bool IsCheckProof() =>
         Status == ReviewRunStatus.Completed
