@@ -111,7 +111,7 @@ internal static class ProjectGitSyncPreflight
             .ToListAsync(ct);
 
         if (attempts.Count == 0)
-            return new State(true, false, false, null, null, null, null);
+            return new State(true, false, false, null, null, null, GitSyncRefusalCode.NeverSynced);
 
         // A transport/worker failure does not invalidate the last successful Git result.
         // Prefer the newest parseable command result and retain that older result when a
@@ -170,7 +170,8 @@ internal static class ProjectGitSyncPreflight
                 ?? (result.Detached ? GitSyncRefusalCode.Detached
                     : !result.HasUpstream ? GitSyncRefusalCode.NoUpstream
                     : result.Diverged ? GitSyncRefusalCode.Diverged
-                    : (result.Behind > 0 || result.Outcome == GitSyncOutcome.FastForwarded) && !result.Clean
+                    : result.Outcome is GitSyncOutcome.UpToDate or GitSyncOutcome.FastForwarded
+                        && !result.Clean
                         ? GitSyncRefusalCode.DirtyWorkingTree
                     : inconsistentSuccess || result.Outcome is GitSyncOutcome.Failed or GitSyncOutcome.Refused
                         ? GitSyncRefusalCode.FetchFailed
