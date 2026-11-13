@@ -179,7 +179,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
-    public void TaskDetail_ShowsNonBlockingWarningWhenLastGitStatusIsBehind()
+    public void TaskDetail_ShowsBehindAndDirtyWarningsWithoutBlocking()
     {
         var task = DbContext.Tasks.First();
         var project = DbContext.Projects.Single();
@@ -217,7 +217,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
             project.Id,
             user.Id);
         command.Succeed(
-            """{"branch":"feature/task-work","upstream":"origin/feature/task-work","ahead":0,"behind":3,"clean":true,"detached":false,"hasUpstream":true,"diverged":false,"headBefore":"0123456789abcdef0123456789abcdef01234567","headAfter":"0123456789abcdef0123456789abcdef01234567","outcome":"UpToDate","reasonCode":null,"stderr":null}""");
+            """{"branch":"feature/task-work","upstream":"origin/feature/task-work","ahead":0,"behind":3,"clean":false,"detached":false,"hasUpstream":true,"diverged":false,"headBefore":"0123456789abcdef0123456789abcdef01234567","headAfter":"0123456789abcdef0123456789abcdef01234567","outcome":"UpToDate","reasonCode":null,"stderr":null}""");
         DbContext.WorkstationCommands.Add(command);
         DbContext.SaveChanges();
 
@@ -226,6 +226,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         Assert.Contains("repository-behind-warning", cut.Markup);
         Assert.Contains("3 commit(s) behind", cut.Markup);
+        Assert.Contains("Local changes are present.", cut.Markup);
         Assert.Contains("feature/task-work", cut.Markup);
         Assert.Contains("href=\"/project/settings\"", cut.Markup);
         Assert.Contains("task-repository-sync", cut.Markup);
