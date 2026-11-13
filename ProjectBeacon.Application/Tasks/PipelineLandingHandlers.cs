@@ -62,7 +62,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             .OrderByDescending(r => r.CompletedAt)
             .ThenByDescending(r => r.Id)
             .FirstOrDefaultAsync(ct);
-        if (reviewRun is null || reviewRun.CreatedAt < latestVerdict.CreatedAt || !reviewRun.IsCheckProof()
+        if (reviewRun is null || !reviewRun.IsCheckProof()
             || !string.Equals(reviewRun.CheckCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>(
                 "A successful review check for the current pinned command and task branch revision is required.", ErrorKind.Conflict);
