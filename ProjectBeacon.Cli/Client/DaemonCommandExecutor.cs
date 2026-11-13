@@ -455,7 +455,15 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             token.AllowedMcpTools, token.McpServers,
             sessionWorktree.ProjectRoot,
             IsolatedWorkspace: true,
-            CommandsEnabled: commandsEnabled);
+            CommandsEnabled: commandsEnabled,
+            GitWorkspace: sessionWorktree is AgentTaskWorktree branchWorkspace
+                ? new AgentGitWorkspaceAuthorization(
+                    branchWorkspace.RepositoryRoot,
+                    branchWorkspace.RecoveryPath,
+                    branchWorkspace.BranchName,
+                    branchWorkspace.BaseBranch,
+                    branchWorkspace.BaseSha)
+                : null);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         await runtime.SwitchAgentAsync(externalSessionId, agentMode, ct);
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
