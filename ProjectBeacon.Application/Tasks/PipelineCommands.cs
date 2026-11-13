@@ -155,6 +155,33 @@ public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId,
 /// <summary>Records a review check and returns pipeline state.</summary>
 public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
+/// <summary>One server-owned landing attempt and its verified preview or execution state.</summary>
+public record LandingAttemptDto(
+    Guid Id,
+    Guid TaskId,
+    LandingAttemptStatus Status,
+    string SourceBranch,
+    string SourceSha,
+    string? TargetBranch,
+    string? TargetHeadSha,
+    string? CandidateTreeSha,
+    string? MergeCommitSha,
+    string? RevertCommitSha,
+    string? FailureCode,
+    string? ConflictFilesJson,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
+
+/// <summary>Requests a verified preview for the approved task branch.</summary>
+public record RequestLandingRequest(Guid TaskId, string Rationale);
+public record RequestLandingCommand(RequestLandingRequest Request, ActorContext Actor)
+    : ICommand<Result<LandingAttemptDto>>;
+
+/// <summary>Requests a guarded revert of a previously landed attempt.</summary>
+public record RevertLandingRequest(Guid TaskId, Guid LandingAttemptId);
+public record RevertLandingCommand(RevertLandingRequest Request, ActorContext Actor)
+    : ICommand<Result<LandingAttemptDto>>;
+
 /// <summary>Task to approve, with an optional note.</summary>
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null, string? ActorId = null);
 
