@@ -370,7 +370,7 @@ internal static class GitLandExecutor
             if (scope.FileCount > MaxChangedFiles || scope.ChangedLines > MaxChangedLines)
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "CandidateDiffTooLarge");
 
-            var relativeProject = Path.GetRelativePath(repo, workspace.WorkingDirectory);
+            var relativeProject = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory);
             var checkDirectory = relativeProject == "."
                 ? temp
                 : Path.GetFullPath(Path.Combine(temp, relativeProject));
