@@ -171,6 +171,81 @@ public sealed class GitSyncServiceTests
     }
 
     [Fact]
+    public async Task PullFastForward_UpdatesOnlyTheCallingPristineAgentSnapshot_AndPatchBackUsesNewBaseline()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var created = await AgentSessionWorktree.CreateAsync(repo.Root, Guid.NewGuid(), CancellationToken.None);
+        Assert.NotNull(created.Workspace);
+        Assert.Null(created.Error);
+        await using var workspace = created.Workspace!;
+
+        var before = await Git(repo.Root, "rev-parse", "HEAD");
+        var result = await ExecuteAsync(
+            repo, GitSyncMode.PullFastForward, workspace.WorkingDirectory, workspace.AdvanceSnapshotBaseline);
+        var after = await Git(repo.Root, "rev-parse", "HEAD");
+
+        Assert.Equal(GitSyncOutcome.FastForwarded, result.Outcome);
+        Assert.Equal(before, result.HeadBefore);
+        Assert.Equal(after, result.HeadAfter);
+        Assert.NotEqual(before, after);
+        Assert.Equal(after, await Git(workspace.WorkingDirectory, "rev-parse", "HEAD"));
+        Assert.Equal("upstream change", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "remote.txt")));
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.txt"), "agent change");
+        var applied = await workspace.ApplyChangesAsync(CancellationToken.None);
+
+        Assert.True(applied.Success, applied.Error);
+        Assert.Equal("upstream change", await File.ReadAllTextAsync(Path.Combine(repo.Root, "remote.txt")));
+        Assert.Equal("agent change", await File.ReadAllTextAsync(Path.Combine(repo.Root, "agent-change.txt")));
+    }
+
+    [Fact]
+    public async Task PullFastForward_RefusesAgentSnapshotAfterItHasBeenModified()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var created = await AgentSessionWorktree.CreateAsync(repo.Root, Guid.NewGuid(), CancellationToken.None);
+        Assert.NotNull(created.Workspace);
+        Assert.Null(created.Error);
+        await using var workspace = created.Workspace!;
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.txt"), "local work");
+
+        var result = await ExecuteAsync(
+            repo, GitSyncMode.PullFastForward, workspace.WorkingDirectory, workspace.AdvanceSnapshotBaseline);
+
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.DirtyWorkingTree, result.ReasonCode);
+        Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+        Assert.Equal("local work", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-change.txt")));
+    }
+
+    [Fact]
+    public async Task PullFastForward_RefusesAgentSnapshotWhenAnotherSessionIsActive()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+
+        var first = await AgentSessionWorktree.CreateAsync(repo.Root, Guid.NewGuid(), CancellationToken.None);
+        var second = await AgentSessionWorktree.CreateAsync(repo.Root, Guid.NewGuid(), CancellationToken.None);
+        Assert.NotNull(first.Workspace);
+        Assert.NotNull(second.Workspace);
+        Assert.Null(first.Error);
+        Assert.Null(second.Error);
+        await using var firstWorkspace = first.Workspace!;
+        await using var secondWorkspace = second.Workspace!;
+
+        var result = await ExecuteAsync(
+            repo, GitSyncMode.PullFastForward, firstWorkspace.WorkingDirectory, firstWorkspace.AdvanceSnapshotBaseline);
+
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.ActiveSessions, result.ReasonCode);
+        Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+    }
+
+    [Fact]
     public async Task Status_RemainsAvailableWhileAgentSnapshotIsActive()
     {
         await using var repo = await RepositoryFixture.CreateAsync();
@@ -405,10 +480,16 @@ public sealed class GitSyncServiceTests
         Assert.Equal(await Git(repo.Root, "rev-parse", "HEAD"), result.HeadAfter);
     }
 
-    private async Task<GitSyncResultDto> ExecuteAsync(RepositoryFixture repo, GitSyncMode mode)
+    private async Task<GitSyncResultDto> ExecuteAsync(
+        RepositoryFixture repo,
+        GitSyncMode mode,
+        string? activeWorktreeDirectory = null,
+        Action<string>? repositoryBaseSynced = null)
     {
         var payload = JsonSerializer.Serialize(new { projectId = repo.ProjectId, mode = mode.ToString() });
-        var result = await _service.ExecuteAsync(repo.Root, repo.ProjectId, payload, CancellationToken.None);
+        var result = await _service.ExecuteAsync(
+            repo.Root, repo.ProjectId, payload, CancellationToken.None,
+            activeWorktreeDirectory, repositoryBaseSynced);
         Assert.True(result.Ok, result.Error);
         Assert.NotNull(result.Result);
         return JsonSerializer.Deserialize<GitSyncResultDto>(
