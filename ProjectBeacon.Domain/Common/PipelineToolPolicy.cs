@@ -2,6 +2,36 @@ namespace ProjectBeacon.Domain.Common;
 
 public static class PipelineToolPolicy
 {
+    public const string GitInfo = "git_info";
+    public const string GitCommit = "git_commit";
+    public const string GitIntegrate = "git_integrate";
+
+    public static IReadOnlyList<string> PlannerGitTools { get; } = Array.AsReadOnly(new[]
+    {
+        GitInfo, GitIntegrate
+    });
+    public static IReadOnlyList<string> ActorGitTools { get; } = Array.AsReadOnly(new[]
+    {
+        GitInfo, GitCommit, GitIntegrate
+    });
+    public static IReadOnlyList<string> ReviewerGitTools { get; } = Array.AsReadOnly(new[]
+    {
+        GitInfo
+    });
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GitToolsByRole =
+        new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Planner"] = PlannerGitTools,
+                ["Actor"] = ActorGitTools,
+                ["Review"] = ReviewerGitTools
+            });
+
+    public static IReadOnlyList<string> GitToolsForRole(string? role) =>
+        role is not null && GitToolsByRole.TryGetValue(role, out var tools)
+            ? tools
+            : Array.Empty<string>();
     public static IReadOnlyList<string> ReadOnlyWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,
@@ -105,12 +135,12 @@ public static class PipelineToolPolicy
         McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
         McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "repo_status", "suggest_command_prefixes",
-        "run_log", "service_status", "service_logs"
+        GitInfo, "run_log", "service_status", "service_logs"
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.KnowledgePropose,
-        McpToolNames.KnowledgeWithdraw, "run_command", "service_start"
+        McpToolNames.KnowledgeWithdraw, "run_command", "service_start", GitCommit, GitIntegrate
     });
 
     /// <summary>Shared maximum set of role-scoped Beacon MCP tools; local execution tools have separate guards.</summary>

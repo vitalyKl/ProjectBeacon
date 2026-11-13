@@ -36,7 +36,16 @@ public sealed record AgentHarnessAuthorization(
     IReadOnlyList<McpServerConfiguration>? McpServers = null,
     string? ProjectRoot = null,
     bool IsolatedWorkspace = false,
-    bool CommandsEnabled = true);
+    bool CommandsEnabled = true,
+    AgentGitWorkspaceAuthorization? GitWorkspace = null);
+
+/// <summary>Daemon-derived identity for the task branch workspace. Never supplied by an agent.</summary>
+public sealed record AgentGitWorkspaceAuthorization(
+    string RepositoryRoot,
+    string WorktreeRoot,
+    string BranchName,
+    string? BaseBranch,
+    string BaseSha);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
