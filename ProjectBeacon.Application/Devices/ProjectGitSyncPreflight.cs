@@ -75,13 +75,12 @@ internal static class ProjectGitSyncPreflight
         DaemonDevice? device,
         CancellationToken ct)
     {
-        if (device is null
-            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1))
+        if (device is null)
             return new State(false, false, false, null, null, null, null);
 
-        // A queued or running GitSync can mutate this checkout while the pipeline is
-        // snapshotting it. Only commands for the exact pipeline workstation are relevant:
-        // another workstation owns a different local checkout.
+        // An already queued command may still mutate this checkout even if the latest
+        // heartbeat no longer advertises GitSync. Check the active operation before
+        // consulting capability metadata so it cannot slip past the launch barrier.
         var inProgress = await db.WorkstationCommands.AsNoTracking()
             .AnyAsync(command => command.ProjectId == projectId
                 && command.DeviceId == device.Id
@@ -89,7 +88,17 @@ internal static class ProjectGitSyncPreflight
                 && (command.Status == WorkstationCommandStatus.Pending
                     || command.Status == WorkstationCommandStatus.Running), ct);
         if (inProgress)
-            return new State(true, true, true, null, null, null, null);
+            return new State(
+                WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1),
+                true,
+                true,
+                null,
+                null,
+                null,
+                null);
+
+        if (!WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1))
+            return new State(false, false, false, null, null, null, null);
 
         // Cancelled commands are often superseded by a replacement Pull. They must not
         // erase the last usable repository observation.
