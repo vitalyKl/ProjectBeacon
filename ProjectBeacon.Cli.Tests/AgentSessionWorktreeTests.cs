@@ -181,7 +181,7 @@ public sealed class AgentSessionWorktreeTests
             await Git(root, "config", "core.autocrlf", "false");
             await Git(root, "config", "user.name", "ProjectBeacon Tests");
             await Git(root, "config", "user.email", "tests@projectbeacon.local");
-            await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "ignored-link/\n");
+            await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "ignored-link\n");
             await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base\n");
             await Git(root, "add", ".gitignore", "README.md");
             await Git(root, "commit", "-m", "initial");
