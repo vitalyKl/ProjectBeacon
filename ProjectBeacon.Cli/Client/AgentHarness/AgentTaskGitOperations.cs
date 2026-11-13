@@ -199,6 +199,7 @@ internal static class AgentTaskGitOperations
                 || !SamePath(AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(metadata.RepositoryRoot)), repositoryRoot)
                 || !SamePath(AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(metadata.WorktreePath)), worktreeRoot)
                 || !string.Equals(metadata.BranchName, expectedBranch, StringComparison.Ordinal)
+                || !string.Equals(metadata.BaseBranch, workspace.BaseBranch, StringComparison.Ordinal)
                 || !IsGitSha(metadata.BaseSha))
                 return (null, "Task worktree metadata does not match the active command authorization.");
 
@@ -762,8 +763,10 @@ internal static class AgentTaskGitOperations
         args.Add("--");
         if (path is not null)
             args.Add(Pathspec(path));
-        else if (context.ProjectRelativePath.Length > 0)
-            args.Add(Pathspec(context.ProjectRelativePath + "/"));
+        else
+            args.Add(Pathspec(context.ProjectRelativePath.Length > 0
+                ? context.ProjectRelativePath + "/"
+                : "."));
     }
 
     private static string Pathspec(string path) => ":(literal)" + path;
