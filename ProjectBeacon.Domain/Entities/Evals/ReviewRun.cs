@@ -145,8 +145,8 @@ public sealed class ReviewRun : Entity, IProjectScoped
         value is { Length: > 0 and <= 200 }
         && !value.Contains("..", StringComparison.Ordinal)
         && !value.Contains("@{", StringComparison.Ordinal)
-        && !value.StartsWith('/', StringComparison.Ordinal)
-        && !value.EndsWith('/', StringComparison.Ordinal)
+        && !value.StartsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith("/", StringComparison.Ordinal)
         && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
         && value.All(character => !char.IsControl(character)
             && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
