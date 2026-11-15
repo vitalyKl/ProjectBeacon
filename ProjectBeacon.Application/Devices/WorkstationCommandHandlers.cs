@@ -152,7 +152,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 if (!sanitized.Success)
                     return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
                 var queuedPayload = sanitized.Value;
-                if (command.Request.Kind is WorkstationCommandKind.RunReviewCheck or WorkstationCommandKind.GitLand)
+                if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck
+                    || command.Request.Kind == WorkstationCommandKind.GitLand
+                        && !IsGitLandRevert(queuedPayload))
                 {
                     if (string.IsNullOrWhiteSpace(command.Request.TrustedCheckCommand))
                         return Result.Failure<WorkstationCommandDto>(
@@ -183,6 +185,19 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         db.WorkstationCommands.Add(queued);
         await db.SaveChangesAsync(ct);
         return Result.Ok(MapCommand(queued, localRoot));
+    }
+
+    private static bool IsGitLandRevert(string? payloadJson)
+    {
+        try
+        {
+            var json = JsonNode.Parse(payloadJson ?? "{}") as JsonObject;
+            return string.Equals(json?["action"]?.GetValue<string>(), "Revert", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     internal static WorkstationCommandDto MapCommand(WorkstationCommand command, string? localRoot = null) =>
