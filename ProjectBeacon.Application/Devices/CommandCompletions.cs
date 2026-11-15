@@ -780,6 +780,32 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 or LandingAttemptStatus.LandedUnverified
                     ? AuditOutcome.Failed
                     : AuditOutcome.Success;
+            var details = new Dictionary<string, object>
+            {
+                ["previousState"] = previousState.ToString(),
+                ["newState"] = attempt.Status.ToString(),
+                ["resultCode"] = resultCode,
+                ["sourceBranch"] = attempt.SourceBranch,
+                ["targetBranch"] = attempt.TargetBranch,
+                ["sourceSha"] = attempt.SourceSha,
+                ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                ["reviewRunId"] = attempt.ReviewRunId.ToString("D"),
+                ["deviceId"] = attempt.DeviceId.ToString("D")
+            };
+            if (attempt.TargetHeadSha is not null)
+                details["targetHeadSha"] = attempt.TargetHeadSha;
+            if (attempt.CandidateTreeSha is not null)
+                details["candidateTreeSha"] = attempt.CandidateTreeSha;
+            if (attempt.CandidateCheckOutputHash is not null)
+                details["candidateCheckOutputHash"] = attempt.CandidateCheckOutputHash;
+            if (attempt.PostMergeCheckOutputHash is not null)
+                details["postMergeCheckOutputHash"] = attempt.PostMergeCheckOutputHash;
+            if (attempt.MergeCommitSha is not null)
+                details["mergeCommitSha"] = attempt.MergeCommitSha;
+            if (attempt.RevertCommitSha is not null)
+                details["revertCommitSha"] = attempt.RevertCommitSha;
+
             db.AuditEvents.Add(AuditEventFactory.ForActor(
                 actor,
                 action,
@@ -788,12 +814,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 resolvedOrgId,
                 projectId,
                 outcome,
-                JsonSerializer.Serialize(new
-                {
-                    previousState = previousState.ToString(),
-                    newState = attempt.Status.ToString(),
-                    resultCode
-                })));
+                JsonSerializer.Serialize(details)));
         }
     }
 
