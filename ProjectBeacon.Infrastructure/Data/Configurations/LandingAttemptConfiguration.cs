@@ -13,6 +13,7 @@ public sealed class LandingAttemptConfiguration : IEntityTypeConfiguration<Landi
         entity.Property(e => e.Rationale).IsRequired().HasMaxLength(1000);
         entity.Property(e => e.SourceBranch).IsRequired().HasMaxLength(200);
         entity.Property(e => e.SourceSha).IsRequired().HasMaxLength(64);
+        entity.Property(e => e.ReviewTreeSha).IsRequired().HasMaxLength(64);
         entity.Property(e => e.ReviewCommandHash).IsRequired().HasMaxLength(64);
         entity.Property(e => e.TargetBranch).HasMaxLength(200);
         entity.Property(e => e.TargetHeadSha).HasMaxLength(64);
