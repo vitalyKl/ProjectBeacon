@@ -574,8 +574,19 @@ internal sealed class GitLandCompletion : ICommandCompletion
         {
             if (!IsInFlight(attempt.Status))
                 return;
-            attempt.Fail("GitLandCommandFailed");
-            resultCode = "GitLandCommandFailed";
+            if (attempt.Status is LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
+            {
+                // A lost acknowledgement after a compare-and-swap may mean the Git ref
+                // already moved. Keep the state retryable; GitLand's attempt marker makes
+                // the next command reconcile the exact commit instead of merging twice.
+                attempt.MarkCommandCompletionUnknown();
+                resultCode = "CommandCompletionUnknown";
+            }
+            else
+            {
+                attempt.Fail("GitLandCommandFailed");
+                resultCode = "GitLandCommandFailed";
+            }
             action = ActionFor(previousState);
         }
         else
@@ -588,10 +599,12 @@ internal sealed class GitLandCompletion : ICommandCompletion
             }
             catch (JsonException)
             {
-                if (IsInFlight(attempt.Status))
+                if (attempt.Status is LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
+                    attempt.MarkCommandCompletionUnknown();
+                else if (IsInFlight(attempt.Status))
                     attempt.Fail("InvalidGitLandResult");
-                resultCode = "InvalidGitLandResult";
-                action = "pipeline.landing.command_failed";
+                resultCode = attempt.FailureCode ?? "InvalidGitLandResult";
+                action = ActionFor(previousState);
                 goto Audit;
             }
 
@@ -789,6 +802,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 or LandingAttemptStatus.RevertFailed
                 or LandingAttemptStatus.RevertedUnverified
                 or LandingAttemptStatus.LandedUnverified
+                || string.Equals(attempt.FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal)
                     ? AuditOutcome.Failed
                     : AuditOutcome.Success;
             var details = new Dictionary<string, object>
