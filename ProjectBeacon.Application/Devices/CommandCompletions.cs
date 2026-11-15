@@ -625,19 +625,26 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 {
                     var mergeCommit = ReadString(root, "mergeCommitSha");
                     var tree = ReadString(root, "candidateTreeSha");
+                    var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                    var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
                     if (attempt.Status == LandingAttemptStatus.ExecutePending
                         && IsGitSha(mergeCommit) && IsGitSha(tree))
                     {
-                        if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase)
+                            && checkExitCode == 0 && IsSha256(checkOutputHash))
                         {
-                            attempt.RecordLanded(mergeCommit!, tree!);
+                            attempt.RecordLanded(mergeCommit!, tree!, checkExitCode.Value, checkOutputHash!);
                             resultCode = "Landed";
                             action = "pipeline.landing.completed";
                         }
                         else
                         {
-                            attempt.RecordLandedUnverified(mergeCommit!, "LandedTreeMismatch");
-                            resultCode = "LandedTreeMismatch";
+                            attempt.RecordLandedUnverified(
+                                mergeCommit!,
+                                "PostMergeEvidenceInvalid",
+                                checkExitCode,
+                                checkOutputHash);
+                            resultCode = "PostMergeEvidenceInvalid";
                             action = "pipeline.landing.execute_failed";
                         }
                     }
@@ -655,11 +662,15 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 {
                     var mergeCommit = ReadString(root, "mergeCommitSha");
                     var errorCode = ReadString(root, "errorCode");
+                    var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                    var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
                     if (attempt.Status == LandingAttemptStatus.ExecutePending && IsGitSha(mergeCommit))
                     {
                         attempt.RecordLandedUnverified(
                             mergeCommit!,
-                            IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed");
+                            IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed",
+                            checkExitCode,
+                            checkOutputHash);
                         resultCode = IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed";
                     }
                     else
