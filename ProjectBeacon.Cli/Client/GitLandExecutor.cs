@@ -749,6 +749,7 @@ internal static class GitLandExecutor
             }
             var action = root["action"]?.GetValue<string>();
             var sourceSha = root["sourceSha"]?.GetValue<string>();
+            var reviewTreeSha = root["reviewTreeSha"]?.GetValue<string>();
             var hash = root["checkCommandHash"]?.GetValue<string>();
             var checkCommand = root["checkCommand"]?.GetValue<string>();
             if (action is not ("Preview" or "Execute" or "Revert")
