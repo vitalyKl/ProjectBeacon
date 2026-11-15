@@ -311,7 +311,8 @@ internal static class GitLandExecutor
         if (!targetAlreadyContainsMerge)
         {
             if (branchExists
-                && !string.Equals(branchHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(branchHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                && await IsAncestorAsync(repo, filters, branchHead.StdOut.Trim(), request.TargetHeadSha!, ct) != true)
                 return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
 
             if (checkout.Checkout!.CheckedOut)
@@ -332,8 +333,9 @@ internal static class GitLandExecutor
             }
             else
             {
+                var branchStartSha = branchExists ? branchHead.StdOut.Trim() : request.TargetHeadSha!;
                 var advanced = await FastForwardTemporaryTargetWorktreeAsync(
-                    repo, request.TargetBranch, request.TargetHeadSha!, mergeCommitSha,
+                    repo, request.TargetBranch, branchStartSha, mergeCommitSha,
                     request.LandingAttemptId, filters, CancellationToken.None);
                 if (!advanced)
                     return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
