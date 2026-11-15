@@ -311,6 +311,13 @@ public static class WorkstationEval
             return Result.Failure<string>(opened.Error ?? "The persistent task branch workspace is unavailable.");
 
         await using var taskWorkspace = opened.Worktree;
+        var checkedBaseBranch = taskWorkspace.BaseBranch;
+        if (string.IsNullOrWhiteSpace(checkedBaseBranch))
+            return Result.Failure<string>("The task branch workspace has no daemon-selected base branch.");
+        var branchCheck = await AgentSessionWorktree.RunGitAsync(
+            taskWorkspace.RepositoryRoot, ct, [], "check-ref-format", "--branch", checkedBaseBranch);
+        if (branchCheck.ExitCode != 0 || branchCheck.TimedOut)
+            return Result.Failure<string>("The task branch workspace base branch is invalid.");
         var checkpoint = await taskWorkspace.CommitChangesAsync(
             $"ProjectBeacon: task {taskId.Value:N} review checkpoint", ct);
         if (!checkpoint.Success || string.IsNullOrWhiteSpace(checkpoint.CommitSha))
@@ -387,6 +394,7 @@ public static class WorkstationEval
                 checkOutput = output,
                 checkedSourceSha = sourceSha,
                 checkedTreeSha,
+                checkedBaseBranch,
                 checkCommandHash = actualCommandHash
             }));
         }
