@@ -29,6 +29,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public string? FailureCode { get; private set; }
     public string? MergeCommitSha { get; private set; }
     public string? RevertCommitSha { get; private set; }
+    public int? PostMergeCheckExitCode { get; private set; }
+    public string? PostMergeCheckOutputHash { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public DateTime? PreviewedAt { get; private set; }
@@ -115,28 +117,44 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
-    public void RecordLanded(string mergeCommitSha, string candidateTreeSha)
+    public void RecordLanded(
+        string mergeCommitSha,
+        string candidateTreeSha,
+        int postMergeCheckExitCode,
+        string postMergeCheckOutputHash)
     {
         EnsureStatus(LandingAttemptStatus.ExecutePending);
         if (!IsGitSha(mergeCommitSha) || !IsGitSha(candidateTreeSha)
             || !string.Equals(CandidateTreeSha, candidateTreeSha, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The executed merge does not match the previewed candidate tree.");
+        if (postMergeCheckExitCode != 0 || !IsSha256(postMergeCheckOutputHash))
+            throw new InvalidOperationException("A successful post-merge check with a SHA-256 output hash is required.");
         MergeCommitSha = mergeCommitSha.ToLowerInvariant();
+        PostMergeCheckExitCode = postMergeCheckExitCode;
+        PostMergeCheckOutputHash = postMergeCheckOutputHash.ToLowerInvariant();
         Status = LandingAttemptStatus.Landed;
         ExecutedAt = DateTime.UtcNow;
         Touch();
     }
 
     /// <summary>Records a merge that reached the target branch but failed post-merge verification.</summary>
-    public void RecordLandedUnverified(string mergeCommitSha, string failureCode)
+    public void RecordLandedUnverified(
+        string mergeCommitSha,
+        string failureCode,
+        int? postMergeCheckExitCode = null,
+        string? postMergeCheckOutputHash = null)
     {
         EnsureStatus(LandingAttemptStatus.ExecutePending);
         if (!IsGitSha(mergeCommitSha))
             throw new ArgumentException("Merge commit SHA is invalid.", nameof(mergeCommitSha));
+        if (postMergeCheckOutputHash is not null && !IsSha256(postMergeCheckOutputHash))
+            throw new ArgumentException("Post-merge check output hash is invalid.", nameof(postMergeCheckOutputHash));
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         if (failureCode.Length > 80 || failureCode.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')))
             throw new ArgumentException("Failure code must be a short machine-readable code.", nameof(failureCode));
         MergeCommitSha = mergeCommitSha.ToLowerInvariant();
+        PostMergeCheckExitCode = postMergeCheckExitCode;
+        PostMergeCheckOutputHash = postMergeCheckOutputHash?.ToLowerInvariant();
         FailureCode = failureCode;
         Status = LandingAttemptStatus.LandedUnverified;
         ExecutedAt = DateTime.UtcNow;
