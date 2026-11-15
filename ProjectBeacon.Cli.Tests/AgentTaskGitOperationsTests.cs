@@ -8,7 +8,7 @@ using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
-public sealed class AgentTaskGitOperationsTests
+public sealed partial class AgentTaskGitOperationsTests
 {
     [Fact]
     public async Task GitCommit_IsScopedToTheProjectDirectoryAndRejectsTraversal()
