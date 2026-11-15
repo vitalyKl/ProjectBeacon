@@ -66,6 +66,9 @@ public static class CommandSandbox
                 || obj["sourceSha"] is not JsonValue sourceValue
                 || !sourceValue.TryGetValue<string>(out var sourceSha)
                 || !IsGitSha(sourceSha)
+                || obj["reviewTreeSha"] is not JsonValue reviewTreeValue
+                || !reviewTreeValue.TryGetValue<string>(out var reviewTreeSha)
+                || !IsGitSha(reviewTreeSha)
                 || obj["checkCommandHash"] is not JsonValue hashValue
                 || !hashValue.TryGetValue<string>(out var checkHash)
                 || !IsSha256(checkHash))
@@ -82,7 +85,7 @@ public static class CommandSandbox
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
                 "projectId", "taskId", "landingAttemptId", "action", "sourceSha",
-                "checkCommandHash", "targetHeadSha", "targetTreeSha", "mergeCommitSha"
+                "reviewTreeSha", "checkCommandHash", "targetHeadSha", "targetTreeSha", "mergeCommitSha"
             };
             if (obj.Any(pair => !allowed.Contains(pair.Key)))
                 return Result.Failure<string>("GitLand payload contains unsupported properties.");
