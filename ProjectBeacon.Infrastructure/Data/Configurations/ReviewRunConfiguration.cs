@@ -20,6 +20,7 @@ public class ReviewRunConfiguration : IEntityTypeConfiguration<ReviewRun>
         entity.Property(e => e.CheckCommandHash).HasMaxLength(64);
         entity.Property(e => e.CheckedSourceSha).HasMaxLength(64);
         entity.Property(e => e.CheckedTreeSha).HasMaxLength(64);
+        entity.Property(e => e.CheckedDeviceId);
         entity.Property(e => e.StartedAt).IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.TaskId });
