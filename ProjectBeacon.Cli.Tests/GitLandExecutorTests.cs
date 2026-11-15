@@ -77,6 +77,18 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Equal("reviewed task change\n",
                 await File.ReadAllTextAsync(Path.Combine(projectRoot, "task-change.txt")));
 
+            // A duplicate Execute after a lost completion must reconcile the durable marker
+            // and return the same merge commit, never construct a second merge.
+            var executeRetry = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha, commandHash, checkCommand, targetHead, candidateTree),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(executeRetry.Ok, executeRetry.Error ?? executeRetry.Result);
+            using var retriedLanding = JsonDocument.Parse(executeRetry.Result!);
+            Assert.Equal("landed", retriedLanding.RootElement.GetProperty("status").GetString());
+            Assert.Equal(mergeCommit, retriedLanding.RootElement.GetProperty("mergeCommitSha").GetString());
+            Assert.Equal(mergeCommit, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+
             var revert = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
                 Payload(projectId, taskId, attemptId, "Revert", sourceSha, reviewTreeSha, commandHash, null, mergeCommitSha: mergeCommit),
@@ -84,8 +96,20 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(revert.Ok, revert.Error ?? revert.Result);
             using var revertedJson = JsonDocument.Parse(revert.Result!);
             Assert.Equal("reverted", revertedJson.RootElement.GetProperty("status").GetString());
+            var revertCommit = revertedJson.RootElement.GetProperty("revertCommitSha").GetString();
             Assert.NotEqual(mergeCommit, await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.False(File.Exists(Path.Combine(projectRoot, "task-change.txt")));
+
+            // A duplicate Revert after a lost completion must reconcile the same revert marker.
+            var revertRetry = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Revert", sourceSha, reviewTreeSha, commandHash, null, mergeCommitSha: mergeCommit),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(revertRetry.Ok, revertRetry.Error ?? revertRetry.Result);
+            using var retriedRevert = JsonDocument.Parse(revertRetry.Result!);
+            Assert.Equal("reverted", retriedRevert.RootElement.GetProperty("status").GetString());
+            Assert.Equal(revertCommit, retriedRevert.RootElement.GetProperty("revertCommitSha").GetString());
+            Assert.Equal(revertCommit, await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.Equal(string.Empty, await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
         }
         finally
@@ -269,8 +293,10 @@ public sealed partial class AgentTaskGitOperationsTests
                 projectRoot, projectId,
                 Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha, commandHash, checkCommand, targetHead, candidateTree),
                 settings, TestContext.Current.CancellationToken);
-            Assert.False(execute.Ok);
-            Assert.Contains("changed after preview", execute.Error ?? execute.Result ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.True(execute.Ok, execute.Error ?? execute.Result);
+            using var failedJson = JsonDocument.Parse(execute.Result!);
+            Assert.Equal("failed", failedJson.RootElement.GetProperty("status").GetString());
+            Assert.Equal("TargetChangedAfterPreview", failedJson.RootElement.GetProperty("errorCode").GetString());
             Assert.Equal(advancedTarget, await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.Equal(string.Empty,
                 await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
