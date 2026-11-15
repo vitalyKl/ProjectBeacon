@@ -81,7 +81,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
         var attempt = LandingAttempt.Start(
             task.ProjectId, task.Id, reviewRun.Id, userId,
-            reviewRun.CheckedSourceSha!, expectedCommandHash, rationale);
+            reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         db.LandingAttempts.Add(attempt);
         try
         {
@@ -109,6 +109,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Preview",
             ["sourceSha"] = attempt.SourceSha,
+            ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
@@ -178,7 +179,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
     internal static LandingAttemptDto ToDto(LandingAttempt attempt) => new(
         attempt.Id, attempt.TaskId, attempt.Status, attempt.SourceBranch, attempt.SourceSha,
-        attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
+        attempt.ReviewTreeSha, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
         attempt.MergeCommitSha, attempt.RevertCommitSha, attempt.FailureCode,
         attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
         attempt.CreatedAt, attempt.UpdatedAt);
@@ -271,6 +272,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Execute",
             ["sourceSha"] = attempt.SourceSha,
+            ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
             ["targetHeadSha"] = attempt.TargetHeadSha,
             ["targetTreeSha"] = attempt.CandidateTreeSha
@@ -350,6 +352,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Revert",
             ["sourceSha"] = attempt.SourceSha,
+            ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
             ["mergeCommitSha"] = attempt.MergeCommitSha
         };
