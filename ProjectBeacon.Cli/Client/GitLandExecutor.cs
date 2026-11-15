@@ -495,7 +495,7 @@ internal static class GitLandExecutor
         if (!Succeeded(branchCheck))
             return new CandidateResult("failed", ErrorCode: "InvalidTargetBranch");
 
-        var target = await ResolveTargetHeadAsync(workspace, request.LandingAttemptId, filters, ct);
+        var target = await ResolveTargetHeadAsync(workspace, request.TargetBranch, request.LandingAttemptId, filters, ct);
         if (target.Error is not null)
             return new CandidateResult("failed", ErrorCode: target.ErrorCode ?? "TargetUnavailable");
 
@@ -587,10 +587,9 @@ internal static class GitLandExecutor
     }
 
     private static async Task<(string? Sha, string? Error, string? ErrorCode)> ResolveTargetHeadAsync(
-        AgentTaskWorktree workspace, Guid attemptId, string[] filters, CancellationToken ct)
+        AgentTaskWorktree workspace, string targetBranch, Guid attemptId, string[] filters, CancellationToken ct)
     {
         var repo = workspace.RepositoryRoot;
-        var targetBranch = workspace.BaseBranch!;
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
             return (null, checkout.Error, "TargetCheckoutUnavailable");
