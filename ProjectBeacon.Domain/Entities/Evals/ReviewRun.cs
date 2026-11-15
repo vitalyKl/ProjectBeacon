@@ -24,6 +24,7 @@ public sealed class ReviewRun : Entity, IProjectScoped
     public string? CheckedSourceSha { get; private set; }
     public string? CheckedTreeSha { get; private set; }
     public Guid? CheckedDeviceId { get; private set; }
+    public string? CheckedBaseBranch { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -92,17 +93,19 @@ public sealed class ReviewRun : Entity, IProjectScoped
     }
 
     /// <summary>Completes a review proof tied to the exact task branch commit and Git tree that were checked.</summary>
-    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha, Guid checkedDeviceId)
+    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha, Guid checkedDeviceId, string checkedBaseBranch)
     {
         if (string.IsNullOrWhiteSpace(CheckCommandHash)
             || !IsGitSha(checkedSourceSha)
             || !IsGitSha(checkedTreeSha)
-            || checkedDeviceId == Guid.Empty)
-            throw new InvalidOperationException("The approved command hash, checked Git source/tree SHAs, and workstation device are required.");
+            || checkedDeviceId == Guid.Empty
+            || !IsSafeBranchName(checkedBaseBranch))
+            throw new InvalidOperationException("The approved command hash, checked Git source/tree SHAs, workstation device, and target branch are required.");
         Complete(findings, artifactRef);
         CheckedSourceSha = checkedSourceSha.ToLowerInvariant();
         CheckedTreeSha = checkedTreeSha.ToLowerInvariant();
         CheckedDeviceId = checkedDeviceId;
+        CheckedBaseBranch = checkedBaseBranch;
     }
 
     /// <summary>
@@ -129,13 +132,24 @@ public sealed class ReviewRun : Entity, IProjectScoped
         && IsSha256(CheckCommandHash)
         && IsGitSha(CheckedSourceSha)
         && IsGitSha(CheckedTreeSha)
-        && CheckedDeviceId is not null && CheckedDeviceId != Guid.Empty;
+        && CheckedDeviceId is not null && CheckedDeviceId != Guid.Empty
+        && IsSafeBranchName(CheckedBaseBranch);
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 
     private static bool IsSha256(string? value) =>
         value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSafeBranchName(string? value) =>
+        value is { Length: > 0 and <= 200 }
+        && !value.Contains("..", StringComparison.Ordinal)
+        && !value.Contains("@{", StringComparison.Ordinal)
+        && !value.StartsWith('/', StringComparison.Ordinal)
+        && !value.EndsWith('/', StringComparison.Ordinal)
+        && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
+        && value.All(character => !char.IsControl(character)
+            && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
 
     /// <summary>
     /// Starts an agent review and completes it immediately, using <paramref name="transcriptRef"/> as the artifact.
