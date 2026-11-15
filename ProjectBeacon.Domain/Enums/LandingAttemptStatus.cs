@@ -12,5 +12,6 @@ public enum LandingAttemptStatus
     LandedUnverified,
     RevertPending,
     Reverted,
+    RevertedUnverified,
     RevertFailed
 }
