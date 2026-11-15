@@ -168,39 +168,38 @@ internal static class GitLandExecutor
         if (!IsGitSha(request.TargetHeadSha) || !IsGitSha(request.TargetTreeSha))
             return (false, null, "GitLand Execute requires the reviewed target HEAD and candidate tree.");
 
+        var resumed = await TryResumeLandingAsync(workspace, request, filters, ct);
+        if (resumed is { } recovered)
+            return recovered;
+
         var candidate = await BuildCandidateAsync(workspace, request, filters, ct);
         if (candidate.Status != "previewed")
-            return (false, JsonSerializer.Serialize(new
-            {
-                status = candidate.Status,
-                conflicts = candidate.Conflicts,
-                errorCode = candidate.ErrorCode
-            }), "The merge candidate no longer passes preview.");
+            return BusinessFailure(candidate.ErrorCode ?? "CandidateNoLongerValid");
         if (!string.Equals(candidate.TargetHeadSha, request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "Target branch HEAD changed after preview; a new landing preview is required.");
+            return BusinessFailure("TargetChangedAfterPreview");
         if (!string.Equals(candidate.CandidateTreeSha, request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The candidate tree changed after preview; a new landing preview is required.");
+            return BusinessFailure("CandidateTreeChangedAfterPreview");
 
         var repo = workspace.RepositoryRoot;
         var targetBranch = request.TargetBranch;
         var branchCheck = await Git(repo, filters, ct, "check-ref-format", "--branch", targetBranch);
         if (!Succeeded(branchCheck))
-            return (false, null, "The daemon-selected target branch is not a valid branch name.");
+            return BusinessFailure("InvalidTargetBranch");
 
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
-            return (false, null, checkout.Error);
+            return BusinessFailure("TargetCheckoutUnavailable");
         if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
-            return (false, null, "The target branch is checked out in a different worktree; GitLand will not mutate an unrelated checkout.");
+            return BusinessFailure("TargetCheckedOutElsewhere");
 
         var branchRef = $"refs/heads/{targetBranch}";
         var localHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
         var branchExists = Succeeded(localHead);
         if (branchExists
             && !string.Equals(localHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The target branch moved after preview; a new landing preview is required.");
+            return BusinessFailure("TargetChangedAfterPreview");
         if (!branchExists && localHead.ExitCode != 128)
-            return (false, null, "Could not safely inspect the local target branch before landing.");
+            return BusinessFailure("TargetHeadUnavailable");
 
         if (checkout.Checkout.CheckedOut)
         {
@@ -212,12 +211,10 @@ internal static class GitLandExecutor
                 || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal)
                 || !Succeeded(currentHead)
                 || !string.Equals(currentHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The target checkout is no longer clean and at the previewed HEAD; landing was not executed.");
+                return BusinessFailure("TargetCheckoutChangedAfterPreview");
         }
 
-        // Create the exact two-parent commit from the reviewed candidate tree, then move the
-        // target ref with compare-and-swap. This avoids a plain 'git merge' silently merging
-        // onto a branch that moved between preview validation and execution.
+        // Build the exact two-parent commit from the reviewed candidate tree.
         var commit = await Git(repo, filters, ct,
             "-c", "user.name=ProjectBeacon",
             "-c", "user.email=projectbeacon@localhost",
@@ -227,7 +224,7 @@ internal static class GitLandExecutor
             "-p", request.SourceSha,
             "-m", $"ProjectBeacon: land task {request.TaskId:N}");
         if (!Succeeded(commit) || !IsGitSha(commit.StdOut.Trim()))
-            return (false, null, "Could not create the verified landing merge commit.");
+            return BusinessFailure("LandingCommitCreationFailed");
         var mergeCommitSha = commit.StdOut.Trim();
 
         var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
@@ -235,60 +232,130 @@ internal static class GitLandExecutor
         if (!Succeeded(parents) || parentFields.Length != 3
             || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The generated landing commit does not have the exact previewed parents.");
+            return BusinessFailure("LandingCommitParentsInvalid");
 
         var mergeTree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
         if (!Succeeded(mergeTree)
             || !string.Equals(mergeTree.StdOut.Trim(), candidate.CandidateTreeSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The generated landing commit does not contain the previewed candidate tree.");
+            return BusinessFailure("LandingCommitTreeInvalid");
 
-        var update = branchExists
-            ? await Git(repo, filters, ct, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
-            : await Git(repo, filters, ct, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha.Length));
-        if (!Succeeded(update))
-            return (false, null, "The target branch changed before the atomic landing update; the branch was not moved.");
-
-        if (checkout.Checkout.CheckedOut)
+        // Persist the exact intended result before moving the target ref. If the daemon exits
+        // after this point, a retry can validate this marker and finish the same CAS operation.
+        var markerRef = LandingMarkerRef(request.LandingAttemptId, "merge");
+        var markerCreate = await Git(repo, filters, CancellationToken.None,
+            "update-ref", markerRef, mergeCommitSha, new string('0', mergeCommitSha.Length));
+        if (!Succeeded(markerCreate))
         {
-            // The ref is now committed. Update the already-clean checkout without a hard reset;
-            // read-tree refuses to overwrite worktree changes that appeared after the clean check.
-            var readTree = await Git(repo, filters, ct, "read-tree", "-u", "-m", request.TargetHeadSha!, mergeCommitSha);
-            var observedHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
-            var observedStatus = await Git(repo, filters, ct, "status", "--porcelain", "--untracked-files=all");
-            if (!Succeeded(readTree) || !Succeeded(observedHead)
-                || !string.Equals(observedHead.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase)
-                || !Succeeded(observedStatus) || !string.IsNullOrWhiteSpace(observedStatus.StdOut))
+            var recovered = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
+            return recovered ?? BusinessFailure("LandingMarkerCouldNotBePersisted");
+        }
+
+        // From the marker write onward, ignore caller cancellation: the target mutation must
+        // either be reconciled and acknowledged or leave a durable attempt marker for retry.
+        var update = branchExists
+            ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
+            : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha.Length));
+        if (!Succeeded(update))
+        {
+            var recovered = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
+            return recovered ?? BusinessFailure("TargetChangedBeforeLandingUpdate");
+        }
+
+        return await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None)
+            ?? BusinessFailure("LandingMarkerCouldNotBeReconciled");
+    }
+
+    private static async Task<(bool Ok, string? Result, string? Error)?> TryResumeLandingAsync(
+        AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
+    {
+        var repo = workspace.RepositoryRoot;
+        var markerRef = LandingMarkerRef(request.LandingAttemptId, "merge");
+        var marker = await Git(repo, filters, ct, "rev-parse", "--verify", markerRef);
+        if (marker.ExitCode == 128 && !marker.TimedOut)
+            return null;
+        if (!Succeeded(marker) || !IsGitSha(marker.StdOut.Trim()))
+            return BusinessFailure("LandingMarkerInvalid");
+
+        var mergeCommitSha = marker.StdOut.Trim();
+        var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
+        var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
+        if (!Succeeded(parents) || parentFields.Length != 3
+            || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !Succeeded(tree)
+            || !string.Equals(tree.StdOut.Trim(), request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
+            return BusinessFailure("LandingMarkerDoesNotMatchPreview");
+
+        var branchRef = $"refs/heads/{request.TargetBranch}";
+        var branchHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
+        var branchExists = Succeeded(branchHead);
+        if (!branchExists && branchHead.ExitCode != 128)
+            return BusinessFailure("TargetHeadUnavailable");
+
+        var checkout = await FindTargetCheckoutAsync(repo, request.TargetBranch, filters, ct);
+        if (checkout.Error is not null)
+            return BusinessFailure("TargetCheckoutUnavailable");
+
+        var targetAlreadyContainsMerge = branchExists
+            && await IsAncestorAsync(repo, filters, mergeCommitSha, branchHead.StdOut.Trim(), ct) == true;
+        if (!targetAlreadyContainsMerge)
+        {
+            if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
+                return BusinessFailure("TargetCheckedOutElsewhere");
+            if (branchExists
+                && !string.Equals(branchHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
+                return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
+
+            var update = branchExists
+                ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
+                : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha!.Length));
+            if (!Succeeded(update))
             {
+                var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
+                if (!Succeeded(current)
+                    || await IsAncestorAsync(repo, filters, mergeCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                    return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
+            }
+        }
+
+        var finalHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
+        if (!Succeeded(finalHead)
+            || await IsAncestorAsync(repo, filters, mergeCommitSha, finalHead.StdOut.Trim(), ct) != true)
+            return BusinessFailure("LandingCommitNotOnTargetBranch");
+
+        if (checkout.Checkout!.CheckedOut && SamePath(checkout.Checkout.Path, repo)
+            && string.Equals(finalHead.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase))
+        {
+            var refreshed = await RefreshTargetCheckoutAsync(
+                repo, request.TargetHeadSha!, mergeCommitSha, filters, CancellationToken.None);
+            if (!refreshed)
                 return (true, JsonSerializer.Serialize(new
                 {
                     status = "landed_unverified",
-                    targetBranch,
+                    targetBranch = request.TargetBranch,
+                    sourceSha = request.SourceSha,
+                    targetHeadSha = request.TargetHeadSha,
+                    candidateTreeSha = request.TargetTreeSha,
                     mergeCommitSha,
-                    candidateTreeSha = candidate.CandidateTreeSha,
                     postMergeCheckExitCode = (int?)null,
                     postMergeCheckOutputHash = (string?)null,
                     errorCode = "TargetWorktreeUpdateFailed"
                 }), null);
-            }
         }
 
         var postMergeCheck = await RunPostMergeCheckAsync(
-            workspace,
-            request,
-            mergeCommitSha,
-            candidate.CandidateTreeSha!,
-            filters,
-            ct);
+            workspace, request, mergeCommitSha, request.TargetTreeSha!, filters, CancellationToken.None);
         if (postMergeCheck.ExitCode != 0 || postMergeCheck.ErrorCode is not null
             || !IsSha256(postMergeCheck.OutputHash))
         {
             return (true, JsonSerializer.Serialize(new
             {
                 status = "landed_unverified",
-                targetBranch,
+                targetBranch = request.TargetBranch,
                 sourceSha = request.SourceSha,
                 targetHeadSha = request.TargetHeadSha,
-                candidateTreeSha = candidate.CandidateTreeSha,
+                candidateTreeSha = request.TargetTreeSha,
                 mergeCommitSha,
                 postMergeCheckExitCode = postMergeCheck.ExitCode,
                 postMergeCheckOutputHash = postMergeCheck.OutputHash,
@@ -300,16 +367,153 @@ internal static class GitLandExecutor
         return (true, JsonSerializer.Serialize(new
         {
             status = "landed",
-            targetBranch,
+            targetBranch = request.TargetBranch,
             sourceSha = request.SourceSha,
             targetHeadSha = request.TargetHeadSha,
-            candidateTreeSha = candidate.CandidateTreeSha,
+            candidateTreeSha = request.TargetTreeSha,
             mergeCommitSha,
             postMergeCheckExitCode = postMergeCheck.ExitCode,
             postMergeCheckOutputHash = postMergeCheck.OutputHash,
             postMergeCheckOutput = postMergeCheck.Output
         }), null);
     }
+
+    private static async Task<(bool Ok, string? Result, string? Error)?> TryResumeRevertAsync(
+        AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
+    {
+        var repo = workspace.RepositoryRoot;
+        var markerRef = LandingMarkerRef(request.LandingAttemptId, "revert");
+        var marker = await Git(repo, filters, ct, "rev-parse", "--verify", markerRef);
+        if (marker.ExitCode == 128 && !marker.TimedOut)
+            return null;
+        if (!Succeeded(marker) || !IsGitSha(marker.StdOut.Trim()))
+            return BusinessFailure("RevertMarkerInvalid");
+
+        var revertCommitSha = marker.StdOut.Trim();
+        var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", revertCommitSha);
+        var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var expectedTree = await Git(repo, filters, ct, "rev-parse", "--verify", request.MergeCommitSha + "^1^{tree}");
+        var actualTree = await Git(repo, filters, ct, "rev-parse", "--verify", revertCommitSha + "^{tree}");
+        if (!Succeeded(parents) || parentFields.Length != 2
+            || !string.Equals(parentFields[1], request.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+            || !Succeeded(expectedTree) || !Succeeded(actualTree)
+            || !string.Equals(expectedTree.StdOut.Trim(), actualTree.StdOut.Trim(), StringComparison.OrdinalIgnoreCase))
+            return BusinessFailure("RevertMarkerDoesNotMatchLanding");
+
+        var branchRef = $"refs/heads/{request.TargetBranch}";
+        var branchHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
+        if (!Succeeded(branchHead))
+            return BusinessFailure("TargetBranchUnavailableForRevertRecovery");
+
+        var checkout = await FindTargetCheckoutAsync(repo, request.TargetBranch, filters, ct);
+        if (checkout.Error is not null)
+            return BusinessFailure("TargetCheckoutUnavailable");
+        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
+            return BusinessFailure("TargetCheckedOutElsewhere");
+
+        var targetAlreadyReverted = await IsAncestorAsync(
+            repo, filters, revertCommitSha, branchHead.StdOut.Trim(), ct) == true;
+        if (!targetAlreadyReverted)
+        {
+            if (!string.Equals(branchHead.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
+                return BusinessFailure("TargetAdvancedBeyondLanding");
+            var update = await Git(repo, filters, CancellationToken.None,
+                "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
+            if (!Succeeded(update))
+            {
+                var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
+                if (!Succeeded(current)
+                    || await IsAncestorAsync(repo, filters, revertCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                    return BusinessFailure("TargetAdvancedBeyondLanding");
+            }
+        }
+
+        var finalHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
+        if (!Succeeded(finalHead)
+            || await IsAncestorAsync(repo, filters, revertCommitSha, finalHead.StdOut.Trim(), ct) != true)
+            return BusinessFailure("RevertCommitNotOnTargetBranch");
+
+        if (checkout.Checkout!.CheckedOut && SamePath(checkout.Checkout.Path, repo)
+            && string.Equals(finalHead.StdOut.Trim(), revertCommitSha, StringComparison.OrdinalIgnoreCase))
+        {
+            var refreshed = await RefreshTargetCheckoutAsync(
+                repo, request.MergeCommitSha!, revertCommitSha, filters, CancellationToken.None);
+            if (!refreshed)
+                return (true, JsonSerializer.Serialize(new
+                {
+                    status = "reverted_unverified",
+                    targetBranch = request.TargetBranch,
+                    mergeCommitSha = request.MergeCommitSha,
+                    revertCommitSha,
+                    errorCode = "TargetWorktreeUpdateFailed"
+                }), null);
+        }
+
+        return (true, JsonSerializer.Serialize(new
+        {
+            status = "reverted",
+            targetBranch = request.TargetBranch,
+            mergeCommitSha = request.MergeCommitSha,
+            revertCommitSha
+        }), null);
+    }
+
+    private static async Task<bool> RefreshTargetCheckoutAsync(
+        string repositoryRoot, string previousHeadSha, string newHeadSha, string[] filters, CancellationToken ct)
+    {
+        var head = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", "HEAD");
+        if (!Succeeded(head) || !string.Equals(head.StdOut.Trim(), newHeadSha, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var indexTree = await Git(repositoryRoot, filters, ct, "write-tree");
+        var previousTree = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", previousHeadSha + "^{tree}");
+        var nextTree = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", newHeadSha + "^{tree}");
+        var unstaged = await Git(repositoryRoot, filters, ct, "diff", "--quiet");
+        var untracked = await Git(repositoryRoot, filters, ct, "ls-files", "--others", "--exclude-standard");
+        if (!Succeeded(indexTree) || !Succeeded(previousTree) || !Succeeded(nextTree)
+            || unstaged.ExitCode != 0 || unstaged.TimedOut
+            || !Succeeded(untracked) || !string.IsNullOrWhiteSpace(untracked.StdOut))
+            return false;
+
+        var currentIndexTree = indexTree.StdOut.Trim();
+        var expectedPreviousTree = previousTree.StdOut.Trim();
+        var expectedNextTree = nextTree.StdOut.Trim();
+        if (string.Equals(currentIndexTree, expectedNextTree, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (!string.Equals(currentIndexTree, expectedPreviousTree, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var update = await Git(repositoryRoot, filters, ct, "read-tree", "-u", "-m", previousHeadSha, newHeadSha);
+        if (!Succeeded(update))
+            return false;
+        var updatedHead = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", "HEAD");
+        var updatedTree = await Git(repositoryRoot, filters, ct, "write-tree");
+        var status = await Git(repositoryRoot, filters, ct, "status", "--porcelain", "--untracked-files=all");
+        return Succeeded(updatedHead)
+            && string.Equals(updatedHead.StdOut.Trim(), newHeadSha, StringComparison.OrdinalIgnoreCase)
+            && Succeeded(updatedTree)
+            && string.Equals(updatedTree.StdOut.Trim(), expectedNextTree, StringComparison.OrdinalIgnoreCase)
+            && Succeeded(status)
+            && string.IsNullOrWhiteSpace(status.StdOut);
+    }
+
+    private static async Task<bool?> IsAncestorAsync(
+        string repositoryRoot, string[] filters, string ancestorSha, string descendantSha, CancellationToken ct)
+    {
+        var result = await Git(repositoryRoot, filters, ct, "merge-base", "--is-ancestor", ancestorSha, descendantSha);
+        return result.ExitCode switch
+        {
+            0 when !result.TimedOut => true,
+            1 when !result.TimedOut => false,
+            _ => null
+        };
+    }
+
+    private static string LandingMarkerRef(Guid attemptId, string action) =>
+        $"refs/beacon/landing-attempts/{attemptId:N}/{action}";
+
+    private static (bool Ok, string? Result, string? Error) BusinessFailure(string code) =>
+        (true, JsonSerializer.Serialize(new { status = "failed", errorCode = code }), null);
 
     private static async Task<PostMergeCheckResult> RunPostMergeCheckAsync(
         AgentTaskWorktree workspace,
@@ -383,18 +587,22 @@ internal static class GitLandExecutor
         if (!IsGitSha(request.MergeCommitSha))
             return (false, null, "GitLand Revert requires the recorded merge commit SHA.");
 
+        var resumed = await TryResumeRevertAsync(workspace, request, filters, ct);
+        if (resumed is { } recovered)
+            return recovered;
+
         var repo = workspace.RepositoryRoot;
         var targetBranch = request.TargetBranch;
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
-            return (false, null, checkout.Error);
+            return BusinessFailure("TargetCheckoutUnavailable");
         if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
-            return (false, null, "The target branch is checked out in a different worktree; revert was not attempted.");
+            return BusinessFailure("TargetCheckedOutElsewhere");
 
         var branchRef = $"refs/heads/{targetBranch}";
         var head = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
         if (!Succeeded(head) || !string.Equals(head.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The target branch has advanced beyond the landing commit; automatic revert is not safe.");
+            return BusinessFailure("TargetAdvancedBeyondLanding");
 
         if (checkout.Checkout.CheckedOut)
         {
@@ -406,7 +614,7 @@ internal static class GitLandExecutor
                 || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal)
                 || !Succeeded(currentHead)
                 || !string.Equals(currentHead.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The target checkout is no longer clean and at the recorded landing commit; revert was not attempted.");
+                return BusinessFailure("TargetCheckoutChangedBeforeRevert");
         }
 
         var temp = CreateTemporaryWorktreePath(request.LandingAttemptId, "revert");
@@ -414,7 +622,7 @@ internal static class GitLandExecutor
         {
             var add = await Git(repo, filters, ct, "worktree", "add", "--detach", temp, request.MergeCommitSha!);
             if (!Succeeded(add))
-                return (false, null, "Could not prepare a detached worktree to revert the landing commit.");
+                return BusinessFailure("RevertWorktreeFailed");
 
             var revert = await Git(temp, filters, ct,
                 "-c", "user.name=ProjectBeacon",
@@ -428,57 +636,47 @@ internal static class GitLandExecutor
                 var cleanup = Succeeded(abort)
                     ? string.Empty
                     : " The detached revert could not be aborted automatically; inspect its temporary worktree before continuing.";
-                return (false, null, "Git could not revert the landing commit." + cleanup);
+                return BusinessFailure("GitRevertFailed" + cleanup);
             }
 
             var resultHead = await Git(temp, filters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(resultHead) || !IsGitSha(resultHead.StdOut.Trim()))
-                return (false, null, "The revert ran but its commit SHA could not be verified.");
+                return BusinessFailure("RevertCommitUnavailable");
             var revertCommitSha = resultHead.StdOut.Trim();
 
             var parents = await Git(temp, filters, ct, "rev-list", "--parents", "-n", "1", revertCommitSha);
             var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (!Succeeded(parents) || parentFields.Length != 2
                 || !string.Equals(parentFields[1], request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The generated revert commit does not have the recorded landing commit as its only parent.");
+                return BusinessFailure("RevertCommitParentInvalid");
 
             var expectedTree = await Git(repo, filters, ct, "rev-parse", "--verify", request.MergeCommitSha + "^1^{tree}");
             var revertTree = await Git(temp, filters, ct, "rev-parse", "--verify", revertCommitSha + "^{tree}");
             if (!Succeeded(expectedTree) || !Succeeded(revertTree)
                 || !string.Equals(expectedTree.StdOut.Trim(), revertTree.StdOut.Trim(), StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The generated revert commit does not restore the landing commit's first-parent tree.");
+                return BusinessFailure("RevertCommitTreeInvalid");
 
-            var update = await Git(repo, filters, ct, "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
-            if (!Succeeded(update))
-                return (false, null, "The target branch advanced before the atomic revert update; the branch was not moved.");
-
-            if (checkout.Checkout.CheckedOut)
+            // The revert marker makes an interrupted CAS recoverable without creating a
+            // second revert commit or accidentally reverting a later target change.
+            var markerRef = LandingMarkerRef(request.LandingAttemptId, "revert");
+            var markerCreate = await Git(repo, filters, CancellationToken.None,
+                "update-ref", markerRef, revertCommitSha, new string('0', revertCommitSha.Length));
+            if (!Succeeded(markerCreate))
             {
-                var readTree = await Git(repo, filters, ct, "read-tree", "-u", "-m", request.MergeCommitSha!, revertCommitSha);
-                var observedHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
-                var observedStatus = await Git(repo, filters, ct, "status", "--porcelain", "--untracked-files=all");
-                if (!Succeeded(readTree) || !Succeeded(observedHead)
-                    || !string.Equals(observedHead.StdOut.Trim(), revertCommitSha, StringComparison.OrdinalIgnoreCase)
-                    || !Succeeded(observedStatus) || !string.IsNullOrWhiteSpace(observedStatus.StdOut))
-                {
-                    return (true, JsonSerializer.Serialize(new
-                    {
-                        status = "reverted_unverified",
-                        targetBranch,
-                        mergeCommitSha = request.MergeCommitSha,
-                        revertCommitSha,
-                        errorCode = "TargetWorktreeUpdateFailed"
-                    }), null);
-                }
+                var recovered = await TryResumeRevertAsync(workspace, request, filters, CancellationToken.None);
+                return recovered ?? BusinessFailure("RevertMarkerCouldNotBePersisted");
             }
 
-            return (true, JsonSerializer.Serialize(new
+            var update = await Git(repo, filters, CancellationToken.None,
+                "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
+            if (!Succeeded(update))
             {
-                status = "reverted",
-                targetBranch,
-                mergeCommitSha = request.MergeCommitSha,
-                revertCommitSha
-            }), null);
+                var recovered = await TryResumeRevertAsync(workspace, request, filters, CancellationToken.None);
+                return recovered ?? BusinessFailure("TargetChangedBeforeRevertUpdate");
+            }
+
+            return await TryResumeRevertAsync(workspace, request, filters, CancellationToken.None)
+                ?? BusinessFailure("RevertMarkerCouldNotBeReconciled");
         }
         finally
         {
