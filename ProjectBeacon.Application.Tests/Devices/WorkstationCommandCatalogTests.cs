@@ -66,14 +66,15 @@ public sealed class WorkstationCommandCatalogTests
     }
 
     [Fact]
-    public void GitLand_IsTrustedAtMostOnceProjectRuntimeCommand()
+    public void GitLand_IsIdempotentAndReconcilesAttemptScopedRefs()
     {
         var descriptor = WorkstationCommandCatalog.Get(WorkstationCommandKind.GitLand);
 
         Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
-        Assert.Equal(OperationRetrySemantics.AtMostOnce, descriptor.RetrySemantics);
+        Assert.Equal(OperationRetrySemantics.Idempotent, descriptor.RetrySemantics);
         Assert.Equal(TimeSpan.FromMinutes(30), descriptor.LeaseDuration);
         Assert.Contains("landingAttemptId:guid", descriptor.PayloadContract, StringComparison.Ordinal);
+        Assert.Contains("targetTreeSha?:sha", descriptor.PayloadContract, StringComparison.Ordinal);
         Assert.False(descriptor.ReconcileBacked);
     }
 
