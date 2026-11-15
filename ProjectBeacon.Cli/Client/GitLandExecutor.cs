@@ -481,6 +481,12 @@ internal static class GitLandExecutor
                 : (null, "Could not read target checkout HEAD.", "TargetHeadUnavailable");
         }
 
+        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
+        if (Succeeded(local) && IsGitSha(local.StdOut.Trim()))
+            return (local.StdOut.Trim(), null, null);
+        if (local.TimedOut || local.ExitCode != 128)
+            return (null, "Could not inspect the local target branch safely.", "TargetHeadUnavailable");
+
         var remote = await Git(repo, filters, ct, "remote", "get-url", "origin");
         if (Succeeded(remote) && !string.IsNullOrWhiteSpace(remote.StdOut))
         {
@@ -500,10 +506,7 @@ internal static class GitLandExecutor
         }
         if (remote.ExitCode is not (0 or 1) || remote.TimedOut)
             return (null, "Could not inspect the origin remote safely.", "TargetRemoteInspectionFailed");
-        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
-        return Succeeded(local) && IsGitSha(local.StdOut.Trim())
-            ? (local.StdOut.Trim(), null, null)
-            : (null, "The target branch is not checked out and no local target branch is available.", "TargetUnavailable");
+        return (null, "The target branch is not checked out, no local target branch exists, and no origin remote is configured.", "TargetUnavailable");
     }
 
     private static async Task<(string? Error, int FileCount, int ChangedLines, bool ProtectedPath)> CheckCandidateScopeAsync(
