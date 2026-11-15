@@ -364,6 +364,8 @@ internal static class GitLandExecutor
                     postMergeCheckOutputHash = (string?)null,
                     errorCode = "TargetWorktreeUpdateFailed"
                 }), null);
+            if (SamePath(checkout.Checkout.Path, LandingTargetWorktreePath(request.LandingAttemptId)))
+                await RemoveTemporaryWorktreeAsync(repo, checkout.Checkout.Path, filters);
         }
 
         var postMergeCheck = await RunPostMergeCheckAsync(
@@ -482,6 +484,8 @@ internal static class GitLandExecutor
                     revertCommitSha,
                     errorCode = "TargetWorktreeUpdateFailed"
                 }), null);
+            if (SamePath(checkout.Checkout.Path, LandingTargetWorktreePath(request.LandingAttemptId)))
+                await RemoveTemporaryWorktreeAsync(repo, checkout.Checkout.Path, filters);
         }
 
         return (true, JsonSerializer.Serialize(new
