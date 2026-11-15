@@ -21,6 +21,7 @@ public sealed partial class AgentTaskGitOperationsTests
         var taskId = Guid.NewGuid();
         var attemptId = Guid.NewGuid();
         string sourceSha;
+        string reviewTreeSha;
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
         Assert.NotNull(opened.Worktree);
@@ -34,6 +35,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(commit.Success, commit.Error);
             sourceSha = commit.CommitSha!;
         }
+        reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
 
         var checkCommand = "echo review-ok";
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
@@ -46,7 +48,7 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             var preview = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
-                Payload(projectId, taskId, attemptId, "Preview", sourceSha, commandHash, checkCommand),
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
                 settings, TestContext.Current.CancellationToken);
             Assert.True(preview.Ok, preview.Error ?? preview.Result);
             using var previewJson = JsonDocument.Parse(preview.Result!);
@@ -60,7 +62,7 @@ public sealed partial class AgentTaskGitOperationsTests
 
             var execute = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
-                Payload(projectId, taskId, attemptId, "Execute", sourceSha, commandHash, checkCommand, targetHead, candidateTree),
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha, commandHash, checkCommand, targetHead, candidateTree),
                 settings, TestContext.Current.CancellationToken);
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
             using var landedJson = JsonDocument.Parse(execute.Result!);
@@ -77,7 +79,7 @@ public sealed partial class AgentTaskGitOperationsTests
 
             var revert = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
-                Payload(projectId, taskId, attemptId, "Revert", sourceSha, commandHash, null, mergeCommitSha: mergeCommit),
+                Payload(projectId, taskId, attemptId, "Revert", sourceSha, reviewTreeSha, commandHash, null, mergeCommitSha: mergeCommit),
                 settings, TestContext.Current.CancellationToken);
             Assert.True(revert.Ok, revert.Error ?? revert.Result);
             using var revertedJson = JsonDocument.Parse(revert.Result!);
@@ -116,6 +118,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(commit.Success, commit.Error);
             sourceSha = commit.CommitSha!;
         }
+        reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
 
         await File.WriteAllTextAsync(Path.Combine(projectRoot, "shared.txt"), "target version\n");
         await GitAsync(repository, "add", "src/app/shared.txt");
@@ -133,7 +136,7 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             var result = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
-                Payload(projectId, taskId, attemptId, "Preview", sourceSha, commandHash, checkCommand),
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
                 settings, TestContext.Current.CancellationToken);
             Assert.True(result.Ok, result.Error ?? result.Result);
             using var document = JsonDocument.Parse(result.Result!);
@@ -158,6 +161,7 @@ public sealed partial class AgentTaskGitOperationsTests
         Guid attemptId,
         string action,
         string sourceSha,
+        string reviewTreeSha,
         string checkCommandHash,
         string? checkCommand,
         string? targetHeadSha = null,
@@ -170,6 +174,7 @@ public sealed partial class AgentTaskGitOperationsTests
             landingAttemptId = attemptId,
             action,
             sourceSha,
+            reviewTreeSha,
             checkCommandHash,
             checkCommand,
             targetHeadSha,
