@@ -19,6 +19,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public string Rationale { get; private set; } = string.Empty;
     public string SourceBranch { get; private set; } = string.Empty;
     public string SourceSha { get; private set; } = string.Empty;
+    public string ReviewTreeSha { get; private set; } = string.Empty;
     public string ReviewCommandHash { get; private set; } = string.Empty;
     public string? TargetBranch { get; private set; }
     public string? TargetHeadSha { get; private set; }
@@ -43,6 +44,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Guid reviewRunId,
         Guid requestedByUserId,
         string sourceSha,
+        string reviewTreeSha,
         string reviewCommandHash,
         string rationale)
     {
@@ -50,6 +52,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
             throw new ArgumentException("Project, task, review run, and requesting user are required.");
         if (!IsGitSha(sourceSha))
             throw new ArgumentException("Source SHA is invalid.", nameof(sourceSha));
+        if (!IsGitSha(reviewTreeSha))
+            throw new ArgumentException("Reviewed tree SHA is invalid.", nameof(reviewTreeSha));
         if (!IsSha256(reviewCommandHash))
             throw new ArgumentException("Review command hash is invalid.", nameof(reviewCommandHash));
         var normalizedRationale = rationale?.Trim() ?? string.Empty;
@@ -66,6 +70,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         attempt.Rationale = normalizedRationale;
         attempt.SourceBranch = $"beacon/task/{taskId:N}";
         attempt.SourceSha = sourceSha.ToLowerInvariant();
+        attempt.ReviewTreeSha = reviewTreeSha.ToLowerInvariant();
         attempt.ReviewCommandHash = reviewCommandHash.ToLowerInvariant();
         attempt.CreatedAt = now;
         attempt.UpdatedAt = now;
