@@ -63,6 +63,14 @@ public static class CommandSandbox
                 || obj["action"] is not JsonValue actionValue
                 || !actionValue.TryGetValue<string>(out var action)
                 || action is not ("Preview" or "Execute" or "Revert")
+                || obj["targetBranch"] is not JsonValue branchValue
+                || !branchValue.TryGetValue<string>(out var targetBranch)
+                || string.IsNullOrWhiteSpace(targetBranch)
+                || targetBranch.Length > 200
+                || targetBranch.Contains("..", StringComparison.Ordinal)
+                || targetBranch.Contains("@{", StringComparison.Ordinal)
+                || targetBranch.Contains('\\')
+                || targetBranch.Any(char.IsControl)
                 || obj["sourceSha"] is not JsonValue sourceValue
                 || !sourceValue.TryGetValue<string>(out var sourceSha)
                 || !IsGitSha(sourceSha)
@@ -84,7 +92,7 @@ public static class CommandSandbox
             }
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
-                "projectId", "taskId", "landingAttemptId", "action", "sourceSha",
+                "projectId", "taskId", "landingAttemptId", "action", "targetBranch", "sourceSha",
                 "reviewTreeSha", "checkCommandHash", "targetHeadSha", "targetTreeSha", "mergeCommitSha"
             };
             if (obj.Any(pair => !allowed.Contains(pair.Key)))
