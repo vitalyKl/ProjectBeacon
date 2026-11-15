@@ -300,6 +300,7 @@ public sealed partial class AgentTaskGitOperationsTests
             taskId,
             landingAttemptId = attemptId,
             action,
+            targetBranch = "main",
             sourceSha,
             reviewTreeSha,
             checkCommandHash,
