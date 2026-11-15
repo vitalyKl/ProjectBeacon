@@ -226,7 +226,7 @@ public static class McpToolCatalog
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite, McpToolSurface.Pipeline,
                 McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
                 McpToolNames.PipelineFailSubtask, McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove,
-                McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandExecute, McpToolNames.PipelineLandRevert),
+                McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert),
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead, McpToolSurface.Pipeline,
                 McpToolNames.PipelineLandStatus),
             ..Api(McpToolScope.Admin, ApiTokenCapability.Admin, McpToolSurface.Pipeline,
