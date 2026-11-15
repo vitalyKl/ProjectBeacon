@@ -41,7 +41,7 @@ public static class PipelineEndpoints
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land", RequestLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}", GetLandingAttempt).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/execute", ExecuteLanding).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/revert", RevertLanding).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/land/{attemptId:guid}/revert", RevertLanding).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.Admin);
 
         return app;
