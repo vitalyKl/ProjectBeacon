@@ -335,7 +335,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         if (project is null)
             return Result.Failure<LandingAttemptDto>("Project not found.", ErrorKind.NotFound);
-        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, userId, ct);
+        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, ct);
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
