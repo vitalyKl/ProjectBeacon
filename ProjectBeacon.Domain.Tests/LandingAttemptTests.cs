@@ -27,7 +27,7 @@ public sealed class LandingAttemptTests
         Assert.Equal(LandingAttemptStatus.Previewed, attempt.Status);
         attempt.MarkExecutePending();
         var mergeCommit = new string('f', 40);
-        attempt.RecordLanded(mergeCommit, tree);
+        attempt.RecordLanded(mergeCommit, tree, 0, new string('9', 64));
 
         Assert.Equal(LandingAttemptStatus.Landed, attempt.Status);
         Assert.Equal(mergeCommit, attempt.MergeCommitSha);
@@ -72,8 +72,8 @@ public sealed class LandingAttemptTests
         attempt.MarkExecutePending();
 
         Assert.Throws<InvalidOperationException>(() =>
-            attempt.RecordLanded(new string('f', 40), new string('1', 40)));
-        attempt.RecordLanded(new string('f', 40), new string('d', 40));
+            attempt.RecordLanded(new string('f', 40), new string('1', 40), 0, new string('9', 64)));
+        attempt.RecordLanded(new string('f', 40), new string('d', 40), 0, new string('9', 64));
         Assert.Throws<InvalidOperationException>(attempt.MarkExecutePending);
     }
 
