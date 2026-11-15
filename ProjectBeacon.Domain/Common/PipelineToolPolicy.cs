@@ -141,7 +141,8 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.PipelineLandExecute,
+        McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.PipelineLandRequest,
+        McpToolNames.PipelineLandExecute,
         McpToolNames.PipelineLandRevert, McpToolNames.KnowledgePropose,
         McpToolNames.KnowledgeWithdraw, "run_command", "service_start", GitCommit, GitIntegrate
     });
