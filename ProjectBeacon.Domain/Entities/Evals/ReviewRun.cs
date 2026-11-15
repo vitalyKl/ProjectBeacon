@@ -23,6 +23,7 @@ public sealed class ReviewRun : Entity, IProjectScoped
     public string? CheckCommandHash { get; private set; }
     public string? CheckedSourceSha { get; private set; }
     public string? CheckedTreeSha { get; private set; }
+    public Guid? CheckedDeviceId { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -91,15 +92,17 @@ public sealed class ReviewRun : Entity, IProjectScoped
     }
 
     /// <summary>Completes a review proof tied to the exact task branch commit and Git tree that were checked.</summary>
-    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha)
+    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha, Guid checkedDeviceId)
     {
         if (string.IsNullOrWhiteSpace(CheckCommandHash)
             || !IsGitSha(checkedSourceSha)
-            || !IsGitSha(checkedTreeSha))
-            throw new InvalidOperationException("The approved command hash and checked Git source/tree SHAs are required.");
+            || !IsGitSha(checkedTreeSha)
+            || checkedDeviceId == Guid.Empty)
+            throw new InvalidOperationException("The approved command hash, checked Git source/tree SHAs, and workstation device are required.");
         Complete(findings, artifactRef);
         CheckedSourceSha = checkedSourceSha.ToLowerInvariant();
         CheckedTreeSha = checkedTreeSha.ToLowerInvariant();
+        CheckedDeviceId = checkedDeviceId;
     }
 
     /// <summary>
@@ -125,7 +128,8 @@ public sealed class ReviewRun : Entity, IProjectScoped
         && !string.IsNullOrWhiteSpace(ArtifactRef)
         && IsSha256(CheckCommandHash)
         && IsGitSha(CheckedSourceSha)
-        && IsGitSha(CheckedTreeSha);
+        && IsGitSha(CheckedTreeSha)
+        && CheckedDeviceId is not null && CheckedDeviceId != Guid.Empty;
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
