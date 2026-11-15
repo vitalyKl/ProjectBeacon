@@ -163,6 +163,7 @@ public record LandingAttemptDto(
     string SourceBranch,
     string SourceSha,
     string ReviewTreeSha,
+    Guid DeviceId,
     string? TargetBranch,
     string? TargetHeadSha,
     string? CandidateTreeSha,
