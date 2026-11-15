@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Devices;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
+using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -178,11 +179,15 @@ public sealed class GitLandCompletionTests : IDisposable
     {
         var org = Org.Create("GitLand completion");
         var project = Project.Create("GitLand", null, org.Id);
-        var userId = Guid.NewGuid();
+        var user = User.Create(
+            "gitland-" + Guid.NewGuid().ToString("N"),
+            "gitland-" + Guid.NewGuid().ToString("N") + "@beacon.local",
+            "hash");
+        _db.Users.Add(user);
         var device = DaemonDevice.Create(
-            "git-land-test", userId, "git-land-fp-" + Guid.NewGuid().ToString("N"),
+            "git-land-test", user.Id, "git-land-fp-" + Guid.NewGuid().ToString("N"),
             "token-hash", "bcd_gitland_" + Guid.NewGuid().ToString("N"));
-        return (org, project, device, userId);
+        return (org, project, device, user.Id);
     }
 
     private static WorkstationCommand CreateCommand(
