@@ -32,13 +32,14 @@ public sealed class ReviewRunTests
         var treeSha = new string('c', 40);
         run.SetCheckCommandHash(commandHash);
         var deviceId = Guid.NewGuid();
-        run.CompleteCheck("ok", "check:exit0", sourceSha, treeSha, deviceId);
+        run.CompleteCheck("ok", "check:exit0", sourceSha, treeSha, deviceId, "main");
 
         Assert.True(run.IsCheckProof());
         Assert.Equal(commandHash, run.CheckCommandHash);
         Assert.Equal(sourceSha, run.CheckedSourceSha);
         Assert.Equal(treeSha, run.CheckedTreeSha);
         Assert.Equal(deviceId, run.CheckedDeviceId);
+        Assert.Equal("main", run.CheckedBaseBranch);
         Assert.Equal("check:exit0", run.ArtifactRef);
     }
 
