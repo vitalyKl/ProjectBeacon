@@ -140,10 +140,18 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             attempt.Id.ToString("D"),
             project.OrgId,
             project.Id,
-            detailsJson: JsonSerializer.Serialize(new
+            detailsJson: JsonSerializer.Serialize(new Dictionary<string, object>
             {
-                newState = attempt.Status.ToString(),
-                resultCode = "PreviewQueued"
+                ["previousState"] = "None",
+                ["newState"] = attempt.Status.ToString(),
+                ["resultCode"] = "PreviewQueued",
+                ["sourceBranch"] = attempt.SourceBranch,
+                ["targetBranch"] = attempt.TargetBranch,
+                ["sourceSha"] = attempt.SourceSha,
+                ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                ["reviewRunId"] = attempt.ReviewRunId.ToString("D"),
+                ["deviceId"] = attempt.DeviceId.ToString("D")
             })));
         await db.SaveChangesAsync(ct);
         return Result.Ok(ToDto(attempt));
@@ -314,11 +322,19 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             attempt.Id.ToString("D"),
             project!.OrgId,
             project.Id,
-            detailsJson: JsonSerializer.Serialize(new
+            detailsJson: JsonSerializer.Serialize(new Dictionary<string, object>
             {
-                previousState = LandingAttemptStatus.Previewed.ToString(),
-                newState = attempt.Status.ToString(),
-                resultCode = "ExecuteQueued"
+                ["previousState"] = LandingAttemptStatus.Previewed.ToString(),
+                ["newState"] = attempt.Status.ToString(),
+                ["resultCode"] = "ExecuteQueued",
+                ["sourceBranch"] = attempt.SourceBranch,
+                ["targetBranch"] = attempt.TargetBranch,
+                ["sourceSha"] = attempt.SourceSha,
+                ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                ["targetHeadSha"] = attempt.TargetHeadSha!,
+                ["candidateTreeSha"] = attempt.CandidateTreeSha!,
+                ["deviceId"] = attempt.DeviceId.ToString("D")
             })));
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
@@ -402,11 +418,18 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             attempt.Id.ToString("D"),
             project.OrgId,
             project.Id,
-            detailsJson: JsonSerializer.Serialize(new
+            detailsJson: JsonSerializer.Serialize(new Dictionary<string, object>
             {
-                previousState = previousState.ToString(),
-                newState = attempt.Status.ToString(),
-                resultCode = "RevertQueued"
+                ["previousState"] = previousState.ToString(),
+                ["newState"] = attempt.Status.ToString(),
+                ["resultCode"] = "RevertQueued",
+                ["sourceBranch"] = attempt.SourceBranch,
+                ["targetBranch"] = attempt.TargetBranch,
+                ["sourceSha"] = attempt.SourceSha,
+                ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                ["mergeCommitSha"] = attempt.MergeCommitSha!,
+                ["deviceId"] = attempt.DeviceId.ToString("D")
             })));
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
