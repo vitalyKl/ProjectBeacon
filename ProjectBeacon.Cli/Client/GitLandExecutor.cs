@@ -56,7 +56,8 @@ internal static class GitLandExecutor
         if (request!.ProjectId != authorizedProjectId)
             return (false, null, "GitLand project identity does not match the workstation command.");
 
-        if (!string.Equals(HashCommand(request.CheckCommand), request.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
+        if (request.Action is not "Revert"
+            && !string.Equals(HashCommand(request.CheckCommand), request.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
             return (false, null, "The trusted review command does not match its server-pinned hash.");
 
         var opened = await AgentTaskWorktree.CreateAsync(
@@ -590,13 +591,14 @@ internal static class GitLandExecutor
             if (action is not ("Preview" or "Execute" or "Revert")
                 || !IsGitSha(sourceSha)
                 || hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit)
-                || string.IsNullOrWhiteSpace(checkCommand) || checkCommand.Length > 2000)
+                || (action is not "Revert" && string.IsNullOrWhiteSpace(checkCommand))
+                || checkCommand?.Length > 2000)
             {
                 error = "GitLand payload action, source SHA, or trusted check command is invalid.";
                 return false;
             }
             request = new Request(
-                projectId, taskId, attemptId, action, sourceSha!, hash!, checkCommand!,
+                projectId, taskId, attemptId, action, sourceSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
                 root["mergeCommitSha"]?.GetValue<string>());
