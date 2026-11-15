@@ -83,6 +83,13 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
             table: "LandingAttempts",
             columns: new[] { "ProjectId", "TaskId", "CreatedAt" });
 
+        migrationBuilder.CreateIndex(
+            name: "IX_LandingAttempts_ProjectId_TaskId_Active",
+            table: "LandingAttempts",
+            columns: new[] { "ProjectId", "TaskId" },
+            unique: true,
+            filter: "\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
+
         migrationBuilder.Sql("""
             ALTER TABLE "LandingAttempts" ENABLE ROW LEVEL SECURITY;
             ALTER TABLE "LandingAttempts" FORCE ROW LEVEL SECURITY;
@@ -106,6 +113,10 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
             ALTER TABLE "LandingAttempts" NO FORCE ROW LEVEL SECURITY;
             ALTER TABLE "LandingAttempts" DISABLE ROW LEVEL SECURITY;
             """);
+
+        migrationBuilder.DropIndex(
+            name: "IX_LandingAttempts_ProjectId_TaskId_Active",
+            table: "LandingAttempts");
 
         migrationBuilder.DropTable(name: "LandingAttempts");
         migrationBuilder.DropColumn(name: "CheckCommandHash", table: "ReviewRuns");
