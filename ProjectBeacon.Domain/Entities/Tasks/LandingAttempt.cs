@@ -127,9 +127,26 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>Records a merge that reached the target branch but failed post-merge verification.</summary>
+    public void RecordLandedUnverified(string mergeCommitSha, string failureCode)
+    {
+        EnsureStatus(LandingAttemptStatus.ExecutePending);
+        if (!IsGitSha(mergeCommitSha))
+            throw new ArgumentException("Merge commit SHA is invalid.", nameof(mergeCommitSha));
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
+        if (failureCode.Length > 80 || failureCode.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')))
+            throw new ArgumentException("Failure code must be a short machine-readable code.", nameof(failureCode));
+        MergeCommitSha = mergeCommitSha.ToLowerInvariant();
+        FailureCode = failureCode;
+        Status = LandingAttemptStatus.LandedUnverified;
+        ExecutedAt = DateTime.UtcNow;
+        Touch();
+    }
+
     public void MarkRevertPending()
     {
-        EnsureStatus(LandingAttemptStatus.Landed);
+        if (Status is not (LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified))
+            throw new InvalidOperationException($"Cannot revert a landing attempt in status {Status}.");
         Status = LandingAttemptStatus.RevertPending;
         Touch();
     }
@@ -150,7 +167,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         if (failureCode.Length > 80 || failureCode.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')))
             throw new ArgumentException("Failure code must be a short machine-readable code.", nameof(failureCode));
-        if (Status is LandingAttemptStatus.Landed or LandingAttemptStatus.Reverted or LandingAttemptStatus.Conflicted)
+        if (Status is LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified
+            or LandingAttemptStatus.Reverted or LandingAttemptStatus.Conflicted)
             throw new InvalidOperationException($"Cannot fail a landing attempt in status {Status}.");
         Status = Status == LandingAttemptStatus.RevertPending
             ? LandingAttemptStatus.RevertFailed
