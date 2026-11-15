@@ -534,6 +534,25 @@ internal sealed class GitLandCompletion : ICommandCompletion
         if (attempt is null)
             return;
 
+        var payloadTaskId = DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId");
+        var payloadAction = DevicePayloadReader.ReadString(row.PayloadJson, "action");
+        var payloadTargetBranch = DevicePayloadReader.ReadString(row.PayloadJson, "targetBranch");
+        var expectedAction = attempt.Status switch
+        {
+            LandingAttemptStatus.PreviewPending => "Preview",
+            LandingAttemptStatus.ExecutePending => "Execute",
+            LandingAttemptStatus.RevertPending => "Revert",
+            _ => null
+        };
+        if (row.DeviceId != attempt.DeviceId
+            || payloadTaskId != attempt.TaskId
+            || !string.Equals(DevicePayloadReader.ReadString(row.PayloadJson, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(DevicePayloadReader.ReadString(row.PayloadJson, "reviewTreeSha"), attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(DevicePayloadReader.ReadString(row.PayloadJson, "checkCommandHash"), attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal))
+            return;
+
         var previousState = attempt.Status;
         string resultCode;
         string action;
@@ -573,7 +592,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     var checkHash = ReadString(root, "checkOutputHash");
                     var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
                     if (attempt.Status == LandingAttemptStatus.PreviewPending
-                        && !string.IsNullOrWhiteSpace(targetBranch)
+                        && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
                         && IsGitSha(targetHead)
                         && IsGitSha(tree)
                         && IsSha256(checkHash)
@@ -605,7 +624,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                                 .ToArray()
                             : [];
                     if (attempt.Status == LandingAttemptStatus.PreviewPending
-                        && !string.IsNullOrWhiteSpace(targetBranch)
+                        && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
                         && IsGitSha(targetHead)
                         && conflicts.Length is > 0 and <= 200)
                     {
@@ -638,6 +657,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
                     var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
                     if (attempt.Status == LandingAttemptStatus.ExecutePending
+                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
                         && IsGitSha(mergeCommit) && IsGitSha(tree))
                     {
                         if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase)
@@ -674,7 +694,9 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     var errorCode = ReadString(root, "errorCode");
                     var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
                     var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
-                    if (attempt.Status == LandingAttemptStatus.ExecutePending && IsGitSha(mergeCommit))
+                    if (attempt.Status == LandingAttemptStatus.ExecutePending
+                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                        && IsGitSha(mergeCommit))
                     {
                         attempt.RecordLandedUnverified(
                             mergeCommit!,
@@ -694,7 +716,9 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 case "reverted":
                 {
                     var revertCommit = ReadString(root, "revertCommitSha");
-                    if (attempt.Status == LandingAttemptStatus.RevertPending && IsGitSha(revertCommit))
+                    if (attempt.Status == LandingAttemptStatus.RevertPending
+                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                        && IsGitSha(revertCommit))
                     {
                         attempt.RecordReverted(revertCommit!);
                         resultCode = "Reverted";
