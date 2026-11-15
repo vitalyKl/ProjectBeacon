@@ -83,7 +83,15 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             task.ProjectId, task.Id, reviewRun.Id, userId,
             reviewRun.CheckedSourceSha!, expectedCommandHash, rationale);
         db.LandingAttempts.Add(attempt);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<LandingAttemptDto>(
+                "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
+        }
 
         var device = await FindLandingDeviceAsync(db, task.ProjectId, userId, ct);
         if (device is null)
@@ -149,10 +157,22 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var devices = await db.DaemonDevices.IgnoreQueryFilters()
             .Where(d => deviceIds.Contains(d.Id) && d.RevokedAt == null)
             .ToListAsync(ct);
+        if (devices.Count == 0)
+            return null;
+        var ownerIds = devices.Select(d => d.UserId).Distinct().ToArray();
+        var projectMemberIds = await db.ProjectMembers.IgnoreQueryFilters()
+            .Where(member => member.ProjectId == projectId && ownerIds.Contains(member.UserId))
+            .Select(member => member.UserId)
+            .Distinct()
+            .ToArrayAsync(ct);
+        var eligibleOwners = projectMemberIds.ToHashSet();
         var now = DateTime.UtcNow;
         return devices
-            .Where(d => d.IsOnline(now) && WorkstationCapabilities.Supports(d.ProbeJson, WorkstationCapabilities.GitLandV1))
+            .Where(d => eligibleOwners.Contains(d.UserId)
+                && d.IsOnline(now)
+                && WorkstationCapabilities.Supports(d.ProbeJson, WorkstationCapabilities.GitLandV1))
             .OrderByDescending(d => d.LastHeartbeatAt)
+            .ThenBy(d => d.Id)
             .FirstOrDefault();
     }
 
