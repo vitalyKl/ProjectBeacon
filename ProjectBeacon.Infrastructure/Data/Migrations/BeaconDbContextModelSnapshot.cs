@@ -2103,7 +2103,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProjectId", "TaskId")
                         .IsUnique()
-                        .HasFilter("\\"Status\\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
+                        .HasFilter("\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
 
                     b.ToTable("LandingAttempts");
                 });
