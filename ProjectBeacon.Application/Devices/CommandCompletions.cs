@@ -433,6 +433,7 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
             string? sourceSha = null;
             string? treeSha = null;
             string? reportedCommandHash = null;
+            string? checkedBaseBranch = null;
             try
             {
                 using var result = JsonDocument.Parse(resultJson ?? "{}");
@@ -450,6 +451,9 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 reportedCommandHash = root.TryGetProperty("checkCommandHash", out var hash) && hash.ValueKind == JsonValueKind.String
                     ? hash.GetString()
                     : null;
+                checkedBaseBranch = root.TryGetProperty("checkedBaseBranch", out var branch) && branch.ValueKind == JsonValueKind.String
+                    ? branch.GetString()
+                    : null;
             }
             catch (JsonException)
             {
@@ -463,8 +467,9 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
             var commandMatches = actualCommandHash is not null
                 && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase);
-            if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha))
-                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId);
+            if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha)
+                && !string.IsNullOrWhiteSpace(checkedBaseBranch))
+                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId, checkedBaseBranch!);
             else
                 run.Fail(exitCode == 0
                     ? "Review check result did not prove the pinned command and checked Git revision."
@@ -483,7 +488,8 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 .SetProperty(r => r.CheckCommandHash, run.CheckCommandHash)
                 .SetProperty(r => r.CheckedSourceSha, run.CheckedSourceSha)
                 .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha)
-                .SetProperty(r => r.CheckedDeviceId, run.CheckedDeviceId), ct);
+                .SetProperty(r => r.CheckedDeviceId, run.CheckedDeviceId)
+                .SetProperty(r => r.CheckedBaseBranch, run.CheckedBaseBranch), ct);
     }
 
     private static string? ReadString(string json, string name)
