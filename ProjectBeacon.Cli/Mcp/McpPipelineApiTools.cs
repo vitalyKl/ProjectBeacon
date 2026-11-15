@@ -26,6 +26,8 @@ internal static partial class McpApiTools
             () => Props(("reason", "string", false), ("taskId", "string", false)), PipelineForceClose),
         new(McpToolNames.PipelineLandRequest, "Request a verified preview for the approved task branch. This checks the pinned review proof and does not merge the branch.",
             () => Props(("rationale", "string", true), ("taskId", "string", false)), PipelineLandRequest),
+        new(McpToolNames.PipelineLandExecute, "Execute a successful landing preview. The server rechecks task approval, review proof, trusted check hash, and the recorded target HEAD/candidate tree before enqueueing the merge.",
+            () => Props(("landingAttemptId", "string", true), ("taskId", "string", false)), PipelineLandExecute),
         new(McpToolNames.PipelineLandRevert, "Request a guarded revert of a landed task attempt. The target must still point exactly at the landing commit.",
             () => Props(("landingAttemptId", "string", true), ("taskId", "string", false)), PipelineLandRevert),
         new(McpToolNames.PipelineLandStatus, "Read the current server-verified state of a task landing attempt, including preview conflicts or a completed merge/revert.",
@@ -144,6 +146,17 @@ internal static partial class McpApiTools
             return new McpToolText(true, "missing or invalid 'landingAttemptId'");
         return await SendAsync(api, HttpMethod.Get,
             $"v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}", null, ct);
+    }
+
+    private static async Task<McpToolText> PipelineLandExecute(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
+            return new McpToolText(true, error);
+        if (!TryGuid(args, "landingAttemptId", out var attemptId))
+            return new McpToolText(true, "missing or invalid 'landingAttemptId'");
+        var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
+        return await SendAsync(api, HttpMethod.Post,
+            $"v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}/execute", body, ct);
     }
 
     private static async Task<McpToolText> PipelineLandRevert(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
