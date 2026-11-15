@@ -183,6 +183,10 @@ internal static class GitLandExecutor
             var currentBranch = await Git(repo, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
             if (!Succeeded(currentBranch) || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal))
                 return (false, null, "The target checkout changed branch; landing was not executed.");
+            var currentHead = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
+            if (!Succeeded(currentHead)
+                || !string.Equals(currentHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
+                return (false, null, "The target branch HEAD changed after preview; a new landing preview is required.");
 
             var merge = await Git(repo, filters, ct,
                 "-c", "user.name=ProjectBeacon",
@@ -191,7 +195,37 @@ internal static class GitLandExecutor
                 "-c", "core.editor=true",
                 "merge", "--no-ff", "--no-edit", "--no-verify", request.SourceSha);
             if (!Succeeded(merge))
-                return (false, null, "Git could not apply the reviewed merge in the target checkout. No reset or destructive recovery was attempted.");
+            {
+                var observedHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
+                if (Succeeded(observedHead)
+                    && IsGitSha(observedHead.StdOut.Trim())
+                    && !string.Equals(observedHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
+                {
+                    var observedCommit = observedHead.StdOut.Trim();
+                    var observedParents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", observedCommit);
+                    var observedFields = observedParents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (Succeeded(observedParents) && observedFields.Length == 3
+                        && string.Equals(observedFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(observedFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var observedTree = await Git(repo, filters, ct, "rev-parse", "--verify", observedCommit + "^{tree}");
+                        return (true, JsonSerializer.Serialize(new
+                        {
+                            status = "landed_unverified",
+                            mergeCommitSha = observedCommit,
+                            candidateTreeSha = request.TargetTreeSha,
+                            actualTreeSha = Succeeded(observedTree) ? observedTree.StdOut.Trim() : null,
+                            errorCode = "MergeCommandReportedFailureAfterCommit"
+                        }), null);
+                    }
+                }
+
+                var abort = await Git(repo, filters, ct, "merge", "--abort");
+                var cleanup = Succeeded(abort)
+                    ? string.Empty
+                    : " The merge could not be aborted automatically; inspect the target checkout before continuing.";
+                return (false, null, "Git could not apply the reviewed merge." + cleanup);
+            }
             var head = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(head) || !IsGitSha(head.StdOut.Trim()))
                 return (false, null, "The merge ran but its resulting commit SHA could not be verified.");
@@ -201,15 +235,27 @@ internal static class GitLandExecutor
             if (!Succeeded(parents) || parentFields.Length != 3
                 || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase))
-                return (false, JsonSerializer.Serialize(new { status = "landed_metadata_mismatch", mergeCommitSha }),
-                    "The target moved while the merge was being created. The merge commit was not reset; inspect the target branch before retrying.");
+            {
+                var actualTree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
+                return (true, JsonSerializer.Serialize(new
+                {
+                    status = "landed_unverified",
+                    mergeCommitSha,
+                    candidateTreeSha = request.TargetTreeSha,
+                    actualTreeSha = Succeeded(actualTree) ? actualTree.StdOut.Trim() : null,
+                    errorCode = "MergeParentsMismatch"
+                }), null);
+            }
         }
         else
         {
             var branchRef = $"refs/heads/{targetBranch}";
             var localHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
-            if (!Succeeded(localHead) || !string.Equals(localHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
+            var branchExists = Succeeded(localHead);
+            if (branchExists && !string.Equals(localHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
                 return (false, null, "The local target branch moved after preview; landing was not executed.");
+            if (!branchExists && localHead.ExitCode != 128)
+                return (false, null, "Could not safely inspect the local target branch before landing.");
 
             var commit = await Git(repo, filters, ct,
                 "-c", "user.name=ProjectBeacon",
@@ -223,16 +269,23 @@ internal static class GitLandExecutor
                 return (false, null, "Could not create the verified landing merge commit.");
             mergeCommitSha = commit.StdOut.Trim();
 
-            var update = await Git(repo, filters, ct,
-                "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!);
+            var update = branchExists
+                ? await Git(repo, filters, ct, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
+                : await Git(repo, filters, ct, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha.Length));
             if (!Succeeded(update))
                 return (false, null, "The target branch changed before the atomic landing update; the branch was not moved.");
         }
 
         var mergeTree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
         if (!Succeeded(mergeTree) || !string.Equals(mergeTree.StdOut.Trim(), candidate.CandidateTreeSha, StringComparison.OrdinalIgnoreCase))
-            return (false, JsonSerializer.Serialize(new { status = "landed_tree_mismatch", mergeCommitSha, actualTreeSha = mergeTree.StdOut.Trim(), expectedTreeSha = candidate.CandidateTreeSha }),
-                "The merge commit exists but its tree differs from the validated candidate. Do not retry automatically; inspect the target branch.");
+            return (true, JsonSerializer.Serialize(new
+            {
+                status = "landed_unverified",
+                mergeCommitSha,
+                candidateTreeSha = candidate.CandidateTreeSha,
+                actualTreeSha = Succeeded(mergeTree) ? mergeTree.StdOut.Trim() : null,
+                errorCode = "LandedTreeMismatch"
+            }), null);
         return (true, JsonSerializer.Serialize(new
         {
             status = "landed",
@@ -274,7 +327,13 @@ internal static class GitLandExecutor
                 "-c", "core.editor=true",
                 "revert", "--no-edit", "-m", "1", request.MergeCommitSha!);
             if (!Succeeded(revert))
-                return (false, null, "Git could not revert the landing commit. No reset or destructive recovery was attempted.");
+            {
+                var abort = await Git(repo, filters, ct, "revert", "--abort");
+                var cleanup = Succeeded(abort)
+                    ? string.Empty
+                    : " The revert could not be aborted automatically; inspect the target checkout before continuing.";
+                return (false, null, "Git could not revert the landing commit." + cleanup);
+            }
             var resultHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(resultHead) || !IsGitSha(resultHead.StdOut.Trim()))
                 return (false, null, "The revert ran but its commit SHA could not be verified.");
