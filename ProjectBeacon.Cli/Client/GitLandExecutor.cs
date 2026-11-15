@@ -301,20 +301,32 @@ internal static class GitLandExecutor
             && await IsAncestorAsync(repo, filters, mergeCommitSha, branchHead.StdOut.Trim(), ct) == true;
         if (!targetAlreadyContainsMerge)
         {
-            if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
-                return BusinessFailure("TargetCheckedOutElsewhere");
             if (branchExists
                 && !string.Equals(branchHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
                 return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
 
-            var update = branchExists
-                ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
-                : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha!.Length));
-            if (!Succeeded(update))
+            if (checkout.Checkout!.CheckedOut)
             {
-                var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
-                if (!Succeeded(current)
-                    || await IsAncestorAsync(repo, filters, mergeCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                if (!SamePath(checkout.Checkout.Path, repo))
+                    return BusinessFailure("TargetCheckedOutElsewhere");
+
+                var update = branchExists
+                    ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
+                    : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha!.Length));
+                if (!Succeeded(update))
+                {
+                    var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
+                    if (!Succeeded(current)
+                        || await IsAncestorAsync(repo, filters, mergeCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                        return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
+                }
+            }
+            else
+            {
+                var advanced = await FastForwardTemporaryTargetWorktreeAsync(
+                    repo, request.TargetBranch, request.TargetHeadSha!, mergeCommitSha,
+                    request.LandingAttemptId, filters, CancellationToken.None);
+                if (!advanced)
                     return BusinessFailure("TargetMovedBeforeLandingCouldBeCompleted");
             }
         }
@@ -416,13 +428,27 @@ internal static class GitLandExecutor
         {
             if (!string.Equals(branchHead.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
                 return BusinessFailure("TargetAdvancedBeyondLanding");
-            var update = await Git(repo, filters, CancellationToken.None,
-                "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
-            if (!Succeeded(update))
+
+            if (checkout.Checkout!.CheckedOut)
             {
-                var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
-                if (!Succeeded(current)
-                    || await IsAncestorAsync(repo, filters, revertCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                if (!SamePath(checkout.Checkout.Path, repo))
+                    return BusinessFailure("TargetCheckedOutElsewhere");
+                var update = await Git(repo, filters, CancellationToken.None,
+                    "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
+                if (!Succeeded(update))
+                {
+                    var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
+                    if (!Succeeded(current)
+                        || await IsAncestorAsync(repo, filters, revertCommitSha, current.StdOut.Trim(), CancellationToken.None) != true)
+                        return BusinessFailure("TargetAdvancedBeyondLanding");
+                }
+            }
+            else
+            {
+                var reverted = await FastForwardTemporaryTargetWorktreeAsync(
+                    repo, request.TargetBranch, request.MergeCommitSha!, revertCommitSha,
+                    request.LandingAttemptId, filters, CancellationToken.None);
+                if (!reverted)
                     return BusinessFailure("TargetAdvancedBeyondLanding");
             }
         }
@@ -454,6 +480,98 @@ internal static class GitLandExecutor
             mergeCommitSha = request.MergeCommitSha,
             revertCommitSha
         }), null);
+    }
+
+    private static string LandingTargetWorktreePath(Guid attemptId)
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "git-land-worktrees");
+        Directory.CreateDirectory(parent);
+        return Path.Combine(parent, $"target-{attemptId:N}");
+    }
+
+    /// <summary>
+    /// For a branch that is not checked out, performs the target update through a temporary
+    /// worktree on that branch using a verified fast-forward. The path is deterministic per
+    /// attempt so a process restart can reuse and finish an interrupted operation.
+    /// </summary>
+    private static async Task<bool> FastForwardTemporaryTargetWorktreeAsync(
+        string repositoryRoot,
+        string targetBranch,
+        string expectedHeadSha,
+        string desiredHeadSha,
+        Guid attemptId,
+        string[] filters,
+        CancellationToken ct)
+    {
+        var targetPath = LandingTargetWorktreePath(attemptId);
+        var checkout = await FindTargetCheckoutAsync(repositoryRoot, targetBranch, filters, ct);
+        if (checkout.Error is not null)
+            return false;
+
+        if (checkout.Checkout!.CheckedOut)
+        {
+            if (!SamePath(checkout.Checkout.Path, targetPath))
+                return false;
+        }
+        else
+        {
+            if (Directory.Exists(targetPath) || File.Exists(targetPath))
+                return false;
+
+            var branchHead = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
+            if (Succeeded(branchHead))
+            {
+                if (!string.Equals(branchHead.StdOut.Trim(), expectedHeadSha, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                var add = await Git(repositoryRoot, filters, ct, "worktree", "add", targetPath, targetBranch);
+                if (!Succeeded(add))
+                    return false;
+            }
+            else
+            {
+                if (branchHead.ExitCode != 128 || branchHead.TimedOut)
+                    return false;
+                var add = await Git(repositoryRoot, filters, ct,
+                    "worktree", "add", "-b", targetBranch, targetPath, expectedHeadSha);
+                if (!Succeeded(add))
+                    return false;
+            }
+        }
+
+        try
+        {
+            var root = await Git(targetPath, filters, ct, "rev-parse", "--show-toplevel");
+            var currentBranch = await Git(targetPath, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
+            var head = await Git(targetPath, filters, ct, "rev-parse", "--verify", "HEAD");
+            var status = await Git(targetPath, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            if (!Succeeded(root) || !SamePath(root.StdOut.Trim(), targetPath)
+                || !Succeeded(currentBranch) || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal)
+                || !Succeeded(head) || !Succeeded(status) || !string.IsNullOrWhiteSpace(status.StdOut))
+                return false;
+
+            var currentSha = head.StdOut.Trim();
+            if (string.Equals(currentSha, desiredHeadSha, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (!string.Equals(currentSha, expectedHeadSha, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var merge = await Git(targetPath, filters, ct, "merge", "--ff-only", desiredHeadSha);
+            if (!Succeeded(merge))
+                return false;
+
+            var finalHead = await Git(targetPath, filters, ct, "rev-parse", "--verify", "HEAD");
+            var finalStatus = await Git(targetPath, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            return Succeeded(finalHead)
+                && string.Equals(finalHead.StdOut.Trim(), desiredHeadSha, StringComparison.OrdinalIgnoreCase)
+                && Succeeded(finalStatus)
+                && string.IsNullOrWhiteSpace(finalStatus.StdOut);
+        }
+        finally
+        {
+            // If the process is terminated before this finally executes, the deterministic
+            // worktree path remains registered and is reused by the next attempt.
+            await RemoveTemporaryWorktreeAsync(repositoryRoot, targetPath, filters);
+        }
     }
 
     private static async Task<bool> RefreshTargetCheckoutAsync(
@@ -827,15 +945,16 @@ internal static class GitLandExecutor
                 : (null, "Could not read target checkout HEAD.", "TargetHeadUnavailable");
         }
 
-        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
-        if (Succeeded(local) && IsGitSha(local.StdOut.Trim()))
-            return (local.StdOut.Trim(), null, null);
-        if (local.TimedOut || local.ExitCode != 128)
-            return (null, "Could not inspect the local target branch safely.", "TargetHeadUnavailable");
-
-        var remote = await Git(repo, filters, ct, "remote", "get-url", "origin");
-        if (Succeeded(remote) && !string.IsNullOrWhiteSpace(remote.StdOut))
+        var remotes = await Git(repo, filters, ct, "remote");
+        if (!Succeeded(remotes))
+            return (null, "Could not inspect configured Git remotes safely.", "TargetRemoteInspectionFailed");
+        var hasOrigin = remotes.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(name => string.Equals(name.Trim(), "origin", StringComparison.Ordinal));
+        if (hasOrigin)
         {
+            var remote = await Git(repo, filters, ct, "remote", "get-url", "origin");
+            if (!Succeeded(remote) || string.IsNullOrWhiteSpace(remote.StdOut))
+                return (null, "Could not resolve the configured origin URL safely.", "TargetRemoteInspectionFailed");
             var url = remote.StdOut.Trim();
             if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
                 return (null, "The configured origin uses an unsupported Git transport.", "UnsupportedRemote");
@@ -850,8 +969,14 @@ internal static class GitLandExecutor
                 ? (fetched.StdOut.Trim(), null, null)
                 : (null, "Could not verify the fetched target branch.", "TargetHeadUnavailable");
         }
-        if (remote.ExitCode is not (0 or 1) || remote.TimedOut)
-            return (null, "Could not inspect the origin remote safely.", "TargetRemoteInspectionFailed");
+
+        // Local-only repositories are supported, but a configured origin must never
+        // silently fall back to a stale local copy when its fetch fails.
+        var local = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
+        if (Succeeded(local) && IsGitSha(local.StdOut.Trim()))
+            return (local.StdOut.Trim(), null, null);
+        if (local.TimedOut || local.ExitCode != 128)
+            return (null, "Could not inspect the local target branch safely.", "TargetHeadUnavailable");
         return (null, "The target branch is not checked out, no local target branch exists, and no origin remote is configured.", "TargetUnavailable");
     }
 
