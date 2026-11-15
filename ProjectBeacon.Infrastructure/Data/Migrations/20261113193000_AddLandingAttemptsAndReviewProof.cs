@@ -33,6 +33,12 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
             maxLength: 64,
             nullable: true);
 
+        migrationBuilder.AddColumn<Guid>(
+            name: "CheckedDeviceId",
+            table: "ReviewRuns",
+            type: "uuid",
+            nullable: true);
+
         migrationBuilder.CreateTable(
             name: "LandingAttempts",
             columns: table => new
@@ -42,6 +48,7 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
                 TaskId = table.Column<Guid>(type: "uuid", nullable: false),
                 ReviewRunId = table.Column<Guid>(type: "uuid", nullable: false),
                 RequestedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                DeviceId = table.Column<Guid>(type: "uuid", nullable: false),
                 Status = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
                 Rationale = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
                 SourceBranch = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
@@ -125,5 +132,6 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
         migrationBuilder.DropColumn(name: "CheckCommandHash", table: "ReviewRuns");
         migrationBuilder.DropColumn(name: "CheckedSourceSha", table: "ReviewRuns");
         migrationBuilder.DropColumn(name: "CheckedTreeSha", table: "ReviewRuns");
+        migrationBuilder.DropColumn(name: "CheckedDeviceId", table: "ReviewRuns");
     }
 }
