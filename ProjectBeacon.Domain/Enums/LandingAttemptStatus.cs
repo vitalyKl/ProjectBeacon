@@ -9,6 +9,7 @@ public enum LandingAttemptStatus
     Failed,
     ExecutePending,
     Landed,
+    LandedUnverified,
     RevertPending,
     Reverted,
     RevertFailed
