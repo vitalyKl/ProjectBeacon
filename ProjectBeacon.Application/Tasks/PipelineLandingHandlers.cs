@@ -87,8 +87,11 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "The workstation that produced the review proof is offline or no longer GitLand-capable; rerun the review on an eligible workstation.",
                 ErrorKind.Conflict);
 
+        if (string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch))
+            return Result.Failure<LandingAttemptDto>("The review proof does not identify its daemon-selected target branch.", ErrorKind.Conflict);
+
         var attempt = LandingAttempt.Start(
-            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id,
+            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, reviewRun.CheckedBaseBranch,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         db.LandingAttempts.Add(attempt);
         try
@@ -107,6 +110,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["taskId"] = task.Id.ToString("D"),
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Preview",
+            ["targetBranch"] = attempt.TargetBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash
@@ -250,6 +254,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (reviewRun is null || !reviewRun.IsCheckProof()
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>("The review proof no longer matches this landing attempt.", ErrorKind.Conflict);
 
@@ -281,6 +286,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["taskId"] = attempt.TaskId.ToString("D"),
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Execute",
+            ["targetBranch"] = attempt.TargetBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
@@ -369,6 +375,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["taskId"] = attempt.TaskId.ToString("D"),
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Revert",
+            ["targetBranch"] = attempt.TargetBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
