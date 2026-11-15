@@ -46,6 +46,7 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
                 Rationale = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
                 SourceBranch = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                 SourceSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                ReviewTreeSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                 ReviewCommandHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                 TargetBranch = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                 TargetHeadSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
