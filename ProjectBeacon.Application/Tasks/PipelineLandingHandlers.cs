@@ -73,6 +73,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             && (a.Status == LandingAttemptStatus.PreviewPending
                 || a.Status == LandingAttemptStatus.Previewed
                 || a.Status == LandingAttemptStatus.ExecutePending
+                || a.Status == LandingAttemptStatus.Landed
+                || a.Status == LandingAttemptStatus.LandedUnverified
                 || a.Status == LandingAttemptStatus.RevertPending), ct);
         if (pending)
             return Result.Failure<LandingAttemptDto>("A landing attempt is already active for this task.", ErrorKind.Conflict);
@@ -305,7 +307,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<LandingAttemptDto>("Landing attempt not found.");
-        if (attempt.Status != LandingAttemptStatus.Landed || string.IsNullOrWhiteSpace(attempt.MergeCommitSha))
+        if (attempt.Status is not (LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified)
+            || string.IsNullOrWhiteSpace(attempt.MergeCommitSha))
             return Result.Failure<LandingAttemptDto>("Only a landed attempt can be reverted.", ErrorKind.Conflict);
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
@@ -351,7 +354,9 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             project.Id,
             detailsJson: JsonSerializer.Serialize(new
             {
-                previousState = LandingAttemptStatus.Landed.ToString(),
+                previousState = attempt.Status == LandingAttemptStatus.RevertPending
+                    ? LandingAttemptStatus.Landed.ToString()
+                    : LandingAttemptStatus.LandedUnverified.ToString(),
                 newState = attempt.Status.ToString(),
                 resultCode = "RevertQueued"
             })));
