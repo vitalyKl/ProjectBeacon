@@ -2110,6 +2110,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProjectId", "TaskId")
                         .IsUnique()
+                        .HasDatabaseName("IX_LandingAttempts_ProjectId_TaskId_Active")
                         .HasFilter("\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
 
                     b.ToTable("LandingAttempts");
