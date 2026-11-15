@@ -529,13 +529,11 @@ internal sealed class GitLandCompletion : ICommandCompletion
         string action;
         if (!success)
         {
-            if (attempt.Status is LandingAttemptStatus.Landed
-                or LandingAttemptStatus.Reverted
-                or LandingAttemptStatus.Conflicted)
+            if (!IsInFlight(attempt.Status))
                 return;
             attempt.Fail("GitLandCommandFailed");
             resultCode = "GitLandCommandFailed";
-            action = "pipeline.landing.command_failed";
+            action = ActionFor(previousState);
         }
         else
         {
@@ -547,11 +545,8 @@ internal sealed class GitLandCompletion : ICommandCompletion
             }
             catch (JsonException)
             {
-                if (attempt.Status is LandingAttemptStatus.Landed
-                    or LandingAttemptStatus.Reverted
-                    or LandingAttemptStatus.Conflicted)
-                    return;
-                attempt.Fail("InvalidGitLandResult");
+                if (IsInFlight(attempt.Status))
+                    attempt.Fail("InvalidGitLandResult");
                 resultCode = "InvalidGitLandResult";
                 action = "pipeline.landing.command_failed";
                 goto Audit;
@@ -567,22 +562,23 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     var tree = ReadString(root, "candidateTreeSha");
                     var checkHash = ReadString(root, "checkOutputHash");
                     var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
-                    if (attempt.Status != LandingAttemptStatus.PreviewPending
-                        || string.IsNullOrWhiteSpace(targetBranch)
-                        || !IsGitSha(targetHead)
-                        || !IsGitSha(tree)
-                        || !IsSha256(checkHash)
-                        || exitCode != 0)
+                    if (attempt.Status == LandingAttemptStatus.PreviewPending
+                        && !string.IsNullOrWhiteSpace(targetBranch)
+                        && IsGitSha(targetHead)
+                        && IsGitSha(tree)
+                        && IsSha256(checkHash)
+                        && exitCode == 0)
                     {
-                        if (attempt.Status == LandingAttemptStatus.PreviewPending)
-                            attempt.Fail("InvalidPreviewEvidence");
+                        attempt.RecordPreview(targetBranch!, targetHead!, tree, checkHash, exitCode, null);
+                        resultCode = "Previewed";
+                        action = "pipeline.landing.preview_completed";
+                    }
+                    else
+                    {
+                        FailIfInFlight(attempt, "UnexpectedOrInvalidPreviewResult");
                         resultCode = "InvalidPreviewEvidence";
                         action = "pipeline.landing.preview_failed";
-                        break;
                     }
-                    attempt.RecordPreview(targetBranch, targetHead!, tree, checkHash, exitCode, null);
-                    resultCode = "Previewed";
-                    action = "pipeline.landing.preview_completed";
                     break;
                 }
                 case "conflicted":
@@ -591,26 +587,38 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     var targetHead = ReadString(root, "targetHeadSha");
                     var conflicts = root.TryGetProperty("conflicts", out var files)
                         && files.ValueKind == JsonValueKind.Array
-                            ? files.GetRawText()
-                            : "[]";
+                            ? files.EnumerateArray()
+                                .Where(item => item.ValueKind == JsonValueKind.String)
+                                .Select(item => item.GetString())
+                                .Where(value => !string.IsNullOrWhiteSpace(value))
+                                .Take(201)
+                                .ToArray()
+                            : [];
                     if (attempt.Status == LandingAttemptStatus.PreviewPending
                         && !string.IsNullOrWhiteSpace(targetBranch)
-                        && IsGitSha(targetHead))
+                        && IsGitSha(targetHead)
+                        && conflicts.Length is > 0 and <= 200)
                     {
-                        attempt.RecordPreview(targetBranch!, targetHead!, null, null, null, conflicts);
+                        attempt.RecordPreview(
+                            targetBranch!, targetHead!, null, null, null,
+                            JsonSerializer.Serialize(conflicts));
+                        resultCode = "Conflicted";
+                        action = "pipeline.landing.conflicted";
                     }
-                    resultCode = "Conflicted";
-                    action = "pipeline.landing.conflicted";
+                    else
+                    {
+                        FailIfInFlight(attempt, "UnexpectedOrInvalidConflictResult");
+                        resultCode = "InvalidConflictEvidence";
+                        action = "pipeline.landing.preview_failed";
+                    }
                     break;
                 }
                 case "failed":
                 {
-                    if (attempt.Status == LandingAttemptStatus.PreviewPending)
-                    {
-                        attempt.Fail(ReadString(root, "errorCode") ?? "PreviewFailed");
-                    }
-                    resultCode = ReadString(root, "errorCode") ?? "PreviewFailed";
-                    action = "pipeline.landing.preview_failed";
+                    var failureCode = ReadString(root, "errorCode");
+                    FailIfInFlight(attempt, IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed");
+                    resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed";
+                    action = ActionFor(previousState);
                     break;
                 }
                 case "landed":
@@ -620,17 +628,46 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     if (attempt.Status == LandingAttemptStatus.ExecutePending
                         && IsGitSha(mergeCommit) && IsGitSha(tree))
                     {
-                        attempt.RecordLanded(mergeCommit!, tree!);
-                        resultCode = "Landed";
-                        action = "pipeline.landing.completed";
+                        if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase))
+                        {
+                            attempt.RecordLanded(mergeCommit!, tree!);
+                            resultCode = "Landed";
+                            action = "pipeline.landing.completed";
+                        }
+                        else
+                        {
+                            attempt.RecordLandedUnverified(mergeCommit!, "LandedTreeMismatch");
+                            resultCode = "LandedTreeMismatch";
+                            action = "pipeline.landing.execute_failed";
+                        }
                     }
                     else
                     {
-                        if (attempt.Status == LandingAttemptStatus.ExecutePending)
-                            attempt.Fail("InvalidLandedEvidence");
+                        FailIfInFlight(attempt, "InvalidLandedEvidence");
                         resultCode = "InvalidLandedEvidence";
                         action = "pipeline.landing.execute_failed";
                     }
+                    break;
+                }
+                case "landed_unverified":
+                case "landed_tree_mismatch":
+                case "landed_metadata_mismatch":
+                {
+                    var mergeCommit = ReadString(root, "mergeCommitSha");
+                    var errorCode = ReadString(root, "errorCode");
+                    if (attempt.Status == LandingAttemptStatus.ExecutePending && IsGitSha(mergeCommit))
+                    {
+                        attempt.RecordLandedUnverified(
+                            mergeCommit!,
+                            IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed");
+                        resultCode = IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed";
+                    }
+                    else
+                    {
+                        FailIfInFlight(attempt, "InvalidLandedUnverifiedEvidence");
+                        resultCode = "InvalidLandedUnverifiedEvidence";
+                    }
+                    action = "pipeline.landing.execute_failed";
                     break;
                 }
                 case "reverted":
@@ -644,27 +681,15 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     }
                     else
                     {
-                        if (attempt.Status == LandingAttemptStatus.RevertPending)
-                            attempt.Fail("InvalidRevertEvidence");
+                        FailIfInFlight(attempt, "InvalidRevertEvidence");
                         resultCode = "InvalidRevertEvidence";
                         action = "pipeline.landing.revert_failed";
                     }
                     break;
                 }
-                case "landed_tree_mismatch":
-                {
-                    if (attempt.Status == LandingAttemptStatus.ExecutePending)
-                        attempt.Fail("LandedTreeMismatch");
-                    resultCode = "LandedTreeMismatch";
-                    action = "pipeline.landing.execute_failed";
-                    break;
-                }
                 default:
                 {
-                    if (attempt.Status is not (LandingAttemptStatus.Landed
-                        or LandingAttemptStatus.Reverted
-                        or LandingAttemptStatus.Conflicted))
-                        attempt.Fail("UnknownGitLandResult");
+                    FailIfInFlight(attempt, "UnknownGitLandResult");
                     resultCode = "UnknownGitLandResult";
                     action = "pipeline.landing.command_failed";
                     break;
@@ -682,9 +707,11 @@ internal sealed class GitLandCompletion : ICommandCompletion
             var actor = new ActorContext(
                 ActorType.Worker, null, false, null, null,
                 projectId, resolvedOrgId, ApiTokenCapability.None);
-            var outcome = attempt.Status is LandingAttemptStatus.Failed or LandingAttemptStatus.RevertFailed
-                ? AuditOutcome.Failed
-                : AuditOutcome.Success;
+            var outcome = attempt.Status is LandingAttemptStatus.Failed
+                or LandingAttemptStatus.RevertFailed
+                or LandingAttemptStatus.LandedUnverified
+                    ? AuditOutcome.Failed
+                    : AuditOutcome.Success;
             db.AuditEvents.Add(AuditEventFactory.ForActor(
                 actor,
                 action,
@@ -701,6 +728,32 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 })));
         }
     }
+
+    private static bool IsInFlight(LandingAttemptStatus status) =>
+        status is LandingAttemptStatus.PreviewPending
+            or LandingAttemptStatus.Previewed
+            or LandingAttemptStatus.ExecutePending
+            or LandingAttemptStatus.RevertPending;
+
+    private static void FailIfInFlight(LandingAttempt attempt, string code)
+    {
+        if (IsInFlight(attempt.Status))
+            attempt.Fail(code);
+    }
+
+    private static string ActionFor(LandingAttemptStatus status) =>
+        status switch
+        {
+            LandingAttemptStatus.PreviewPending => "pipeline.landing.preview_failed",
+            LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending => "pipeline.landing.execute_failed",
+            LandingAttemptStatus.RevertPending => "pipeline.landing.revert_failed",
+            _ => "pipeline.landing.command_failed"
+        };
+
+    private static bool IsSafeFailureCode(string? value) =>
+        value is { Length: > 0 and <= 80 }
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+            || character is '.' or '_' or ':' or '-');
 
     private static string? ReadString(JsonElement root, string name) =>
         root.ValueKind == JsonValueKind.Object
