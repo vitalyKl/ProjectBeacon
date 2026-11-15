@@ -104,7 +104,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
                 device.Id,
-                userId,
+                device.UserId,
                 WorkstationCommandKind.GitLand,
                 payload.ToJsonString(),
                 task.ProjectId,
@@ -145,7 +145,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return null;
         var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
         var devices = await db.DaemonDevices.IgnoreQueryFilters()
-            .Where(d => deviceIds.Contains(d.Id) && d.UserId == userId && d.RevokedAt == null)
+            .Where(d => deviceIds.Contains(d.Id) && d.RevokedAt == null)
             .ToListAsync(ct);
         var now = DateTime.UtcNow;
         return devices
@@ -254,7 +254,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
-                device.Id, userId, WorkstationCommandKind.GitLand,
+                device.Id, device.UserId, WorkstationCommandKind.GitLand,
                 payload.ToJsonString(), attempt.ProjectId, checkCommand)
             {
                 TrustedGitLand = true
@@ -309,8 +309,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             return Result.Failure<LandingAttemptDto>("Only a landed attempt can be reverted.", ErrorKind.Conflict);
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
-        if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
-            return Result.Failure<LandingAttemptDto>("The pinned project check command is unavailable.", ErrorKind.Conflict);
+        if (project is null)
+            return Result.Failure<LandingAttemptDto>("Project not found.", ErrorKind.NotFound);
         var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, userId, ct);
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
@@ -330,8 +330,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
-                device.Id, userId, WorkstationCommandKind.GitLand, payload.ToJsonString(),
-                attempt.ProjectId, project.ReviewCheckCommand.Trim())
+                device.Id, device.UserId, WorkstationCommandKind.GitLand, payload.ToJsonString(),
+                attempt.ProjectId)
             {
                 TrustedGitLand = true
             }), ct);
