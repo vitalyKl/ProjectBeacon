@@ -107,6 +107,7 @@ public sealed partial class AgentTaskGitOperationsTests
         var taskId = Guid.NewGuid();
         var attemptId = Guid.NewGuid();
         string sourceSha;
+        string reviewTreeSha;
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
         Assert.NotNull(opened.Worktree);
