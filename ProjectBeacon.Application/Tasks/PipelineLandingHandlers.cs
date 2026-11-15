@@ -58,15 +58,15 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>("The latest review verdict must be Approve.", ErrorKind.Conflict);
 
         var reviewRun = await db.ReviewRuns
-            .Where(r => r.TaskId == task.Id && r.ProjectId == task.ProjectId
-                && r.Status == ReviewRunStatus.Completed)
-            .OrderByDescending(r => r.CompletedAt)
+            .Where(r => r.TaskId == task.Id && r.ProjectId == task.ProjectId)
+            .OrderByDescending(r => r.StartedAt)
             .ThenByDescending(r => r.Id)
             .FirstOrDefaultAsync(ct);
         if (reviewRun is null || !reviewRun.IsCheckProof()
+            || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>(
-                "A successful review check for the current pinned command and task branch revision is required.", ErrorKind.Conflict);
+                "The latest review run must have a successful check for the current approval, pinned command, and task branch revision.", ErrorKind.Conflict);
 
         var pending = await db.LandingAttempts.AnyAsync(a =>
             a.ProjectId == task.ProjectId && a.TaskId == task.Id
@@ -259,12 +259,21 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
 
         var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
             r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
+        var latestReviewRunId = await db.ReviewRuns
+            .Where(r => r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId)
+            .OrderByDescending(r => r.StartedAt)
+            .ThenByDescending(r => r.Id)
+            .Select(r => (Guid?)r.Id)
+            .FirstOrDefaultAsync(ct);
         if (reviewRun is null || !reviewRun.IsCheckProof()
+            || latestReviewRunId != attempt.ReviewRunId
+            || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure<LandingAttemptDto>("The review proof no longer matches this landing attempt.", ErrorKind.Conflict);
+            return Result.Failure<LandingAttemptDto>("The latest review proof no longer matches this landing attempt.", ErrorKind.Conflict);
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
