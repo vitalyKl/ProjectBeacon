@@ -22,6 +22,8 @@ public sealed class LandingAttemptConfiguration : IEntityTypeConfiguration<Landi
         entity.Property(e => e.FailureCode).HasMaxLength(80);
         entity.Property(e => e.MergeCommitSha).HasMaxLength(64);
         entity.Property(e => e.RevertCommitSha).HasMaxLength(64);
+        entity.Property(e => e.PostMergeCheckExitCode);
+        entity.Property(e => e.PostMergeCheckOutputHash).HasMaxLength(64);
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.UpdatedAt).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.TaskId, e.CreatedAt });
