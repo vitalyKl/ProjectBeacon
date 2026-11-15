@@ -29,7 +29,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.RunReviewCheck,
             WorkstationCommandKind.RunPipelineSession,
             WorkstationCommandKind.GitSync,
-            WorkstationCommandKind.ApplyProposalPatch
+            WorkstationCommandKind.ApplyProposalPatch,
+            WorkstationCommandKind.GitLand
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
@@ -62,6 +63,18 @@ public sealed class WorkstationCommandCatalogTests
         Assert.Equal("{projectId:guid,mode:Status|PullFastForward}", descriptor.PayloadContract);
         Assert.False(descriptor.ReconcileBacked);
         Assert.Equal(TimeSpan.FromMinutes(CommandLease.Minutes), descriptor.LeaseDuration);
+    }
+
+    [Fact]
+    public void GitLand_IsTrustedAtMostOnceProjectRuntimeCommand()
+    {
+        var descriptor = WorkstationCommandCatalog.Get(WorkstationCommandKind.GitLand);
+
+        Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
+        Assert.Equal(OperationRetrySemantics.AtMostOnce, descriptor.RetrySemantics);
+        Assert.Equal(TimeSpan.FromMinutes(30), descriptor.LeaseDuration);
+        Assert.Contains("landingAttemptId:guid", descriptor.PayloadContract, StringComparison.Ordinal);
+        Assert.False(descriptor.ReconcileBacked);
     }
 
     [Fact]
