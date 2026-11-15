@@ -56,6 +56,8 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
                 FailureCode = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: true),
                 MergeCommitSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                 RevertCommitSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                PostMergeCheckExitCode = table.Column<int>(type: "integer", nullable: true),
+                PostMergeCheckOutputHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                 CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                 UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                 PreviewedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
