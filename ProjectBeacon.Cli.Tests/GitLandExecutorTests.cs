@@ -156,6 +156,132 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+    [Fact]
+    public async Task GitLand_PreviewRejectsChangesOutsideAuthorizedProjectDirectory()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        string sourceSha;
+        string reviewTreeSha;
+
+        var opened = await AgentTaskWorktree.CreateAsync(
+            projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+        Assert.NotNull(opened.Worktree);
+        await using (var taskWorktree = opened.Worktree!)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "authorized-change.txt"),
+                "inside project\n");
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.RecoveryPath, "outside-project.txt"),
+                "outside project\n");
+            await GitAsync(taskWorktree.RecoveryPath, "add", "--", ".");
+            await GitAsync(taskWorktree.RecoveryPath, "commit", "-m", "ProjectBeacon: deliberately out-of-scope task commit");
+            sourceSha = await GitAsync(taskWorktree.RecoveryPath, "rev-parse", "HEAD");
+        }
+        reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+
+        var checkCommand = "echo review-ok";
+        var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var settings = new WorkstationSettings
+        {
+            WorkspaceMode = "Branch",
+            WorktreeRoot = worktreeRoot
+        };
+        try
+        {
+            var result = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Ok, result.Error ?? result.Result);
+            using var document = JsonDocument.Parse(result.Result!);
+            Assert.Equal("failed", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("CandidateChangesOutsideProject",
+                document.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal(await GitAsync(repository, "rev-parse", "HEAD"),
+                await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitLand_ExecuteRejectsTargetAdvancedSincePreview()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        string sourceSha;
+        string reviewTreeSha;
+
+        var opened = await AgentTaskWorktree.CreateAsync(
+            projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+        Assert.NotNull(opened.Worktree);
+        await using (var taskWorktree = opened.Worktree!)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "task-change.txt"),
+                "reviewed\n");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: reviewed task change", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            sourceSha = commit.CommitSha!;
+        }
+        reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+        var checkCommand = "echo review-ok";
+        var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var settings = new WorkstationSettings { WorkspaceMode = "Branch", WorktreeRoot = worktreeRoot };
+        try
+        {
+            var preview = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(preview.Ok, preview.Error ?? preview.Result);
+            using var previewJson = JsonDocument.Parse(preview.Result!);
+            var targetHead = previewJson.RootElement.GetProperty("targetHeadSha").GetString()!;
+            var candidateTree = previewJson.RootElement.GetProperty("candidateTreeSha").GetString()!;
+
+            await File.WriteAllTextAsync(Path.Combine(projectRoot, "target-change.txt"), "advanced target\n");
+            await GitAsync(repository, "add", "src/app/target-change.txt");
+            await GitAsync(repository, "commit", "-m", "Advance target after preview");
+            var advancedTarget = await GitAsync(repository, "rev-parse", "HEAD");
+
+            var execute = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha, commandHash, checkCommand, targetHead, candidateTree),
+                settings, TestContext.Current.CancellationToken);
+            Assert.False(execute.Ok);
+            Assert.Contains("changed after preview", execute.Error ?? execute.Result ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(advancedTarget, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     private static string Payload(
         Guid projectId,
         Guid taskId,
