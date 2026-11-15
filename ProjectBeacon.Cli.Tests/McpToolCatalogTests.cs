@@ -36,6 +36,17 @@ public sealed class McpToolCatalogTests
     }
 
     [Fact]
+    public void LandingExecuteTool_IsWriteScopedToTaskWrite()
+    {
+        var descriptor = McpToolCatalog.Get(McpToolNames.PipelineLandExecute);
+
+        Assert.Equal(McpToolScope.Write, descriptor.Scope);
+        Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskWrite, descriptor.Capability);
+        Assert.Equal(McpToolHandler.Api, descriptor.Handler);
+        Assert.Equal(McpToolSurface.Pipeline, descriptor.Surface);
+    }
+
+    [Fact]
     public void TaskAttachmentTool_IsWriteScopedToTaskWrite()
     {
         var descriptor = McpToolCatalog.Get(McpToolNames.TaskAttachFile);
