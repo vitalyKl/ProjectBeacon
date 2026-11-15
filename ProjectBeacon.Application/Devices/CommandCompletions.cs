@@ -699,6 +699,25 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     }
                     break;
                 }
+                case "reverted_unverified":
+                {
+                    var revertCommit = ReadString(root, "revertCommitSha");
+                    var failureCode = ReadString(root, "errorCode");
+                    if (attempt.Status == LandingAttemptStatus.RevertPending && IsGitSha(revertCommit))
+                    {
+                        attempt.RecordRevertedUnverified(
+                            revertCommit!,
+                            IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed");
+                        resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed";
+                    }
+                    else
+                    {
+                        FailIfInFlight(attempt, "InvalidRevertUnverifiedEvidence");
+                        resultCode = "InvalidRevertUnverifiedEvidence";
+                    }
+                    action = "pipeline.landing.revert_failed";
+                    break;
+                }
                 default:
                 {
                     FailIfInFlight(attempt, "UnknownGitLandResult");
@@ -721,6 +740,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 projectId, resolvedOrgId, ApiTokenCapability.None);
             var outcome = attempt.Status is LandingAttemptStatus.Failed
                 or LandingAttemptStatus.RevertFailed
+                or LandingAttemptStatus.RevertedUnverified
                 or LandingAttemptStatus.LandedUnverified
                     ? AuditOutcome.Failed
                     : AuditOutcome.Success;
