@@ -12,6 +12,7 @@ public sealed class LandingAttemptTests
             Guid.NewGuid(),
             Guid.NewGuid(),
             new string('a', 40),
+            new string('c', 40),
             new string('b', 64),
             "Verified task branch change.");
 
@@ -80,10 +81,10 @@ public sealed class LandingAttemptTests
     [Fact]
     public void Start_RejectsInvalidProofAndRationale()
     {
-        var args = new object[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "short", new string('b', 64), "ok" };
+        var args = new object[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "short", new string('c', 40), new string('b', 64), "ok" };
         Assert.Throws<ArgumentException>(() => LandingAttempt.Start(
             (Guid)args[0], (Guid)args[1], (Guid)args[2], (Guid)args[3], (string)args[4], (string)args[5], (string)args[6]));
         Assert.Throws<ArgumentException>(() => LandingAttempt.Start(
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), new string('a', 40), new string('b', 64), "  "));
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), new string('a', 40), new string('c', 40), new string('b', 64), "  "));
     }
 }
