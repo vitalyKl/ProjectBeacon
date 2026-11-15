@@ -58,7 +58,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
             || targetBranch.Contains("..", StringComparison.Ordinal)
             || targetBranch.Contains("@{", StringComparison.Ordinal)
             || targetBranch.Contains('\\')
-            || targetBranch.Any(char.IsControl))
+            || targetBranch.Any(character => !char.IsAsciiLetterOrDigit(character)
+                && character is not ('.' or '_' or '-' or '/')))
             throw new ArgumentException("Target branch is invalid.", nameof(targetBranch));
         if (!IsGitSha(sourceSha))
             throw new ArgumentException("Source SHA is invalid.", nameof(sourceSha));
