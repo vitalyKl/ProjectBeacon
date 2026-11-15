@@ -499,44 +499,68 @@ internal static class GitLandExecutor
         if (target.Error is not null)
             return new CandidateResult("failed", ErrorCode: target.ErrorCode ?? "TargetUnavailable");
 
+        // --write-tree computes the merge result directly in Git's object database. It does
+        // not create MERGE_HEAD, touch an index, or modify the target checkout. With -z and
+        // --name-only the output is: <tree-sha> NUL [conflict-path NUL ...].
+        var mergeTree = await Git(
+            repo, filters, ct,
+            "merge-tree", "--write-tree", "--name-only", "-z", "--no-messages",
+            target.Sha!, request.SourceSha);
+        if (mergeTree.TimedOut || mergeTree.ExitCode is not (0 or 1))
+            return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeTreeFailed");
+
+        var mergeFields = mergeTree.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (mergeFields.Length == 0 || !IsGitSha(mergeFields[0]))
+            return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeTreeResultInvalid");
+        var treeSha = mergeFields[0];
+
+        var projectPrefix = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory)
+            .Replace('\\', '/')
+            .Trim('/');
+        if (mergeTree.ExitCode == 1)
+        {
+            var conflicts = mergeFields.Skip(1).ToList();
+            if (conflicts.Count == 0
+                || conflicts.Any(path => string.IsNullOrWhiteSpace(path)
+                    || path.StartsWith("/", StringComparison.Ordinal)
+                    || path.Split('/').Any(segment => segment is "" or "." or "..")))
+                return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeTreeConflictListInvalid");
+
+            if (projectPrefix.Length > 0 && projectPrefix != ".")
+            {
+                var prefix = projectPrefix + "/";
+                if (conflicts.Any(path => !path.StartsWith(prefix, StringComparison.Ordinal)))
+                    return new CandidateResult(
+                        "failed", targetBranch, target.Sha, ErrorCode: "ConflictsOutsideProject");
+                conflicts = conflicts.Select(path => path[prefix.Length..]).ToList();
+            }
+
+            return new CandidateResult("conflicted", targetBranch, target.Sha, Conflicts: conflicts);
+        }
+
+        if (mergeFields.Length != 1)
+            return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "UnexpectedMergeTreeOutput");
+
+        // Materialize the immutable candidate tree as an unreferenced commit so Git can
+        // check it out in a temporary worktree for the configured verification command.
+        // The target ref and every registered checkout remain untouched during Preview.
+        var candidateCommit = await Git(repo, filters, ct,
+            "-c", "user.name=ProjectBeacon",
+            "-c", "user.email=projectbeacon@localhost",
+            "-c", "commit.gpgsign=false",
+            "commit-tree", treeSha,
+            "-p", target.Sha!,
+            "-p", request.SourceSha,
+            "-m", $"ProjectBeacon: preview task {request.TaskId:N}");
+        if (!Succeeded(candidateCommit) || !IsGitSha(candidateCommit.StdOut.Trim()))
+            return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "CandidateCommitFailed");
+
         var temp = CreateTemporaryWorktreePath(request.LandingAttemptId, "candidate");
         try
         {
-            var add = await Git(repo, filters, ct, "worktree", "add", "--detach", temp, target.Sha!);
+            var add = await Git(repo, filters, ct, "worktree", "add", "--detach", temp, candidateCommit.StdOut.Trim());
             if (!Succeeded(add))
-                return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "CandidateWorktreeFailed");
-
-            var merge = await Git(temp, filters, ct,
-                "-c", "user.name=ProjectBeacon",
-                "-c", "user.email=projectbeacon-agent@localhost",
-                "-c", "commit.gpgsign=false",
-                "-c", "core.editor=true",
-                "merge", "--no-commit", "--no-ff", "--no-edit", "--no-verify", request.SourceSha);
-            if (!Succeeded(merge))
-            {
-                var conflicts = await ReadConflictsAsync(temp, filters, ct);
-                if (conflicts.Count == 0)
-                    return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeCandidateFailed");
-
-                var projectPrefix = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory)
-                    .Replace('\\', '/')
-                    .Trim('/');
-                if (projectPrefix.Length > 0 && projectPrefix != ".")
-                {
-                    var prefix = projectPrefix + "/";
-                    if (conflicts.Any(path => !path.StartsWith(prefix, StringComparison.Ordinal)))
-                        return new CandidateResult(
-                            "failed", targetBranch, target.Sha, ErrorCode: "ConflictsOutsideProject");
-                    conflicts = conflicts.Select(path => path[prefix.Length..]).ToList();
-                }
-
-                return new CandidateResult("conflicted", targetBranch, target.Sha, Conflicts: conflicts);
-            }
-
-            var tree = await Git(temp, filters, ct, "write-tree");
-            if (!Succeeded(tree) || !IsGitSha(tree.StdOut.Trim()))
-                return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "CandidateTreeFailed");
-            var treeSha = tree.StdOut.Trim();
+                return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "CandidateWorktreeFailed");
 
             var treeEntries = await Git(temp, filters, ct, "ls-tree", "-r", treeSha);
             if (!Succeeded(treeEntries))
@@ -546,9 +570,6 @@ internal static class GitLandExecutor
                 || line.StartsWith("160000 commit ", StringComparison.Ordinal)))
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "SymlinkOrSubmoduleNotAllowed");
 
-            var projectPrefix = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory)
-                .Replace('\\', '/')
-                .Trim('/');
             var scope = await CheckCandidateScopeAsync(temp, target.Sha!, projectPrefix, filters, ct);
             if (scope.Error is not null)
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: scope.Error);
@@ -565,11 +586,15 @@ internal static class GitLandExecutor
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "CandidateProjectMissing");
 
             var check = EvalCheck.Execute(checkDirectory, request.CheckCommand);
-            var outputHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(check.Output ?? string.Empty))).ToLowerInvariant();
+            var outputHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(check.Output ?? string.Empty))).ToLowerInvariant();
+            var headAfter = await Git(temp, filters, ct, "rev-parse", "--verify", "HEAD");
             var workingDiff = await Git(temp, filters, ct, "diff", "--quiet");
             var untracked = await Git(temp, filters, ct, "ls-files", "--others", "--exclude-standard");
             var afterTree = await Git(temp, filters, ct, "write-tree");
-            if (workingDiff.ExitCode != 0 || workingDiff.TimedOut
+            if (!Succeeded(headAfter)
+                || !string.Equals(headAfter.StdOut.Trim(), candidateCommit.StdOut.Trim(), StringComparison.OrdinalIgnoreCase)
+                || workingDiff.ExitCode != 0 || workingDiff.TimedOut
                 || !Succeeded(untracked) || !string.IsNullOrWhiteSpace(untracked.StdOut)
                 || !Succeeded(afterTree) || !string.Equals(afterTree.StdOut.Trim(), treeSha, StringComparison.OrdinalIgnoreCase))
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, outputHash, check.ExitCode,
