@@ -181,6 +181,28 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>
+    /// Preserves an in-flight execute/revert when the workstation acknowledgement is lost.
+    /// The target ref may already have moved; a retry must reconcile the attempt marker before
+    /// deciding whether to mutate the target again.
+    /// </summary>
+    public void MarkCommandCompletionUnknown()
+    {
+        if (Status is not (LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending))
+            throw new InvalidOperationException($"Cannot mark a landing command uncertain in status {Status}.");
+        FailureCode = "CommandCompletionUnknown";
+        Touch();
+    }
+
+    public void ClearCommandCompletionUnknown()
+    {
+        if (Status is not (LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
+            || !string.Equals(FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal))
+            throw new InvalidOperationException("The landing attempt is not awaiting command reconciliation.");
+        FailureCode = null;
+        Touch();
+    }
+
     public void MarkRevertPending()
     {
         if (Status is not (LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified))
