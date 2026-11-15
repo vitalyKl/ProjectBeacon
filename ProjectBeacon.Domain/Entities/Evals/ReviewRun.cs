@@ -148,8 +148,8 @@ public sealed class ReviewRun : Entity, IProjectScoped
         && !value.StartsWith("/", StringComparison.Ordinal)
         && !value.EndsWith("/", StringComparison.Ordinal)
         && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
-        && value.All(character => !char.IsControl(character)
-            && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+            || character is '.' or '_' or '-' or '/');
 
     /// <summary>
     /// Starts an agent review and completes it immediately, using <paramref name="transcriptRef"/> as the artifact.
