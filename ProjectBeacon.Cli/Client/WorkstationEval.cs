@@ -360,12 +360,31 @@ public static class WorkstationEval
                 return Result.Failure<string>(validatedPath.Error ?? "path is not inside the task project.");
 
             var checkResult = EvalCheck.Execute(validatedPath.Value!, checkCommand);
+            var headAfter = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "rev-parse", "--verify", "HEAD");
+            var diffAfter = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "diff", "--quiet");
+            var stagedTreeAfter = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "write-tree");
+            var untrackedAfter = await AgentSessionWorktree.RunGitAsync(
+                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "ls-files", "--others", "--exclude-standard");
+            var checkWasReadOnly = headAfter.ExitCode == 0 && !headAfter.TimedOut
+                && string.Equals(headAfter.StdOut.Trim(), sourceSha, StringComparison.OrdinalIgnoreCase)
+                && diffAfter.ExitCode == 0 && !diffAfter.TimedOut
+                && stagedTreeAfter.ExitCode == 0 && !stagedTreeAfter.TimedOut
+                && string.Equals(stagedTreeAfter.StdOut.Trim(), checkedTreeSha, StringComparison.OrdinalIgnoreCase)
+                && untrackedAfter.ExitCode == 0 && !untrackedAfter.TimedOut
+                && string.IsNullOrWhiteSpace(untrackedAfter.StdOut);
+            var exitCode = checkWasReadOnly ? checkResult.ExitCode : -2;
+            var output = checkWasReadOnly
+                ? checkResult.Output
+                : "Review check modified the checked-out source tree; its result cannot be used as review proof. " + checkResult.Output;
             return Result.Ok(JsonSerializer.Serialize(new
             {
                 reviewRunId,
                 taskId,
-                exitCode = checkResult.ExitCode,
-                checkOutput = checkResult.Output,
+                exitCode,
+                checkOutput = output,
                 checkedSourceSha = sourceSha,
                 checkedTreeSha,
                 checkCommandHash = actualCommandHash
