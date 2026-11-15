@@ -180,7 +180,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         attempt.Id, attempt.TaskId, attempt.Status, attempt.SourceBranch, attempt.SourceSha,
         attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
         attempt.MergeCommitSha, attempt.RevertCommitSha, attempt.FailureCode,
-        attempt.ConflictFilesJson, attempt.CreatedAt, attempt.UpdatedAt);
+        attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
+        attempt.CreatedAt, attempt.UpdatedAt);
 }
 
 /// <summary>Reads one landing attempt scoped to the requested task.</summary>
