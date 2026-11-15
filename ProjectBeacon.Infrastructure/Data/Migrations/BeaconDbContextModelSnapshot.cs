@@ -2080,6 +2080,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("ReviewTreeSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(24)
