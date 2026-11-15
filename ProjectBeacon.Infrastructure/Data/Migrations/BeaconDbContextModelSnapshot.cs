@@ -1315,6 +1315,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("CheckedDeviceId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CheckedBaseBranch")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2100,6 +2104,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("TargetBranch")
+                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
