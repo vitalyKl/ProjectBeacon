@@ -226,21 +226,23 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
-        if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
-            return Result.Failure<PipelineStateDto>("A pinned project ReviewCheckCommand is required for a review proof.", ErrorKind.Conflict);
-        var checkCommand = project.ReviewCheckCommand.Trim();
         if (command.Actor.IsHuman)
         {
             if (string.IsNullOrWhiteSpace(bodyCommand))
                 return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
-            if (!string.Equals(bodyCommand, checkCommand, StringComparison.Ordinal))
-                return Result.Failure<PipelineStateDto>("The requested check command must exactly match the project's pinned ReviewCheckCommand.", ErrorKind.Conflict);
         }
         else if (!string.IsNullOrEmpty(bodyCommand))
         {
             return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; the project's pinned ReviewCheckCommand is used instead.", ErrorKind.Validation);
         }
+
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
+            return Result.Failure<PipelineStateDto>("A pinned project ReviewCheckCommand is required for a review proof.", ErrorKind.Conflict);
+        var checkCommand = project.ReviewCheckCommand.Trim();
+        if (command.Actor.IsHuman
+            && !string.Equals(bodyCommand, checkCommand, StringComparison.Ordinal))
+            return Result.Failure<PipelineStateDto>("The requested check command must exactly match the project's pinned ReviewCheckCommand.", ErrorKind.Conflict);
 
         var checkCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
