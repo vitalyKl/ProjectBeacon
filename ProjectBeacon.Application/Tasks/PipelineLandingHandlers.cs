@@ -248,6 +248,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
         if (reviewRun is null || !reviewRun.IsCheckProof()
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>("The review proof no longer matches this landing attempt.", ErrorKind.Conflict);
 
