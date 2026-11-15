@@ -28,6 +28,7 @@ internal static class GitLandExecutor
         string? MergeCommitSha);
 
     private sealed record TargetCheckout(string Path, bool CheckedOut);
+    private sealed record PostMergeCheckResult(int? ExitCode, string? OutputHash, string? Output, string? ErrorCode);
     private sealed record CandidateResult(
         string Status,
         string? TargetBranch = null,
@@ -286,6 +287,31 @@ internal static class GitLandExecutor
                 actualTreeSha = Succeeded(mergeTree) ? mergeTree.StdOut.Trim() : null,
                 errorCode = "LandedTreeMismatch"
             }), null);
+        var postMergeCheck = await RunPostMergeCheckAsync(
+            workspace,
+            request,
+            mergeCommitSha,
+            candidate.CandidateTreeSha!,
+            filters,
+            ct);
+        if (postMergeCheck.ExitCode != 0 || postMergeCheck.ErrorCode is not null
+            || !IsSha256(postMergeCheck.OutputHash))
+        {
+            return (true, JsonSerializer.Serialize(new
+            {
+                status = "landed_unverified",
+                targetBranch,
+                sourceSha = request.SourceSha,
+                targetHeadSha = request.TargetHeadSha,
+                candidateTreeSha = candidate.CandidateTreeSha,
+                mergeCommitSha,
+                postMergeCheckExitCode = postMergeCheck.ExitCode,
+                postMergeCheckOutputHash = postMergeCheck.OutputHash,
+                postMergeCheckOutput = postMergeCheck.Output,
+                errorCode = postMergeCheck.ErrorCode ?? "PostMergeCheckFailed"
+            }), null);
+        }
+
         return (true, JsonSerializer.Serialize(new
         {
             status = "landed",
@@ -293,8 +319,77 @@ internal static class GitLandExecutor
             sourceSha = request.SourceSha,
             targetHeadSha = request.TargetHeadSha,
             candidateTreeSha = candidate.CandidateTreeSha,
-            mergeCommitSha
+            mergeCommitSha,
+            postMergeCheckExitCode = postMergeCheck.ExitCode,
+            postMergeCheckOutputHash = postMergeCheck.OutputHash,
+            postMergeCheckOutput = postMergeCheck.Output
         }), null);
+    }
+
+    private static async Task<PostMergeCheckResult> RunPostMergeCheckAsync(
+        AgentTaskWorktree workspace,
+        Request request,
+        string mergeCommitSha,
+        string expectedTreeSha,
+        string[] filters,
+        CancellationToken ct)
+    {
+        var repositoryRoot = workspace.RepositoryRoot;
+        var temp = CreateTemporaryWorktreePath(request.LandingAttemptId, "post-merge-check");
+        try
+        {
+            var add = await Git(repositoryRoot, filters, ct, "worktree", "add", "--detach", temp, mergeCommitSha);
+            if (!Succeeded(add))
+                return new PostMergeCheckResult(null, null, ClipGitOutput(add.StdErr), "PostMergeCheckWorktreeFailed");
+
+            var relativeProject = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory);
+            var checkDirectory = relativeProject == "."
+                ? temp
+                : Path.GetFullPath(Path.Combine(temp, relativeProject));
+            if (!IsWithin(temp, checkDirectory) || !Directory.Exists(checkDirectory))
+                return new PostMergeCheckResult(null, null, null, "PostMergeCheckProjectMissing");
+
+            var check = EvalCheck.Execute(checkDirectory, request.CheckCommand);
+            var output = Clip(check.Output);
+            var outputHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(check.Output ?? string.Empty))).ToLowerInvariant();
+
+            var head = await Git(temp, filters, ct, "rev-parse", "--verify", "HEAD");
+            var tree = await Git(temp, filters, ct, "write-tree");
+            var diff = await Git(temp, filters, ct, "diff", "--quiet");
+            var untracked = await Git(temp, filters, ct, "ls-files", "--others", "--exclude-standard");
+            var immutable = Succeeded(head)
+                && string.Equals(head.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                && Succeeded(tree)
+                && string.Equals(tree.StdOut.Trim(), expectedTreeSha, StringComparison.OrdinalIgnoreCase)
+                && diff.ExitCode == 0 && !diff.TimedOut
+                && Succeeded(untracked) && string.IsNullOrWhiteSpace(untracked.StdOut);
+            if (!immutable)
+                return new PostMergeCheckResult(-2, outputHash, Clip(
+                    "The post-merge check modified the merge worktree; its result is not accepted. " + output),
+                    "PostMergeCheckModifiedFiles");
+            if (check.ExitCode != 0)
+                return new PostMergeCheckResult(check.ExitCode, outputHash, output, "PostMergeCheckFailed");
+            return new PostMergeCheckResult(0, outputHash, output, null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return new PostMergeCheckResult(null, null, ClipGitOutput(ex.Message), "PostMergeCheckError");
+        }
+        finally
+        {
+            await RemoveTemporaryWorktreeAsync(repositoryRoot, temp, filters);
+        }
+    }
+
+    private static string ClipGitOutput(string? value)
+    {
+        var output = value?.Trim() ?? string.Empty;
+        return output.Length <= 2000 ? output : output[..2000];
     }
 
     private static async Task<(bool Ok, string? Result, string? Error)> RevertAsync(
