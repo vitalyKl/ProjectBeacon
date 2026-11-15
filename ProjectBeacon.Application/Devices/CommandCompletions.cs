@@ -464,7 +464,7 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase);
             if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha))
-                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!);
+                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId);
             else
                 run.Fail(exitCode == 0
                     ? "Review check result did not prove the pinned command and checked Git revision."
@@ -482,7 +482,8 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 .SetProperty(r => r.CompletedAt, run.CompletedAt)
                 .SetProperty(r => r.CheckCommandHash, run.CheckCommandHash)
                 .SetProperty(r => r.CheckedSourceSha, run.CheckedSourceSha)
-                .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha), ct);
+                .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha)
+                .SetProperty(r => r.CheckedDeviceId, run.CheckedDeviceId), ct);
     }
 
     private static string? ReadString(string json, string name)
