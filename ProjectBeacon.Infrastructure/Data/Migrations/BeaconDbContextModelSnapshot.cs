@@ -1312,6 +1312,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("CheckedDeviceId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2049,6 +2052,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ReviewRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ReviewCommandHash")
