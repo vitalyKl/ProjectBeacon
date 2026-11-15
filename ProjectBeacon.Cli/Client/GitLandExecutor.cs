@@ -20,6 +20,7 @@ internal static class GitLandExecutor
         Guid TaskId,
         Guid LandingAttemptId,
         string Action,
+        string TargetBranch,
         string SourceSha,
         string ReviewTreeSha,
         string CheckCommandHash,
@@ -72,6 +73,8 @@ internal static class GitLandExecutor
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
             return (false, null, "The task branch workspace has no daemon-selected target branch.");
+        if (!string.Equals(taskWorkspace.BaseBranch, request.TargetBranch, StringComparison.Ordinal))
+            return (false, null, "The task workspace target branch no longer matches the branch pinned by review proof.");
 
         var repositoryRoot = taskWorkspace.RepositoryRoot;
         var filters = await ReadDisabledFiltersAsync(repositoryRoot, ct);
@@ -175,7 +178,7 @@ internal static class GitLandExecutor
             return (false, null, "The candidate tree changed after preview; a new landing preview is required.");
 
         var repo = workspace.RepositoryRoot;
-        var targetBranch = workspace.BaseBranch!;
+        var targetBranch = request.TargetBranch;
         var branchCheck = await Git(repo, filters, ct, "check-ref-format", "--branch", targetBranch);
         if (!Succeeded(branchCheck))
             return (false, null, "The daemon-selected target branch is not a valid branch name.");
@@ -775,11 +778,13 @@ internal static class GitLandExecutor
                 return false;
             }
             var action = root["action"]?.GetValue<string>();
+            var targetBranch = root["targetBranch"]?.GetValue<string>();
             var sourceSha = root["sourceSha"]?.GetValue<string>();
             var reviewTreeSha = root["reviewTreeSha"]?.GetValue<string>();
             var hash = root["checkCommandHash"]?.GetValue<string>();
             var checkCommand = root["checkCommand"]?.GetValue<string>();
             if (action is not ("Preview" or "Execute" or "Revert")
+                || !IsSafeBranchName(targetBranch)
                 || !IsGitSha(sourceSha)
                 || !IsGitSha(reviewTreeSha)
                 || hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit)
@@ -790,7 +795,7 @@ internal static class GitLandExecutor
                 return false;
             }
             request = new Request(
-                projectId, taskId, attemptId, action, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
+                projectId, taskId, attemptId, action, targetBranch!, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
                 root["mergeCommitSha"]?.GetValue<string>());
