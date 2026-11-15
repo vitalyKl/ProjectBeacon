@@ -751,8 +751,8 @@ internal static class GitLandExecutor
 
     private static bool IsSafeBranchName(string? value) =>
         value is { Length: > 0 and <= 200 }
-        && !value.StartsWith('/', StringComparison.Ordinal)
-        && !value.EndsWith('/', StringComparison.Ordinal)
+        && !value.StartsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith("/", StringComparison.Ordinal)
         && !value.Contains("..", StringComparison.Ordinal)
         && !value.Contains("@{", StringComparison.Ordinal)
         && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
