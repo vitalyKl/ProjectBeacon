@@ -421,6 +421,9 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
             return;
         if (row.ProjectId is Guid projectId && run.ProjectId != projectId)
             return;
+        if (DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId") != run.TaskId
+            || row.DeviceId == Guid.Empty)
+            return;
 
         if (!success)
         {
