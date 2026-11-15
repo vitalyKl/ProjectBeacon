@@ -66,6 +66,10 @@ public sealed partial class AgentTaskGitOperationsTests
             using var landedJson = JsonDocument.Parse(execute.Result!);
             Assert.Equal("landed", landedJson.RootElement.GetProperty("status").GetString());
             var mergeCommit = landedJson.RootElement.GetProperty("mergeCommitSha").GetString()!;
+            Assert.Equal(0, landedJson.RootElement.GetProperty("postMergeCheckExitCode").GetInt32());
+            Assert.Matches(
+                "^[0-9a-f]{64}$",
+                landedJson.RootElement.GetProperty("postMergeCheckOutputHash").GetString() ?? string.Empty);
             Assert.Equal(mergeCommit, await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.Equal(candidateTree, await GitAsync(repository, "rev-parse", "HEAD^{tree}"));
             Assert.Equal("reviewed task change\n",
