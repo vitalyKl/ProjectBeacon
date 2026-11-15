@@ -2060,6 +2060,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int?>("PostMergeCheckExitCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PostMergeCheckOutputHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime?>( "RevertedAt")
                         .HasColumnType("timestamp with time zone");
 
