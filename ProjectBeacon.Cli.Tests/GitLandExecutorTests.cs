@@ -143,7 +143,7 @@ public sealed partial class AgentTaskGitOperationsTests
             using var document = JsonDocument.Parse(result.Result!);
             Assert.Equal("conflicted", document.RootElement.GetProperty("status").GetString());
             Assert.Contains(
-                "src/app/shared.txt",
+                "shared.txt",
                 document.RootElement.GetProperty("conflicts").EnumerateArray().Select(item => item.GetString() ?? string.Empty));
             Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
             Assert.Equal("target version\n", await File.ReadAllTextAsync(Path.Combine(projectRoot, "shared.txt")));
