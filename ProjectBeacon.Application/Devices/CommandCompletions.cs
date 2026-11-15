@@ -469,13 +469,24 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(trustedCommand))).ToLowerInvariant();
             var commandMatches = actualCommandHash is not null
                 && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase);
-            if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha)
+                && (reportedCommandHash is null
+                    || string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase));
+            var hasAnyGitEvidence = sourceSha is not null || treeSha is not null
+                || reportedCommandHash is not null || checkedBaseBranch is not null;
+            var hasCompleteGitEvidence = IsGitSha(sourceSha)
+                && IsGitSha(treeSha)
+                && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(checkedBaseBranch)
                 && checkedBaseBranch.Length <= 200
                 && !checkedBaseBranch.Contains("..", StringComparison.Ordinal)
-                && !checkedBaseBranch.Contains('\\'))
+                && !checkedBaseBranch.Contains('\\');
+
+            if (exitCode == 0 && commandMatches && hasCompleteGitEvidence)
                 run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId, checkedBaseBranch!);
+            else if (exitCode == 0 && commandMatches && !hasAnyGitEvidence)
+                // Legacy Snapshot-mode review remains a valid review result, but cannot be
+                // used as a landing proof because it is not bound to a task-branch commit.
+                run.Complete(output, $"cmd:{row.Id:D}");
             else
                 run.Fail(exitCode == 0
                     ? "Review check result did not prove the pinned command and checked Git revision."
