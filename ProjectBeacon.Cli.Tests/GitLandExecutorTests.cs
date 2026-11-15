@@ -375,8 +375,9 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Equal(originalWorkstationHead, await GitAsync(repository, "rev-parse", "HEAD"));
             Assert.Equal("workstation-checkout", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
             Assert.DoesNotContain(
+                "branch refs/heads/main",
                 await GitAsync(repository, "worktree", "list", "--porcelain"),
-                block => block.Contains("branch refs/heads/main", StringComparison.Ordinal));
+                StringComparison.Ordinal);
 
             var revert = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
@@ -391,8 +392,9 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Equal("workstation-checkout", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
             Assert.Equal(string.Empty, await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
             Assert.DoesNotContain(
+                "branch refs/heads/main",
                 await GitAsync(repository, "worktree", "list", "--porcelain"),
-                block => block.Contains("branch refs/heads/main", StringComparison.Ordinal));
+                StringComparison.Ordinal);
         }
         finally
         {
