@@ -21,6 +21,7 @@ internal static class GitLandExecutor
         Guid LandingAttemptId,
         string Action,
         string SourceSha,
+        string ReviewTreeSha,
         string CheckCommandHash,
         string CheckCommand,
         string? TargetHeadSha,
@@ -91,6 +92,11 @@ internal static class GitLandExecutor
             var sourceHead = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(sourceHead) || !string.Equals(sourceHead.StdOut.Trim(), request.SourceSha, StringComparison.OrdinalIgnoreCase))
                 return (false, null, "The task branch has changed since the successful review check.");
+
+            var sourceTree = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", request.SourceSha + "^{tree}");
+            if (!Succeeded(sourceTree)
+                || !string.Equals(sourceTree.StdOut.Trim(), request.ReviewTreeSha, StringComparison.OrdinalIgnoreCase))
+                return (false, null, "The task branch tree does not match the recorded review proof.");
 
             var sourceStatus = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "status", "--porcelain", "--untracked-files=all");
             if (!Succeeded(sourceStatus))
@@ -747,6 +753,7 @@ internal static class GitLandExecutor
             var checkCommand = root["checkCommand"]?.GetValue<string>();
             if (action is not ("Preview" or "Execute" or "Revert")
                 || !IsGitSha(sourceSha)
+                || !IsGitSha(reviewTreeSha)
                 || hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit)
                 || (action is not "Revert" && string.IsNullOrWhiteSpace(checkCommand))
                 || checkCommand?.Length > 2000)
@@ -755,7 +762,7 @@ internal static class GitLandExecutor
                 return false;
             }
             request = new Request(
-                projectId, taskId, attemptId, action, sourceSha!, hash!, checkCommand ?? string.Empty,
+                projectId, taskId, attemptId, action, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
                 root["mergeCommitSha"]?.GetValue<string>());
