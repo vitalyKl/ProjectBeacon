@@ -238,12 +238,15 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<LandingAttemptDto>("Landing attempt not found.", ErrorKind.NotFound);
-        if (attempt.Status != LandingAttemptStatus.Previewed
+        var reconciliationRetry = attempt.Status == LandingAttemptStatus.ExecutePending
+            && string.Equals(attempt.FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal);
+        if ((!reconciliationRetry && attempt.Status != LandingAttemptStatus.Previewed)
             || string.IsNullOrWhiteSpace(attempt.TargetBranch)
             || string.IsNullOrWhiteSpace(attempt.TargetHeadSha)
             || string.IsNullOrWhiteSpace(attempt.CandidateTreeSha)
             || attempt.CandidateCheckExitCode != 0)
-            return Result.Failure<LandingAttemptDto>("Only a successful, complete preview can be executed.", ErrorKind.Conflict);
+            return Result.Failure<LandingAttemptDto>(
+                "Execute requires a successful preview or an explicit retry of an unacknowledged Execute.", ErrorKind.Conflict);
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == attempt.TaskId && t.ProjectId == attempt.ProjectId, ct);
         if (task is null || task.PipelineStage != TaskPipelineStage.Approved)
@@ -256,6 +259,14 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         if (!string.Equals(commandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>("The project's review check command changed after Preview.", ErrorKind.Conflict);
+
+        var latestVerdict = await db.ReviewVerdicts
+            .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
+            .OrderByDescending(v => v.CreatedAt)
+            .ThenByDescending(v => v.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
+            return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
 
         var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
             r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
@@ -275,27 +286,27 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>("The latest review proof no longer matches this landing attempt.", ErrorKind.Conflict);
 
-        var latestVerdict = await db.ReviewVerdicts
-            .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
-            .OrderByDescending(v => v.CreatedAt)
-            .ThenByDescending(v => v.Id)
-            .FirstOrDefaultAsync(ct);
-        if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
-            return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
-
         var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, attempt.DeviceId, ct);
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
-        var claimed = await db.LandingAttempts
-            .Where(candidate => candidate.Id == attempt.Id
-                && candidate.Status == LandingAttemptStatus.Previewed)
-            .ExecuteUpdateAsync(update => update
-                .SetProperty(candidate => candidate.Status, LandingAttemptStatus.ExecutePending)
-                .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
-                .SetProperty(candidate => candidate.FailureCode, (string?)null), ct);
+        var claimed = reconciliationRetry
+            ? await db.LandingAttempts
+                .Where(candidate => candidate.Id == attempt.Id
+                    && candidate.Status == LandingAttemptStatus.ExecutePending
+                    && candidate.FailureCode == "CommandCompletionUnknown")
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
+                    .SetProperty(candidate => candidate.FailureCode, (string?)null), ct)
+            : await db.LandingAttempts
+                .Where(candidate => candidate.Id == attempt.Id
+                    && candidate.Status == LandingAttemptStatus.Previewed)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(candidate => candidate.Status, LandingAttemptStatus.ExecutePending)
+                    .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
+                    .SetProperty(candidate => candidate.FailureCode, (string?)null), ct);
         if (claimed != 1)
-            return Result.Failure<LandingAttemptDto>("The landing preview was already claimed by another execution request.", ErrorKind.Conflict);
+            return Result.Failure<LandingAttemptDto>("The landing attempt was already claimed by another execution request.", ErrorKind.Conflict);
         await db.Entry(attempt).ReloadAsync(ct);
         var payload = new JsonObject
         {
@@ -319,7 +330,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             }), ct);
         if (!queued.Success)
         {
-            attempt.Fail("EnqueueFailed");
+            if (reconciliationRetry)
+                attempt.MarkCommandCompletionUnknown();
+            else
+                attempt.Fail("EnqueueFailed");
             await db.SaveChangesAsync(ct);
             return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Execute.");
         }
