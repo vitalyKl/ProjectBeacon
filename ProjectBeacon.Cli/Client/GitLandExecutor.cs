@@ -324,11 +324,10 @@ internal static class GitLandExecutor
             || await IsAncestorAsync(repo, filters, mergeCommitSha, finalHead.StdOut.Trim(), ct) != true)
             return BusinessFailure("LandingCommitNotOnTargetBranch");
 
-        if (checkout.Checkout!.CheckedOut && SamePath(checkout.Checkout.Path, repo)
-            && string.Equals(finalHead.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase))
+        if (checkout.Checkout!.CheckedOut)
         {
             var refreshed = await RefreshTargetCheckoutAsync(
-                repo, request.TargetHeadSha!, mergeCommitSha, filters, CancellationToken.None);
+                checkout.Checkout.Path, request.TargetHeadSha!, finalHead.StdOut.Trim(), filters, CancellationToken.None);
             if (!refreshed)
                 return (true, JsonSerializer.Serialize(new
                 {
@@ -408,11 +407,11 @@ internal static class GitLandExecutor
         var checkout = await FindTargetCheckoutAsync(repo, request.TargetBranch, filters, ct);
         if (checkout.Error is not null)
             return BusinessFailure("TargetCheckoutUnavailable");
-        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
-            return BusinessFailure("TargetCheckedOutElsewhere");
 
         var targetAlreadyReverted = await IsAncestorAsync(
             repo, filters, revertCommitSha, branchHead.StdOut.Trim(), ct) == true;
+        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo) && !targetAlreadyReverted)
+            return BusinessFailure("TargetCheckedOutElsewhere");
         if (!targetAlreadyReverted)
         {
             if (!string.Equals(branchHead.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
@@ -433,11 +432,10 @@ internal static class GitLandExecutor
             || await IsAncestorAsync(repo, filters, revertCommitSha, finalHead.StdOut.Trim(), ct) != true)
             return BusinessFailure("RevertCommitNotOnTargetBranch");
 
-        if (checkout.Checkout!.CheckedOut && SamePath(checkout.Checkout.Path, repo)
-            && string.Equals(finalHead.StdOut.Trim(), revertCommitSha, StringComparison.OrdinalIgnoreCase))
+        if (checkout.Checkout!.CheckedOut)
         {
             var refreshed = await RefreshTargetCheckoutAsync(
-                repo, request.MergeCommitSha!, revertCommitSha, filters, CancellationToken.None);
+                checkout.Checkout.Path, request.MergeCommitSha!, finalHead.StdOut.Trim(), filters, CancellationToken.None);
             if (!refreshed)
                 return (true, JsonSerializer.Serialize(new
                 {
