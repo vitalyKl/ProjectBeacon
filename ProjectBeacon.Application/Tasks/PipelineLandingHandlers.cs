@@ -79,8 +79,16 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         if (pending)
             return Result.Failure<LandingAttemptDto>("A landing attempt is already active for this task.", ErrorKind.Conflict);
 
+        if (reviewRun.CheckedDeviceId is not { } reviewedDeviceId || reviewedDeviceId == Guid.Empty)
+            return Result.Failure<LandingAttemptDto>("The review proof does not identify its workstation.", ErrorKind.Conflict);
+        var device = await FindLandingDeviceAsync(db, task.ProjectId, reviewedDeviceId, ct);
+        if (device is null)
+            return Result.Failure<LandingAttemptDto>(
+                "The workstation that produced the review proof is offline or no longer GitLand-capable; rerun the review on an eligible workstation.",
+                ErrorKind.Conflict);
+
         var attempt = LandingAttempt.Start(
-            task.ProjectId, task.Id, reviewRun.Id, userId,
+            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         db.LandingAttempts.Add(attempt);
         try
@@ -91,15 +99,6 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         {
             return Result.Failure<LandingAttemptDto>(
                 "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
-        }
-
-        var device = await FindLandingDeviceAsync(db, task.ProjectId, ct);
-        if (device is null)
-        {
-            attempt.Fail("NoGitLandWorkstation");
-            await db.SaveChangesAsync(ct);
-            return Result.Failure<LandingAttemptDto>(
-                "No online project workstation attached to this project advertises git-land-v1.", ErrorKind.Conflict);
         }
 
         var payload = new JsonObject
@@ -147,16 +146,18 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
     }
 
     internal static async Task<Domain.Entities.Devices.DaemonDevice?> FindLandingDeviceAsync(
-        IBeaconDb db, Guid projectId, CancellationToken ct)
+        IBeaconDb db, Guid projectId, Guid deviceId, CancellationToken ct)
     {
+        if (deviceId == Guid.Empty)
+            return null;
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.ProjectId == projectId && !string.IsNullOrWhiteSpace(r.LocalRoot))
+            .Where(r => r.ProjectId == projectId && r.DeviceId == deviceId
+                && !string.IsNullOrWhiteSpace(r.LocalRoot))
             .ToListAsync(ct);
         if (runtimes.Count == 0)
             return null;
-        var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
         var devices = await db.DaemonDevices.IgnoreQueryFilters()
-            .Where(d => deviceIds.Contains(d.Id) && d.RevokedAt == null)
+            .Where(d => d.Id == deviceId && d.RevokedAt == null)
             .ToListAsync(ct);
         if (devices.Count == 0)
             return null;
@@ -179,7 +180,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
     internal static LandingAttemptDto ToDto(LandingAttempt attempt) => new(
         attempt.Id, attempt.TaskId, attempt.Status, attempt.SourceBranch, attempt.SourceSha,
-        attempt.ReviewTreeSha, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
+        attempt.ReviewTreeSha, attempt.DeviceId, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
         attempt.MergeCommitSha, attempt.RevertCommitSha, attempt.FailureCode,
         attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
         attempt.CreatedAt, attempt.UpdatedAt);
@@ -260,7 +261,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
             return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
 
-        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, ct);
+        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, attempt.DeviceId, ct);
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
