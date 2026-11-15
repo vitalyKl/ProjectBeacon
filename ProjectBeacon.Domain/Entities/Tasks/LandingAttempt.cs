@@ -15,6 +15,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public Guid TaskId { get; private set; }
     public Guid ReviewRunId { get; private set; }
     public Guid RequestedByUserId { get; private set; }
+    public Guid DeviceId { get; private set; }
     public LandingAttemptStatus Status { get; private set; }
     public string Rationale { get; private set; } = string.Empty;
     public string SourceBranch { get; private set; } = string.Empty;
@@ -43,13 +44,15 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Guid taskId,
         Guid reviewRunId,
         Guid requestedByUserId,
+        Guid deviceId,
         string sourceSha,
         string reviewTreeSha,
         string reviewCommandHash,
         string rationale)
     {
-        if (projectId == Guid.Empty || taskId == Guid.Empty || reviewRunId == Guid.Empty || requestedByUserId == Guid.Empty)
-            throw new ArgumentException("Project, task, review run, and requesting user are required.");
+        if (projectId == Guid.Empty || taskId == Guid.Empty || reviewRunId == Guid.Empty
+            || requestedByUserId == Guid.Empty || deviceId == Guid.Empty)
+            throw new ArgumentException("Project, task, review run, requesting user, and workstation are required.");
         if (!IsGitSha(sourceSha))
             throw new ArgumentException("Source SHA is invalid.", nameof(sourceSha));
         if (!IsGitSha(reviewTreeSha))
@@ -66,6 +69,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         attempt.TaskId = taskId;
         attempt.ReviewRunId = reviewRunId;
         attempt.RequestedByUserId = requestedByUserId;
+        attempt.DeviceId = deviceId;
         attempt.Status = LandingAttemptStatus.PreviewPending;
         attempt.Rationale = normalizedRationale;
         attempt.SourceBranch = $"beacon/task/{taskId:N}";
