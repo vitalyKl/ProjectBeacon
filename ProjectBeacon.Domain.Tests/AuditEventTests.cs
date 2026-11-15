@@ -48,6 +48,45 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsLandingEvidenceWithoutFreeFormContent()
+    {
+        var sourceSha = new string('a', 40);
+        var treeSha = new string('b', 40);
+        var commandHash = new string('c', 64);
+        var mergeSha = new string('d', 40);
+        var details = new
+        {
+            previousState = "ExecutePending",
+            newState = "Landed",
+            resultCode = "Landed",
+            sourceBranch = "beacon/task/0123456789abcdef0123456789abcdef",
+            targetBranch = "main",
+            sourceSha,
+            reviewTreeSha = treeSha,
+            reviewCommandHash = commandHash,
+            targetHeadSha = new string('e', 40),
+            candidateTreeSha = treeSha,
+            candidateCheckOutputHash = commandHash,
+            postMergeCheckOutputHash = commandHash,
+            mergeCommitSha = mergeSha,
+            reviewRunId = Guid.NewGuid().ToString("D"),
+            deviceId = Guid.NewGuid().ToString("D")
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(details);
+
+        var auditEvent = Create(detailsJson: json);
+
+        Assert.Equal(json, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_RejectsLandingBranchNamesOutsideTheSafeBranchAlphabet()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"targetBranch":"main;rm -rf"}"""));
+    }
+
+    [Fact]
     public void Create_RejectsFreeFormDetailValues()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"reasonCode":"The user asked us to reset a password"}"""));
