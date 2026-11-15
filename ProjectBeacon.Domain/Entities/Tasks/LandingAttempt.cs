@@ -189,13 +189,30 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>Records a ref update that succeeded while the checked-out target worktree could not be safely refreshed.</summary>
+    public void RecordRevertedUnverified(string revertCommitSha, string failureCode)
+    {
+        EnsureStatus(LandingAttemptStatus.RevertPending);
+        if (!IsGitSha(revertCommitSha))
+            throw new ArgumentException("Revert commit SHA is invalid.", nameof(revertCommitSha));
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
+        if (failureCode.Length > 80 || failureCode.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')))
+            throw new ArgumentException("Failure code must be a short machine-readable code.", nameof(failureCode));
+        RevertCommitSha = revertCommitSha.ToLowerInvariant();
+        FailureCode = failureCode;
+        Status = LandingAttemptStatus.RevertedUnverified;
+        RevertedAt = DateTime.UtcNow;
+        Touch();
+    }
+
     public void Fail(string failureCode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         if (failureCode.Length > 80 || failureCode.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-')))
             throw new ArgumentException("Failure code must be a short machine-readable code.", nameof(failureCode));
         if (Status is LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified
-            or LandingAttemptStatus.Reverted or LandingAttemptStatus.Conflicted)
+            or LandingAttemptStatus.Reverted or LandingAttemptStatus.RevertedUnverified
+            or LandingAttemptStatus.Conflicted)
             throw new InvalidOperationException($"Cannot fail a landing attempt in status {Status}.");
         Status = Status == LandingAttemptStatus.RevertPending
             ? LandingAttemptStatus.RevertFailed
