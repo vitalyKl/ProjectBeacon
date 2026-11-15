@@ -195,11 +195,20 @@ internal static class GitLandExecutor
         var branchRef = $"refs/heads/{targetBranch}";
         var localHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
         var branchExists = Succeeded(localHead);
-        if (branchExists
-            && !string.Equals(localHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
-            return BusinessFailure("TargetChangedAfterPreview");
         if (!branchExists && localHead.ExitCode != 128)
             return BusinessFailure("TargetHeadUnavailable");
+        if (checkout.Checkout.CheckedOut
+            && (!branchExists
+                || !string.Equals(localHead.StdOut.Trim(), request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)))
+            return BusinessFailure("TargetChangedAfterPreview");
+        if (!checkout.Checkout.CheckedOut && branchExists)
+        {
+            // A local target may lag behind the freshly fetched origin target. It is safe
+            // only when it is an ancestor of the reviewed target; a local-ahead or diverged
+            // branch must never be overwritten or silently discarded.
+            if (await IsAncestorAsync(repo, filters, localHead.StdOut.Trim(), request.TargetHeadSha!, ct) != true)
+                return BusinessFailure("LocalTargetDivergedFromReviewedOrigin");
+        }
 
         if (checkout.Checkout.CheckedOut)
         {
@@ -521,7 +530,8 @@ internal static class GitLandExecutor
             var branchHead = await Git(repositoryRoot, filters, ct, "rev-parse", "--verify", $"refs/heads/{targetBranch}");
             if (Succeeded(branchHead))
             {
-                if (!string.Equals(branchHead.StdOut.Trim(), expectedHeadSha, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(branchHead.StdOut.Trim(), expectedHeadSha, StringComparison.OrdinalIgnoreCase)
+                    && await IsAncestorAsync(repositoryRoot, filters, branchHead.StdOut.Trim(), expectedHeadSha, ct) != true)
                     return false;
                 var add = await Git(repositoryRoot, filters, ct, "worktree", "add", targetPath, targetBranch);
                 if (!Succeeded(add))
