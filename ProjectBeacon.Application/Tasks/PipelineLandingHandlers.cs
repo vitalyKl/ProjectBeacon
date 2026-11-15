@@ -265,8 +265,16 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
-        attempt.MarkExecutePending();
-        await db.SaveChangesAsync(ct);
+        var claimed = await db.LandingAttempts
+            .Where(candidate => candidate.Id == attempt.Id
+                && candidate.Status == LandingAttemptStatus.Previewed)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(candidate => candidate.Status, LandingAttemptStatus.ExecutePending)
+                .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
+                .SetProperty(candidate => candidate.FailureCode, (string?)null), ct);
+        if (claimed != 1)
+            return Result.Failure<LandingAttemptDto>("The landing preview was already claimed by another execution request.", ErrorKind.Conflict);
+        await db.Entry(attempt).ReloadAsync(ct);
         var payload = new JsonObject
         {
             ["projectId"] = attempt.ProjectId.ToString("D"),
@@ -344,8 +352,16 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
         var previousState = attempt.Status;
-        attempt.MarkRevertPending();
-        await db.SaveChangesAsync(ct);
+        var claimed = await db.LandingAttempts
+            .Where(candidate => candidate.Id == attempt.Id
+                && (candidate.Status == LandingAttemptStatus.Landed
+                    || candidate.Status == LandingAttemptStatus.LandedUnverified))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(candidate => candidate.Status, LandingAttemptStatus.RevertPending)
+                .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow), ct);
+        if (claimed != 1)
+            return Result.Failure<LandingAttemptDto>("The landing attempt was already claimed by another revert request.", ErrorKind.Conflict);
+        await db.Entry(attempt).ReloadAsync(ct);
 
         var payload = new JsonObject
         {
