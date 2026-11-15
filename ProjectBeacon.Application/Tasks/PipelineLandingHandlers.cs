@@ -93,13 +93,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
         }
 
-        var device = await FindLandingDeviceAsync(db, task.ProjectId, userId, ct);
+        var device = await FindLandingDeviceAsync(db, task.ProjectId, ct);
         if (device is null)
         {
             attempt.Fail("NoGitLandWorkstation");
             await db.SaveChangesAsync(ct);
             return Result.Failure<LandingAttemptDto>(
-                "No online project workstation advertises git-land-v1 and is owned by the requesting user.", ErrorKind.Conflict);
+                "No online project workstation attached to this project advertises git-land-v1.", ErrorKind.Conflict);
         }
 
         var payload = new JsonObject
@@ -146,7 +146,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
     }
 
     internal static async Task<Domain.Entities.Devices.DaemonDevice?> FindLandingDeviceAsync(
-        IBeaconDb db, Guid projectId, Guid userId, CancellationToken ct)
+        IBeaconDb db, Guid projectId, CancellationToken ct)
     {
         var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(r => r.ProjectId == projectId && !string.IsNullOrWhiteSpace(r.LocalRoot))
@@ -257,7 +257,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
             return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
 
-        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, userId, ct);
+        var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, ct);
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
@@ -338,6 +338,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
+        var previousState = attempt.Status;
         attempt.MarkRevertPending();
         await db.SaveChangesAsync(ct);
 
@@ -374,9 +375,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             project.Id,
             detailsJson: JsonSerializer.Serialize(new
             {
-                previousState = attempt.Status == LandingAttemptStatus.RevertPending
-                    ? LandingAttemptStatus.Landed.ToString()
-                    : LandingAttemptStatus.LandedUnverified.ToString(),
+                previousState = previousState.ToString(),
                 newState = attempt.Status.ToString(),
                 resultCode = "RevertQueued"
             })));
