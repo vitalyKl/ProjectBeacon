@@ -251,14 +251,6 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (reviewRun is null)
             return Result.Failure<PipelineStateDto>("No open review run to check.");
 
-        if (!command.Actor.IsHuman)
-        {
-            var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
-            if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
-                return Result.Failure<PipelineStateDto>("No review check command is configured for this project.", ErrorKind.Conflict);
-            checkCommand = project.ReviewCheckCommand.Trim();
-        }
-
         var actorId = command.Request.ActorId.ToString();
         // Claim the run before enqueuing: a second concurrent check loses here and never enqueues.
         var claimed = await db.ReviewRuns
