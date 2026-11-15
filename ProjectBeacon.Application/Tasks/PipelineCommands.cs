@@ -169,6 +169,8 @@ public record LandingAttemptDto(
     string? RevertCommitSha,
     string? FailureCode,
     string? ConflictFilesJson,
+    int? PostMergeCheckExitCode,
+    string? PostMergeCheckOutputHash,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
