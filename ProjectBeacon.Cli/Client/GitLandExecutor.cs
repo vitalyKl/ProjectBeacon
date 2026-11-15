@@ -490,7 +490,7 @@ internal static class GitLandExecutor
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
     {
         var repo = workspace.RepositoryRoot;
-        var targetBranch = workspace.BaseBranch!;
+        var targetBranch = request.TargetBranch;
         var branchCheck = await Git(repo, filters, ct, "check-ref-format", "--branch", targetBranch);
         if (!Succeeded(branchCheck))
             return new CandidateResult("failed", ErrorCode: "InvalidTargetBranch");
