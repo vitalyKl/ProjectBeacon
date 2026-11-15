@@ -201,15 +201,24 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
                     var settings = _loadSettings();
-                    if (!WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
-                        return (false, null, "Review proof requires the persistent task branch workspace mode.");
-                    if (command.ProjectId is not { } reviewProjectId || reviewProjectId == Guid.Empty)
-                        return (false, null, "Review proof requires a project-scoped command.");
-                    var reviewAction = await WorkstationEval.RunReviewCheckAsync(
-                        command.LocalRoot, payload, reviewProjectId, settings.WorktreeRoot, ct);
-                    if (!reviewAction.Success)
-                        return (false, null, reviewAction.Error);
-                    return (true, reviewAction.Value, null);
+                    if (WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
+                    {
+                        if (command.ProjectId is not { } reviewProjectId || reviewProjectId == Guid.Empty)
+                            return (false, null, "Review proof requires a project-scoped command.");
+                        var reviewAction = await WorkstationEval.RunReviewCheckAsync(
+                            command.LocalRoot, payload, reviewProjectId, settings.WorktreeRoot, ct);
+                        if (!reviewAction.Success)
+                            return (false, null, reviewAction.Error);
+                        return (true, reviewAction.Value, null);
+                    }
+
+                    // Snapshot remains the default until phase 5. Keep existing review checks
+                    // usable there, but this legacy result intentionally contains no checked
+                    // task-branch SHA/tree and therefore cannot authorize a landing.
+                    var snapshotReview = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
+                    if (!snapshotReview.Success)
+                        return (false, null, snapshotReview.Error);
+                    return (true, snapshotReview.Value, null);
                 }
                 if (kind == WorkstationCommandKind.GitLand)
                 {
