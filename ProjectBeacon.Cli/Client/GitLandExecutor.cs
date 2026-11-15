@@ -76,6 +76,10 @@ internal static class GitLandExecutor
         if (!string.Equals(taskWorkspace.BaseBranch, request.TargetBranch, StringComparison.Ordinal))
             return (false, null, "The task workspace target branch no longer matches the branch pinned by review proof.");
 
+        var targetBranchCheck = await Git(taskWorkspace.RepositoryRoot, [], ct, "check-ref-format", "--branch", request.TargetBranch);
+        if (!Succeeded(targetBranchCheck))
+            return (false, null, "The review-pinned target branch is not a valid Git branch name.");
+
         var repositoryRoot = taskWorkspace.RepositoryRoot;
         var filters = await ReadDisabledFiltersAsync(repositoryRoot, ct);
         if (filters.Error is not null)
@@ -132,7 +136,7 @@ internal static class GitLandExecutor
             "previewed" => (true, JsonSerializer.Serialize(new
             {
                 status = "previewed",
-                targetBranch = workspace.BaseBranch,
+                targetBranch = request.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 candidateTreeSha = candidate.CandidateTreeSha,
                 checkOutputHash = candidate.CheckOutputHash,
@@ -380,7 +384,7 @@ internal static class GitLandExecutor
             return (false, null, "GitLand Revert requires the recorded merge commit SHA.");
 
         var repo = workspace.RepositoryRoot;
-        var targetBranch = workspace.BaseBranch!;
+        var targetBranch = request.TargetBranch;
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
             return (false, null, checkout.Error);
@@ -744,6 +748,16 @@ internal static class GitLandExecutor
 
     private static bool Succeeded((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
         result.ExitCode == 0 && !result.TimedOut;
+
+    private static bool IsSafeBranchName(string? value) =>
+        value is { Length: > 0 and <= 200 }
+        && !value.StartsWith('/', StringComparison.Ordinal)
+        && !value.EndsWith('/', StringComparison.Ordinal)
+        && !value.Contains("..", StringComparison.Ordinal)
+        && !value.Contains("@{", StringComparison.Ordinal)
+        && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
+        && value.All(character => !char.IsControl(character)
+            && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
