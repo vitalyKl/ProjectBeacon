@@ -508,9 +508,22 @@ internal static class GitLandExecutor
             if (!Succeeded(merge))
             {
                 var conflicts = await ReadConflictsAsync(temp, filters, ct);
-                return conflicts.Count > 0
-                    ? new CandidateResult("conflicted", targetBranch, target.Sha, Conflicts: conflicts)
-                    : new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeCandidateFailed");
+                if (conflicts.Count == 0)
+                    return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: "MergeCandidateFailed");
+
+                var projectPrefix = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory)
+                    .Replace('\\', '/')
+                    .Trim('/');
+                if (projectPrefix.Length > 0 && projectPrefix != ".")
+                {
+                    var prefix = projectPrefix + "/";
+                    if (conflicts.Any(path => !path.StartsWith(prefix, StringComparison.Ordinal)))
+                        return new CandidateResult(
+                            "failed", targetBranch, target.Sha, ErrorCode: "ConflictsOutsideProject");
+                    conflicts = conflicts.Select(path => path[prefix.Length..]).ToList();
+                }
+
+                return new CandidateResult("conflicted", targetBranch, target.Sha, Conflicts: conflicts);
             }
 
             var tree = await Git(temp, filters, ct, "write-tree");
