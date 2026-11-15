@@ -162,6 +162,7 @@ public record LandingAttemptDto(
     LandingAttemptStatus Status,
     string SourceBranch,
     string SourceSha,
+    string ReviewTreeSha,
     string? TargetBranch,
     string? TargetHeadSha,
     string? CandidateTreeSha,
