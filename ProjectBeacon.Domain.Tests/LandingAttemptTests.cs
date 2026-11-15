@@ -80,6 +80,24 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void RevertedUnverifiedAttempt_IsTerminalAndRetainsRevertCommit()
+    {
+        var attempt = Start();
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.RecordLanded(new string('f', 40), new string('d', 40), 0, new string('9', 64));
+        attempt.MarkRevertPending();
+
+        var revertCommit = new string('1', 40);
+        attempt.RecordRevertedUnverified(revertCommit, "TargetWorktreeUpdateFailed");
+
+        Assert.Equal(LandingAttemptStatus.RevertedUnverified, attempt.Status);
+        Assert.Equal(revertCommit, attempt.RevertCommitSha);
+        Assert.Equal("TargetWorktreeUpdateFailed", attempt.FailureCode);
+        Assert.Throws<InvalidOperationException>(attempt.MarkRevertPending);
+    }
+
+    [Fact]
     public void Start_RejectsInvalidProofAndRationale()
     {
         var args = new object[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "short", new string('c', 40), new string('b', 64), "ok" };
