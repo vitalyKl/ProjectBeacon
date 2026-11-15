@@ -308,6 +308,99 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+    [Fact]
+    public async Task GitLand_UncheckedOutTarget_UsesTemporaryBranchWorktreeForExecuteAndRevert()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        string sourceSha;
+        string reviewTreeSha;
+        var opened = await AgentTaskWorktree.CreateAsync(
+            projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+        Assert.NotNull(opened.Worktree);
+        await using (var taskWorktree = opened.Worktree!)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "unchecked-target-change.txt"),
+                "landed through temporary target worktree\\n");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: reviewed change for unchecked target", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            sourceSha = commit.CommitSha!;
+        }
+        reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+
+        // Move the workstation's real checkout off main after its persistent task
+        // worktree has recorded main as its daemon-selected landing target.
+        await GitAsync(repository, "branch", "workstation-checkout");
+        await GitAsync(repository, "checkout", "workstation-checkout");
+        Assert.Equal("workstation-checkout", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
+        var originalWorkstationHead = await GitAsync(repository, "rev-parse", "HEAD");
+
+        var checkCommand = "echo review-ok";
+        var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var settings = new WorkstationSettings
+        {
+            WorkspaceMode = "Branch",
+            WorktreeRoot = worktreeRoot
+        };
+        try
+        {
+            var preview = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(preview.Ok, preview.Error ?? preview.Result);
+            using var previewJson = JsonDocument.Parse(preview.Result!);
+            Assert.Equal("previewed", previewJson.RootElement.GetProperty("status").GetString());
+            var targetHead = previewJson.RootElement.GetProperty("targetHeadSha").GetString()!;
+            var candidateTree = previewJson.RootElement.GetProperty("candidateTreeSha").GetString()!;
+            Assert.Equal(originalWorkstationHead, await GitAsync(repository, "rev-parse", "HEAD"));
+
+            var execute = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha, commandHash, checkCommand, targetHead, candidateTree),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(execute.Ok, execute.Error ?? execute.Result);
+            using var landed = JsonDocument.Parse(execute.Result!);
+            Assert.Equal("landed", landed.RootElement.GetProperty("status").GetString());
+            var mergeCommitSha = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
+            Assert.Equal(mergeCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(originalWorkstationHead, await GitAsync(repository, "rev-parse", "HEAD"));
+            Assert.Equal("workstation-checkout", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
+            Assert.DoesNotContain(
+                await GitAsync(repository, "worktree", "list", "--porcelain"),
+                block => block.Contains("branch refs/heads/main", StringComparison.Ordinal));
+
+            var revert = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Revert", sourceSha, reviewTreeSha, commandHash, null, mergeCommitSha: mergeCommitSha),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(revert.Ok, revert.Error ?? revert.Result);
+            using var reverted = JsonDocument.Parse(revert.Result!);
+            Assert.Equal("reverted", reverted.RootElement.GetProperty("status").GetString());
+            var revertCommitSha = reverted.RootElement.GetProperty("revertCommitSha").GetString()!;
+            Assert.Equal(revertCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(originalWorkstationHead, await GitAsync(repository, "rev-parse", "HEAD"));
+            Assert.Equal("workstation-checkout", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
+            Assert.Equal(string.Empty, await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+            Assert.DoesNotContain(
+                await GitAsync(repository, "worktree", "list", "--porcelain"),
+                block => block.Contains("branch refs/heads/main", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     private static string Payload(
         Guid projectId,
         Guid taskId,
