@@ -22,7 +22,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public string SourceSha { get; private set; } = string.Empty;
     public string ReviewTreeSha { get; private set; } = string.Empty;
     public string ReviewCommandHash { get; private set; } = string.Empty;
-    public string? TargetBranch { get; private set; }
+    public string TargetBranch { get; private set; } = string.Empty;
     public string? TargetHeadSha { get; private set; }
     public string? CandidateTreeSha { get; private set; }
     public string? CandidateCheckOutputHash { get; private set; }
@@ -45,6 +45,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Guid reviewRunId,
         Guid requestedByUserId,
         Guid deviceId,
+        string targetBranch,
         string sourceSha,
         string reviewTreeSha,
         string reviewCommandHash,
@@ -53,6 +54,12 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         if (projectId == Guid.Empty || taskId == Guid.Empty || reviewRunId == Guid.Empty
             || requestedByUserId == Guid.Empty || deviceId == Guid.Empty)
             throw new ArgumentException("Project, task, review run, requesting user, and workstation are required.");
+        if (string.IsNullOrWhiteSpace(targetBranch) || targetBranch.Length > 200
+            || targetBranch.Contains("..", StringComparison.Ordinal)
+            || targetBranch.Contains("@{", StringComparison.Ordinal)
+            || targetBranch.Contains('\\')
+            || targetBranch.Any(char.IsControl))
+            throw new ArgumentException("Target branch is invalid.", nameof(targetBranch));
         if (!IsGitSha(sourceSha))
             throw new ArgumentException("Source SHA is invalid.", nameof(sourceSha));
         if (!IsGitSha(reviewTreeSha))
@@ -73,6 +80,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         attempt.Status = LandingAttemptStatus.PreviewPending;
         attempt.Rationale = normalizedRationale;
         attempt.SourceBranch = $"beacon/task/{taskId:N}";
+        attempt.TargetBranch = targetBranch.Trim();
         attempt.SourceSha = sourceSha.ToLowerInvariant();
         attempt.ReviewTreeSha = reviewTreeSha.ToLowerInvariant();
         attempt.ReviewCommandHash = reviewCommandHash.ToLowerInvariant();
@@ -91,6 +99,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     {
         EnsureStatus(LandingAttemptStatus.PreviewPending);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranch);
+        if (!string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
+            throw new InvalidOperationException("Preview target branch does not match the branch pinned by the review proof.");
         if (!IsGitSha(targetHeadSha))
             throw new ArgumentException("Target HEAD SHA is invalid.", nameof(targetHeadSha));
         if (candidateTreeSha is not null && !IsGitSha(candidateTreeSha))
