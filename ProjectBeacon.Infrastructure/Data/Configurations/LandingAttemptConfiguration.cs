@@ -16,7 +16,7 @@ public sealed class LandingAttemptConfiguration : IEntityTypeConfiguration<Landi
         entity.Property(e => e.DeviceId).IsRequired();
         entity.Property(e => e.ReviewTreeSha).IsRequired().HasMaxLength(64);
         entity.Property(e => e.ReviewCommandHash).IsRequired().HasMaxLength(64);
-        entity.Property(e => e.TargetBranch).HasMaxLength(200);
+        entity.Property(e => e.TargetBranch).IsRequired().HasMaxLength(200);
         entity.Property(e => e.TargetHeadSha).HasMaxLength(64);
         entity.Property(e => e.CandidateTreeSha).HasMaxLength(64);
         entity.Property(e => e.CandidateCheckOutputHash).HasMaxLength(64);
