@@ -39,6 +39,13 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
             type: "uuid",
             nullable: true);
 
+        migrationBuilder.AddColumn<string>(
+            name: "CheckedBaseBranch",
+            table: "ReviewRuns",
+            type: "character varying(200)",
+            maxLength: 200,
+            nullable: true);
+
         migrationBuilder.CreateTable(
             name: "LandingAttempts",
             columns: table => new
@@ -55,7 +62,7 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
                 SourceSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                 ReviewTreeSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                 ReviewCommandHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                TargetBranch = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                TargetBranch = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                 TargetHeadSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                 CandidateTreeSha = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                 CandidateCheckOutputHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
@@ -133,5 +140,6 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
         migrationBuilder.DropColumn(name: "CheckedSourceSha", table: "ReviewRuns");
         migrationBuilder.DropColumn(name: "CheckedTreeSha", table: "ReviewRuns");
         migrationBuilder.DropColumn(name: "CheckedDeviceId", table: "ReviewRuns");
+        migrationBuilder.DropColumn(name: "CheckedBaseBranch", table: "ReviewRuns");
     }
 }
