@@ -468,7 +468,10 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase);
             if (exitCode == 0 && commandMatches && IsGitSha(sourceSha) && IsGitSha(treeSha)
-                && !string.IsNullOrWhiteSpace(checkedBaseBranch))
+                && !string.IsNullOrWhiteSpace(checkedBaseBranch)
+                && checkedBaseBranch.Length <= 200
+                && !checkedBaseBranch.Contains("..", StringComparison.Ordinal)
+                && !checkedBaseBranch.Contains('\\'))
                 run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId, checkedBaseBranch!);
             else
                 run.Fail(exitCode == 0
