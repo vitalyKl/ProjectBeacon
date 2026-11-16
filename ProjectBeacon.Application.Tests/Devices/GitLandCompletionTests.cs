@@ -30,6 +30,60 @@ public sealed class GitLandCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task PreviewConflict_RecordsFailedAuditWithAllowlistedBranchAndShaEvidence()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Resolve the conflict and request a fresh review.");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, taskId, "Preview",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                null, null, null);
+            var result = JsonSerializer.Serialize(new
+            {
+                status = "conflicted",
+                targetBranch = "main",
+                targetHeadSha,
+                conflicts = new[] { "src/app/conflict.cs" }
+            });
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, result, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.Conflicted, attempt.Status);
+            var audit = await _db.AuditEvents
+                .SingleAsync(item => item.TargetType == "LandingAttempt"
+                    && item.TargetId == attempt.Id.ToString("D"),
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("pipeline.landing.conflicted", audit.Action);
+            Assert.Equal(AuditOutcome.Failed, audit.Outcome);
+            using var details = JsonDocument.Parse(audit.DetailsJson!);
+            Assert.Equal("beacon/task/" + taskId.ToString("N"),
+                details.RootElement.GetProperty("sourceBranch").GetString());
+            Assert.Equal("main", details.RootElement.GetProperty("targetBranch").GetString());
+            Assert.Equal(sourceSha, details.RootElement.GetProperty("sourceSha").GetString());
+            Assert.Equal(targetHeadSha, details.RootElement.GetProperty("targetHeadSha").GetString());
+            Assert.Equal("Conflicted", details.RootElement.GetProperty("newState").GetString());
+        }
+    }
+
+    [Fact]
     public async Task ExecuteCompletion_RequiresPayloadAndResultToMatchTheReviewedAttempt()
     {
         var (org, project, device, userId) = CreateScope();
