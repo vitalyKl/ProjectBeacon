@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Devices;
 
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Application.Devices;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
