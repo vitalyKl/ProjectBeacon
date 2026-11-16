@@ -34,7 +34,7 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(McpToolNames.HashFile, actor);
         Assert.Contains(McpToolNames.HashText, actor);
         Assert.Contains(McpToolNames.PipelineLandRequest, PipelineToolPolicy.ToolsForRole("Planner"));
-        Assert.Contains(McpToolNames.PipelineLandExecute, PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.DoesNotContain(McpToolNames.PipelineLandExecute, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.Contains(McpToolNames.PipelineLandStatus, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.DoesNotContain(McpToolNames.PipelineLandExecute, PipelineToolPolicy.ToolsForRole("Review"));
         Assert.DoesNotContain(McpToolNames.PipelineLandRevert, PipelineToolPolicy.ToolsForRole("Actor"));
