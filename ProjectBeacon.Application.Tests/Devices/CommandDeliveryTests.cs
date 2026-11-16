@@ -12,6 +12,9 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RunEvalTurn)]
     [InlineData(WorkstationCommandKind.RunReviewCheck)]
     [InlineData(WorkstationCommandKind.RunPipelineSession)]
+    [InlineData(WorkstationCommandKind.ChatSwitchAgent)]
+    [InlineData(WorkstationCommandKind.ChatReplyForm)]
+    [InlineData(WorkstationCommandKind.UpdateClient)]
     public void IsAtMostOnce_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {
         Assert.True(CommandDelivery.IsAtMostOnce(kind));
@@ -36,7 +39,6 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
     [InlineData(WorkstationCommandKind.ApplyProposalPatch)]
-    [InlineData(WorkstationCommandKind.UpdateClient)]
     public void IsAtMostOnce_IdempotentKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
         Assert.False(CommandDelivery.IsAtMostOnce(kind));
@@ -54,6 +56,8 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.SwapModel)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
     [InlineData(WorkstationCommandKind.ChatAbort)]
+    [InlineData(WorkstationCommandKind.CheckClientUpdate)]
+    [InlineData(WorkstationCommandKind.GitLand)]
     [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
