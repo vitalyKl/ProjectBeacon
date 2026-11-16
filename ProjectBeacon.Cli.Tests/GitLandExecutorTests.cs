@@ -382,10 +382,12 @@ public sealed partial class AgentTaskGitOperationsTests
 
             await GitAsync(taskWorktree.RecoveryPath, "mv",
                 "outside-project.txt", "src/app/moved-into-project.txt");
-            var commit = await taskWorktree.CommitChangesAsync(
-                "ProjectBeacon: move out-of-scope file into project", CancellationToken.None);
-            Assert.True(commit.Success, commit.Error);
-            var sourceSha = commit.CommitSha!;
+            // Deliberately create a malformed candidate that bypasses the project-scoped
+            // git_commit tool. GitLand must enforce the boundary independently at landing time.
+            await GitAsync(taskWorktree.RecoveryPath, "add", "-A");
+            await GitAsync(taskWorktree.RecoveryPath, "commit", "-m",
+                "ProjectBeacon: deliberately move an out-of-scope file into project");
+            var sourceSha = await GitAsync(taskWorktree.RecoveryPath, "rev-parse", "HEAD");
             var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
             const string checkCommand = "echo review-ok";
             var commandHash = Convert.ToHexString(
