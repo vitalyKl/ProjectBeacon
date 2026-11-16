@@ -33,7 +33,7 @@ public sealed class LandingAttemptConfiguration : IEntityTypeConfiguration<Landi
         entity.HasIndex(e => new { e.ProjectId, e.TaskId })
             .IsUnique()
             .HasDatabaseName("IX_LandingAttempts_ProjectId_TaskId_Active")
-            .HasFilter("\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
+            .HasFilter("\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending', 'RevertedUnverified', 'RevertFailed')");
         entity.HasOne<ProjectBeacon.Domain.Entities.Projects.Project>()
             .WithMany()
             .HasForeignKey(e => e.ProjectId)
