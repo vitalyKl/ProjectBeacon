@@ -145,7 +145,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 .OrderByDescending(candidate => candidate.CreatedAt)
                 .ThenByDescending(candidate => candidate.Id)
                 .FirstOrDefaultAsync(ct);
-            if (concurrent?.Status == LandingAttemptStatus.PreviewPending)
+            if (concurrent?.Status == LandingAttemptStatus.PreviewPending
+                && concurrent.ReviewRunId == reviewRun.Id
+                && concurrent.DeviceId == device.Id
+                && string.Equals(concurrent.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(concurrent.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(concurrent.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(concurrent.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal))
                 return Result.Ok(ToDto(concurrent));
             return Result.Failure<LandingAttemptDto>(
                 "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
