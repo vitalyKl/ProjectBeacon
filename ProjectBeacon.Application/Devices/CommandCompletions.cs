@@ -630,189 +630,189 @@ internal sealed class GitLandCompletion : ICommandCompletion
             switch (status)
             {
                 case "previewed":
-                {
-                    var targetBranch = ReadString(root, "targetBranch");
-                    var targetHead = ReadString(root, "targetHeadSha");
-                    var tree = ReadString(root, "candidateTreeSha");
-                    var checkHash = ReadString(root, "checkOutputHash");
-                    var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
-                    if (attempt.Status == LandingAttemptStatus.PreviewPending
-                        && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
-                        && IsGitSha(targetHead)
-                        && IsGitSha(tree)
-                        && IsSha256(checkHash)
-                        && exitCode == 0)
                     {
-                        attempt.RecordPreview(targetBranch!, targetHead!, tree, checkHash, exitCode, null);
-                        resultCode = "Previewed";
-                        action = "pipeline.landing.preview_completed";
-                    }
-                    else
-                    {
-                        FailIfInFlight(attempt, "UnexpectedOrInvalidPreviewResult");
-                        resultCode = "InvalidPreviewEvidence";
-                        action = "pipeline.landing.preview_failed";
-                    }
-                    break;
-                }
-                case "conflicted":
-                {
-                    var targetBranch = ReadString(root, "targetBranch");
-                    var targetHead = ReadString(root, "targetHeadSha");
-                    var conflicts = root.TryGetProperty("conflicts", out var files)
-                        && files.ValueKind == JsonValueKind.Array
-                            ? files.EnumerateArray()
-                                .Where(item => item.ValueKind == JsonValueKind.String)
-                                .Select(item => item.GetString())
-                                .Where(value => !string.IsNullOrWhiteSpace(value))
-                                .Take(201)
-                                .ToArray()
-                            : [];
-                    if (attempt.Status == LandingAttemptStatus.PreviewPending
-                        && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
-                        && IsGitSha(targetHead)
-                        && conflicts.Length is > 0 and <= 200)
-                    {
-                        attempt.RecordPreview(
-                            targetBranch!, targetHead!, null, null, null,
-                            JsonSerializer.Serialize(conflicts));
-                        resultCode = "Conflicted";
-                        action = "pipeline.landing.conflicted";
-                    }
-                    else
-                    {
-                        FailIfInFlight(attempt, "UnexpectedOrInvalidConflictResult");
-                        resultCode = "InvalidConflictEvidence";
-                        action = "pipeline.landing.preview_failed";
-                    }
-                    break;
-                }
-                case "failed":
-                {
-                    var failureCode = ReadString(root, "errorCode");
-                    FailIfInFlight(attempt, IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed");
-                    resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed";
-                    action = ActionFor(previousState);
-                    break;
-                }
-                case "landed":
-                {
-                    var mergeCommit = ReadString(root, "mergeCommitSha");
-                    var tree = ReadString(root, "candidateTreeSha");
-                    var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
-                    var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
-                    if (attempt.Status == LandingAttemptStatus.ExecutePending
-                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
-                        && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(tree, attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
-                        && IsGitSha(mergeCommit) && IsGitSha(tree))
-                    {
-                        if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase)
-                            && checkExitCode == 0 && IsSha256(checkOutputHash))
+                        var targetBranch = ReadString(root, "targetBranch");
+                        var targetHead = ReadString(root, "targetHeadSha");
+                        var tree = ReadString(root, "candidateTreeSha");
+                        var checkHash = ReadString(root, "checkOutputHash");
+                        var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
+                        if (attempt.Status == LandingAttemptStatus.PreviewPending
+                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsGitSha(targetHead)
+                            && IsGitSha(tree)
+                            && IsSha256(checkHash)
+                            && exitCode == 0)
                         {
-                            attempt.RecordLanded(mergeCommit!, tree!, checkExitCode.Value, checkOutputHash!);
-                            resultCode = "Landed";
-                            action = "pipeline.landing.completed";
+                            attempt.RecordPreview(targetBranch!, targetHead!, tree, checkHash, exitCode, null);
+                            resultCode = "Previewed";
+                            action = "pipeline.landing.preview_completed";
                         }
                         else
                         {
-                            attempt.RecordLandedUnverified(
-                                mergeCommit!,
-                                "PostMergeEvidenceInvalid",
-                                checkExitCode,
-                                checkOutputHash);
-                            resultCode = "PostMergeEvidenceInvalid";
+                            FailIfInFlight(attempt, "UnexpectedOrInvalidPreviewResult");
+                            resultCode = "InvalidPreviewEvidence";
+                            action = "pipeline.landing.preview_failed";
+                        }
+                        break;
+                    }
+                case "conflicted":
+                    {
+                        var targetBranch = ReadString(root, "targetBranch");
+                        var targetHead = ReadString(root, "targetHeadSha");
+                        var conflicts = root.TryGetProperty("conflicts", out var files)
+                            && files.ValueKind == JsonValueKind.Array
+                                ? files.EnumerateArray()
+                                    .Where(item => item.ValueKind == JsonValueKind.String)
+                                    .Select(item => item.GetString())
+                                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                                    .Take(201)
+                                    .ToArray()
+                                : [];
+                        if (attempt.Status == LandingAttemptStatus.PreviewPending
+                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsGitSha(targetHead)
+                            && conflicts.Length is > 0 and <= 200)
+                        {
+                            attempt.RecordPreview(
+                                targetBranch!, targetHead!, null, null, null,
+                                JsonSerializer.Serialize(conflicts));
+                            resultCode = "Conflicted";
+                            action = "pipeline.landing.conflicted";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "UnexpectedOrInvalidConflictResult");
+                            resultCode = "InvalidConflictEvidence";
+                            action = "pipeline.landing.preview_failed";
+                        }
+                        break;
+                    }
+                case "failed":
+                    {
+                        var failureCode = ReadString(root, "errorCode");
+                        FailIfInFlight(attempt, IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed");
+                        resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed";
+                        action = ActionFor(previousState);
+                        break;
+                    }
+                case "landed":
+                    {
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var tree = ReadString(root, "candidateTreeSha");
+                        var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                        var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(tree, attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(mergeCommit) && IsGitSha(tree))
+                        {
+                            if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase)
+                                && checkExitCode == 0 && IsSha256(checkOutputHash))
+                            {
+                                attempt.RecordLanded(mergeCommit!, tree!, checkExitCode.Value, checkOutputHash!);
+                                resultCode = "Landed";
+                                action = "pipeline.landing.completed";
+                            }
+                            else
+                            {
+                                attempt.RecordLandedUnverified(
+                                    mergeCommit!,
+                                    "PostMergeEvidenceInvalid",
+                                    checkExitCode,
+                                    checkOutputHash);
+                                resultCode = "PostMergeEvidenceInvalid";
+                                action = "pipeline.landing.execute_failed";
+                            }
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidLandedEvidence");
+                            resultCode = "InvalidLandedEvidence";
                             action = "pipeline.landing.execute_failed";
                         }
+                        break;
                     }
-                    else
-                    {
-                        FailIfInFlight(attempt, "InvalidLandedEvidence");
-                        resultCode = "InvalidLandedEvidence";
-                        action = "pipeline.landing.execute_failed";
-                    }
-                    break;
-                }
                 case "landed_unverified":
                 case "landed_tree_mismatch":
                 case "landed_metadata_mismatch":
-                {
-                    var mergeCommit = ReadString(root, "mergeCommitSha");
-                    var errorCode = ReadString(root, "errorCode");
-                    var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
-                    var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
-                    if (attempt.Status == LandingAttemptStatus.ExecutePending
-                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
-                        && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
-                        && IsGitSha(mergeCommit))
                     {
-                        attempt.RecordLandedUnverified(
-                            mergeCommit!,
-                            IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed",
-                            checkExitCode,
-                            checkOutputHash);
-                        resultCode = IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed";
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var errorCode = ReadString(root, "errorCode");
+                        var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                        var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(mergeCommit))
+                        {
+                            attempt.RecordLandedUnverified(
+                                mergeCommit!,
+                                IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed",
+                                checkExitCode,
+                                checkOutputHash);
+                            resultCode = IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidLandedUnverifiedEvidence");
+                            resultCode = "InvalidLandedUnverifiedEvidence";
+                        }
+                        action = "pipeline.landing.execute_failed";
+                        break;
                     }
-                    else
-                    {
-                        FailIfInFlight(attempt, "InvalidLandedUnverifiedEvidence");
-                        resultCode = "InvalidLandedUnverifiedEvidence";
-                    }
-                    action = "pipeline.landing.execute_failed";
-                    break;
-                }
                 case "reverted":
-                {
-                    var revertCommit = ReadString(root, "revertCommitSha");
-                    if (attempt.Status == LandingAttemptStatus.RevertPending
-                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
-                        && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
-                        && IsGitSha(revertCommit))
                     {
-                        attempt.RecordReverted(revertCommit!);
-                        resultCode = "Reverted";
-                        action = "pipeline.landing.reverted";
+                        var revertCommit = ReadString(root, "revertCommitSha");
+                        if (attempt.Status == LandingAttemptStatus.RevertPending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(revertCommit))
+                        {
+                            attempt.RecordReverted(revertCommit!);
+                            resultCode = "Reverted";
+                            action = "pipeline.landing.reverted";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidRevertEvidence");
+                            resultCode = "InvalidRevertEvidence";
+                            action = "pipeline.landing.revert_failed";
+                        }
+                        break;
                     }
-                    else
-                    {
-                        FailIfInFlight(attempt, "InvalidRevertEvidence");
-                        resultCode = "InvalidRevertEvidence";
-                        action = "pipeline.landing.revert_failed";
-                    }
-                    break;
-                }
                 case "reverted_unverified":
-                {
-                    var revertCommit = ReadString(root, "revertCommitSha");
-                    var failureCode = ReadString(root, "errorCode");
-                    if (attempt.Status == LandingAttemptStatus.RevertPending
-                        && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
-                        && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
-                        && IsGitSha(revertCommit))
                     {
-                        attempt.RecordRevertedUnverified(
-                            revertCommit!,
-                            IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed");
-                        resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed";
+                        var revertCommit = ReadString(root, "revertCommitSha");
+                        var failureCode = ReadString(root, "errorCode");
+                        if (attempt.Status == LandingAttemptStatus.RevertPending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(revertCommit))
+                        {
+                            attempt.RecordRevertedUnverified(
+                                revertCommit!,
+                                IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed");
+                            resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidRevertUnverifiedEvidence");
+                            resultCode = "InvalidRevertUnverifiedEvidence";
+                        }
+                        action = "pipeline.landing.revert_failed";
+                        break;
                     }
-                    else
-                    {
-                        FailIfInFlight(attempt, "InvalidRevertUnverifiedEvidence");
-                        resultCode = "InvalidRevertUnverifiedEvidence";
-                    }
-                    action = "pipeline.landing.revert_failed";
-                    break;
-                }
                 default:
-                {
-                    FailIfInFlight(attempt, "UnknownGitLandResult");
-                    resultCode = "UnknownGitLandResult";
-                    action = "pipeline.landing.command_failed";
-                    break;
-                }
+                    {
+                        FailIfInFlight(attempt, "UnknownGitLandResult");
+                        resultCode = "UnknownGitLandResult";
+                        action = "pipeline.landing.command_failed";
+                        break;
+                    }
             }
         }
 
