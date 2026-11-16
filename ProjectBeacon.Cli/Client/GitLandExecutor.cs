@@ -189,7 +189,8 @@ internal static class GitLandExecutor
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
             return BusinessFailure("TargetCheckoutUnavailable");
-        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
+        if (checkout.Checkout!.CheckedOut
+            && !IsAllowedTargetCheckout(checkout.Checkout, repo, request.LandingAttemptId))
             return BusinessFailure("TargetCheckedOutElsewhere");
 
         var branchRef = $"refs/heads/{targetBranch}";
@@ -212,9 +213,9 @@ internal static class GitLandExecutor
 
         if (checkout.Checkout.CheckedOut)
         {
-            var clean = await Git(repo, filters, ct, "status", "--porcelain", "--untracked-files=all");
-            var currentBranch = await Git(repo, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
-            var currentHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
+            var clean = await Git(checkout.Checkout.Path, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            var currentBranch = await Git(checkout.Checkout.Path, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
+            var currentHead = await Git(checkout.Checkout.Path, filters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(clean) || !string.IsNullOrWhiteSpace(clean.StdOut)
                 || !Succeeded(currentBranch)
                 || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal)
@@ -305,9 +306,25 @@ internal static class GitLandExecutor
         var checkout = await FindTargetCheckoutAsync(repo, request.TargetBranch, filters, ct);
         if (checkout.Error is not null)
             return BusinessFailure("TargetCheckoutUnavailable");
+        if (checkout.Checkout!.CheckedOut
+            && !IsAllowedTargetCheckout(checkout.Checkout, repo, request.LandingAttemptId))
+            return BusinessFailure("TargetCheckedOutElsewhere");
 
         var targetAlreadyContainsMerge = branchExists
             && await IsAncestorAsync(repo, filters, mergeCommitSha, branchHead.StdOut.Trim(), ct) == true;
+        if (checkout.Checkout.CheckedOut)
+        {
+            var checkedOutBranch = await Git(checkout.Checkout.Path, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
+            var checkedOutHead = await Git(checkout.Checkout.Path, filters, ct, "rev-parse", "--verify", "HEAD");
+            var checkedOutStatus = await Git(checkout.Checkout.Path, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            if (!Succeeded(checkedOutBranch)
+                || !string.Equals(checkedOutBranch.StdOut.Trim(), request.TargetBranch, StringComparison.Ordinal)
+                || !Succeeded(checkedOutHead)
+                || !string.Equals(checkedOutHead.StdOut.Trim(), branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase)
+                || !Succeeded(checkedOutStatus)
+                || (!targetAlreadyContainsMerge && !string.IsNullOrWhiteSpace(checkedOutStatus.StdOut)))
+                return BusinessFailure("TargetCheckoutChangedBeforeLandingRecovery");
+        }
         if (!targetAlreadyContainsMerge)
         {
             if (branchExists
@@ -317,9 +334,6 @@ internal static class GitLandExecutor
 
             if (checkout.Checkout!.CheckedOut)
             {
-                if (!SamePath(checkout.Checkout.Path, repo))
-                    return BusinessFailure("TargetCheckedOutElsewhere");
-
                 var update = branchExists
                     ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
                     : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha!.Length));
@@ -435,8 +449,21 @@ internal static class GitLandExecutor
 
         var targetAlreadyReverted = await IsAncestorAsync(
             repo, filters, revertCommitSha, branchHead.StdOut.Trim(), ct) == true;
-        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo) && !targetAlreadyReverted)
-            return BusinessFailure("TargetCheckedOutElsewhere");
+        if (checkout.Checkout!.CheckedOut)
+        {
+            if (!IsAllowedTargetCheckout(checkout.Checkout, repo, request.LandingAttemptId))
+                return BusinessFailure("TargetCheckedOutElsewhere");
+            var checkedOutBranch = await Git(checkout.Checkout.Path, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
+            var checkedOutHead = await Git(checkout.Checkout.Path, filters, ct, "rev-parse", "--verify", "HEAD");
+            var checkedOutStatus = await Git(checkout.Checkout.Path, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            if (!Succeeded(checkedOutBranch)
+                || !string.Equals(checkedOutBranch.StdOut.Trim(), request.TargetBranch, StringComparison.Ordinal)
+                || !Succeeded(checkedOutHead)
+                || !string.Equals(checkedOutHead.StdOut.Trim(), branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase)
+                || !Succeeded(checkedOutStatus)
+                || (!targetAlreadyReverted && !string.IsNullOrWhiteSpace(checkedOutStatus.StdOut)))
+                return BusinessFailure("TargetCheckoutChangedBeforeRevertRecovery");
+        }
         if (!targetAlreadyReverted)
         {
             if (!string.Equals(branchHead.StdOut.Trim(), request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
@@ -444,8 +471,6 @@ internal static class GitLandExecutor
 
             if (checkout.Checkout!.CheckedOut)
             {
-                if (!SamePath(checkout.Checkout.Path, repo))
-                    return BusinessFailure("TargetCheckedOutElsewhere");
                 var update = await Git(repo, filters, CancellationToken.None,
                     "update-ref", branchRef, revertCommitSha, request.MergeCommitSha!);
                 if (!Succeeded(update))
@@ -728,7 +753,8 @@ internal static class GitLandExecutor
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
             return BusinessFailure("TargetCheckoutUnavailable");
-        if (checkout.Checkout!.CheckedOut && !SamePath(checkout.Checkout.Path, repo))
+        if (checkout.Checkout!.CheckedOut
+            && !IsAllowedTargetCheckout(checkout.Checkout, repo, request.LandingAttemptId))
             return BusinessFailure("TargetCheckedOutElsewhere");
 
         var branchRef = $"refs/heads/{targetBranch}";
@@ -738,9 +764,9 @@ internal static class GitLandExecutor
 
         if (checkout.Checkout.CheckedOut)
         {
-            var clean = await Git(repo, filters, ct, "status", "--porcelain", "--untracked-files=all");
-            var currentBranch = await Git(repo, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
-            var currentHead = await Git(repo, filters, ct, "rev-parse", "--verify", "HEAD");
+            var clean = await Git(checkout.Checkout.Path, filters, ct, "status", "--porcelain", "--untracked-files=all");
+            var currentBranch = await Git(checkout.Checkout.Path, filters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
+            var currentHead = await Git(checkout.Checkout.Path, filters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(clean) || !string.IsNullOrWhiteSpace(clean.StdOut)
                 || !Succeeded(currentBranch)
                 || !string.Equals(currentBranch.StdOut.Trim(), targetBranch, StringComparison.Ordinal)
@@ -1119,6 +1145,11 @@ internal static class GitLandExecutor
         && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
         && value.All(character => !char.IsControl(character)
             && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
+
+    private static bool IsAllowedTargetCheckout(TargetCheckout checkout, string repositoryRoot, Guid attemptId) =>
+        !checkout.CheckedOut
+        || SamePath(checkout.Path, repositoryRoot)
+        || SamePath(checkout.Path, LandingTargetWorktreePath(attemptId));
 
     private static bool SamePath(string left, string right) =>
         string.Equals(
