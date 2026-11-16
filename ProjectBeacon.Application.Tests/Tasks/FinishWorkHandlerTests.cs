@@ -655,6 +655,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<Subtask> Subtasks => _inner.Subtasks;
         public DbSet<PipelineSession> PipelineSessions => _inner.PipelineSessions;
         public DbSet<ReviewVerdict> ReviewVerdicts => _inner.ReviewVerdicts;
+        public DbSet<LandingAttempt> LandingAttempts => _inner.LandingAttempts;
         public DbSet<DaemonDevice> DaemonDevices => _inner.DaemonDevices;
         public DbSet<WorkstationCommand> WorkstationCommands => _inner.WorkstationCommands;
         public DbSet<ProjectRuntime> ProjectRuntimes => _inner.ProjectRuntimes;
