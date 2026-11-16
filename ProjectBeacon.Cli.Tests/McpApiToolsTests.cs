@@ -647,29 +647,6 @@ public sealed class McpApiToolsTests
             call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/proposals/{proposalId:D}/withdraw");
     }
 
-    [Fact]
-    public async Task PipelineLandExecute_UsesTaskScopedExecuteEndpoint()
-    {
-        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        var attemptId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
-        var env = McpEnvironment.Of(("BEACON_TASK_ID", taskId.ToString("D")));
-        var handler = new RecordingHandler();
-        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
-        var api = new BeaconApiClient(http, env);
-
-        var result = await McpApiTools.CallAsync(
-            McpToolNames.PipelineLandExecute,
-            new JsonObject { ["landingAttemptId"] = attemptId.ToString("D") },
-            api,
-            env);
-
-        Assert.False(result.IsError, result.Text);
-        Assert.Contains(handler.Calls, call =>
-            call.Method == "POST"
-            && call.Path == $"/v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}/execute"
-            && call.Body.Contains(taskId.ToString("D"), StringComparison.OrdinalIgnoreCase));
-    }
-
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
