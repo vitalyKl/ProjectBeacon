@@ -50,9 +50,12 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
 
         if (expectedStage == TaskPipelineStage.Approved && !recoveryAfterLandingConflict)
         {
-            var latestStatus = latestLandingStatus?.ToString() ?? "None";
+            if (latestLandingStatus is null)
+                return Result.Failure<PipelineSessionDto>("Cannot start review in stage Approved.");
+
+            var latestStatus = latestLandingStatus.Value.ToString();
             return Result.Failure<PipelineSessionDto>(
-                $"A task in Approved cannot start a fresh review unless the latest landing attempt is Conflicted (current latest status: {latestStatus}).");
+                $"Cannot start review in stage Approved: the latest landing attempt is conflicted only when its current status is Conflicted (current status: {latestStatus}).");
         }
 
         if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
