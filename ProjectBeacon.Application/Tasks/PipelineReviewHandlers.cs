@@ -226,7 +226,8 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
         if (project is null)
             return Result.Failure<PipelineStateDto>("Project not found.");
 
