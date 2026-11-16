@@ -18,7 +18,7 @@ internal static partial class McpApiTools
             () => Props(("sessionId", "string", true)), PipelineLaunch),
         new(McpToolNames.PipelineFailSubtask, "Fail an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match.",
             () => Props(("subtaskId", "string", false), ("reason", "string", true), ("taskId", "string", false)), PipelineFail),
-        new(McpToolNames.PipelineStartReview, "Start the review stage after execution, or start a fresh review after the latest approved landing attempt was conflicted and the task branch has been integrated.",
+        new(McpToolNames.PipelineStartReview, "Start the review stage after subtask work is complete, or start a fresh review after integrating a conflicted landing.",
             () => Props(("taskId", "string", false)), PipelineReview),
         new(McpToolNames.PipelineApprove, "Approve the pipeline and close the task.",
             () => Props(("note", "string", false), ("taskId", "string", false)), PipelineApprove),
