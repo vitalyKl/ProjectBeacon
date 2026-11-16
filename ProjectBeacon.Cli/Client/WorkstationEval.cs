@@ -313,6 +313,14 @@ public static class WorkstationEval
         if (!string.Equals(actualCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<string>("The trusted check command does not match its server-pinned hash.");
 
+        var repositoryRootResult = await AgentSessionWorktree.RunGitAsync(
+            root, ct, [], "rev-parse", "--show-toplevel");
+        if (repositoryRootResult.ExitCode != 0 || repositoryRootResult.TimedOut
+            || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
+            return Result.Failure<string>("The configured project directory is not inside a Git repository.");
+        var repositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
+        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+
         var opened = await AgentTaskWorktree.CreateAsync(
             root, projectId, taskId.Value, configuredWorktreeRoot, ct);
         if (opened.Worktree is null)
@@ -330,6 +338,11 @@ public static class WorkstationEval
             $"ProjectBeacon: task {taskId.Value:N} review checkpoint", ct);
         if (!checkpoint.Success || string.IsNullOrWhiteSpace(checkpoint.CommitSha))
             return Result.Failure<string>(checkpoint.Error ?? "Could not checkpoint the task branch before review.");
+
+        // The task checkpoint and any base-branch fetch are complete. The later detached
+        // worktree and check run do not update shared branch refs, so they need not hold
+        // the repository-wide Git operation gate.
+        repositoryGate.Dispose();
 
         var sourceSha = checkpoint.CommitSha;
         var repositoryRoot = taskWorkspace.RepositoryRoot;
