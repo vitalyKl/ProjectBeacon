@@ -125,10 +125,21 @@ public sealed class ReviewRun : Entity, IProjectScoped
     /// <summary>
     /// True only when completion proves the pinned command and exact checked Git source/tree.
     /// </summary>
+    /// <summary>
+    /// True when a completed review has a server-recorded check artifact. This remains the
+    /// completion proof for existing Snapshot-mode task workflows.
+    /// </summary>
     public bool IsCheckProof() =>
         Status == ReviewRunStatus.Completed
         && TargetRunId is not null
-        && !string.IsNullOrWhiteSpace(ArtifactRef)
+        && !string.IsNullOrWhiteSpace(ArtifactRef);
+
+    /// <summary>
+    /// True only when the completed check is bound to its approved command, exact Git source
+    /// and tree, workstation device, and daemon-selected target branch. Required for landing.
+    /// </summary>
+    public bool IsLandingProof() =>
+        IsCheckProof()
         && IsSha256(CheckCommandHash)
         && IsGitSha(CheckedSourceSha)
         && IsGitSha(CheckedTreeSha)
