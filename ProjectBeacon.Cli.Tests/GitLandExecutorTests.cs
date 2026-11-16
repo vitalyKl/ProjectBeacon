@@ -138,7 +138,7 @@ public sealed partial class AgentTaskGitOperationsTests
             projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
         Assert.NotNull(opened.Worktree);
         var taskWorkingDirectory = opened.Worktree!.WorkingDirectory;
-        await using (var taskWorktree = opened.Worktree)
+        await using (var taskWorktree = opened.Worktree!)
         {
             await File.WriteAllTextAsync(Path.Combine(taskWorktree.WorkingDirectory, "shared.txt"), "task version\n");
             var commit = await taskWorktree.CommitChangesAsync(
