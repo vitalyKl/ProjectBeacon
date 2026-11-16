@@ -102,6 +102,7 @@ internal static class LandingCommandDispatch
             "Revert" when attempt.Status is LandingAttemptStatus.Landed
                 or LandingAttemptStatus.LandedUnverified
                 or LandingAttemptStatus.RevertPending
+                or LandingAttemptStatus.RevertFailed
                 => LandingAttemptStatus.RevertPending,
             _ => (LandingAttemptStatus?)null
         };
@@ -110,6 +111,7 @@ internal static class LandingCommandDispatch
 
         var previousCode = attempt.FailureCode;
         if (previousCode is not null
+            && !(action == "Revert" && attempt.Status == LandingAttemptStatus.RevertFailed)
             && !string.Equals(previousCode, "CommandCompletionUnknown", StringComparison.Ordinal)
             && !string.Equals(previousCode, marker, StringComparison.Ordinal))
             return false;
