@@ -38,13 +38,22 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         // a fresh Review session here; the next verdict and RunReviewCheck will bind to
         // the new branch SHA. A Failed/Rejected landing cannot use this recovery path.
         var expectedStage = task.PipelineStage;
-        var recoveryAfterLandingConflict = expectedStage == TaskPipelineStage.Approved
-            && await db.LandingAttempts
+        var latestLandingStatus = expectedStage == TaskPipelineStage.Approved
+            ? await db.LandingAttempts
                 .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
                 .OrderByDescending(attempt => attempt.CreatedAt)
                 .ThenByDescending(attempt => attempt.Id)
-                .Select(attempt => attempt.Status)
-                .FirstOrDefaultAsync(ct) == LandingAttemptStatus.Conflicted;
+                .Select(attempt => (LandingAttemptStatus?)attempt.Status)
+                .FirstOrDefaultAsync(ct)
+            : null;
+        var recoveryAfterLandingConflict = latestLandingStatus == LandingAttemptStatus.Conflicted;
+
+        if (expectedStage == TaskPipelineStage.Approved && !recoveryAfterLandingConflict)
+        {
+            var latestStatus = latestLandingStatus?.ToString() ?? "None";
+            return Result.Failure<PipelineSessionDto>(
+                $"A task in Approved cannot start a fresh review unless the latest landing attempt is Conflicted (current latest status: {latestStatus}).");
+        }
 
         if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
             return Result.Failure<PipelineSessionDto>(
