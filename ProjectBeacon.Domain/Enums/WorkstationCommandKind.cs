@@ -29,5 +29,6 @@ public enum WorkstationCommandKind
     CheckClientUpdate,
     UpdateClient,
     GitSync,
-    ApplyProposalPatch
+    ApplyProposalPatch,
+    GitLand
 }

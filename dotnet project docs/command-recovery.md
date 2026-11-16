@@ -14,7 +14,7 @@
 claim и completion, оставалась `Running` вечно, а повторный POST
 completion делал один fire-and-forget запрос. Теперь:
 
-- claim выдаёт команде **lease** (по виду, 15 минут) и запоминает
+- claim выдаёт команде **lease** (обычно 15 минут; отдельные длительные виды используют 30 или 75 минут по каталогу) и запоминает
   **идентификатор процесса** (instance id) заявившего daemon'а;
 - **stale-правило** переводит `Running` в recovery state при истёкшем lease,
   если гибель процесса доказана (устройство отозвано, offline > 45 c, или
@@ -56,16 +56,21 @@ H4.1-стиль). `LeaseExpiresAt` сбрасывается при requeue и п
 ## Lease contract
 
 - Lease выдаётся в claim: `LeaseExpiresAt = StartedAt + CommandLease.For(kind)`.
-- `CommandLease.For(kind)` — исчерпывающий switch по всем 17 видам, каждый
-  вид имеет явный arm (15 минут). Новый вид без явного arm не компилируется
-  без осознанного решения.
-- **Достаточность 15 минут.** Все виды жёстко ограничены клиентом:
+- `CommandLease.For(kind)` берёт длительность из исчерпывающего
+  `WorkstationCommandCatalog`; тесты требуют descriptor для каждого enum.
+  Обычная аренда — 15 минут; `RunPipelineSession` — 75 минут;
+  `ApplyProposalPatch` и `GitLand` — 30 минут.
+- **Достаточность аренды.** Обычные виды имеют клиентские ограничения:
   LLM/eval-ходы — 180 c (`ChatPrompt`, `RunEvalTurn`, `ChatEnsureSession`),
-  review check и winget-установка — 120 c, остальные — файловые операции и
-  HTTP-вызовы, завершающиеся за секунды. 15 минут больше любого возможного
-  времени живого исполнения с большим запасом, поэтому **продление lease
-  не нужно**: lease существует, чтобы отличить «процесс жив и исполняет» от
-  «процесс мёртв», а не для точного учёта времени.
+  review check и winget-установка — 120 c, остальные — короткие файловые
+  операции и HTTP-вызовы. `GitLand` специально получает 30 минут: это
+  последовательность fetch/merge-tree/commit-tree/update-ref, изолированных
+  candidate и post-merge проверок; отдельные Git-вызовы ограничены, а check
+  имеет собственный таймаут. `RunPipelineSession` получает 75 минут по
+  отдельному контракту pipeline. Lease не является точным лимитом времени:
+  он помогает отличить процесс, который ещё исполняет команду, от потерянной
+  попытки. Не добавляйте длительную команду с обычной арендой без проверки её
+  worst-case длительности.
 - Lease — не TTL исполнения. Живой daemon может завершить команду в любой
   момент до конца lease; истечение lease само по себе ничего не означает
   (см. stale-правило). Long-stale-ярус — тоже не продление lease: это
@@ -103,9 +108,10 @@ H4.1-стиль). `LeaseExpiresAt` сбрасывается при requeue и п
 **не** считается равным (EF Core переводит `==` в `=`, а не в
 `IS NOT DISTINCT FROM`). Для legacy-daemon'ов, не шлющих instance id (оба
 поля `NULL`), это означает, что ярус 1 признаёт строку stale сразу после
-истечения lease — без 30-минутного grace. Это безопасно: клиентские лимиты
-всех видов (≤ 180 s) многократно ниже 15-минутного lease, поэтому lease не
-может истечь, пока живое исполнение в полёте; потерянный ACK решается по
+истечения lease — без 30-минутного grace. Это безопасно для legacy-команд с обычной 15-минутной арендой: их клиентские
+лимиты (≤ 180 s) многократно меньше lease, поэтому он не истекает при
+легитимном исполнении. Длительные виды используют собственный lease;
+потерянный ACK решается по
 тому же пути, что и для daemon'ов с instance id, а поздний дублированный
 ACK отклоняется generation guard и терминальным статусом.
 
@@ -142,6 +148,11 @@ Instance id: клиент генерирует `Guid.ToString("N")` на про�
 - `RunEvalTurn` → `EvalRun.Complete(...)` с ошибкой (run завершён как
   проваленный);
 - `RunReviewCheck` → `ReviewRun.Fail(...)`;
+- `GitLand` → `GitLandCompletion` validates the attempt/action/device and
+  all reviewed SHA/hash bindings. A lost/ambiguous Execute or Revert ACK leaves
+  the attempt in `CommandCompletionUnknown`; a later idempotent requeue
+  resumes only the commit recorded in the attempt-scoped Git marker ref.
+  Recovery never infers a landed/reverted result from a timeout alone.
 - подтверждённый сбой `ChatPrompt` → стриминг-сессия переводится в `Idle`
   (`ChatSessionCompletion`), только если сессия в `Streaming`; success
   никогда не декларируется;
@@ -253,6 +264,23 @@ ACK от первой попытки не может задублировать 
 ## GitSync
 
 `GitSync` is registered as idempotent in the command catalog. If a claimed command becomes stale, the standard idempotent recovery path may requeue it once. Repeating `Status` or `PullFastForward` converges: a completed fast-forward is reported as `UpToDate` on redelivery. The workstation serializes GitSync against snapshot creation and refuses `PullFastForward` while a native project session is active.
+
+## GitLand
+
+`GitLand` uses the catalog's idempotent classification and a 30-minute lease.
+The command body is not replayed after a failed completion POST; the daemon
+retries only the ACK. If the daemon process is lost while Execute/Revert is
+running, the stale-command rule can requeue the command once. The workstation
+then validates `refs/beacon/landing-attempts/<attempt-id>/merge` or
+`/revert` and resumes the exact compare-and-swap, rather than generating a
+second landing/revert commit. A known business failure is stored as a structured
+result and is not treated as a successful landing. The server completion handler
+moves the attempt only when the payload identity and returned evidence match.
+
+Preview does not mutate the target branch; Execute validates the target HEAD
+and candidate tree again immediately before the ref update; Revert requires the
+target ref to still equal the exact landing commit. Later target commits are
+never reset, rewritten, or discarded.
 
 ## ApplyProposalPatch
 

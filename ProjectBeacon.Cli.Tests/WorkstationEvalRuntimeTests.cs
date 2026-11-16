@@ -98,6 +98,38 @@ public sealed class WorkstationEvalRuntimeTests
     }
 
     [Fact]
+    public async Task RunReviewCheck_BranchProofRejectsSubdirectoryScope()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-review-proof-path-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        const string checkCommand = "dotnet test";
+        var commandHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var payload = JsonSerializer.Serialize(new
+        {
+            reviewRunId = Guid.NewGuid(),
+            taskId = Guid.NewGuid(),
+            checkCommand,
+            checkCommandHash = commandHash,
+            path = "src"
+        });
+
+        try
+        {
+            var result = await WorkstationEval.RunReviewCheckAsync(
+                root, payload, Guid.NewGuid(), null, TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Contains("project root", result.Error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectory(root);
+        }
+    }
+
+    [Fact]
     public async Task RunEvalTurn_UsesIsolatedWorktreeAndDoesNotModifyOriginalCheckout()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-eval-worktree-" + Guid.NewGuid().ToString("N"));

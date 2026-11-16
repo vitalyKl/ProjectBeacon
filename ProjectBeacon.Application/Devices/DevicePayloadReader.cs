@@ -21,6 +21,25 @@ internal static class DevicePayloadReader
         return null;
     }
 
+    public static string? ReadString(string? json, string name)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public static int ReadInt(JsonElement parent, string name) => ReadNullableInt(parent, name) ?? 0;
 
     public static int? ReadNullableInt(JsonElement parent, string name)

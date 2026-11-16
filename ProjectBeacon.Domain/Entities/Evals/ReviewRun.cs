@@ -5,7 +5,9 @@ using ProjectBeacon.Domain.Enums;
 
 /// <summary>
 /// A project-scoped review of a task. Starts as <see cref="ReviewRunStatus.Started"/>.
-/// <see cref="IsCheckProof"/> requires completion, a target run, and an artifact ref.
+/// <see cref="IsCheckProof"/> is the legacy completion proof used by existing task workflows;
+/// <see cref="IsLandingProof"/> additionally binds the pinned command, exact Git source/tree,
+/// workstation device, and daemon-selected target branch.
 /// </summary>
 public sealed class ReviewRun : Entity, IProjectScoped
 {
@@ -20,6 +22,11 @@ public sealed class ReviewRun : Entity, IProjectScoped
     public string? ArtifactRef { get; private set; }
     public string TranscriptRef { get; private set; } = string.Empty;
     public string? ReviewerActorId { get; private set; }
+    public string? CheckCommandHash { get; private set; }
+    public string? CheckedSourceSha { get; private set; }
+    public string? CheckedTreeSha { get; private set; }
+    public Guid? CheckedDeviceId { get; private set; }
+    public string? CheckedBaseBranch { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -75,6 +82,34 @@ public sealed class ReviewRun : Entity, IProjectScoped
         CompletedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Locks this run to the server-approved command before the workstation check is queued.</summary>
+    public void SetCheckCommandHash(string commandHash)
+    {
+        if (Status != ReviewRunStatus.Started)
+            throw new InvalidOperationException("Only a started review run can be bound to a check command.");
+        if (!IsSha256(commandHash))
+            throw new ArgumentException("A valid SHA-256 command hash is required.", nameof(commandHash));
+        if (CheckCommandHash is not null)
+            throw new InvalidOperationException("A review check command has already been assigned to this run.");
+        CheckCommandHash = commandHash.ToLowerInvariant();
+    }
+
+    /// <summary>Completes a review proof tied to the exact task branch commit and Git tree that were checked.</summary>
+    public void CompleteCheck(string? findings, string artifactRef, string checkedSourceSha, string checkedTreeSha, Guid checkedDeviceId, string checkedBaseBranch)
+    {
+        if (string.IsNullOrWhiteSpace(CheckCommandHash)
+            || !IsGitSha(checkedSourceSha)
+            || !IsGitSha(checkedTreeSha)
+            || checkedDeviceId == Guid.Empty
+            || !IsSafeBranchName(checkedBaseBranch))
+            throw new InvalidOperationException("The approved command hash, checked Git source/tree SHAs, workstation device, and target branch are required.");
+        Complete(findings, artifactRef);
+        CheckedSourceSha = checkedSourceSha.ToLowerInvariant();
+        CheckedTreeSha = checkedTreeSha.ToLowerInvariant();
+        CheckedDeviceId = checkedDeviceId;
+        CheckedBaseBranch = checkedBaseBranch;
+    }
+
     /// <summary>
     /// Fails the run.
     /// </summary>
@@ -90,12 +125,41 @@ public sealed class ReviewRun : Entity, IProjectScoped
     }
 
     /// <summary>
-    /// True when the run is completed, <see cref="TargetRunId"/> is set, and <see cref="ArtifactRef"/> is not white space.
+    /// True when a completed review has a server-recorded check artifact. This remains the
+    /// completion proof for existing Snapshot-mode task workflows.
     /// </summary>
     public bool IsCheckProof() =>
         Status == ReviewRunStatus.Completed
         && TargetRunId is not null
         && !string.IsNullOrWhiteSpace(ArtifactRef);
+
+    /// <summary>
+    /// True only when the completed check is bound to its approved command, exact Git source
+    /// and tree, workstation device, and daemon-selected target branch. Required for landing.
+    /// </summary>
+    public bool IsLandingProof() =>
+        IsCheckProof()
+        && IsSha256(CheckCommandHash)
+        && IsGitSha(CheckedSourceSha)
+        && IsGitSha(CheckedTreeSha)
+        && CheckedDeviceId is not null && CheckedDeviceId != Guid.Empty
+        && IsSafeBranchName(CheckedBaseBranch);
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSafeBranchName(string? value) =>
+        value is { Length: > 0 and <= 200 }
+        && !value.Contains("..", StringComparison.Ordinal)
+        && !value.Contains("@{", StringComparison.Ordinal)
+        && !value.StartsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+            || character is '.' or '_' or '-' or '/');
 
     /// <summary>
     /// Starts an agent review and completes it immediately, using <paramref name="transcriptRef"/> as the artifact.

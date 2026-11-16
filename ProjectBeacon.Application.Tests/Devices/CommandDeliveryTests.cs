@@ -12,6 +12,9 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RunEvalTurn)]
     [InlineData(WorkstationCommandKind.RunReviewCheck)]
     [InlineData(WorkstationCommandKind.RunPipelineSession)]
+    [InlineData(WorkstationCommandKind.ChatSwitchAgent)]
+    [InlineData(WorkstationCommandKind.ChatReplyForm)]
+    [InlineData(WorkstationCommandKind.UpdateClient)]
     public void IsAtMostOnce_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {
         Assert.True(CommandDelivery.IsAtMostOnce(kind));
@@ -30,6 +33,8 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.SwapModel)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
     [InlineData(WorkstationCommandKind.ChatAbort)]
+    [InlineData(WorkstationCommandKind.CheckClientUpdate)]
+    [InlineData(WorkstationCommandKind.GitLand)]
     [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
@@ -51,6 +56,8 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.SwapModel)]
     [InlineData(WorkstationCommandKind.SaveWorkstation)]
     [InlineData(WorkstationCommandKind.ChatAbort)]
+    [InlineData(WorkstationCommandKind.CheckClientUpdate)]
+    [InlineData(WorkstationCommandKind.GitLand)]
     [InlineData(WorkstationCommandKind.RetiredProviderSync)]
     [InlineData(WorkstationCommandKind.ReconcileDesired)]
     [InlineData(WorkstationCommandKind.GitSync)]
@@ -68,6 +75,7 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.RunPipelineSession)]
     [InlineData(WorkstationCommandKind.ChatSwitchAgent)]
     [InlineData(WorkstationCommandKind.ChatReplyForm)]
+    [InlineData(WorkstationCommandKind.UpdateClient)]
     public void IsIdempotent_AtMostOnceKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
         Assert.False(CommandDelivery.IsIdempotent(kind));
@@ -103,6 +111,7 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.ChatSwitchAgent)]
     [InlineData(WorkstationCommandKind.ChatReplyForm)]
     [InlineData(WorkstationCommandKind.ApplyProposalPatch)]
+    [InlineData(WorkstationCommandKind.GitLand)]
     public void IsReconcileBacked_OtherKinds_ReturnsFalse(WorkstationCommandKind kind)
     {
         Assert.False(CommandDelivery.IsReconcileBacked(kind));
@@ -116,9 +125,9 @@ public sealed class CommandDeliveryTests
         var idempotent = all.Where(CommandDelivery.IsIdempotent).ToHashSet();
         var reconcile = all.Where(CommandDelivery.IsReconcileBacked).ToHashSet();
 
-        Assert.Equal(24, all.Length);
+        Assert.Equal(25, all.Length);
         Assert.Equal(8, atMostOnce.Count);
-        Assert.Equal(16, idempotent.Count);
+        Assert.Equal(17, idempotent.Count);
         Assert.Equal(5, reconcile.Count);
 
         Assert.Empty(atMostOnce.Intersect(idempotent));

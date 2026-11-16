@@ -1,9 +1,12 @@
 namespace ProjectBeacon.Application.Devices;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Domain.Entities.Content;
+using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
@@ -25,6 +28,7 @@ internal static class CommandCompletions
         new RepoPatchCompletion(),
         new EvalRunCompletion(),
         new ReviewCheckCompletion(),
+        new GitLandCompletion(),
         new DesiredStateCompletion(),
         new ChatSessionCompletion(),
         new PipelineSessionCompletion()
@@ -418,32 +422,76 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
             return;
         if (row.ProjectId is Guid projectId && run.ProjectId != projectId)
             return;
+        if (DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId") != run.TaskId
+            || row.DeviceId == Guid.Empty)
+            return;
 
         if (!success)
+        {
             run.Fail(error);
+        }
         else
         {
             int? exitCode = null;
             string? output = null;
-            if (!string.IsNullOrWhiteSpace(resultJson))
+            string? sourceSha = null;
+            string? treeSha = null;
+            string? reportedCommandHash = null;
+            string? checkedBaseBranch = null;
+            try
             {
-                try
-                {
-                    using var doc = JsonDocument.Parse(resultJson);
-                    exitCode = DevicePayloadReader.ReadNullableInt(doc.RootElement, "exitCode");
-                    if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
-                        output = outputElement.GetString();
-                }
-                catch (JsonException)
-                {
-                    exitCode = null;
-                }
+                using var result = JsonDocument.Parse(resultJson ?? "{}");
+                var root = result.RootElement;
+                exitCode = DevicePayloadReader.ReadNullableInt(root, "exitCode");
+                output = root.TryGetProperty("checkOutput", out var value) && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+                sourceSha = root.TryGetProperty("checkedSourceSha", out var source) && source.ValueKind == JsonValueKind.String
+                    ? source.GetString()
+                    : null;
+                treeSha = root.TryGetProperty("checkedTreeSha", out var tree) && tree.ValueKind == JsonValueKind.String
+                    ? tree.GetString()
+                    : null;
+                reportedCommandHash = root.TryGetProperty("checkCommandHash", out var hash) && hash.ValueKind == JsonValueKind.String
+                    ? hash.GetString()
+                    : null;
+                checkedBaseBranch = root.TryGetProperty("checkedBaseBranch", out var branch) && branch.ValueKind == JsonValueKind.String
+                    ? branch.GetString()
+                    : null;
+            }
+            catch (JsonException)
+            {
+                exitCode = null;
             }
 
-            if (exitCode == 0)
+            var trustedCommand = DevicePayloadReader.ReadString(row.PayloadJson, "checkCommand");
+            var actualCommandHash = string.IsNullOrWhiteSpace(trustedCommand)
+                ? null
+                : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(trustedCommand))).ToLowerInvariant();
+            var commandMatches = actualCommandHash is not null
+                && string.Equals(actualCommandHash, run.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
+                && (reportedCommandHash is null
+                    || string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase));
+            var hasAnyGitEvidence = sourceSha is not null || treeSha is not null
+                || reportedCommandHash is not null || checkedBaseBranch is not null;
+            var hasCompleteGitEvidence = IsGitSha(sourceSha)
+                && IsGitSha(treeSha)
+                && string.Equals(actualCommandHash, reportedCommandHash, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(checkedBaseBranch)
+                && checkedBaseBranch.Length <= 200
+                && !checkedBaseBranch.Contains("..", StringComparison.Ordinal)
+                && !checkedBaseBranch.Contains('\\');
+
+            if (exitCode == 0 && commandMatches && hasCompleteGitEvidence)
+                run.CompleteCheck(output, $"cmd:{row.Id:D}", sourceSha!, treeSha!, row.DeviceId, checkedBaseBranch!);
+            else if (exitCode == 0 && commandMatches && !hasAnyGitEvidence)
+                // Legacy Snapshot-mode review remains a valid review result, but cannot be
+                // used as a landing proof because it is not bound to a task-branch commit.
                 run.Complete(output, $"cmd:{row.Id:D}");
             else
-                run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
+                run.Fail(exitCode == 0
+                    ? "Review check result did not prove the pinned command and checked Git revision."
+                    : string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
         }
 
         // Guarded: only the first completion of the started run is stored.
@@ -454,8 +502,441 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
                 .SetProperty(r => r.ArtifactRef, run.ArtifactRef)
                 .SetProperty(r => r.TranscriptRef, run.TranscriptRef)
                 .SetProperty(r => r.Status, run.Status)
-                .SetProperty(r => r.CompletedAt, run.CompletedAt), ct);
+                .SetProperty(r => r.CompletedAt, run.CompletedAt)
+                .SetProperty(r => r.CheckCommandHash, run.CheckCommandHash)
+                .SetProperty(r => r.CheckedSourceSha, run.CheckedSourceSha)
+                .SetProperty(r => r.CheckedTreeSha, run.CheckedTreeSha)
+                .SetProperty(r => r.CheckedDeviceId, run.CheckedDeviceId)
+                .SetProperty(r => r.CheckedBaseBranch, run.CheckedBaseBranch), ct);
     }
+
+    private static string? ReadString(string json, string name)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+}
+
+internal sealed class GitLandCompletion : ICommandCompletion
+{
+    public async Task ApplyAsync(
+        IBeaconDb db,
+        WorkstationCommand row,
+        bool success,
+        string? resultJson,
+        string? error,
+        CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.GitLand || row.ProjectId is not { } projectId)
+            return;
+        var attemptId = DevicePayloadReader.ReadGuid(row.PayloadJson, "landingAttemptId");
+        if (attemptId is null)
+            return;
+
+        var attempt = await db.LandingAttempts.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == attemptId.Value && item.ProjectId == projectId, ct);
+        if (attempt is null)
+            return;
+
+        var payloadTaskId = DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId");
+        var payloadAction = DevicePayloadReader.ReadString(row.PayloadJson, "action");
+        var payloadTargetBranch = DevicePayloadReader.ReadString(row.PayloadJson, "targetBranch");
+        var payloadSourceSha = DevicePayloadReader.ReadString(row.PayloadJson, "sourceSha");
+        var payloadReviewTreeSha = DevicePayloadReader.ReadString(row.PayloadJson, "reviewTreeSha");
+        var payloadCommandHash = DevicePayloadReader.ReadString(row.PayloadJson, "checkCommandHash");
+        var payloadTargetHeadSha = DevicePayloadReader.ReadString(row.PayloadJson, "targetHeadSha");
+        var payloadTargetTreeSha = DevicePayloadReader.ReadString(row.PayloadJson, "targetTreeSha");
+        var payloadMergeCommitSha = DevicePayloadReader.ReadString(row.PayloadJson, "mergeCommitSha");
+        var expectedAction = attempt.Status switch
+        {
+            LandingAttemptStatus.PreviewPending => "Preview",
+            LandingAttemptStatus.ExecutePending => "Execute",
+            LandingAttemptStatus.RevertPending => "Revert",
+            _ => null
+        };
+        var actionBindingValid = payloadAction switch
+        {
+            "Preview" => payloadTargetHeadSha is null && payloadTargetTreeSha is null && payloadMergeCommitSha is null,
+            "Execute" => string.Equals(payloadTargetHeadSha, attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(payloadTargetTreeSha, attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                && payloadMergeCommitSha is null,
+            "Revert" => string.Equals(payloadMergeCommitSha, attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                && payloadTargetHeadSha is null && payloadTargetTreeSha is null,
+            _ => false
+        };
+        if (row.DeviceId != attempt.DeviceId
+            || payloadTaskId != attempt.TaskId
+            || !string.Equals(payloadSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payloadReviewTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payloadCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal)
+            || !actionBindingValid)
+            return;
+
+        var previousState = attempt.Status;
+        string resultCode;
+        string action;
+        if (!success)
+        {
+            if (!IsInFlight(attempt.Status))
+                return;
+            if (attempt.Status is LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
+            {
+                // A lost acknowledgement after a compare-and-swap may mean the Git ref
+                // already moved. Keep the state retryable; GitLand's attempt marker makes
+                // the next command reconcile the exact commit instead of merging twice.
+                attempt.MarkCommandCompletionUnknown();
+                resultCode = "CommandCompletionUnknown";
+            }
+            else
+            {
+                attempt.Fail("GitLandCommandFailed");
+                resultCode = "GitLandCommandFailed";
+            }
+            action = ActionFor(previousState);
+        }
+        else
+        {
+            JsonElement root;
+            try
+            {
+                using var document = JsonDocument.Parse(resultJson ?? "{}");
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new JsonException("GitLand result must be a JSON object.");
+                root = document.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                if (attempt.Status is LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
+                    attempt.MarkCommandCompletionUnknown();
+                else if (IsInFlight(attempt.Status))
+                    attempt.Fail("InvalidGitLandResult");
+                resultCode = attempt.FailureCode ?? "InvalidGitLandResult";
+                action = ActionFor(previousState);
+                goto Audit;
+            }
+
+            var status = ReadString(root, "status");
+            switch (status)
+            {
+                case "previewed":
+                    {
+                        var targetBranch = ReadString(root, "targetBranch");
+                        var targetHead = ReadString(root, "targetHeadSha");
+                        var tree = ReadString(root, "candidateTreeSha");
+                        var checkHash = ReadString(root, "checkOutputHash");
+                        var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
+                        if (attempt.Status == LandingAttemptStatus.PreviewPending
+                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsGitSha(targetHead)
+                            && IsGitSha(tree)
+                            && IsSha256(checkHash)
+                            && exitCode == 0)
+                        {
+                            attempt.RecordPreview(targetBranch!, targetHead!, tree, checkHash, exitCode, null);
+                            resultCode = "Previewed";
+                            action = "pipeline.landing.preview_completed";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "UnexpectedOrInvalidPreviewResult");
+                            resultCode = "InvalidPreviewEvidence";
+                            action = "pipeline.landing.preview_failed";
+                        }
+                        break;
+                    }
+                case "conflicted":
+                    {
+                        var targetBranch = ReadString(root, "targetBranch");
+                        var targetHead = ReadString(root, "targetHeadSha");
+                        var conflicts = root.TryGetProperty("conflicts", out var files)
+                            && files.ValueKind == JsonValueKind.Array
+                                ? files.EnumerateArray()
+                                    .Where(item => item.ValueKind == JsonValueKind.String)
+                                    .Select(item => item.GetString())
+                                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                                    .Take(201)
+                                    .ToArray()
+                                : [];
+                        if (attempt.Status == LandingAttemptStatus.PreviewPending
+                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsGitSha(targetHead)
+                            && conflicts.Length is > 0 and <= 200)
+                        {
+                            attempt.RecordPreview(
+                                targetBranch!, targetHead!, null, null, null,
+                                JsonSerializer.Serialize(conflicts));
+                            resultCode = "Conflicted";
+                            action = "pipeline.landing.conflicted";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "UnexpectedOrInvalidConflictResult");
+                            resultCode = "InvalidConflictEvidence";
+                            action = "pipeline.landing.preview_failed";
+                        }
+                        break;
+                    }
+                case "failed":
+                    {
+                        var failureCode = ReadString(root, "errorCode");
+                        FailIfInFlight(attempt, IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed");
+                        resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "GitLandOperationFailed";
+                        action = ActionFor(previousState);
+                        break;
+                    }
+                case "execute_unknown":
+                    {
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var errorCode = ReadString(root, "errorCode");
+                        var identityMatches = attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && (mergeCommit is null || IsGitSha(mergeCommit));
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending)
+                        {
+                            // Keep the attempt exclusive until a retry can reconcile the durable
+                            // merge marker. Even malformed evidence must not release the unique
+                            // active-attempt slot while a target ref may already have moved.
+                            attempt.MarkCommandCompletionUnknown();
+                            resultCode = identityMatches
+                                ? IsSafeFailureCode(errorCode) ? errorCode! : "CommandCompletionUnknown"
+                                : "InvalidExecuteUnknownEvidence";
+                        }
+                        else
+                        {
+                            resultCode = "UnexpectedExecuteUnknownState";
+                        }
+                        action = "pipeline.landing.execute_failed";
+                        break;
+                    }
+                case "landed":
+                    {
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var tree = ReadString(root, "candidateTreeSha");
+                        var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                        var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(tree, attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(mergeCommit) && IsGitSha(tree))
+                        {
+                            if (string.Equals(attempt.CandidateTreeSha, tree, StringComparison.OrdinalIgnoreCase)
+                                && checkExitCode == 0 && IsSha256(checkOutputHash))
+                            {
+                                attempt.RecordLanded(mergeCommit!, tree!, checkExitCode.Value, checkOutputHash!);
+                                resultCode = "Landed";
+                                action = "pipeline.landing.completed";
+                            }
+                            else
+                            {
+                                attempt.RecordLandedUnverified(
+                                    mergeCommit!,
+                                    "PostMergeEvidenceInvalid",
+                                    checkExitCode,
+                                    checkOutputHash);
+                                resultCode = "PostMergeEvidenceInvalid";
+                                action = "pipeline.landing.execute_failed";
+                            }
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidLandedEvidence");
+                            resultCode = "InvalidLandedEvidence";
+                            action = "pipeline.landing.execute_failed";
+                        }
+                        break;
+                    }
+                case "landed_unverified":
+                case "landed_tree_mismatch":
+                case "landed_metadata_mismatch":
+                    {
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var errorCode = ReadString(root, "errorCode");
+                        var checkExitCode = DevicePayloadReader.ReadNullableInt(root, "postMergeCheckExitCode");
+                        var checkOutputHash = ReadString(root, "postMergeCheckOutputHash");
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(mergeCommit))
+                        {
+                            attempt.RecordLandedUnverified(
+                                mergeCommit!,
+                                IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed",
+                                checkExitCode,
+                                checkOutputHash);
+                            resultCode = IsSafeFailureCode(errorCode) ? errorCode! : "PostMergeVerificationFailed";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidLandedUnverifiedEvidence");
+                            resultCode = "InvalidLandedUnverifiedEvidence";
+                        }
+                        action = "pipeline.landing.execute_failed";
+                        break;
+                    }
+                case "reverted":
+                    {
+                        var revertCommit = ReadString(root, "revertCommitSha");
+                        if (attempt.Status == LandingAttemptStatus.RevertPending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(revertCommit))
+                        {
+                            attempt.RecordReverted(revertCommit!);
+                            resultCode = "Reverted";
+                            action = "pipeline.landing.reverted";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidRevertEvidence");
+                            resultCode = "InvalidRevertEvidence";
+                            action = "pipeline.landing.revert_failed";
+                        }
+                        break;
+                    }
+                case "reverted_unverified":
+                    {
+                        var revertCommit = ReadString(root, "revertCommitSha");
+                        var failureCode = ReadString(root, "errorCode");
+                        if (attempt.Status == LandingAttemptStatus.RevertPending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "mergeCommitSha"), attempt.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                            && IsGitSha(revertCommit))
+                        {
+                            attempt.RecordRevertedUnverified(
+                                revertCommit!,
+                                IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed");
+                            resultCode = IsSafeFailureCode(failureCode) ? failureCode! : "TargetWorktreeUpdateFailed";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidRevertUnverifiedEvidence");
+                            resultCode = "InvalidRevertUnverifiedEvidence";
+                        }
+                        action = "pipeline.landing.revert_failed";
+                        break;
+                    }
+                default:
+                    {
+                        FailIfInFlight(attempt, "UnknownGitLandResult");
+                        resultCode = "UnknownGitLandResult";
+                        action = "pipeline.landing.command_failed";
+                        break;
+                    }
+            }
+        }
+
+    Audit:
+        var orgId = await db.Projects
+            .Where(project => project.Id == projectId)
+            .Select(project => (Guid?)project.OrgId)
+            .FirstOrDefaultAsync(ct);
+        if (orgId is { } resolvedOrgId)
+        {
+            var actor = new ActorContext(
+                ActorType.Worker, null, false, null, null,
+                projectId, resolvedOrgId, ApiTokenCapability.None);
+            var outcome = attempt.Status is LandingAttemptStatus.Conflicted
+                or LandingAttemptStatus.Failed
+                or LandingAttemptStatus.RevertFailed
+                or LandingAttemptStatus.RevertedUnverified
+                or LandingAttemptStatus.LandedUnverified
+                || string.Equals(attempt.FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal)
+                    ? AuditOutcome.Failed
+                    : AuditOutcome.Success;
+            var details = new Dictionary<string, object>
+            {
+                ["previousState"] = previousState.ToString(),
+                ["newState"] = attempt.Status.ToString(),
+                ["resultCode"] = resultCode,
+                ["sourceBranch"] = attempt.SourceBranch,
+                ["targetBranch"] = attempt.TargetBranch,
+                ["sourceSha"] = attempt.SourceSha,
+                ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                ["reviewRunId"] = attempt.ReviewRunId.ToString("D"),
+                ["deviceId"] = attempt.DeviceId.ToString("D")
+            };
+            if (attempt.TargetHeadSha is not null)
+                details["targetHeadSha"] = attempt.TargetHeadSha;
+            if (attempt.CandidateTreeSha is not null)
+                details["candidateTreeSha"] = attempt.CandidateTreeSha;
+            if (attempt.CandidateCheckOutputHash is not null)
+                details["candidateCheckOutputHash"] = attempt.CandidateCheckOutputHash;
+            if (attempt.PostMergeCheckOutputHash is not null)
+                details["postMergeCheckOutputHash"] = attempt.PostMergeCheckOutputHash;
+            if (attempt.MergeCommitSha is not null)
+                details["mergeCommitSha"] = attempt.MergeCommitSha;
+            if (attempt.RevertCommitSha is not null)
+                details["revertCommitSha"] = attempt.RevertCommitSha;
+
+            db.AuditEvents.Add(AuditEventFactory.ForActor(
+                actor,
+                action,
+                "LandingAttempt",
+                attempt.Id.ToString("D"),
+                resolvedOrgId,
+                projectId,
+                outcome,
+                JsonSerializer.Serialize(details)));
+        }
+    }
+
+    private static bool IsInFlight(LandingAttemptStatus status) =>
+        status is LandingAttemptStatus.PreviewPending
+            or LandingAttemptStatus.Previewed
+            or LandingAttemptStatus.ExecutePending
+            or LandingAttemptStatus.RevertPending;
+
+    private static void FailIfInFlight(LandingAttempt attempt, string code)
+    {
+        if (IsInFlight(attempt.Status))
+            attempt.Fail(code);
+    }
+
+    private static string ActionFor(LandingAttemptStatus status) =>
+        status switch
+        {
+            LandingAttemptStatus.PreviewPending => "pipeline.landing.preview_failed",
+            LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending => "pipeline.landing.execute_failed",
+            LandingAttemptStatus.RevertPending => "pipeline.landing.revert_failed",
+            _ => "pipeline.landing.command_failed"
+        };
+
+    private static bool IsSafeFailureCode(string? value) =>
+        value is { Length: > 0 and <= 80 }
+        && value.All(character => char.IsAsciiLetterOrDigit(character)
+            || character is '.' or '_' or ':' or '-');
+
+    private static string? ReadString(JsonElement root, string name) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 }
 
 internal sealed class DesiredStateCompletion : ICommandCompletion

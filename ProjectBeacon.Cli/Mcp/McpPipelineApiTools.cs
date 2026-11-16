@@ -18,12 +18,18 @@ internal static partial class McpApiTools
             () => Props(("sessionId", "string", true)), PipelineLaunch),
         new(McpToolNames.PipelineFailSubtask, "Fail an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match.",
             () => Props(("subtaskId", "string", false), ("reason", "string", true), ("taskId", "string", false)), PipelineFail),
-        new(McpToolNames.PipelineStartReview, "Start the review stage of the pipeline.",
+        new(McpToolNames.PipelineStartReview, "Start the review stage after subtask work is complete, or start a fresh review after integrating a conflicted landing.",
             () => Props(("taskId", "string", false)), PipelineReview),
         new(McpToolNames.PipelineApprove, "Approve the pipeline and close the task.",
             () => Props(("note", "string", false), ("taskId", "string", false)), PipelineApprove),
         new(McpToolNames.PipelineForceClose, "Force-close a pipeline. The API token needs the Admin capability.",
             () => Props(("reason", "string", false), ("taskId", "string", false)), PipelineForceClose),
+        new(McpToolNames.PipelineLandRequest, "Request a verified preview for the approved task branch. This checks the pinned review proof and does not merge the branch.",
+            () => Props(("rationale", "string", true), ("taskId", "string", false)), PipelineLandRequest),
+        new(McpToolNames.PipelineLandRevert, "Request a guarded revert of a landed task attempt. The target must still point exactly at the landing commit.",
+            () => Props(("landingAttemptId", "string", true), ("taskId", "string", false)), PipelineLandRevert),
+        new(McpToolNames.PipelineLandStatus, "Read the current server-verified state of a task landing attempt, including preview conflicts or a completed merge/revert.",
+            () => Props(("landingAttemptId", "string", true), ("taskId", "string", false)), PipelineLandStatus),
     ];
 
     private static async Task<McpToolText> PipelineStart(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
@@ -111,6 +117,44 @@ internal static partial class McpApiTools
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "note", Text(args, "note"));
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/approve", body, ct);
+    }
+
+    private static async Task<McpToolText> PipelineLandRequest(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
+            return new McpToolText(true, error);
+        var rationale = Text(args, "rationale");
+        if (string.IsNullOrWhiteSpace(rationale))
+            return new McpToolText(true, "missing 'rationale'");
+        if (rationale.Length > 1000)
+            return new McpToolText(true, "rationale exceeds the 1000-character limit.");
+        var body = new JsonObject
+        {
+            ["taskId"] = taskId.ToString("D"),
+            ["rationale"] = rationale
+        };
+        return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/land", body, ct);
+    }
+
+    private static async Task<McpToolText> PipelineLandStatus(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
+            return new McpToolText(true, error);
+        if (!TryGuid(args, "landingAttemptId", out var attemptId))
+            return new McpToolText(true, "missing or invalid 'landingAttemptId'");
+        return await SendAsync(api, HttpMethod.Get,
+            $"v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}", null, ct);
+    }
+
+    private static async Task<McpToolText> PipelineLandRevert(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
+            return new McpToolText(true, error);
+        if (!TryGuid(args, "landingAttemptId", out var attemptId))
+            return new McpToolText(true, "missing or invalid 'landingAttemptId'");
+        var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
+        return await SendAsync(api, HttpMethod.Post,
+            $"v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}/revert", body, ct);
     }
 
     private static async Task<McpToolText> PipelineForceClose(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)

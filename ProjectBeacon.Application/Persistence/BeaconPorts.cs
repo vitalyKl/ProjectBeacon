@@ -57,6 +57,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<Subtask> Subtasks { get; }
     DbSet<PipelineSession> PipelineSessions { get; }
     DbSet<ReviewVerdict> ReviewVerdicts { get; }
+    DbSet<LandingAttempt> LandingAttempts { get; }
     DbSet<DaemonDevice> DaemonDevices { get; }
     DbSet<WorkstationCommand> WorkstationCommands { get; }
     DbSet<ProjectRuntime> ProjectRuntimes { get; }

@@ -441,13 +441,22 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         if (stage.ExitCode != 0 || stage.TimedOut)
             return (false, "Could not stage task project changes.", null);
 
+        // --summary reports mode changes, creations and deletions, but not ordinary
+        // content-only edits to an existing file. Use --quiet to decide whether a staged
+        // diff exists; exit code 1 means there are changes to commit.
+        var stagedDiff = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers,
+            "diff", "--cached", "--quiet", "HEAD", "--", projectPathspec);
+        if (stagedDiff.TimedOut || stagedDiff.ExitCode is not (0 or 1))
+            return (false, "Could not inspect staged task project changes.", null);
+        if (stagedDiff.ExitCode == 0)
+            return await ReadHeadAsync(ct);
+
         var summary = await AgentSessionWorktree.RunGitAsync(
             _worktreeRoot, ct, _disabledFilterDrivers,
             "diff", "--cached", "--summary", "HEAD", "--", projectPathspec);
         if (summary.ExitCode != 0 || summary.TimedOut)
-            return (false, "Could not inspect staged task project changes.", null);
-        if (string.IsNullOrWhiteSpace(summary.StdOut))
-            return await ReadHeadAsync(ct);
+            return (false, "Could not inspect staged task project change modes.", null);
         if (summary.StdOut.Contains("120000", StringComparison.Ordinal))
             return (false, "Task worktree contains a symbolic link; changes remain preserved but were not committed.", null);
 

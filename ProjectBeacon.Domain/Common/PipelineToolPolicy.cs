@@ -54,7 +54,9 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> PlannerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview,
+        McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert,
+        McpToolNames.PipelineLandStatus
     });
     public static IReadOnlyList<string> ReviewerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
@@ -139,7 +141,9 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.KnowledgePropose,
+        McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.PipelineLandRequest,
+        McpToolNames.PipelineLandExecute,
+        McpToolNames.PipelineLandRevert, McpToolNames.KnowledgePropose,
         McpToolNames.KnowledgeWithdraw, "run_command", "service_start", GitCommit, GitIntegrate
     });
 

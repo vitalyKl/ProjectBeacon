@@ -107,7 +107,11 @@ public record EnqueueCommandRequest(
     WorkstationCommandKind Kind,
     string? PayloadJson,
     Guid? ProjectId,
-    string? TrustedCheckCommand = null);
+    string? TrustedCheckCommand = null)
+{
+    // Set only by a server-side landing workflow. Generic API command endpoints cannot bind this.
+    internal bool TrustedGitLand { get; init; }
+}
 /// <summary>
 /// Command for enqueue command.
 /// </summary>

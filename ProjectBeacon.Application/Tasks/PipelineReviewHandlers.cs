@@ -11,7 +11,8 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Opens review only from the executing stage, and only when every subtask is done or failed.
+/// Opens review from the executing stage, or after a conflicted landing has been integrated
+/// back into the task branch. Every subtask must be done or failed.
 /// </summary>
 public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<PipelineSessionDto>>
 {
@@ -32,8 +33,44 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        if (task.PipelineStage != TaskPipelineStage.Executing)
-            return Result.Failure<PipelineSessionDto>($"Cannot start review in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
+        // A conflicted landing is the one supported way to re-enter review after
+        // approval. The Planner can integrate the target into the task branch, then start
+        // a fresh Review session here; the next verdict and RunReviewCheck will bind to
+        // the new branch SHA. A Failed/Rejected landing cannot use this recovery path.
+        var expectedStage = task.PipelineStage;
+        var latestLandingStatus = expectedStage == TaskPipelineStage.Approved
+            ? await db.LandingAttempts
+                .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
+                .OrderByDescending(attempt => attempt.CreatedAt)
+                .ThenByDescending(attempt => attempt.Id)
+                .Select(attempt => (LandingAttemptStatus?)attempt.Status)
+                .FirstOrDefaultAsync(ct)
+            : null;
+        var recoveryAfterLandingConflict = latestLandingStatus == LandingAttemptStatus.Conflicted;
+
+        if (expectedStage == TaskPipelineStage.Approved && !recoveryAfterLandingConflict)
+        {
+            if (latestLandingStatus is null)
+                return Result.Failure<PipelineSessionDto>("Cannot start review in stage Approved.");
+
+            var latestStatus = latestLandingStatus.Value.ToString();
+            return Result.Failure<PipelineSessionDto>(
+                $"Cannot start review in stage Approved: the latest landing attempt is conflicted only when its current status is Conflicted (current status: {latestStatus}).");
+        }
+
+        if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
+            return Result.Failure<PipelineSessionDto>(
+                $"Cannot start review in stage {expectedStage ?? TaskPipelineStage.None}.");
+
+        var latestVerdict = await db.ReviewVerdicts
+            .Where(verdict => verdict.ProjectId == task.ProjectId && verdict.TaskId == task.Id)
+            .OrderByDescending(verdict => verdict.CreatedAt)
+            .ThenByDescending(verdict => verdict.Id)
+            .Select(verdict => (ReviewVerdictKind?)verdict.Kind)
+            .FirstOrDefaultAsync(ct);
+        if (recoveryAfterLandingConflict && latestVerdict != ReviewVerdictKind.Approve)
+            return Result.Failure<PipelineSessionDto>(
+                "A conflicted landing can be re-reviewed only while the latest task verdict remains Approve.");
 
         var subtasks = await db.Subtasks
             .Where(s => s.TaskId == task.Id)
@@ -47,6 +84,11 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         var expectedStatus = task.Status;
         try
         {
+            if (recoveryAfterLandingConflict)
+            {
+                task.ReopenForRevision();
+                task.EnterExecuting();
+            }
             task.EnterReview();
         }
         catch (InvalidOperationException ex)
@@ -54,10 +96,11 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
-        // Guarded stage claim before the spawn: only takes effect while the task is still executing.
+        // Guarded stage claim before the spawn. Conflict recovery advances
+        // Approved -> ReopenedForRevision -> Executing -> Reviewing in one guarded write.
         var transition = await GuardedTransition.TryAsync(
             db.Tasks.Where(t => t.Id == task.Id),
-            t => t.PipelineStage == TaskPipelineStage.Executing && t.Status == expectedStatus,
+            t => t.PipelineStage == expectedStage && t.Status == expectedStatus,
             t => t.PipelineStage == task.PipelineStage && t.Status == task.Status,
             update => update
                 .SetProperty(t => t.PipelineStage, task.PipelineStage)
@@ -79,7 +122,10 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         }
         if (spawnFailure is not null)
         {
-            await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Reviewing, TaskPipelineStage.Executing, ct);
+            await PipelineSupport.RollbackStageAsync(
+                db, task.Id, TaskPipelineStage.Reviewing,
+                recoveryAfterLandingConflict ? TaskPipelineStage.Approved : TaskPipelineStage.Executing,
+                ct);
             if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
                 throw canceled;
             return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
@@ -165,8 +211,11 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         if (command.Request.Kind == ReviewVerdictKind.Approve)
         {
             var reviewSessionId = await db.PipelineSessions
-                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review)
-                .OrderByDescending(s => s.LaunchedAt)
+                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review
+                    && (s.Status == SessionStatus.Ready
+                        || s.Status == SessionStatus.Active
+                        || s.Status == SessionStatus.WaitingForUser))
+                .OrderByDescending(s => s.Id)
                 .Select(s => (Guid?)s.Id)
                 .FirstOrDefaultAsync(ct);
             if (reviewSessionId is null)
@@ -221,25 +270,46 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
     {
         var bodyCommand = command.Request.CheckCommand?.Trim();
 
-        string checkCommand;
-        if (command.Actor.IsHuman)
-        {
-            if (string.IsNullOrEmpty(bodyCommand))
-                return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
-            checkCommand = bodyCommand;
-        }
-        else
-        {
-            if (!string.IsNullOrEmpty(bodyCommand))
-                return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; set the project ReviewCheckCommand instead.", ErrorKind.Validation);
-            checkCommand = null!;
-        }
-
         await using var db = _dbFactory.CreateDbContext();
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<PipelineStateDto>("Project not found.");
+
+        string checkCommand;
+        var pinnedCommand = project.ReviewCheckCommand?.Trim();
+        if (command.Actor.IsHuman)
+        {
+            if (string.IsNullOrWhiteSpace(bodyCommand))
+                return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
+            if (!string.IsNullOrWhiteSpace(pinnedCommand)
+                && !string.Equals(bodyCommand, pinnedCommand, StringComparison.Ordinal))
+                return Result.Failure<PipelineStateDto>(
+                    "The requested check command must exactly match the project's pinned ReviewCheckCommand.",
+                    ErrorKind.Conflict);
+            // Existing projects may still use an explicitly human-approved review check before
+            // a project pin is configured. Such a run can complete the task but cannot become
+            // landing proof: RequestLandingHandler also requires the project pin to match.
+            checkCommand = bodyCommand;
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(bodyCommand))
+                return Result.Failure<PipelineStateDto>(
+                    "API tokens may not supply a check command; set the project ReviewCheckCommand instead.",
+                    ErrorKind.Validation);
+            if (string.IsNullOrWhiteSpace(pinnedCommand))
+                return Result.Failure<PipelineStateDto>(
+                    "No review check command is configured for this project.", ErrorKind.Conflict);
+            checkCommand = pinnedCommand;
+        }
+
+        var checkCommandHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         var reviewRun = await db.ReviewRuns.AsNoTracking()
             .Where(r => r.TaskId == task.Id && r.Status == ReviewRunStatus.Started && r.TargetRunId != null)
             .OrderByDescending(r => r.StartedAt)
@@ -247,25 +317,21 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (reviewRun is null)
             return Result.Failure<PipelineStateDto>("No open review run to check.");
 
-        if (!command.Actor.IsHuman)
-        {
-            var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
-            if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
-                return Result.Failure<PipelineStateDto>("No review check command is configured for this project.", ErrorKind.Conflict);
-            checkCommand = project.ReviewCheckCommand.Trim();
-        }
-
         var actorId = command.Request.ActorId.ToString();
         // Claim the run before enqueuing: a second concurrent check loses here and never enqueues.
         var claimed = await db.ReviewRuns
             .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, actorId), ct);
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.ReviewerActorId, actorId)
+                .SetProperty(r => r.CheckCommandHash, checkCommandHash), ct);
         if (claimed == 0)
             return Result.Failure<PipelineStateDto>("A review check is already in flight for this run.", ErrorKind.Conflict);
 
         var payload = new JsonObject
         {
-            ["reviewRunId"] = reviewRun.Id.ToString("D")
+            ["reviewRunId"] = reviewRun.Id.ToString("D"),
+            ["taskId"] = task.Id.ToString("D"),
+            ["checkCommandHash"] = checkCommandHash
         };
         if (!string.IsNullOrWhiteSpace(command.Request.Path))
             payload["path"] = command.Request.Path;
@@ -282,7 +348,9 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
             // Give the run back: no check command was delivered, so it must stay claimable.
             await db.ReviewRuns
                 .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == actorId)
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, (string?)null), ct);
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.ReviewerActorId, (string?)null)
+                    .SetProperty(r => r.CheckCommandHash, (string?)null), ct);
             return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
         }
 

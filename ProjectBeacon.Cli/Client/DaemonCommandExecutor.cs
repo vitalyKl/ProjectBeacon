@@ -200,10 +200,38 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return await RunEvalTurnAsync(command, payload, ct);
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
-                    var reviewAction = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
-                    if (!reviewAction.Success)
-                        return (false, null, reviewAction.Error);
-                    return (true, reviewAction.Value, null);
+                    var reviewSettings = _loadSettings();
+                    if (WorkstationWorkspaceMode.UsesTaskBranches(reviewSettings.WorkspaceMode))
+                    {
+                        if (command.ProjectId is not { } reviewProjectId || reviewProjectId == Guid.Empty)
+                            return (false, null, "Review proof requires a project-scoped command.");
+                        var reviewAction = await WorkstationEval.RunReviewCheckAsync(
+                            command.LocalRoot, payload, reviewProjectId, reviewSettings.WorktreeRoot, ct);
+                        if (!reviewAction.Success)
+                            return (false, null, reviewAction.Error);
+                        return (true, reviewAction.Value, null);
+                    }
+
+                    // Snapshot remains the default until phase 5. Keep existing review checks
+                    // usable there, but this legacy result intentionally contains no checked
+                    // task-branch SHA/tree and therefore cannot authorize a landing.
+                    var snapshotReview = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
+                    if (!snapshotReview.Success)
+                        return (false, null, snapshotReview.Error);
+                    return (true, snapshotReview.Value, null);
+                }
+                if (kind == WorkstationCommandKind.GitLand)
+                {
+                    var landingSettings = _loadSettings();
+                    var landing = await GitLandExecutor.ExecuteAsync(
+                        command.LocalRoot,
+                        command.ProjectId ?? Guid.Empty,
+                        payload,
+                        landingSettings,
+                        ct);
+                    return landing.Ok
+                        ? (true, landing.Result, null)
+                        : (false, landing.Result, landing.Error);
                 }
                 if (kind == WorkstationCommandKind.RunPipelineSession)
                     return await RunPipelineSessionAsync(command, payload, ct);

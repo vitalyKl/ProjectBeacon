@@ -114,11 +114,13 @@ internal static class AgentTaskGitOperations
         if (opened.Context is null)
             return Error(opened.Error ?? "The task branch workspace is unavailable.");
 
+        if (toolName == PipelineToolPolicy.GitIntegrate)
+            return await IntegrateAsync(opened.Context, arguments, ct);
+
         return toolName switch
         {
             PipelineToolPolicy.GitInfo => await InfoAsync(opened.Context, arguments, ct),
             PipelineToolPolicy.GitCommit => await CommitAsync(opened.Context, authorization, arguments, ct),
-            PipelineToolPolicy.GitIntegrate => await IntegrateAsync(opened.Context, arguments, ct),
             _ => Error("Unknown structured Git operation.")
         };
     }

@@ -36,6 +36,20 @@ public sealed class McpToolCatalogTests
     }
 
     [Fact]
+    public void LandingExecuteTool_IsNotExposedBeforeServerLandingPolicyExists()
+    {
+        Assert.DoesNotContain(
+            McpToolCatalog.All,
+            descriptor => descriptor.Name == McpToolNames.PipelineLandExecute);
+        Assert.DoesNotContain(
+            McpApiTools.Definitions(),
+            definition => string.Equals(
+                definition["name"]?.GetValue<string>(),
+                McpToolNames.PipelineLandExecute,
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TaskAttachmentTool_IsWriteScopedToTaskWrite()
     {
         var descriptor = McpToolCatalog.Get(McpToolNames.TaskAttachFile);

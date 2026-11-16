@@ -36,6 +36,82 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
+    public async Task GitLandPreview_RequiresServerPinnedReviewCommand()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"/workspace/project")),
+            TestContext.Current.CancellationToken);
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = Guid.NewGuid(),
+            landingAttemptId = Guid.NewGuid(),
+            action = "Preview",
+            targetBranch = "main",
+            sourceSha = new string('a', 40),
+            reviewTreeSha = new string('b', 40),
+            checkCommandHash = new string('c', 64)
+        });
+
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId,
+                user.Id,
+                WorkstationCommandKind.GitLand,
+                payload,
+                project.Id)
+            {
+                TrustedGitLand = true
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(queued.Success);
+        Assert.Contains("trusted project check command", queued.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.WorkstationCommands.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GitLandRevert_DoesNotRequireReviewCheckCommandToBeQueued()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"/workspace/project")),
+            TestContext.Current.CancellationToken);
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = Guid.NewGuid(),
+            landingAttemptId = Guid.NewGuid(),
+            action = "Revert",
+            targetBranch = "main",
+            sourceSha = new string('a', 40),
+            reviewTreeSha = new string('b', 40),
+            checkCommandHash = new string('c', 64),
+            mergeCommitSha = new string('d', 40)
+        });
+
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId,
+                user.Id,
+                WorkstationCommandKind.GitLand,
+                payload,
+                project.Id)
+            {
+                TrustedGitLand = true
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(queued.Success, queued.Error);
+        using var document = JsonDocument.Parse(queued.Value!.PayloadJson);
+        Assert.Equal("Revert", document.RootElement.GetProperty("action").GetString());
+        Assert.False(document.RootElement.TryGetProperty("checkCommand", out _));
+    }
+
+    [Fact]
     public async Task ForeignUser_CannotSeeCommand()
     {
         var owner = await SeedUserAsync("owner");

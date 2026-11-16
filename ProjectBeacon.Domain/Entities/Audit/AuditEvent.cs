@@ -15,11 +15,18 @@ public sealed class AuditEvent : Entity
     {
         "reasonCode", "permission", "authMethod", "source", "previousState",
         "newState", "count", "policyCode", "resultCode",
-        "sourceVersionId", "restoredRevision", "restoredTaskLinks"
+        "sourceVersionId", "restoredRevision", "restoredTaskLinks",
+        "sourceBranch", "targetBranch", "sourceSha", "reviewTreeSha",
+        "reviewCommandHash", "targetHeadSha", "candidateTreeSha",
+        "candidateCheckOutputHash", "postMergeCheckOutputHash",
+        "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId"
     };
 
     private static readonly Regex DetailCodePattern =
         new("^[A-Za-z0-9._:-]{1,80}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex BranchNamePattern =
+        new("^[A-Za-z0-9._/-]{1,200}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public DateTime At { get; private set; }
     public AuditActorKind ActorKind { get; private set; }
@@ -126,7 +133,10 @@ public sealed class AuditEvent : Entity
                 if (value.ValueKind == JsonValueKind.String)
                 {
                     var code = value.GetString();
-                    if (code is null || !DetailCodePattern.IsMatch(code))
+                    var pattern = property.Name is "sourceBranch" or "targetBranch"
+                        ? BranchNamePattern
+                        : DetailCodePattern;
+                    if (code is null || !pattern.IsMatch(code))
                         throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
                 }
                 else if (value.ValueKind == JsonValueKind.Number)
