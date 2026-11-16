@@ -300,6 +300,120 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitLand_PreviewRejectsRenameThatRemovesProtectedSecurityFile()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "SECURITY.md"), "protected security policy\\n");
+        await GitAsync(repository, "add", "src/app/SECURITY.md");
+        await GitAsync(repository, "commit", "-m", "Add protected security policy");
+
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        AgentTaskWorktree? taskWorktree = null;
+        try
+        {
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            taskWorktree = opened.Worktree!;
+
+            await GitAsync(taskWorktree.RecoveryPath, "mv",
+                "src/app/SECURITY.md", "src/app/README-public.md");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: rename protected security file", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            var sourceSha = commit.CommitSha!;
+            var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            const string checkCommand = "echo review-ok";
+            var commandHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+            var settings = new WorkstationSettings { WorkspaceMode = "Branch", WorktreeRoot = worktreeRoot };
+
+            var result = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Ok, result.Error ?? result.Result);
+            using var document = JsonDocument.Parse(result.Result!);
+            Assert.Equal("failed", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("ProtectedPathChanged", document.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            if (taskWorktree is not null)
+                await taskWorktree.DisposeAsync();
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitLand_PreviewRejectsRenameIntoProjectFromOutsideProject()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        await File.WriteAllTextAsync(Path.Combine(repository, "outside-project.txt"), "outside project content\\n");
+        await GitAsync(repository, "add", "outside-project.txt");
+        await GitAsync(repository, "commit", "-m", "Add file outside the project");
+
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        AgentTaskWorktree? taskWorktree = null;
+        try
+        {
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            taskWorktree = opened.Worktree!;
+
+            await GitAsync(taskWorktree.RecoveryPath, "mv",
+                "outside-project.txt", "src/app/moved-into-project.txt");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: move out-of-scope file into project", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            var sourceSha = commit.CommitSha!;
+            var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            const string checkCommand = "echo review-ok";
+            var commandHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+            var settings = new WorkstationSettings { WorkspaceMode = "Branch", WorktreeRoot = worktreeRoot };
+
+            var result = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Ok, result.Error ?? result.Result);
+            using var document = JsonDocument.Parse(result.Result!);
+            Assert.Equal("failed", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("CandidateChangesOutsideProject", document.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            if (taskWorktree is not null)
+                await taskWorktree.DisposeAsync();
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task GitLand_ExecuteRejectsTargetAdvancedSincePreview()
     {
         var root = CreateTempRoot();
