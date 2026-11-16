@@ -99,6 +99,40 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void DispatchLeaseTransitions_CanBeRetriedAndClearedForEachAction()
+    {
+        var attempt = Start();
+
+        attempt.MarkDispatchPending("Preview");
+        Assert.Equal(LandingAttemptStatus.PreviewPending, attempt.Status);
+        Assert.Equal("PreviewEnqueuePending", attempt.FailureCode);
+        attempt.ClearDispatchPending("Preview");
+        Assert.Null(attempt.FailureCode);
+
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkDispatchPending("Execute");
+        Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+        Assert.Equal("ExecuteEnqueuePending", attempt.FailureCode);
+
+        attempt.MarkCommandCompletionUnknown();
+        Assert.Equal("CommandCompletionUnknown", attempt.FailureCode);
+        attempt.MarkDispatchPending("Execute");
+        attempt.ClearDispatchPending("Execute");
+        Assert.Null(attempt.FailureCode);
+
+        attempt.RecordLanded(new string('f', 40), new string('d', 40), 0, new string('9', 64));
+        attempt.MarkDispatchPending("Revert");
+        Assert.Equal(LandingAttemptStatus.RevertPending, attempt.Status);
+        Assert.Equal("RevertEnqueuePending", attempt.FailureCode);
+        attempt.ClearDispatchPending("Revert");
+        Assert.Null(attempt.FailureCode);
+
+        attempt.RecordReverted(new string('1', 40));
+        Assert.Equal(LandingAttemptStatus.Reverted, attempt.Status);
+        Assert.Null(attempt.FailureCode);
+    }
+
+    [Fact]
     public void Start_RejectsInvalidProofAndRationale()
     {
         var args = new object[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "main", "short", new string('c', 40), new string('b', 64), "ok" };
