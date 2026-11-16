@@ -11,7 +11,8 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Opens review only from the executing stage, and only when every subtask is done or failed.
+/// Opens review from the executing stage, or after a conflicted landing has been integrated
+/// back into the task branch. Every subtask must be done or failed.
 /// </summary>
 public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<PipelineSessionDto>>
 {
