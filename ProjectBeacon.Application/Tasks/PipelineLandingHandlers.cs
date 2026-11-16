@@ -68,6 +68,18 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The latest review run must have a successful check for the current approval, pinned command, and task branch revision.", ErrorKind.Conflict);
 
+        var latestLanding = await db.LandingAttempts
+            .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
+            .OrderByDescending(attempt => attempt.CreatedAt)
+            .ThenByDescending(attempt => attempt.Id)
+            .Select(attempt => new { attempt.Status, attempt.PreviewedAt })
+            .FirstOrDefaultAsync(ct);
+        if (latestLanding?.Status == LandingAttemptStatus.Conflicted
+            && (latestLanding.PreviewedAt is null || reviewRun.StartedAt <= latestLanding.PreviewedAt.Value))
+            return Result.Failure<LandingAttemptDto>(
+                "The task branch changed after a conflicted preview. Start a fresh Review, record a new Approve verdict, and rerun the pinned review check before requesting another landing.",
+                ErrorKind.Conflict);
+
         var pending = await db.LandingAttempts.AnyAsync(a =>
             a.ProjectId == task.ProjectId && a.TaskId == task.Id
             && (a.Status == LandingAttemptStatus.PreviewPending
