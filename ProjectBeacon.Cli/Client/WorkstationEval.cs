@@ -319,17 +319,14 @@ public static class WorkstationEval
             || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
             return Result.Failure<string>("The configured project directory is not inside a Git repository.");
         var repositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
-        // Match structured Git operations and GitLand: acquire the per-task worktree lease
-        // first, then serialize shared repository ref operations. The opposite order can
-        // deadlock when review and git_integrate arrive concurrently for the same task.
+        // The per-task worktree lease serializes review with Actor/Planner Git changes
+        // for this task. Independent task branches need no repository-wide mutex.
         var opened = await AgentTaskWorktree.CreateAsync(
             root, projectId, taskId.Value, configuredWorktreeRoot, ct);
         if (opened.Worktree is null)
             return Result.Failure<string>(opened.Error ?? "The persistent task branch workspace is unavailable.");
 
         await using var taskWorkspace = opened.Worktree;
-        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
-            taskWorkspace.RepositoryRoot, ct);
         var checkedBaseBranch = taskWorkspace.BaseBranch;
         if (string.IsNullOrWhiteSpace(checkedBaseBranch))
             return Result.Failure<string>("The task branch workspace has no daemon-selected base branch.");
@@ -341,11 +338,6 @@ public static class WorkstationEval
             $"ProjectBeacon: task {taskId.Value:N} review checkpoint", ct);
         if (!checkpoint.Success || string.IsNullOrWhiteSpace(checkpoint.CommitSha))
             return Result.Failure<string>(checkpoint.Error ?? "Could not checkpoint the task branch before review.");
-
-        // The task checkpoint and any base-branch fetch are complete. The later detached
-        // worktree and check run do not update shared branch refs, so they need not hold
-        // the repository-wide Git operation gate.
-        repositoryGate.Dispose();
 
         var sourceSha = checkpoint.CommitSha;
         var taskRepositoryRoot = taskWorkspace.RepositoryRoot;
