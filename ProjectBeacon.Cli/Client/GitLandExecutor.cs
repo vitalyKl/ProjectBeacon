@@ -169,8 +169,8 @@ internal static class GitLandExecutor
             return (false, null, "GitLand Execute requires the reviewed target HEAD and candidate tree.");
 
         var resumed = await TryResumeLandingAsync(workspace, request, filters, ct);
-        if (resumed is { } recovered)
-            return recovered;
+        if (resumed is { } resumedLanding)
+            return resumedLanding;
 
         var candidate = await BuildCandidateAsync(workspace, request, filters, ct);
         if (candidate.Status != "previewed")
@@ -720,8 +720,8 @@ internal static class GitLandExecutor
             return (false, null, "GitLand Revert requires the recorded merge commit SHA.");
 
         var resumed = await TryResumeRevertAsync(workspace, request, filters, ct);
-        if (resumed is { } recovered)
-            return recovered;
+        if (resumed is { } resumedRevert)
+            return resumedRevert;
 
         var repo = workspace.RepositoryRoot;
         var targetBranch = request.TargetBranch;
@@ -1182,6 +1182,12 @@ internal static class GitLandExecutor
             return false;
         }
     }
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     private static string HashCommand(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
