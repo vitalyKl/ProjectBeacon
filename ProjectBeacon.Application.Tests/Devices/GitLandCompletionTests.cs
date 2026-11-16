@@ -189,6 +189,58 @@ public sealed class GitLandCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task NonObjectResult_KeepsMutatingActionsRecoverableAndFailsPreview()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateTreeSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string outputHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+        var executeTaskId = Guid.NewGuid();
+        var executeAttempt = LandingAttempt.Start(
+            project.Id, executeTaskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Recover an ambiguous execution result.");
+        executeAttempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        executeAttempt.MarkExecutePending();
+
+        var previewTaskId = Guid.NewGuid();
+        var previewAttempt = LandingAttempt.Start(
+            project.Id, previewTaskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Fail an invalid preview result.");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.AddRange(executeAttempt, previewAttempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var executeCommand = CreateCommand(
+                device.Id, project.Id, userId, executeAttempt.Id, executeTaskId, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main", targetHeadSha, candidateTreeSha, null);
+            await new GitLandCompletion().ApplyAsync(
+                _db, executeCommand, true, "[]", null, TestContext.Current.CancellationToken);
+
+            var previewCommand = CreateCommand(
+                device.Id, project.Id, userId, previewAttempt.Id, previewTaskId, "Preview",
+                sourceSha, reviewTreeSha, commandHash, "main", null, null, null);
+            await new GitLandCompletion().ApplyAsync(
+                _db, previewCommand, true, "[]", null, TestContext.Current.CancellationToken);
+
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.ExecutePending, executeAttempt.Status);
+            Assert.Equal("CommandCompletionUnknown", executeAttempt.FailureCode);
+            Assert.Equal(LandingAttemptStatus.Failed, previewAttempt.Status);
+            Assert.Equal("InvalidGitLandResult", previewAttempt.FailureCode);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteCompletion_RecordsOnlyThePreviewedMergeEvidence()
     {
         var (org, project, device, userId) = CreateScope();
