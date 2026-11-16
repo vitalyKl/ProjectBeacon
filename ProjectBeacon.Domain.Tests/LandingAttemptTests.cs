@@ -133,6 +133,25 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void FailedRevert_CanReturnToPendingForAnExplicitSafeRetry()
+    {
+        var attempt = Start();
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.RecordLanded(new string('f', 40), new string('d', 40), 0, new string('9', 64));
+        attempt.MarkRevertPending();
+        attempt.Fail("TargetAdvancedBeyondLanding");
+
+        Assert.Equal(LandingAttemptStatus.RevertFailed, attempt.Status);
+        Assert.Equal("TargetAdvancedBeyondLanding", attempt.FailureCode);
+
+        attempt.MarkDispatchPending("Revert");
+
+        Assert.Equal(LandingAttemptStatus.RevertPending, attempt.Status);
+        Assert.Equal("RevertEnqueuePending", attempt.FailureCode);
+    }
+
+    [Fact]
     public void Start_RejectsInvalidProofAndRationale()
     {
         var args = new object[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "main", "short", new string('c', 40), new string('b', 64), "ok" };
