@@ -200,13 +200,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return await RunEvalTurnAsync(command, payload, ct);
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
-                    var settings = _loadSettings();
-                    if (WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
+                    var reviewSettings = _loadSettings();
+                    if (WorkstationWorkspaceMode.UsesTaskBranches(reviewSettings.WorkspaceMode))
                     {
                         if (command.ProjectId is not { } reviewProjectId || reviewProjectId == Guid.Empty)
                             return (false, null, "Review proof requires a project-scoped command.");
                         var reviewAction = await WorkstationEval.RunReviewCheckAsync(
-                            command.LocalRoot, payload, reviewProjectId, settings.WorktreeRoot, ct);
+                            command.LocalRoot, payload, reviewProjectId, reviewSettings.WorktreeRoot, ct);
                         if (!reviewAction.Success)
                             return (false, null, reviewAction.Error);
                         return (true, reviewAction.Value, null);
@@ -222,12 +222,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 }
                 if (kind == WorkstationCommandKind.GitLand)
                 {
-                    var settings = _loadSettings();
+                    var landingSettings = _loadSettings();
                     var landing = await GitLandExecutor.ExecuteAsync(
                         command.LocalRoot,
                         command.ProjectId ?? Guid.Empty,
                         payload,
-                        settings,
+                        landingSettings,
                         ct);
                     return landing.Ok
                         ? (true, landing.Result, null)
