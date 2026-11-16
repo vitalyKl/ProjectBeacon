@@ -75,7 +75,9 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 || a.Status == LandingAttemptStatus.ExecutePending
                 || a.Status == LandingAttemptStatus.Landed
                 || a.Status == LandingAttemptStatus.LandedUnverified
-                || a.Status == LandingAttemptStatus.RevertPending), ct);
+                || a.Status == LandingAttemptStatus.RevertPending
+                || a.Status == LandingAttemptStatus.RevertedUnverified
+                || a.Status == LandingAttemptStatus.RevertFailed), ct);
         if (pending)
             return Result.Failure<LandingAttemptDto>("A landing attempt is already active for this task.", ErrorKind.Conflict);
 
