@@ -695,6 +695,33 @@ internal sealed class GitLandCompletion : ICommandCompletion
                         action = ActionFor(previousState);
                         break;
                     }
+                case "execute_unknown":
+                    {
+                        var mergeCommit = ReadString(root, "mergeCommitSha");
+                        var errorCode = ReadString(root, "errorCode");
+                        var identityMatches = attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && (mergeCommit is null || IsGitSha(mergeCommit));
+                        if (attempt.Status == LandingAttemptStatus.ExecutePending)
+                        {
+                            // Keep the attempt exclusive until a retry can reconcile the durable
+                            // merge marker. Even malformed evidence must not release the unique
+                            // active-attempt slot while a target ref may already have moved.
+                            attempt.MarkCommandCompletionUnknown();
+                            resultCode = identityMatches
+                                ? IsSafeFailureCode(errorCode) ? errorCode! : "CommandCompletionUnknown"
+                                : "InvalidExecuteUnknownEvidence";
+                        }
+                        else
+                        {
+                            resultCode = "UnexpectedExecuteUnknownState";
+                        }
+                        action = "pipeline.landing.execute_failed";
+                        break;
+                    }
                 case "landed":
                     {
                         var mergeCommit = ReadString(root, "mergeCommitSha");
