@@ -15,16 +15,17 @@ public sealed class ReviewRunTests
     }
 
     [Fact]
-    public void Complete_WithoutPinnedCommandAndGitRevision_IsNotCheckProof()
+    public void Complete_WithoutPinnedCommandAndGitRevision_IsNotLandingProof()
     {
         var run = ReviewRun.Start(Guid.NewGuid(), Guid.NewGuid(), ReviewerType.Agent, Guid.NewGuid());
         run.Complete("ok", "check:exit0");
 
-        Assert.False(run.IsCheckProof());
+        Assert.True(run.IsCheckProof());
+        Assert.False(run.IsLandingProof());
     }
 
     [Fact]
-    public void CompleteCheck_WithPinnedCommandAndGitRevision_IsCheckProof()
+    public void CompleteCheck_WithPinnedCommandAndGitRevision_IsLandingProof()
     {
         var run = ReviewRun.Start(Guid.NewGuid(), Guid.NewGuid(), ReviewerType.Agent, Guid.NewGuid());
         var commandHash = new string('a', 64);
@@ -35,6 +36,7 @@ public sealed class ReviewRunTests
         run.CompleteCheck("ok", "check:exit0", sourceSha, treeSha, deviceId, "main");
 
         Assert.True(run.IsCheckProof());
+        Assert.True(run.IsLandingProof());
         Assert.Equal(commandHash, run.CheckCommandHash);
         Assert.Equal(sourceSha, run.CheckedSourceSha);
         Assert.Equal(treeSha, run.CheckedTreeSha);
