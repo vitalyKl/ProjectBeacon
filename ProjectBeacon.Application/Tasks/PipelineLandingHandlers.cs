@@ -282,7 +282,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
     internal static LandingAttemptDto ToDto(LandingAttempt attempt) => new(
         attempt.Id, attempt.TaskId, attempt.Status, attempt.SourceBranch, attempt.SourceSha,
         attempt.ReviewTreeSha, attempt.DeviceId, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
-        attempt.MergeCommitSha, attempt.RevertCommitSha, attempt.FailureCode,
+        attempt.MergeCommitSha, attempt.RevertCommitSha, LandingCommandDispatch.PublicFailureCode(attempt),
         attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
         attempt.CreatedAt, attempt.UpdatedAt);
 }
