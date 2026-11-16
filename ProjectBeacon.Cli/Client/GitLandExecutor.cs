@@ -1120,9 +1120,6 @@ internal static class GitLandExecutor
         && value.All(character => !char.IsControl(character)
             && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
 
-    private static bool IsGitSha(string? value) =>
-        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
-
     private static bool SamePath(string left, string right) =>
         string.Equals(
             Path.GetFullPath(left), Path.GetFullPath(right),
