@@ -260,6 +260,25 @@ internal static class GitLandExecutor
             return recovered ?? BusinessFailure("LandingMarkerCouldNotBePersisted");
         }
 
+        // Persist the exact target ref value before changing it. This lets recovery validate
+        // and refresh a deterministic target worktree even when the local branch lagged behind
+        // the freshly reviewed origin HEAD.
+        var targetBeforeRef = LandingMarkerRef(request.LandingAttemptId, "target-before");
+        var targetBeforeSha = branchExists ? localHead.StdOut.Trim() : request.TargetHeadSha!;
+        var existingTargetBefore = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", targetBeforeRef);
+        if (existingTargetBefore.ExitCode == 128 && !existingTargetBefore.TimedOut)
+        {
+            var createdTargetBefore = await Git(repo, filters, CancellationToken.None,
+                "update-ref", targetBeforeRef, targetBeforeSha, new string('0', targetBeforeSha.Length));
+            if (!Succeeded(createdTargetBefore))
+                return BusinessFailure("LandingTargetBeforeMarkerCouldNotBePersisted");
+        }
+        else if (!Succeeded(existingTargetBefore)
+            || !string.Equals(existingTargetBefore.StdOut.Trim(), targetBeforeSha, StringComparison.OrdinalIgnoreCase))
+        {
+            return BusinessFailure("LandingTargetBeforeMarkerMismatch");
+        }
+
         // From the marker write onward, ignore caller cancellation: the target mutation must
         // either be reconciled and acknowledged or leave a durable attempt marker for retry.
         var update = branchExists
@@ -296,6 +315,17 @@ internal static class GitLandExecutor
             || !Succeeded(tree)
             || !string.Equals(tree.StdOut.Trim(), request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
             return BusinessFailure("LandingMarkerDoesNotMatchPreview");
+
+        var targetBeforeRef = LandingMarkerRef(request.LandingAttemptId, "target-before");
+        var targetBefore = await Git(repo, filters, ct, "rev-parse", "--verify", targetBeforeRef);
+        var targetBeforeSha = Succeeded(targetBefore)
+            ? targetBefore.StdOut.Trim()
+            : targetBefore.ExitCode == 128 && !targetBefore.TimedOut
+                ? request.TargetHeadSha
+                : null;
+        if (!IsGitSha(targetBeforeSha)
+            || await IsAncestorAsync(repo, filters, targetBeforeSha!, request.TargetHeadSha!, ct) != true)
+            return BusinessFailure("LandingTargetBeforeMarkerInvalid");
 
         var branchRef = $"refs/heads/{request.TargetBranch}";
         var branchHead = await Git(repo, filters, ct, "rev-parse", "--verify", branchRef);
@@ -334,9 +364,9 @@ internal static class GitLandExecutor
 
             if (checkout.Checkout!.CheckedOut)
             {
-                var update = branchExists
-                    ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
-                    : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha!.Length));
+                var expectedRefHead = branchExists ? branchHead.StdOut.Trim() : new string('0', mergeCommitSha!.Length);
+                var update = await Git(repo, filters, CancellationToken.None,
+                    "update-ref", branchRef, mergeCommitSha, expectedRefHead);
                 if (!Succeeded(update))
                 {
                     var current = await Git(repo, filters, CancellationToken.None, "rev-parse", "--verify", branchRef);
@@ -364,7 +394,7 @@ internal static class GitLandExecutor
         if (checkout.Checkout!.CheckedOut)
         {
             var refreshed = await RefreshTargetCheckoutAsync(
-                checkout.Checkout.Path, request.TargetHeadSha!, finalHead.StdOut.Trim(), filters, CancellationToken.None);
+                checkout.Checkout.Path, targetBeforeSha!, finalHead.StdOut.Trim(), filters, CancellationToken.None);
             if (!refreshed)
                 return (true, JsonSerializer.Serialize(new
                 {
