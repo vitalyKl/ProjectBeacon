@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using System.Text.Json;
 using Application.Persistence;
+using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
