@@ -237,7 +237,7 @@ internal static class GitLandExecutor
         var mergeCommitSha = commit.StdOut.Trim();
 
         var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
-        var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parentFields = parents.StdOut.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (!Succeeded(parents) || parentFields.Length != 3
             || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase))
@@ -287,7 +287,7 @@ internal static class GitLandExecutor
 
         var mergeCommitSha = marker.StdOut.Trim();
         var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
-        var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parentFields = parents.StdOut.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var tree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
         if (!Succeeded(parents) || parentFields.Length != 3
             || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
@@ -415,7 +415,7 @@ internal static class GitLandExecutor
 
         var revertCommitSha = marker.StdOut.Trim();
         var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", revertCommitSha);
-        var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parentFields = parents.StdOut.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var expectedTree = await Git(repo, filters, ct, "rev-parse", "--verify", request.MergeCommitSha + "^1^{tree}");
         var actualTree = await Git(repo, filters, ct, "rev-parse", "--verify", revertCommitSha + "^{tree}");
         if (!Succeeded(parents) || parentFields.Length != 2
@@ -777,7 +777,7 @@ internal static class GitLandExecutor
             var revertCommitSha = resultHead.StdOut.Trim();
 
             var parents = await Git(temp, filters, ct, "rev-list", "--parents", "-n", "1", revertCommitSha);
-            var parentFields = parents.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var parentFields = parents.StdOut.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (!Succeeded(parents) || parentFields.Length != 2
                 || !string.Equals(parentFields[1], request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
                 return BusinessFailure("RevertCommitParentInvalid");
