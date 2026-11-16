@@ -473,10 +473,11 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
 
         if (attempt.Status is not (LandingAttemptStatus.Landed
             or LandingAttemptStatus.LandedUnverified
-            or LandingAttemptStatus.RevertPending)
+            or LandingAttemptStatus.RevertPending
+            or LandingAttemptStatus.RevertFailed)
             || string.IsNullOrWhiteSpace(attempt.MergeCommitSha))
             return Result.Failure<LandingAttemptDto>(
-                "Revert requires a landed attempt or an unacknowledged Revert that can be reconciled.", ErrorKind.Conflict);
+                "Revert requires a landed attempt or a retryable/uncertain Revert with a recorded merge commit.", ErrorKind.Conflict);
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         if (project is null)
@@ -533,7 +534,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             {
                 ["previousState"] = previousState.ToString(),
                 ["newState"] = attempt.Status.ToString(),
-                ["resultCode"] = previousState == LandingAttemptStatus.RevertPending ? "RevertRetryQueued" : "RevertQueued",
+                ["resultCode"] = previousState is LandingAttemptStatus.RevertPending or LandingAttemptStatus.RevertFailed
+                    ? "RevertRetryQueued" : "RevertQueued",
                 ["sourceBranch"] = attempt.SourceBranch,
                 ["targetBranch"] = attempt.TargetBranch,
                 ["sourceSha"] = attempt.SourceSha,
