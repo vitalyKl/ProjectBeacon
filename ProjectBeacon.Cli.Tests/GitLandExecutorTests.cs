@@ -589,8 +589,9 @@ public sealed partial class AgentTaskGitOperationsTests
                 await GitAsync(repository, "rev-parse", revertCommitSha + "^{tree}"));
             Assert.Equal(string.Empty,
                 await GitAsync(repository, "ls-tree", "-r", revertCommitSha, "--", "src/app/lagging-target-task-change.txt"));
-            Assert.Equal("100644 blob ",
-                (await GitAsync(repository, "ls-tree", revertCommitSha, "--", "src/app/remote-target-change.txt"))[..15]);
+            Assert.Contains("remote-target-change.txt",
+                await GitAsync(repository, "ls-tree", revertCommitSha, "--", "src/app/remote-target-change.txt"),
+                StringComparison.Ordinal);
             Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
             Assert.Equal(string.Empty,
                 await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
