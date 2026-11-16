@@ -345,7 +345,7 @@ public static class WorkstationEval
         repositoryGate.Dispose();
 
         var sourceSha = checkpoint.CommitSha;
-        var repositoryRoot = taskWorkspace.RepositoryRoot;
+        var taskRepositoryRoot = taskWorkspace.RepositoryRoot;
         var relativeProject = Path.GetRelativePath(taskWorkspace.RecoveryPath, taskWorkspace.WorkingDirectory);
         if (Path.IsPathRooted(relativeProject)
             || relativeProject == ".."
@@ -360,7 +360,7 @@ public static class WorkstationEval
         var checkedTreeSha = tree.StdOut.Trim();
 
         var filterConfig = await AgentSessionWorktree.RunGitAsync(
-            repositoryRoot, ct, [], "config", "--name-only", "--get-regexp", "^filter\\.");
+            taskRepositoryRoot, ct, [], "config", "--name-only", "--get-regexp", "^filter\\.");
         if (filterConfig.TimedOut || filterConfig.ExitCode is not (0 or 1))
             return Result.Failure<string>("Could not inspect Git filters safely for the review worktree.");
         var disabledFilters = AgentSessionWorktree.ParseFilterDriverNames(filterConfig.StdOut);
@@ -371,7 +371,7 @@ public static class WorkstationEval
         try
         {
             var add = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, ct, disabledFilters,
+                taskRepositoryRoot, ct, disabledFilters,
                 "worktree", "add", "--detach", temporaryWorktree, sourceSha);
             if (add.ExitCode != 0 || add.TimedOut)
                 return Result.Failure<string>("Could not create a detached review worktree: " + ClipGitError(add.StdErr));
@@ -389,13 +389,13 @@ public static class WorkstationEval
 
             var checkResult = EvalCheck.Execute(validatedPath.Value!, checkCommand);
             var headAfter = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "rev-parse", "--verify", "HEAD");
+                taskRepositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "rev-parse", "--verify", "HEAD");
             var diffAfter = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "diff", "--quiet");
+                taskRepositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "diff", "--quiet");
             var stagedTreeAfter = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "write-tree");
+                taskRepositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "write-tree");
             var untrackedAfter = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "ls-files", "--others", "--exclude-standard");
+                taskRepositoryRoot, ct, disabledFilters, "-C", temporaryWorktree, "ls-files", "--others", "--exclude-standard");
             var checkWasReadOnly = headAfter.ExitCode == 0 && !headAfter.TimedOut
                 && string.Equals(headAfter.StdOut.Trim(), sourceSha, StringComparison.OrdinalIgnoreCase)
                 && diffAfter.ExitCode == 0 && !diffAfter.TimedOut
@@ -422,7 +422,7 @@ public static class WorkstationEval
         finally
         {
             var remove = await AgentSessionWorktree.RunGitAsync(
-                repositoryRoot, CancellationToken.None, disabledFilters,
+                taskRepositoryRoot, CancellationToken.None, disabledFilters,
                 "worktree", "remove", "--force", temporaryWorktree);
             if (Directory.Exists(temporaryWorktree))
             {
@@ -430,7 +430,7 @@ public static class WorkstationEval
             }
             if (remove.ExitCode != 0)
                 _ = await AgentSessionWorktree.RunGitAsync(
-                    repositoryRoot, CancellationToken.None, disabledFilters, "worktree", "prune");
+                    taskRepositoryRoot, CancellationToken.None, disabledFilters, "worktree", "prune");
         }
     }
 
