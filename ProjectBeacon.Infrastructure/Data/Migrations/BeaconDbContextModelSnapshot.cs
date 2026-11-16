@@ -2030,7 +2030,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("ConflictFilesJson")
                         .HasColumnType("jsonb");
 
-                    b.Property<DateTime>( "CreatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>( "ExecutedAt")
@@ -2077,7 +2077,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<DateTime?>( "RevertedAt")
+                    b.Property<DateTime?>("RevertedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceBranch")
@@ -2112,10 +2112,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<DateTime>( "UpdatedAt")
+                    b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>( "PreviewedAt")
+                    b.Property<DateTime?>("PreviewedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
