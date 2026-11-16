@@ -319,14 +319,17 @@ public static class WorkstationEval
             || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
             return Result.Failure<string>("The configured project directory is not inside a Git repository.");
         var repositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
-        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
-
+        // Match structured Git operations and GitLand: acquire the per-task worktree lease
+        // first, then serialize shared repository ref operations. The opposite order can
+        // deadlock when review and git_integrate arrive concurrently for the same task.
         var opened = await AgentTaskWorktree.CreateAsync(
             root, projectId, taskId.Value, configuredWorktreeRoot, ct);
         if (opened.Worktree is null)
             return Result.Failure<string>(opened.Error ?? "The persistent task branch workspace is unavailable.");
 
         await using var taskWorkspace = opened.Worktree;
+        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
+            taskWorkspace.RepositoryRoot, ct);
         var checkedBaseBranch = taskWorkspace.BaseBranch;
         if (string.IsNullOrWhiteSpace(checkedBaseBranch))
             return Result.Failure<string>("The task branch workspace has no daemon-selected base branch.");
