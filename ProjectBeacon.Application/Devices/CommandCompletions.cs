@@ -6,6 +6,7 @@ using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Domain.Entities.Content;
+using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
