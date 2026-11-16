@@ -72,7 +72,6 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
             .OrderByDescending(attempt => attempt.CreatedAt)
             .ThenByDescending(attempt => attempt.Id)
-            .Select(attempt => new { attempt.Status, attempt.PreviewedAt, attempt.SourceSha })
             .FirstOrDefaultAsync(ct);
         if (latestLanding?.Status == LandingAttemptStatus.Conflicted
             && (latestLanding.PreviewedAt is null
@@ -82,18 +81,42 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "The task branch has not been integrated and reviewed since the conflicted preview. Integrate the daemon-selected target into the task branch, start a fresh Review, record a new Approve verdict, and rerun the pinned review check before requesting another landing.",
                 ErrorKind.Conflict);
 
-        var pending = await db.LandingAttempts.AnyAsync(a =>
-            a.ProjectId == task.ProjectId && a.TaskId == task.Id
-            && (a.Status == LandingAttemptStatus.PreviewPending
-                || a.Status == LandingAttemptStatus.Previewed
-                || a.Status == LandingAttemptStatus.ExecutePending
-                || a.Status == LandingAttemptStatus.Landed
-                || a.Status == LandingAttemptStatus.LandedUnverified
-                || a.Status == LandingAttemptStatus.RevertPending
-                || a.Status == LandingAttemptStatus.RevertedUnverified
-                || a.Status == LandingAttemptStatus.RevertFailed), ct);
-        if (pending)
-            return Result.Failure<LandingAttemptDto>("A landing attempt is already active for this task.", ErrorKind.Conflict);
+        var latestProofMatches = latestLanding is not null
+            && latestLanding.ReviewRunId == reviewRun.Id
+            && string.Equals(latestLanding.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(latestLanding.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(latestLanding.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(latestLanding.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal)
+            && latestLanding.DeviceId == reviewRun.CheckedDeviceId;
+
+        if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
+        {
+            if (!latestProofMatches)
+                return Result.Failure<LandingAttemptDto>(
+                    "A Preview is already pending for a different review proof. Inspect its landing status before starting another attempt.",
+                    ErrorKind.Conflict);
+            var previewDevice = await FindLandingDeviceAsync(db, task.ProjectId, latestLanding.DeviceId, ct);
+            if (previewDevice is null)
+                return Result.Failure<LandingAttemptDto>(
+                    "The workstation assigned to the pending Preview is offline; reconnect it and retry the same landing request.",
+                    ErrorKind.Conflict);
+            return await QueuePreviewAsync(db, latestLanding, previewDevice, checkCommand, command.Actor,
+                project: null, dispatchAlreadyClaimed: false, ct);
+        }
+
+        if (latestLanding?.Status == LandingAttemptStatus.Previewed)
+        {
+            if (latestProofMatches)
+                return Result.Ok(ToDto(latestLanding));
+            return Result.Failure<LandingAttemptDto>(
+                "A successful Preview already exists for a different review proof. Execute or resolve that attempt before requesting another landing.",
+                ErrorKind.Conflict);
+        }
+
+        if (latestLanding is not null && IsLandingAttemptBlockingNewPreview(latestLanding.Status))
+            return Result.Failure<LandingAttemptDto>(
+                $"Landing attempt {latestLanding.Id:D} is still {latestLanding.Status}; resolve it before requesting another Preview.",
+                ErrorKind.Conflict);
 
         if (reviewRun.CheckedDeviceId is not { } reviewedDeviceId || reviewedDeviceId == Guid.Empty)
             return Result.Failure<LandingAttemptDto>("The review proof does not identify its workstation.", ErrorKind.Conflict);
@@ -109,6 +132,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var attempt = LandingAttempt.Start(
             task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, reviewRun.CheckedBaseBranch!,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
+        attempt.MarkDispatchPending("Preview");
         db.LandingAttempts.Add(attempt);
         try
         {
@@ -116,14 +140,58 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         }
         catch (DbUpdateException)
         {
+            var concurrent = await db.LandingAttempts
+                .Where(candidate => candidate.ProjectId == task.ProjectId && candidate.TaskId == task.Id)
+                .OrderByDescending(candidate => candidate.CreatedAt)
+                .ThenByDescending(candidate => candidate.Id)
+                .FirstOrDefaultAsync(ct);
+            if (concurrent?.Status == LandingAttemptStatus.PreviewPending)
+                return Result.Ok(ToDto(concurrent));
             return Result.Failure<LandingAttemptDto>(
                 "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
         }
 
+        return await QueuePreviewAsync(db, attempt, device, checkCommand, command.Actor,
+            project, dispatchAlreadyClaimed: true, ct);
+    }
+
+    private static bool IsLandingAttemptBlockingNewPreview(LandingAttemptStatus status) =>
+        status is LandingAttemptStatus.ExecutePending
+            or LandingAttemptStatus.Landed
+            or LandingAttemptStatus.LandedUnverified
+            or LandingAttemptStatus.RevertPending
+            or LandingAttemptStatus.RevertedUnverified
+            or LandingAttemptStatus.RevertFailed;
+
+    private async Task<Result<LandingAttemptDto>> QueuePreviewAsync(
+        IBeaconDb db,
+        LandingAttempt attempt,
+        Domain.Entities.Devices.DaemonDevice device,
+        string checkCommand,
+        ActorContext actor,
+        Domain.Entities.Projects.Project? project,
+        bool dispatchAlreadyClaimed,
+        CancellationToken ct)
+    {
+        if (!dispatchAlreadyClaimed)
+        {
+            var activeCommand = await LandingCommandDispatch.FindActiveCommandAsync(
+                db, attempt.ProjectId, attempt.Id, "Preview", ct);
+            if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Preview"))
+                return Result.Ok(ToDto(attempt));
+
+            if (!await LandingCommandDispatch.TryClaimAsync(db, attempt, "Preview", ct))
+            {
+                await db.Entry(attempt).ReloadAsync(ct);
+                return Result.Ok(ToDto(attempt));
+            }
+            await db.Entry(attempt).ReloadAsync(ct);
+        }
+
         var payload = new JsonObject
         {
-            ["projectId"] = task.ProjectId.ToString("D"),
-            ["taskId"] = task.Id.ToString("D"),
+            ["projectId"] = attempt.ProjectId.ToString("D"),
+            ["taskId"] = attempt.TaskId.ToString("D"),
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Preview",
             ["targetBranch"] = attempt.TargetBranch,
@@ -133,12 +201,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
-                device.Id,
-                device.UserId,
-                WorkstationCommandKind.GitLand,
-                payload.ToJsonString(),
-                task.ProjectId,
-                checkCommand)
+                device.Id, device.UserId, WorkstationCommandKind.GitLand,
+                payload.ToJsonString(), attempt.ProjectId, checkCommand)
             {
                 TrustedGitLand = true
             }), ct);
@@ -149,27 +213,36 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Preview.");
         }
 
-        db.AuditEvents.Add(AuditEventFactory.ForActor(
-            command.Actor,
-            "pipeline.landing.preview_requested",
-            "LandingAttempt",
-            attempt.Id.ToString("D"),
-            project.OrgId,
-            project.Id,
-            detailsJson: JsonSerializer.Serialize(new Dictionary<string, object>
-            {
-                ["previousState"] = "None",
-                ["newState"] = attempt.Status.ToString(),
-                ["resultCode"] = "PreviewQueued",
-                ["sourceBranch"] = attempt.SourceBranch,
-                ["targetBranch"] = attempt.TargetBranch,
-                ["sourceSha"] = attempt.SourceSha,
-                ["reviewTreeSha"] = attempt.ReviewTreeSha,
-                ["reviewCommandHash"] = attempt.ReviewCommandHash,
-                ["reviewRunId"] = attempt.ReviewRunId.ToString("D"),
-                ["deviceId"] = attempt.DeviceId.ToString("D")
-            })));
-        await db.SaveChangesAsync(ct);
+        await LandingCommandDispatch.ClearLeaseAsync(db, attempt, "Preview", ct);
+        await db.Entry(attempt).ReloadAsync(ct);
+
+        var auditProject = project
+            ?? await db.Projects.FirstOrDefaultAsync(candidate => candidate.Id == attempt.ProjectId, ct);
+        if (auditProject is not null)
+        {
+            db.AuditEvents.Add(AuditEventFactory.ForActor(
+                actor,
+                "pipeline.landing.preview_requested",
+                "LandingAttempt",
+                attempt.Id.ToString("D"),
+                auditProject.OrgId,
+                auditProject.Id,
+                detailsJson: JsonSerializer.Serialize(new Dictionary<string, object>
+                {
+                    ["previousState"] = "None",
+                    ["newState"] = attempt.Status.ToString(),
+                    ["resultCode"] = "PreviewQueued",
+                    ["sourceBranch"] = attempt.SourceBranch,
+                    ["targetBranch"] = attempt.TargetBranch,
+                    ["sourceSha"] = attempt.SourceSha,
+                    ["reviewTreeSha"] = attempt.ReviewTreeSha,
+                    ["reviewCommandHash"] = attempt.ReviewCommandHash,
+                    ["reviewRunId"] = attempt.ReviewRunId.ToString("D"),
+                    ["deviceId"] = attempt.DeviceId.ToString("D")
+                })));
+            await db.SaveChangesAsync(ct);
+        }
+
         return Result.Ok(ToDto(attempt));
     }
 
