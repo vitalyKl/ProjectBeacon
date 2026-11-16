@@ -482,6 +482,123 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitLand_UncheckedOutTarget_CasUsesLaggingLocalHeadWhenOriginAdvanced()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        var remoteClone = Path.Combine(root, "remote-clone");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+        var origin = repository + "-origin.git";
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        string sourceSha;
+        var opened = await AgentTaskWorktree.CreateAsync(
+            projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+        Assert.NotNull(opened.Worktree);
+        await using (var taskWorktree = opened.Worktree!)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "lagging-target-task-change.txt"),
+                "reviewed task change\n");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: commit task change against origin main", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            sourceSha = commit.CommitSha!;
+        }
+
+        var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+        var originalTargetHead = await GitAsync(repository, "rev-parse", "refs/heads/main");
+
+        // Leave main checked out nowhere. Advance origin/main from a separate clone while
+        // the workstation's local refs/heads/main deliberately remains at originalTargetHead.
+        await GitAsync(repository, "branch", "workstation-checkout");
+        await GitAsync(repository, "checkout", "workstation-checkout");
+        await GitAsync(root, "clone", "--branch", "main", "--single-branch", origin, remoteClone);
+        await GitAsync(remoteClone, "config", "user.name", "Remote Target");
+        await GitAsync(remoteClone, "config", "user.email", "remote-target@projectbeacon.local");
+        var remoteTargetFile = Path.Combine(remoteClone, "src", "app", "remote-target-change.txt");
+        await File.WriteAllTextAsync(remoteTargetFile, "newer remote target\n");
+        await GitAsync(remoteClone, "add", "-A");
+        await GitAsync(remoteClone, "commit", "-m", "advance origin main");
+        await GitAsync(remoteClone, "push", "origin", "main");
+        var remoteTargetHead = await GitAsync(remoteClone, "rev-parse", "HEAD");
+        Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+        Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
+
+        var checkCommand = "echo review-ok";
+        var commandHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var settings = new WorkstationSettings
+        {
+            WorkspaceMode = "Branch",
+            WorktreeRoot = worktreeRoot
+        };
+
+        try
+        {
+            var preview = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha, commandHash, checkCommand),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(preview.Ok, preview.Error ?? preview.Result);
+            using var previewJson = JsonDocument.Parse(preview.Result!);
+            Assert.Equal("previewed", previewJson.RootElement.GetProperty("status").GetString());
+            var previewTargetHead = previewJson.RootElement.GetProperty("targetHeadSha").GetString()!;
+            var candidateTree = previewJson.RootElement.GetProperty("candidateTreeSha").GetString()!;
+            Assert.Equal(remoteTargetHead, previewTargetHead);
+            Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
+
+            var execute = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand, previewTargetHead, candidateTree),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(execute.Ok, execute.Error ?? execute.Result);
+            using var landed = JsonDocument.Parse(execute.Result!);
+            Assert.Equal("landed", landed.RootElement.GetProperty("status").GetString());
+            var mergeCommitSha = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
+            Assert.Equal(mergeCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(remoteTargetHead,
+                await GitAsync(repository, "rev-parse", mergeCommitSha + "^1"));
+            Assert.Equal(sourceSha,
+                await GitAsync(repository, "rev-parse", mergeCommitSha + "^2"));
+            Assert.Equal(candidateTree,
+                await GitAsync(repository, "rev-parse", mergeCommitSha + "^{tree}"));
+            Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
+            Assert.Equal("workstation-checkout",
+                await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
+
+            var revert = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Revert", sourceSha, reviewTreeSha,
+                    commandHash, null, mergeCommitSha: mergeCommitSha),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(revert.Ok, revert.Error ?? revert.Result);
+            using var reverted = JsonDocument.Parse(revert.Result!);
+            Assert.Equal("reverted", reverted.RootElement.GetProperty("status").GetString());
+            var revertCommitSha = reverted.RootElement.GetProperty("revertCommitSha").GetString()!;
+            Assert.Equal(revertCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(remoteTargetHead,
+                await GitAsync(repository, "rev-parse", revertCommitSha + "^"));
+            Assert.False(File.Exists(Path.Combine(projectRoot, "lagging-target-task-change.txt")));
+            Assert.Equal("newer remote target\n",
+                await File.ReadAllTextAsync(Path.Combine(projectRoot, "remote-target-change.txt")));
+            Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task GitLand_UncheckedOutTarget_UsesTemporaryBranchWorktreeForExecuteAndRevert()
     {
         var root = CreateTempRoot();
