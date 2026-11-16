@@ -66,7 +66,9 @@ public sealed partial class AgentTaskGitOperationsTests
                 settings, TestContext.Current.CancellationToken);
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
             using var landedJson = JsonDocument.Parse(execute.Result!);
-            Assert.Equal("landed", landedJson.RootElement.GetProperty("status").GetString());
+            Assert.True(
+                string.Equals("landed", landedJson.RootElement.GetProperty("status").GetString(), StringComparison.Ordinal),
+                execute.Result);
             var mergeCommit = landedJson.RootElement.GetProperty("mergeCommitSha").GetString()!;
             Assert.Equal(0, landedJson.RootElement.GetProperty("postMergeCheckExitCode").GetInt32());
             Assert.Matches(
@@ -135,7 +137,8 @@ public sealed partial class AgentTaskGitOperationsTests
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
         Assert.NotNull(opened.Worktree);
-        await using (var taskWorktree = opened.Worktree!)
+        var taskWorkingDirectory = opened.Worktree!.WorkingDirectory;
+        await using (var taskWorktree = opened.Worktree)
         {
             await File.WriteAllTextAsync(Path.Combine(taskWorktree.WorkingDirectory, "shared.txt"), "task version\n");
             var commit = await taskWorktree.CommitChangesAsync(
@@ -144,6 +147,8 @@ public sealed partial class AgentTaskGitOperationsTests
             sourceSha = commit.CommitSha!;
         }
         reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+        Assert.Equal(string.Empty, await GitAsync(
+            taskWorkingDirectory, "status", "--porcelain", "--untracked-files=all"));
 
         await File.WriteAllTextAsync(Path.Combine(projectRoot, "shared.txt"), "target version\n");
         await GitAsync(repository, "add", "src/app/shared.txt");
@@ -369,7 +374,9 @@ public sealed partial class AgentTaskGitOperationsTests
                 settings, TestContext.Current.CancellationToken);
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
             using var landed = JsonDocument.Parse(execute.Result!);
-            Assert.Equal("landed", landed.RootElement.GetProperty("status").GetString());
+            Assert.True(
+                string.Equals("landed", landed.RootElement.GetProperty("status").GetString(), StringComparison.Ordinal),
+                execute.Result);
             var mergeCommitSha = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
             Assert.Equal(mergeCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.Equal(originalWorkstationHead, await GitAsync(repository, "rev-parse", "HEAD"));
@@ -561,7 +568,9 @@ public sealed partial class AgentTaskGitOperationsTests
                 settings, TestContext.Current.CancellationToken);
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
             using var landed = JsonDocument.Parse(execute.Result!);
-            Assert.Equal("landed", landed.RootElement.GetProperty("status").GetString());
+            Assert.True(
+                string.Equals("landed", landed.RootElement.GetProperty("status").GetString(), StringComparison.Ordinal),
+                execute.Result);
             var mergeCommit = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
 
             await File.WriteAllTextAsync(Path.Combine(projectRoot, "later-target-change.txt"), "keep later work\n");
