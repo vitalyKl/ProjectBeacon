@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
+using Infrastructure.Data;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
