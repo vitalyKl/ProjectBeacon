@@ -135,6 +135,60 @@ public sealed class GitLandCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteUnknownCompletion_KeepsAttemptPendingForMarkerReconciliation()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateTreeSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string outputHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        const string mergeCommitSha = "1111111111111111111111111111111111111111";
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Keep an uncertain merge exclusive.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        attempt.MarkExecutePending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, taskId, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                targetHeadSha, candidateTreeSha, null);
+            var result = JsonSerializer.Serialize(new
+            {
+                status = "execute_unknown",
+                targetBranch = "main",
+                sourceSha,
+                targetHeadSha,
+                candidateTreeSha,
+                mergeCommitSha,
+                errorCode = "TargetReachabilityCouldNotBeVerified"
+            });
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, result, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+            Assert.Equal("CommandCompletionUnknown", attempt.FailureCode);
+            Assert.Null(attempt.MergeCommitSha);
+            Assert.Contains(
+                await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
+                action => action == "pipeline.landing.execute_failed");
+        }
+    }
+
+    [Fact]
     public async Task ExecuteCompletion_RecordsOnlyThePreviewedMergeEvidence()
     {
         var (org, project, device, userId) = CreateScope();
