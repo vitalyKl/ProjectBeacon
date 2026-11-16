@@ -613,6 +613,8 @@ internal sealed class GitLandCompletion : ICommandCompletion
             try
             {
                 using var document = JsonDocument.Parse(resultJson ?? "{}");
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new JsonException("GitLand result must be a JSON object.");
                 root = document.RootElement.Clone();
             }
             catch (JsonException)
