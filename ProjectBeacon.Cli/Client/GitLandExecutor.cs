@@ -63,6 +63,19 @@ internal static class GitLandExecutor
             && !string.Equals(HashCommand(request.CheckCommand), request.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
             return (false, null, "The trusted review command does not match its server-pinned hash.");
 
+        var repositoryRootResult = await AgentSessionWorktree.RunGitAsync(
+            projectRoot, ct, [], "rev-parse", "--show-toplevel");
+        if (repositoryRootResult.ExitCode != 0 || repositoryRootResult.TimedOut
+            || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
+            return (false, null, "The configured project directory is not inside a Git repository.");
+        var selectedRepositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
+
+        // GitLand mutates the real target ref. Hold the repository gate for its complete
+        // preview/execute/revert transaction so GitSync and task-branch integration cannot
+        // race it while fetching or changing shared refs.
+        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
+            selectedRepositoryRoot, ct);
+
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, request.ProjectId, request.TaskId, settings.WorktreeRoot, ct);
         if (opened.Worktree is null)
