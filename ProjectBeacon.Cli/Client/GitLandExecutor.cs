@@ -182,7 +182,7 @@ internal static class GitLandExecutor
 
         var resumed = await TryResumeLandingAsync(workspace, request, filters, ct);
         if (resumed is { } resumedLanding)
-            return resumedLanding;
+            return await ReconcileLandingOutcomeAsync(workspace, request, filters, resumedLanding, CancellationToken.None);
 
         var candidate = await BuildCandidateAsync(workspace, request, filters, ct);
         if (candidate.Status != "previewed")
@@ -269,7 +269,9 @@ internal static class GitLandExecutor
         if (!Succeeded(markerCreate))
         {
             var recovered = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
-            return recovered ?? BusinessFailure("LandingMarkerCouldNotBePersisted");
+            if (recovered is { } recoveredResult)
+                return await ReconcileLandingOutcomeAsync(workspace, request, filters, recoveredResult, CancellationToken.None);
+            return ExecuteUnknown(request, null, "LandingMarkerCouldNotBePersisted");
         }
 
         // Persist the exact target ref value before changing it. This lets recovery validate
@@ -299,12 +301,118 @@ internal static class GitLandExecutor
         if (!Succeeded(update))
         {
             var recovered = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
-            return recovered ?? BusinessFailure("TargetChangedBeforeLandingUpdate");
+            if (recovered is { } recoveredResult)
+                return await ReconcileLandingOutcomeAsync(workspace, request, filters, recoveredResult, CancellationToken.None);
+            return ExecuteUnknown(request, mergeCommitSha, "TargetChangedBeforeLandingUpdate");
         }
 
-        return await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None)
-            ?? BusinessFailure("LandingMarkerCouldNotBeReconciled");
+        var finalRecovery = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
+        if (finalRecovery is { } finalResult)
+            return await ReconcileLandingOutcomeAsync(workspace, request, filters, finalResult, CancellationToken.None);
+        return ExecuteUnknown(request, mergeCommitSha, "LandingMarkerCouldNotBeReconciled");
     }
+
+    /// <summary>
+    /// Once the merge marker exists, a recovery error must never be reported as an ordinary
+    /// failure while the exact commit may already be reachable from the target branch.
+    /// Verify the marker's parents/tree and the target ref before deciding whether retry is
+    /// safe, the landing happened but needs attention, or the outcome is still unknown.
+    /// </summary>
+    private static async Task<(bool Ok, string? Result, string? Error)> ReconcileLandingOutcomeAsync(
+        AgentTaskWorktree workspace,
+        Request request,
+        string[] filters,
+        (bool Ok, string? Result, string? Error) result,
+        CancellationToken ct)
+    {
+        if (!IsBusinessFailureResult(result))
+            return result;
+
+        var repo = workspace.RepositoryRoot;
+        var markerRef = LandingMarkerRef(request.LandingAttemptId, "merge");
+        var marker = await Git(repo, filters, ct, "rev-parse", "--verify", markerRef);
+        if (!Succeeded(marker) || !IsGitSha(marker.StdOut.Trim()))
+            return ExecuteUnknown(request, null, ReadFailureCode(result) ?? "LandingMarkerUnavailable");
+
+        var mergeCommitSha = marker.StdOut.Trim();
+        var parents = await Git(repo, filters, ct, "rev-list", "--parents", "-n", "1", mergeCommitSha);
+        var parentFields = parents.StdOut.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var mergeTree = await Git(repo, filters, ct, "rev-parse", "--verify", mergeCommitSha + "^{tree}");
+        if (!Succeeded(parents) || parentFields.Length != 3
+            || !string.Equals(parentFields[1], request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(parentFields[2], request.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !Succeeded(mergeTree)
+            || !string.Equals(mergeTree.StdOut.Trim(), request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
+            return ExecuteUnknown(request, mergeCommitSha, "LandingMarkerDoesNotMatchPreview");
+
+        var targetHead = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{request.TargetBranch}");
+        if (!Succeeded(targetHead) || !IsGitSha(targetHead.StdOut.Trim()))
+            return ExecuteUnknown(request, mergeCommitSha, ReadFailureCode(result) ?? "TargetHeadUnavailable");
+
+        var containsMerge = await IsAncestorAsync(repo, filters, mergeCommitSha, targetHead.StdOut.Trim(), ct);
+        if (containsMerge is null)
+            return ExecuteUnknown(request, mergeCommitSha, "TargetReachabilityCouldNotBeVerified");
+        if (!containsMerge.Value)
+            return result;
+
+        return (true, JsonSerializer.Serialize(new
+        {
+            status = "landed_unverified",
+            targetBranch = request.TargetBranch,
+            sourceSha = request.SourceSha,
+            targetHeadSha = request.TargetHeadSha,
+            candidateTreeSha = request.TargetTreeSha,
+            mergeCommitSha,
+            postMergeCheckExitCode = (int?)null,
+            postMergeCheckOutputHash = (string?)null,
+            errorCode = ReadFailureCode(result) ?? "LandingRecoveryFailed"
+        }), null);
+    }
+
+    private static bool IsBusinessFailureResult((bool Ok, string? Result, string? Error) result)
+    {
+        if (!result.Ok || string.IsNullOrWhiteSpace(result.Result))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(result.Result);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("status", out var status)
+                && status.ValueKind == JsonValueKind.String
+                && string.Equals(status.GetString(), "failed", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string? ReadFailureCode((bool Ok, string? Result, string? Error) result)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(result.Result ?? "{}");
+            return document.RootElement.TryGetProperty("errorCode", out var code)
+                && code.ValueKind == JsonValueKind.String ? code.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static (bool Ok, string? Result, string? Error) ExecuteUnknown(
+        Request request, string? mergeCommitSha, string errorCode) =>
+        (true, JsonSerializer.Serialize(new
+        {
+            status = "execute_unknown",
+            targetBranch = request.TargetBranch,
+            sourceSha = request.SourceSha,
+            targetHeadSha = request.TargetHeadSha,
+            candidateTreeSha = request.TargetTreeSha,
+            mergeCommitSha,
+            errorCode
+        }), null);
 
     private static async Task<(bool Ok, string? Result, string? Error)?> TryResumeLandingAsync(
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
