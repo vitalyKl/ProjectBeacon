@@ -46,7 +46,7 @@ backstop is safe; do not assume otherwise in future code.
 
 ## Classification
 
-All 24 `WorkstationCommandKind` values, complete. The executable source of truth is
+All 25 `WorkstationCommandKind` values, complete. The executable source of truth is
 `WorkstationCommandCatalog`; tests assert the exhaustive partition.
 
 | Kind | Property | Retryable | ReconcileBacked | Rationale |
@@ -75,8 +75,9 @@ All 24 `WorkstationCommandKind` values, complete. The executable source of truth
 | `UpdateClient` | **AtMostOnce** | **no** | no | Downloads/verifies/installs a client release; ambiguous interruption is not re-executed. |
 | `GitSync` | Idempotent | yes | no | Repeating status/fetch/fast-forward converges; successful fast-forward is subsequently UpToDate. |
 | `ApplyProposalPatch` | Idempotent | yes | no | Each file is checked against exact base/result hashes; already-applied sections are skipped and only remaining base-state sections are applied. A third state is a conflict, never success. |
+| `GitLand` | Idempotent | yes | no | Preview is repeatable; Execute/Revert use attempt-scoped durable refs and compare-and-swap the exact reviewed target ref, so recovery resumes the same result instead of creating a second merge/revert. |
 
-Counts: **16 Idempotent**, **8 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
+Counts: **17 Idempotent**, **8 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
 `ChatSwitchAgent`, `ChatReplyForm`, `RunEvalTurn`, `RunReviewCheck`,
 `RunPipelineSession`, `UpdateClient`), **5 ReconcileBacked**
 (`RetiredAgentConfigApply`, `ReloadProxy`, `SaveWorkstation`,
@@ -85,7 +86,7 @@ the exhaustive enum/catalog partition but cannot be newly enqueued.
 
 ## Current protection for AtMostOnce
 
-The seven at-most-once kinds are protected from duplicate execution by the
+The eight at-most-once kinds are protected from duplicate execution by the
 combination of the following. **All of these must be preserved.**
 
 1. **Atomic claim (H4.1).** The claim is a guarded
@@ -124,6 +125,18 @@ combination of the following. **All of these must be preserved.**
 `GitSync` is a project-runtime, idempotent command. It is human-initiated by a project Owner/Admin or system administrator and is queued only to a workstation explicitly advertising the `git-sync-v1` heartbeat capability, so older daemons are never sent an unknown enum value. Its payload is restricted to `projectId` and `mode` (`Status` or `PullFastForward`). Re-delivery is safe: fetching the same tracked upstream converges on the same remote-tracking ref, and a repeated fast-forward after success returns `UpToDate`. The normal command lease applies; recovery may requeue a stale GitSync once under the existing idempotent recovery rule. This does not make arbitrary Git operations idempotent or permitted.
 
 `Status` refreshes the current branch's tracked upstream and reports ahead/behind counts and worktree state. `PullFastForward` additionally refuses dirty, detached, unconfigured, diverged, or actively used repositories without applying a merge.
+
+### GitLand
+
+`GitLand` is an idempotent, project-runtime command available only to the server-side landing workflow. It is not a general-purpose Git tool and its payload contains no remote URL or caller-selected source/target identity. The daemon verifies the task worktree metadata, reviewed source SHA/tree, pinned target branch, and trusted check-command hash before acting.
+
+- `Preview` uses `git merge-tree --write-tree`, builds a detached candidate worktree, and runs the pinned check without moving the target branch.
+- `Execute` rebuilds the same candidate, compares it with the previewed target HEAD and tree, creates the exact two-parent merge commit, then updates the target ref with compare-and-swap.
+- `Revert` is allowed only while the target ref still equals the recorded merge commit. It creates a normal `git revert -m 1` commit; it never resets or discards later target work.
+- Attempt-scoped refs under `refs/beacon/landing-attempts/<attempt-id>/` record the exact merge and revert commits before target mutation. A repeated delivery validates and resumes those markers, preventing a second merge/revert after a lost acknowledgement or daemon restart.
+- A known failure is returned as a structured result. An ambiguous Execute/Revert completion remains retryable as `CommandCompletionUnknown`; the server does not report success without matching the attempt, action, device, source, target, and commit evidence.
+
+GitLand has a dedicated 30-minute command lease because it performs multiple bounded Git operations plus candidate and post-merge checks. Stale recovery may requeue it once under the idempotent rule. It is not `ReconcileBacked`: the durable attempt markers, not a background desired-state loop, reconcile an interrupted operation.
 
 ## Cross-references
 
