@@ -176,6 +176,49 @@ public sealed class GitLandCompletionTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnresolvedRevertAttempt_BlocksAnotherLandingForTheSameTask(bool worktreeRefreshFailed)
+    {
+        var (org, project, device, userId) = CreateScope();
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", new string('a', 40), new string('b', 40), new string('c', 64),
+            "Keep unresolved revert state exclusive.");
+        attempt.RecordPreview("main", new string('d', 40), new string('e', 40), new string('f', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.RecordLanded(new string('1', 40), new string('e', 40), 0, new string('2', 64));
+        attempt.MarkRevertPending();
+        if (worktreeRefreshFailed)
+            attempt.RecordRevertedUnverified(new string('3', 40), "TargetWorktreeUpdateFailed");
+        else
+            attempt.Fail("TargetAdvancedAfterLanding");
+
+        Assert.Equal(
+            worktreeRefreshFailed ? LandingAttemptStatus.RevertedUnverified : LandingAttemptStatus.RevertFailed,
+            attempt.Status);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var secondAttempt = LandingAttempt.Start(
+                project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+                "main", new string('4', 40), new string('5', 40), new string('6', 64),
+                "Must not overlap an unresolved revert.");
+            _db.LandingAttempts.Add(secondAttempt);
+
+            await Assert.ThrowsAsync<DbUpdateException>(
+                () => _db.SaveChangesAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
     private (Org Org, Project Project, DaemonDevice Device, Guid UserId) CreateScope()
     {
         var org = Org.Create("GitLand completion");
