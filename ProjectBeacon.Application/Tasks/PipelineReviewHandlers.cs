@@ -226,23 +226,37 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<PipelineStateDto>("Project not found.");
+
+        string checkCommand;
+        var pinnedCommand = project.ReviewCheckCommand?.Trim();
         if (command.Actor.IsHuman)
         {
             if (string.IsNullOrWhiteSpace(bodyCommand))
                 return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
+            if (!string.IsNullOrWhiteSpace(pinnedCommand)
+                && !string.Equals(bodyCommand, pinnedCommand, StringComparison.Ordinal))
+                return Result.Failure<PipelineStateDto>(
+                    "The requested check command must exactly match the project's pinned ReviewCheckCommand.",
+                    ErrorKind.Conflict);
+            // Existing projects may still use an explicitly human-approved review check before
+            // a project pin is configured. Such a run can complete the task but cannot become
+            // landing proof: RequestLandingHandler also requires the project pin to match.
+            checkCommand = bodyCommand;
         }
-        else if (!string.IsNullOrEmpty(bodyCommand))
+        else
         {
-            return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; the project's pinned ReviewCheckCommand is used instead.", ErrorKind.Validation);
+            if (!string.IsNullOrEmpty(bodyCommand))
+                return Result.Failure<PipelineStateDto>(
+                    "API tokens may not supply a check command; set the project ReviewCheckCommand instead.",
+                    ErrorKind.Validation);
+            if (string.IsNullOrWhiteSpace(pinnedCommand))
+                return Result.Failure<PipelineStateDto>(
+                    "No review check command is configured for this project.", ErrorKind.Conflict);
+            checkCommand = pinnedCommand;
         }
-
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
-        if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
-            return Result.Failure<PipelineStateDto>("A pinned project ReviewCheckCommand is required for a review proof.", ErrorKind.Conflict);
-        var checkCommand = project.ReviewCheckCommand.Trim();
-        if (command.Actor.IsHuman
-            && !string.Equals(bodyCommand, checkCommand, StringComparison.Ordinal))
-            return Result.Failure<PipelineStateDto>("The requested check command must exactly match the project's pinned ReviewCheckCommand.", ErrorKind.Conflict);
 
         var checkCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
