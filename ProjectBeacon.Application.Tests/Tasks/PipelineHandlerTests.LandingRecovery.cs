@@ -9,6 +9,118 @@ using Microsoft.EntityFrameworkCore;
 public sealed partial class PipelineHandlerTests
 {
     [Fact]
+    public async Task LandingCommandDispatch_UsesCompareAndSwapLeaseAndFindsExistingCommand()
+    {
+        var done = await SeedDoneSubtaskAsync("Recover landing command dispatch");
+        var taskId = done.Task.Id;
+        var deviceId = Guid.NewGuid();
+        var requestedBy = Guid.NewGuid();
+        var reviewRunId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            done.ProjectId,
+            taskId,
+            reviewRunId,
+            requestedBy,
+            deviceId,
+            "main",
+            new string('a', 40),
+            new string('b', 40),
+            new string('c', 64),
+            "Verify the candidate before landing.");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
+        await using var db = factory.CreateDbContext();
+        var persisted = await db.LandingAttempts.SingleAsync(
+            item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+
+        Assert.False(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+        Assert.True(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Preview", TestContext.Current.CancellationToken));
+        // The same stale entity snapshot cannot claim the dispatch a second time.
+        Assert.False(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Preview", TestContext.Current.CancellationToken));
+
+        await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.True(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+        Assert.Null(LandingCommandDispatch.PublicFailureCode(persisted));
+
+        var command = Domain.Entities.Devices.WorkstationCommand.Create(
+            deviceId,
+            WorkstationCommandKind.GitLand,
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                landingAttemptId = attempt.Id,
+                action = "Preview"
+            }),
+            done.ProjectId,
+            requestedBy);
+        db.WorkstationCommands.Add(command);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var active = await LandingCommandDispatch.FindActiveCommandAsync(
+            db, done.ProjectId, attempt.Id, "Preview", TestContext.Current.CancellationToken);
+        Assert.NotNull(active);
+        Assert.Equal(command.Id, active.Id);
+
+        await LandingCommandDispatch.ClearLeaseAsync(
+            db, persisted, "Preview", TestContext.Current.CancellationToken);
+        await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Null(persisted.FailureCode);
+        Assert.False(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+    }
+
+    [Fact]
+    public async Task LandingCommandDispatch_RecoversAnExpiredLeaseWithoutDuplicatingAnActiveCommand()
+    {
+        var done = await SeedDoneSubtaskAsync("Recover expired landing lease");
+        var attempt = LandingAttempt.Start(
+            done.ProjectId,
+            done.Task.Id,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "main",
+            new string('a', 40),
+            new string('b', 40),
+            new string('c', 64),
+            "Verify the candidate before landing.");
+        attempt.MarkDispatchPending("Preview");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
+        await using var db = factory.CreateDbContext();
+        var persisted = await db.LandingAttempts.SingleAsync(
+            item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+        Assert.True(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+        Assert.False(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Preview", TestContext.Current.CancellationToken));
+
+        await db.LandingAttempts
+            .Where(item => item.Id == attempt.Id)
+            .ExecuteUpdateAsync(update => update.SetProperty(
+                item => item.UpdatedAt, DateTime.UtcNow.AddMinutes(-3)),
+                TestContext.Current.CancellationToken);
+        await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+        Assert.True(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Preview", TestContext.Current.CancellationToken));
+        await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.True(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+    }
+
+    [Fact]
     public async Task StartReview_AfterLatestLandingConflict_RequiresFreshReviewWithoutDiscardingCompletedSubtasks()
     {
         var done = await SeedDoneSubtaskAsync("Re-review conflicted landing");
