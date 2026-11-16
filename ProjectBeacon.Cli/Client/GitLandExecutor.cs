@@ -964,7 +964,7 @@ internal static class GitLandExecutor
         var remotes = await Git(repo, filters, ct, "remote");
         if (!Succeeded(remotes))
             return (null, "Could not inspect configured Git remotes safely.", "TargetRemoteInspectionFailed");
-        var hasOrigin = remotes.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+        var hasOrigin = remotes.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .Any(name => string.Equals(name.Trim(), "origin", StringComparison.Ordinal));
         if (hasOrigin)
         {
