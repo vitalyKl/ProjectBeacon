@@ -330,6 +330,8 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(commit.Success, commit.Error);
             var sourceSha = commit.CommitSha!;
             var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            await taskWorktree.DisposeAsync();
+            taskWorktree = null;
             const string checkCommand = "echo review-ok";
             var commandHash = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
@@ -389,6 +391,8 @@ public sealed partial class AgentTaskGitOperationsTests
                 "ProjectBeacon: deliberately move an out-of-scope file into project");
             var sourceSha = await GitAsync(taskWorktree.RecoveryPath, "rev-parse", "HEAD");
             var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            await taskWorktree.DisposeAsync();
+            taskWorktree = null;
             const string checkCommand = "echo review-ok";
             var commandHash = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
