@@ -122,6 +122,52 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task TaskWorktreeCommit_DetectsContentOnlyChangesToTrackedFiles()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            var baseSha = await GitAsync(worktree.RecoveryPath, "rev-parse", "HEAD");
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"),
+                "content-only task edit\n");
+
+            var committed = await worktree.CommitChangesAsync(
+                "ProjectBeacon: update tracked file content", CancellationToken.None);
+
+            Assert.True(committed.Success, committed.Error);
+            Assert.NotNull(committed.CommitSha);
+            Assert.NotEqual(baseSha, committed.CommitSha);
+            Assert.Contains(
+                "src/app/shared.txt",
+                await GitAsync(worktree.RecoveryPath, "show", "--format=", "--name-only", "HEAD"),
+                StringComparison.Ordinal);
+            Assert.Equal(
+                string.Empty,
+                await GitAsync(worktree.RecoveryPath, "status", "--porcelain", "--untracked-files=all"));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task GitLand_PreviewConflict_ReportsPathsWithoutChangingTarget()
     {
         var root = CreateTempRoot();
@@ -154,6 +200,12 @@ public sealed partial class AgentTaskGitOperationsTests
         await GitAsync(repository, "add", "src/app/shared.txt");
         await GitAsync(repository, "commit", "-m", "Conflicting target change");
         var originalTargetHead = await GitAsync(repository, "rev-parse", "HEAD");
+        Assert.Equal(
+            string.Empty,
+            await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+        Assert.NotEqual(
+            await GitAsync(repository, "rev-parse", "main"),
+            sourceSha);
         var checkCommand = "echo review-ok";
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         var settings = new WorkstationSettings
