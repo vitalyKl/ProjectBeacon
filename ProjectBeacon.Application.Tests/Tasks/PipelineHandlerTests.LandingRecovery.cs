@@ -132,6 +132,54 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task LandingCommandDispatch_AllowsExplicitRetryOfRevertFailedAttempt()
+    {
+        var done = await SeedDoneSubtaskAsync("Retry failed landing revert");
+        Guid deviceId;
+        Guid requestedBy;
+        using (TenantScope.EnterUnscoped())
+        {
+            deviceId = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(runtime => runtime.ProjectId == done.ProjectId)
+                .Select(runtime => runtime.DeviceId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            requestedBy = await _db.DaemonDevices.IgnoreQueryFilters()
+                .Where(device => device.Id == deviceId)
+                .Select(device => device.UserId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+        }
+
+        var attempt = LandingAttempt.Start(
+            done.ProjectId, done.Task.Id, Guid.NewGuid(), requestedBy, deviceId,
+            "main", new string('a', 40), new string('b', 40), new string('c', 64),
+            "Retry a revert after confirming the target ref.");
+        attempt.RecordPreview("main", new string('d', 40), new string('e', 40), new string('f', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.RecordLanded(new string('1', 40), new string('e', 40), 0, new string('2', 64));
+        attempt.MarkRevertPending();
+        attempt.Fail("TargetAdvancedBeyondLanding");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
+        await using var db = factory.CreateDbContext();
+        var persisted = await db.LandingAttempts.SingleAsync(
+            item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+
+        Assert.True(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Revert", TestContext.Current.CancellationToken));
+        await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(LandingAttemptStatus.RevertPending, persisted.Status);
+        Assert.True(LandingCommandDispatch.HasFreshLease(persisted, "Revert"));
+        Assert.False(await LandingCommandDispatch.TryClaimAsync(
+            db, persisted, "Revert", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task StartReview_AfterLatestLandingConflict_RequiresFreshReviewWithoutDiscardingCompletedSubtasks()
     {
         var done = await SeedDoneSubtaskAsync("Re-review conflicted landing");
