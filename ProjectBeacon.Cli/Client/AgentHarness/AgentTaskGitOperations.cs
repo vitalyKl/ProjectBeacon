@@ -115,14 +115,7 @@ internal static class AgentTaskGitOperations
             return Error(opened.Error ?? "The task branch workspace is unavailable.");
 
         if (toolName == PipelineToolPolicy.GitIntegrate)
-        {
-            // GitIntegrate fetches and updates the task branch from the shared repository.
-            // Serialize it with GitSync and GitLand so remote-tracking refs and target refs
-            // are not concurrently updated by separate workstation commands.
-            using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
-                opened.Context.RepositoryRoot, ct);
             return await IntegrateAsync(opened.Context, arguments, ct);
-        }
 
         return toolName switch
         {
