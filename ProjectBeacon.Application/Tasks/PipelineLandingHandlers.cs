@@ -466,12 +466,17 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<LandingAttemptDto>("Landing attempt not found.");
-        var reconciliationRetry = attempt.Status == LandingAttemptStatus.RevertPending
-            && string.Equals(attempt.FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal);
-        if ((!reconciliationRetry && attempt.Status is not (LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified))
+        var activeCommand = await LandingCommandDispatch.FindActiveCommandAsync(
+            db, attempt.ProjectId, attempt.Id, "Revert", ct);
+        if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Revert"))
+            return Result.Ok(RequestLandingHandler.ToDto(attempt));
+
+        if (attempt.Status is not (LandingAttemptStatus.Landed
+            or LandingAttemptStatus.LandedUnverified
+            or LandingAttemptStatus.RevertPending)
             || string.IsNullOrWhiteSpace(attempt.MergeCommitSha))
             return Result.Failure<LandingAttemptDto>(
-                "Revert requires a landed attempt or an explicit retry of an unacknowledged Revert.", ErrorKind.Conflict);
+                "Revert requires a landed attempt or an unacknowledged Revert that can be reconciled.", ErrorKind.Conflict);
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         if (project is null)
@@ -481,24 +486,12 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
         var previousState = attempt.Status;
-        var claimed = reconciliationRetry
-            ? await db.LandingAttempts
-                .Where(candidate => candidate.Id == attempt.Id
-                    && candidate.Status == LandingAttemptStatus.RevertPending
-                    && candidate.FailureCode == "CommandCompletionUnknown")
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
-                    .SetProperty(candidate => candidate.FailureCode, (string?)null), ct)
-            : await db.LandingAttempts
-                .Where(candidate => candidate.Id == attempt.Id
-                    && (candidate.Status == LandingAttemptStatus.Landed
-                        || candidate.Status == LandingAttemptStatus.LandedUnverified))
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(candidate => candidate.Status, LandingAttemptStatus.RevertPending)
-                    .SetProperty(candidate => candidate.UpdatedAt, DateTime.UtcNow)
-                    .SetProperty(candidate => candidate.FailureCode, (string?)null), ct);
-        if (claimed != 1)
-            return Result.Failure<LandingAttemptDto>("The landing attempt was already claimed by another revert request.", ErrorKind.Conflict);
+        var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Revert", ct);
+        if (!claimed)
+        {
+            await db.Entry(attempt).ReloadAsync(ct);
+            return Result.Ok(RequestLandingHandler.ToDto(attempt));
+        }
         await db.Entry(attempt).ReloadAsync(ct);
 
         var payload = new JsonObject
@@ -522,14 +515,13 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             }), ct);
         if (!queued.Success)
         {
-            if (reconciliationRetry)
-                attempt.MarkCommandCompletionUnknown();
-            else
-                attempt.Fail("EnqueueFailed");
+            attempt.MarkCommandCompletionUnknown();
             await db.SaveChangesAsync(ct);
             return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Revert.");
         }
 
+        await LandingCommandDispatch.ClearLeaseAsync(db, attempt, "Revert", ct);
+        await db.Entry(attempt).ReloadAsync(ct);
         db.AuditEvents.Add(AuditEventFactory.ForActor(
             command.Actor,
             "pipeline.landing.revert_requested",
@@ -541,7 +533,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             {
                 ["previousState"] = previousState.ToString(),
                 ["newState"] = attempt.Status.ToString(),
-                ["resultCode"] = reconciliationRetry ? "RevertRetryQueued" : "RevertQueued",
+                ["resultCode"] = previousState == LandingAttemptStatus.RevertPending ? "RevertRetryQueued" : "RevertQueued",
                 ["sourceBranch"] = attempt.SourceBranch,
                 ["targetBranch"] = attempt.TargetBranch,
                 ["sourceSha"] = attempt.SourceSha,
