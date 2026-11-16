@@ -70,18 +70,17 @@ internal static class GitLandExecutor
             return (false, null, "The configured project directory is not inside a Git repository.");
         var selectedRepositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
 
-        // GitLand mutates the real target ref. Hold the repository gate for its complete
-        // preview/execute/revert transaction so GitSync and task-branch integration cannot
-        // race it while fetching or changing shared refs.
-        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
-            selectedRepositoryRoot, ct);
-
+        // Always acquire the task worktree lease before the repository-wide gate.
+        // Structured Git integration uses the same order; reversing it here would allow
+        // GitLand and git_integrate to deadlock while each holds one lease and waits for the other.
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, request.ProjectId, request.TaskId, settings.WorktreeRoot, ct);
         if (opened.Worktree is null)
             return (false, null, opened.Error ?? "The persistent task branch workspace is unavailable.");
 
         await using var taskWorkspace = opened.Worktree;
+        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
+            selectedRepositoryRoot, ct);
         var expectedBranch = $"beacon/task/{request.TaskId:N}";
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
