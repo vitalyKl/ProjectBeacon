@@ -198,8 +198,11 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         if (command.Request.Kind == ReviewVerdictKind.Approve)
         {
             var reviewSessionId = await db.PipelineSessions
-                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review)
-                .OrderByDescending(s => s.LaunchedAt)
+                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review
+                    && (s.Status == SessionStatus.Ready
+                        || s.Status == SessionStatus.Active
+                        || s.Status == SessionStatus.WaitingForUser))
+                .OrderByDescending(s => s.Id)
                 .Select(s => (Guid?)s.Id)
                 .FirstOrDefaultAsync(ct);
             if (reviewSessionId is null)
