@@ -63,24 +63,14 @@ internal static class GitLandExecutor
             && !string.Equals(HashCommand(request.CheckCommand), request.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
             return BusinessFailure("ReviewCommandHashMismatch");
 
-        var repositoryRootResult = await AgentSessionWorktree.RunGitAsync(
-            projectRoot, ct, [], "rev-parse", "--show-toplevel");
-        if (repositoryRootResult.ExitCode != 0 || repositoryRootResult.TimedOut
-            || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
-            return BusinessFailure("ProjectRepositoryUnavailable");
-        var selectedRepositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
-
-        // Always acquire the task worktree lease before the repository-wide gate.
-        // Structured Git integration uses the same order; reversing it here would allow
-        // GitLand and git_integrate to deadlock while each holds one lease and waits for the other.
+        // The task worktree lease serializes operations for this task. Different task
+        // branches use independent refs; shared target refs are guarded by update-ref CAS.
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, request.ProjectId, request.TaskId, settings.WorktreeRoot, ct);
         if (opened.Worktree is null)
             return BusinessFailure("TaskWorkspaceUnavailable");
 
         await using var taskWorkspace = opened.Worktree;
-        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
-            selectedRepositoryRoot, ct);
         var expectedBranch = $"beacon/task/{request.TaskId:N}";
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
