@@ -1067,7 +1067,11 @@ internal static class GitLandExecutor
     private static async Task<(string? Error, int FileCount, int ChangedLines, bool ProtectedPath)> CheckCandidateScopeAsync(
         string candidateWorktree, string targetHeadSha, string projectPrefix, string[] filters, CancellationToken ct)
     {
-        var files = await Git(candidateWorktree, filters, ct, "diff", "--cached", "--name-only", "-z", targetHeadSha);
+        // A rename is represented by both its deleted source and added destination.
+        // Without --no-renames Git can report only the destination, hiding a protected or
+        // out-of-project source path from the landing policy.
+        var files = await Git(candidateWorktree, filters, ct,
+            "diff", "--cached", "--no-renames", "--name-only", "-z", targetHeadSha);
         if (!Succeeded(files))
             return ("CandidateDiffInspectionFailed", 0, 0, false);
         var paths = files.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
@@ -1095,7 +1099,8 @@ internal static class GitLandExecutor
                 || value.EndsWith(".targets", StringComparison.OrdinalIgnoreCase);
         }
         var protectedPath = projectPaths.Any(Protected);
-        var numstat = await Git(candidateWorktree, filters, ct, "diff", "--cached", "--numstat", targetHeadSha);
+        var numstat = await Git(candidateWorktree, filters, ct,
+            "diff", "--cached", "--no-renames", "--numstat", targetHeadSha);
         if (!Succeeded(numstat))
             return ("CandidateDiffInspectionFailed", paths.Length, 0, protectedPath);
         var changedLines = 0;
