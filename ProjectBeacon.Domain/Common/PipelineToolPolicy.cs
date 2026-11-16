@@ -55,8 +55,8 @@ public static class PipelineToolPolicy
     {
         McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.TaskCreateSubtask, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview,
-        McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandExecute,
-        McpToolNames.PipelineLandRevert, McpToolNames.PipelineLandStatus
+        McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandRevert,
+        McpToolNames.PipelineLandStatus
     });
     public static IReadOnlyList<string> ReviewerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
