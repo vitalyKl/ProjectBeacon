@@ -156,7 +156,9 @@ public sealed class LandingAttempt : Entity, IProjectScoped
                     EnsureStatus(LandingAttemptStatus.ExecutePending);
                 break;
             case "Revert":
-                if (Status is LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified)
+                if (Status is LandingAttemptStatus.Landed
+                    or LandingAttemptStatus.LandedUnverified
+                    or LandingAttemptStatus.RevertFailed)
                     Status = LandingAttemptStatus.RevertPending;
                 else
                     EnsureStatus(LandingAttemptStatus.RevertPending);
