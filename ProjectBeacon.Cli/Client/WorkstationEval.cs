@@ -299,6 +299,14 @@ public static class WorkstationEval
         if (string.IsNullOrWhiteSpace(checkCommand) || !IsSha256(expectedCommandHash))
             return Result.Failure<string>("The trusted check command and its SHA-256 hash are required.");
 
+        // Landing Preview and post-merge verification execute the pinned check from the
+        // project root. Do not accept proof from a caller-selected subdirectory: it would
+        // certify a different command scope than the one later used for the candidate tree.
+        var requestedPath = ReadString(payload, "path");
+        if (!string.IsNullOrWhiteSpace(requestedPath) && requestedPath != ".")
+            return Result.Failure<string>(
+                "Landing review proof must run from the project root; omit the optional path.");
+
         var actualCommandHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(checkCommand)))
             .ToLowerInvariant();
