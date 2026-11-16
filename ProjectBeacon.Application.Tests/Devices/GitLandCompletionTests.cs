@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Domain.Common;
 using Application.Devices;
 using Domain.Entities.Devices;
+using Domain.Entities.Audit;
 using Domain.Entities.Projects;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
