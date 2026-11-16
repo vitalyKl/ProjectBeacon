@@ -295,9 +295,14 @@ internal static class GitLandExecutor
 
         // From the marker write onward, ignore caller cancellation: the target mutation must
         // either be reconciled and acknowledged or leave a durable attempt marker for retry.
-        var update = branchExists
-            ? await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, request.TargetHeadSha!)
-            : await Git(repo, filters, CancellationToken.None, "update-ref", branchRef, mergeCommitSha, new string('0', mergeCommitSha.Length));
+        // The local branch may intentionally lag behind the freshly fetched target when
+        // it is not checked out. We allowed that only after proving it is an ancestor of
+        // the reviewed target, so compare-and-swap against the exact local value captured
+        // before marker creation, not the remote preview HEAD.
+        var expectedLocalHead = branchExists ? targetBeforeSha : new string('0', mergeCommitSha.Length);
+        var update = await Git(
+            repo, filters, CancellationToken.None,
+            "update-ref", branchRef, mergeCommitSha, expectedLocalHead);
         if (!Succeeded(update))
         {
             var recovered = await TryResumeLandingAsync(workspace, request, filters, CancellationToken.None);
