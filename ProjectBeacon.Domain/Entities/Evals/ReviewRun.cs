@@ -5,7 +5,9 @@ using ProjectBeacon.Domain.Enums;
 
 /// <summary>
 /// A project-scoped review of a task. Starts as <see cref="ReviewRunStatus.Started"/>.
-/// <see cref="IsCheckProof"/> requires completion, a target run, an artifact ref, the approved command hash, and the checked Git source/tree SHAs.
+/// <see cref="IsCheckProof"/> is the legacy completion proof used by existing task workflows;
+/// <see cref="IsLandingProof"/> additionally binds the pinned command, exact Git source/tree,
+/// workstation device, and daemon-selected target branch.
 /// </summary>
 public sealed class ReviewRun : Entity, IProjectScoped
 {
@@ -122,9 +124,6 @@ public sealed class ReviewRun : Entity, IProjectScoped
         CompletedAt = DateTime.UtcNow;
     }
 
-    /// <summary>
-    /// True only when completion proves the pinned command and exact checked Git source/tree.
-    /// </summary>
     /// <summary>
     /// True when a completed review has a server-recorded check artifact. This remains the
     /// completion proof for existing Snapshot-mode task workflows.
