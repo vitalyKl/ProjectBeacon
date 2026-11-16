@@ -31,6 +31,11 @@ internal static class LandingCommandDispatch
             && attempt.UpdatedAt >= DateTime.UtcNow - DispatchLease;
     }
 
+    public static string? PublicFailureCode(LandingAttempt attempt) =>
+        attempt.FailureCode is "PreviewEnqueuePending" or "ExecuteEnqueuePending" or "RevertEnqueuePending"
+            ? null
+            : attempt.FailureCode;
+
     public static async Task<WorkstationCommand?> FindActiveCommandAsync(
         IBeaconDb db,
         Guid projectId,
