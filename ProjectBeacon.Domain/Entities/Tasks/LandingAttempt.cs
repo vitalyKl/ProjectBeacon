@@ -129,6 +129,60 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>
+    /// Marks the attempt as being dispatched to its workstation. The timestamp is a
+    /// short recovery lease: a repeated API request must not enqueue a duplicate command
+    /// while the first request is still creating it, but can recover after a process crash.
+    /// </summary>
+    public void MarkDispatchPending(string action)
+    {
+        var marker = action switch
+        {
+            "Preview" => "PreviewEnqueuePending",
+            "Execute" => "ExecuteEnqueuePending",
+            "Revert" => "RevertEnqueuePending",
+            _ => throw new ArgumentOutOfRangeException(nameof(action))
+        };
+
+        switch (action)
+        {
+            case "Preview":
+                EnsureStatus(LandingAttemptStatus.PreviewPending);
+                break;
+            case "Execute":
+                if (Status == LandingAttemptStatus.Previewed)
+                    Status = LandingAttemptStatus.ExecutePending;
+                else
+                    EnsureStatus(LandingAttemptStatus.ExecutePending);
+                break;
+            case "Revert":
+                if (Status is LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified)
+                    Status = LandingAttemptStatus.RevertPending;
+                else
+                    EnsureStatus(LandingAttemptStatus.RevertPending);
+                break;
+        }
+
+        FailureCode = marker;
+        Touch();
+    }
+
+    /// <summary>Clears a dispatch lease once the durable workstation command has been created.</summary>
+    public void ClearDispatchPending(string action)
+    {
+        var marker = action switch
+        {
+            "Preview" => "PreviewEnqueuePending",
+            "Execute" => "ExecuteEnqueuePending",
+            "Revert" => "RevertEnqueuePending",
+            _ => throw new ArgumentOutOfRangeException(nameof(action))
+        };
+        if (!string.Equals(FailureCode, marker, StringComparison.Ordinal))
+            throw new InvalidOperationException($"The landing attempt is not in the {action} dispatch phase.");
+        FailureCode = null;
+        Touch();
+    }
+
     public void MarkExecutePending()
     {
         EnsureStatus(LandingAttemptStatus.Previewed);
@@ -153,6 +207,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         PostMergeCheckExitCode = postMergeCheckExitCode;
         PostMergeCheckOutputHash = postMergeCheckOutputHash.ToLowerInvariant();
         Status = LandingAttemptStatus.Landed;
+        FailureCode = null;
         ExecutedAt = DateTime.UtcNow;
         Touch();
     }
@@ -218,6 +273,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
             throw new ArgumentException("Revert commit SHA is invalid.", nameof(revertCommitSha));
         RevertCommitSha = revertCommitSha.ToLowerInvariant();
         Status = LandingAttemptStatus.Reverted;
+        FailureCode = null;
         RevertedAt = DateTime.UtcNow;
         Touch();
     }
