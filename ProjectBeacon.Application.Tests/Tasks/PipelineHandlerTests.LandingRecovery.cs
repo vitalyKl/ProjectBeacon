@@ -13,8 +13,19 @@ public sealed partial class PipelineHandlerTests
     {
         var done = await SeedDoneSubtaskAsync("Recover landing command dispatch");
         var taskId = done.Task.Id;
-        var deviceId = Guid.NewGuid();
-        var requestedBy = Guid.NewGuid();
+        Guid deviceId;
+        Guid requestedBy;
+        using (TenantScope.EnterUnscoped())
+        {
+            deviceId = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(runtime => runtime.ProjectId == done.ProjectId)
+                .Select(runtime => runtime.DeviceId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            requestedBy = await _db.DaemonDevices.IgnoreQueryFilters()
+                .Where(device => device.Id == deviceId)
+                .Select(device => device.UserId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+        }
         var reviewRunId = Guid.NewGuid();
         var attempt = LandingAttempt.Start(
             done.ProjectId,
