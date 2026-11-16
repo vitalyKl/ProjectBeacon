@@ -826,7 +826,8 @@ internal sealed class GitLandCompletion : ICommandCompletion
             var actor = new ActorContext(
                 ActorType.Worker, null, false, null, null,
                 projectId, resolvedOrgId, ApiTokenCapability.None);
-            var outcome = attempt.Status is LandingAttemptStatus.Failed
+            var outcome = attempt.Status is LandingAttemptStatus.Conflicted
+                or LandingAttemptStatus.Failed
                 or LandingAttemptStatus.RevertFailed
                 or LandingAttemptStatus.RevertedUnverified
                 or LandingAttemptStatus.LandedUnverified
