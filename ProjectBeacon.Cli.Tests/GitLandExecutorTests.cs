@@ -527,6 +527,7 @@ public sealed partial class AgentTaskGitOperationsTests
         var remoteTargetHead = await GitAsync(remoteClone, "rev-parse", "HEAD");
         Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "refs/heads/main"));
         Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
+        var remoteTargetTree = await GitAsync(remoteClone, "rev-parse", "HEAD^{tree}");
 
         var checkCommand = "echo review-ok";
         var commandHash = Convert.ToHexString(
@@ -582,11 +583,14 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Equal("reverted", reverted.RootElement.GetProperty("status").GetString());
             var revertCommitSha = reverted.RootElement.GetProperty("revertCommitSha").GetString()!;
             Assert.Equal(revertCommitSha, await GitAsync(repository, "rev-parse", "refs/heads/main"));
-            Assert.Equal(remoteTargetHead,
+            Assert.Equal(mergeCommitSha,
                 await GitAsync(repository, "rev-parse", revertCommitSha + "^"));
-            Assert.False(File.Exists(Path.Combine(projectRoot, "lagging-target-task-change.txt")));
-            Assert.Equal("newer remote target\n",
-                await File.ReadAllTextAsync(Path.Combine(projectRoot, "remote-target-change.txt")));
+            Assert.Equal(remoteTargetTree,
+                await GitAsync(repository, "rev-parse", revertCommitSha + "^{tree}"));
+            Assert.Equal(string.Empty,
+                await GitAsync(repository, "ls-tree", "-r", revertCommitSha, "--", "src/app/lagging-target-task-change.txt"));
+            Assert.Equal("100644 blob ",
+                (await GitAsync(repository, "ls-tree", revertCommitSha, "--", "src/app/remote-target-change.txt"))[..15]);
             Assert.Equal(originalTargetHead, await GitAsync(repository, "rev-parse", "HEAD"));
             Assert.Equal(string.Empty,
                 await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
