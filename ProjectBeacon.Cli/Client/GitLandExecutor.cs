@@ -50,24 +50,24 @@ internal static class GitLandExecutor
         CancellationToken ct)
     {
         if (!WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
-            return (false, null, "GitLand requires persistent task branch workspace mode.");
+            return BusinessFailure("WorkspaceModeRequiresTaskBranches");
         if (authorizedProjectId == Guid.Empty || !Directory.Exists(projectRoot))
-            return (false, null, "GitLand requires a valid project runtime.");
+            return BusinessFailure("ProjectRuntimeUnavailable");
 
         if (!TryReadRequest(payloadJson, out var request, out var parseError))
-            return (false, null, parseError);
+            return BusinessFailure("GitLandPayloadInvalid");
         if (request!.ProjectId != authorizedProjectId)
-            return (false, null, "GitLand project identity does not match the workstation command.");
+            return BusinessFailure("ProjectIdentityMismatch");
 
         if (request.Action is not "Revert"
             && !string.Equals(HashCommand(request.CheckCommand), request.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
-            return (false, null, "The trusted review command does not match its server-pinned hash.");
+            return BusinessFailure("ReviewCommandHashMismatch");
 
         var repositoryRootResult = await AgentSessionWorktree.RunGitAsync(
             projectRoot, ct, [], "rev-parse", "--show-toplevel");
         if (repositoryRootResult.ExitCode != 0 || repositoryRootResult.TimedOut
             || string.IsNullOrWhiteSpace(repositoryRootResult.StdOut))
-            return (false, null, "The configured project directory is not inside a Git repository.");
+            return BusinessFailure("ProjectRepositoryUnavailable");
         var selectedRepositoryRoot = Path.GetFullPath(repositoryRootResult.StdOut.Trim());
 
         // Always acquire the task worktree lease before the repository-wide gate.
@@ -76,7 +76,7 @@ internal static class GitLandExecutor
         var opened = await AgentTaskWorktree.CreateAsync(
             projectRoot, request.ProjectId, request.TaskId, settings.WorktreeRoot, ct);
         if (opened.Worktree is null)
-            return (false, null, opened.Error ?? "The persistent task branch workspace is unavailable.");
+            return BusinessFailure("TaskWorkspaceUnavailable");
 
         await using var taskWorkspace = opened.Worktree;
         using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(
@@ -84,51 +84,51 @@ internal static class GitLandExecutor
         var expectedBranch = $"beacon/task/{request.TaskId:N}";
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
-            return (false, null, "The task branch workspace has no daemon-selected target branch.");
+            return BusinessFailure("TaskBranchIdentityUnavailable");
         if (!string.Equals(taskWorkspace.BaseBranch, request.TargetBranch, StringComparison.Ordinal))
-            return (false, null, "The task workspace target branch no longer matches the branch pinned by review proof.");
+            return BusinessFailure("TargetBranchIdentityMismatch");
 
         var targetBranchCheck = await Git(taskWorkspace.RepositoryRoot, [], ct, "check-ref-format", "--branch", request.TargetBranch);
         if (!Succeeded(targetBranchCheck))
-            return (false, null, "The review-pinned target branch is not a valid Git branch name.");
+            return BusinessFailure("TargetBranchInvalid");
 
         var repositoryRoot = taskWorkspace.RepositoryRoot;
         var filters = await ReadDisabledFiltersAsync(repositoryRoot, ct);
         if (filters.Error is not null)
-            return (false, null, filters.Error);
+            return BusinessFailure("GitFilterConfigurationUnavailable");
         var disabledFilters = filters.Filters!;
 
         var version = await Git(repositoryRoot, disabledFilters, ct, "--version");
         if (!Succeeded(version) || !AgentTaskWorktree.SupportsBranchWorkflow(version.StdOut))
-            return (false, null, "GitLand requires Git 2.38 or newer.");
+            return BusinessFailure("GitVersionUnsupported");
 
         var branch = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "symbolic-ref", "--quiet", "--short", "HEAD");
         if (!Succeeded(branch) || !string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
-            return (false, null, "The task worktree is no longer on its assigned task branch.");
+            return BusinessFailure("TaskBranchIdentityMismatch");
 
         if (request.Action is not "Revert")
         {
             var sourceHead = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", "HEAD");
             if (!Succeeded(sourceHead) || !string.Equals(sourceHead.StdOut.Trim(), request.SourceSha, StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The task branch has changed since the successful review check.");
+                return BusinessFailure("TaskSourceChangedSinceReview");
 
             var sourceTree = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "rev-parse", "--verify", request.SourceSha + "^{tree}");
             if (!Succeeded(sourceTree)
                 || !string.Equals(sourceTree.StdOut.Trim(), request.ReviewTreeSha, StringComparison.OrdinalIgnoreCase))
-                return (false, null, "The task branch tree does not match the recorded review proof.");
+                return BusinessFailure("TaskTreeDoesNotMatchReview");
 
             var sourceStatus = await Git(taskWorkspace.RecoveryPath, disabledFilters, ct, "status", "--porcelain", "--untracked-files=all");
             if (!Succeeded(sourceStatus))
-                return (false, null, "Could not verify task branch cleanliness.");
+                return BusinessFailure("TaskBranchStatusUnavailable");
             if (!string.IsNullOrWhiteSpace(sourceStatus.StdOut))
-                return (false, null, "The task branch contains uncommitted changes; commit them and repeat review before landing.");
+                return BusinessFailure("TaskBranchDirtyAfterReview");
         }
 
         var customMergeDrivers = await Git(repositoryRoot, disabledFilters, ct, "config", "--get-regexp", "^merge\\..*\\.driver$");
         if (customMergeDrivers.TimedOut || customMergeDrivers.ExitCode is not (0 or 1))
-            return (false, null, "Could not inspect merge driver configuration safely.");
+            return BusinessFailure("MergeDriverInspectionFailed");
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
-            return (false, null, "Custom Git merge drivers are configured; GitLand refuses to execute repository-defined merge programs.");
+            return BusinessFailure("CustomMergeDriversConfigured");
 
         return request.Action switch
         {
@@ -178,7 +178,7 @@ internal static class GitLandExecutor
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
     {
         if (!IsGitSha(request.TargetHeadSha) || !IsGitSha(request.TargetTreeSha))
-            return (false, null, "GitLand Execute requires the reviewed target HEAD and candidate tree.");
+            return BusinessFailure("ExecutePreviewEvidenceMissing");
 
         var resumed = await TryResumeLandingAsync(workspace, request, filters, ct);
         if (resumed is { } resumedLanding)
@@ -784,7 +784,7 @@ internal static class GitLandExecutor
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
     {
         if (!IsGitSha(request.MergeCommitSha))
-            return (false, null, "GitLand Revert requires the recorded merge commit SHA.");
+            return BusinessFailure("RevertMergeCommitMissing");
 
         var resumed = await TryResumeRevertAsync(workspace, request, filters, ct);
         if (resumed is { } resumedRevert)
