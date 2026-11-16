@@ -180,6 +180,87 @@ public sealed class GitLandCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePreflightFailure_IsTerminalAndDoesNotBecomeCompletionUnknown()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateTreeSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string outputHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Record a deterministic preflight rejection.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        attempt.MarkExecutePending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, taskId, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                targetHeadSha, candidateTreeSha, null);
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true,
+                JsonSerializer.Serialize(new { status = "failed", errorCode = "TaskSourceChangedSinceReview" }),
+                null, TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.Failed, attempt.Status);
+            Assert.Equal("TaskSourceChangedSinceReview", attempt.FailureCode);
+        }
+    }
+
+    [Fact]
+    public async Task RevertPreflightFailure_IsRetryableWithoutAssumingTheTargetWasChanged()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateTreeSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string outputHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        const string mergeCommitSha = "1111111111111111111111111111111111111111";
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Keep a failed revert explicitly retryable.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        attempt.MarkExecutePending();
+        attempt.RecordLanded(mergeCommitSha, candidateTreeSha, 0, outputHash);
+        attempt.MarkRevertPending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, taskId, "Revert",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                null, null, mergeCommitSha);
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true,
+                JsonSerializer.Serialize(new { status = "failed", errorCode = "TargetAdvancedBeyondLanding" }),
+                null, TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.RevertFailed, attempt.Status);
+            Assert.Equal("TargetAdvancedBeyondLanding", attempt.FailureCode);
+        }
+    }
+
+    [Fact]
     public async Task RevertCompletion_RequiresTheRecordedLandingCommit()
     {
         var (org, project, device, userId) = CreateScope();
