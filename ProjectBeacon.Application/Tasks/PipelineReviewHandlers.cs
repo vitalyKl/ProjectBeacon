@@ -48,7 +48,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
 
         if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
             return Result.Failure<PipelineSessionDto>(
-                $"Cannot start review in stage {expectedStage ?? TaskPipelineStage.None}. A new review after approval is allowed only when the latest landing attempt is conflicted.");
+                $"Cannot start review in stage {expectedStage ?? TaskPipelineStage.None}.");
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(verdict => verdict.ProjectId == task.ProjectId && verdict.TaskId == task.Id)
