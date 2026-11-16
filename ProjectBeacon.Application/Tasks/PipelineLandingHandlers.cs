@@ -62,7 +62,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             .OrderByDescending(r => r.StartedAt)
             .ThenByDescending(r => r.Id)
             .FirstOrDefaultAsync(ct);
-        if (reviewRun is null || !reviewRun.IsCheckProof()
+        if (reviewRun is null || !reviewRun.IsLandingProof()
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>(
@@ -276,7 +276,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             .ThenByDescending(r => r.Id)
             .Select(r => (Guid?)r.Id)
             .FirstOrDefaultAsync(ct);
-        if (reviewRun is null || !reviewRun.IsCheckProof()
+        if (reviewRun is null || !reviewRun.IsLandingProof()
             || latestReviewRunId != attempt.ReviewRunId
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
