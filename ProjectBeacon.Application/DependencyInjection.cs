@@ -180,6 +180,12 @@ public static class ServiceCollectionExtensions
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<EnqueueProjectGitSyncHandler>();
         services.AddTransient<GetProjectGitSyncCommandHandler>();
+        // Pipeline landing endpoints bind these concrete handlers directly; register them
+        // explicitly so Minimal API can infer their parameters as services at startup.
+        services.AddTransient<RequestLandingHandler>();
+        services.AddTransient<GetLandingAttemptHandler>();
+        services.AddTransient<ExecuteLandingHandler>();
+        services.AddTransient<RevertLandingHandler>();
         services.AddTransient<ClaimNextCommandHandler>();
         services.AddTransient<CompleteCommandHandler>();
         // Device progress endpoint injects this concrete handler directly.
