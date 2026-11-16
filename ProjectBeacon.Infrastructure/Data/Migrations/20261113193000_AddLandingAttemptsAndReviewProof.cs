@@ -105,7 +105,7 @@ public sealed class AddLandingAttemptsAndReviewProof : Migration
             table: "LandingAttempts",
             columns: new[] { "ProjectId", "TaskId" },
             unique: true,
-            filter: "\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending')");
+            filter: "\"Status\" IN ('PreviewPending', 'Previewed', 'ExecutePending', 'Landed', 'LandedUnverified', 'RevertPending', 'RevertedUnverified', 'RevertFailed')");
 
         migrationBuilder.Sql("""
             ALTER TABLE "LandingAttempts" ENABLE ROW LEVEL SECURITY;
