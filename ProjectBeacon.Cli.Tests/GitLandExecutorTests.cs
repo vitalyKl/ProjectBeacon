@@ -952,7 +952,7 @@ public sealed partial class AgentTaskGitOperationsTests
                 Payload(projectId, taskId, Guid.NewGuid(), "Preview", sourceSha, reviewTreeSha,
                     commandHash, checkCommand,
                     maxChangedFiles: 10,
-                    protectedPaths: ["src/app/policy-file-one.txt"]),
+                    protectedPaths: ["policy-file-one.txt"]),
                 settings, TestContext.Current.CancellationToken);
             Assert.True(protectedPath.Ok, protectedPath.Error ?? protectedPath.Result);
             using var protectedResult = JsonDocument.Parse(protectedPath.Result!);
