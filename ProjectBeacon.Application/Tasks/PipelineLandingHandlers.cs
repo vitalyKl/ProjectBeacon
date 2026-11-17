@@ -475,7 +475,8 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
                 device.Id, device.UserId, WorkstationCommandKind.GitLand,
                 payload.ToJsonString(), attempt.ProjectId, checkCommand)
             {
-                TrustedGitLand = true
+                TrustedGitLand = true,
+                TrustedGitPolicyRevision = attempt.GitPolicyRevision
             }), ct);
         if (!queued.Success)
         {
