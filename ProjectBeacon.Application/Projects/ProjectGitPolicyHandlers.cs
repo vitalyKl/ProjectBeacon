@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Application.Tasks;
+namespace ProjectBeacon.Application.Projects;
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
