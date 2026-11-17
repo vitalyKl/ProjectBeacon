@@ -55,8 +55,12 @@ public static class ProjectGitPolicyCatalog
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !TryInt(root, "autonomyLevel", out var autonomy)
+            if (root.ValueKind != JsonValueKind.Object)
+                return false;
+            var propertyNames = root.EnumerateObject().Select(property => property.Name).ToArray();
+            if (propertyNames.Distinct(StringComparer.Ordinal).Count() != propertyNames.Length)
+                return false;
+            if (!TryInt(root, "autonomyLevel", out var autonomy)
                 || autonomy is < 0 or > 2
                 || !TryString(root, "dirtyCheckoutBehavior", out var dirty)
                 || dirty != "Escalate"
