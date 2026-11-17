@@ -66,7 +66,8 @@ public record PipelineStateDto(
     IReadOnlyList<ReviewVerdictDto> Verdicts,
     bool CanStart = false,
     string? StartBlockedReason = null,
-    PipelinePreflightDto? Preflight = null);
+    PipelinePreflightDto? Preflight = null,
+    LandingAttemptDto? LatestLandingAttempt = null);
 
 /// <summary>Server-computed availability of the native executor and role models.</summary>
 public record PipelinePreflightDto(
@@ -174,7 +175,9 @@ public record LandingAttemptDto(
     int? PostMergeCheckExitCode,
     string? PostMergeCheckOutputHash,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? EscalationCode = null,
+    int GitPolicyRevision = 1);
 
 /// <summary>Requests a verified preview for the approved task branch.</summary>
 public record RequestLandingRequest(Guid TaskId, string Rationale);
