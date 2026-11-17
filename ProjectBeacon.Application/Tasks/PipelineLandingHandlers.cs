@@ -623,7 +623,6 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
     }
-
 }
 
 /// <summary>Authorization boundary for a request to revert a task landing.</summary>
