@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using ProjectBeacon.Domain.Enums;
 
 /// <summary>
@@ -27,7 +28,10 @@ internal static class GitLandExecutor
         string CheckCommand,
         string? TargetHeadSha,
         string? TargetTreeSha,
-        string? MergeCommitSha);
+        string? MergeCommitSha,
+        int MaxChangedFiles,
+        int MaxChangedLines,
+        IReadOnlyList<string> ProtectedPaths);
 
     private sealed record TargetCheckout(string Path, bool CheckedOut);
     private sealed record PostMergeCheckResult(int? ExitCode, string? OutputHash, string? Output, string? ErrorCode);
@@ -1071,12 +1075,14 @@ internal static class GitLandExecutor
                 || line.StartsWith("160000 commit ", StringComparison.Ordinal)))
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "SymlinkOrSubmoduleNotAllowed");
 
-            var scope = await CheckCandidateScopeAsync(temp, target.Sha!, projectPrefix, filters, ct);
+            var scope = await CheckCandidateScopeAsync(
+                temp, target.Sha!, projectPrefix, request.MaxChangedFiles, request.MaxChangedLines,
+                request.ProtectedPaths, filters, ct);
             if (scope.Error is not null)
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: scope.Error);
             if (scope.ProtectedPath)
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "ProtectedPathChanged");
-            if (scope.FileCount > MaxChangedFiles || scope.ChangedLines > MaxChangedLines)
+            if (scope.FileCount > request.MaxChangedFiles || scope.ChangedLines > request.MaxChangedLines)
                 return new CandidateResult("failed", targetBranch, target.Sha, treeSha, ErrorCode: "CandidateDiffTooLarge");
 
             var relativeProject = Path.GetRelativePath(workspace.RecoveryPath, workspace.WorkingDirectory);
@@ -1168,7 +1174,14 @@ internal static class GitLandExecutor
     }
 
     private static async Task<(string? Error, int FileCount, int ChangedLines, bool ProtectedPath)> CheckCandidateScopeAsync(
-        string candidateWorktree, string targetHeadSha, string projectPrefix, string[] filters, CancellationToken ct)
+        string candidateWorktree,
+        string targetHeadSha,
+        string projectPrefix,
+        int maxChangedFiles,
+        int maxChangedLines,
+        IReadOnlyList<string> additionalProtectedPaths,
+        string[] filters,
+        CancellationToken ct)
     {
         // A rename is represented by both its deleted source and added destination.
         // Without --no-renames Git can report only the destination, hiding a protected or
@@ -1190,7 +1203,7 @@ internal static class GitLandExecutor
         bool Protected(string path)
         {
             var value = path.Replace('\\', '/');
-            return value.Equals("SECURITY.md", StringComparison.OrdinalIgnoreCase)
+            var builtIn = value.Equals("SECURITY.md", StringComparison.OrdinalIgnoreCase)
                 || value.StartsWith(".github/workflows/", StringComparison.OrdinalIgnoreCase)
                 || value.Equals(".github/workflows", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("global.json", StringComparison.OrdinalIgnoreCase)
@@ -1200,6 +1213,7 @@ internal static class GitLandExecutor
                 || value.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith(".props", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith(".targets", StringComparison.OrdinalIgnoreCase);
+            return builtIn || additionalProtectedPaths.Any(pattern => MatchesPathPattern(pattern, value));
         }
         var protectedPath = projectPaths.Any(Protected);
         var numstat = await Git(candidateWorktree, filters, ct,
@@ -1217,7 +1231,17 @@ internal static class GitLandExecutor
             if (int.TryParse(parts[1], out var removed))
                 changedLines += removed;
         }
+        if (paths.Length > maxChangedFiles || changedLines > maxChangedLines)
+            return ("CandidateDiffTooLarge", paths.Length, changedLines, protectedPath);
         return (null, paths.Length, changedLines, protectedPath);
+    }
+
+    private static bool MatchesPathPattern(string pattern, string path)
+    {
+        var expression = "^" + Regex.Escape(pattern)
+            .Replace("\\*", ".*", StringComparison.Ordinal)
+            .Replace("\\?", ".", StringComparison.Ordinal) + "$";
+        return Regex.IsMatch(path, expression, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static async Task<List<string>> ReadConflictsAsync(string worktree, string[] filters, CancellationToken ct)
@@ -1336,6 +1360,19 @@ internal static class GitLandExecutor
             var reviewTreeSha = root["reviewTreeSha"]?.GetValue<string>();
             var hash = root["checkCommandHash"]?.GetValue<string>();
             var checkCommand = root["checkCommand"]?.GetValue<string>();
+            var maxFiles = root["maxChangedFiles"]?.GetValue<int>() ?? 0;
+            var maxLines = root["maxChangedLines"]?.GetValue<int>() ?? 0;
+            var protectedPaths = root["protectedPaths"] is JsonArray protectedArray
+                ? protectedArray.Select(item => item?.GetValue<string>() ?? string.Empty).ToArray()
+                : [];
+            if (maxFiles is < 1 or > MaxChangedFiles
+                || maxLines is < 1 or > MaxChangedLines
+                || protectedPaths.Length > 100
+                || protectedPaths.Any(path => !IsSafeProtectedPattern(path)))
+            {
+                error = "GitLand policy limits or protected path patterns are invalid.";
+                return false;
+            }
             if (action is not ("Preview" or "Execute" or "Revert")
                 || !IsSafeBranchName(targetBranch)
                 || !IsGitSha(sourceSha)
@@ -1351,7 +1388,10 @@ internal static class GitLandExecutor
                 projectId, taskId, attemptId, action, targetBranch!, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
-                root["mergeCommitSha"]?.GetValue<string>());
+                root["mergeCommitSha"]?.GetValue<string>(),
+                maxFiles,
+                maxLines,
+                protectedPaths);
             return true;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
@@ -1360,6 +1400,16 @@ internal static class GitLandExecutor
             return false;
         }
     }
+
+    private static bool IsSafeProtectedPattern(string? pattern) =>
+        !string.IsNullOrWhiteSpace(pattern)
+        && pattern.Length <= 200
+        && Regex.IsMatch(pattern, "^[A-Za-z0-9._/*?-]+$", RegexOptions.CultureInvariant)
+        && !pattern.StartsWith('/', StringComparison.Ordinal)
+        && !pattern.Contains("..", StringComparison.Ordinal)
+        && !pattern.Contains('\\')
+        && !pattern.Contains(':')
+        && !pattern.Split('/').Any(segment => segment.Length == 0);
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
