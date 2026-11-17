@@ -112,7 +112,7 @@ public static class ProjectGitPolicyCatalog
     {
         if (string.IsNullOrWhiteSpace(pattern)
             || !SafePattern.IsMatch(pattern)
-            || pattern.StartsWith('/', StringComparison.Ordinal)
+            || pattern.StartsWith("/", StringComparison.Ordinal)
             || pattern.Contains("..", StringComparison.Ordinal)
             || pattern.Contains('\\')
             || pattern.Contains(':')
