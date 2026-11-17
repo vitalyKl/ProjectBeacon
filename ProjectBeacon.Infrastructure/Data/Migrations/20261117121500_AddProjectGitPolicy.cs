@@ -25,11 +25,35 @@ public sealed class AddProjectGitPolicy : Migration
             type: "integer",
             nullable: false,
             defaultValue: 1);
+
+        migrationBuilder.AddColumn<string>(
+            name: "EscalationCode",
+            table: "LandingAttempts",
+            type: "character varying(80)",
+            maxLength: 80,
+            nullable: true);
+
+        migrationBuilder.AddColumn<int>(
+            name: "GitPolicyRevision",
+            table: "LandingAttempts",
+            type: "integer",
+            nullable: false,
+            defaultValue: 1);
+
+        migrationBuilder.AddColumn<string>(
+            name: "GitPolicySnapshotJson",
+            table: "LandingAttempts",
+            type: "jsonb",
+            nullable: false,
+            defaultValue: "{}");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropColumn(name: "GitPolicyJson", table: "Projects");
         migrationBuilder.DropColumn(name: "GitPolicyRevision", table: "Projects");
+        migrationBuilder.DropColumn(name: "EscalationCode", table: "LandingAttempts");
+        migrationBuilder.DropColumn(name: "GitPolicyRevision", table: "LandingAttempts");
+        migrationBuilder.DropColumn(name: "GitPolicySnapshotJson", table: "LandingAttempts");
     }
 }
