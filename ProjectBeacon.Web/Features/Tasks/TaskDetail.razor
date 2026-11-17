@@ -21,6 +21,9 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject GetPipelineHandler GetPipeline
+@inject RequestLandingHandler RequestLanding
+@inject ExecuteLandingHandler ExecuteLanding
+@inject RevertLandingHandler RevertLanding
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
 @inject GetProjectGitSyncCommandHandler GetGitSyncCommand
 @inject ListProposalsHandler ListProposals
@@ -280,7 +283,12 @@ else
                               OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                 @if (_pipeline?.Stage is not null && _pipeline.Stage != TaskPipelineStage.None)
                 {
-                    <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" OnCancel="OnCancelPipelineSession" />
+                    <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy"
+                                       CanManageLanding="@CanManageLanding"
+                                       OnRequestLanding="OnRequestLanding"
+                                       OnExecuteLanding="OnExecuteLanding"
+                                       OnRevertLanding="OnRevertLanding"
+                                       OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" OnCancel="OnCancelPipelineSession" />
                 }
             </section>
         </main>
@@ -502,6 +510,7 @@ else
             ? L["PipelinePreflightNoPlannerModel"].Value
             : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
+    private bool CanManageLanding => _actorContext.IsHuman && _actorContext.UserId is not null;
 
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
@@ -1405,6 +1414,83 @@ else
         && value.All(character => character is >= '0' and <= '9'
             or >= 'a' and <= 'f'
             or >= 'A' and <= 'F');
+
+    private async Task OnRequestLanding(string rationale)
+    {
+        if (_busy || _task is null || !CanManageLanding)
+            return;
+        _busy = true;
+        try
+        {
+            var result = await RequestLanding.HandleAsync(new RequestLandingCommand(
+                new RequestLandingRequest(TaskId, rationale), _actorContext));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["LandingPreviewQueued"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnExecuteLanding(LandingAttemptDto attempt)
+    {
+        if (_busy || !CanManageLanding)
+            return;
+        _busy = true;
+        try
+        {
+            var result = await ExecuteLanding.HandleAsync(new ExecuteLandingCommand(
+                new ExecuteLandingRequest(TaskId, attempt.Id), _actorContext));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["LandingExecuteQueued"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnRevertLanding(LandingAttemptDto attempt)
+    {
+        if (_busy || !CanManageLanding)
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["RevertLanding"].Value,
+            L["RevertLandingConfirm"].Value,
+            yesText: L["RevertLanding"].Value,
+            cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await RevertLanding.HandleAsync(new RevertLandingCommand(
+                new RevertLandingRequest(TaskId, attempt.Id), _actorContext));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["LandingRevertQueued"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private async Task OnStartActorSession(SubtaskDto subtask)
     {
