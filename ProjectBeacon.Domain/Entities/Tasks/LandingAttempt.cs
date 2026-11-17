@@ -100,6 +100,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public void SetGitPolicySnapshot(int revision, string snapshotJson)
     {
         EnsureStatus(LandingAttemptStatus.PreviewPending);
+        if (!string.Equals(GitPolicySnapshotJson, "{}", StringComparison.Ordinal))
+            throw new InvalidOperationException("The Git policy snapshot is already pinned for this landing attempt.");
         if (revision < 1 || string.IsNullOrWhiteSpace(snapshotJson) || snapshotJson.Length > 16_384)
             throw new ArgumentException("A valid Git policy revision and snapshot are required.");
         using var document = System.Text.Json.JsonDocument.Parse(snapshotJson);
@@ -180,6 +182,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         {
             case "Preview":
                 EnsureStatus(LandingAttemptStatus.PreviewPending);
+                if (string.Equals(GitPolicySnapshotJson, "{}", StringComparison.Ordinal))
+                    throw new InvalidOperationException("A Git policy snapshot must be pinned before Preview dispatch.");
                 break;
             case "Execute":
                 if (Status == LandingAttemptStatus.Previewed)
