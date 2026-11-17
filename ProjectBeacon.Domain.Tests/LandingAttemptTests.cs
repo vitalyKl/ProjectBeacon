@@ -19,6 +19,41 @@ public sealed class LandingAttemptTests
             "Verified task branch change.");
 
     [Fact]
+    public void GitPolicySnapshot_IsPinnedBeforePreviewAndCannotBeChangedAfterDispatch()
+    {
+        var attempt = Start();
+        const string snapshot = """
+            {"autonomyLevel":2,"dirtyCheckoutBehavior":"Escalate","protectedPaths":["src/private/**"],"maxChangedFiles":50,"maxChangedLines":5000,"autoRevertMode":"OnPostCheckFail"}
+            """;
+
+        attempt.SetGitPolicySnapshot(7, snapshot);
+
+        Assert.Equal(7, attempt.GitPolicyRevision);
+        Assert.Equal(snapshot, attempt.GitPolicySnapshotJson);
+
+        attempt.MarkDispatchPending("Preview");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.SetGitPolicySnapshot(8, "{}"));
+    }
+
+    [Fact]
+    public void EscalationCode_IsMachineReadableAndCanBeCleared()
+    {
+        var attempt = Start();
+
+        attempt.SetEscalationCode("ManualExecutionRequired");
+
+        Assert.Equal("ManualExecutionRequired", attempt.EscalationCode);
+        Assert.Throws<ArgumentException>(() => attempt.SetEscalationCode("manual execution required"));
+        Assert.Throws<ArgumentException>(() => attempt.SetEscalationCode(new string('x', 81)));
+
+        attempt.SetEscalationCode(null);
+
+        Assert.Null(attempt.EscalationCode);
+    }
+
+    [Fact]
     public void PreviewedAttempt_CanBeExecutedAndLanded()
     {
         var attempt = Start();
