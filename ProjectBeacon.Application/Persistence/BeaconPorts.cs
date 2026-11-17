@@ -30,6 +30,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
     DbSet<DataProtectionKey> DataProtectionKeys { get; }
     DbSet<Project> Projects { get; }
+    DbSet<ProjectGitPolicy> ProjectGitPolicies { get; }
     DbSet<ProjectMember> ProjectMembers { get; }
     DbSet<ProjectInvite> ProjectInvites { get; }
     DbSet<ApiToken> ApiTokens { get; }
