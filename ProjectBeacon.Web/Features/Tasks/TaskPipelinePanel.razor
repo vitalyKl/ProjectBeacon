@@ -85,6 +85,102 @@
                 <MarkdownView Text="@verdict.Note" MaxHeight="120" Class="mt-1" />
             }
         }
+
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.subtitle2">@L["LandingAttemptTitle"]</MudText>
+        @if (pipeline.LatestLandingAttempt is { } landing)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+                <StatusChip Color="@LandingStatusColor(landing.Status)" Label="@LandingStatusLabel(landing.Status)" />
+                <MudText Typo="Typo.caption">rev. @landing.GitPolicyRevision · <LocalTime Value="landing.UpdatedAt" Format="g" /></MudText>
+            </MudStack>
+            <MudGrid Spacing="1" Class="mt-1">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LandingSourceBranch"]</MudText>
+                    <MudText Typo="Typo.body2">@landing.SourceBranch</MudText>
+                    <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@landing.SourceSha">@landing.SourceSha</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LandingTargetBranch"]</MudText>
+                    <MudText Typo="Typo.body2">@(landing.TargetBranch ?? "—")</MudText>
+                    <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@landing.TargetHeadSha">@landing.TargetHeadSha</MudText>
+                </MudItem>
+                @if (!string.IsNullOrWhiteSpace(landing.CandidateTreeSha))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LandingCandidateTree"]</MudText>
+                        <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@landing.CandidateTreeSha">@landing.CandidateTreeSha</MudText>
+                    </MudItem>
+                }
+                @if (!string.IsNullOrWhiteSpace(landing.MergeCommitSha))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LandingMergeCommit"]</MudText>
+                        <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@landing.MergeCommitSha">@landing.MergeCommitSha</MudText>
+                    </MudItem>
+                }
+                @if (!string.IsNullOrWhiteSpace(landing.RevertCommitSha))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LandingRevertCommit"]</MudText>
+                        <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@landing.RevertCommitSha">@landing.RevertCommitSha</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+            @if (!string.IsNullOrWhiteSpace(landing.EscalationCode))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                    @LandingReasonLabel(landing.EscalationCode)
+                </MudAlert>
+            }
+            @if (!string.IsNullOrWhiteSpace(landing.FailureCode))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                    @LandingReasonLabel(landing.FailureCode)
+                </MudAlert>
+            }
+            @if (landing.PostMergeCheckExitCode is { } exitCode)
+            {
+                <MudText Typo="Typo.caption" Class="mt-1">
+                    @L["LandingPostMergeCheck"]: @(exitCode == 0 ? L["Passed"].Value : $"{L["Failed"].Value} ({exitCode})")
+                </MudText>
+            }
+            @if (!string.IsNullOrWhiteSpace(landing.ConflictFilesJson))
+            {
+                <MudExpansionPanels Elevation="0" Class="mt-2">
+                    <MudExpansionPanel Text="@L["LandingConflictFiles"]">
+                        <MudText Typo="Typo.caption" Class="beacon-ellipsis">@landing.ConflictFilesJson</MudText>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
+                @if (CanManageLanding && landing.Status == LandingAttemptStatus.Previewed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               Disabled="Busy" OnClick="@(() => OnExecuteLanding.InvokeAsync(landing))">
+                        @L["ExecuteLanding"]
+                    </MudButton>
+                }
+                @if (CanManageLanding && landing.Status is LandingAttemptStatus.Landed or LandingAttemptStatus.LandedUnverified or LandingAttemptStatus.RevertFailed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                               Disabled="Busy" OnClick="@(() => OnRevertLanding.InvokeAsync(landing))">
+                        @L["RevertLanding"]
+                    </MudButton>
+                }
+            </MudStack>
+        }
+        @if (CanManageLanding && pipeline.Stage == TaskPipelineStage.Approved && CanRequestPreview(pipeline.LatestLandingAttempt))
+        {
+            <MudTextField T="string" @bind-Value="_landingRationale" Label="@L["LandingRationale"]"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"
+                          Class="mt-2" />
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="Busy || string.IsNullOrWhiteSpace(_landingRationale)"
+                       OnClick="@(() => OnRequestLanding.InvokeAsync(_landingRationale.Trim()))">
+                @L["PreviewLanding"]
+            </MudButton>
+        }
     }
 </MudPaper>
 
@@ -94,6 +190,28 @@
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnCancel { get; set; }
+    [Parameter] public bool CanManageLanding { get; set; }
+    [Parameter] public EventCallback<string> OnRequestLanding { get; set; }
+    [Parameter] public EventCallback<LandingAttemptDto> OnExecuteLanding { get; set; }
+    [Parameter] public EventCallback<LandingAttemptDto> OnRevertLanding { get; set; }
+    private string _landingRationale = "Approved task branch ready for landing.";
+
+    private bool CanRequestPreview(LandingAttemptDto? attempt) => attempt is null
+        || attempt.Status is LandingAttemptStatus.Failed or LandingAttemptStatus.Conflicted or LandingAttemptStatus.Reverted;
+
+    private string LandingStatusLabel(LandingAttemptStatus status) => L["LandingStatus" + status].Value;
+
+    private string LandingReasonLabel(string code) => L["LandingReason" + code].Value;
+
+    private Color LandingStatusColor(LandingAttemptStatus status) => status switch
+    {
+        LandingAttemptStatus.Previewed or LandingAttemptStatus.Landed or LandingAttemptStatus.Reverted => Color.Success,
+        LandingAttemptStatus.Conflicted or LandingAttemptStatus.Failed or LandingAttemptStatus.LandedUnverified
+            or LandingAttemptStatus.RevertFailed or LandingAttemptStatus.RevertedUnverified => Color.Error,
+        LandingAttemptStatus.PreviewPending or LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending => Color.Warning,
+        _ => Color.Default
+    };
+
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
 
     private bool IsCurrentStage(PipelineSessionDto session) => session.Role switch
