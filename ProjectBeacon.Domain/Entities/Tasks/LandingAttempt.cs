@@ -198,6 +198,7 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         }
 
         FailureCode = marker;
+        EscalationCode = null;
         Touch();
     }
 
