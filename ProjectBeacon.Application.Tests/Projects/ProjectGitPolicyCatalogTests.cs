@@ -37,7 +37,7 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Equal(40, policy.MaxChangedFiles);
         Assert.Equal(2_500, policy.MaxChangedLines);
         Assert.Equal("OnPostCheckFail", policy.AutoRevertMode);
-        Assert.Equal(["docs/private/*.md", "src/generated/**"], policy.ProtectedPaths);
+        Assert.Equal(new[] { "docs/private/*.md", "src/generated/**" }, policy.ProtectedPaths);
     }
 
     [Theory]
