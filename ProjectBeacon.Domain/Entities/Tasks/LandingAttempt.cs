@@ -29,6 +29,9 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     public int? CandidateCheckExitCode { get; private set; }
     public string? ConflictFilesJson { get; private set; }
     public string? FailureCode { get; private set; }
+    public string? EscalationCode { get; private set; }
+    public int GitPolicyRevision { get; private set; } = 1;
+    public string GitPolicySnapshotJson { get; private set; } = "{}";
     public string? MergeCommitSha { get; private set; }
     public string? RevertCommitSha { get; private set; }
     public int? PostMergeCheckExitCode { get; private set; }
@@ -88,6 +91,35 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         attempt.CreatedAt = now;
         attempt.UpdatedAt = now;
         return attempt;
+    }
+
+    /// <summary>
+    /// Pins the validated project Git policy to this attempt before the first command is queued.
+    /// The snapshot is immutable for the lifetime of the attempt.
+    /// </summary>
+    public void SetGitPolicySnapshot(int revision, string snapshotJson)
+    {
+        EnsureStatus(LandingAttemptStatus.PreviewPending);
+        if (revision < 1 || string.IsNullOrWhiteSpace(snapshotJson) || snapshotJson.Length > 16_384)
+            throw new ArgumentException("A valid Git policy revision and snapshot are required.");
+        using var document = System.Text.Json.JsonDocument.Parse(snapshotJson);
+        if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+            throw new ArgumentException("Git policy snapshot must be a JSON object.", nameof(snapshotJson));
+        GitPolicyRevision = revision;
+        GitPolicySnapshotJson = snapshotJson;
+        Touch();
+    }
+
+    /// <summary>Sets a short machine-readable escalation reason without changing the Git outcome.</summary>
+    public void SetEscalationCode(string? code)
+    {
+        if (code is not null
+            && (code.Length > 80 || code.Length == 0
+                || code.Any(character => !(char.IsAsciiLetterOrDigit(character)
+                    || character is '.' or '_' or ':' or '-'))))
+            throw new ArgumentException("Escalation code must be a short machine-readable code.", nameof(code));
+        EscalationCode = code;
+        Touch();
     }
 
     public void RecordPreview(
