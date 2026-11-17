@@ -27,6 +27,8 @@
 @inject RestoreContentVersionHandler RestoreContentVersion
 @inject ListProposalPoliciesHandler ListProposalPolicies
 @inject SetProposalPolicyHandler SetProposalPolicy
+@inject GetProjectGitPolicyHandler GetGitPolicy
+@inject SetProjectGitPolicyHandler SetGitPolicy
 @inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
 @inject IBeaconDbFactory DbFactory
 @inject DeleteProjectHandler DeleteProject
@@ -129,6 +131,52 @@ else
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>
             </div>
         </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectGitPolicyTitle"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ProjectGitPolicyHelp"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_gitPolicy is null)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ProjectGitPolicyUnavailable"]</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                <MudSelect T="int" Value="_gitPolicyAutonomy" ValueChanged="OnGitPolicyAutonomyChanged"
+                           Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)" Label="@L["GitAutonomyLevel"]"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="int" Value="0">@L["GitAutonomyLevel0"]</MudSelectItem>
+                    <MudSelectItem T="int" Value="1" Disabled="true">@L["GitAutonomyLevel1Unavailable"]</MudSelectItem>
+                    <MudSelectItem T="int" Value="2">@L["GitAutonomyLevel2"]</MudSelectItem>
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitAutonomyLevelHelp"]</MudText>
+                <MudSelect T="string" @bind-Value="_gitAutoRevertMode" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                           Label="@L["GitAutoRevert"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value="@("Off")">@L["GitAutoRevertOff"]</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("OnPostCheckFail")">@L["GitAutoRevertOnFailure"]</MudSelectItem>
+                </MudSelect>
+                <MudTextField T="int" @bind-Value="_gitMaxChangedFiles" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                              Label="@L["GitMaxChangedFiles"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="200" />
+                <MudTextField T="int" @bind-Value="_gitMaxChangedLines" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                              Label="@L["GitMaxChangedLines"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="20000" />
+                <MudTextField T="string" @bind-Value="_gitProtectedPathsText" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                              Label="@L["GitProtectedPaths"]" HelperText="@L["GitProtectedPathsHelp"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Lines="4" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitDirtyCheckoutEscalate"]</MudText>
+                <MudAlert Severity="Severity.Info" Dense="true">@L["GitIntegrationBranchPhase6"]</MudAlert>
+                @if (!_canEditProposalPolicies)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["GovernanceOwnerAdminOnly"]</MudText>
+                }
+                <MudStack Row="true" Justify="Justify.FlexEnd">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                               OnClick="SaveGitPolicy">
+                        @L["SaveGitPolicy"]
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
     </MudPaper>
 
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProposalPoliciesTitle"]</MudText>
@@ -303,6 +351,13 @@ else
     private bool _canEditProposalPolicies;
     private bool _proposalPolicyBusy;
     private List<ProposalPolicyDto> _proposalPolicies = [];
+    private ProjectGitPolicyDto? _gitPolicy;
+    private bool _gitPolicyBusy;
+    private int _gitPolicyAutonomy;
+    private int _gitMaxChangedFiles = 200;
+    private int _gitMaxChangedLines = 20_000;
+    private string _gitAutoRevertMode = "Off";
+    private string _gitProtectedPathsText = string.Empty;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
@@ -398,6 +453,7 @@ else
         _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
         await ReloadProposalPolicies();
+        await ReloadGitPolicy();
 
         if (_canManageRepositorySync && _projectId is { } projectId)
         {
@@ -446,6 +502,63 @@ else
         var permission = await Authorization.CanAsync(
             db, _actor, ResourceType.Project, AuthAction.Administer, projectId: projectId);
         _canEditProposalPolicies = permission.Success;
+    }
+
+    private void ApplyGitPolicy(ProjectGitPolicyDto policy)
+    {
+        _gitPolicy = policy;
+        _gitPolicyAutonomy = policy.AutonomyLevel;
+        _gitAutoRevertMode = policy.AutoRevertMode;
+        _gitMaxChangedFiles = policy.MaxChangedFiles;
+        _gitMaxChangedLines = policy.MaxChangedLines;
+        _gitProtectedPathsText = string.Join(Environment.NewLine, policy.ProtectedPaths);
+    }
+
+    private void OnGitPolicyAutonomyChanged(int value)
+    {
+        if (_canEditProposalPolicies && value is 0 or 2)
+            _gitPolicyAutonomy = value;
+    }
+
+    private async Task ReloadGitPolicy()
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var result = await GetGitPolicy.HandleAsync(projectId, _actor);
+        if (!result.Success || result.Value is null)
+        {
+            _gitPolicy = null;
+            Snackbar.Add(result.Error ?? L["ProjectGitPolicyUnavailable"].Value, Severity.Warning);
+            return;
+        }
+        ApplyGitPolicy(result.Value);
+    }
+
+    private async Task SaveGitPolicy()
+    {
+        if (_projectId is not { } projectId || !_canEditProposalPolicies || _gitPolicyBusy || _gitPolicy is null)
+            return;
+        var paths = _gitProtectedPathsText.Split(
+            ['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        _gitPolicyBusy = true;
+        try
+        {
+            var saved = await SetGitPolicy.HandleAsync(new SetProjectGitPolicyCommand(
+                projectId, _gitPolicyAutonomy, "Escalate", paths, _gitMaxChangedFiles,
+                _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
+            if (!saved.Success || saved.Value is null)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                await ReloadGitPolicy();
+                return;
+            }
+            ApplyGitPolicy(saved.Value);
+            Snackbar.Add(L["GitPolicySaved"].Value, Severity.Success);
+        }
+        finally
+        {
+            _gitPolicyBusy = false;
+        }
     }
 
     private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
