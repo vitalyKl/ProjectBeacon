@@ -190,12 +190,12 @@ public record GetLandingAttemptCommand(GetLandingAttemptRequest Request)
     : ICommand<Result<LandingAttemptDto>>;
 
 /// <summary>Requests execution of a previously reviewed and previewed task landing.</summary>
-public record ExecuteLandingRequest(Guid TaskId, Guid LandingAttemptId);
+public record ExecuteLandingRequest(Guid TaskId, Guid LandingAttemptId, bool Automatic = false);
 public record ExecuteLandingCommand(ExecuteLandingRequest Request, ActorContext Actor)
     : ICommand<Result<LandingAttemptDto>>;
 
 /// <summary>Requests a guarded revert of a previously landed attempt.</summary>
-public record RevertLandingRequest(Guid TaskId, Guid LandingAttemptId);
+public record RevertLandingRequest(Guid TaskId, Guid LandingAttemptId, bool Automatic = false);
 public record RevertLandingCommand(RevertLandingRequest Request, ActorContext Actor)
     : ICommand<Result<LandingAttemptDto>>;
 
