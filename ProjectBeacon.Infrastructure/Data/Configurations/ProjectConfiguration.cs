@@ -28,7 +28,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.Property(e => e.GitPolicyJson)
             .IsRequired()
             .HasColumnType("jsonb")
-            .HasDefaultValue("{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\"}");
+            .HasDefaultValue("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}");
         entity.Property(e => e.GitPolicyRevision)
             .IsRequired()
             .IsConcurrencyToken()
