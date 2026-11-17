@@ -539,7 +539,7 @@ else
         if (_projectId is not { } projectId || !_canEditProposalPolicies || _gitPolicyBusy || _gitPolicy is null)
             return;
         var paths = _gitProtectedPathsText.Split(
-            ['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         _gitPolicyBusy = true;
         try
         {
