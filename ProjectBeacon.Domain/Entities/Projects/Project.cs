@@ -21,7 +21,7 @@ public class Project : Entity, IOrgScoped
     /// <summary>Optimistic-concurrency token for proposal policy edits, independent of content revision.</summary>
     public int ProposalPolicyRevision { get; private set; } = 1;
     /// <summary>Validated ProjectGitPolicy JSON. Defaults to manual landing, Escalate, and no auto-revert.</summary>
-    public string GitPolicyJson { get; private set; } = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\"}";
+    public string GitPolicyJson { get; private set; } = "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
     /// <summary>Optimistic-concurrency token for Git policy edits.</summary>
     public int GitPolicyRevision { get; private set; } = 1;
     public Guid OrgId { get; private set; }
