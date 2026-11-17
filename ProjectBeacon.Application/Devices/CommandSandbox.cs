@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
 using Domain.Enums;
+using Application.Projects;
 /// <summary>
 /// Strips a client-supplied root from a command payload and rejects paths that are not relative.
 /// </summary>
@@ -90,10 +91,25 @@ public static class CommandSandbox
                     || !IsGitSha(sha))
                     return Result.Failure<string>($"GitLand {key} is invalid.");
             }
+            if (obj["maxChangedFiles"] is not JsonValue maxFilesValue
+                || !maxFilesValue.TryGetValue<int>(out var maxFiles)
+                || maxFiles is < 1 or > 200
+                || obj["maxChangedLines"] is not JsonValue maxLinesValue
+                || !maxLinesValue.TryGetValue<int>(out var maxLines)
+                || maxLines is < 1 or > 20_000
+                || obj["protectedPaths"] is not JsonArray protectedPaths
+                || protectedPaths.Count > 100
+                || protectedPaths.Any(item =>
+                    item is not JsonValue value
+                    || !value.TryGetValue<string>(out var pattern)
+                    || !ProjectGitPolicyCatalog.IsSafePattern(pattern)))
+                return Result.Failure<string>("GitLand policy constraints are invalid.");
+
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
                 "projectId", "taskId", "landingAttemptId", "action", "targetBranch", "sourceSha",
-                "reviewTreeSha", "checkCommandHash", "targetHeadSha", "targetTreeSha", "mergeCommitSha"
+                "reviewTreeSha", "checkCommandHash", "targetHeadSha", "targetTreeSha", "mergeCommitSha",
+                "maxChangedFiles", "maxChangedLines", "protectedPaths"
             };
             if (obj.Any(pair => !allowed.Contains(pair.Key)))
                 return Result.Failure<string>("GitLand payload contains unsupported properties.");
