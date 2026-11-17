@@ -527,20 +527,15 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
 
     public async Task<Result<LandingAttemptDto>> HandleAsync(RevertLandingCommand command, CancellationToken ct = default)
     {
-        if (command.Request.Automatic)
-        {
-            if (!command.Actor.IsWorker)
-                return Result.Forbidden<LandingAttemptDto>("Only the trusted worker can request an automatic revert.");
-        }
-        else if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
-        {
-            return Result.Forbidden<LandingAttemptDto>("A human action is required to request a revert.");
-        }
         await using var db = _dbFactory.CreateDbContext();
         var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<LandingAttemptDto>("Landing attempt not found.");
+        if (!LandingAuthorizationPolicy.CanRequestRevert(
+                command.Actor, attempt.ProjectId, command.Request.Automatic))
+            return Result.Forbidden<LandingAttemptDto>(
+                "Revert requires a human caller or a project-bound TaskWrite API token. Automatic reverts are worker-only.");
         var activeCommand = await LandingCommandDispatch.FindActiveCommandAsync(
             db, attempt.ProjectId, attempt.Id, "Revert", ct);
         if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Revert"))
@@ -628,4 +623,27 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
     }
+
+/// <summary>Authorization boundary for a request to revert a task landing.</summary>
+public static class LandingAuthorizationPolicy
+{
+    public static bool CanRequestRevert(ActorContext actor, Guid projectId, bool automatic)
+    {
+        if (projectId == Guid.Empty)
+            return false;
+
+        if (automatic)
+            return actor.IsWorker && actor.ProjectId == projectId;
+
+        if (actor.UserId is not { } userId || userId == Guid.Empty)
+            return false;
+
+        if (actor.IsHuman)
+            return actor.ProjectId is null || actor.ProjectId == projectId;
+
+        return actor.IsApiToken
+            && actor.ProjectId == projectId
+            && (actor.Capabilities & ApiTokenCapability.TaskWrite) == ApiTokenCapability.TaskWrite;
+    }
+}
 }
