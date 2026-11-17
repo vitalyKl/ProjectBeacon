@@ -624,6 +624,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
     }
 
+}
+
 /// <summary>Authorization boundary for a request to revert a task landing.</summary>
 public static class LandingAuthorizationPolicy
 {
@@ -645,5 +647,4 @@ public static class LandingAuthorizationPolicy
             && actor.ProjectId == projectId
             && (actor.Capabilities & ApiTokenCapability.TaskWrite) == ApiTokenCapability.TaskWrite;
     }
-}
 }
