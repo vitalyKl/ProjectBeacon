@@ -2835,4 +2835,160 @@
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
     <value>Путь привязанного локального репозитория изменился после последней успешной проверки Git. Текущее состояние не проверено; pipeline продолжит использовать локальную копию по настроенному пути. Повторите Git Status или синхронизацию, чтобы обновить предупреждение.</value>
   </data>
+  <data name="ProjectGitPolicyTitle" xml:space="preserve">
+    <value>Политика Git-посадки</value>
+  </data>
+  <data name="ProjectGitPolicyHelp" xml:space="preserve">
+    <value>Определяет, когда одобренные task-ветки можно предварительно проверить, слить или откатить. Изменения версионируются и фиксируются в каждой попытке посадки.</value>
+  </data>
+  <data name="ProjectGitPolicyUnavailable" xml:space="preserve">
+    <value>Не удалось прочитать Git-политику проекта. Автоматизация посадки отключена до исправления политики.</value>
+  </data>
+  <data name="GitAutonomyLevel" xml:space="preserve">
+    <value>Уровень автономности посадки</value>
+  </data>
+  <data name="GitAutonomyLevel0" xml:space="preserve">
+    <value>Уровень 0 — ручное выполнение</value>
+  </data>
+  <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
+    <value>Уровень 1 — интеграционная ветка (появится в фазе 6)</value>
+  </data>
+  <data name="GitAutonomyLevel2" xml:space="preserve">
+    <value>Уровень 2 — автоматическое выполнение после успешного Preview</value>
+  </data>
+  <data name="GitAutonomyLevelHelp" xml:space="preserve">
+    <value>Уровень 1 пока недоступен: интеграционная ветка запланирована на фазу 6. Уровень 2 запускает слияние только после успешной проверки кандидата.</value>
+  </data>
+  <data name="GitAutoRevert" xml:space="preserve">
+    <value>Проверка после слияния</value>
+  </data>
+  <data name="GitAutoRevertOff" xml:space="preserve">
+    <value>Эскалировать проблему; не откатывать автоматически</value>
+  </data>
+  <data name="GitAutoRevertOnFailure" xml:space="preserve">
+    <value>Автоматически откатывать при ошибке проверки после слияния</value>
+  </data>
+  <data name="GitMaxChangedFiles" xml:space="preserve">
+    <value>Максимум изменённых файлов</value>
+  </data>
+  <data name="GitMaxChangedLines" xml:space="preserve">
+    <value>Максимум изменённых строк</value>
+  </data>
+  <data name="GitProtectedPaths" xml:space="preserve">
+    <value>Защищённые пути</value>
+  </data>
+  <data name="GitProtectedPathsHelp" xml:space="preserve">
+    <value>Один glob-шаблон относительно корня проекта на строку. Поддерживаются * и ?. Также всегда защищены файлы безопасности, GitHub workflows, solution/project-файлы и конфигурация сборки.</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>Грязное или небезопасное целевое состояние передаётся на разбор. Оно никогда не перезаписывается автоматически.</value>
+  </data>
+  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
+    <value>Посадка через интеграционную ветку пока недоступна; она запланирована на фазу 6.</value>
+  </data>
+  <data name="SaveGitPolicy" xml:space="preserve">
+    <value>Сохранить Git-политику</value>
+  </data>
+  <data name="GitPolicySaved" xml:space="preserve">
+    <value>Git-политика посадки сохранена.</value>
+  </data>
+  <data name="LandingAttemptTitle" xml:space="preserve">
+    <value>Попытка посадки</value>
+  </data>
+  <data name="LandingSourceBranch" xml:space="preserve">
+    <value>Исходная ветка</value>
+  </data>
+  <data name="LandingTargetBranch" xml:space="preserve">
+    <value>Целевая ветка</value>
+  </data>
+  <data name="LandingCandidateTree" xml:space="preserve">
+    <value>Дерево кандидата после Preview</value>
+  </data>
+  <data name="LandingMergeCommit" xml:space="preserve">
+    <value>Коммит слияния</value>
+  </data>
+  <data name="LandingRevertCommit" xml:space="preserve">
+    <value>Коммит отката</value>
+  </data>
+  <data name="LandingPostMergeCheck" xml:space="preserve">
+    <value>Проверка после слияния</value>
+  </data>
+  <data name="LandingConflictFiles" xml:space="preserve">
+    <value>Конфликтующие файлы</value>
+  </data>
+  <data name="LandingStatusPreviewPending" xml:space="preserve">
+    <value>Preview поставлен в очередь</value>
+  </data>
+  <data name="LandingStatusPreviewed" xml:space="preserve">
+    <value>Preview пройден</value>
+  </data>
+  <data name="LandingStatusConflicted" xml:space="preserve">
+    <value>В Preview обнаружены конфликты</value>
+  </data>
+  <data name="LandingStatusFailed" xml:space="preserve">
+    <value>Preview завершился ошибкой</value>
+  </data>
+  <data name="LandingStatusExecutePending" xml:space="preserve">
+    <value>Слияние поставлено в очередь</value>
+  </data>
+  <data name="LandingStatusLanded" xml:space="preserve">
+    <value>Слито и проверено</value>
+  </data>
+  <data name="LandingStatusLandedUnverified" xml:space="preserve">
+    <value>Слито; проверка после слияния не пройдена</value>
+  </data>
+  <data name="LandingStatusRevertPending" xml:space="preserve">
+    <value>Откат поставлен в очередь</value>
+  </data>
+  <data name="LandingStatusReverted" xml:space="preserve">
+    <value>Откат выполнен</value>
+  </data>
+  <data name="LandingStatusRevertedUnverified" xml:space="preserve">
+    <value>Откат выполнен; обновление checkout не подтверждено</value>
+  </data>
+  <data name="LandingStatusRevertFailed" xml:space="preserve">
+    <value>Откат завершился ошибкой</value>
+  </data>
+  <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
+    <value>Preview пройден. Политика проекта требует ручного запуска слияния.</value>
+  </data>
+  <data name="LandingReasonIntegrationBranchNotAvailable" xml:space="preserve">
+    <value>Этот уровень автономности требует интеграционную ветку, запланированную на фазу 6.</value>
+  </data>
+  <data name="LandingReasonInvalidGitPolicySnapshot" xml:space="preserve">
+    <value>Сохранённый снимок Git-политики некорректен. Требуется ручная проверка.</value>
+  </data>
+  <data name="LandingReasonProjectUnavailable" xml:space="preserve">
+    <value>Проект недоступен; автоматизация остановлена.</value>
+  </data>
+  <data name="LandingReasonPostMergeCheckFailed" xml:space="preserve">
+    <value>Проверка после слияния не пройдена. Проверьте результат и при необходимости запросите защищённый откат.</value>
+  </data>
+  <data name="LandingReasonGitPolicyChangedSincePreview" xml:space="preserve">
+    <value>Git-политика проекта изменилась после Preview. Требуется новый Preview.</value>
+  </data>
+  <data name="ExecuteLanding" xml:space="preserve">
+    <value>Выполнить слияние</value>
+  </data>
+  <data name="RevertLanding" xml:space="preserve">
+    <value>Откатить слияние</value>
+  </data>
+  <data name="LandingRationale" xml:space="preserve">
+    <value>Причина посадки</value>
+  </data>
+  <data name="PreviewLanding" xml:space="preserve">
+    <value>Проверить посадку</value>
+  </data>
+  <data name="LandingPreviewQueued" xml:space="preserve">
+    <value>Preview посадки поставлен в очередь.</value>
+  </data>
+  <data name="LandingExecuteQueued" xml:space="preserve">
+    <value>Слияние поставлено в очередь.</value>
+  </data>
+  <data name="RevertLandingConfirm" xml:space="preserve">
+    <value>Будет создан новый коммит отката. Целевая ветка изменится, только если она всё ещё указывает на зафиксированный коммит посадки.</value>
+  </data>
+  <data name="LandingRevertQueued" xml:space="preserve">
+    <value>Откат посадки поставлен в очередь.</value>
+  </data>
 </root>
