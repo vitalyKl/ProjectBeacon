@@ -29,6 +29,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectGitPolicy> ProjectGitPolicies => Set<ProjectGitPolicy>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectInvite> ProjectInvites => Set<ProjectInvite>();
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
