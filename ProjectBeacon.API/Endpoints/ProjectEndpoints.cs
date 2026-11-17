@@ -28,6 +28,8 @@ public static class ProjectEndpoints
         app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}", DeleteProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}/git-policy", GetGitPolicy).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPut("/v1/projects/{projectId:guid}/git-policy", SetGitPolicy).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
@@ -70,6 +72,25 @@ public static class ProjectEndpoints
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
+    }
+
+    private static async Task<IResult> GetGitPolicy(
+        Guid projectId, GetProjectGitPolicyHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, ctx.GetActor(), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> SetGitPolicy(
+        Guid projectId, [FromBody] SetGitPolicyBody body,
+        SetProjectGitPolicyHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(new SetProjectGitPolicyCommand(
+            projectId, body.AutonomyLevel, body.DirtyCheckoutBehavior, body.ProtectedPaths,
+            body.MaxChangedFiles, body.MaxChangedLines, body.AutoRevertMode,
+            body.ExpectedRevision, actor), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> DeleteProject(Guid projectId, DeleteProjectHandler handler, HttpContext ctx)
@@ -219,6 +240,16 @@ public static class ProjectEndpoints
             ? Results.NoContent()
             : result.FromResult(404);
     }
+
+    /// <summary>JSON body for updating a project's landing policy.</summary>
+    public record SetGitPolicyBody(
+        int AutonomyLevel,
+        string DirtyCheckoutBehavior,
+        IReadOnlyList<string>? ProtectedPaths,
+        int MaxChangedFiles,
+        int MaxChangedLines,
+        string AutoRevertMode,
+        int ExpectedRevision);
 
     /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/invites</c>.</summary>
     public record CreateInviteBody(string Email, MemberRole Role);
