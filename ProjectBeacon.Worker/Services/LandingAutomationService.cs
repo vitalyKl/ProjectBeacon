@@ -71,9 +71,10 @@ public sealed class LandingAutomationService : BackgroundService
             var candidates = await db.LandingAttempts
                 .AsNoTracking()
                 .Where(attempt =>
-                    attempt.Status == LandingAttemptStatus.Previewed
-                    || attempt.Status == LandingAttemptStatus.LandedUnverified
-                    || attempt.Status == LandingAttemptStatus.RevertPending)
+                    attempt.Status == LandingAttemptStatus.RevertPending
+                    || (attempt.EscalationCode == null
+                        && (attempt.Status == LandingAttemptStatus.Previewed
+                            || attempt.Status == LandingAttemptStatus.LandedUnverified)))
                 .OrderBy(attempt => attempt.UpdatedAt)
                 .Take(200)
                 .ToListAsync(ct);
@@ -153,14 +154,19 @@ public sealed class LandingAutomationService : BackgroundService
                         continue;
                     }
 
-                    if (policy.AutoRevertMode == "Off")
+                    // RevertPending means a human or a prior policy decision already requested
+                    // the revert. AutoRevertMode controls only whether a new revert is initiated
+                    // after a failed post-merge check; it must never strand an existing revert
+                    // when its workstation command was lost or its dispatch lease expired.
+                    if (candidate.Status == LandingAttemptStatus.LandedUnverified
+                        && policy.AutoRevertMode == "Off")
                     {
-                        if (candidate.Status == LandingAttemptStatus.LandedUnverified)
-                            await SetEscalationAsync(db, candidate.Id, candidate.Status, "PostMergeCheckFailed", ct);
+                        await SetEscalationAsync(db, candidate.Id, candidate.Status, "PostMergeCheckFailed", ct);
                         continue;
                     }
 
-                    if (policy.AutoRevertMode == "OnPostCheckFail")
+                    if (ShouldDispatchRevert(
+                        candidate.Status, policy.AutoRevertMode, candidate.PostMergeCheckExitCode))
                     {
                         var result = await new RevertLandingHandler(appDbFactory, enqueue).HandleAsync(
                             new RevertLandingCommand(
@@ -181,6 +187,19 @@ public sealed class LandingAutomationService : BackgroundService
                 _logger.LogInformation("Dispatched {Count} policy-driven landing commands", dispatched);
             return dispatched;
         }
+    }
+
+    internal static bool ShouldDispatchRevert(
+        LandingAttemptStatus status,
+        string autoRevertMode,
+        int? postMergeCheckExitCode)
+    {
+        if (status == LandingAttemptStatus.RevertPending)
+            return true;
+
+        return status == LandingAttemptStatus.LandedUnverified
+            && string.Equals(autoRevertMode, "OnPostCheckFail", StringComparison.Ordinal)
+            && postMergeCheckExitCode is > 0;
     }
 
     private static async Task SetEscalationAsync(
