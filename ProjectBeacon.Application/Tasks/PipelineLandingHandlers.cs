@@ -357,8 +357,15 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
 
     public async Task<Result<LandingAttemptDto>> HandleAsync(ExecuteLandingCommand command, CancellationToken ct = default)
     {
-        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
-            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to execute a landing.");
+        if (command.Request.Automatic)
+        {
+            if (!command.Actor.IsWorker)
+                return Result.Forbidden<LandingAttemptDto>("Only the trusted worker can request automatic landing execution.");
+        }
+        else if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+        {
+            return Result.Forbidden<LandingAttemptDto>("A human Owner/Admin action is required to execute a landing.");
+        }
 
         await using var db = _dbFactory.CreateDbContext();
         var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
@@ -519,8 +526,15 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
 
     public async Task<Result<LandingAttemptDto>> HandleAsync(RevertLandingCommand command, CancellationToken ct = default)
     {
-        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
-            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to request a revert.");
+        if (command.Request.Automatic)
+        {
+            if (!command.Actor.IsWorker)
+                return Result.Forbidden<LandingAttemptDto>("Only the trusted worker can request an automatic revert.");
+        }
+        else if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+        {
+            return Result.Forbidden<LandingAttemptDto>("A human action is required to request a revert.");
+        }
         await using var db = _dbFactory.CreateDbContext();
         var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
