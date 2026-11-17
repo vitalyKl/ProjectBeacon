@@ -52,7 +52,10 @@ public sealed partial class DeviceHandlerTests
             targetBranch = "main",
             sourceSha = new string('a', 40),
             reviewTreeSha = new string('b', 40),
-            checkCommandHash = new string('c', 64)
+            checkCommandHash = new string('c', 64),
+            maxChangedFiles = 200,
+            maxChangedLines = 20_000,
+            protectedPaths = Array.Empty<string>()
         });
 
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
@@ -90,7 +93,10 @@ public sealed partial class DeviceHandlerTests
             sourceSha = new string('a', 40),
             reviewTreeSha = new string('b', 40),
             checkCommandHash = new string('c', 64),
-            mergeCommitSha = new string('d', 40)
+            mergeCommitSha = new string('d', 40),
+            maxChangedFiles = 200,
+            maxChangedLines = 20_000,
+            protectedPaths = Array.Empty<string>()
         });
 
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
