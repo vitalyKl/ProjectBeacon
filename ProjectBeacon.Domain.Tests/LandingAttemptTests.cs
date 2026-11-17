@@ -31,6 +31,9 @@ public sealed class LandingAttemptTests
         Assert.Equal(7, attempt.GitPolicyRevision);
         Assert.Equal(snapshot, attempt.GitPolicySnapshotJson);
 
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.SetGitPolicySnapshot(8, snapshot));
+
         attempt.MarkDispatchPending("Preview");
 
         Assert.Throws<InvalidOperationException>(() =>
