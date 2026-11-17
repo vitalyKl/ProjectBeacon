@@ -91,7 +91,7 @@ public sealed class LandingAutomationService : BackgroundService
 
                 var project = await db.Projects.IgnoreQueryFilters()
                     .Where(item => item.Id == candidate.ProjectId)
-                    .Select(item => new { item.OrgId })
+                    .Select(item => new { item.OrgId, item.GitPolicyRevision })
                     .FirstOrDefaultAsync(ct);
                 if (project is null)
                 {
@@ -105,6 +105,13 @@ public sealed class LandingAutomationService : BackgroundService
 
                 if (candidate.Status == LandingAttemptStatus.Previewed)
                 {
+                    if (project.GitPolicyRevision != candidate.GitPolicyRevision)
+                    {
+                        await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
+                            "GitPolicyChangedSincePreview", ct);
+                        continue;
+                    }
+
                     if (policy.AutonomyLevel == 0)
                     {
                         await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
@@ -138,6 +145,14 @@ public sealed class LandingAutomationService : BackgroundService
 
                 if (candidate.Status is LandingAttemptStatus.LandedUnverified or LandingAttemptStatus.RevertPending)
                 {
+                    if (candidate.Status == LandingAttemptStatus.LandedUnverified
+                        && candidate.PostMergeCheckExitCode is not > 0)
+                    {
+                        await SetEscalationAsync(db, candidate.Id, candidate.Status,
+                            "PostMergeVerificationNeedsReview", ct);
+                        continue;
+                    }
+
                     if (policy.AutoRevertMode == "Off")
                     {
                         if (candidate.Status == LandingAttemptStatus.LandedUnverified)
