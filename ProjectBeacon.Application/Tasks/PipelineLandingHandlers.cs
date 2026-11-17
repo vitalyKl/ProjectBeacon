@@ -99,6 +99,10 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
         {
+            if (latestLanding.GitPolicyRevision != gitPolicy.Revision)
+                return Result.Failure<LandingAttemptDto>(
+                    "The project Git policy changed while Preview was pending. Let that command finish or recover before requesting a new Preview.",
+                    ErrorKind.Conflict);
             if (!latestProofMatches)
                 return Result.Failure<LandingAttemptDto>(
                     "A Preview is already pending for a different review proof. Inspect its landing status before starting another attempt.",
@@ -212,6 +216,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             await db.Entry(attempt).ReloadAsync(ct);
         }
 
+        if (!ProjectGitPolicyCatalog.TryRead(
+                attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var attemptPolicy))
+        {
+            attempt.Fail("InvalidGitPolicySnapshot");
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
+        }
         var payload = new JsonObject
         {
             ["projectId"] = attempt.ProjectId.ToString("D"),
@@ -222,9 +233,9 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
-            ["maxChangedFiles"] = gitPolicy.MaxChangedFiles,
-            ["maxChangedLines"] = gitPolicy.MaxChangedLines,
-            ["protectedPaths"] = JsonSerializer.SerializeToNode(gitPolicy.ProtectedPaths)
+            ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
+            ["maxChangedLines"] = attemptPolicy.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(attemptPolicy.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
@@ -378,6 +389,25 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         if (!string.Equals(commandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
             return Result.Failure<LandingAttemptDto>("The project's review check command changed after Preview.", ErrorKind.Conflict);
+        if (!ProjectGitPolicyCatalog.TryRead(project!.GitPolicyJson, project.GitPolicyRevision, out var currentPolicy)
+            || !ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var attemptPolicy))
+            return Result.Failure<LandingAttemptDto>("The project's Git policy snapshot is invalid.", ErrorKind.Conflict);
+        if (project.GitPolicyRevision != attempt.GitPolicyRevision)
+        {
+            attempt.SetEscalationCode("GitPolicyChangedSincePreview");
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LandingAttemptDto>(
+                "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
+        }
+        if (currentPolicy.AutonomyLevel == 1)
+        {
+            attempt.SetEscalationCode("IntegrationBranchNotAvailable");
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LandingAttemptDto>(
+                "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
+        }
+        if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+            return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
@@ -428,7 +458,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
             ["targetHeadSha"] = attempt.TargetHeadSha,
-            ["targetTreeSha"] = attempt.CandidateTreeSha
+            ["targetTreeSha"] = attempt.CandidateTreeSha,
+            ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
+            ["maxChangedLines"] = attemptPolicy.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(attemptPolicy.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
@@ -513,6 +546,9 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
+        if (!ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var policySnapshot))
+            return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
+
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Revert", ct);
         if (!claimed)
@@ -532,7 +568,10 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
-            ["mergeCommitSha"] = attempt.MergeCommitSha
+            ["mergeCommitSha"] = attempt.MergeCommitSha,
+            ["maxChangedFiles"] = policySnapshot.MaxChangedFiles,
+            ["maxChangedLines"] = policySnapshot.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(policySnapshot.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
