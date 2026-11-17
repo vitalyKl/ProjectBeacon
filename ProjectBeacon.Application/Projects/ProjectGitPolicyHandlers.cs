@@ -155,8 +155,13 @@ public static class ProjectGitPolicyCatalog
 public sealed class GetProjectGitPolicyHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public GetProjectGitPolicyHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetProjectGitPolicyHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<ProjectGitPolicyDto>> HandleAsync(
         Guid projectId, ActorContext actor, CancellationToken ct = default)
@@ -166,8 +171,14 @@ public sealed class GetProjectGitPolicyHandler
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers.AnyAsync(
             item => item.ProjectId == projectId && item.UserId == actor.UserId, ct);
-        if (!member && !actor.IsAdmin)
-            return Result.Forbidden<ProjectGitPolicyDto>();
+        if (!member)
+        {
+            var administrator = await _authorization.CanAsync(
+                db, actor, ResourceType.Project, AuthAction.Administer,
+                projectId: projectId, ct: ct);
+            if (!administrator.Success)
+                return Result.Forbidden<ProjectGitPolicyDto>();
+        }
         var project = await db.Projects.FirstOrDefaultAsync(item => item.Id == projectId, ct);
         if (project is null)
             return Result.Failure<ProjectGitPolicyDto>("Project not found.", ErrorKind.NotFound);
