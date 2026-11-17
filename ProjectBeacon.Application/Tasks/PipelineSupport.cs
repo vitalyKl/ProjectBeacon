@@ -194,8 +194,14 @@ internal static class PipelineSupport
             startBlockedReason = "PipelineContextSizeInvalid";
 
         var state = PipelineMappers.ToState(task, subtasks, sessions, verdicts);
+        var latestLanding = await db.LandingAttempts
+            .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
+            .OrderByDescending(attempt => attempt.CreatedAt)
+            .ThenByDescending(attempt => attempt.Id)
+            .FirstOrDefaultAsync(ct);
         return state with
         {
+            LatestLandingAttempt = latestLanding is null ? null : RequestLandingHandler.ToDto(latestLanding),
             CanStart = startBlockedReason is null,
             StartBlockedReason = startBlockedReason,
             Sessions = sessions.Select(session =>
