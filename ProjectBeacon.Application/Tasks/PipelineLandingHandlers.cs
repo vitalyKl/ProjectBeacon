@@ -9,6 +9,7 @@ using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Application.Persistence;
+using Application.Projects;
 using Domain.Entities.Tasks;
 using Domain.Common;
 using Domain.Enums;
@@ -46,6 +47,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
             return Result.Failure<LandingAttemptDto>("A pinned project ReviewCheckCommand is required before landing.", ErrorKind.Conflict);
         var checkCommand = project.ReviewCheckCommand.Trim();
+        if (!ProjectGitPolicyCatalog.TryRead(project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy))
+            return Result.Failure<LandingAttemptDto>(
+                "The project's Git policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it.",
+                ErrorKind.Conflict);
+        var policySnapshot = ProjectGitPolicyCatalog.Serialize(
+            gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
+            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode);
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -106,11 +114,20 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
         if (latestLanding?.Status == LandingAttemptStatus.Previewed)
         {
-            if (latestProofMatches)
+            if (latestProofMatches && latestLanding.GitPolicyRevision == gitPolicy.Revision)
                 return Result.Ok(ToDto(latestLanding));
-            return Result.Failure<LandingAttemptDto>(
-                "A successful Preview already exists for a different review proof. Execute or resolve that attempt before requesting another landing.",
-                ErrorKind.Conflict);
+            if (latestProofMatches && latestLanding.GitPolicyRevision != gitPolicy.Revision)
+            {
+                latestLanding.Fail("GitPolicyChangedSincePreview");
+                latestLanding.SetEscalationCode("GitPolicyChangedSincePreview");
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                return Result.Failure<LandingAttemptDto>(
+                    "A successful Preview already exists for a different review proof. Execute or resolve that attempt before requesting another landing.",
+                    ErrorKind.Conflict);
+            }
         }
 
         if (latestLanding is not null && IsLandingAttemptBlockingNewPreview(latestLanding.Status))
@@ -132,6 +149,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var attempt = LandingAttempt.Start(
             task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, reviewRun.CheckedBaseBranch!,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
+        attempt.SetGitPolicySnapshot(gitPolicy.Revision, policySnapshot);
         attempt.MarkDispatchPending("Preview");
         db.LandingAttempts.Add(attempt);
         try
@@ -203,7 +221,10 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["targetBranch"] = attempt.TargetBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
-            ["checkCommandHash"] = attempt.ReviewCommandHash
+            ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["maxChangedFiles"] = gitPolicy.MaxChangedFiles,
+            ["maxChangedLines"] = gitPolicy.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(gitPolicy.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
@@ -290,7 +311,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         attempt.ReviewTreeSha, attempt.DeviceId, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
         attempt.MergeCommitSha, attempt.RevertCommitSha, LandingCommandDispatch.PublicFailureCode(attempt),
         attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
-        attempt.CreatedAt, attempt.UpdatedAt);
+        attempt.CreatedAt, attempt.UpdatedAt, attempt.EscalationCode, attempt.GitPolicyRevision);
 }
 
 /// <summary>Reads one landing attempt scoped to the requested task.</summary>
