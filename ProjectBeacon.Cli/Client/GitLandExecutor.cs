@@ -1405,7 +1405,7 @@ internal static class GitLandExecutor
         !string.IsNullOrWhiteSpace(pattern)
         && pattern.Length <= 200
         && Regex.IsMatch(pattern, "^[A-Za-z0-9._/*?-]+$", RegexOptions.CultureInvariant)
-        && !pattern.StartsWith('/', StringComparison.Ordinal)
+        && !pattern.StartsWith("/", StringComparison.Ordinal)
         && !pattern.Contains("..", StringComparison.Ordinal)
         && !pattern.Contains('\\')
         && !pattern.Contains(':')
