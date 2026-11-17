@@ -2853,4 +2853,160 @@ orthstar</value>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
     <value>上次 Git 检查成功后，已连接的本地仓库路径发生了变化。当前状态尚未验证；流水线仍会使用配置路径下的检出。运行 Git Status 或同步即可更新此警告。</value>
   </data>
+  <data name="ProjectGitPolicyTitle" xml:space="preserve">
+    <value>Git 合并策略</value>
+  </data>
+  <data name="ProjectGitPolicyHelp" xml:space="preserve">
+    <value>控制已批准的任务分支何时可以预览、合并或回滚。策略变更会进行版本管理，并固定到每次合并尝试中。</value>
+  </data>
+  <data name="ProjectGitPolicyUnavailable" xml:space="preserve">
+    <value>无法读取项目的 Git 策略。在策略修复之前，合并自动化将保持禁用。</value>
+  </data>
+  <data name="GitAutonomyLevel" xml:space="preserve">
+    <value>合并自动化级别</value>
+  </data>
+  <data name="GitAutonomyLevel0" xml:space="preserve">
+    <value>级别 0 — 手动执行</value>
+  </data>
+  <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
+    <value>级别 1 — 集成分支（第 6 阶段提供）</value>
+  </data>
+  <data name="GitAutonomyLevel2" xml:space="preserve">
+    <value>级别 2 — 预览成功后自动执行</value>
+  </data>
+  <data name="GitAutonomyLevelHelp" xml:space="preserve">
+    <value>集成分支工作流计划在第 6 阶段实现，因此级别 1 暂不可用。级别 2 仅在已审查的候选版本通过预览检查后才会执行。</value>
+  </data>
+  <data name="GitAutoRevert" xml:space="preserve">
+    <value>合并后检查失败时</value>
+  </data>
+  <data name="GitAutoRevertOff" xml:space="preserve">
+    <value>升级处理；不自动回滚</value>
+  </data>
+  <data name="GitAutoRevertOnFailure" xml:space="preserve">
+    <value>合并后检查失败时自动回滚</value>
+  </data>
+  <data name="GitMaxChangedFiles" xml:space="preserve">
+    <value>更改文件数上限</value>
+  </data>
+  <data name="GitMaxChangedLines" xml:space="preserve">
+    <value>更改行数上限</value>
+  </data>
+  <data name="GitProtectedPaths" xml:space="preserve">
+    <value>受保护路径</value>
+  </data>
+  <data name="GitProtectedPathsHelp" xml:space="preserve">
+    <value>每行一个相对于项目根目录的 glob 模式。支持 * 和 ?。安全文件、GitHub 工作流、解决方案和项目文件以及构建配置始终受到保护。</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>目标 checkout 存在未提交更改或无法确认安全时，将升级处理，绝不会自动覆盖。</value>
+  </data>
+  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
+    <value>集成分支合并尚不可用，计划在第 6 阶段实现。</value>
+  </data>
+  <data name="SaveGitPolicy" xml:space="preserve">
+    <value>保存 Git 策略</value>
+  </data>
+  <data name="GitPolicySaved" xml:space="preserve">
+    <value>Git 合并策略已保存。</value>
+  </data>
+  <data name="LandingAttemptTitle" xml:space="preserve">
+    <value>合并尝试</value>
+  </data>
+  <data name="LandingSourceBranch" xml:space="preserve">
+    <value>源分支</value>
+  </data>
+  <data name="LandingTargetBranch" xml:space="preserve">
+    <value>目标分支</value>
+  </data>
+  <data name="LandingCandidateTree" xml:space="preserve">
+    <value>预览候选树</value>
+  </data>
+  <data name="LandingMergeCommit" xml:space="preserve">
+    <value>合并提交</value>
+  </data>
+  <data name="LandingRevertCommit" xml:space="preserve">
+    <value>回滚提交</value>
+  </data>
+  <data name="LandingPostMergeCheck" xml:space="preserve">
+    <value>合并后检查</value>
+  </data>
+  <data name="LandingConflictFiles" xml:space="preserve">
+    <value>冲突文件</value>
+  </data>
+  <data name="LandingStatusPreviewPending" xml:space="preserve">
+    <value>预览已排队</value>
+  </data>
+  <data name="LandingStatusPreviewed" xml:space="preserve">
+    <value>预览通过</value>
+  </data>
+  <data name="LandingStatusConflicted" xml:space="preserve">
+    <value>预览存在冲突</value>
+  </data>
+  <data name="LandingStatusFailed" xml:space="preserve">
+    <value>预览失败</value>
+  </data>
+  <data name="LandingStatusExecutePending" xml:space="preserve">
+    <value>合并已排队</value>
+  </data>
+  <data name="LandingStatusLanded" xml:space="preserve">
+    <value>已合并并验证</value>
+  </data>
+  <data name="LandingStatusLandedUnverified" xml:space="preserve">
+    <value>已合并；合并后检查失败</value>
+  </data>
+  <data name="LandingStatusRevertPending" xml:space="preserve">
+    <value>回滚已排队</value>
+  </data>
+  <data name="LandingStatusReverted" xml:space="preserve">
+    <value>已回滚</value>
+  </data>
+  <data name="LandingStatusRevertedUnverified" xml:space="preserve">
+    <value>回滚已应用；checkout 刷新未验证</value>
+  </data>
+  <data name="LandingStatusRevertFailed" xml:space="preserve">
+    <value>回滚失败</value>
+  </data>
+  <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
+    <value>预览已通过。项目策略要求手动执行合并。</value>
+  </data>
+  <data name="LandingReasonIntegrationBranchNotAvailable" xml:space="preserve">
+    <value>此自动化级别需要第 6 阶段计划实现的集成分支工作流。</value>
+  </data>
+  <data name="LandingReasonInvalidGitPolicySnapshot" xml:space="preserve">
+    <value>保存的 Git 策略快照无效，需要人工检查。</value>
+  </data>
+  <data name="LandingReasonProjectUnavailable" xml:space="preserve">
+    <value>项目不可用，自动化已停止。</value>
+  </data>
+  <data name="LandingReasonPostMergeCheckFailed" xml:space="preserve">
+    <value>合并后检查失败。请检查结果，并在适当时请求受保护的回滚。</value>
+  </data>
+  <data name="LandingReasonGitPolicyChangedSincePreview" xml:space="preserve">
+    <value>预览后项目 Git 策略发生变化，需要重新预览。</value>
+  </data>
+  <data name="ExecuteLanding" xml:space="preserve">
+    <value>执行合并</value>
+  </data>
+  <data name="RevertLanding" xml:space="preserve">
+    <value>回滚合并</value>
+  </data>
+  <data name="LandingRationale" xml:space="preserve">
+    <value>合并原因</value>
+  </data>
+  <data name="PreviewLanding" xml:space="preserve">
+    <value>预览合并</value>
+  </data>
+  <data name="LandingPreviewQueued" xml:space="preserve">
+    <value>合并预览已排队。</value>
+  </data>
+  <data name="LandingExecuteQueued" xml:space="preserve">
+    <value>合并操作已排队。</value>
+  </data>
+  <data name="RevertLandingConfirm" xml:space="preserve">
+    <value>将创建一个新的回滚提交。只有当目标分支仍指向记录的合并提交时才会修改它。</value>
+  </data>
+  <data name="LandingRevertQueued" xml:space="preserve">
+    <value>合并回滚已排队。</value>
+  </data>
 </root>
