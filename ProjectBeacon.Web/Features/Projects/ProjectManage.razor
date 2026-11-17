@@ -156,10 +156,10 @@ else
                     <MudSelectItem T="string" Value="@("Off")">@L["GitAutoRevertOff"]</MudSelectItem>
                     <MudSelectItem T="string" Value="@("OnPostCheckFail")">@L["GitAutoRevertOnFailure"]</MudSelectItem>
                 </MudSelect>
-                <MudTextField T="int" @bind-Value="_gitMaxChangedFiles" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
-                              Label="@L["GitMaxChangedFiles"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="200" />
-                <MudTextField T="int" @bind-Value="_gitMaxChangedLines" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
-                              Label="@L["GitMaxChangedLines"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="20000" />
+                <MudNumericField T="int" @bind-Value="_gitMaxChangedFiles" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                                 Label="@L["GitMaxChangedFiles"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="200" />
+                <MudNumericField T="int" @bind-Value="_gitMaxChangedLines" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                                 Label="@L["GitMaxChangedLines"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="20000" />
                 <MudTextField T="string" @bind-Value="_gitProtectedPathsText" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
                               Label="@L["GitProtectedPaths"]" HelperText="@L["GitProtectedPathsHelp"]"
                               Variant="Variant.Outlined" Margin="Margin.Dense" Lines="4" />
