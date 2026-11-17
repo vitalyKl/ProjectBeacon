@@ -140,6 +140,7 @@ public sealed class LandingAttemptTests
     public void DispatchLeaseTransitions_CanBeRetriedAndClearedForEachAction()
     {
         var attempt = Start();
+        attempt.SetGitPolicySnapshot(1, """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
 
         attempt.MarkDispatchPending("Preview");
         Assert.Equal(LandingAttemptStatus.PreviewPending, attempt.Status);
