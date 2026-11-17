@@ -20,6 +20,10 @@ public class Project : Entity, IOrgScoped
     public string ProposalPoliciesJson { get; private set; } = "{}";
     /// <summary>Optimistic-concurrency token for proposal policy edits, independent of content revision.</summary>
     public int ProposalPolicyRevision { get; private set; } = 1;
+    /// <summary>Validated ProjectGitPolicy JSON. Defaults to manual landing, Escalate, and no auto-revert.</summary>
+    public string GitPolicyJson { get; private set; } = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\"}";
+    /// <summary>Optimistic-concurrency token for Git policy edits.</summary>
+    public int GitPolicyRevision { get; private set; } = 1;
     public Guid OrgId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -55,6 +59,15 @@ public class Project : Entity, IOrgScoped
         ArgumentException.ThrowIfNullOrWhiteSpace(policiesJson);
         ProposalPoliciesJson = policiesJson;
         ProposalPolicyRevision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Replaces the canonical Git workflow policy without changing project content revision.</summary>
+    public void SetGitPolicyJson(string policyJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policyJson);
+        GitPolicyJson = policyJson;
+        GitPolicyRevision++;
         UpdatedAt = DateTime.UtcNow;
     }
 
