@@ -2853,4 +2853,160 @@ orthstar</value>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
     <value>最後に Git チェックが成功した後、接続されたローカルリポジトリのパスが変更されました。現在の状態は未確認ですが、パイプラインは設定されたパスのチェックアウトを使用します。警告を更新するには Git Status または同期を実行してください。</value>
   </data>
+  <data name="ProjectGitPolicyTitle" xml:space="preserve">
+    <value>Git ランディングポリシー</value>
+  </data>
+  <data name="ProjectGitPolicyHelp" xml:space="preserve">
+    <value>承認済みタスクブランチのプレビュー、マージ、取り消しの条件を設定します。変更はバージョン管理され、各ランディング試行に固定されます。</value>
+  </data>
+  <data name="ProjectGitPolicyUnavailable" xml:space="preserve">
+    <value>プロジェクトの Git ポリシーを読み取れません。ポリシーが修復されるまでランディング自動化は無効です。</value>
+  </data>
+  <data name="GitAutonomyLevel" xml:space="preserve">
+    <value>ランディング自律レベル</value>
+  </data>
+  <data name="GitAutonomyLevel0" xml:space="preserve">
+    <value>レベル 0 — 手動実行</value>
+  </data>
+  <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
+    <value>レベル 1 — 統合ブランチ（フェーズ 6 で利用可能）</value>
+  </data>
+  <data name="GitAutonomyLevel2" xml:space="preserve">
+    <value>レベル 2 — プレビュー成功後に自動実行</value>
+  </data>
+  <data name="GitAutonomyLevelHelp" xml:space="preserve">
+    <value>統合ブランチのワークフローはフェーズ 6 で予定されているため、レベル 1 はまだ利用できません。レベル 2 では、レビュー済み候補がプレビュー検査に合格した場合のみ実行します。</value>
+  </data>
+  <data name="GitAutoRevert" xml:space="preserve">
+    <value>マージ後チェック</value>
+  </data>
+  <data name="GitAutoRevertOff" xml:space="preserve">
+    <value>エスカレーションし、自動で取り消さない</value>
+  </data>
+  <data name="GitAutoRevertOnFailure" xml:space="preserve">
+    <value>マージ後チェック失敗時に自動で取り消す</value>
+  </data>
+  <data name="GitMaxChangedFiles" xml:space="preserve">
+    <value>変更ファイルの上限</value>
+  </data>
+  <data name="GitMaxChangedLines" xml:space="preserve">
+    <value>変更行数の上限</value>
+  </data>
+  <data name="GitProtectedPaths" xml:space="preserve">
+    <value>保護するパス</value>
+  </data>
+  <data name="GitProtectedPathsHelp" xml:space="preserve">
+    <value>プロジェクト相対の glob パターンを 1 行に 1 つ入力します。* と ? を使用できます。セキュリティファイル、GitHub ワークフロー、ソリューション／プロジェクトファイル、ビルド設定も常に保護されます。</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>変更のある、または安全性を確認できないターゲット checkout はエスカレーションされ、自動で上書きされません。</value>
+  </data>
+  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
+    <value>統合ブランチによるランディングはまだ利用できません。フェーズ 6 で実装予定です。</value>
+  </data>
+  <data name="SaveGitPolicy" xml:space="preserve">
+    <value>Git ポリシーを保存</value>
+  </data>
+  <data name="GitPolicySaved" xml:space="preserve">
+    <value>Git ランディングポリシーを保存しました。</value>
+  </data>
+  <data name="LandingAttemptTitle" xml:space="preserve">
+    <value>ランディング試行</value>
+  </data>
+  <data name="LandingSourceBranch" xml:space="preserve">
+    <value>ソースブランチ</value>
+  </data>
+  <data name="LandingTargetBranch" xml:space="preserve">
+    <value>ターゲットブランチ</value>
+  </data>
+  <data name="LandingCandidateTree" xml:space="preserve">
+    <value>プレビュー候補ツリー</value>
+  </data>
+  <data name="LandingMergeCommit" xml:space="preserve">
+    <value>マージコミット</value>
+  </data>
+  <data name="LandingRevertCommit" xml:space="preserve">
+    <value>取り消しコミット</value>
+  </data>
+  <data name="LandingPostMergeCheck" xml:space="preserve">
+    <value>マージ後チェック</value>
+  </data>
+  <data name="LandingConflictFiles" xml:space="preserve">
+    <value>競合ファイル</value>
+  </data>
+  <data name="LandingStatusPreviewPending" xml:space="preserve">
+    <value>プレビューをキューに登録</value>
+  </data>
+  <data name="LandingStatusPreviewed" xml:space="preserve">
+    <value>プレビュー成功</value>
+  </data>
+  <data name="LandingStatusConflicted" xml:space="preserve">
+    <value>プレビューに競合あり</value>
+  </data>
+  <data name="LandingStatusFailed" xml:space="preserve">
+    <value>プレビュー失敗</value>
+  </data>
+  <data name="LandingStatusExecutePending" xml:space="preserve">
+    <value>マージをキューに登録</value>
+  </data>
+  <data name="LandingStatusLanded" xml:space="preserve">
+    <value>マージ済み・検証済み</value>
+  </data>
+  <data name="LandingStatusLandedUnverified" xml:space="preserve">
+    <value>マージ済み・マージ後チェック失敗</value>
+  </data>
+  <data name="LandingStatusRevertPending" xml:space="preserve">
+    <value>取り消しをキューに登録</value>
+  </data>
+  <data name="LandingStatusReverted" xml:space="preserve">
+    <value>取り消し済み</value>
+  </data>
+  <data name="LandingStatusRevertedUnverified" xml:space="preserve">
+    <value>取り消し適用済み・checkout 更新未検証</value>
+  </data>
+  <data name="LandingStatusRevertFailed" xml:space="preserve">
+    <value>取り消し失敗</value>
+  </data>
+  <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
+    <value>プレビューは成功しました。プロジェクトポリシーにより手動実行が必要です。</value>
+  </data>
+  <data name="LandingReasonIntegrationBranchNotAvailable" xml:space="preserve">
+    <value>この自律レベルにはフェーズ 6 で予定されている統合ブランチが必要です。</value>
+  </data>
+  <data name="LandingReasonInvalidGitPolicySnapshot" xml:space="preserve">
+    <value>保存された Git ポリシースナップショットが無効です。手動確認が必要です。</value>
+  </data>
+  <data name="LandingReasonProjectUnavailable" xml:space="preserve">
+    <value>プロジェクトを利用できないため、自動化を停止しました。</value>
+  </data>
+  <data name="LandingReasonPostMergeCheckFailed" xml:space="preserve">
+    <value>マージ後チェックに失敗しました。結果を確認し、必要に応じて安全な取り消しを依頼してください。</value>
+  </data>
+  <data name="LandingReasonGitPolicyChangedSincePreview" xml:space="preserve">
+    <value>プレビュー後に Git ポリシーが変更されました。新しいプレビューが必要です。</value>
+  </data>
+  <data name="ExecuteLanding" xml:space="preserve">
+    <value>マージを実行</value>
+  </data>
+  <data name="RevertLanding" xml:space="preserve">
+    <value>マージを取り消す</value>
+  </data>
+  <data name="LandingRationale" xml:space="preserve">
+    <value>ランディングの理由</value>
+  </data>
+  <data name="PreviewLanding" xml:space="preserve">
+    <value>ランディングをプレビュー</value>
+  </data>
+  <data name="LandingPreviewQueued" xml:space="preserve">
+    <value>ランディングのプレビューをキューに登録しました。</value>
+  </data>
+  <data name="LandingExecuteQueued" xml:space="preserve">
+    <value>ランディングのマージをキューに登録しました。</value>
+  </data>
+  <data name="RevertLandingConfirm" xml:space="preserve">
+    <value>新しい取り消しコミットを作成します。ターゲットブランチが記録済みのランディングコミットを指している場合にのみ変更します。</value>
+  </data>
+  <data name="LandingRevertQueued" xml:space="preserve">
+    <value>ランディングの取り消しをキューに登録しました。</value>
+  </data>
 </root>
