@@ -109,8 +109,12 @@ public record EnqueueCommandRequest(
     Guid? ProjectId,
     string? TrustedCheckCommand = null)
 {
-    // Set only by a server-side landing workflow. Generic API command endpoints cannot bind this.
+    // Set only by server-side landing workflows. Generic API command endpoints cannot bind these.
     internal bool TrustedGitLand { get; init; }
+
+    // Execute must match the policy snapshot revision after the project row has been locked
+    // inside the command-creation transaction.
+    internal int? TrustedGitPolicyRevision { get; init; }
 }
 /// <summary>
 /// Command for enqueue command.
