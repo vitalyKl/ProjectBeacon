@@ -203,6 +203,39 @@ public sealed class PipelineRoleAuthorizationTests
     }
 
     [Fact]
+    public void PlannerCanRequestLandingPreviewReadAttemptAndRequestGuardedRevertButCannotExecute()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var otherTaskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{taskId:D}/pipeline/land"));
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Get, $"/v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}"));
+
+        Assert.True(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}/revert"));
+
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{taskId:D}/pipeline/land/{attemptId:D}/execute"));
+
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{otherTaskId:D}/pipeline/land"));
+
+        Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
+            WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner, projectId, taskId, null,
+            HttpMethods.Post, $"/v1/tasks/{taskId:D}/pipeline/land/{Guid.Empty:D}/revert"));
+    }
+
+    [Fact]
     public void PlannerCanStillCreateSubtasksAndStartReview()
     {
         var projectId = Guid.NewGuid();
