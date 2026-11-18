@@ -2967,6 +2967,9 @@ orthstar</value>
   <data name="LandingStatusRevertFailed" xml:space="preserve">
     <value>取り消し失敗</value>
   </data>
+  <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
+    <value>前回の Execute 要求は配信されませんでした。手動で再試行してください。この自律レベルでは Worker はマージを実行しません。</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>プレビューは成功しました。プロジェクトポリシーにより手動実行が必要です。</value>
   </data>
