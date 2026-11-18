@@ -61,7 +61,7 @@ public static class ProjectGitPolicyCatalog
             if (propertyNames.Distinct(StringComparer.Ordinal).Count() != propertyNames.Length)
                 return false;
             if (!TryInt(root, "autonomyLevel", out var autonomy)
-                || autonomy is not (0 or 2)
+                || autonomy is < 0 or > 2
                 || !TryString(root, "dirtyCheckoutBehavior", out var dirty)
                 || dirty != "Escalate"
                 || !TryInt(root, "maxChangedFiles", out var files)
