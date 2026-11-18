@@ -566,7 +566,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task GetPipeline_BlocksWhileGitSyncIsPendingEvenIfCapabilityIsNoLongerAdvertised()
+    public async Task GetPipeline_ReportsPendingGitSyncWithoutBlockingStartWhenCapabilityIsNoLongerAdvertised()
     {
         var (projectId, task) = await SeedTaskAsync("Pending GitSync on selected workstation");
         var device = await SeedGitSyncRuntimeAsync(projectId);
@@ -589,7 +589,8 @@ public sealed partial class PipelineHandlerTests
         Assert.False(result.Value!.Preflight!.PipelineGitSyncSupported);
         Assert.True(result.Value!.Preflight!.RepositorySyncInProgress);
         Assert.True(result.Value.Preflight.RepositorySyncBlocked);
-        Assert.Equal("PipelineRepositorySyncInProgress", result.Value.StartBlockedReason);
+        Assert.True(result.Value.CanStart);
+        Assert.Null(result.Value.StartBlockedReason);
     }
 
     [Fact]
