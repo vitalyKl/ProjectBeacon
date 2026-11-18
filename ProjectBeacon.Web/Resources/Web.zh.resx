@@ -2970,6 +2970,9 @@ orthstar</value>
   <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
     <value>上一次 Execute 请求未能送达。请手动重试；在此自动化级别下，Worker 不会执行合并。</value>
   </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>当前没有支持 GitLand 的在线工作站。Worker 将在短暂等待后重试；您也可以手动重试 Revert。</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>预览已通过。项目策略要求手动执行合并。</value>
   </data>
