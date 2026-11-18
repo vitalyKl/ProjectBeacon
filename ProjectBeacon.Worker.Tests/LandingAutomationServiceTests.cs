@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Worker.Tests;
 
+using System.Text.Json;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Entities.Identity;
