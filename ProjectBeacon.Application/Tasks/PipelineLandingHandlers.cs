@@ -542,7 +542,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         string failureCode,
         CancellationToken ct)
     {
-        if (attempt.Status == LandingAttemptStatus.ExecutePending)
+        if (attempt.Status is LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending)
             attempt.Fail(failureCode);
         attempt.SetEscalationCode(failureCode);
         await db.SaveChangesAsync(ct);
