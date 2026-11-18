@@ -15,6 +15,7 @@ using Application.Persistence;
 using Application.Proposals;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Application.Projects;
 
 internal interface ICommandCompletion
 {
@@ -549,6 +550,15 @@ internal sealed class GitLandCompletion : ICommandCompletion
         if (attempt is null)
             return;
 
+        var reviewBaseBranch = await db.ReviewRuns.IgnoreQueryFilters()
+            .Where(run => run.Id == attempt.ReviewRunId && run.TaskId == attempt.TaskId
+                && run.ProjectId == attempt.ProjectId)
+            .Select(run => run.CheckedBaseBranch)
+            .FirstOrDefaultAsync(ct);
+        var payloadReviewBaseBranch = DevicePayloadReader.ReadString(row.PayloadJson, "reviewBaseBranch");
+        var payloadIntegrationMode = DevicePayloadReader.ReadString(row.PayloadJson, "integrationMode");
+        var expectedIntegrationMode = ProjectGitPolicyCatalog.IntegrationMode(attempt.GitPolicySnapshotJson);
+
         var payloadTaskId = DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId");
         var payloadAction = DevicePayloadReader.ReadString(row.PayloadJson, "action");
         var payloadTargetBranch = DevicePayloadReader.ReadString(row.PayloadJson, "targetBranch");
@@ -581,6 +591,9 @@ internal sealed class GitLandCompletion : ICommandCompletion
             || !string.Equals(payloadReviewTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(payloadReviewBaseBranch, reviewBaseBranch, StringComparison.Ordinal)
+            || !string.Equals(payloadIntegrationMode, expectedIntegrationMode, StringComparison.Ordinal)
+            || !attempt.AllowsLandingTarget(reviewBaseBranch)
             || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal)
             || !actionBindingValid)
             return;
@@ -639,7 +652,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                         var checkHash = ReadString(root, "checkOutputHash");
                         var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && attempt.AllowsLandingTarget(targetBranch)
                             && IsGitSha(targetHead)
                             && IsGitSha(tree)
                             && IsSha256(checkHash)
@@ -671,7 +684,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                                     .ToArray()
                                 : [];
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && attempt.AllowsLandingTarget(targetBranch)
                             && IsGitSha(targetHead)
                             && conflicts.Length is > 0 and <= 200)
                         {

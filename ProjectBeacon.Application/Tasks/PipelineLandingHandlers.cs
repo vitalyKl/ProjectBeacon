@@ -53,7 +53,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 ErrorKind.Conflict);
         var policySnapshot = ProjectGitPolicyCatalog.Serialize(
             gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
-            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode);
+            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode, gitPolicy.DirtyCheckoutBehavior);
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -94,7 +94,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             && string.Equals(latestLanding.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(latestLanding.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal)
+            && latestLanding.AllowsLandingTarget(reviewRun.CheckedBaseBranch)
             && latestLanding.DeviceId == reviewRun.CheckedDeviceId;
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
@@ -230,6 +230,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Preview",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = attempt.TargetBranch,
+            ["integrationMode"] = ProjectGitPolicyCatalog.IntegrationMode(attempt.GitPolicySnapshotJson),
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
@@ -417,17 +419,12 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
         }
-        if (currentPolicy.AutonomyLevel == 1)
-        {
-            await InvalidateUnqueuedExecuteAsync(db, attempt, "IntegrationBranchNotAvailable", ct);
-            return Result.Failure<LandingAttemptDto>(
-                "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
-        }
-        if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+        if (command.Request.Automatic && currentPolicy.AutonomyLevel is not (1 or 2))
         {
             await InvalidateUnqueuedExecuteAsync(db, attempt, "AutomaticLandingNotAllowed", ct);
-            return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
+            return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy levels 1 or 2.", ErrorKind.Forbidden);
         }
+
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
@@ -453,7 +450,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !attempt.AllowsLandingTarget(reviewRun.CheckedBaseBranch)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
         {
@@ -483,6 +480,8 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Execute",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = reviewRun.CheckedBaseBranch,
+            ["integrationMode"] = ProjectGitPolicyCatalog.IntegrationMode(attempt.GitPolicySnapshotJson),
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
@@ -595,6 +594,14 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         if (!ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var policySnapshot))
             return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
 
+        var reviewBaseBranch = await db.ReviewRuns
+            .Where(run => run.Id == attempt.ReviewRunId && run.TaskId == attempt.TaskId
+                && run.ProjectId == attempt.ProjectId)
+            .Select(run => run.CheckedBaseBranch)
+            .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(reviewBaseBranch))
+            return Result.Failure<LandingAttemptDto>("The original review base branch is unavailable.", ErrorKind.Conflict);
+
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Revert", ct);
         if (!claimed)
@@ -611,6 +618,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Revert",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = reviewBaseBranch,
+            ["integrationMode"] = ProjectGitPolicyCatalog.IntegrationMode(attempt.GitPolicySnapshotJson),
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
