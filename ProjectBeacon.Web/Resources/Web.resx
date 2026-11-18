@@ -3158,6 +3158,9 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingStatusRevertFailed" xml:space="preserve">
     <value>Revert failed</value>
   </data>
+  <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
+    <value>The previous Execute request was not delivered. Retry it manually; the worker will not execute it at this autonomy level.</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>Preview passed. Manual execution is required by the project policy.</value>
   </data>
