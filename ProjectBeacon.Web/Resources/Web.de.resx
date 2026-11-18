@@ -2834,11 +2834,6 @@ orthstar</value>
     <value>Aufgaben-ID</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>Die letzte Git-Prüfung zeigte, dass dieses Repository im Branch „{1}“ {0} Commit(s) zurückliegt. Die Pipeline verwendet dieses lokale Checkout unverändert; synchronisieren Sie es, um Upstream-Änderungen einzubeziehen.</value></data>
-  <data name="PipelineRepositoryBehind" xml:space="preserve"><value>Das Projekt-Repository liegt hinter seinem konfigurierten Upstream. Synchronisieren Sie es, bevor Sie die Pipeline starten.</value></data>
-  <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
-    <value>Für dieses Projekt läuft noch eine Repository-Synchronisierung. Warten Sie, bis sie abgeschlossen ist, bevor Sie die Pipeline starten.</value>
-  </data>
-  <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>Das Repository konnte nicht mit einem konfigurierten Upstream abgeglichen werden. Prüfen Sie Branch- und Upstream-Einstellungen und synchronisieren Sie es vor dem Start der Pipeline.</value></data>
   <data name="GitSyncOtherWorkstationFinished" xml:space="preserve">
     <value>Ein Git-Synchronisierungsvorgang wurde auf einer anderen Workstation beendet. Das Repository der für die Pipeline ausgewählten Workstation muss weiterhin synchronisiert werden.</value>
   </data>
