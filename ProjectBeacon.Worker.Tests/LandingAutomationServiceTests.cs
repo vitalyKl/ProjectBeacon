@@ -92,18 +92,20 @@ public sealed class LandingAutomationServiceTests
             owner.Id);
         var escalatedRevert = NewRevertPending();
         escalatedRevert.SetEscalationCode("ManualReviewRequired");
+        var unavailableRevert = NewRevertPending();
+        unavailableRevert.SetEscalationCode("RevertDispatchUnavailable");
 
         db.LandingAttempts.AddRange(
             activeAttempts.Concat([
                 freeRevert, expiredExecute, freshExecute, completionUnknownExecute,
-                activeExecute, escalatedRevert
+                activeExecute, escalatedRevert, unavailableRevert
             ]));
         db.WorkstationCommands.AddRange(activeCommands.Append(activeExecuteCommand));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var now = DateTime.UtcNow;
         await db.LandingAttempts
-            .Where(attempt => attempt.Id == expiredExecute.Id)
+            .Where(attempt => attempt.Id == expiredExecute.Id || attempt.Id == unavailableRevert.Id)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(attempt => attempt.UpdatedAt, now.AddMinutes(-3)),
                 TestContext.Current.CancellationToken);
@@ -113,10 +115,11 @@ public sealed class LandingAutomationServiceTests
             .ToListAsync(TestContext.Current.CancellationToken);
         var candidateIds = candidates.Select(attempt => attempt.Id).ToHashSet();
 
-        Assert.Equal(3, candidates.Count);
+        Assert.Equal(4, candidates.Count);
         Assert.Contains(freeRevert.Id, candidateIds);
         Assert.Contains(expiredExecute.Id, candidateIds);
         Assert.Contains(completionUnknownExecute.Id, candidateIds);
+        Assert.Contains(unavailableRevert.Id, candidateIds);
         Assert.DoesNotContain(freshExecute.Id, candidateIds);
         Assert.DoesNotContain(activeExecute.Id, candidateIds);
         Assert.DoesNotContain(escalatedRevert.Id, candidateIds);
