@@ -13,6 +13,14 @@ using ProjectBeacon.Domain.Common;
 public sealed class NativeAgentRuntimeTests
 {
     [Fact]
+    public void RepositorySyncRequiresExclusiveToolBatchExecution()
+    {
+        Assert.True(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution("repo_sync"));
+        Assert.False(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution("repo_status"));
+        Assert.False(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution("run_command"));
+    }
+
+    [Fact]
     public void RunCommandAuthorization_RespectsProfileCommandFlag()
     {
         var authorization = new AgentHarnessAuthorization(
