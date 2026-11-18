@@ -161,7 +161,6 @@ internal static partial class GitRepositoryOperationGate
 
     [LibraryImport("libc", EntryPoint = "free")]
     private static partial void Free(IntPtr pointer);
-    }
 
     private static RepositoryState GetState(string repositoryRoot)
     {
