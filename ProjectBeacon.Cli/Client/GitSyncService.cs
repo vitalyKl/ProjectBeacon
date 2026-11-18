@@ -223,9 +223,11 @@ internal sealed class GitSyncService
                             ? GitSyncRefusalCode.FetchFailed : GitSyncRefusalCode.DirtyWorkingTree,
                         "The project branch was fast-forwarded, but the agent worktree changed during synchronization. Its contents were preserved; stop this session before continuing."));
 
+                // Do not discard edits that race with the final clean check. --keep
+                // advances the baseline only when local changes can be preserved safely.
                 var reset = await RunGitAsync(
                     agentWorktreeRoot, hooksDirectory, filters.Drivers, ct,
-                    "reset", "--hard", syncedHead);
+                    "reset", "--keep", syncedHead);
                 if (reset.TimedOut)
                     return Complete(Failed(after, GitSyncRefusalCode.Timeout,
                         "The project branch was fast-forwarded, but the clean agent snapshot could not be advanced before timeout."));
