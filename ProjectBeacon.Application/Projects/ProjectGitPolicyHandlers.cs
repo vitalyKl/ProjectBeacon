@@ -19,7 +19,8 @@ public sealed record ProjectGitPolicyDto(
     string AutoRevertMode,
     int Revision,
     bool IntegrationBranchAvailable,
-    string? IntegrationBranchUnavailableReason);
+    string? IntegrationBranchUnavailableReason,
+    string? ReviewBaseBranch = null);
 
 public sealed record SetProjectGitPolicyCommand(
     Guid ProjectId,
@@ -39,12 +40,13 @@ public static class ProjectGitPolicyCatalog
         "^[A-Za-z0-9._/*?-]{1,200}$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    public const string IntegrationBranchName = "beacon/integration";
+
     public const string DefaultJson =
         "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
 
     public static ProjectGitPolicyDto Defaults(int revision = 1) =>
-        new(0, "Escalate", [], 200, 20_000, "Off", revision, false,
-            "Integration-branch landing is scheduled for phase 6.");
+        new(0, "Escalate", [], 200, 20_000, "Off", revision, true, null);
 
     public static bool TryRead(string? json, int revision, out ProjectGitPolicyDto policy)
     {
@@ -63,7 +65,7 @@ public static class ProjectGitPolicyCatalog
             if (!TryInt(root, "autonomyLevel", out var autonomy)
                 || autonomy is < 0 or > 2
                 || !TryString(root, "dirtyCheckoutBehavior", out var dirty)
-                || dirty != "Escalate"
+                || dirty is not ("Escalate" or "LandViaIntegration")
                 || !TryInt(root, "maxChangedFiles", out var files)
                 || files is < 1 or > 200
                 || !TryInt(root, "maxChangedLines", out var lines)
@@ -86,20 +88,31 @@ public static class ProjectGitPolicyCatalog
                 paths.Add(pattern!);
             }
 
+            // Landing-attempt snapshots additionally pin the branch against which the
+            // review proof was produced. Project-level policy JSON omits this optional field.
+            string? reviewBaseBranch = null;
+            if (root.TryGetProperty("reviewBaseBranch", out var reviewBaseElement))
+            {
+                if (reviewBaseElement.ValueKind != JsonValueKind.String)
+                    return false;
+                reviewBaseBranch = reviewBaseElement.GetString();
+                if (!IsSafeBranchName(reviewBaseBranch))
+                    return false;
+            }
+
             // A corrupt or unknown property is not silently ignored. This protects policy
             // decisions from a newer/older writer whose semantics are not understood here.
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
                 "autonomyLevel", "dirtyCheckoutBehavior", "protectedPaths",
-                "maxChangedFiles", "maxChangedLines", "autoRevertMode"
+                "maxChangedFiles", "maxChangedLines", "autoRevertMode", "reviewBaseBranch"
             };
             if (root.EnumerateObject().Any(property => !allowed.Contains(property.Name)))
                 return false;
 
             policy = new ProjectGitPolicyDto(
                 autonomy, dirty, paths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                files, lines, revert, Math.Max(1, revision), false,
-                "Integration-branch landing is scheduled for phase 6.");
+                files, lines, revert, Math.Max(1, revision), true, null, reviewBaseBranch);
             return true;
         }
         catch (JsonException)
@@ -126,16 +139,39 @@ public static class ProjectGitPolicyCatalog
         IReadOnlyList<string> protectedPaths,
         int maxChangedFiles,
         int maxChangedLines,
-        string autoRevertMode) =>
-        JsonSerializer.Serialize(new
+        string autoRevertMode,
+        string dirtyCheckoutBehavior = "Escalate",
+        string? reviewBaseBranch = null)
+    {
+        var snapshot = new Dictionary<string, object?>
         {
-            autonomyLevel,
-            dirtyCheckoutBehavior = "Escalate",
-            protectedPaths = protectedPaths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            maxChangedFiles,
-            maxChangedLines,
-            autoRevertMode
-        }, JsonOptions);
+            ["autonomyLevel"] = autonomyLevel,
+            ["dirtyCheckoutBehavior"] = dirtyCheckoutBehavior,
+            ["protectedPaths"] = protectedPaths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ["maxChangedFiles"] = maxChangedFiles,
+            ["maxChangedLines"] = maxChangedLines,
+            ["autoRevertMode"] = autoRevertMode
+        };
+        if (reviewBaseBranch is not null)
+            snapshot["reviewBaseBranch"] = reviewBaseBranch;
+        return JsonSerializer.Serialize(snapshot, JsonOptions);
+    }
+
+    public static bool IsSafeBranchName(string? value) =>
+        value is { Length: > 0 and <= 200 }
+        && !value.StartsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith("/", StringComparison.Ordinal)
+        && !value.Contains("..", StringComparison.Ordinal)
+        && !value.Contains("//", StringComparison.Ordinal)
+        && !value.Contains("@{", StringComparison.Ordinal)
+        && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
+        && value.Split('/').All(segment =>
+            segment.Length > 0
+            && segment is not ("." or "..")
+            && !segment.StartsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".", StringComparison.Ordinal)
+            && segment.All(character => !char.IsControl(character)
+                && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\')));
 
     private static bool TryInt(JsonElement root, string name, out int value)
     {
@@ -216,13 +252,13 @@ public sealed class SetProjectGitPolicyHandler
     {
         if (!command.Actor.IsHuman || command.Actor.UserId is null)
             return Result.Forbidden<ProjectGitPolicyDto>("Only a human Owner/Admin can change the project Git policy.");
-        if (command.AutonomyLevel is not (0 or 2))
+        if (command.AutonomyLevel is < 0 or > 2)
             return Result.Failure<ProjectGitPolicyDto>(
-                "Autonomy level must be 0 or 2. Level 1 requires the integration-branch workflow planned for phase 6.",
+                "Autonomy level must be 0, 1, or 2.",
                 ErrorKind.Validation);
-        if (!string.Equals(command.DirtyCheckoutBehavior, "Escalate", StringComparison.Ordinal))
+        if (command.DirtyCheckoutBehavior is not ("Escalate" or "LandViaIntegration"))
             return Result.Failure<ProjectGitPolicyDto>(
-                "Only Escalate is supported until the integration-branch workflow is implemented in phase 6.",
+                "Dirty checkout behavior must be Escalate or LandViaIntegration.",
                 ErrorKind.Validation);
         if (command.AutoRevertMode is not ("Off" or "OnPostCheckFail"))
             return Result.Failure<ProjectGitPolicyDto>("Auto-revert must be Off or OnPostCheckFail.", ErrorKind.Validation);
@@ -266,7 +302,8 @@ public sealed class SetProjectGitPolicyHandler
             return Result.Ok(current);
 
         project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
-            command.AutonomyLevel, paths, command.MaxChangedFiles, command.MaxChangedLines, command.AutoRevertMode));
+            command.AutonomyLevel, paths, command.MaxChangedFiles, command.MaxChangedLines,
+            command.AutoRevertMode, command.DirtyCheckoutBehavior));
         _auditWriter.Stage(db, AuditEventFactory.ForActor(
             command.Actor,
             "project.git_policy.updated",
@@ -278,6 +315,7 @@ public sealed class SetProjectGitPolicyHandler
             {
                 previousState = $"Level{current.AutonomyLevel}",
                 newState = $"Level{command.AutonomyLevel}",
+                dirtyCheckoutBehavior = command.DirtyCheckoutBehavior,
                 policyCode = command.AutoRevertMode == "OnPostCheckFail" ? "AutoRevert.OnPostCheckFail" : "AutoRevert.Off"
             })));
         try
@@ -294,6 +332,6 @@ public sealed class SetProjectGitPolicyHandler
             command.AutonomyLevel, command.DirtyCheckoutBehavior,
             paths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             command.MaxChangedFiles, command.MaxChangedLines, command.AutoRevertMode,
-            project.GitPolicyRevision, false, "Integration-branch landing is scheduled for phase 6."));
+            project.GitPolicyRevision, true, null));
     }
 }
