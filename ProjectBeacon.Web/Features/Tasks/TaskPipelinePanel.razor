@@ -154,7 +154,10 @@
                 </MudExpansionPanels>
             }
             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
-                @if (CanManageLanding && landing.Status == LandingAttemptStatus.Previewed)
+                @if (CanManageLanding
+                    && (landing.Status == LandingAttemptStatus.Previewed
+                        || landing.Status == LandingAttemptStatus.ExecutePending
+                            && landing.EscalationCode == "ManualExecuteRetryRequired"))
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                                Disabled="Busy" OnClick="@(() => OnExecuteLanding.InvokeAsync(landing))">
