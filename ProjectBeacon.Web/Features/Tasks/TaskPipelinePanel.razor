@@ -165,11 +165,11 @@
                     </MudButton>
                 }
                 @if (CanManageLanding
-                    && (landing.Status is LandingAttemptStatus.Landed
-                        or LandingAttemptStatus.LandedUnverified
-                        or LandingAttemptStatus.RevertFailed
-                        || landing.Status == LandingAttemptStatus.RevertPending
-                            && landing.EscalationCode == "RevertDispatchUnavailable"))
+                    && ((landing.Status is LandingAttemptStatus.Landed
+                            or LandingAttemptStatus.LandedUnverified
+                            or LandingAttemptStatus.RevertFailed)
+                        || (landing.Status == LandingAttemptStatus.RevertPending
+                            && landing.EscalationCode == "RevertDispatchUnavailable")))
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
                                Disabled="Busy" OnClick="@(() => OnRevertLanding.InvokeAsync(landing))">
