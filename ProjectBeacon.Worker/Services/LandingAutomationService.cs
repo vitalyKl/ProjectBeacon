@@ -7,6 +7,7 @@ using Application.Persistence;
 using Application.Projects;
 using Application.Tasks;
 using Domain.Enums;
+using Domain.Entities.Tasks;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,36 +70,7 @@ public sealed class LandingAutomationService : BackgroundService
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var expiredDispatchLease = now.AddMinutes(-2);
-            var candidates = await db.LandingAttempts
-                .AsNoTracking()
-                .Where(attempt =>
-                    (attempt.Status == LandingAttemptStatus.RevertPending
-                        && attempt.EscalationCode == null
-                        && (attempt.FailureCode == null
-                            || attempt.FailureCode == "CommandCompletionUnknown"
-                            || (attempt.FailureCode == "RevertEnqueuePending"
-                                && attempt.UpdatedAt < expiredDispatchLease)))
-                    || (attempt.Status == LandingAttemptStatus.ExecutePending
-                        && attempt.EscalationCode == null
-                        && (attempt.FailureCode == null
-                            || attempt.FailureCode == "CommandCompletionUnknown"
-                            || (attempt.FailureCode == "ExecuteEnqueuePending"
-                                && attempt.UpdatedAt < expiredDispatchLease)))
-                    || (attempt.EscalationCode == null
-                        && (attempt.Status == LandingAttemptStatus.Previewed
-                            || attempt.Status == LandingAttemptStatus.LandedUnverified)))
-                // A command already in the durable queue owns this attempt. Exclude it before
-                // applying Take(200), otherwise the same oldest active Revert commands can
-                // occupy every worker batch and starve unrelated landings indefinitely.
-                .Where(attempt => !db.WorkstationCommands.Any(command =>
-                    command.ProjectId == attempt.ProjectId
-                    && command.Kind == WorkstationCommandKind.GitLand
-                    && (command.Status == WorkstationCommandStatus.Pending
-                        || command.Status == WorkstationCommandStatus.Running)
-                    && command.PayloadJson.Contains(attempt.Id.ToString())))
-                .OrderBy(attempt => attempt.UpdatedAt)
-                .ThenBy(attempt => attempt.Id)
+            var candidates = await GetDispatchCandidates(db, now)
                 .Take(200)
                 .ToListAsync(ct);
 
@@ -216,6 +188,39 @@ public sealed class LandingAutomationService : BackgroundService
                 _logger.LogInformation("Dispatched {Count} policy-driven landing commands", dispatched);
             return dispatched;
         }
+    }
+
+    internal static IQueryable<LandingAttempt> GetDispatchCandidates(BeaconDbContext db, DateTime now)
+    {
+        var expiredDispatchLease = now.AddMinutes(-2);
+        return db.LandingAttempts
+            .AsNoTracking()
+            .Where(attempt =>
+                (attempt.Status == LandingAttemptStatus.RevertPending
+                    && attempt.EscalationCode == null
+                    && (attempt.FailureCode == null
+                        || attempt.FailureCode == "CommandCompletionUnknown"
+                        || (attempt.FailureCode == "RevertEnqueuePending"
+                            && attempt.UpdatedAt < expiredDispatchLease)))
+                || (attempt.Status == LandingAttemptStatus.ExecutePending
+                    && attempt.EscalationCode == null
+                    && (attempt.FailureCode == null
+                        || attempt.FailureCode == "CommandCompletionUnknown"
+                        || (attempt.FailureCode == "ExecuteEnqueuePending"
+                            && attempt.UpdatedAt < expiredDispatchLease)))
+                || (attempt.EscalationCode == null
+                    && (attempt.Status == LandingAttemptStatus.Previewed
+                        || attempt.Status == LandingAttemptStatus.LandedUnverified)))
+            // A command already in the durable queue owns this attempt. Exclude it before
+            // applying Take(200), otherwise old active commands can starve later landings.
+            .Where(attempt => !db.WorkstationCommands.Any(command =>
+                command.ProjectId == attempt.ProjectId
+                && command.Kind == WorkstationCommandKind.GitLand
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running)
+                && command.PayloadJson.Contains(attempt.Id.ToString())))
+            .OrderBy(attempt => attempt.UpdatedAt)
+            .ThenBy(attempt => attempt.Id);
     }
 
     internal static bool ShouldDispatchExecute(LandingAttemptStatus status, int autonomyLevel) =>
