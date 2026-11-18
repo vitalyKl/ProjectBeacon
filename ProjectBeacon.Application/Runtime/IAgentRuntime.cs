@@ -37,7 +37,8 @@ public sealed record AgentHarnessAuthorization(
     string? ProjectRoot = null,
     bool IsolatedWorkspace = false,
     bool CommandsEnabled = true,
-    AgentGitWorkspaceAuthorization? GitWorkspace = null);
+    AgentGitWorkspaceAuthorization? GitWorkspace = null,
+    Action<string>? RepositoryBaseSynced = null);
 
 /// <summary>Daemon-derived identity for the task branch workspace. Never supplied by an agent.</summary>
 public sealed record AgentGitWorkspaceAuthorization(

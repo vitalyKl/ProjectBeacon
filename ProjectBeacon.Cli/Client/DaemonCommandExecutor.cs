@@ -484,6 +484,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             sessionWorktree.ProjectRoot,
             IsolatedWorkspace: true,
             CommandsEnabled: commandsEnabled,
+            RepositoryBaseSynced: sessionWorktree is AgentSessionWorktree snapshotWorkspace
+                ? snapshotWorkspace.AdvanceSnapshotBaseline
+                : null,
             GitWorkspace: sessionWorktree is AgentTaskWorktree branchWorkspace
                 ? new AgentGitWorkspaceAuthorization(
                     branchWorkspace.RepositoryRoot,

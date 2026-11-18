@@ -235,7 +235,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             {
                 WorkingDirectory = sessionWorktree.WorkingDirectory,
                 ProjectRoot = sessionWorktree.ProjectRoot,
-                IsolatedWorkspace = true
+                IsolatedWorkspace = true,
+                RepositoryBaseSynced = sessionWorktree.AdvanceSnapshotBaseline
             };
         }
 
