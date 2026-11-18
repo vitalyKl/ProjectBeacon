@@ -44,6 +44,16 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         DbContext.ProjectMembers.Add(
             ProjectBeacon.Domain.Entities.Projects.ProjectMember.Create(project.Id, member.Id, MemberRole.Member));
 
+        var plannerBackend = LocalModelBackend.Create(
+            "task-detail-pending-sync-planner",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        DbContext.LocalModelBackends.Add(plannerBackend);
+        DbContext.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, plannerBackend.Id, project.Id));
+
         var device = DbContext.Set<DaemonDevice>().Single();
         device.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
         DbContext.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, "/workspace/project"));
@@ -76,7 +86,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
-    public void TaskDetail_RestoresPendingGitSyncCommandAfterPageReload()
+    public void TaskDetail_RestoresPendingGitSyncCommandWithoutBlockingPipelineStart()
     {
         var task = DbContext.Tasks.First();
         var project = DbContext.Projects.Single();
