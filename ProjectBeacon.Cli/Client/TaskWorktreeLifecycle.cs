@@ -56,7 +56,7 @@ internal static class TaskWorktreeLifecycle
         {
             if (!Path.IsPathRooted(configuredRoot))
                 throw new InvalidDataException("WorktreeRoot must be an absolute path.");
-            return Path.GetFullPath(configuredRoot);
+            return AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(configuredRoot));
         }
 
         var baseDirectory = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -68,7 +68,8 @@ internal static class TaskWorktreeLifecycle
             baseDirectory = Path.Combine(profile, ".local", "share");
         }
 
-        return Path.GetFullPath(Path.Combine(baseDirectory, "ProjectBeacon", "worktrees"));
+        return AgentTaskWorktree.ResolvePhysicalPath(
+            Path.GetFullPath(Path.Combine(baseDirectory, "ProjectBeacon", "worktrees")));
     }
 
     public static async Task<IReadOnlyList<TaskWorktreeInventoryEntry>> ListAsync(
@@ -447,6 +448,18 @@ internal static class TaskWorktreeLifecycle
             || !AgentTaskWorktree.IsGitSha(metadata.BaseSha))
             return false;
 
+        var hasLandingEvidence = metadata.LandedAtUtc is not null
+            || metadata.LandingTargetBranch is not null
+            || metadata.LandingSourceSha is not null
+            || metadata.LandingCommitSha is not null;
+        if (hasLandingEvidence
+            && (metadata.LandedAtUtc is null
+                || !IsSafeBranchName(metadata.LandingTargetBranch)
+                || !string.Equals(metadata.LandingTargetBranch, metadata.BaseBranch, StringComparison.Ordinal)
+                || !AgentTaskWorktree.IsGitSha(metadata.LandingSourceSha ?? string.Empty)
+                || !AgentTaskWorktree.IsGitSha(metadata.LandingCommitSha ?? string.Empty)))
+            return false;
+
         var expectedPath = Path.GetFullPath(Path.Combine(root, projectId.ToString("N"),
             "beacon", "task", metadata.TaskId.ToString("N")));
         return SamePath(expectedPath, metadata.WorktreePath)
@@ -539,6 +552,21 @@ internal static class TaskWorktreeLifecycle
             && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
+
+    private static bool IsSafeBranchName(string? value) =>
+        value is { Length: > 0 and <= 200 }
+        && !value.StartsWith("/", StringComparison.Ordinal)
+        && !value.EndsWith("/", StringComparison.Ordinal)
+        && !value.Contains("..", StringComparison.Ordinal)
+        && !value.Contains("//", StringComparison.Ordinal)
+        && !value.Contains("@{", StringComparison.Ordinal)
+        && !value.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)
+        && value.Split('/').All(segment =>
+            segment.Length > 0 && segment is not ("." or "..")
+            && !segment.StartsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".", StringComparison.Ordinal)
+            && segment.All(character => !char.IsControl(character)
+                && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
 
     private static bool SamePath(string left, string right) =>
         string.Equals(Path.GetFullPath(left), Path.GetFullPath(right),

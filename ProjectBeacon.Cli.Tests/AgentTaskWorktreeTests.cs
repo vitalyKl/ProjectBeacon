@@ -178,6 +178,7 @@ public sealed class AgentTaskWorktreeTests
         var settings = new WorkstationSettings();
         Assert.Equal(WorkstationWorkspaceMode.Branch, settings.WorkspaceMode);
         Assert.False(settings.WorkspaceModeConfigured);
+        Assert.Equal(30, settings.TaskWorktreeRetentionDays);
     }
 
     [Fact]
