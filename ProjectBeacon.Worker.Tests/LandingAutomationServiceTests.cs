@@ -128,9 +128,8 @@ public sealed class LandingAutomationServiceTests
                 .SetProperty(attempt => attempt.UpdatedAt, now.AddMinutes(-3)),
                 TestContext.Current.CancellationToken);
 
-        var candidates = await LandingAutomationService.GetDispatchCandidates(db, now)
-            .Take(200)
-            .ToListAsync(TestContext.Current.CancellationToken);
+        var candidates = await LandingAutomationService.GetDispatchCandidatesAsync(
+            db, now, TestContext.Current.CancellationToken);
         var candidateIds = candidates.Select(attempt => attempt.Id).ToHashSet();
 
         Assert.Equal(5, candidates.Count);
