@@ -48,7 +48,9 @@ public sealed class RunPipelineSessionDispatchTests
             {
                 AgentDataDir = Path.Combine(temp, "native-data"),
                 LlamaSwapPort = 8080,
-                CommandPolicy = "off"
+                CommandPolicy = "off",
+                WorkspaceMode = WorkstationWorkspaceMode.Snapshot,
+                WorkspaceModeConfigured = true
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(
@@ -172,7 +174,9 @@ public sealed class RunPipelineSessionDispatchTests
             var settings = new WorkstationSettings
             {
                 AgentDataDir = Path.Combine(temp, "native-data"),
-                LlamaSwapPort = 8080
+                LlamaSwapPort = 8080,
+                WorkspaceMode = WorkstationWorkspaceMode.Snapshot,
+                WorkspaceModeConfigured = true
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(
