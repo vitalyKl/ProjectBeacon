@@ -81,6 +81,10 @@ internal static class NativeAgentToolPolicy
             || string.Equals(tool, "run_command", StringComparison.Ordinal)
             || string.Equals(tool, "service_start", StringComparison.Ordinal);
 
+    /// <summary>Repository sync mutates the real checkout and the active snapshot, so it must run alone and last in its tool batch.</summary>
+    internal static bool RequiresExclusiveWorktreeExecution(string? tool) =>
+        string.Equals(tool, "repo_sync", StringComparison.Ordinal);
+
     public static bool IsCacheableTool(string? name)
         => name is not null && CacheableReadOnlyTools.Contains(name);
 
@@ -111,6 +115,12 @@ internal static class NativeAgentToolPolicy
         => authorization.PipelineRole is null
             && authorization.TaskId is null
             && authorization.SubtaskId is null;
+
+    /// <summary>Repository synchronization is available to isolated interactive chats and pipeline Actor/Planner sessions.</summary>
+    public static bool IsRepositorySyncAuthorized(AgentHarnessAuthorization authorization)
+        => authorization.IsolatedWorkspace
+            && (IsInteractiveChatAuthorization(authorization)
+                || authorization.PipelineRole is "Actor" or "Planner");
 
     public static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {

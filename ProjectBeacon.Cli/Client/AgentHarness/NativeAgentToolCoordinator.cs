@@ -99,18 +99,29 @@ internal sealed class NativeAgentToolCoordinator(
 
         // Approval forms may pause the task lease. They are deliberately run after all parallel
         // siblings complete, so a paused session never leaves concurrent work using its worktree.
+        var exclusiveCalls = step.ToolCalls
+            .Where(call => NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(call.Name))
+            .OrderBy(call => call.Index)
+            .ToArray();
         var parallelCalls = step.ToolCalls
-            .Where(call => !NativeAgentToolPolicy.MayRequestUserInput(call.Name))
+            .Where(call => !NativeAgentToolPolicy.MayRequestUserInput(call.Name)
+                && !NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(call.Name))
             .Select(call => _toolExecutor.ExecuteAsync(executionContext, call, ct))
             .ToArray();
         var approvalCalls = step.ToolCalls
-            .Where(call => NativeAgentToolPolicy.MayRequestUserInput(call.Name))
+            .Where(call => NativeAgentToolPolicy.MayRequestUserInput(call.Name)
+                && !NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(call.Name))
             .OrderBy(call => call.Index)
             .ToArray();
 
         var executedTools = new List<NativeExecutedToolCall>();
         executedTools.AddRange(await Task.WhenAll(parallelCalls));
         foreach (var call in approvalCalls)
+            executedTools.Add(await _toolExecutor.ExecuteAsync(executionContext, call, ct));
+
+        // repo_sync updates both the user's checkout and this snapshot. It must not overlap
+        // with any sibling tool that can read or write the worktree; run it after all siblings.
+        foreach (var call in exclusiveCalls)
             executedTools.Add(await _toolExecutor.ExecuteAsync(executionContext, call, ct));
 
         // Any non-cacheable operation may have changed project state, even when it reports an error
