@@ -61,7 +61,7 @@ public static class ProjectGitPolicyCatalog
             if (propertyNames.Distinct(StringComparer.Ordinal).Count() != propertyNames.Length)
                 return false;
             if (!TryInt(root, "autonomyLevel", out var autonomy)
-                || autonomy is < 0 or > 2
+                || autonomy is not (0 or 2)
                 || !TryString(root, "dirtyCheckoutBehavior", out var dirty)
                 || dirty != "Escalate"
                 || !TryInt(root, "maxChangedFiles", out var files)
@@ -216,8 +216,10 @@ public sealed class SetProjectGitPolicyHandler
     {
         if (!command.Actor.IsHuman || command.Actor.UserId is null)
             return Result.Forbidden<ProjectGitPolicyDto>("Only a human Owner/Admin can change the project Git policy.");
-        if (command.AutonomyLevel is < 0 or > 2)
-            return Result.Failure<ProjectGitPolicyDto>("Autonomy level must be 0, 1, or 2.", ErrorKind.Validation);
+        if (command.AutonomyLevel is not (0 or 2))
+            return Result.Failure<ProjectGitPolicyDto>(
+                "Autonomy level must be 0 or 2. Level 1 requires the integration-branch workflow planned for phase 6.",
+                ErrorKind.Validation);
         if (!string.Equals(command.DirtyCheckoutBehavior, "Escalate", StringComparison.Ordinal))
             return Result.Failure<ProjectGitPolicyDto>(
                 "Only Escalate is supported until the integration-branch workflow is implemented in phase 6.",
