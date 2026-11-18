@@ -653,7 +653,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         return !value.Contains("::", StringComparison.Ordinal);
     }
 
-    private static bool IsGitSha(string value) =>
+    internal static bool IsGitSha(string value) =>
         (value.Length == 40 || value.Length == 64) && value.All(Uri.IsHexDigit);
 
     private static bool IsReparsePoint(string path) =>
