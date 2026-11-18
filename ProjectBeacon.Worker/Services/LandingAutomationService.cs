@@ -177,9 +177,16 @@ public sealed class LandingAutomationService : BackgroundService
                         if (result.Success)
                             dispatched++;
                         else
+                        {
+                            // A missing/offline workstation must not occupy the first 200
+                            // candidates every 15 seconds. Persist a short retry backoff while
+                            // keeping the attempt visible and manually retryable.
+                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.RevertPending,
+                                "RevertDispatchUnavailable", ct);
                             _logger.LogWarning(
                                 "Automatic revert for landing {LandingAttemptId} was not queued: {Error}",
                                 candidate.Id, result.Error);
+                        }
                     }
                 }
             }
@@ -197,10 +204,12 @@ public sealed class LandingAutomationService : BackgroundService
             .AsNoTracking()
             .Where(attempt =>
                 (attempt.Status == LandingAttemptStatus.RevertPending
-                    && attempt.EscalationCode == null
-                    && (attempt.FailureCode == null
-                        || attempt.FailureCode == "CommandCompletionUnknown"
-                        || (attempt.FailureCode == "RevertEnqueuePending"
+                    && ((attempt.EscalationCode == null
+                            && (attempt.FailureCode == null
+                                || attempt.FailureCode == "CommandCompletionUnknown"
+                                || (attempt.FailureCode == "RevertEnqueuePending"
+                                    && attempt.UpdatedAt < expiredDispatchLease)))
+                        || (attempt.EscalationCode == "RevertDispatchUnavailable"
                             && attempt.UpdatedAt < expiredDispatchLease)))
                 || (attempt.Status == LandingAttemptStatus.ExecutePending
                     && attempt.EscalationCode == null
@@ -265,8 +274,10 @@ public sealed class LandingAutomationService : BackgroundService
     {
         var attempt = await db.LandingAttempts
             .FirstOrDefaultAsync(item => item.Id == attemptId && item.Status == expectedStatus, ct);
-        if (attempt is null || string.Equals(attempt.EscalationCode, escalationCode, StringComparison.Ordinal))
+        if (attempt is null)
             return;
+        // Refresh UpdatedAt even for the same escalation code so retryable failures
+        // observe the backoff window instead of re-entering every worker tick.
         attempt.SetEscalationCode(escalationCode);
         await db.SaveChangesAsync(ct);
     }
