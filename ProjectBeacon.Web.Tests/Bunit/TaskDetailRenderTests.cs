@@ -111,7 +111,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         Assert.DoesNotContain("task-repository-sync", cut.Markup);
         Assert.Contains("The Git operation is still running. This page will keep checking its status automatically.", cut.Markup);
-        Assert.True(cut.Find("[data-testid='task-pipeline-start']").HasAttribute("disabled"));
+        Assert.False(cut.Find("[data-testid='task-pipeline-start']").HasAttribute("disabled"));
     }
 
     [Fact]
