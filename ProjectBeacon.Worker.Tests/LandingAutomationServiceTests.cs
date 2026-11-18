@@ -56,6 +56,21 @@ public sealed class LandingAutomationServiceTests
             return attempt;
         }
 
+        LandingAttempt NewLandedUnverified()
+        {
+            var attempt = LandingAttempt.Start(
+                project.Id, Guid.NewGuid(), Guid.NewGuid(), owner.Id, device.Id,
+                "main", new string('a', 40), new string('b', 40), new string('c', 64),
+                "Retry an automatic revert after a workstation reconnects.");
+            attempt.RecordPreview(
+                "main", new string('d', 40), new string('e', 40), new string('f', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.RecordLandedUnverified(
+                new string('1', 40), "PostMergeCheckFailed", 1, new string('2', 64));
+            attempt.SetEscalationCode("RevertDispatchUnavailable");
+            return attempt;
+        }
+
         var activeAttempts = Enumerable.Range(0, 201).Select(_ => NewRevertPending()).ToArray();
         var activeCommands = activeAttempts.Select(attempt =>
             WorkstationCommand.Create(
@@ -94,18 +109,21 @@ public sealed class LandingAutomationServiceTests
         escalatedRevert.SetEscalationCode("ManualReviewRequired");
         var unavailableRevert = NewRevertPending();
         unavailableRevert.SetEscalationCode("RevertDispatchUnavailable");
+        var unavailableLanded = NewLandedUnverified();
 
         db.LandingAttempts.AddRange(
             activeAttempts.Concat([
                 freeRevert, expiredExecute, freshExecute, completionUnknownExecute,
-                activeExecute, escalatedRevert, unavailableRevert
+                activeExecute, escalatedRevert, unavailableRevert, unavailableLanded
             ]));
         db.WorkstationCommands.AddRange(activeCommands.Append(activeExecuteCommand));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var now = DateTime.UtcNow;
         await db.LandingAttempts
-            .Where(attempt => attempt.Id == expiredExecute.Id || attempt.Id == unavailableRevert.Id)
+            .Where(attempt => attempt.Id == expiredExecute.Id
+                || attempt.Id == unavailableRevert.Id
+                || attempt.Id == unavailableLanded.Id)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(attempt => attempt.UpdatedAt, now.AddMinutes(-3)),
                 TestContext.Current.CancellationToken);
@@ -115,11 +133,12 @@ public sealed class LandingAutomationServiceTests
             .ToListAsync(TestContext.Current.CancellationToken);
         var candidateIds = candidates.Select(attempt => attempt.Id).ToHashSet();
 
-        Assert.Equal(4, candidates.Count);
+        Assert.Equal(5, candidates.Count);
         Assert.Contains(freeRevert.Id, candidateIds);
         Assert.Contains(expiredExecute.Id, candidateIds);
         Assert.Contains(completionUnknownExecute.Id, candidateIds);
         Assert.Contains(unavailableRevert.Id, candidateIds);
+        Assert.Contains(unavailableLanded.Id, candidateIds);
         Assert.DoesNotContain(freshExecute.Id, candidateIds);
         Assert.DoesNotContain(activeExecute.Id, candidateIds);
         Assert.DoesNotContain(escalatedRevert.Id, candidateIds);
