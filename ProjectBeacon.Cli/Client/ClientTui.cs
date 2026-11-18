@@ -191,6 +191,19 @@ public static class ClientTui
         settings.AgentDataDir = PromptOptional("Agent data dir", settings.AgentDataDir);
         settings.BeaconPath = PromptOptional("beacon executable", settings.BeaconPath ?? Environment.ProcessPath);
         settings.LlamaSwapPort = AnsiConsole.Ask("llama-swap port:", settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080);
+        var currentWorkspaceMode = WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode)
+            ? WorkstationWorkspaceMode.Branch
+            : WorkstationWorkspaceMode.Snapshot;
+        AnsiConsole.MarkupLine("[grey]This setting applies to task/pipeline runs. Chat sessions continue to use isolated snapshots. Branch mode keeps one persistent beacon/task/<taskId> branch per task; it does not push to GitHub.[/]");
+        settings.WorkspaceMode = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"Task/pipeline workspace mode (current: {currentWorkspaceMode})")
+                .AddChoices(WorkstationWorkspaceMode.Branch, WorkstationWorkspaceMode.Snapshot)
+                .HighlightStyle(new Style(Color.Cyan1)));
+        settings.WorkspaceModeConfigured = true;
+        settings.WorktreeRoot = PromptOptionalAbsolutePath(
+            "Task worktree root (empty uses the per-user ProjectBeacon directory)", settings.WorktreeRoot);
+        AnsiConsole.MarkupLine("[grey]Branch mode requires Git 2.38 or newer. Uncommitted changes in your original checkout are not copied into a task branch.[/]");
         AnsiConsole.MarkupLine("[grey]Command execution policy applies to native agents on this workstation. Auto skips consent; it is not an OS sandbox.[/]");
         var currentPolicy = settings.CommandPolicy?.Trim().ToLowerInvariant() is "off" or "auto" or "ask"
             ? settings.CommandPolicy.Trim().ToLowerInvariant()
@@ -468,6 +481,20 @@ public static class ClientTui
                 .AllowEmpty()
                 .DefaultValue(current ?? ""));
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static string? PromptOptionalAbsolutePath(string label, string? current)
+    {
+        while (true)
+        {
+            var value = PromptOptional(label, current);
+            if (value is null)
+                return null;
+            if (Path.IsPathRooted(value))
+                return Path.GetFullPath(value);
+            AnsiConsole.MarkupLine("[yellow]Worktree root must be an absolute path. Leave it empty to use the default.[/]");
+            current = value;
+        }
     }
 
     private static void OpenBrowser(string url)

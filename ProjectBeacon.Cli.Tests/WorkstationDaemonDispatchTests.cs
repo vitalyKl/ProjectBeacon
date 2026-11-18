@@ -329,7 +329,12 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     {
         var projectRoot = Path.Combine(_dir, "review");
         Directory.CreateDirectory(projectRoot);
-        await using var daemon = CreateDaemon(_dir);
+        var snapshotSettings = new WorkstationSettings
+        {
+            WorkspaceMode = WorkstationWorkspaceMode.Snapshot,
+            WorkspaceModeConfigured = true
+        };
+        await using var daemon = CreateDaemon(_dir, snapshotSettings);
         var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
         {
             Id = Guid.NewGuid(),
@@ -355,7 +360,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         Assert.Contains("git", result);
     }
 
-    private static WorkstationDaemon CreateDaemon(string tempDir)
+    private static WorkstationDaemon CreateDaemon(string tempDir, WorkstationSettings? settings = null)
     {
         var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
         var llama = new ClientLlamaSwap
@@ -363,7 +368,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
             SkipRealProcess = true,
             ConfigFile = Path.Combine(tempDir, "config.yaml")
         };
-        return new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        return new WorkstationDaemon(http, llama, () => settings ?? new WorkstationSettings());
     }
 
     private static HttpResponseMessage JsonResponse(object body)

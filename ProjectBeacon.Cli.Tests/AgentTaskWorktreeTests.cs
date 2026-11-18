@@ -27,6 +27,9 @@ public sealed class AgentTaskWorktreeTests
             Assert.Null(created.Error);
             Assert.Contains("origin", created.Warning ?? string.Empty, StringComparison.OrdinalIgnoreCase);
             var workspace = created.Worktree!;
+            // A Branch-mode task workspace is isolated by its own branch and lease; it must
+            // not be counted as a live Snapshot session that blocks repository GitSync.
+            Assert.False(GitRepositoryOperationGate.HasActiveSessions(repository));
             Assert.Equal($"beacon/task/{taskId:N}", workspace.BranchName);
             Assert.Contains(Path.Combine("worktrees", projectId.ToString("N")),
                 workspace.RecoveryPath, StringComparison.Ordinal);
@@ -170,9 +173,41 @@ public sealed class AgentTaskWorktreeTests
     }
 
     [Fact]
-    public void WorkstationSettings_DefaultToSnapshotMode()
+    public void WorkstationSettings_DefaultToPersistentTaskBranches()
     {
-        Assert.Equal(WorkstationWorkspaceMode.Snapshot, new WorkstationSettings().WorkspaceMode);
+        var settings = new WorkstationSettings();
+        Assert.Equal(WorkstationWorkspaceMode.Branch, settings.WorkspaceMode);
+        Assert.False(settings.WorkspaceModeConfigured);
+    }
+
+    [Fact]
+    public async Task WorkstationSettings_MigratesLegacyImplicitSnapshotButPreservesExplicitChoice()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "beacon-workstation-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            await File.WriteAllTextAsync(path, "{\"workspaceMode\":\"Snapshot\"}");
+            var (legacy, legacyError) = WorkstationSettings.TryRead(path);
+            Assert.Null(legacyError);
+            Assert.Equal(WorkstationWorkspaceMode.Branch, legacy.WorkspaceMode);
+            Assert.False(legacy.WorkspaceModeConfigured);
+
+            await File.WriteAllTextAsync(path, "{\"workspaceMode\":\"Snapshot\",\"workspaceModeConfigured\":true}");
+            var (explicitSnapshot, explicitError) = WorkstationSettings.TryRead(path);
+            Assert.Null(explicitError);
+            Assert.Equal(WorkstationWorkspaceMode.Snapshot, explicitSnapshot.WorkspaceMode);
+            Assert.True(explicitSnapshot.WorkspaceModeConfigured);
+
+            explicitSnapshot.Save(path);
+            var (roundTripped, roundTripError) = WorkstationSettings.TryRead(path);
+            Assert.Null(roundTripError);
+            Assert.Equal(WorkstationWorkspaceMode.Snapshot, roundTripped.WorkspaceMode);
+            Assert.True(roundTripped.WorkspaceModeConfigured);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
     }
 
     private static async Task InitializeRepositoryAsync(string repository)

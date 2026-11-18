@@ -127,8 +127,10 @@ public sealed class WorkstationSettings
     public int ContextResponseReserveTokens { get; set; }
     /// <summary>Abort a pipeline turn after this many minutes without transcript/tool/form progress.</summary>
     public int PipelineIdleTimeoutMinutes { get; set; } = 15;
-    /// <summary>Agent workspace strategy. Snapshot remains the default until task branch workspaces are enabled explicitly.</summary>
-    public string WorkspaceMode { get; set; } = WorkstationWorkspaceMode.Snapshot;
+    /// <summary>Agent workspace strategy for task/pipeline runs. New and legacy-default installations use persistent task branches.</summary>
+    public string WorkspaceMode { get; set; } = WorkstationWorkspaceMode.Branch;
+    /// <summary>True when the user explicitly chose a workspace mode. Missing values are migrated to Branch.</summary>
+    public bool WorkspaceModeConfigured { get; set; }
     /// <summary>Persistent root for task worktrees. Blank uses the per-user ProjectBeacon worktree directory.</summary>
     public string? WorktreeRoot { get; set; }
     public string? AgentDataDir { get; set; }
@@ -164,7 +166,16 @@ public sealed class WorkstationSettings
                 root["agentDataDir"] = legacyDataDirectory?.DeepClone();
             root.Remove("opencodeDataDir");
             root.Remove("agentRuntime");
-            return (JsonSerializer.Deserialize<WorkstationSettings>(root.ToJsonString(), JsonOptions) ?? new WorkstationSettings(), null);
+            var settings = JsonSerializer.Deserialize<WorkstationSettings>(root.ToJsonString(), JsonOptions)
+                ?? new WorkstationSettings();
+            // Snapshot was the old implicit default, not an intentional opt-out. Migrate
+            // those settings to Branch; the TUI persists WorkspaceModeConfigured=true
+            // whenever the user deliberately chooses Branch or Snapshot.
+            if (!settings.WorkspaceModeConfigured)
+                settings.WorkspaceMode = WorkstationWorkspaceMode.Branch;
+            else if (!WorkstationWorkspaceMode.IsSupported(settings.WorkspaceMode))
+                throw new JsonException("workspaceMode must be Branch or Snapshot when explicitly configured.");
+            return (settings, null);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -214,4 +225,8 @@ internal static class WorkstationWorkspaceMode
 
     public static bool UsesTaskBranches(string? value) =>
         string.Equals(value?.Trim(), Branch, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsSupported(string? value) =>
+        string.Equals(value?.Trim(), Branch, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value?.Trim(), Snapshot, StringComparison.OrdinalIgnoreCase);
 }
