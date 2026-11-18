@@ -566,7 +566,7 @@ internal static class TaskWorktreeLifecycle
             && !segment.StartsWith(".", StringComparison.Ordinal)
             && !segment.EndsWith(".", StringComparison.Ordinal)
             && segment.All(character => !char.IsControl(character)
-                && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'));
+                && character is not (' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\')));
 
     private static bool SamePath(string left, string right) =>
         string.Equals(Path.GetFullPath(left), Path.GetFullPath(right),
