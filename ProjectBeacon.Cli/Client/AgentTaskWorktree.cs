@@ -504,8 +504,9 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         if (string.IsNullOrWhiteSpace(targetBranch)
             || !AgentTaskWorktree.IsGitSha(sourceSha)
             || !AgentTaskWorktree.IsGitSha(mergeCommitSha)
-            || !string.Equals(targetBranch, BaseBranch, StringComparison.Ordinal))
-            return (false, "Landing evidence does not match this task's configured base branch.");
+            || (!string.Equals(targetBranch, BaseBranch, StringComparison.Ordinal)
+                && !string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal)))
+            return (false, "Landing evidence does not match this task's base or integration branch.");
 
         var branch = await AgentSessionWorktree.RunGitAsync(
             _worktreeRoot, ct, _disabledFilterDrivers, "symbolic-ref", "--quiet", "--short", "HEAD");

@@ -15,6 +15,7 @@ internal static class GitLandExecutor
 {
     private const int MaxChangedFiles = 200;
     private const int MaxChangedLines = 20_000;
+    private const string IntegrationBranch = "beacon/integration";
 
     private sealed record Request(
         Guid ProjectId,
@@ -22,6 +23,8 @@ internal static class GitLandExecutor
         Guid LandingAttemptId,
         string Action,
         string TargetBranch,
+        string ReviewBaseBranch,
+        string IntegrationMode,
         string SourceSha,
         string ReviewTreeSha,
         string CheckCommandHash,
@@ -79,7 +82,11 @@ internal static class GitLandExecutor
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
             return BusinessFailure("TaskBranchIdentityUnavailable");
-        if (!string.Equals(taskWorkspace.BaseBranch, request.TargetBranch, StringComparison.Ordinal))
+        if (!string.Equals(taskWorkspace.BaseBranch, request.ReviewBaseBranch, StringComparison.Ordinal))
+            return BusinessFailure("ReviewBaseBranchIdentityMismatch");
+        if (!string.Equals(request.TargetBranch, request.ReviewBaseBranch, StringComparison.Ordinal)
+            && !(string.Equals(request.TargetBranch, IntegrationBranch, StringComparison.Ordinal)
+                && request.IntegrationMode is "Force" or "Fallback"))
             return BusinessFailure("TargetBranchIdentityMismatch");
 
         var targetBranchCheck = await Git(taskWorkspace.RepositoryRoot, [], ct, "check-ref-format", "--branch", request.TargetBranch);
@@ -196,7 +203,7 @@ internal static class GitLandExecutor
             "previewed" => (true, JsonSerializer.Serialize(new
             {
                 status = "previewed",
-                targetBranch = request.TargetBranch,
+                targetBranch = candidate.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 candidateTreeSha = candidate.CandidateTreeSha,
                 checkOutputHash = candidate.CheckOutputHash,
@@ -206,14 +213,14 @@ internal static class GitLandExecutor
             "conflicted" => (true, JsonSerializer.Serialize(new
             {
                 status = "conflicted",
-                targetBranch = workspace.BaseBranch,
+                targetBranch = candidate.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 conflicts = candidate.Conflicts
             }), null),
             _ => (true, JsonSerializer.Serialize(new
             {
                 status = "failed",
-                targetBranch = workspace.BaseBranch,
+                targetBranch = candidate.TargetBranch ?? request.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 errorCode = candidate.ErrorCode ?? candidate.Status,
                 checkExitCode = candidate.CheckExitCode,
@@ -1049,14 +1056,35 @@ internal static class GitLandExecutor
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
     {
         var repo = workspace.RepositoryRoot;
-        var targetBranch = request.TargetBranch;
+        var targetBranch = request.IntegrationMode == "Force" ? IntegrationBranch : request.TargetBranch;
         var branchCheck = await Git(repo, filters, ct, "check-ref-format", "--branch", targetBranch);
         if (!Succeeded(branchCheck))
-            return new CandidateResult("failed", ErrorCode: "InvalidTargetBranch");
+            return new CandidateResult("failed", targetBranch, ErrorCode: "InvalidTargetBranch");
 
-        var target = await ResolveTargetHeadAsync(workspace, request.TargetBranch, request.LandingAttemptId, filters, ct);
+        if (request.IntegrationMode == "Force")
+        {
+            var integration = await EnsureIntegrationBranchAsync(workspace, request.ReviewBaseBranch,
+                request.LandingAttemptId, filters, ct);
+            if (integration.Error is not null)
+                return new CandidateResult("failed", targetBranch, ErrorCode: integration.Error);
+        }
+
+        var target = await ResolveTargetHeadAsync(workspace, targetBranch, request.LandingAttemptId, filters, ct);
+        if (target.ErrorCode == "TargetCheckoutDirty"
+            && request.Action == "Preview"
+            && request.IntegrationMode == "Fallback"
+            && string.Equals(targetBranch, request.ReviewBaseBranch, StringComparison.Ordinal))
+        {
+            var integration = await EnsureIntegrationBranchAsync(workspace, request.ReviewBaseBranch,
+                request.LandingAttemptId, filters, ct);
+            if (integration.Error is not null)
+                return new CandidateResult("failed", request.ReviewBaseBranch, ErrorCode: integration.Error);
+            targetBranch = IntegrationBranch;
+            target = await ResolveTargetHeadAsync(workspace, targetBranch, request.LandingAttemptId, filters, ct);
+        }
+
         if (target.Error is not null)
-            return new CandidateResult("failed", ErrorCode: target.ErrorCode ?? "TargetUnavailable");
+            return new CandidateResult("failed", targetBranch, ErrorCode: target.ErrorCode ?? "TargetUnavailable");
 
         // --write-tree computes the merge result directly in Git's object database. It does
         // not create MERGE_HEAD, touch an index, or modify the target checkout. With -z and
@@ -1172,10 +1200,87 @@ internal static class GitLandExecutor
         }
     }
 
+    private static async Task<(string? Sha, string? Error)> EnsureIntegrationBranchAsync(
+        AgentTaskWorktree workspace,
+        string reviewBaseBranch,
+        Guid attemptId,
+        string[] filters,
+        CancellationToken ct)
+    {
+        if (!string.Equals(reviewBaseBranch, workspace.BaseBranch, StringComparison.Ordinal)
+            || !string.Equals(reviewBaseBranch, workspace.BaseBranch, StringComparison.Ordinal))
+            return (null, "The review base branch does not match this task's recorded base.");
+
+        var integrationCheckout = await FindTargetCheckoutAsync(
+            workspace.RepositoryRoot, IntegrationBranch, filters, ct);
+        if (integrationCheckout.Error is not null)
+            return (null, integrationCheckout.Error);
+        if (integrationCheckout.Checkout!.CheckedOut
+            && !SamePath(integrationCheckout.Checkout.Path, workspace.RepositoryRoot))
+            return (null, "The integration branch is checked out in a different worktree.");
+
+        // The task's pinned BaseSha is the commit against which its branch was created
+        // or most recently integrated. Do not fetch or mutate any user's checkout to seed
+        // the internal integration ref.
+        var baseSha = workspace.BaseSha;
+        if (!IsGitSha(baseSha))
+            return (null, "The task's recorded base commit is unavailable.");
+
+        var integrationRef = $"refs/heads/{IntegrationBranch}";
+        var current = await Git(workspace.RepositoryRoot, filters, ct, "rev-parse", "--verify", integrationRef);
+        if (current.ExitCode == 128 && !current.TimedOut)
+        {
+            var create = await Git(workspace.RepositoryRoot, filters, CancellationToken.None,
+                "update-ref", integrationRef, baseSha, new string('0', baseSha.Length));
+            if (!Succeeded(create))
+                return (null, "Could not create the integration branch from the task's reviewed base commit.");
+            return (baseSha, null);
+        }
+        if (!Succeeded(current) || !IsGitSha(current.StdOut.Trim()))
+            return (null, "Could not inspect the existing integration branch.");
+        var integrationSha = current.StdOut.Trim();
+        if (await IsAncestorAsync(workspace.RepositoryRoot, filters, baseSha, integrationSha, ct) == true)
+            return (integrationSha, null);
+        if (await IsAncestorAsync(workspace.RepositoryRoot, filters, integrationSha, baseSha, ct) == true)
+        {
+            var update = await Git(workspace.RepositoryRoot, filters, CancellationToken.None,
+                "update-ref", integrationRef, baseSha, integrationSha);
+            return Succeeded(update)
+                ? (baseSha, null)
+                : (null, "The integration branch changed while it was being advanced to the reviewed base.");
+        }
+
+        return (null, "The existing integration branch diverges from this task's reviewed base. Resolve the branch history before landing.");
+    }
+
     private static async Task<(string? Sha, string? Error, string? ErrorCode)> ResolveTargetHeadAsync(
         AgentTaskWorktree workspace, string targetBranch, Guid attemptId, string[] filters, CancellationToken ct)
     {
         var repo = workspace.RepositoryRoot;
+        if (string.Equals(targetBranch, IntegrationBranch, StringComparison.Ordinal))
+        {
+            var integrationCheckout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
+            if (integrationCheckout.Error is not null)
+                return (null, integrationCheckout.Error, "TargetCheckoutUnavailable");
+            if (integrationCheckout.Checkout!.CheckedOut
+                && !SamePath(integrationCheckout.Checkout.Path, repo))
+                return (null, "The integration branch is checked out in a different worktree.", "TargetCheckedOutElsewhere");
+            if (integrationCheckout.Checkout.CheckedOut)
+            {
+                var status = await Git(repo, filters, ct, "status", "--porcelain", "--untracked-files=all");
+                if (!Succeeded(status) || !string.IsNullOrWhiteSpace(status.StdOut))
+                    return (null, "The integration branch checkout is not clean.", "TargetCheckoutDirty");
+                var head = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{IntegrationBranch}");
+                return Succeeded(head) && IsGitSha(head.StdOut.Trim())
+                    ? (head.StdOut.Trim(), null, null)
+                    : (null, "Could not read the integration branch HEAD.", "TargetHeadUnavailable");
+            }
+            var localIntegration = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{IntegrationBranch}");
+            return Succeeded(localIntegration) && IsGitSha(localIntegration.StdOut.Trim())
+                ? (localIntegration.StdOut.Trim(), null, null)
+                : (null, "The local integration branch is unavailable.", "IntegrationBranchUnavailable");
+        }
+
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
         if (checkout.Error is not null)
             return (null, checkout.Error, "TargetCheckoutUnavailable");
@@ -1410,6 +1515,8 @@ internal static class GitLandExecutor
             }
             var action = root["action"]?.GetValue<string>();
             var targetBranch = root["targetBranch"]?.GetValue<string>();
+            var reviewBaseBranch = root["reviewBaseBranch"]?.GetValue<string>() ?? targetBranch;
+            var integrationMode = root["integrationMode"]?.GetValue<string>() ?? "None";
             var sourceSha = root["sourceSha"]?.GetValue<string>();
             var reviewTreeSha = root["reviewTreeSha"]?.GetValue<string>();
             var hash = root["checkCommandHash"]?.GetValue<string>();
@@ -1429,6 +1536,10 @@ internal static class GitLandExecutor
             }
             if (action is not ("Preview" or "Execute" or "Revert")
                 || !IsSafeBranchName(targetBranch)
+                || !IsSafeBranchName(reviewBaseBranch)
+                || integrationMode is not ("None" or "Force" or "Fallback")
+                || (targetBranch != reviewBaseBranch
+                    && !(targetBranch == IntegrationBranch && integrationMode is "Force" or "Fallback"))
                 || !IsGitSha(sourceSha)
                 || !IsGitSha(reviewTreeSha)
                 || hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit)
@@ -1439,7 +1550,8 @@ internal static class GitLandExecutor
                 return false;
             }
             request = new Request(
-                projectId, taskId, attemptId, action, targetBranch!, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
+                projectId, taskId, attemptId, action, targetBranch!, reviewBaseBranch!, integrationMode!,
+                sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
                 root["mergeCommitSha"]?.GetValue<string>(),

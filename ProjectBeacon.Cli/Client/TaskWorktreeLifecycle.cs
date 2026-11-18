@@ -455,7 +455,8 @@ internal static class TaskWorktreeLifecycle
         if (hasLandingEvidence
             && (metadata.LandedAtUtc is null
                 || !IsSafeBranchName(metadata.LandingTargetBranch)
-                || !string.Equals(metadata.LandingTargetBranch, metadata.BaseBranch, StringComparison.Ordinal)
+                || (!string.Equals(metadata.LandingTargetBranch, metadata.BaseBranch, StringComparison.Ordinal)
+                    && !string.Equals(metadata.LandingTargetBranch, "beacon/integration", StringComparison.Ordinal))
                 || !AgentTaskWorktree.IsGitSha(metadata.LandingSourceSha ?? string.Empty)
                 || !AgentTaskWorktree.IsGitSha(metadata.LandingCommitSha ?? string.Empty)))
             return false;
