@@ -89,7 +89,7 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                            StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="OnStartPipeline" Disabled="_busy || _gitSyncBusy || _gitSyncCommandPending || _pipeline?.Preflight?.RepositorySyncInProgress == true || !CanStartPlanner"
+                           OnClick="OnStartPipeline" Disabled="_busy || !CanStartPlanner"
                            data-testid="task-pipeline-start">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
                 @if (_pipeline?.Preflight?.RepositorySyncInProgress == true)
@@ -126,7 +126,7 @@ else
                         <MudText Typo="Typo.caption" Color="Color.Warning">@L["GitSyncRequiresAdmin"]</MudText>
                     }
                 }
-                @if (!CanStartPlanner && _pipeline?.Preflight?.RepositorySyncInProgress != true)
+                @if (!CanStartPlanner)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
                 }
@@ -497,8 +497,7 @@ else
     private string _workspaceTitle = string.Empty;
     private string _workspaceAbstract = string.Empty;
     private string _workspaceContent = string.Empty;
-    private bool CanStartPlanner => _pipeline?.CanStart == true
-        && _pipeline.Preflight?.RepositorySyncInProgress != true;
+    private bool CanStartPlanner => _pipeline?.CanStart == true;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
     private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
