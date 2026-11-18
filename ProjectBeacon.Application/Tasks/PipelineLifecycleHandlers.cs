@@ -34,9 +34,9 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            // Resolve the project id, then lock the same project row used by GitSync enqueue
-            // and LaunchSession. The final preflight, stage transition, and Planner session
-            // creation are committed atomically with respect to repository synchronization.
+            // Serialize pipeline start with project runtime reassignment and project-scoped
+            // workstation command enqueue. Repository synchronization state is advisory and
+            // is deliberately not part of the pipeline start decision.
             var projectId = await db.Tasks.AsNoTracking()
                 .Where(task => task.Id == command.Request.TaskId)
                 .Select(task => (Guid?)task.ProjectId)
@@ -164,9 +164,9 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
 
-            // Serialize the final repository gate and pipeline command insert with GitSync enqueue.
-            // Both operations update the same project row inside their transaction, so a new
-            // synchronization cannot slip between this check and the launch becoming durable.
+            // Serialize pipeline command creation with project runtime reassignment and
+            // project-scoped GitSync enqueue. The workstation selection and durable command
+            // insert share this transaction; GitSync completion is not a launch prerequisite.
             var projectLocked = await db.Projects.IgnoreQueryFilters()
                 .Where(project => project.Id == session.ProjectId)
                 .ExecuteUpdateAsync(update => update
