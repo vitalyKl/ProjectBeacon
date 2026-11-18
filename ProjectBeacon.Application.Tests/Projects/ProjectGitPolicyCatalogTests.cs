@@ -56,7 +56,7 @@ public sealed class ProjectGitPolicyCatalogTests
     {
         var handler = new SetProjectGitPolicyHandler(null!, null!, null!);
         var actor = new ProjectBeacon.Application.Authorization.ActorContext(
-            ProjectBeacon.Domain.Enums.ActorType.Human,
+            ProjectBeacon.Application.Authorization.ActorType.Human,
             Guid.NewGuid(),
             false,
             null,
