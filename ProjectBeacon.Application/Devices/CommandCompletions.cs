@@ -593,7 +593,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
             || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
             || !string.Equals(payloadReviewBaseBranch, reviewBaseBranch, StringComparison.Ordinal)
             || !string.Equals(payloadIntegrationMode, expectedIntegrationMode, StringComparison.Ordinal)
-            || !attempt.AllowsLandingTarget(reviewBaseBranch)
+            || !attempt.AllowsReviewBaseBranch(reviewBaseBranch)
             || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal)
             || !actionBindingValid)
             return;

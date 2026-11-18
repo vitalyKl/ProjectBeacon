@@ -94,7 +94,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             && string.Equals(latestLanding.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
-            && latestLanding.AllowsLandingTarget(reviewRun.CheckedBaseBranch)
+            && latestLanding.AllowsReviewBaseBranch(reviewRun.CheckedBaseBranch)
             && latestLanding.DeviceId == reviewRun.CheckedDeviceId;
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
@@ -450,7 +450,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
-            || !attempt.AllowsLandingTarget(reviewRun.CheckedBaseBranch)
+            || !attempt.AllowsReviewBaseBranch(reviewRun.CheckedBaseBranch)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
         {

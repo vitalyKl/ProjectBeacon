@@ -129,8 +129,27 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     {
         if (string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
             return true;
-        if (!string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal))
+        return string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal)
+            && AllowsIntegrationByPinnedPolicy();
+    }
+
+    /// <summary>
+    /// Verifies the original base branch against the immutable ReviewRun. Once a
+    /// preview routes to the integration branch, the effective target is different
+    /// but the original review proof remains the same.
+    /// </summary>
+    public bool AllowsReviewBaseBranch(string? reviewBaseBranch)
+    {
+        if (string.IsNullOrWhiteSpace(reviewBaseBranch))
             return false;
+        if (string.Equals(TargetBranch, reviewBaseBranch, StringComparison.Ordinal))
+            return true;
+        return string.Equals(TargetBranch, "beacon/integration", StringComparison.Ordinal)
+            && AllowsIntegrationByPinnedPolicy();
+    }
+
+    private bool AllowsIntegrationByPinnedPolicy()
+    {
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(GitPolicySnapshotJson);

@@ -1207,8 +1207,7 @@ internal static class GitLandExecutor
         string[] filters,
         CancellationToken ct)
     {
-        if (!string.Equals(reviewBaseBranch, workspace.BaseBranch, StringComparison.Ordinal)
-            || !string.Equals(reviewBaseBranch, workspace.BaseBranch, StringComparison.Ordinal))
+        if (!string.Equals(reviewBaseBranch, workspace.BaseBranch, StringComparison.Ordinal))
             return (null, "The review base branch does not match this task's recorded base.");
 
         var integrationCheckout = await FindTargetCheckoutAsync(
