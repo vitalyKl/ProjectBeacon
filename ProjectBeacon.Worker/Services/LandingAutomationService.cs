@@ -224,7 +224,7 @@ public sealed class LandingAutomationService : BackgroundService
 
     internal static bool ShouldDispatchExecute(LandingAttemptStatus status, int autonomyLevel) =>
         autonomyLevel == 2
-        && status is LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending;
+        && status is (LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending);
 
     internal static bool ShouldDispatchRevert(
         LandingAttemptStatus status,
