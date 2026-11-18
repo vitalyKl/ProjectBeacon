@@ -368,6 +368,68 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LaunchSession_LaunchesWhileGitSyncIsActiveWithoutGitSyncCapability(bool running)
+    {
+        var (projectId, task) = await SeedTaskAsync("Launch while GitSync is active", seedPipelinePrerequisites: false);
+        var user = User.Create("launch-active-sync", $"launch-active-sync-{Guid.NewGuid():N}@beacon.local", "hash");
+        var device = DaemonDevice.Create(
+            "native workstation without GitSync capability",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash-" + Guid.NewGuid().ToString("N"),
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        device.Heartbeat("{}", """{"agentRuntime":"native"}""");
+        var backend = LocalModelBackend.Create(
+            "launch-active-sync-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        var runtime = ProjectRuntime.Create(projectId, device.Id, "/workspace/launch-active-sync");
+        var session = PipelineSession.Create(
+            task.Id, projectId, PipelineRole.Planner, "Planner prompt", modelBackendId: backend.Id);
+        var activeSync = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId, mode = "PullFastForward" }),
+            projectId);
+        if (running)
+            activeSync.Claim(TimeSpan.FromMinutes(5), "launch-git-sync-test");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(user);
+            _db.DaemonDevices.Add(device);
+            _db.LocalModelBackends.Add(backend);
+            _db.ProjectRuntimes.Add(runtime);
+            _db.PipelineSessions.Add(session);
+            _db.WorkstationCommands.Add(activeSync);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new LaunchSessionHandler(factory)
+            .HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(item => item.Id == session.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Active, persisted.Status);
+            Assert.Single(await _db.WorkstationCommands.AsNoTracking()
+                .Where(command => command.ProjectId == projectId
+                    && command.Kind == WorkstationCommandKind.RunPipelineSession)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
     [Fact]
     public async Task GetPipeline_AllowsCapableWorkstationAfterVerifiedUpToDateSync()
     {
