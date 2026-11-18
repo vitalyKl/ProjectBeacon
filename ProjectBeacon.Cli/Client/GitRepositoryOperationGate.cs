@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 /// <summary>Serializes operations that must not overlap on a real project repository.</summary>
-internal static partial class GitRepositoryOperationGate
+internal static class GitRepositoryOperationGate
 {
     private sealed class RepositoryState
     {
@@ -156,11 +156,13 @@ internal static partial class GitRepositoryOperationGate
         }
     }
 
-    [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8)]
-    private static partial IntPtr RealPath(string path, IntPtr resolvedPath);
+    [DllImport("libc", EntryPoint = "realpath", ExactSpelling = true)]
+    private static extern IntPtr RealPath(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        IntPtr resolvedPath);
 
-    [LibraryImport("libc", EntryPoint = "free")]
-    private static partial void Free(IntPtr pointer);
+    [DllImport("libc", EntryPoint = "free", ExactSpelling = true)]
+    private static extern void Free(IntPtr pointer);
 
     private static RepositoryState GetState(string repositoryRoot)
     {
