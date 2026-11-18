@@ -102,7 +102,7 @@ internal sealed class NativeAgentToolExecutor(
                 {
                     if (string.Equals(agentMode, "plan", StringComparison.Ordinal)
                         || controls?.HarnessAuthorization is not
-                            { RepositoryBaseSynced: not null } repoAuthorization
+                        { RepositoryBaseSynced: not null } repoAuthorization
                         || !NativeAgentToolPolicy.IsRepositorySyncAuthorized(repoAuthorization))
                     {
                         isError = true;
