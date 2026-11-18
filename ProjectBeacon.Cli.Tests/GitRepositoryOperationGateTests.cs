@@ -10,6 +10,20 @@ public sealed class GitRepositoryOperationGateTests
         if (OperatingSystem.IsWindows())
             return;
 
+        if (OperatingSystem.IsMacOS())
+        {
+            var tempRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
+            var alternateTempRoot = tempRoot.StartsWith("/private/var/", StringComparison.Ordinal)
+                ? tempRoot["/private".Length..]
+                : tempRoot.StartsWith("/var/", StringComparison.Ordinal)
+                    ? "/private" + tempRoot
+                    : null;
+            Assert.NotNull(alternateTempRoot);
+            Assert.Equal(
+                GitRepositoryOperationGate.NormalizeRoot(tempRoot),
+                GitRepositoryOperationGate.NormalizeRoot(alternateTempRoot!));
+        }
+
         var parent = Path.Combine(
             Path.GetTempPath(),
             "beacon-git-gate-path-" + Guid.NewGuid().ToString("N"));
