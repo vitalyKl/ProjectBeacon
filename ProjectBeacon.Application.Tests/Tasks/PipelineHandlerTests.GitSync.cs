@@ -131,6 +131,63 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartPipeline_StartsWithPendingOrRunningGitSyncWithoutGitSyncCapability(bool running)
+    {
+        var (projectId, task) = await SeedTaskAsync("Start while GitSync is active", seedPipelinePrerequisites: false);
+        var plannerOwner = User.Create("active-sync-planner", $"active-sync-planner-{Guid.NewGuid():N}@beacon.local", "hash");
+        var plannerBackend = LocalModelBackend.Create(
+            "active-sync-planner-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            plannerOwner.Id);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(plannerOwner);
+            _db.LocalModelBackends.Add(plannerBackend);
+            _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, plannerBackend.Id, projectId));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var device = await SeedGitSyncRuntimeAsync(projectId);
+        // Simulate an older workstation whose last heartbeat no longer advertises GitSync.
+        device.Heartbeat(probeJson: "{}");
+        var activeSync = WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.GitSync,
+            JsonSerializer.Serialize(new { projectId, mode = "PullFastForward" }),
+            projectId);
+        if (running)
+            activeSync.Claim(TimeSpan.FromMinutes(5), "pipeline-git-sync-test");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(activeSync);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new StartPipelineHandler(factory, new FakeSpawner(Guid.NewGuid()))
+            .HandleAsync(
+                new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskPipelineStage.Planning, persisted.PipelineStage);
+            Assert.Single(await _db.PipelineSessions.AsNoTracking()
+                .Where(session => session.TaskId == task.Id)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
     [Fact]
     public async Task StartPipeline_StartsWithoutPriorGitSyncVerification()
     {
