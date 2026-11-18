@@ -172,6 +172,22 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void UnqueuedExecuteInvalidation_ReleasesAttemptForFreshPreview()
+    {
+        var attempt = Start();
+        attempt.SetGitPolicySnapshot(1, """{"autonomyLevel":2,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+
+        attempt.Fail("GitPolicyChangedSincePreview");
+        attempt.SetEscalationCode("GitPolicyChangedSincePreview");
+
+        Assert.Equal(LandingAttemptStatus.Failed, attempt.Status);
+        Assert.Equal("GitPolicyChangedSincePreview", attempt.FailureCode);
+        Assert.Equal("GitPolicyChangedSincePreview", attempt.EscalationCode);
+    }
+
+    [Fact]
     public void FailedRevert_CanReturnToPendingForAnExplicitSafeRetry()
     {
         var attempt = Start();
