@@ -40,8 +40,18 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Equal(new[] { "docs/private/*.md", "src/generated/**" }, policy.ProtectedPaths);
     }
 
+    [Fact]
+    public void TryRead_RecognizesPersistedIntegrationPolicySoItCanBeRepaired()
+    {
+        const string json = "{\"autonomyLevel\":1,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
+
+        Assert.True(ProjectGitPolicyCatalog.TryRead(json, 4, out var policy));
+        Assert.Equal(1, policy.AutonomyLevel);
+        Assert.False(policy.IntegrationBranchAvailable);
+        Assert.Contains("phase 6", policy.IntegrationBranchUnavailableReason, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
-    [InlineData("{\"autonomyLevel\":1,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":3,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"LandViaIntegration\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":201,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
