@@ -68,14 +68,36 @@ public sealed class LandingAutomationService : BackgroundService
         {
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
 
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var expiredDispatchLease = now.AddMinutes(-2);
             var candidates = await db.LandingAttempts
                 .AsNoTracking()
                 .Where(attempt =>
-                    attempt.Status == LandingAttemptStatus.RevertPending
+                    (attempt.Status == LandingAttemptStatus.RevertPending
+                        && (attempt.FailureCode == null
+                            || attempt.FailureCode == "CommandCompletionUnknown"
+                            || (attempt.FailureCode == "RevertEnqueuePending"
+                                && attempt.UpdatedAt < expiredDispatchLease)))
+                    || (attempt.Status == LandingAttemptStatus.ExecutePending
+                        && attempt.EscalationCode == null
+                        && (attempt.FailureCode == null
+                            || attempt.FailureCode == "CommandCompletionUnknown"
+                            || (attempt.FailureCode == "ExecuteEnqueuePending"
+                                && attempt.UpdatedAt < expiredDispatchLease)))
                     || (attempt.EscalationCode == null
                         && (attempt.Status == LandingAttemptStatus.Previewed
                             || attempt.Status == LandingAttemptStatus.LandedUnverified)))
+                // A command already in the durable queue owns this attempt. Exclude it before
+                // applying Take(200), otherwise the same oldest active Revert commands can
+                // occupy every worker batch and starve unrelated landings indefinitely.
+                .Where(attempt => !db.WorkstationCommands.Any(command =>
+                    command.ProjectId == attempt.ProjectId
+                    && command.Kind == WorkstationCommandKind.GitLand
+                    && (command.Status == WorkstationCommandStatus.Pending
+                        || command.Status == WorkstationCommandStatus.Running)
+                    && command.PayloadJson.Contains(attempt.Id.ToString())))
                 .OrderBy(attempt => attempt.UpdatedAt)
+                .ThenBy(attempt => attempt.Id)
                 .Take(200)
                 .ToListAsync(ct);
 
@@ -104,26 +126,36 @@ public sealed class LandingAutomationService : BackgroundService
                     ActorType.Worker, null, false, null, null,
                     candidate.ProjectId, project.OrgId, ApiTokenCapability.None);
 
-                if (candidate.Status == LandingAttemptStatus.Previewed)
+                if (candidate.Status is LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending)
                 {
                     if (project.GitPolicyRevision != candidate.GitPolicyRevision)
                     {
-                        await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
-                            "GitPolicyChangedSincePreview", ct);
+                        if (candidate.Status == LandingAttemptStatus.ExecutePending)
+                            await FailAndEscalateAsync(db, candidate.Id, LandingAttemptStatus.ExecutePending,
+                                "GitPolicyChangedSincePreview", ct);
+                        else
+                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
+                                "GitPolicyChangedSincePreview", ct);
                         continue;
                     }
 
                     if (policy.AutonomyLevel == 0)
                     {
-                        await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
-                            "ManualExecutionRequired", ct);
+                        await SetEscalationAsync(db, candidate.Id, candidate.Status,
+                            candidate.Status == LandingAttemptStatus.ExecutePending
+                                ? "ManualExecuteRetryRequired"
+                                : "ManualExecutionRequired", ct);
                         continue;
                     }
 
                     if (policy.AutonomyLevel == 1)
                     {
-                        await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
-                            "IntegrationBranchNotAvailable", ct);
+                        if (candidate.Status == LandingAttemptStatus.ExecutePending)
+                            await FailAndEscalateAsync(db, candidate.Id, LandingAttemptStatus.ExecutePending,
+                                "IntegrationBranchNotAvailable", ct);
+                        else
+                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
+                                "IntegrationBranchNotAvailable", ct);
                         continue;
                     }
 
@@ -138,7 +170,7 @@ public sealed class LandingAutomationService : BackgroundService
                             dispatched++;
                         else
                             _logger.LogWarning(
-                                "Automatic execute for landing {LandingAttemptId} was not queued: {Error}",
+                                "Automatic execute recovery for landing {LandingAttemptId} was not queued: {Error}",
                                 candidate.Id, result.Error);
                     }
                     continue;
@@ -200,6 +232,22 @@ public sealed class LandingAutomationService : BackgroundService
         return status == LandingAttemptStatus.LandedUnverified
             && string.Equals(autoRevertMode, "OnPostCheckFail", StringComparison.Ordinal)
             && postMergeCheckExitCode is > 0;
+    }
+
+    private static async Task FailAndEscalateAsync(
+        BeaconDbContext db,
+        Guid attemptId,
+        LandingAttemptStatus expectedStatus,
+        string escalationCode,
+        CancellationToken ct)
+    {
+        var attempt = await db.LandingAttempts
+            .FirstOrDefaultAsync(item => item.Id == attemptId && item.Status == expectedStatus, ct);
+        if (attempt is null)
+            return;
+        attempt.Fail(escalationCode);
+        attempt.SetEscalationCode(escalationCode);
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SetEscalationAsync(
