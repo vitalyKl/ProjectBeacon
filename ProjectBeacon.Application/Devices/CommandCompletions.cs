@@ -12,6 +12,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
+using Application.Projects;
 using Application.Proposals;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -558,6 +559,18 @@ internal sealed class GitLandCompletion : ICommandCompletion
         var payloadTargetHeadSha = DevicePayloadReader.ReadString(row.PayloadJson, "targetHeadSha");
         var payloadTargetTreeSha = DevicePayloadReader.ReadString(row.PayloadJson, "targetTreeSha");
         var payloadMergeCommitSha = DevicePayloadReader.ReadString(row.PayloadJson, "mergeCommitSha");
+        var payloadReviewBaseBranch = DevicePayloadReader.ReadString(row.PayloadJson, "reviewBaseBranch");
+        var payloadAutonomyLevel = DevicePayloadReader.ReadNullableInt(row.PayloadJson, "autonomyLevel");
+        var payloadDirtyCheckoutBehavior = DevicePayloadReader.ReadString(row.PayloadJson, "dirtyCheckoutBehavior");
+        if (!ProjectGitPolicyCatalog.TryRead(
+                attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var policySnapshot))
+            return;
+        var pinnedReviewBaseBranch = policySnapshot.ReviewBaseBranch ?? attempt.TargetBranch;
+        var policyPayloadValid = (payloadReviewBaseBranch is null
+                || string.Equals(payloadReviewBaseBranch, pinnedReviewBaseBranch, StringComparison.Ordinal))
+            && (payloadAutonomyLevel is null || payloadAutonomyLevel == policySnapshot.AutonomyLevel)
+            && (payloadDirtyCheckoutBehavior is null
+                || string.Equals(payloadDirtyCheckoutBehavior, policySnapshot.DirtyCheckoutBehavior, StringComparison.Ordinal));
         var expectedAction = attempt.Status switch
         {
             LandingAttemptStatus.PreviewPending => "Preview",
@@ -581,6 +594,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
             || !string.Equals(payloadReviewTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !policyPayloadValid
             || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal)
             || !actionBindingValid)
             return;
@@ -638,14 +652,23 @@ internal sealed class GitLandCompletion : ICommandCompletion
                         var tree = ReadString(root, "candidateTreeSha");
                         var checkHash = ReadString(root, "checkOutputHash");
                         var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
+                        var allowedPreviewTarget = string.Equals(targetBranch, pinnedReviewBaseBranch, StringComparison.Ordinal)
+                            || string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal)
+                                && (policySnapshot.AutonomyLevel == 1
+                                    || policySnapshot.DirtyCheckoutBehavior == "LandViaIntegration");
+                        var requiredIntegrationTarget = policySnapshot.AutonomyLevel == 1;
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && allowedPreviewTarget
+                            && (!requiredIntegrationTarget
+                                || string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal))
                             && IsGitSha(targetHead)
                             && IsGitSha(tree)
                             && IsSha256(checkHash)
                             && exitCode == 0)
                         {
-                            attempt.RecordPreview(targetBranch!, targetHead!, tree, checkHash, exitCode, null);
+                            attempt.RecordPreview(
+                                targetBranch!, targetHead!, tree, checkHash, exitCode, null,
+                                allowIntegrationTarget: string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal));
                             resultCode = "Previewed";
                             action = "pipeline.landing.preview_completed";
                         }
@@ -670,14 +693,22 @@ internal sealed class GitLandCompletion : ICommandCompletion
                                     .Take(201)
                                     .ToArray()
                                 : [];
+                        var allowedConflictTarget = string.Equals(targetBranch, pinnedReviewBaseBranch, StringComparison.Ordinal)
+                            || string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal)
+                                && (policySnapshot.AutonomyLevel == 1
+                                    || policySnapshot.DirtyCheckoutBehavior == "LandViaIntegration");
+                        var requiredIntegrationTarget = policySnapshot.AutonomyLevel == 1;
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && allowedConflictTarget
+                            && (!requiredIntegrationTarget
+                                || string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal))
                             && IsGitSha(targetHead)
                             && conflicts.Length is > 0 and <= 200)
                         {
                             attempt.RecordPreview(
                                 targetBranch!, targetHead!, null, null, null,
-                                JsonSerializer.Serialize(conflicts));
+                                JsonSerializer.Serialize(conflicts),
+                                allowIntegrationTarget: string.Equals(targetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal));
                             resultCode = "Conflicted";
                             action = "pipeline.landing.conflicted";
                         }

@@ -51,9 +51,6 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The project's Git policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it.",
                 ErrorKind.Conflict);
-        var policySnapshot = ProjectGitPolicyCatalog.Serialize(
-            gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
-            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode);
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -76,6 +73,11 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The latest review run must have a successful check for the current approval, pinned command, and task branch revision.", ErrorKind.Conflict);
 
+        var policySnapshot = ProjectGitPolicyCatalog.Serialize(
+            gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
+            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode,
+            gitPolicy.DirtyCheckoutBehavior, reviewRun.CheckedBaseBranch);
+
         var latestLanding = await db.LandingAttempts
             .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
             .OrderByDescending(attempt => attempt.CreatedAt)
@@ -89,12 +91,19 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "The task branch has not been integrated and reviewed since the conflicted preview. Integrate the daemon-selected target into the task branch, start a fresh Review, record a new Approve verdict, and rerun the pinned review check before requesting another landing.",
                 ErrorKind.Conflict);
 
+        var latestLandingReviewBaseMatches = latestLanding is not null
+            && ProjectGitPolicyCatalog.TryRead(
+                latestLanding.GitPolicySnapshotJson, latestLanding.GitPolicyRevision, out var latestLandingPolicy)
+            && string.Equals(
+                latestLandingPolicy.ReviewBaseBranch ?? latestLanding.TargetBranch,
+                reviewRun.CheckedBaseBranch,
+                StringComparison.Ordinal);
         var latestProofMatches = latestLanding is not null
             && latestLanding.ReviewRunId == reviewRun.Id
             && string.Equals(latestLanding.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(latestLanding.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal)
+            && latestLandingReviewBaseMatches
             && latestLanding.DeviceId == reviewRun.CheckedDeviceId;
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
@@ -233,6 +242,9 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["reviewBaseBranch"] = attemptPolicy.ReviewBaseBranch ?? attempt.TargetBranch,
+            ["autonomyLevel"] = attemptPolicy.AutonomyLevel,
+            ["dirtyCheckoutBehavior"] = attemptPolicy.DirtyCheckoutBehavior,
             ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
             ["maxChangedLines"] = attemptPolicy.MaxChangedLines,
             ["protectedPaths"] = JsonSerializer.SerializeToNode(attemptPolicy.ProtectedPaths)
@@ -417,13 +429,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
         }
-        if (currentPolicy.AutonomyLevel == 1)
-        {
-            await InvalidateUnqueuedExecuteAsync(db, attempt, "IntegrationBranchNotAvailable", ct);
-            return Result.Failure<LandingAttemptDto>(
-                "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
-        }
-        if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+        if (command.Request.Automatic && currentPolicy.AutonomyLevel is not (1 or 2))
         {
             await InvalidateUnqueuedExecuteAsync(db, attempt, "AutomaticLandingNotAllowed", ct);
             return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
@@ -453,7 +459,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(
+                reviewRun.CheckedBaseBranch,
+                attemptPolicy.ReviewBaseBranch ?? attempt.TargetBranch,
+                StringComparison.Ordinal)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
         {
@@ -486,6 +495,9 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["reviewBaseBranch"] = attemptPolicy.ReviewBaseBranch ?? attempt.TargetBranch,
+            ["autonomyLevel"] = attemptPolicy.AutonomyLevel,
+            ["dirtyCheckoutBehavior"] = attemptPolicy.DirtyCheckoutBehavior,
             ["targetHeadSha"] = attempt.TargetHeadSha,
             ["targetTreeSha"] = attempt.CandidateTreeSha,
             ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
@@ -614,6 +626,9 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["reviewBaseBranch"] = policySnapshot.ReviewBaseBranch ?? attempt.TargetBranch,
+            ["autonomyLevel"] = policySnapshot.AutonomyLevel,
+            ["dirtyCheckoutBehavior"] = policySnapshot.DirtyCheckoutBehavior,
             ["mergeCommitSha"] = attempt.MergeCommitSha,
             ["maxChangedFiles"] = policySnapshot.MaxChangedFiles,
             ["maxChangedLines"] = policySnapshot.MaxChangedLines,

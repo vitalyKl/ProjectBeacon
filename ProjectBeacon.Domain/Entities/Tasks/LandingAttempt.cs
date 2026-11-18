@@ -130,12 +130,16 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         string? candidateTreeSha,
         string? candidateCheckOutputHash,
         int? candidateCheckExitCode,
-        string? conflictFilesJson)
+        string? conflictFilesJson,
+        bool allowIntegrationTarget = false)
     {
         EnsureStatus(LandingAttemptStatus.PreviewPending);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranch);
-        if (!string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
-            throw new InvalidOperationException("Preview target branch does not match the branch pinned by the review proof.");
+        var targetMatchesReview = string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal);
+        var isAllowedIntegrationTarget = allowIntegrationTarget
+            && string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal);
+        if (!targetMatchesReview && !isAllowedIntegrationTarget)
+            throw new InvalidOperationException("Preview target branch is neither the reviewed base nor the permitted integration branch.");
         if (!IsGitSha(targetHeadSha))
             throw new ArgumentException("Target HEAD SHA is invalid.", nameof(targetHeadSha));
         if (candidateTreeSha is not null && !IsGitSha(candidateTreeSha))
