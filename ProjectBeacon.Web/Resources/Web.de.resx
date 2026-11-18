@@ -2962,6 +2962,9 @@ orthstar</value>
   <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
     <value>Die vorherige Execute-Anforderung wurde nicht zugestellt. Wiederholen Sie sie manuell; auf dieser Autonomiestufe führt der Worker keine Zusammenführung aus.</value>
   </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>Keine Online-Workstation mit GitLand-Unterstützung verfügbar. Der Worker versucht es nach einer kurzen Pause erneut; Sie können Revert auch manuell wiederholen.</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>Die Vorschau war erfolgreich. Laut Projektrichtlinie ist eine manuelle Ausführung erforderlich.</value>
   </data>
