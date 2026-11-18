@@ -2952,6 +2952,9 @@
   <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
     <value>Предыдущая команда Execute не была доставлена. Повторите запуск вручную; при этом уровне автономности Worker не будет выполнять слияние.</value>
   </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>Нет подключённой станции с поддержкой GitLand. Worker повторит попытку после паузы; также можно повторить Revert вручную.</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>Preview пройден. Политика проекта требует ручного запуска слияния.</value>
   </data>
