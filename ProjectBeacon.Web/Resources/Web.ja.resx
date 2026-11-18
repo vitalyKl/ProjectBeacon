@@ -2869,7 +2869,7 @@ orthstar</value>
     <value>レベル 0 — 手動実行</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>レベル 1 — 統合ブランチ（フェーズ 6 で利用可能）</value>
+    <value>レベル 1 — レビュー成功後に beacon/integration へ自動的に反映</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>レベル 2 — プレビュー成功後に自動実行</value>
@@ -2902,7 +2902,7 @@ orthstar</value>
     <value>変更のある、または安全性を確認できないターゲット checkout はエスカレーションされ、自動で上書きされません。</value>
   </data>
   <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>統合ブランチによるランディングはまだ利用できません。フェーズ 6 で実装予定です。</value>
+    <value>統合ブランチは最初の反映時にレビュー済みのベースから作成され、その後の反映で更新されます。</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Git ポリシーを保存</value>
@@ -3015,4 +3015,6 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>ランディングの取り消しをキューに登録しました。</value>
   </data>
+  <data name="GitDirtyCheckoutBehaviorTitle" xml:space="preserve"><value>未コミット変更があるターゲット checkout の動作</value></data>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve"><value>レビュー済みのベースブランチを変更せず、beacon/integration を使用します。</value></data>
 </root>

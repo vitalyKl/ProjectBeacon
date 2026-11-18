@@ -2869,7 +2869,7 @@ orthstar</value>
     <value>级别 0 — 手动执行</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>级别 1 — 集成分支（第 6 阶段提供）</value>
+    <value>级别 1 — 审核成功后自动合并到 beacon/integration</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>级别 2 — 预览成功后自动执行</value>
@@ -2902,7 +2902,7 @@ orthstar</value>
     <value>目标 checkout 存在未提交更改或无法确认安全时，将升级处理，绝不会自动覆盖。</value>
   </data>
   <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>集成分支合并尚不可用，计划在第 6 阶段实现。</value>
+    <value>首次合并时从已审核的基准分支创建集成分支，后续合并会继续更新该分支。</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>保存 Git 策略</value>
@@ -3015,4 +3015,6 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>合并回滚已排队。</value>
   </data>
+  <data name="GitDirtyCheckoutBehaviorTitle" xml:space="preserve"><value>目标 checkout 存在未提交更改时的处理方式</value></data>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve"><value>使用 beacon/integration，而不是直接修改审核时所依据的基准分支。</value></data>
 </root>

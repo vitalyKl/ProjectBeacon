@@ -147,7 +147,7 @@ else
                            Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)" Label="@L["GitAutonomyLevel"]"
                            Variant="Variant.Outlined" Margin="Margin.Dense">
                     <MudSelectItem T="int" Value="0">@L["GitAutonomyLevel0"]</MudSelectItem>
-                    <MudSelectItem T="int" Value="1" Disabled="true">@L["GitAutonomyLevel1Unavailable"]</MudSelectItem>
+                    <MudSelectItem T="int" Value="1">@L["GitAutonomyLevel1Unavailable"]</MudSelectItem>
                     <MudSelectItem T="int" Value="2">@L["GitAutonomyLevel2"]</MudSelectItem>
                 </MudSelect>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitAutonomyLevelHelp"]</MudText>
@@ -163,7 +163,13 @@ else
                 <MudTextField T="string" @bind-Value="_gitProtectedPathsText" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
                               Label="@L["GitProtectedPaths"]" HelperText="@L["GitProtectedPathsHelp"]"
                               Variant="Variant.Outlined" Margin="Margin.Dense" Lines="4" />
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitDirtyCheckoutEscalate"]</MudText>
+                <MudSelect T="string" @bind-Value="_gitDirtyCheckoutBehavior"
+                           Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
+                           Label="@L["GitDirtyCheckoutBehaviorTitle"]"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value="@("Escalate")">@L["GitDirtyCheckoutEscalate"]</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("LandViaIntegration")">@L["GitDirtyCheckoutLandViaIntegration"]</MudSelectItem>
+                </MudSelect>
                 <MudAlert Severity="Severity.Info" Dense="true">@L["GitIntegrationBranchPhase6"]</MudAlert>
                 @if (!_canEditProposalPolicies)
                 {
@@ -357,6 +363,7 @@ else
     private int _gitMaxChangedFiles = 200;
     private int _gitMaxChangedLines = 20_000;
     private string _gitAutoRevertMode = "Off";
+    private string _gitDirtyCheckoutBehavior = "Escalate";
     private string _gitProtectedPathsText = string.Empty;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
@@ -508,6 +515,7 @@ else
     {
         _gitPolicy = policy;
         _gitPolicyAutonomy = policy.AutonomyLevel;
+        _gitDirtyCheckoutBehavior = policy.DirtyCheckoutBehavior;
         _gitAutoRevertMode = policy.AutoRevertMode;
         _gitMaxChangedFiles = policy.MaxChangedFiles;
         _gitMaxChangedLines = policy.MaxChangedLines;
@@ -516,7 +524,7 @@ else
 
     private void OnGitPolicyAutonomyChanged(int value)
     {
-        if (_canEditProposalPolicies && value is 0 or 2)
+        if (_canEditProposalPolicies && value is 0 or 1 or 2)
             _gitPolicyAutonomy = value;
     }
 
@@ -544,7 +552,7 @@ else
         try
         {
             var saved = await SetGitPolicy.HandleAsync(new SetProjectGitPolicyCommand(
-                projectId, _gitPolicyAutonomy, "Escalate", paths, _gitMaxChangedFiles,
+                projectId, _gitPolicyAutonomy, _gitDirtyCheckoutBehavior, paths, _gitMaxChangedFiles,
                 _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
             if (!saved.Success || saved.Value is null)
             {

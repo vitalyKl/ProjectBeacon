@@ -3060,7 +3060,7 @@ No Beacon-hosted coding agent.</value>
     <value>Level 0 — manual execution</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>Level 1 — integration branch (available in phase 6)</value>
+    <value>Level 1 — automatically land to beacon/integration after successful review</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>Level 2 — automatic execution after successful preview</value>
@@ -3093,7 +3093,7 @@ No Beacon-hosted coding agent.</value>
     <value>Dirty or otherwise unsafe target checkouts are escalated. They are never overwritten automatically.</value>
   </data>
   <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>Integration-branch landing is not available yet; it is planned for phase 6.</value>
+    <value>The integration branch is created from the reviewed base on first landing and then updated by subsequent landings.</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Save Git policy</value>
@@ -3206,4 +3206,6 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing revert queued.</value>
   </data>
+  <data name="GitDirtyCheckoutBehaviorTitle" xml:space="preserve"><value>Dirty target checkout behavior</value></data>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve"><value>Use beacon/integration instead of changing the reviewed base branch.</value></data>
 </root>

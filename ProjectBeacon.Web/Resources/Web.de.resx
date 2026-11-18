@@ -2861,7 +2861,7 @@ orthstar</value>
     <value>Stufe 0 — manuelle Ausführung</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>Stufe 1 — Integrations-Branch (ab Phase 6 verfügbar)</value>
+    <value>Stufe 1 — nach erfolgreicher Prüfung automatisch nach beacon/integration übernehmen</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>Stufe 2 — automatische Ausführung nach erfolgreicher Vorschau</value>
@@ -2894,7 +2894,7 @@ orthstar</value>
     <value>Ein unsauberer oder anderweitig unsicherer Ziel-Checkout wird eskaliert und niemals automatisch überschrieben.</value>
   </data>
   <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>Landing über einen Integrations-Branch ist noch nicht verfügbar und für Phase 6 geplant.</value>
+    <value>Der Integrations-Branch wird bei der ersten Übernahme vom geprüften Basis-Branch erstellt und bei weiteren Übernahmen fortgeschrieben.</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Git-Richtlinie speichern</value>
@@ -3007,4 +3007,6 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing-Revert wurde eingeplant.</value>
   </data>
+  <data name="GitDirtyCheckoutBehaviorTitle" xml:space="preserve"><value>Verhalten bei unsauberem Ziel-Checkout</value></data>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve"><value>beacon/integration statt des beim Review geprüften Basis-Branches verwenden.</value></data>
 </root>

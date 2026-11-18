@@ -2851,7 +2851,7 @@
     <value>Уровень 0 — ручное выполнение</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>Уровень 1 — интеграционная ветка (появится в фазе 6)</value>
+    <value>Уровень 1 — автоматически выполнять посадку в beacon/integration после успешного ревью</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>Уровень 2 — автоматическое выполнение после успешного Preview</value>
@@ -2884,7 +2884,7 @@
     <value>Грязное или небезопасное целевое состояние передаётся на разбор. Оно никогда не перезаписывается автоматически.</value>
   </data>
   <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>Посадка через интеграционную ветку пока недоступна; она запланирована на фазу 6.</value>
+    <value>При первой посадке интеграционная ветка создаётся от проверенной базовой ветки; последующие посадки обновляют её.</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Сохранить Git-политику</value>
@@ -2997,4 +2997,6 @@
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Откат посадки поставлен в очередь.</value>
   </data>
+  <data name="GitDirtyCheckoutBehaviorTitle" xml:space="preserve"><value>Поведение при грязной целевой рабочей копии</value></data>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve"><value>Использовать beacon/integration вместо изменения базовой ветки, проверенной при ревью.</value></data>
 </root>
