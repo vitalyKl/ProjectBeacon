@@ -53,7 +53,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 ErrorKind.Conflict);
         var policySnapshot = ProjectGitPolicyCatalog.Serialize(
             gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
-            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode);
+            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode, gitPolicy.DirtyCheckoutBehavior);
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -89,12 +89,16 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "The task branch has not been integrated and reviewed since the conflicted preview. Integrate the daemon-selected target into the task branch, start a fresh Review, record a new Approve verdict, and rerun the pinned review check before requesting another landing.",
                 ErrorKind.Conflict);
 
+        if (string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch))
+            return Result.Failure<LandingAttemptDto>("The review proof does not identify its daemon-selected base branch.", ErrorKind.Conflict);
+        var landingTargetBranch = ProjectGitPolicyCatalog.ResolveLandingTarget(gitPolicy, reviewRun.CheckedBaseBranch);
+
         var latestProofMatches = latestLanding is not null
             && latestLanding.ReviewRunId == reviewRun.Id
             && string.Equals(latestLanding.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
             && string.Equals(latestLanding.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(latestLanding.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal)
+            && string.Equals(latestLanding.TargetBranch, landingTargetBranch, StringComparison.Ordinal)
             && latestLanding.DeviceId == reviewRun.CheckedDeviceId;
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
@@ -147,11 +151,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 "The workstation that produced the review proof is offline or no longer GitLand-capable; rerun the review on an eligible workstation.",
                 ErrorKind.Conflict);
 
-        if (string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch))
-            return Result.Failure<LandingAttemptDto>("The review proof does not identify its daemon-selected target branch.", ErrorKind.Conflict);
-
         var attempt = LandingAttempt.Start(
-            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, reviewRun.CheckedBaseBranch!,
+            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, landingTargetBranch,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         attempt.SetGitPolicySnapshot(gitPolicy.Revision, policySnapshot);
         attempt.MarkDispatchPending("Preview");
@@ -173,7 +174,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 && string.Equals(concurrent.SourceSha, reviewRun.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(concurrent.ReviewTreeSha, reviewRun.CheckedTreeSha, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(concurrent.ReviewCommandHash, expectedCommandHash, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(concurrent.TargetBranch, reviewRun.CheckedBaseBranch, StringComparison.Ordinal))
+                && string.Equals(concurrent.TargetBranch, landingTargetBranch, StringComparison.Ordinal))
                 return Result.Ok(ToDto(concurrent));
             return Result.Failure<LandingAttemptDto>(
                 "Another landing attempt was created for this task; refresh the landing state and retry.", ErrorKind.Conflict);
@@ -223,6 +224,16 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             await db.SaveChangesAsync(ct);
             return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
         }
+        var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
+            r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
+        if (reviewRun is null || !reviewRun.IsLandingProof()
+            || string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch)
+            || !string.Equals(
+                ProjectGitPolicyCatalog.ResolveLandingTarget(attemptPolicy, reviewRun.CheckedBaseBranch),
+                attempt.TargetBranch, StringComparison.Ordinal))
+            return Result.Failure<LandingAttemptDto>(
+                "The original review proof no longer matches the policy-selected landing target.", ErrorKind.Conflict);
+
         var payload = new JsonObject
         {
             ["projectId"] = attempt.ProjectId.ToString("D"),
@@ -230,6 +241,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Preview",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = reviewRun.CheckedBaseBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
@@ -417,13 +429,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
         }
-        if (currentPolicy.AutonomyLevel == 1)
-        {
-            await InvalidateUnqueuedExecuteAsync(db, attempt, "IntegrationBranchNotAvailable", ct);
-            return Result.Failure<LandingAttemptDto>(
-                "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
-        }
-        if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+        if (command.Request.Automatic && currentPolicy.AutonomyLevel is not (1 or 2))
         {
             await InvalidateUnqueuedExecuteAsync(db, attempt, "AutomaticLandingNotAllowed", ct);
             return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
@@ -453,7 +459,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || reviewRun.StartedAt < latestVerdict.CreatedAt
             || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(reviewRun.CheckedTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch)
+            || !string.Equals(
+                ProjectGitPolicyCatalog.ResolveLandingTarget(attemptPolicy, reviewRun.CheckedBaseBranch),
+                attempt.TargetBranch, StringComparison.Ordinal)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
         {
@@ -483,6 +492,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Execute",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = reviewRun.CheckedBaseBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
@@ -595,6 +605,15 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         if (!ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var policySnapshot))
             return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
 
+        var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
+            r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
+        if (reviewRun is null || !reviewRun.IsLandingProof()
+            || string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch)
+            || (attempt.TargetBranch != reviewRun.CheckedBaseBranch
+                && attempt.TargetBranch != ProjectGitPolicyCatalog.IntegrationBranch))
+            return Result.Failure<LandingAttemptDto>(
+                "The original review proof and its base branch are required to revert this landing.", ErrorKind.Conflict);
+
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Revert", ct);
         if (!claimed)
@@ -611,6 +630,7 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["landingAttemptId"] = attempt.Id.ToString("D"),
             ["action"] = "Revert",
             ["targetBranch"] = attempt.TargetBranch,
+            ["reviewBaseBranch"] = reviewRun.CheckedBaseBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
