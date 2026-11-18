@@ -74,15 +74,6 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
                 return Result.Failure<PipelineSessionDto>(message, ErrorKind.Conflict);
             }
 
-            var pipelineDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
-                db, task.ProjectId, DateTime.UtcNow, ct);
-            var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
-                db, task.ProjectId, pipelineDevice, ct);
-            if (repositorySync.InProgress)
-                return Result.Failure<PipelineSessionDto>(
-                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before starting the pipeline.",
-                    ErrorKind.Conflict);
-
             var expectedStatus = task.Status;
             try
             {
@@ -210,13 +201,6 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 db, session.ProjectId, DateTime.UtcNow, ct);
             if (selectedDevice is null)
                 return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
-
-            var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
-                db, session.ProjectId, selectedDevice, ct);
-            if (repositorySync.InProgress)
-                return Result.Failure<PipelineSessionDto>(
-                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before launching the pipeline session.",
-                    ErrorKind.Conflict);
 
             if (session.ModelBackendId is not { } backendId)
                 return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
