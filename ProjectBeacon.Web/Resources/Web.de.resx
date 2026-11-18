@@ -2959,6 +2959,9 @@ orthstar</value>
   <data name="LandingStatusRevertFailed" xml:space="preserve">
     <value>Revert fehlgeschlagen</value>
   </data>
+  <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
+    <value>Die vorherige Execute-Anforderung wurde nicht zugestellt. Wiederholen Sie sie manuell; auf dieser Autonomiestufe führt der Worker keine Zusammenführung aus.</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>Die Vorschau war erfolgreich. Laut Projektrichtlinie ist eine manuelle Ausführung erforderlich.</value>
   </data>
