@@ -257,7 +257,9 @@ public sealed class RunPipelineSessionDispatchTests
             {
                 AgentDataDir = Path.Combine(temp, "native-data"),
                 LlamaSwapPort = 8080,
-                CommandPolicy = "off"
+                CommandPolicy = "off",
+                WorkspaceMode = WorkstationWorkspaceMode.Snapshot,
+                WorkspaceModeConfigured = true
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(

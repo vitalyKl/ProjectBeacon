@@ -186,13 +186,13 @@ public sealed class AgentTaskWorktreeTests
         var path = Path.Combine(Path.GetTempPath(), "beacon-workstation-settings-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            await File.WriteAllTextAsync(path, "{\\\"workspaceMode\\\":\\\"Snapshot\\\"}");
+            await File.WriteAllTextAsync(path, "{\"workspaceMode\":\"Snapshot\"}");
             var (legacy, legacyError) = WorkstationSettings.TryRead(path);
             Assert.Null(legacyError);
             Assert.Equal(WorkstationWorkspaceMode.Branch, legacy.WorkspaceMode);
             Assert.False(legacy.WorkspaceModeConfigured);
 
-            await File.WriteAllTextAsync(path, "{\\\"workspaceMode\\\":\\\"Snapshot\\\",\\\"workspaceModeConfigured\\\":true}");
+            await File.WriteAllTextAsync(path, "{\"workspaceMode\":\"Snapshot\",\"workspaceModeConfigured\":true}");
             var (explicitSnapshot, explicitError) = WorkstationSettings.TryRead(path);
             Assert.Null(explicitError);
             Assert.Equal(WorkstationWorkspaceMode.Snapshot, explicitSnapshot.WorkspaceMode);
