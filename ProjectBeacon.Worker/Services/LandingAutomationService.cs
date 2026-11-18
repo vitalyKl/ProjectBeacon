@@ -181,8 +181,7 @@ public sealed class LandingAutomationService : BackgroundService
                             // A missing/offline workstation must not occupy the first 200
                             // candidates every 15 seconds. Persist a short retry backoff while
                             // keeping the attempt visible and manually retryable.
-                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.RevertPending,
-                                "RevertDispatchUnavailable", ct);
+                            await SetRevertDispatchUnavailableAsync(db, candidate.Id, ct);
                             _logger.LogWarning(
                                 "Automatic revert for landing {LandingAttemptId} was not queued: {Error}",
                                 candidate.Id, result.Error);
@@ -217,9 +216,12 @@ public sealed class LandingAutomationService : BackgroundService
                         || attempt.FailureCode == "CommandCompletionUnknown"
                         || (attempt.FailureCode == "ExecuteEnqueuePending"
                             && attempt.UpdatedAt < expiredDispatchLease)))
-                || (attempt.EscalationCode == null
-                    && (attempt.Status == LandingAttemptStatus.Previewed
-                        || attempt.Status == LandingAttemptStatus.LandedUnverified)))
+                || (attempt.Status == LandingAttemptStatus.Previewed
+                    && attempt.EscalationCode == null)
+                || (attempt.Status == LandingAttemptStatus.LandedUnverified
+                    && (attempt.EscalationCode == null
+                        || (attempt.EscalationCode == "RevertDispatchUnavailable"
+                            && attempt.UpdatedAt < expiredDispatchLease))))
             // A command already in the durable queue owns this attempt. Exclude it before
             // applying Take(200), otherwise old active commands can starve later landings.
             .Where(attempt => !db.WorkstationCommands.Any(command =>
@@ -262,6 +264,21 @@ public sealed class LandingAutomationService : BackgroundService
             return;
         attempt.Fail(escalationCode);
         attempt.SetEscalationCode(escalationCode);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SetRevertDispatchUnavailableAsync(
+        BeaconDbContext db,
+        Guid attemptId,
+        CancellationToken ct)
+    {
+        var attempt = await db.LandingAttempts
+            .FirstOrDefaultAsync(item => item.Id == attemptId
+                && (item.Status == LandingAttemptStatus.LandedUnverified
+                    || item.Status == LandingAttemptStatus.RevertPending), ct);
+        if (attempt is null)
+            return;
+        attempt.SetEscalationCode("RevertDispatchUnavailable");
         await db.SaveChangesAsync(ct);
     }
 
