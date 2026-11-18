@@ -74,6 +74,7 @@ public sealed class LandingAutomationService : BackgroundService
                 .AsNoTracking()
                 .Where(attempt =>
                     (attempt.Status == LandingAttemptStatus.RevertPending
+                        && attempt.EscalationCode == null
                         && (attempt.FailureCode == null
                             || attempt.FailureCode == "CommandCompletionUnknown"
                             || (attempt.FailureCode == "RevertEnqueuePending"
