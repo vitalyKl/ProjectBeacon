@@ -89,11 +89,33 @@ internal static class GitRepositoryOperationGate
     {
         var fullPath = Path.GetFullPath(repositoryRoot);
         var root = Path.GetPathRoot(fullPath);
-        return string.Equals(fullPath, root, OperatingSystem.IsWindows()
+        if (root is null)
+            return fullPath;
+
+        // Git reports physical paths for worktrees, while Path.GetFullPath preserves
+        // symlink aliases such as macOS /var -> /private/var. Resolve each existing
+        // component so session leases compare the same checkout regardless of alias.
+        var current = root;
+        var segments = fullPath[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in segments)
+        {
+            current = Path.Combine(current, segment);
+            FileSystemInfo info = Directory.Exists(current)
+                ? new DirectoryInfo(current)
+                : new FileInfo(current);
+            var target = info.ResolveLinkTarget(returnFinalTarget: true);
+            if (target is not null)
+                current = Path.GetFullPath(target.FullName);
+        }
+
+        var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal)
-            ? fullPath
-            : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            : StringComparison.Ordinal;
+        return string.Equals(current, root, comparison)
+            ? current
+            : current.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
     private static RepositoryState GetState(string repositoryRoot)
