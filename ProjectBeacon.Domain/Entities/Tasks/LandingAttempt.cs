@@ -124,6 +124,30 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>Whether the pinned review proof permits this effective landing target.</summary>
+    public bool AllowsLandingTarget(string? targetBranch)
+    {
+        if (string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
+            return true;
+        if (!string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal))
+            return false;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(GitPolicySnapshotJson);
+            var root = document.RootElement;
+            var autonomy = root.TryGetProperty("autonomyLevel", out var level)
+                && level.ValueKind == System.Text.Json.JsonValueKind.Number
+                && level.TryGetInt32(out var parsedLevel) ? parsedLevel : 0;
+            var behavior = root.TryGetProperty("dirtyCheckoutBehavior", out var dirty)
+                && dirty.ValueKind == System.Text.Json.JsonValueKind.String ? dirty.GetString() : "Escalate";
+            return autonomy == 1 || string.Equals(behavior, "LandViaIntegration", StringComparison.Ordinal);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     public void RecordPreview(
         string targetBranch,
         string targetHeadSha,
@@ -134,8 +158,8 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     {
         EnsureStatus(LandingAttemptStatus.PreviewPending);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranch);
-        if (!string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
-            throw new InvalidOperationException("Preview target branch does not match the branch pinned by the review proof.");
+        if (!AllowsLandingTarget(targetBranch))
+            throw new InvalidOperationException("Preview target branch is not allowed by the pinned review policy.");
         if (!IsGitSha(targetHeadSha))
             throw new ArgumentException("Target HEAD SHA is invalid.", nameof(targetHeadSha));
         if (candidateTreeSha is not null && !IsGitSha(candidateTreeSha))

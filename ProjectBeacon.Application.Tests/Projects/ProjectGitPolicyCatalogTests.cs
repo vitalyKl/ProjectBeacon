@@ -12,12 +12,12 @@ public sealed class ProjectGitPolicyCatalogTests
 
         Assert.True(parsed);
         Assert.Equal(0, policy.AutonomyLevel);
-        Assert.Equal("Escalate", policy.DirtyCheckoutBehavior);
+        Assert.Equal("LandViaIntegration", policy.DirtyCheckoutBehavior);
         Assert.Empty(policy.ProtectedPaths);
         Assert.Equal(200, policy.MaxChangedFiles);
         Assert.Equal(20_000, policy.MaxChangedLines);
         Assert.Equal("Off", policy.AutoRevertMode);
-        Assert.False(policy.IntegrationBranchAvailable);
+        Assert.True(policy.IntegrationBranchAvailable);
     }
 
     [Fact]
@@ -28,7 +28,8 @@ public sealed class ProjectGitPolicyCatalogTests
             ["src/generated/**", "docs/private/*.md"],
             40,
             2_500,
-            "OnPostCheckFail");
+            "OnPostCheckFail",
+            "LandViaIntegration");
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 7, out var policy));
         Assert.Equal(2, policy.AutonomyLevel);
@@ -47,35 +48,25 @@ public sealed class ProjectGitPolicyCatalogTests
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 4, out var policy));
         Assert.Equal(1, policy.AutonomyLevel);
-        Assert.False(policy.IntegrationBranchAvailable);
-        Assert.Contains("phase 6", policy.IntegrationBranchUnavailableReason, StringComparison.OrdinalIgnoreCase);
+        Assert.True(policy.IntegrationBranchAvailable);
+        Assert.Null(policy.IntegrationBranchUnavailableReason);
     }
 
     [Fact]
-    public async Task SetPolicy_RejectsUnavailableIntegrationLevelBeforePersistence()
+    public void IntegrationMode_IsDerivedFromThePinnedPolicy()
     {
-        var handler = new SetProjectGitPolicyHandler(null!, null!, null!);
-        var actor = new ProjectBeacon.Application.Authorization.ActorContext(
-            ProjectBeacon.Application.Authorization.ActorType.Human,
-            Guid.NewGuid(),
-            false,
-            null,
-            null,
-            null,
-            null,
-            ProjectBeacon.Domain.Enums.ApiTokenCapability.None);
-        var command = new SetProjectGitPolicyCommand(
-            Guid.NewGuid(), 1, "Escalate", [], 200, 20_000, "Off", 1, actor);
+        var forced = ProjectGitPolicyCatalog.Serialize(1, [], 200, 20_000, "Off");
+        var fallback = ProjectGitPolicyCatalog.Serialize(2, [], 200, 20_000, "Off", "LandViaIntegration");
+        var disabled = ProjectGitPolicyCatalog.Serialize(2, [], 200, 20_000, "Off", "Escalate");
 
-        var result = await handler.HandleAsync(command);
-
-        Assert.False(result.Success);
-        Assert.Contains("Autonomy level must be 0 or 2", result.Error, StringComparison.Ordinal);
+        Assert.Equal("Force", ProjectGitPolicyCatalog.IntegrationMode(forced));
+        Assert.Equal("Fallback", ProjectGitPolicyCatalog.IntegrationMode(fallback));
+        Assert.Equal("None", ProjectGitPolicyCatalog.IntegrationMode(disabled));
     }
 
     [Theory]
     [InlineData("{\"autonomyLevel\":3,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
-    [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"LandViaIntegration\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
+    [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Unexpected\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":201,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Auto\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[\"../outside\"],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
