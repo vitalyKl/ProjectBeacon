@@ -51,6 +51,28 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Contains("phase 6", policy.IntegrationBranchUnavailableReason, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task SetPolicy_RejectsUnavailableIntegrationLevelBeforePersistence()
+    {
+        var handler = new SetProjectGitPolicyHandler(null!, null!, null!);
+        var actor = new ProjectBeacon.Application.Authorization.ActorContext(
+            ProjectBeacon.Domain.Enums.ActorType.Human,
+            Guid.NewGuid(),
+            false,
+            null,
+            null,
+            null,
+            null,
+            ProjectBeacon.Domain.Enums.ApiTokenCapability.None);
+        var command = new SetProjectGitPolicyCommand(
+            Guid.NewGuid(), 1, "Escalate", [], 200, 20_000, "Off", 1, actor);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.Contains("Autonomy level must be 0 or 2", result.Error, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("{\"autonomyLevel\":3,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"LandViaIntegration\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
