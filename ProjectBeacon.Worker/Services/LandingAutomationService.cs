@@ -131,12 +131,8 @@ public sealed class LandingAutomationService : BackgroundService
                 {
                     if (project.GitPolicyRevision != candidate.GitPolicyRevision)
                     {
-                        if (candidate.Status == LandingAttemptStatus.ExecutePending)
-                            await FailAndEscalateAsync(db, candidate.Id, LandingAttemptStatus.ExecutePending,
-                                "GitPolicyChangedSincePreview", ct);
-                        else
-                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
-                                "GitPolicyChangedSincePreview", ct);
+                        await FailAndEscalateAsync(db, candidate.Id, candidate.Status,
+                            "GitPolicyChangedSincePreview", ct);
                         continue;
                     }
 
