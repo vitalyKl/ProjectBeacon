@@ -2970,6 +2970,9 @@ orthstar</value>
   <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
     <value>前回の Execute 要求は配信されませんでした。手動で再試行してください。この自律レベルでは Worker はマージを実行しません。</value>
   </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>GitLand に対応したオンラインのワークステーションがありません。Worker は短い待機後に再試行します。Revert を手動で再試行することもできます。</value>
+  </data>
   <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
     <value>プレビューは成功しました。プロジェクトポリシーにより手動実行が必要です。</value>
   </data>
