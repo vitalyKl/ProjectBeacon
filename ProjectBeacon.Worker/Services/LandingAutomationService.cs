@@ -160,7 +160,7 @@ public sealed class LandingAutomationService : BackgroundService
                         continue;
                     }
 
-                    if (policy.AutonomyLevel == 2)
+                    if (ShouldDispatchExecute(candidate.Status, policy.AutonomyLevel))
                     {
                         var result = await new ExecuteLandingHandler(appDbFactory, enqueue).HandleAsync(
                             new ExecuteLandingCommand(
@@ -221,6 +221,10 @@ public sealed class LandingAutomationService : BackgroundService
             return dispatched;
         }
     }
+
+    internal static bool ShouldDispatchExecute(LandingAttemptStatus status, int autonomyLevel) =>
+        autonomyLevel == 2
+        && status is LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending;
 
     internal static bool ShouldDispatchRevert(
         LandingAttemptStatus status,
