@@ -49,6 +49,8 @@ public sealed partial class PipelineHandlerTests
         await using var db = factory.CreateDbContext();
         var persisted = await db.LandingAttempts.SingleAsync(
             item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+        persisted.SetEscalationCode("ManualExecutionRequired");
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Assert.False(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
         Assert.True(await LandingCommandDispatch.TryClaimAsync(
@@ -59,6 +61,7 @@ public sealed partial class PipelineHandlerTests
 
         await db.Entry(persisted).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.True(LandingCommandDispatch.HasFreshLease(persisted, "Preview"));
+        Assert.Null(persisted.EscalationCode);
         Assert.Null(LandingCommandDispatch.PublicFailureCode(persisted));
 
         var command = Domain.Entities.Devices.WorkstationCommand.Create(
@@ -101,6 +104,7 @@ public sealed partial class PipelineHandlerTests
             new string('b', 40),
             new string('c', 64),
             "Verify the candidate before landing.");
+        attempt.SetGitPolicySnapshot(1, """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
         attempt.MarkDispatchPending("Preview");
 
         using (TenantScope.EnterUnscoped())

@@ -9,6 +9,7 @@ using Application.Authorization;
 using Application.Common;
 using Application.Devices;
 using Application.Persistence;
+using Application.Projects;
 using Domain.Entities.Tasks;
 using Domain.Common;
 using Domain.Enums;
@@ -46,6 +47,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
             return Result.Failure<LandingAttemptDto>("A pinned project ReviewCheckCommand is required before landing.", ErrorKind.Conflict);
         var checkCommand = project.ReviewCheckCommand.Trim();
+        if (!ProjectGitPolicyCatalog.TryRead(project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy))
+            return Result.Failure<LandingAttemptDto>(
+                "The project's Git policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it.",
+                ErrorKind.Conflict);
+        var policySnapshot = ProjectGitPolicyCatalog.Serialize(
+            gitPolicy.AutonomyLevel, gitPolicy.ProtectedPaths, gitPolicy.MaxChangedFiles,
+            gitPolicy.MaxChangedLines, gitPolicy.AutoRevertMode);
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -91,6 +99,10 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
         if (latestLanding?.Status == LandingAttemptStatus.PreviewPending)
         {
+            if (latestLanding.GitPolicyRevision != gitPolicy.Revision)
+                return Result.Failure<LandingAttemptDto>(
+                    "The project Git policy changed while Preview was pending. Let that command finish or recover before requesting a new Preview.",
+                    ErrorKind.Conflict);
             if (!latestProofMatches)
                 return Result.Failure<LandingAttemptDto>(
                     "A Preview is already pending for a different review proof. Inspect its landing status before starting another attempt.",
@@ -106,11 +118,20 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
 
         if (latestLanding?.Status == LandingAttemptStatus.Previewed)
         {
-            if (latestProofMatches)
+            if (latestProofMatches && latestLanding.GitPolicyRevision == gitPolicy.Revision)
                 return Result.Ok(ToDto(latestLanding));
-            return Result.Failure<LandingAttemptDto>(
-                "A successful Preview already exists for a different review proof. Execute or resolve that attempt before requesting another landing.",
-                ErrorKind.Conflict);
+            if (latestProofMatches && latestLanding.GitPolicyRevision != gitPolicy.Revision)
+            {
+                latestLanding.Fail("GitPolicyChangedSincePreview");
+                latestLanding.SetEscalationCode("GitPolicyChangedSincePreview");
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                return Result.Failure<LandingAttemptDto>(
+                    "A successful Preview already exists for a different review proof. Execute or resolve that attempt before requesting another landing.",
+                    ErrorKind.Conflict);
+            }
         }
 
         if (latestLanding is not null && IsLandingAttemptBlockingNewPreview(latestLanding.Status))
@@ -132,6 +153,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var attempt = LandingAttempt.Start(
             task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, reviewRun.CheckedBaseBranch!,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
+        attempt.SetGitPolicySnapshot(gitPolicy.Revision, policySnapshot);
         attempt.MarkDispatchPending("Preview");
         db.LandingAttempts.Add(attempt);
         try
@@ -194,6 +216,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             await db.Entry(attempt).ReloadAsync(ct);
         }
 
+        if (!ProjectGitPolicyCatalog.TryRead(
+                attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var attemptPolicy))
+        {
+            attempt.Fail("InvalidGitPolicySnapshot");
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
+        }
         var payload = new JsonObject
         {
             ["projectId"] = attempt.ProjectId.ToString("D"),
@@ -203,7 +232,10 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             ["targetBranch"] = attempt.TargetBranch,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
-            ["checkCommandHash"] = attempt.ReviewCommandHash
+            ["checkCommandHash"] = attempt.ReviewCommandHash,
+            ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
+            ["maxChangedLines"] = attemptPolicy.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(attemptPolicy.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
@@ -290,7 +322,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         attempt.ReviewTreeSha, attempt.DeviceId, attempt.TargetBranch, attempt.TargetHeadSha, attempt.CandidateTreeSha,
         attempt.MergeCommitSha, attempt.RevertCommitSha, LandingCommandDispatch.PublicFailureCode(attempt),
         attempt.ConflictFilesJson, attempt.PostMergeCheckExitCode, attempt.PostMergeCheckOutputHash,
-        attempt.CreatedAt, attempt.UpdatedAt);
+        attempt.CreatedAt, attempt.UpdatedAt, attempt.EscalationCode, attempt.GitPolicyRevision);
 }
 
 /// <summary>Reads one landing attempt scoped to the requested task.</summary>
@@ -325,8 +357,15 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
 
     public async Task<Result<LandingAttemptDto>> HandleAsync(ExecuteLandingCommand command, CancellationToken ct = default)
     {
-        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
-            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to execute a landing.");
+        if (command.Request.Automatic)
+        {
+            if (!command.Actor.IsWorker)
+                return Result.Forbidden<LandingAttemptDto>("Only the trusted worker can request automatic landing execution.");
+        }
+        else if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
+        {
+            return Result.Forbidden<LandingAttemptDto>("A human user-bound actor is required to execute a landing.");
+        }
 
         await using var db = _dbFactory.CreateDbContext();
         var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
@@ -348,15 +387,47 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == attempt.TaskId && t.ProjectId == attempt.ProjectId, ct);
         if (task is null || task.PipelineStage != TaskPipelineStage.Approved)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "TaskNotApprovedForExecute", ct);
             return Result.Failure<LandingAttemptDto>("The task must remain Approved until Execute is queued.", ErrorKind.Conflict);
+        }
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         var checkCommand = project?.ReviewCheckCommand?.Trim();
         if (string.IsNullOrWhiteSpace(checkCommand))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewCommandUnavailable", ct);
             return Result.Failure<LandingAttemptDto>("The pinned project ReviewCheckCommand is unavailable.", ErrorKind.Conflict);
+        }
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         if (!string.Equals(commandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewCommandChanged", ct);
             return Result.Failure<LandingAttemptDto>("The project's review check command changed after Preview.", ErrorKind.Conflict);
+        }
+        if (!ProjectGitPolicyCatalog.TryRead(project!.GitPolicyJson, project.GitPolicyRevision, out var currentPolicy)
+            || !ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var attemptPolicy))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "InvalidGitPolicySnapshot", ct);
+            return Result.Failure<LandingAttemptDto>("The project's Git policy snapshot is invalid.", ErrorKind.Conflict);
+        }
+        if (project.GitPolicyRevision != attempt.GitPolicyRevision)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "GitPolicyChangedSincePreview", ct);
+            return Result.Failure<LandingAttemptDto>(
+                "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
+        }
+        if (currentPolicy.AutonomyLevel == 1)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "IntegrationBranchNotAvailable", ct);
+            return Result.Failure<LandingAttemptDto>(
+                "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
+        }
+        if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "AutomaticLandingNotAllowed", ct);
+            return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
+        }
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
@@ -364,7 +435,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             .ThenByDescending(v => v.Id)
             .FirstOrDefaultAsync(ct);
         if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewApprovalChanged", ct);
             return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
+        }
 
         var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
             r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
@@ -382,11 +456,17 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewProofChanged", ct);
             return Result.Failure<LandingAttemptDto>("The latest review proof no longer matches this landing attempt.", ErrorKind.Conflict);
+        }
 
         var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, attempt.DeviceId, ct);
         if (device is null)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "LandingWorkstationUnavailable", ct);
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
+        }
 
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Execute", ct);
@@ -407,19 +487,25 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
             ["targetHeadSha"] = attempt.TargetHeadSha,
-            ["targetTreeSha"] = attempt.CandidateTreeSha
+            ["targetTreeSha"] = attempt.CandidateTreeSha,
+            ["maxChangedFiles"] = attemptPolicy.MaxChangedFiles,
+            ["maxChangedLines"] = attemptPolicy.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(attemptPolicy.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
                 device.Id, device.UserId, WorkstationCommandKind.GitLand,
                 payload.ToJsonString(), attempt.ProjectId, checkCommand)
             {
-                TrustedGitLand = true
+                TrustedGitLand = true,
+                TrustedGitPolicyRevision = attempt.GitPolicyRevision
             }), ct);
         if (!queued.Success)
         {
-            attempt.MarkCommandCompletionUnknown();
-            await db.SaveChangesAsync(ct);
+            // EnqueueCommandHandler returns a failed Result only when no durable command
+            // was created. This is not an unknown completion: release ExecutePending so
+            // the task can request a fresh Preview instead of waiting forever.
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ExecuteEnqueueFailed", ct);
             return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Execute.");
         }
 
@@ -449,6 +535,18 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
     }
+
+    private static async Task InvalidateUnqueuedExecuteAsync(
+        IBeaconDb db,
+        LandingAttempt attempt,
+        string failureCode,
+        CancellationToken ct)
+    {
+        if (attempt.Status is LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending)
+            attempt.Fail(failureCode);
+        attempt.SetEscalationCode(failureCode);
+        await db.SaveChangesAsync(ct);
+    }
 }
 
 /// <summary>Server-side request to revert a landing while the target still points at its merge commit.</summary>
@@ -465,13 +563,15 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
 
     public async Task<Result<LandingAttemptDto>> HandleAsync(RevertLandingCommand command, CancellationToken ct = default)
     {
-        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
-            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to request a revert.");
         await using var db = _dbFactory.CreateDbContext();
         var attempt = await db.LandingAttempts.FirstOrDefaultAsync(a =>
             a.Id == command.Request.LandingAttemptId && a.TaskId == command.Request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<LandingAttemptDto>("Landing attempt not found.");
+        if (!LandingAuthorizationPolicy.CanRequestRevert(
+                command.Actor, attempt.ProjectId, command.Request.Automatic))
+            return Result.Forbidden<LandingAttemptDto>(
+                "Revert requires a human caller or a project-bound TaskWrite API token. Automatic reverts are worker-only.");
         var activeCommand = await LandingCommandDispatch.FindActiveCommandAsync(
             db, attempt.ProjectId, attempt.Id, "Revert", ct);
         if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Revert"))
@@ -492,6 +592,9 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
         if (device is null)
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
 
+        if (!ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var policySnapshot))
+            return Result.Failure<LandingAttemptDto>("The landing attempt contains an invalid Git policy snapshot.", ErrorKind.Conflict);
+
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Revert", ct);
         if (!claimed)
@@ -511,7 +614,10 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             ["sourceSha"] = attempt.SourceSha,
             ["reviewTreeSha"] = attempt.ReviewTreeSha,
             ["checkCommandHash"] = attempt.ReviewCommandHash,
-            ["mergeCommitSha"] = attempt.MergeCommitSha
+            ["mergeCommitSha"] = attempt.MergeCommitSha,
+            ["maxChangedFiles"] = policySnapshot.MaxChangedFiles,
+            ["maxChangedLines"] = policySnapshot.MaxChangedLines,
+            ["protectedPaths"] = JsonSerializer.SerializeToNode(policySnapshot.ProtectedPaths)
         };
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(
             new EnqueueCommandRequest(
@@ -552,5 +658,28 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             })));
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
+    }
+}
+
+/// <summary>Authorization boundary for a request to revert a task landing.</summary>
+public static class LandingAuthorizationPolicy
+{
+    public static bool CanRequestRevert(ActorContext actor, Guid projectId, bool automatic)
+    {
+        if (projectId == Guid.Empty)
+            return false;
+
+        if (automatic)
+            return actor.IsWorker && actor.ProjectId == projectId;
+
+        if (actor.UserId is not { } userId || userId == Guid.Empty)
+            return false;
+
+        if (actor.IsHuman)
+            return actor.ProjectId is null || actor.ProjectId == projectId;
+
+        return actor.IsApiToken
+            && actor.ProjectId == projectId
+            && (actor.Capabilities & ApiTokenCapability.TaskWrite) == ApiTokenCapability.TaskWrite;
     }
 }

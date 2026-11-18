@@ -19,6 +19,44 @@ public sealed class LandingAttemptTests
             "Verified task branch change.");
 
     [Fact]
+    public void GitPolicySnapshot_IsPinnedBeforePreviewAndCannotBeChangedAfterDispatch()
+    {
+        var attempt = Start();
+        const string snapshot = """
+            {"autonomyLevel":2,"dirtyCheckoutBehavior":"Escalate","protectedPaths":["src/private/**"],"maxChangedFiles":50,"maxChangedLines":5000,"autoRevertMode":"OnPostCheckFail"}
+            """;
+
+        attempt.SetGitPolicySnapshot(7, snapshot);
+
+        Assert.Equal(7, attempt.GitPolicyRevision);
+        Assert.Equal(snapshot, attempt.GitPolicySnapshotJson);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.SetGitPolicySnapshot(8, snapshot));
+
+        attempt.MarkDispatchPending("Preview");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.SetGitPolicySnapshot(8, "{}"));
+    }
+
+    [Fact]
+    public void EscalationCode_IsMachineReadableAndCanBeCleared()
+    {
+        var attempt = Start();
+
+        attempt.SetEscalationCode("ManualExecutionRequired");
+
+        Assert.Equal("ManualExecutionRequired", attempt.EscalationCode);
+        Assert.Throws<ArgumentException>(() => attempt.SetEscalationCode("manual execution required"));
+        Assert.Throws<ArgumentException>(() => attempt.SetEscalationCode(new string('x', 81)));
+
+        attempt.SetEscalationCode(null);
+
+        Assert.Null(attempt.EscalationCode);
+    }
+
+    [Fact]
     public void PreviewedAttempt_CanBeExecutedAndLanded()
     {
         var attempt = Start();
@@ -102,6 +140,7 @@ public sealed class LandingAttemptTests
     public void DispatchLeaseTransitions_CanBeRetriedAndClearedForEachAction()
     {
         var attempt = Start();
+        attempt.SetGitPolicySnapshot(1, """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
 
         attempt.MarkDispatchPending("Preview");
         Assert.Equal(LandingAttemptStatus.PreviewPending, attempt.Status);
@@ -130,6 +169,22 @@ public sealed class LandingAttemptTests
         attempt.RecordReverted(new string('1', 40));
         Assert.Equal(LandingAttemptStatus.Reverted, attempt.Status);
         Assert.Null(attempt.FailureCode);
+    }
+
+    [Fact]
+    public void UnqueuedExecuteInvalidation_ReleasesAttemptForFreshPreview()
+    {
+        var attempt = Start();
+        attempt.SetGitPolicySnapshot(1, """{"autonomyLevel":2,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+
+        attempt.Fail("GitPolicyChangedSincePreview");
+        attempt.SetEscalationCode("GitPolicyChangedSincePreview");
+
+        Assert.Equal(LandingAttemptStatus.Failed, attempt.Status);
+        Assert.Equal("GitPolicyChangedSincePreview", attempt.FailureCode);
+        Assert.Equal("GitPolicyChangedSincePreview", attempt.EscalationCode);
     }
 
     [Fact]

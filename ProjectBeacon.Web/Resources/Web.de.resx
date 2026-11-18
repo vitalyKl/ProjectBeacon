@@ -2845,4 +2845,166 @@ orthstar</value>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
     <value>Der lokale Pfad des angebundenen Repositorys wurde nach der letzten erfolgreichen Git-Prüfung geändert. Der aktuelle Status ist nicht verifiziert; die Pipeline verwendet das Checkout am konfigurierten Pfad. Führen Sie Git-Status oder Synchronisierung aus, um die Warnung zu aktualisieren.</value>
   </data>
+  <data name="ProjectGitPolicyTitle" xml:space="preserve">
+    <value>Git-Landing-Richtlinie</value>
+  </data>
+  <data name="ProjectGitPolicyHelp" xml:space="preserve">
+    <value>Legt fest, wann freigegebene Task-Branches geprüft, zusammengeführt oder zurückgesetzt werden dürfen. Änderungen werden versioniert und für jeden Landing-Versuch gespeichert.</value>
+  </data>
+  <data name="ProjectGitPolicyUnavailable" xml:space="preserve">
+    <value>Die Git-Richtlinie des Projekts konnte nicht gelesen werden. Die Landing-Automatisierung bleibt deaktiviert, bis die Richtlinie repariert ist.</value>
+  </data>
+  <data name="GitAutonomyLevel" xml:space="preserve">
+    <value>Landing-Autonomie</value>
+  </data>
+  <data name="GitAutonomyLevel0" xml:space="preserve">
+    <value>Stufe 0 — manuelle Ausführung</value>
+  </data>
+  <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
+    <value>Stufe 1 — Integrations-Branch (ab Phase 6 verfügbar)</value>
+  </data>
+  <data name="GitAutonomyLevel2" xml:space="preserve">
+    <value>Stufe 2 — automatische Ausführung nach erfolgreicher Vorschau</value>
+  </data>
+  <data name="GitAutonomyLevelHelp" xml:space="preserve">
+    <value>Stufe 1 ist noch nicht verfügbar, da der Integrations-Branch für Phase 6 geplant ist. Stufe 2 führt nur aus, wenn der geprüfte Kandidat die Preview-Prüfungen besteht.</value>
+  </data>
+  <data name="GitAutoRevert" xml:space="preserve">
+    <value>Prüfung nach dem Merge</value>
+  </data>
+  <data name="GitAutoRevertOff" xml:space="preserve">
+    <value>Eskalieren; nicht automatisch zurücksetzen</value>
+  </data>
+  <data name="GitAutoRevertOnFailure" xml:space="preserve">
+    <value>Bei fehlgeschlagener Prüfung nach dem Merge automatisch zurücksetzen</value>
+  </data>
+  <data name="GitMaxChangedFiles" xml:space="preserve">
+    <value>Maximale Anzahl geänderter Dateien</value>
+  </data>
+  <data name="GitMaxChangedLines" xml:space="preserve">
+    <value>Maximale Anzahl geänderter Zeilen</value>
+  </data>
+  <data name="GitProtectedPaths" xml:space="preserve">
+    <value>Geschützte Pfade</value>
+  </data>
+  <data name="GitProtectedPathsHelp" xml:space="preserve">
+    <value>Ein projektrelatives Glob-Muster pro Zeile. * und ? werden unterstützt. Sicherheitsdateien, GitHub-Workflows, Solution- und Projektdateien sowie Build-Konfigurationen sind ebenfalls immer geschützt.</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>Ein unsauberer oder anderweitig unsicherer Ziel-Checkout wird eskaliert und niemals automatisch überschrieben.</value>
+  </data>
+  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
+    <value>Landing über einen Integrations-Branch ist noch nicht verfügbar und für Phase 6 geplant.</value>
+  </data>
+  <data name="SaveGitPolicy" xml:space="preserve">
+    <value>Git-Richtlinie speichern</value>
+  </data>
+  <data name="GitPolicySaved" xml:space="preserve">
+    <value>Git-Landing-Richtlinie gespeichert.</value>
+  </data>
+  <data name="LandingAttemptTitle" xml:space="preserve">
+    <value>Landing-Versuch</value>
+  </data>
+  <data name="LandingSourceBranch" xml:space="preserve">
+    <value>Quell-Branch</value>
+  </data>
+  <data name="LandingTargetBranch" xml:space="preserve">
+    <value>Ziel-Branch</value>
+  </data>
+  <data name="LandingCandidateTree" xml:space="preserve">
+    <value>Kandidatenbaum der Vorschau</value>
+  </data>
+  <data name="LandingMergeCommit" xml:space="preserve">
+    <value>Merge-Commit</value>
+  </data>
+  <data name="LandingRevertCommit" xml:space="preserve">
+    <value>Revert-Commit</value>
+  </data>
+  <data name="LandingPostMergeCheck" xml:space="preserve">
+    <value>Prüfung nach dem Merge</value>
+  </data>
+  <data name="LandingConflictFiles" xml:space="preserve">
+    <value>Konfliktdateien</value>
+  </data>
+  <data name="LandingStatusPreviewPending" xml:space="preserve">
+    <value>Vorschau eingeplant</value>
+  </data>
+  <data name="LandingStatusPreviewed" xml:space="preserve">
+    <value>Vorschau erfolgreich</value>
+  </data>
+  <data name="LandingStatusConflicted" xml:space="preserve">
+    <value>Vorschau enthält Konflikte</value>
+  </data>
+  <data name="LandingStatusFailed" xml:space="preserve">
+    <value>Vorschau fehlgeschlagen</value>
+  </data>
+  <data name="LandingStatusExecutePending" xml:space="preserve">
+    <value>Merge eingeplant</value>
+  </data>
+  <data name="LandingStatusLanded" xml:space="preserve">
+    <value>Zusammengeführt und geprüft</value>
+  </data>
+  <data name="LandingStatusLandedUnverified" xml:space="preserve">
+    <value>Zusammengeführt; Nachprüfung fehlgeschlagen</value>
+  </data>
+  <data name="LandingStatusRevertPending" xml:space="preserve">
+    <value>Revert eingeplant</value>
+  </data>
+  <data name="LandingStatusReverted" xml:space="preserve">
+    <value>Zurückgesetzt</value>
+  </data>
+  <data name="LandingStatusRevertedUnverified" xml:space="preserve">
+    <value>Revert angewendet; Checkout-Aktualisierung nicht verifiziert</value>
+  </data>
+  <data name="LandingStatusRevertFailed" xml:space="preserve">
+    <value>Revert fehlgeschlagen</value>
+  </data>
+  <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
+    <value>Die vorherige Execute-Anforderung wurde nicht zugestellt. Wiederholen Sie sie manuell; auf dieser Autonomiestufe führt der Worker keine Zusammenführung aus.</value>
+  </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>Keine Online-Workstation mit GitLand-Unterstützung verfügbar. Der Worker versucht es nach einer kurzen Pause erneut; Sie können Revert auch manuell wiederholen.</value>
+  </data>
+  <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
+    <value>Die Vorschau war erfolgreich. Laut Projektrichtlinie ist eine manuelle Ausführung erforderlich.</value>
+  </data>
+  <data name="LandingReasonIntegrationBranchNotAvailable" xml:space="preserve">
+    <value>Diese Autonomiestufe benötigt den für Phase 6 geplanten Integrations-Branch.</value>
+  </data>
+  <data name="LandingReasonInvalidGitPolicySnapshot" xml:space="preserve">
+    <value>Der gespeicherte Snapshot der Git-Richtlinie ist ungültig. Eine manuelle Prüfung ist erforderlich.</value>
+  </data>
+  <data name="LandingReasonProjectUnavailable" xml:space="preserve">
+    <value>Das Projekt ist nicht verfügbar; die Automatisierung wurde angehalten.</value>
+  </data>
+  <data name="LandingReasonPostMergeCheckFailed" xml:space="preserve">
+    <value>Die Prüfung nach dem Merge ist fehlgeschlagen. Prüfen Sie das Ergebnis und fordern Sie bei Bedarf einen abgesicherten Revert an.</value>
+  </data>
+  <data name="LandingReasonGitPolicyChangedSincePreview" xml:space="preserve">
+    <value>Die Git-Richtlinie wurde nach der Vorschau geändert. Eine neue Vorschau ist erforderlich.</value>
+  </data>
+  <data name="ExecuteLanding" xml:space="preserve">
+    <value>Merge ausführen</value>
+  </data>
+  <data name="RevertLanding" xml:space="preserve">
+    <value>Merge zurücksetzen</value>
+  </data>
+  <data name="LandingRationale" xml:space="preserve">
+    <value>Begründung für das Landing</value>
+  </data>
+  <data name="PreviewLanding" xml:space="preserve">
+    <value>Landing prüfen</value>
+  </data>
+  <data name="LandingPreviewQueued" xml:space="preserve">
+    <value>Landing-Vorschau wurde eingeplant.</value>
+  </data>
+  <data name="LandingExecuteQueued" xml:space="preserve">
+    <value>Landing-Merge wurde eingeplant.</value>
+  </data>
+  <data name="RevertLandingConfirm" xml:space="preserve">
+    <value>Es wird ein neuer Revert-Commit erstellt. Der Ziel-Branch wird nur geändert, wenn er weiterhin auf den aufgezeichneten Landing-Commit zeigt.</value>
+  </data>
+  <data name="LandingRevertQueued" xml:space="preserve">
+    <value>Landing-Revert wurde eingeplant.</value>
+  </data>
 </root>

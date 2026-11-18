@@ -52,7 +52,10 @@ public sealed partial class DeviceHandlerTests
             targetBranch = "main",
             sourceSha = new string('a', 40),
             reviewTreeSha = new string('b', 40),
-            checkCommandHash = new string('c', 64)
+            checkCommandHash = new string('c', 64),
+            maxChangedFiles = 200,
+            maxChangedLines = 20_000,
+            protectedPaths = Array.Empty<string>()
         });
 
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
@@ -90,7 +93,10 @@ public sealed partial class DeviceHandlerTests
             sourceSha = new string('a', 40),
             reviewTreeSha = new string('b', 40),
             checkCommandHash = new string('c', 64),
-            mergeCommitSha = new string('d', 40)
+            mergeCommitSha = new string('d', 40),
+            maxChangedFiles = 200,
+            maxChangedLines = 20_000,
+            protectedPaths = Array.Empty<string>()
         });
 
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
@@ -109,6 +115,65 @@ public sealed partial class DeviceHandlerTests
         using var document = JsonDocument.Parse(queued.Value!.PayloadJson);
         Assert.Equal("Revert", document.RootElement.GetProperty("action").GetString());
         Assert.False(document.RootElement.TryGetProperty("checkCommand", out _));
+    }
+
+    [Fact]
+    public async Task GitLandExecute_RequiresCurrentServerPinnedPolicyRevision()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"/workspace/project")),
+            TestContext.Current.CancellationToken);
+
+        project.Update(reviewCheckCommand: "dotnet test");
+        project.SetGitPolicyJson(
+            """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var currentPolicyRevision = project.GitPolicyRevision;
+
+        async Task<Result<WorkstationCommandDto>> EnqueueExecuteAsync(int expectedPolicyRevision)
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                projectId = project.Id,
+                taskId = Guid.NewGuid(),
+                landingAttemptId = Guid.NewGuid(),
+                action = "Execute",
+                targetBranch = "main",
+                sourceSha = new string('a', 40),
+                reviewTreeSha = new string('b', 40),
+                checkCommandHash = new string('c', 64),
+                targetHeadSha = new string('d', 40),
+                targetTreeSha = new string('e', 40),
+                maxChangedFiles = 200,
+                maxChangedLines = 20_000,
+                protectedPaths = Array.Empty<string>()
+            });
+
+            return await new EnqueueCommandHandler(Factory()).HandleAsync(
+                new EnqueueCommandCommand(new EnqueueCommandRequest(
+                    deviceId,
+                    user.Id,
+                    WorkstationCommandKind.GitLand,
+                    payload,
+                    project.Id,
+                    "dotnet test")
+                {
+                    TrustedGitLand = true,
+                    TrustedGitPolicyRevision = expectedPolicyRevision
+                }),
+                TestContext.Current.CancellationToken);
+        }
+
+        var stale = await EnqueueExecuteAsync(currentPolicyRevision - 1);
+        Assert.False(stale.Success);
+        Assert.Equal(ErrorKind.Conflict, stale.Kind);
+        Assert.Contains("policy changed", stale.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.WorkstationCommands.ToListAsync(TestContext.Current.CancellationToken));
+
+        var current = await EnqueueExecuteAsync(currentPolicyRevision);
+        Assert.True(current.Success, current.Error);
+        Assert.Single(await _db.WorkstationCommands.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

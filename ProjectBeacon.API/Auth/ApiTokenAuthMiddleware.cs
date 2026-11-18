@@ -442,13 +442,38 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[3] == "subtasks")
                 return true;
 
-            return method == HttpMethods.Post
+            if (method == HttpMethods.Post
                 && segments.Length == 6
                 && segments[1] == "tasks"
                 && GuidSegmentEquals(segments, 2, scopedTaskId)
                 && segments[3] == "pipeline"
                 && segments[4] == "review"
-                && segments[5] == "start";
+                && segments[5] == "start")
+                return true;
+
+            // Landing tools are task-scoped. Planner may request a verified Preview,
+            // inspect only that task's attempt, and request its guarded Revert. Execute
+            // remains human-only; target branch and merge identity are never caller-chosen.
+            if (segments.Length >= 5
+                && segments[1] == "tasks"
+                && GuidSegmentEquals(segments, 2, scopedTaskId)
+                && segments[3] == "pipeline"
+                && segments[4] == "land")
+            {
+                if (method == HttpMethods.Post && segments.Length == 5)
+                    return true;
+                if (method == HttpMethods.Get && segments.Length == 6
+                    && Guid.TryParse(segments[5], out var statusAttemptId)
+                    && statusAttemptId != Guid.Empty)
+                    return true;
+                if (method == HttpMethods.Post && segments.Length == 7
+                    && Guid.TryParse(segments[5], out var revertAttemptId)
+                    && revertAttemptId != Guid.Empty
+                    && segments[6] == "revert")
+                    return true;
+            }
+
+            return false;
         }
 
         if (role == PipelineRole.Review)

@@ -1758,6 +1758,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("GitPolicyRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("GitPolicyJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}");
+
                     b.Property<int>("ProposalPolicyRevision")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
@@ -2039,6 +2050,20 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("FailureCode")
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
+
+                    b.Property<string>("EscalationCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("GitPolicyRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("GitPolicySnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");

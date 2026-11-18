@@ -152,6 +152,32 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 if (!sanitized.Success)
                     return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
                 var queuedPayload = sanitized.Value;
+
+                // Execute is authorized against the exact project policy revision pinned by Preview.
+                // Re-read it after taking the project-row mutation lock and in the same transaction
+                // that inserts the command. A concurrent policy update therefore serializes either
+                // before this check (and makes the stale Execute fail) or after the command is durably
+                // queued; there is no read/check/insert race across transactions.
+                if (command.Request.Kind == WorkstationCommandKind.GitLand
+                    && IsGitLandAction(queuedPayload, "Execute"))
+                {
+                    if (!command.Request.TrustedGitLand
+                        || command.Request.TrustedGitPolicyRevision is not { } expectedPolicyRevision
+                        || expectedPolicyRevision < 1)
+                        return Result.Forbidden<WorkstationCommandDto>(
+                            "GitLand Execute requires a server-pinned project policy revision.");
+
+                    var currentPolicyRevision = await db.Projects.IgnoreQueryFilters()
+                        .Where(project => project.Id == rootedProjectId)
+                        .Select(project => (int?)project.GitPolicyRevision)
+                        .FirstOrDefaultAsync(ct);
+                    if (currentPolicyRevision is null)
+                        return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
+                    if (currentPolicyRevision.Value != expectedPolicyRevision)
+                        return Result.Failure<WorkstationCommandDto>(
+                            "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.",
+                            ErrorKind.Conflict);
+                }
                 if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck
                     || command.Request.Kind == WorkstationCommandKind.GitLand
                         && !IsGitLandRevert(queuedPayload))
@@ -187,12 +213,15 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         return Result.Ok(MapCommand(queued, localRoot));
     }
 
-    private static bool IsGitLandRevert(string? payloadJson)
+    private static bool IsGitLandRevert(string? payloadJson) =>
+        IsGitLandAction(payloadJson, "Revert");
+
+    private static bool IsGitLandAction(string? payloadJson, string expectedAction)
     {
         try
         {
             var json = JsonNode.Parse(payloadJson ?? "{}") as JsonObject;
-            return string.Equals(json?["action"]?.GetValue<string>(), "Revert", StringComparison.Ordinal);
+            return string.Equals(json?["action"]?.GetValue<string>(), expectedAction, StringComparison.Ordinal);
         }
         catch (JsonException)
         {

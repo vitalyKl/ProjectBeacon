@@ -22,6 +22,9 @@ public sealed class LandingAttemptConfiguration : IEntityTypeConfiguration<Landi
         entity.Property(e => e.CandidateCheckOutputHash).HasMaxLength(64);
         entity.Property(e => e.ConflictFilesJson).HasColumnType("jsonb");
         entity.Property(e => e.FailureCode).HasMaxLength(80);
+        entity.Property(e => e.EscalationCode).HasMaxLength(80);
+        entity.Property(e => e.GitPolicyRevision).IsRequired().HasDefaultValue(1);
+        entity.Property(e => e.GitPolicySnapshotJson).IsRequired().HasColumnType("jsonb").HasDefaultValue("{}");
         entity.Property(e => e.MergeCommitSha).HasMaxLength(64);
         entity.Property(e => e.RevertCommitSha).HasMaxLength(64);
         entity.Property(e => e.PostMergeCheckExitCode);

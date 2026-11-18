@@ -3044,4 +3044,166 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncReasonRuntimeChanged" xml:space="preserve">
     <value>The attached local repository path changed after the last successful Git check. Its current status is unverified; the pipeline will use this checkout as configured. Run Git status or synchronize to refresh the warning.</value>
   </data>
+  <data name="ProjectGitPolicyTitle" xml:space="preserve">
+    <value>Git landing policy</value>
+  </data>
+  <data name="ProjectGitPolicyHelp" xml:space="preserve">
+    <value>Controls when approved task branches can be previewed, merged, or reverted. Changes are versioned and pinned to each landing attempt.</value>
+  </data>
+  <data name="ProjectGitPolicyUnavailable" xml:space="preserve">
+    <value>The project's Git policy could not be read. Landing automation remains disabled until the policy is repaired.</value>
+  </data>
+  <data name="GitAutonomyLevel" xml:space="preserve">
+    <value>Landing autonomy</value>
+  </data>
+  <data name="GitAutonomyLevel0" xml:space="preserve">
+    <value>Level 0 — manual execution</value>
+  </data>
+  <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
+    <value>Level 1 — integration branch (available in phase 6)</value>
+  </data>
+  <data name="GitAutonomyLevel2" xml:space="preserve">
+    <value>Level 2 — automatic execution after successful preview</value>
+  </data>
+  <data name="GitAutonomyLevelHelp" xml:space="preserve">
+    <value>Level 1 is not available yet because the integration-branch workflow is scheduled for phase 6. Level 2 executes only after the reviewed candidate passes preview checks.</value>
+  </data>
+  <data name="GitAutoRevert" xml:space="preserve">
+    <value>Post-merge check failure</value>
+  </data>
+  <data name="GitAutoRevertOff" xml:space="preserve">
+    <value>Escalate; do not revert automatically</value>
+  </data>
+  <data name="GitAutoRevertOnFailure" xml:space="preserve">
+    <value>Automatically revert if the post-merge check fails</value>
+  </data>
+  <data name="GitMaxChangedFiles" xml:space="preserve">
+    <value>Maximum changed files</value>
+  </data>
+  <data name="GitMaxChangedLines" xml:space="preserve">
+    <value>Maximum changed lines</value>
+  </data>
+  <data name="GitProtectedPaths" xml:space="preserve">
+    <value>Protected paths</value>
+  </data>
+  <data name="GitProtectedPathsHelp" xml:space="preserve">
+    <value>One project-relative glob per line. Supports * and ?. These paths are always protected too: security files, GitHub workflows, solution and project files, and build configuration.</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>Dirty or otherwise unsafe target checkouts are escalated. They are never overwritten automatically.</value>
+  </data>
+  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
+    <value>Integration-branch landing is not available yet; it is planned for phase 6.</value>
+  </data>
+  <data name="SaveGitPolicy" xml:space="preserve">
+    <value>Save Git policy</value>
+  </data>
+  <data name="GitPolicySaved" xml:space="preserve">
+    <value>Git landing policy saved.</value>
+  </data>
+  <data name="LandingAttemptTitle" xml:space="preserve">
+    <value>Landing attempt</value>
+  </data>
+  <data name="LandingSourceBranch" xml:space="preserve">
+    <value>Source branch</value>
+  </data>
+  <data name="LandingTargetBranch" xml:space="preserve">
+    <value>Target branch</value>
+  </data>
+  <data name="LandingCandidateTree" xml:space="preserve">
+    <value>Preview candidate tree</value>
+  </data>
+  <data name="LandingMergeCommit" xml:space="preserve">
+    <value>Merge commit</value>
+  </data>
+  <data name="LandingRevertCommit" xml:space="preserve">
+    <value>Revert commit</value>
+  </data>
+  <data name="LandingPostMergeCheck" xml:space="preserve">
+    <value>Post-merge check</value>
+  </data>
+  <data name="LandingConflictFiles" xml:space="preserve">
+    <value>Conflicting files</value>
+  </data>
+  <data name="LandingStatusPreviewPending" xml:space="preserve">
+    <value>Preview queued</value>
+  </data>
+  <data name="LandingStatusPreviewed" xml:space="preserve">
+    <value>Preview passed</value>
+  </data>
+  <data name="LandingStatusConflicted" xml:space="preserve">
+    <value>Preview has conflicts</value>
+  </data>
+  <data name="LandingStatusFailed" xml:space="preserve">
+    <value>Preview failed</value>
+  </data>
+  <data name="LandingStatusExecutePending" xml:space="preserve">
+    <value>Merge queued</value>
+  </data>
+  <data name="LandingStatusLanded" xml:space="preserve">
+    <value>Landed and verified</value>
+  </data>
+  <data name="LandingStatusLandedUnverified" xml:space="preserve">
+    <value>Landed; post-merge check failed</value>
+  </data>
+  <data name="LandingStatusRevertPending" xml:space="preserve">
+    <value>Revert queued</value>
+  </data>
+  <data name="LandingStatusReverted" xml:space="preserve">
+    <value>Reverted</value>
+  </data>
+  <data name="LandingStatusRevertedUnverified" xml:space="preserve">
+    <value>Revert applied; checkout refresh unverified</value>
+  </data>
+  <data name="LandingStatusRevertFailed" xml:space="preserve">
+    <value>Revert failed</value>
+  </data>
+  <data name="LandingReasonManualExecuteRetryRequired" xml:space="preserve">
+    <value>The previous Execute request was not delivered. Retry it manually; the worker will not execute it at this autonomy level.</value>
+  </data>
+  <data name="LandingReasonRevertDispatchUnavailable" xml:space="preserve">
+    <value>No online GitLand-capable workstation is available. The worker will retry after a short delay; you can also retry manually.</value>
+  </data>
+  <data name="LandingReasonManualExecutionRequired" xml:space="preserve">
+    <value>Preview passed. Manual execution is required by the project policy.</value>
+  </data>
+  <data name="LandingReasonIntegrationBranchNotAvailable" xml:space="preserve">
+    <value>This autonomy level requires the integration-branch workflow planned for phase 6.</value>
+  </data>
+  <data name="LandingReasonInvalidGitPolicySnapshot" xml:space="preserve">
+    <value>The stored Git policy snapshot is invalid. Manual review is required.</value>
+  </data>
+  <data name="LandingReasonProjectUnavailable" xml:space="preserve">
+    <value>The project is unavailable; automation has stopped.</value>
+  </data>
+  <data name="LandingReasonPostMergeCheckFailed" xml:space="preserve">
+    <value>The post-merge check failed. Review the result and request a guarded revert if appropriate.</value>
+  </data>
+  <data name="LandingReasonGitPolicyChangedSincePreview" xml:space="preserve">
+    <value>The project Git policy changed after preview. A new preview is required.</value>
+  </data>
+  <data name="ExecuteLanding" xml:space="preserve">
+    <value>Execute merge</value>
+  </data>
+  <data name="RevertLanding" xml:space="preserve">
+    <value>Revert merge</value>
+  </data>
+  <data name="LandingRationale" xml:space="preserve">
+    <value>Reason for landing</value>
+  </data>
+  <data name="PreviewLanding" xml:space="preserve">
+    <value>Preview landing</value>
+  </data>
+  <data name="LandingPreviewQueued" xml:space="preserve">
+    <value>Landing preview queued.</value>
+  </data>
+  <data name="LandingExecuteQueued" xml:space="preserve">
+    <value>Landing merge queued.</value>
+  </data>
+  <data name="RevertLandingConfirm" xml:space="preserve">
+    <value>This creates a new revert commit. The target branch is changed only if it still points to the recorded landing commit.</value>
+  </data>
+  <data name="LandingRevertQueued" xml:space="preserve">
+    <value>Landing revert queued.</value>
+  </data>
 </root>

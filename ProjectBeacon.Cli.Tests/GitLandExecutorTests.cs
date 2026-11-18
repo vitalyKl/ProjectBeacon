@@ -894,6 +894,87 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+    [Fact]
+    public async Task GitLand_PreviewEnforcesProjectDiffLimitsAndAdditionalProtectedPaths()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        AgentTaskWorktree? taskWorktree = null;
+        try
+        {
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            taskWorktree = opened.Worktree!;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "policy-file-one.txt"),
+                "one\n");
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "policy-file-two.txt"),
+                "two\n");
+            var commit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: create files for policy-bound landing", CancellationToken.None);
+            Assert.True(commit.Success, commit.Error);
+            var sourceSha = commit.CommitSha!;
+            var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            await taskWorktree.DisposeAsync();
+            taskWorktree = null;
+
+            const string checkCommand = "echo review-ok";
+            var commandHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+            var settings = new WorkstationSettings
+            {
+                WorkspaceMode = "Branch",
+                WorktreeRoot = worktreeRoot
+            };
+
+            var tooLarge = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand, maxChangedFiles: 1),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(tooLarge.Ok, tooLarge.Error ?? tooLarge.Result);
+            using var tooLargeResult = JsonDocument.Parse(tooLarge.Result!);
+            Assert.Equal("failed", tooLargeResult.RootElement.GetProperty("status").GetString());
+            Assert.Equal("CandidateDiffTooLarge", tooLargeResult.RootElement.GetProperty("errorCode").GetString());
+
+            var protectedPath = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, Guid.NewGuid(), "Preview", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand,
+                    maxChangedFiles: 10,
+                    protectedPaths: ["policy-file-one.txt"]),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(protectedPath.Ok, protectedPath.Error ?? protectedPath.Result);
+            using var protectedResult = JsonDocument.Parse(protectedPath.Result!);
+            Assert.Equal("failed", protectedResult.RootElement.GetProperty("status").GetString());
+            Assert.Equal("ProtectedPathChanged", protectedResult.RootElement.GetProperty("errorCode").GetString());
+
+            Assert.Equal(
+                string.Empty,
+                await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+            Assert.Equal(
+                await GitAsync(repository, "rev-parse", "main"),
+                await GitAsync(repository, "rev-parse", "HEAD"));
+        }
+        finally
+        {
+            if (taskWorktree is not null)
+                await taskWorktree.DisposeAsync();
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     private static string Payload(
         Guid projectId,
         Guid taskId,
@@ -905,7 +986,10 @@ public sealed partial class AgentTaskGitOperationsTests
         string? checkCommand,
         string? targetHeadSha = null,
         string? targetTreeSha = null,
-        string? mergeCommitSha = null) =>
+        string? mergeCommitSha = null,
+        int maxChangedFiles = 200,
+        int maxChangedLines = 20_000,
+        IReadOnlyList<string>? protectedPaths = null) =>
         JsonSerializer.Serialize(new
         {
             projectId,
@@ -919,6 +1003,9 @@ public sealed partial class AgentTaskGitOperationsTests
             checkCommand,
             targetHeadSha,
             targetTreeSha,
-            mergeCommitSha
+            mergeCommitSha,
+            maxChangedFiles,
+            maxChangedLines,
+            protectedPaths = protectedPaths ?? Array.Empty<string>()
         });
 }

@@ -13,6 +13,7 @@ builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddApplicationHandlers();
 builder.Services.AddHostedService<ExpiredRecordsCleanupService>();
 builder.Services.AddHostedService<StaleCommandRecoveryService>();
+builder.Services.AddHostedService<LandingAutomationService>();
 
 var host = builder.Build();
 

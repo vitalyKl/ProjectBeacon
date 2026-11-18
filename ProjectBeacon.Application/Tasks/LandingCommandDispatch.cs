@@ -129,6 +129,7 @@ internal static class LandingCommandDispatch
         var updated = await query.ExecuteUpdateAsync(update => update
             .SetProperty(candidate => candidate.Status, targetStatus.Value)
             .SetProperty(candidate => candidate.FailureCode, marker)
+            .SetProperty(candidate => candidate.EscalationCode, (string?)null)
             .SetProperty(candidate => candidate.UpdatedAt, now), ct);
         return updated == 1;
     }
