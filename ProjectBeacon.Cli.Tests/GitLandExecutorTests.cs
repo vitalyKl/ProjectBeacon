@@ -70,6 +70,15 @@ public sealed partial class AgentTaskGitOperationsTests
                 string.Equals("landed", landedJson.RootElement.GetProperty("status").GetString(), StringComparison.Ordinal),
                 execute.Result);
             var mergeCommit = landedJson.RootElement.GetProperty("mergeCommitSha").GetString()!;
+            var taskMetadataPath = Path.Combine(
+                worktreeRoot, projectId.ToString("N"), "beacon", "task", taskId.ToString("N") + ".beacon.json");
+            using (var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(taskMetadataPath)))
+            {
+                Assert.Equal("main", metadata.RootElement.GetProperty("landingTargetBranch").GetString());
+                Assert.Equal(sourceSha, metadata.RootElement.GetProperty("landingSourceSha").GetString());
+                Assert.Equal(mergeCommit, metadata.RootElement.GetProperty("landingCommitSha").GetString());
+                Assert.True(metadata.RootElement.GetProperty("landedAtUtc").GetDateTime() > DateTime.UtcNow.AddMinutes(-5));
+            }
             Assert.Equal(0, landedJson.RootElement.GetProperty("postMergeCheckExitCode").GetInt32());
             Assert.Matches(
                 "^[0-9a-f]{64}$",

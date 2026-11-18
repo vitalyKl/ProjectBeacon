@@ -124,13 +124,67 @@ internal static class GitLandExecutor
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
             return BusinessFailure("CustomMergeDriversConfigured");
 
-        return request.Action switch
+        var outcome = request.Action switch
         {
             "Preview" => await PreviewAsync(taskWorkspace, request, disabledFilters, ct),
             "Execute" => await ExecuteLandingAsync(taskWorkspace, request, disabledFilters, ct),
             "Revert" => await RevertAsync(taskWorkspace, request, disabledFilters, ct),
             _ => (false, null, "GitLand action must be Preview, Execute, or Revert.")
         };
+
+        // Retention starts only after the executor itself confirms a landed result. A
+        // post-merge failure (landed_unverified), a retryable/unknown outcome, or a revert
+        // never makes this task branch eligible for automatic cleanup.
+        if (request.Action == "Execute"
+            && TryReadSuccessfulLanding(outcome.Result, out var landedCommitSha))
+        {
+            var recorded = await taskWorkspace.MarkLandedAsync(
+                request.TargetBranch, request.SourceSha, landedCommitSha!, DateTime.UtcNow, CancellationToken.None);
+            if (!recorded.Success && !string.IsNullOrWhiteSpace(outcome.Result))
+            {
+                try
+                {
+                    var resultNode = JsonNode.Parse(outcome.Result) as JsonObject;
+                    if (resultNode is not null)
+                    {
+                        resultNode["retentionRecorded"] = false;
+                        resultNode["retentionWarning"] = recorded.Error;
+                        outcome = (outcome.Ok, resultNode.ToJsonString(), outcome.Error);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // The landing result remains authoritative; the task is simply retained.
+                }
+            }
+        }
+
+        return outcome;
+    }
+
+    private static bool TryReadSuccessfulLanding(string? resultJson, out string? mergeCommitSha)
+    {
+        mergeCommitSha = null;
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("status", out var status)
+                || status.ValueKind != JsonValueKind.String
+                || !string.Equals(status.GetString(), "landed", StringComparison.Ordinal)
+                || !root.TryGetProperty("mergeCommitSha", out var merge)
+                || merge.ValueKind != JsonValueKind.String
+                || !IsGitSha(merge.GetString()))
+                return false;
+            mergeCommitSha = merge.GetString();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static async Task<(bool Ok, string? Result, string? Error)> PreviewAsync(

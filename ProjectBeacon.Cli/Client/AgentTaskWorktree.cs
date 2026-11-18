@@ -11,17 +11,6 @@ using System.Text.RegularExpressions;
 /// </summary>
 internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 {
-    private sealed record Metadata(
-        int Version,
-        Guid ProjectId,
-        Guid TaskId,
-        string RepositoryRoot,
-        string WorktreePath,
-        string BranchName,
-        string? BaseBranch,
-        string BaseSha,
-        DateTime CreatedAtUtc);
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -33,6 +22,8 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
     private readonly string[] _disabledFilterDrivers;
     private readonly Guid _taskId;
     private readonly FileStream _worktreeLease;
+    private readonly string _metadataPath;
+    private TaskWorktreeMetadata _metadata;
     private bool _disposed;
 
     private AgentTaskWorktree(
@@ -45,7 +36,9 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         string baseSha,
         Guid taskId,
         IReadOnlyCollection<string> disabledFilterDrivers,
-        FileStream worktreeLease)
+        FileStream worktreeLease,
+        string metadataPath,
+        TaskWorktreeMetadata metadata)
     {
         _repositoryRoot = repositoryRoot;
         ProjectRoot = projectRoot;
@@ -57,6 +50,8 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         _taskId = taskId;
         _disabledFilterDrivers = disabledFilterDrivers.ToArray();
         _worktreeLease = worktreeLease;
+        _metadataPath = metadataPath;
+        _metadata = metadata;
     }
 
     public string WorkingDirectory { get; }
@@ -277,11 +272,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 return Fail("This task's branch worktree is already in use by another pipeline command.");
             }
 
-            Metadata metadata;
+            TaskWorktreeMetadata metadata;
             if (File.Exists(metadataPath))
             {
                 var json = await File.ReadAllTextAsync(metadataPath, ct);
-                metadata = JsonSerializer.Deserialize<Metadata>(json, JsonOptions)
+                metadata = JsonSerializer.Deserialize<TaskWorktreeMetadata>(json, JsonOptions)
                     ?? throw new InvalidDataException("Task worktree metadata is empty.");
                 if (metadata.Version != 1
                     || metadata.ProjectId != projectId
@@ -307,7 +302,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 if (branchExists.ExitCode != 1 || branchExists.TimedOut)
                     return Fail("Could not verify whether the task branch already exists.");
 
-                metadata = new Metadata(
+                metadata = new TaskWorktreeMetadata(
                     1, projectId, taskId, repositoryRoot, worktreePath,
                     branchName, baseBranch, baseSha, DateTime.UtcNow);
                 var tempMetadata = metadataPath + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -384,7 +379,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
             var created = new AgentTaskWorktree(
                 repositoryRoot, projectRoot, worktreePath, workingDirectory,
-                branchName, baseBranch, baseSha, taskId, disabledFilters, lease);
+                branchName, baseBranch, baseSha, taskId, disabledFilters, lease, metadataPath, metadata);
             lease = null;
             return (created, null, warning);
         }
@@ -499,6 +494,55 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         return repositoryRelativePath.StartsWith(prefix, StringComparison.Ordinal);
     }
 
+    internal async Task<(bool Success, string? Error)> MarkLandedAsync(
+        string targetBranch,
+        string sourceSha,
+        string mergeCommitSha,
+        DateTime landedAtUtc,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(targetBranch)
+            || !AgentTaskWorktree.IsGitSha(sourceSha)
+            || !AgentTaskWorktree.IsGitSha(mergeCommitSha)
+            || !string.Equals(targetBranch, BaseBranch, StringComparison.Ordinal))
+            return (false, "Landing evidence does not match this task's configured base branch.");
+
+        var branch = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers, "symbolic-ref", "--quiet", "--short", "HEAD");
+        var head = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers, "rev-parse", "--verify", "HEAD");
+        var status = await AgentSessionWorktree.RunGitAsync(
+            _worktreeRoot, ct, _disabledFilterDrivers, "status", "--porcelain", "--untracked-files=all");
+        if (branch.ExitCode != 0 || branch.TimedOut
+            || !string.Equals(branch.StdOut.Trim(), BranchName, StringComparison.Ordinal)
+            || head.ExitCode != 0 || head.TimedOut
+            || !string.Equals(head.StdOut.Trim(), sourceSha, StringComparison.OrdinalIgnoreCase)
+            || status.ExitCode != 0 || status.TimedOut
+            || !string.IsNullOrWhiteSpace(status.StdOut))
+            return (false, "The task branch changed or became dirty after the verified landing.");
+
+        var updated = _metadata with
+        {
+            LandedAtUtc = landedAtUtc,
+            LandingTargetBranch = targetBranch,
+            LandingSourceSha = sourceSha,
+            LandingCommitSha = mergeCommitSha
+        };
+        var temp = _metadataPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(updated, JsonOptions), new UTF8Encoding(false), ct);
+            File.Move(temp, _metadataPath, overwrite: true);
+            _metadata = updated;
+            return (true, null);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            try { File.Delete(temp); } catch { }
+            return (false, "The landing succeeded, but its cleanup evidence could not be saved: " + exception.GetType().Name);
+        }
+    }
+
     private async Task<(bool Success, string? Error, string? CommitSha)> ReadHeadAsync(CancellationToken ct)
     {
         var head = await AgentSessionWorktree.RunGitAsync(
@@ -609,7 +653,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         return !value.Contains("::", StringComparison.Ordinal);
     }
 
-    private static bool IsGitSha(string value) =>
+    internal static bool IsGitSha(string value) =>
         (value.Length == 40 || value.Length == 64) && value.All(Uri.IsHexDigit);
 
     private static bool IsReparsePoint(string path) =>

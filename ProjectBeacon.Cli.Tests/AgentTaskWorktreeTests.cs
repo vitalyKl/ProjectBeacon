@@ -178,6 +178,7 @@ public sealed class AgentTaskWorktreeTests
         var settings = new WorkstationSettings();
         Assert.Equal(WorkstationWorkspaceMode.Branch, settings.WorkspaceMode);
         Assert.False(settings.WorkspaceModeConfigured);
+        Assert.Equal(30, settings.TaskWorktreeRetentionDays);
     }
 
     [Fact]
@@ -207,6 +208,133 @@ public sealed class AgentTaskWorktreeTests
         finally
         {
             try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task TaskWorktreeLifecycle_PrunesExpiredCleanTaskBranchOnlyAfterVerifiedLanding()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-task-retention-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var worktrees = Path.Combine(parent, "worktrees");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var created = await AgentTaskWorktree.CreateAsync(
+                repository, projectId, taskId, worktrees, CancellationToken.None);
+            Assert.NotNull(created.Worktree);
+            await using var workspace = created.Worktree!;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.WorkingDirectory, "task-output.txt"), "merged task output\n");
+            var source = await workspace.CompleteChangesAsync(
+                "ProjectBeacon: complete task", CancellationToken.None);
+            Assert.True(source.Success, source.Error);
+
+            await GitAsync(repository, "merge", "--no-ff", workspace.BranchName, "-m", "land task branch");
+            var mergeCommit = await GitAsync(repository, "rev-parse", "HEAD");
+            var marked = await workspace.MarkLandedAsync(
+                "main", source.CommitSha!, mergeCommit, DateTime.UtcNow.AddDays(-31), CancellationToken.None);
+            Assert.True(marked.Success, marked.Error);
+            await workspace.DisposeAsync();
+
+            var entries = await TaskWorktreeLifecycle.ListAsync(worktrees, 30, CancellationToken.None);
+            var entry = Assert.Single(entries);
+            Assert.Equal("expired-merged", entry.Status);
+            Assert.True(entry.CleanupEligible);
+            Assert.Equal(source.CommitSha, await GitAsync(repository, "rev-parse", $"refs/heads/{workspace.BranchName}"));
+
+            var cleanup = await TaskWorktreeLifecycle.CleanupExpiredAsync(worktrees, 30, CancellationToken.None);
+            Assert.Equal(1, cleanup.Removed);
+            Assert.Equal(0, cleanup.Skipped);
+            Assert.False(Directory.Exists(workspace.RecoveryPath));
+            Assert.False(File.Exists(workspace.RecoveryPath + ".beacon.json"));
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => GitAsync(repository, "rev-parse", "--verify", $"refs/heads/{workspace.BranchName}"));
+            Assert.Equal("merged task output\n",
+                await File.ReadAllTextAsync(Path.Combine(repository, "task-output.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task TaskWorktreeLifecycle_RetainsActiveDirtyAndAdvancedBranches()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-task-retention-guards-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var worktrees = Path.Combine(parent, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? active = null;
+        AgentTaskWorktree? dirty = null;
+        AgentTaskWorktree? advanced = null;
+
+        async Task<AgentTaskWorktree> CreateLandedTaskAsync(Guid taskId, string fileName)
+        {
+            var created = await AgentTaskWorktree.CreateAsync(
+                repository, Guid.NewGuid(), taskId, worktrees, CancellationToken.None);
+            Assert.NotNull(created.Worktree);
+            var workspace = created.Worktree!;
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.WorkingDirectory, fileName), "task output\n");
+            var source = await workspace.CompleteChangesAsync(
+                "ProjectBeacon: complete " + taskId.ToString("N"), CancellationToken.None);
+            Assert.True(source.Success, source.Error);
+            await GitAsync(repository, "merge", "--no-ff", workspace.BranchName, "-m", "land " + taskId.ToString("N"));
+            var mergeCommit = await GitAsync(repository, "rev-parse", "HEAD");
+            var marked = await workspace.MarkLandedAsync(
+                "main", source.CommitSha!, mergeCommit, DateTime.UtcNow.AddDays(-31), CancellationToken.None);
+            Assert.True(marked.Success, marked.Error);
+            return workspace;
+        }
+
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+
+            active = await CreateLandedTaskAsync(Guid.NewGuid(), "active-output.txt");
+
+            dirty = await CreateLandedTaskAsync(Guid.NewGuid(), "dirty-output.txt");
+            await dirty.DisposeAsync();
+            await File.WriteAllTextAsync(Path.Combine(dirty.RecoveryPath, "uncommitted-after-land.txt"), "keep me\n");
+
+            advanced = await CreateLandedTaskAsync(Guid.NewGuid(), "advanced-output.txt");
+            await File.WriteAllTextAsync(
+                Path.Combine(advanced.WorkingDirectory, "new-work-after-land.txt"), "new task work\n");
+            var laterCommit = await advanced.CompleteChangesAsync(
+                "ProjectBeacon: new work after landing", CancellationToken.None);
+            Assert.True(laterCommit.Success, laterCommit.Error);
+            await advanced.DisposeAsync();
+
+            var entries = await TaskWorktreeLifecycle.ListAsync(worktrees, 30, CancellationToken.None);
+            Assert.Contains(entries, entry => entry.TaskId == Guid.ParseExact(active.BranchName["beacon/task/".Length..], "N")
+                && entry.Status == "active");
+            Assert.Contains(entries, entry => entry.TaskId == Guid.ParseExact(dirty.BranchName["beacon/task/".Length..], "N")
+                && entry.Status == "dirty");
+            Assert.Contains(entries, entry => entry.TaskId == Guid.ParseExact(advanced.BranchName["beacon/task/".Length..], "N")
+                && entry.Status == "changed-after-landing");
+            Assert.DoesNotContain(entries, entry => entry.CleanupEligible);
+
+            var cleanup = await TaskWorktreeLifecycle.CleanupExpiredAsync(worktrees, 30, CancellationToken.None);
+            Assert.Equal(0, cleanup.Removed);
+            Assert.True(Directory.Exists(active.RecoveryPath));
+            Assert.True(Directory.Exists(dirty.RecoveryPath));
+            Assert.True(Directory.Exists(advanced.RecoveryPath));
+        }
+        finally
+        {
+            if (active is not null)
+                await active.DisposeAsync();
+            if (dirty is not null)
+                await dirty.DisposeAsync();
+            if (advanced is not null)
+                await advanced.DisposeAsync();
+            try { Directory.Delete(parent, recursive: true); } catch { }
         }
     }
 
