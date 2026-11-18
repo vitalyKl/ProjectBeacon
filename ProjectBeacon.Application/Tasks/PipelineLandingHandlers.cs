@@ -387,34 +387,47 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == attempt.TaskId && t.ProjectId == attempt.ProjectId, ct);
         if (task is null || task.PipelineStage != TaskPipelineStage.Approved)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "TaskNotApprovedForExecute", ct);
             return Result.Failure<LandingAttemptDto>("The task must remain Approved until Execute is queued.", ErrorKind.Conflict);
+        }
 
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         var checkCommand = project?.ReviewCheckCommand?.Trim();
         if (string.IsNullOrWhiteSpace(checkCommand))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewCommandUnavailable", ct);
             return Result.Failure<LandingAttemptDto>("The pinned project ReviewCheckCommand is unavailable.", ErrorKind.Conflict);
+        }
         var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
         if (!string.Equals(commandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewCommandChanged", ct);
             return Result.Failure<LandingAttemptDto>("The project's review check command changed after Preview.", ErrorKind.Conflict);
+        }
         if (!ProjectGitPolicyCatalog.TryRead(project!.GitPolicyJson, project.GitPolicyRevision, out var currentPolicy)
             || !ProjectGitPolicyCatalog.TryRead(attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out var attemptPolicy))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "InvalidGitPolicySnapshot", ct);
             return Result.Failure<LandingAttemptDto>("The project's Git policy snapshot is invalid.", ErrorKind.Conflict);
+        }
         if (project.GitPolicyRevision != attempt.GitPolicyRevision)
         {
-            attempt.SetEscalationCode("GitPolicyChangedSincePreview");
-            await db.SaveChangesAsync(ct);
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "GitPolicyChangedSincePreview", ct);
             return Result.Failure<LandingAttemptDto>(
                 "Project Git policy changed after Preview. Request a fresh Preview before executing this attempt.", ErrorKind.Conflict);
         }
         if (currentPolicy.AutonomyLevel == 1)
         {
-            attempt.SetEscalationCode("IntegrationBranchNotAvailable");
-            await db.SaveChangesAsync(ct);
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "IntegrationBranchNotAvailable", ct);
             return Result.Failure<LandingAttemptDto>(
                 "Autonomy level 1 requires the integration-branch workflow, which is planned for phase 6. Select level 0 or 2.", ErrorKind.Conflict);
         }
         if (command.Request.Automatic && currentPolicy.AutonomyLevel != 2)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "AutomaticLandingNotAllowed", ct);
             return Result.Failure<LandingAttemptDto>("Automatic landing is allowed only at autonomy level 2.", ErrorKind.Forbidden);
+        }
 
         var latestVerdict = await db.ReviewVerdicts
             .Where(v => v.TaskId == attempt.TaskId && v.ProjectId == attempt.ProjectId)
@@ -422,7 +435,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             .ThenByDescending(v => v.Id)
             .FirstOrDefaultAsync(ct);
         if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewApprovalChanged", ct);
             return Result.Failure<LandingAttemptDto>("The latest review verdict must still be Approve.", ErrorKind.Conflict);
+        }
 
         var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(r =>
             r.Id == attempt.ReviewRunId && r.TaskId == attempt.TaskId && r.ProjectId == attempt.ProjectId, ct);
@@ -440,11 +456,17 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
             || reviewRun.CheckedDeviceId != attempt.DeviceId
             || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ReviewProofChanged", ct);
             return Result.Failure<LandingAttemptDto>("The latest review proof no longer matches this landing attempt.", ErrorKind.Conflict);
+        }
 
         var device = await RequestLandingHandler.FindLandingDeviceAsync(db, attempt.ProjectId, attempt.DeviceId, ct);
         if (device is null)
+        {
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "LandingWorkstationUnavailable", ct);
             return Result.Failure<LandingAttemptDto>("No online GitLand-capable project workstation is available.", ErrorKind.Conflict);
+        }
 
         var previousState = attempt.Status;
         var claimed = await LandingCommandDispatch.TryClaimAsync(db, attempt, "Execute", ct);
@@ -480,8 +502,10 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             }), ct);
         if (!queued.Success)
         {
-            attempt.MarkCommandCompletionUnknown();
-            await db.SaveChangesAsync(ct);
+            // EnqueueCommandHandler returns a failed Result only when no durable command
+            // was created. This is not an unknown completion: release ExecutePending so
+            // the task can request a fresh Preview instead of waiting forever.
+            await InvalidateUnqueuedExecuteAsync(db, attempt, "ExecuteEnqueueFailed", ct);
             return Result.Failure<LandingAttemptDto>(queued.Error ?? "Could not queue GitLand Execute.");
         }
 
@@ -510,6 +534,18 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             })));
         await db.SaveChangesAsync(ct);
         return Result.Ok(RequestLandingHandler.ToDto(attempt));
+    }
+
+    private static async Task InvalidateUnqueuedExecuteAsync(
+        IBeaconDb db,
+        LandingAttempt attempt,
+        string failureCode,
+        CancellationToken ct)
+    {
+        if (attempt.Status == LandingAttemptStatus.ExecutePending)
+            attempt.Fail(failureCode);
+        attempt.SetEscalationCode(failureCode);
+        await db.SaveChangesAsync(ct);
     }
 }
 
