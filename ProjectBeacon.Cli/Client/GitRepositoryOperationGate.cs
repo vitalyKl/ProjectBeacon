@@ -1,9 +1,10 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 
 /// <summary>Serializes operations that must not overlap on a real project repository.</summary>
-internal static class GitRepositoryOperationGate
+internal static partial class GitRepositoryOperationGate
 {
     private sealed class RepositoryState
     {
@@ -92,9 +93,17 @@ internal static class GitRepositoryOperationGate
         if (root is null)
             return fullPath;
 
-        // Git reports physical paths for worktrees, while Path.GetFullPath preserves
-        // symlink aliases such as macOS /var -> /private/var. Resolve each existing
-        // component so session leases compare the same checkout regardless of alias.
+        // On Unix, realpath resolves both symlinks and filesystem aliases such as the
+        // macOS /var -> /private/var mapping. Resolve the full existing path in one
+        // operation so a lease registered through an alias matches Git's physical path.
+        if (!OperatingSystem.IsWindows())
+        {
+            var physicalPath = TryResolvePhysicalPath(fullPath);
+            if (physicalPath is not null)
+                return TrimRoot(physicalPath);
+        }
+
+        // Windows junctions and symbolic links are resolved component by component.
         var current = root;
         var segments = fullPath[root.Length..].Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
@@ -110,12 +119,48 @@ internal static class GitRepositoryOperationGate
                 current = Path.GetFullPath(target.FullName);
         }
 
+        return TrimRoot(current);
+    }
+
+    private static string TrimRoot(string path)
+    {
+        var root = Path.GetPathRoot(path);
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        return string.Equals(current, root, comparison)
-            ? current
-            : current.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(path, root, comparison)
+            ? path
+            : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static string? TryResolvePhysicalPath(string path)
+    {
+        IntPtr resolved = IntPtr.Zero;
+        try
+        {
+            resolved = RealPath(path, IntPtr.Zero);
+            return resolved == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(resolved);
+        }
+        catch (DllNotFoundException)
+        {
+            return null;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (resolved != IntPtr.Zero)
+                Free(resolved);
+        }
+    }
+
+    [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial IntPtr RealPath(string path, IntPtr resolvedPath);
+
+    [LibraryImport("libc", EntryPoint = "free")]
+    private static partial void Free(IntPtr pointer);
     }
 
     private static RepositoryState GetState(string repositoryRoot)
