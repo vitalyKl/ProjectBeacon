@@ -2842,11 +2842,6 @@ orthstar</value>
     <value>タスク ID</value>
   </data>
   <data name="GitSyncRepositoryBehindWarning" xml:space="preserve"><value>最後の Git チェックでは、リポジトリがブランチ「{1}」で {0} 件遅れていました。パイプラインはこのローカルチェックアウトをそのまま使用します。Upstream の変更を取り込むには同期してください。</value></data>
-  <data name="PipelineRepositoryBehind" xml:space="preserve"><value>プロジェクトのリポジトリが追跡対象の Upstream より遅れています。パイプラインを開始する前に同期してください。</value></data>
-  <data name="PipelineRepositorySyncInProgress" xml:space="preserve">
-    <value>このプロジェクトではリポジトリの同期がまだ実行中です。パイプラインを開始する前に完了を待ってください。</value>
-  </data>
-  <data name="PipelineRepositorySyncRequired" xml:space="preserve"><value>設定された Upstream に対してリポジトリの状態を確認できませんでした。ブランチと Upstream の設定を確認し、パイプライン開始前に同期してください。</value></data>
   <data name="GitSyncOtherWorkstationFinished" xml:space="preserve">
     <value>別のワークステーションで Git 同期コマンドが終了しました。パイプラインで選択されているワークステーションのリポジトリは、引き続き同期が必要です。</value>
   </data>
