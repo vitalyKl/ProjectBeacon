@@ -133,6 +133,8 @@ public sealed class WorkstationSettings
     public bool WorkspaceModeConfigured { get; set; }
     /// <summary>Persistent root for task worktrees. Blank uses the per-user ProjectBeacon worktree directory.</summary>
     public string? WorktreeRoot { get; set; }
+    /// <summary>Days to retain a clean, verified-merged task worktree before it can be pruned. Zero disables cleanup.</summary>
+    public int TaskWorktreeRetentionDays { get; set; } = 30;
     public string? AgentDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
     public string? BeaconPath { get; set; }

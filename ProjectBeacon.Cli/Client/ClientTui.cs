@@ -203,6 +203,8 @@ public static class ClientTui
         settings.WorkspaceModeConfigured = true;
         settings.WorktreeRoot = PromptOptionalAbsolutePath(
             "Task worktree root (empty uses the per-user ProjectBeacon directory)", settings.WorktreeRoot);
+        settings.TaskWorktreeRetentionDays = PromptRetentionDays(settings.TaskWorktreeRetentionDays);
+        AnsiConsole.MarkupLine("[grey]Merged task worktrees are retained for this many days before they become eligible for cleanup. Zero disables cleanup. Cleanup never removes dirty, active, advanced, or not-verified-merged branches.[/]");
         AnsiConsole.MarkupLine("[grey]Branch mode requires Git 2.38 or newer. Uncommitted changes in your original checkout are not copied into a task branch.[/]");
         AnsiConsole.MarkupLine("[grey]Command execution policy applies to native agents on this workstation. Auto skips consent; it is not an OS sandbox.[/]");
         var currentPolicy = settings.CommandPolicy?.Trim().ToLowerInvariant() is "off" or "auto" or "ask"
@@ -307,6 +309,9 @@ public static class ClientTui
             case ConsoleKey.L:
                 ShowLog(daemon.Snapshot);
                 break;
+            case ConsoleKey.W:
+                await ManageTaskWorktreesAsync(ct);
+                break;
             case ConsoleKey.O:
                 OpenBrowser(store.Url);
                 break;
@@ -370,6 +375,84 @@ public static class ClientTui
                 break;
         }
         return stopAfterUpdate;
+    }
+
+    private static int PromptRetentionDays(int current)
+    {
+        while (true)
+        {
+            var value = AnsiConsole.Ask("Merged task worktree retention days (0 disables cleanup):", Math.Clamp(current, 0, 3650));
+            if (value is >= 0 and <= 3650)
+                return value;
+            AnsiConsole.MarkupLine("[yellow]Enter a value from 0 through 3650.[/]");
+        }
+    }
+
+    private static async Task ManageTaskWorktreesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var (settings, error) = WorkstationSettings.TryRead();
+            if (error is not null)
+            {
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(error)}[/]");
+                return;
+            }
+
+            var entries = await TaskWorktreeLifecycle.ListAsync(
+                settings.WorktreeRoot, settings.TaskWorktreeRetentionDays, ct);
+            var table = new Table().Border(TableBorder.Rounded)
+                .AddColumn("Project")
+                .AddColumn("Task")
+                .AddColumn("Status")
+                .AddColumn("Target")
+                .AddColumn("Landed");
+            foreach (var entry in entries)
+            {
+                table.AddRow(
+                    entry.ProjectId == Guid.Empty ? "unknown" : entry.ProjectId.ToString("N")[..8],
+                    entry.TaskId == Guid.Empty ? "unknown" : entry.TaskId.ToString("N")[..8],
+                    Markup.Escape(entry.Status),
+                    Markup.Escape(entry.LandingTargetBranch ?? "-"),
+                    entry.LandedAtUtc is { } landed ? landed.ToLocalTime().ToString("yyyy-MM-dd") : "-");
+            }
+            if (entries.Count == 0)
+                AnsiConsole.MarkupLine("[grey]No ProjectBeacon task worktrees were found.[/]");
+            else
+                AnsiConsole.Write(table);
+
+            var candidates = entries.Count(entry => entry.CleanupEligible);
+            if (settings.TaskWorktreeRetentionDays <= 0)
+            {
+                AnsiConsole.MarkupLine("[grey]Cleanup is disabled (retention = 0 days).[/]");
+            }
+            else if (candidates == 0)
+            {
+                AnsiConsole.MarkupLine("[grey]No clean, verified-merged task worktrees have expired.[/]");
+            }
+            else if (AnsiConsole.Confirm(
+                $"Remove {candidates} clean task worktree(s) whose landing is verified and retention has expired?",
+                false))
+            {
+                var cleanup = await TaskWorktreeLifecycle.CleanupExpiredAsync(
+                    settings.WorktreeRoot, settings.TaskWorktreeRetentionDays, ct);
+                AnsiConsole.MarkupLine(
+                    $"[green]Removed {cleanup.Removed}; skipped {cleanup.Skipped}.[/]");
+                foreach (var message in cleanup.Messages)
+                    AnsiConsole.MarkupLine("[grey]" + Markup.Escape(message) + "[/]");
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            AnsiConsole.MarkupLine($"[red]Task worktree inventory failed: {Markup.Escape(exception.Message)}[/]");
+        }
+
+        AnsiConsole.MarkupLine("[grey]Press any key…[/]");
+        Console.ReadKey(true);
     }
 
     private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, Task daemonRun, CancellationToken ct)
@@ -436,7 +519,7 @@ public static class ClientTui
             grid.AddRow("Error", $"[red]{Markup.Escape(s.Error)}[/]");
 
         var help = new Markup(
-            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[O]]pen  [[D]]aemon update  [[Q]]uit[/]");
+            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[W]]orktrees  [[O]]pen  [[D]]aemon update  [[Q]]uit[/]");
         return new Rows(
             new Panel(grid) { Header = new PanelHeader("Beacon client"), Border = BoxBorder.Rounded },
             help);
