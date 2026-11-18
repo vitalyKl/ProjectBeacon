@@ -364,7 +364,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         }
         else if (!command.Actor.IsHuman || command.Actor.UserId is not { } userId || userId == Guid.Empty)
         {
-            return Result.Forbidden<LandingAttemptDto>("A human Owner/Admin action is required to execute a landing.");
+            return Result.Forbidden<LandingAttemptDto>("A human user-bound actor is required to execute a landing.");
         }
 
         await using var db = _dbFactory.CreateDbContext();
