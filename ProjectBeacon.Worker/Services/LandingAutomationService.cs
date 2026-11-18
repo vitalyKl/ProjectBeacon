@@ -8,6 +8,7 @@ using Application.Projects;
 using Application.Tasks;
 using Domain.Enums;
 using Domain.Entities.Tasks;
+using System.Text.Json;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,9 +71,7 @@ public sealed class LandingAutomationService : BackgroundService
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var candidates = await GetDispatchCandidates(db, now)
-                .Take(200)
-                .ToListAsync(ct);
+            var candidates = await GetDispatchCandidatesAsync(db, now, ct);
 
             var dispatched = 0;
             foreach (var candidate in candidates)
@@ -196,10 +195,44 @@ public sealed class LandingAutomationService : BackgroundService
         }
     }
 
-    internal static IQueryable<LandingAttempt> GetDispatchCandidates(BeaconDbContext db, DateTime now)
+    internal static async Task<List<LandingAttempt>> GetDispatchCandidatesAsync(
+        BeaconDbContext db,
+        DateTime now,
+        CancellationToken ct = default)
     {
+        // Read active GitLand payloads and parse the attempt identity as data. Guid.ToString()
+        // inside a correlated EF predicate is provider-dependent (and SQLite does not map it
+        // to the same representation as JSON serialization). Resolve exact IDs once, then let
+        // both PostgreSQL and SQLite execute a normal Guid NOT IN predicate.
+        var activePayloads = await db.WorkstationCommands
+            .AsNoTracking()
+            .Where(command => command.Kind == WorkstationCommandKind.GitLand
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running))
+            .Select(command => command.PayloadJson)
+            .ToListAsync(ct);
+
+        var activeAttemptIds = new HashSet<Guid>();
+        foreach (var payload in activePayloads)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("landingAttemptId", out var idElement)
+                    && idElement.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(idElement.GetString(), out var attemptId)
+                    && attemptId != Guid.Empty)
+                    activeAttemptIds.Add(attemptId);
+            }
+            catch (JsonException)
+            {
+                // Malformed commands cannot bind an attempt; completion handling will fail them.
+            }
+        }
+
         var expiredDispatchLease = now.AddMinutes(-2);
-        return db.LandingAttempts
+        var query = db.LandingAttempts
             .AsNoTracking()
             .Where(attempt =>
                 (attempt.Status == LandingAttemptStatus.RevertPending
@@ -221,17 +254,16 @@ public sealed class LandingAutomationService : BackgroundService
                 || (attempt.Status == LandingAttemptStatus.LandedUnverified
                     && (attempt.EscalationCode == null
                         || (attempt.EscalationCode == "RevertDispatchUnavailable"
-                            && attempt.UpdatedAt < expiredDispatchLease))))
-            // A command already in the durable queue owns this attempt. Exclude it before
-            // applying Take(200), otherwise old active commands can starve later landings.
-            .Where(attempt => !db.WorkstationCommands.Any(command =>
-                command.ProjectId == attempt.ProjectId
-                && command.Kind == WorkstationCommandKind.GitLand
-                && (command.Status == WorkstationCommandStatus.Pending
-                    || command.Status == WorkstationCommandStatus.Running)
-                && command.PayloadJson.Contains(attempt.Id.ToString())))
+                            && attempt.UpdatedAt < expiredDispatchLease))));
+
+        if (activeAttemptIds.Count > 0)
+            query = query.Where(attempt => !activeAttemptIds.Contains(attempt.Id));
+
+        return await query
             .OrderBy(attempt => attempt.UpdatedAt)
-            .ThenBy(attempt => attempt.Id);
+            .ThenBy(attempt => attempt.Id)
+            .Take(200)
+            .ToListAsync(ct);
     }
 
     internal static bool ShouldDispatchExecute(LandingAttemptStatus status, int autonomyLevel) =>
