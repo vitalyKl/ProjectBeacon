@@ -1062,9 +1062,22 @@ internal static class GitLandExecutor
         if (!Succeeded(branchCheck))
             return new CandidateResult("failed", ErrorCode: "InvalidTargetBranch");
 
-        var target = await ResolveTargetHeadAsync(workspace, request.TargetBranch, request.ReviewBaseBranch, request.LandingAttemptId, filters, ct);
+        var target = await ResolveTargetHeadAsync(
+            workspace, request.TargetBranch, request.ReviewBaseBranch, request.LandingAttemptId, filters, ct);
         if (target.Error is not null)
-            return new CandidateResult("failed", ErrorCode: target.ErrorCode ?? "TargetUnavailable");
+        {
+            if (target.ErrorCode == "TargetCheckoutDirty"
+                && request.AllowIntegrationFallback
+                && !string.Equals(targetBranch, IntegrationBranchName, StringComparison.Ordinal))
+            {
+                return await BuildCandidateAsync(
+                    workspace,
+                    request with { TargetBranch = IntegrationBranchName, AllowIntegrationFallback = false },
+                    filters,
+                    ct);
+            }
+            return new CandidateResult("failed", targetBranch, target.Sha, ErrorCode: target.ErrorCode ?? "TargetUnavailable");
+        }
 
         // --write-tree computes the merge result directly in Git's object database. It does
         // not create MERGE_HEAD, touch an index, or modify the target checkout. With -z and
@@ -1213,12 +1226,25 @@ internal static class GitLandExecutor
             var url = remote.StdOut.Trim();
             if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
                 return (null, "The configured origin uses an unsupported Git transport.", "UnsupportedRemote");
+            var fetchBranch = targetBranch;
+            if (string.Equals(targetBranch, IntegrationBranchName, StringComparison.Ordinal))
+            {
+                var remoteBranch = await Git(repo, filters, ct,
+                    "ls-remote", "--heads", "--", url, $"refs/heads/{IntegrationBranchName}");
+                if (!Succeeded(remoteBranch))
+                    return (null, "Could not inspect the configured remote integration branch.", "TargetRemoteInspectionFailed");
+                var integrationExistsRemotely = remoteBranch.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    .Any(line => line.Split('\t').LastOrDefault() == $"refs/heads/{IntegrationBranchName}");
+                if (!integrationExistsRemotely)
+                    fetchBranch = reviewBaseBranch;
+            }
+
             var targetRef = $"refs/beacon/landing/{attemptId:N}/target";
             var fetch = await Git(repo, filters, ct,
                 "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
-                "--", url, $"+refs/heads/{targetBranch}:{targetRef}");
+                "--", url, $"+refs/heads/{fetchBranch}:{targetRef}");
             if (!Succeeded(fetch))
-                return (null, "Could not fetch the daemon-selected target branch.", "TargetFetchFailed");
+                return (null, "Could not fetch the daemon-selected target branch or reviewed base.", "TargetFetchFailed");
             var fetched = await Git(repo, filters, ct, "rev-parse", "--verify", targetRef);
             return Succeeded(fetched) && IsGitSha(fetched.StdOut.Trim())
                 ? (fetched.StdOut.Trim(), null, null)
@@ -1232,7 +1258,15 @@ internal static class GitLandExecutor
             return (local.StdOut.Trim(), null, null);
         if (local.TimedOut || local.ExitCode != 128)
             return (null, "Could not inspect the local target branch safely.", "TargetHeadUnavailable");
-        return (null, "The target branch is not checked out, no local target branch exists, and no origin remote is configured.", "TargetUnavailable");
+        if (string.Equals(targetBranch, IntegrationBranchName, StringComparison.Ordinal))
+        {
+            var localBase = await Git(repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{reviewBaseBranch}");
+            if (Succeeded(localBase) && IsGitSha(localBase.StdOut.Trim()))
+                return (localBase.StdOut.Trim(), null, null);
+            if (localBase.TimedOut || localBase.ExitCode != 128)
+                return (null, "Could not inspect the reviewed base branch safely.", "TargetHeadUnavailable");
+        }
+        return (null, "The target and reviewed base branches are unavailable in this local-only repository.", "TargetUnavailable");
     }
 
     private static async Task<(string? Error, int FileCount, int ChangedLines, bool ProtectedPath)> CheckCandidateScopeAsync(
