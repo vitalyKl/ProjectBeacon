@@ -186,7 +186,7 @@ public static class ProjectGitPolicyCatalog
         && !value.Contains("..", StringComparison.Ordinal)
         && !value.Contains("@{", StringComparison.Ordinal)
         && value.All(character => char.IsAsciiLetterOrDigit(character)
-            || character is "." or "_" or "-" or "/");
+            || character is '.' or '_' or '-' or '/');
 
     private static bool TryInt(JsonElement root, string name, out int value)
     {
