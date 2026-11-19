@@ -164,7 +164,7 @@ Kind values are the `WorkstationCommandKind` names. JSON uses those names (`Json
 | `ConfigureOpenCode` | Apply `/v1/devices/me/opencode-connections` and restart OpenCode |
 | `RunEvalTurn` | Run an eval turn in the project root |
 | `RunReviewCheck` | Run `checkCommand` for a `reviewRunId` inside the project root. **Trusted source only:** human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand`; `CommandSandbox` strips raw payload `checkCommand` — `EnqueueCommandHandler` injects `TrustedCheckCommand` only. |
-| `GitLand` | Server-authorized task landing only: non-mutating `Preview`, target-HEAD/tree-revalidated `Execute`, and guarded `Revert`. Requires an enrolled workstation advertising GitLand capability and a persistent task branch workspace. No caller-supplied remote URL or target ref. |
+| `GitLand` | Server-authorized task landing only: non-mutating `Preview`, target-HEAD/tree-revalidated `Execute`, and guarded `Revert`. Requires an enrolled workstation advertising `git-land-v1`; integration-target landings additionally require `git-land-integration-v1`. Uses a persistent task branch workspace. No caller-supplied remote URL or target ref. |
 | `ReconcileDesired` | Sync llama-swap, apply OpenCode connections, and save workstation settings when the payload includes them |
 
 Delivery semantics per kind (idempotent vs at-most-once vs reconcile-backed) are fixed in [command-delivery-semantics.md](command-delivery-semantics.md), with the code source of truth in `CommandDelivery` (`ProjectBeacon.Application/Devices`).
