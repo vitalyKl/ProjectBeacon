@@ -1236,7 +1236,15 @@ internal static class GitLandExecutor
                 var integrationExistsRemotely = remoteBranch.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                     .Any(line => line.Split('\t').LastOrDefault() == $"refs/heads/{IntegrationBranchName}");
                 if (!integrationExistsRemotely)
+                {
+                    var localIntegration = await Git(
+                        repo, filters, ct, "rev-parse", "--verify", $"refs/heads/{IntegrationBranchName}");
+                    if (Succeeded(localIntegration) && IsGitSha(localIntegration.StdOut.Trim()))
+                        return (localIntegration.StdOut.Trim(), null, null);
+                    if (localIntegration.TimedOut || localIntegration.ExitCode != 128)
+                        return (null, "Could not inspect the local integration branch safely.", "TargetHeadUnavailable");
                     fetchBranch = reviewBaseBranch;
+                }
             }
 
             var targetRef = $"refs/beacon/landing/{attemptId:N}/target";
