@@ -116,17 +116,6 @@ public sealed class LandingAutomationService : BackgroundService
                         continue;
                     }
 
-                    if (policy.AutonomyLevel == 1)
-                    {
-                        if (candidate.Status == LandingAttemptStatus.ExecutePending)
-                            await FailAndEscalateAsync(db, candidate.Id, LandingAttemptStatus.ExecutePending,
-                                "IntegrationBranchNotAvailable", ct);
-                        else
-                            await SetEscalationAsync(db, candidate.Id, LandingAttemptStatus.Previewed,
-                                "IntegrationBranchNotAvailable", ct);
-                        continue;
-                    }
-
                     if (ShouldDispatchExecute(candidate.Status, policy.AutonomyLevel))
                     {
                         var result = await new ExecuteLandingHandler(appDbFactory, enqueue).HandleAsync(
@@ -267,7 +256,7 @@ public sealed class LandingAutomationService : BackgroundService
     }
 
     internal static bool ShouldDispatchExecute(LandingAttemptStatus status, int autonomyLevel) =>
-        autonomyLevel == 2
+        autonomyLevel is 1 or 2
         && status is (LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending);
 
     internal static bool ShouldDispatchRevert(
