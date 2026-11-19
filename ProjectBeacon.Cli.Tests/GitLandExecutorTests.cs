@@ -886,9 +886,9 @@ public sealed partial class AgentTaskGitOperationsTests
             var mergeCommit = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
             Assert.Equal(mergeCommit, await GitAsync(repository, "rev-parse", "refs/heads/beacon/integration"));
             Assert.Equal(originalMainHead, await GitAsync(repository, "rev-parse", "refs/heads/main"));
-            Assert.Equal("previous local landing\n",
+            Assert.Equal("previous local landing",
                 await GitAsync(repository, "show", "refs/heads/beacon/integration:src/app/integration-change.txt"));
-            Assert.Equal("reviewed task change\n",
+            Assert.Equal("reviewed task change",
                 await GitAsync(repository, "show", "refs/heads/beacon/integration:src/app/task-change.txt"));
             Assert.Equal("preserve the local change\n", await File.ReadAllTextAsync(uncommittedPath));
         }
