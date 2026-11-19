@@ -146,10 +146,10 @@ public sealed class LandingAutomationServiceTests
 
     [Theory]
     [InlineData(LandingAttemptStatus.Previewed, 0, false)]
-    [InlineData(LandingAttemptStatus.Previewed, 1, false)]
+    [InlineData(LandingAttemptStatus.Previewed, 1, true)]
     [InlineData(LandingAttemptStatus.Previewed, 2, true)]
     [InlineData(LandingAttemptStatus.ExecutePending, 0, false)]
-    [InlineData(LandingAttemptStatus.ExecutePending, 1, false)]
+    [InlineData(LandingAttemptStatus.ExecutePending, 1, true)]
     [InlineData(LandingAttemptStatus.ExecutePending, 2, true)]
     [InlineData(LandingAttemptStatus.Landed, 2, false)]
     [InlineData(LandingAttemptStatus.RevertPending, 2, false)]
