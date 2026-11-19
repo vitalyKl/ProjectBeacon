@@ -5,6 +5,17 @@ using ProjectBeacon.Domain.Common;
 public sealed class WorkstationCapabilitiesTests
 {
     [Fact]
+    public void SupportsIntegrationLanding_RequiresExplicitCapabilityAdvertisement()
+    {
+        Assert.False(WorkstationCapabilities.Supports(
+            """{"capabilities":["git-land-v1"]}""",
+            WorkstationCapabilities.GitLandIntegrationV1));
+        Assert.True(WorkstationCapabilities.Supports(
+            """{"capabilities":["git-land-v1","git-land-integration-v1"]}""",
+            WorkstationCapabilities.GitLandIntegrationV1));
+    }
+
+    [Fact]
     public void SupportsGitSync_RequiresExplicitCapabilityAdvertisement()
     {
         Assert.False(WorkstationCapabilities.Supports(null, WorkstationCapabilities.GitSyncV1));
