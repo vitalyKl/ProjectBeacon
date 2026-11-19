@@ -17,22 +17,23 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Equal(200, policy.MaxChangedFiles);
         Assert.Equal(20_000, policy.MaxChangedLines);
         Assert.Equal("Off", policy.AutoRevertMode);
-        Assert.False(policy.IntegrationBranchAvailable);
+        Assert.True(policy.IntegrationBranchAvailable);
     }
 
     [Fact]
     public void Serialize_RoundTripsCanonicalProjectPolicy()
     {
         var json = ProjectGitPolicyCatalog.Serialize(
-            2,
+            1,
             ["src/generated/**", "docs/private/*.md"],
             40,
             2_500,
-            "OnPostCheckFail");
+            "OnPostCheckFail",
+            "LandViaIntegration");
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 7, out var policy));
-        Assert.Equal(2, policy.AutonomyLevel);
-        Assert.Equal("Escalate", policy.DirtyCheckoutBehavior);
+        Assert.Equal(1, policy.AutonomyLevel);
+        Assert.Equal("LandViaIntegration", policy.DirtyCheckoutBehavior);
         Assert.Equal(7, policy.Revision);
         Assert.Equal(40, policy.MaxChangedFiles);
         Assert.Equal(2_500, policy.MaxChangedLines);
@@ -41,18 +42,18 @@ public sealed class ProjectGitPolicyCatalogTests
     }
 
     [Fact]
-    public void TryRead_RecognizesPersistedIntegrationPolicySoItCanBeRepaired()
+    public void TryRead_RecognizesPersistedIntegrationPolicy()
     {
         const string json = "{\"autonomyLevel\":1,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 4, out var policy));
         Assert.Equal(1, policy.AutonomyLevel);
-        Assert.False(policy.IntegrationBranchAvailable);
-        Assert.Contains("phase 6", policy.IntegrationBranchUnavailableReason, StringComparison.OrdinalIgnoreCase);
+        Assert.True(policy.IntegrationBranchAvailable);
+        Assert.Null(policy.IntegrationBranchUnavailableReason);
     }
 
     [Fact]
-    public async Task SetPolicy_RejectsUnavailableIntegrationLevelBeforePersistence()
+    public async Task SetPolicy_RejectsUnsupportedAutonomyLevelBeforePersistence()
     {
         var handler = new SetProjectGitPolicyHandler(null!, null!, null!);
         var actor = new ProjectBeacon.Application.Authorization.ActorContext(
@@ -65,17 +66,30 @@ public sealed class ProjectGitPolicyCatalogTests
             null,
             ProjectBeacon.Domain.Enums.ApiTokenCapability.None);
         var command = new SetProjectGitPolicyCommand(
-            Guid.NewGuid(), 1, "Escalate", [], 200, 20_000, "Off", 1, actor);
+            Guid.NewGuid(), 3, "Escalate", [], 200, 20_000, "Off", 1, actor);
 
         var result = await handler.HandleAsync(command);
 
         Assert.False(result.Success);
-        Assert.Contains("Autonomy level must be 0 or 2", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Autonomy level must be 0, 1, or 2", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SerializeAttemptSnapshot_PreservesReviewedBaseBranchIndependentlyOfLandingTarget()
+    {
+        var policy = new ProjectGitPolicyDto(
+            1, "Escalate", [], 100, 5_000, "Off", 3, true, null);
+        var snapshot = ProjectGitPolicyCatalog.SerializeAttemptSnapshot(policy, "main");
+
+        Assert.True(ProjectGitPolicyCatalog.TryRead(snapshot, 3, out var parsed));
+        Assert.Equal(1, parsed.AutonomyLevel);
+        Assert.True(ProjectGitPolicyCatalog.TryReadReviewBaseBranch(snapshot, "beacon/integration", out var reviewBase));
+        Assert.Equal("main", reviewBase);
     }
 
     [Theory]
     [InlineData("{\"autonomyLevel\":3,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
-    [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"LandViaIntegration\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
+    [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Unsafe\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":201,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Auto\"}")]
     [InlineData("{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[\"../outside\"],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}")]
