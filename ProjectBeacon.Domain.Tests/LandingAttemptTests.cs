@@ -76,6 +76,25 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void PreviewFallback_PinsIntegrationBranchAsActualTarget()
+    {
+        var attempt = Start();
+        const string snapshot = """
+            {"autonomyLevel":0,"dirtyCheckoutBehavior":"LandViaIntegration","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off","reviewBaseBranch":"main"}
+            """;
+        attempt.SetGitPolicySnapshot(4, snapshot);
+        attempt.MarkDispatchPending("Preview");
+
+        attempt.RecordPreview(
+            "beacon/integration", new string('c', 40), new string('d', 40),
+            new string('e', 64), 0, null);
+
+        Assert.Equal(LandingAttemptStatus.Previewed, attempt.Status);
+        Assert.Equal("beacon/integration", attempt.TargetBranch);
+        Assert.Equal(snapshot, attempt.GitPolicySnapshotJson);
+    }
+
+    [Fact]
     public void ConflictedPreview_IsTerminalUntilAnotherAttempt()
     {
         var attempt = Start();
