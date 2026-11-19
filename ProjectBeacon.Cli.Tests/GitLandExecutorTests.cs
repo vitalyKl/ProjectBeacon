@@ -803,6 +803,103 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitLand_LandViaIntegration_UsesExistingLocalIntegrationBranchWhenOriginHasNoIntegrationRef()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+
+        await GitAsync(repository, "branch", "beacon/integration");
+        await GitAsync(repository, "checkout", "beacon/integration");
+        await File.WriteAllTextAsync(
+            Path.Combine(projectRoot, "integration-change.txt"),
+            "previous local landing\n");
+        await GitAsync(repository, "add", "-A");
+        await GitAsync(repository, "commit", "-m", "ProjectBeacon: seed local integration branch");
+        var integrationBaseHead = await GitAsync(repository, "rev-parse", "refs/heads/beacon/integration");
+        await GitAsync(repository, "checkout", "main");
+
+        string sourceSha;
+        var opened = await AgentTaskWorktree.CreateAsync(
+            projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+        Assert.NotNull(opened.Worktree);
+        await using (var taskWorktree = opened.Worktree!)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(taskWorktree.WorkingDirectory, "task-change.txt"),
+                "reviewed task change\n");
+            var taskCommit = await taskWorktree.CommitChangesAsync(
+                "ProjectBeacon: reviewed task change", CancellationToken.None);
+            Assert.True(taskCommit.Success, taskCommit.Error);
+            sourceSha = taskCommit.CommitSha!;
+        }
+
+        var reviewTreeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+        var originalMainHead = await GitAsync(repository, "rev-parse", "refs/heads/main");
+        const string checkCommand = "echo review-ok";
+        var commandHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
+        var settings = new WorkstationSettings
+        {
+            WorkspaceMode = "Branch",
+            WorktreeRoot = worktreeRoot
+        };
+        var uncommittedPath = Path.Combine(projectRoot, "uncommitted-target.txt");
+
+        try
+        {
+            await File.WriteAllTextAsync(uncommittedPath, "preserve the local change\n");
+            var preview = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(
+                    projectId, taskId, attemptId, "Preview", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand,
+                    reviewBaseBranch: "main",
+                    allowIntegrationFallback: true),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(preview.Ok, preview.Error ?? preview.Result);
+            using var previewJson = JsonDocument.Parse(preview.Result!);
+            Assert.Equal("previewed", previewJson.RootElement.GetProperty("status").GetString());
+            Assert.Equal("beacon/integration", previewJson.RootElement.GetProperty("targetBranch").GetString());
+            Assert.Equal(integrationBaseHead, previewJson.RootElement.GetProperty("targetHeadSha").GetString());
+
+            var targetHead = previewJson.RootElement.GetProperty("targetHeadSha").GetString()!;
+            var candidateTree = previewJson.RootElement.GetProperty("candidateTreeSha").GetString()!;
+            var execute = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(
+                    projectId, taskId, attemptId, "Execute", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand, targetHead, candidateTree,
+                    targetBranch: "beacon/integration",
+                    reviewBaseBranch: "main"),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(execute.Ok, execute.Error ?? execute.Result);
+            using var landed = JsonDocument.Parse(execute.Result!);
+            Assert.Equal("landed", landed.RootElement.GetProperty("status").GetString());
+            var mergeCommit = landed.RootElement.GetProperty("mergeCommitSha").GetString()!;
+            Assert.Equal(mergeCommit, await GitAsync(repository, "rev-parse", "refs/heads/beacon/integration"));
+            Assert.Equal(originalMainHead, await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal("previous local landing\n",
+                await GitAsync(repository, "show", "refs/heads/beacon/integration:src/app/integration-change.txt"));
+            Assert.Equal("reviewed task change\n",
+                await GitAsync(repository, "show", "refs/heads/beacon/integration:src/app/task-change.txt"));
+            Assert.Equal("preserve the local change\n", await File.ReadAllTextAsync(uncommittedPath));
+        }
+        finally
+        {
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task GitLand_PreviewRejectsDirtyCheckedOutTargetWithoutChangingIt()
     {
         var root = CreateTempRoot();
