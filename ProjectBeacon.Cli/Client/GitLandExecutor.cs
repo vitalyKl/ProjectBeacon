@@ -15,6 +15,7 @@ internal static class GitLandExecutor
 {
     private const int MaxChangedFiles = 200;
     private const int MaxChangedLines = 20_000;
+    private const string IntegrationBranchName = "beacon/integration";
 
     private sealed record Request(
         Guid ProjectId,
@@ -22,6 +23,8 @@ internal static class GitLandExecutor
         Guid LandingAttemptId,
         string Action,
         string TargetBranch,
+        string ReviewBaseBranch,
+        bool AllowIntegrationFallback,
         string SourceSha,
         string ReviewTreeSha,
         string CheckCommandHash,
@@ -79,7 +82,10 @@ internal static class GitLandExecutor
         if (!string.Equals(taskWorkspace.BranchName, expectedBranch, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(taskWorkspace.BaseBranch))
             return BusinessFailure("TaskBranchIdentityUnavailable");
-        if (!string.Equals(taskWorkspace.BaseBranch, request.TargetBranch, StringComparison.Ordinal))
+        if (!string.Equals(taskWorkspace.BaseBranch, request.ReviewBaseBranch, StringComparison.Ordinal))
+            return BusinessFailure("ReviewBaseBranchIdentityMismatch");
+        if (!string.Equals(request.TargetBranch, request.ReviewBaseBranch, StringComparison.Ordinal)
+            && !string.Equals(request.TargetBranch, IntegrationBranchName, StringComparison.Ordinal))
             return BusinessFailure("TargetBranchIdentityMismatch");
 
         var targetBranchCheck = await Git(taskWorkspace.RepositoryRoot, [], ct, "check-ref-format", "--branch", request.TargetBranch);
@@ -196,7 +202,7 @@ internal static class GitLandExecutor
             "previewed" => (true, JsonSerializer.Serialize(new
             {
                 status = "previewed",
-                targetBranch = request.TargetBranch,
+                targetBranch = candidate.TargetBranch ?? request.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 candidateTreeSha = candidate.CandidateTreeSha,
                 checkOutputHash = candidate.CheckOutputHash,
@@ -206,14 +212,14 @@ internal static class GitLandExecutor
             "conflicted" => (true, JsonSerializer.Serialize(new
             {
                 status = "conflicted",
-                targetBranch = workspace.BaseBranch,
+                targetBranch = candidate.TargetBranch ?? request.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 conflicts = candidate.Conflicts
             }), null),
             _ => (true, JsonSerializer.Serialize(new
             {
                 status = "failed",
-                targetBranch = workspace.BaseBranch,
+                targetBranch = candidate.TargetBranch ?? request.TargetBranch,
                 targetHeadSha = candidate.TargetHeadSha,
                 errorCode = candidate.ErrorCode ?? candidate.Status,
                 checkExitCode = candidate.CheckExitCode,
@@ -235,6 +241,8 @@ internal static class GitLandExecutor
         var candidate = await BuildCandidateAsync(workspace, request, filters, ct);
         if (candidate.Status != "previewed")
             return BusinessFailure(candidate.ErrorCode ?? "CandidateNoLongerValid");
+        if (!string.Equals(candidate.TargetBranch, request.TargetBranch, StringComparison.Ordinal))
+            return BusinessFailure("TargetBranchChangedSincePreview");
         if (!string.Equals(candidate.TargetHeadSha, request.TargetHeadSha, StringComparison.OrdinalIgnoreCase))
             return BusinessFailure("TargetChangedAfterPreview");
         if (!string.Equals(candidate.CandidateTreeSha, request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
@@ -1054,7 +1062,7 @@ internal static class GitLandExecutor
         if (!Succeeded(branchCheck))
             return new CandidateResult("failed", ErrorCode: "InvalidTargetBranch");
 
-        var target = await ResolveTargetHeadAsync(workspace, request.TargetBranch, request.LandingAttemptId, filters, ct);
+        var target = await ResolveTargetHeadAsync(workspace, request.TargetBranch, request.ReviewBaseBranch, request.LandingAttemptId, filters, ct);
         if (target.Error is not null)
             return new CandidateResult("failed", ErrorCode: target.ErrorCode ?? "TargetUnavailable");
 
@@ -1173,7 +1181,7 @@ internal static class GitLandExecutor
     }
 
     private static async Task<(string? Sha, string? Error, string? ErrorCode)> ResolveTargetHeadAsync(
-        AgentTaskWorktree workspace, string targetBranch, Guid attemptId, string[] filters, CancellationToken ct)
+        AgentTaskWorktree workspace, string targetBranch, string reviewBaseBranch, Guid attemptId, string[] filters, CancellationToken ct)
     {
         var repo = workspace.RepositoryRoot;
         var checkout = await FindTargetCheckoutAsync(repo, targetBranch, filters, ct);
@@ -1410,6 +1418,8 @@ internal static class GitLandExecutor
             }
             var action = root["action"]?.GetValue<string>();
             var targetBranch = root["targetBranch"]?.GetValue<string>();
+            var reviewBaseBranch = root["reviewBaseBranch"]?.GetValue<string>() ?? targetBranch;
+            var allowIntegrationFallback = root["allowIntegrationFallback"]?.GetValue<bool>() ?? false;
             var sourceSha = root["sourceSha"]?.GetValue<string>();
             var reviewTreeSha = root["reviewTreeSha"]?.GetValue<string>();
             var hash = root["checkCommandHash"]?.GetValue<string>();
@@ -1429,6 +1439,12 @@ internal static class GitLandExecutor
             }
             if (action is not ("Preview" or "Execute" or "Revert")
                 || !IsSafeBranchName(targetBranch)
+                || !IsSafeBranchName(reviewBaseBranch)
+                || (!string.Equals(targetBranch, reviewBaseBranch, StringComparison.Ordinal)
+                    && !string.Equals(targetBranch, IntegrationBranchName, StringComparison.Ordinal))
+                || (allowIntegrationFallback
+                    && (action != "Preview"
+                        || !string.Equals(targetBranch, reviewBaseBranch, StringComparison.Ordinal)))
                 || !IsGitSha(sourceSha)
                 || !IsGitSha(reviewTreeSha)
                 || hash is not { Length: 64 } || !hash.All(Uri.IsHexDigit)
@@ -1439,7 +1455,8 @@ internal static class GitLandExecutor
                 return false;
             }
             request = new Request(
-                projectId, taskId, attemptId, action, targetBranch!, sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
+                projectId, taskId, attemptId, action, targetBranch!, reviewBaseBranch!, allowIntegrationFallback,
+                sourceSha!, reviewTreeSha!, hash!, checkCommand ?? string.Empty,
                 root["targetHeadSha"]?.GetValue<string>(),
                 root["targetTreeSha"]?.GetValue<string>(),
                 root["mergeCommitSha"]?.GetValue<string>(),
