@@ -13,6 +13,7 @@ using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
 using Application.Proposals;
+using Application.Projects;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
 
@@ -552,6 +553,20 @@ internal sealed class GitLandCompletion : ICommandCompletion
         var payloadTaskId = DevicePayloadReader.ReadGuid(row.PayloadJson, "taskId");
         var payloadAction = DevicePayloadReader.ReadString(row.PayloadJson, "action");
         var payloadTargetBranch = DevicePayloadReader.ReadString(row.PayloadJson, "targetBranch");
+        var payloadReviewBaseBranch = DevicePayloadReader.ReadString(row.PayloadJson, "reviewBaseBranch");
+        var payloadAllowIntegrationFallback = ReadBooleanPayload(row.PayloadJson, "allowIntegrationFallback");
+        var pinnedPolicy = ProjectGitPolicyCatalog.Defaults(attempt.GitPolicyRevision);
+        var pinnedReviewBaseBranch = attempt.TargetBranch;
+        if (!string.Equals(attempt.GitPolicySnapshotJson, "{}", StringComparison.Ordinal)
+            && (!ProjectGitPolicyCatalog.TryRead(
+                    attempt.GitPolicySnapshotJson, attempt.GitPolicyRevision, out pinnedPolicy)
+                || !ProjectGitPolicyCatalog.TryReadReviewBaseBranch(
+                    attempt.GitPolicySnapshotJson, attempt.TargetBranch, out pinnedReviewBaseBranch)))
+            return;
+        var expectedReviewBaseBranch = payloadReviewBaseBranch ?? attempt.TargetBranch;
+        var expectedIntegrationFallback = payloadAction == "Preview"
+            && pinnedPolicy.AutonomyLevel != 1
+            && pinnedPolicy.DirtyCheckoutBehavior == "LandViaIntegration";
         var payloadSourceSha = DevicePayloadReader.ReadString(row.PayloadJson, "sourceSha");
         var payloadReviewTreeSha = DevicePayloadReader.ReadString(row.PayloadJson, "reviewTreeSha");
         var payloadCommandHash = DevicePayloadReader.ReadString(row.PayloadJson, "checkCommandHash");
@@ -581,6 +596,8 @@ internal sealed class GitLandCompletion : ICommandCompletion
             || !string.Equals(payloadReviewTreeSha, attempt.ReviewTreeSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(payloadTargetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(expectedReviewBaseBranch, pinnedReviewBaseBranch, StringComparison.Ordinal)
+            || payloadAllowIntegrationFallback != expectedIntegrationFallback
             || !string.Equals(payloadAction, expectedAction, StringComparison.Ordinal)
             || !actionBindingValid)
             return;
@@ -639,7 +656,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                         var checkHash = ReadString(root, "checkOutputHash");
                         var exitCode = DevicePayloadReader.ReadNullableInt(root, "checkExitCode");
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsAllowedPreviewTarget(targetBranch, attempt.TargetBranch, pinnedPolicy)
                             && IsGitSha(targetHead)
                             && IsGitSha(tree)
                             && IsSha256(checkHash)
@@ -671,7 +688,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                                     .ToArray()
                                 : [];
                         if (attempt.Status == LandingAttemptStatus.PreviewPending
-                            && string.Equals(targetBranch, attempt.TargetBranch, StringComparison.Ordinal)
+                            && IsAllowedPreviewTarget(targetBranch, attempt.TargetBranch, pinnedPolicy)
                             && IsGitSha(targetHead)
                             && conflicts.Length is > 0 and <= 200)
                         {
@@ -898,6 +915,30 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 projectId,
                 outcome,
                 JsonSerializer.Serialize(details)));
+        }
+    }
+
+    private static bool IsAllowedPreviewTarget(
+        string? resultTargetBranch,
+        string expectedTargetBranch,
+        ProjectGitPolicyDto policy) =>
+        string.Equals(resultTargetBranch, expectedTargetBranch, StringComparison.Ordinal)
+        || (string.Equals(resultTargetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal)
+            && !string.Equals(expectedTargetBranch, ProjectGitPolicyCatalog.IntegrationBranchName, StringComparison.Ordinal)
+            && policy.DirtyCheckoutBehavior == "LandViaIntegration");
+
+    private static bool ReadBooleanPayload(string? json, string name)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json ?? "{}");
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
