@@ -2861,13 +2861,13 @@ orthstar</value>
     <value>Stufe 0 — manuelle Ausführung</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>Stufe 1 — Integrations-Branch (ab Phase 6 verfügbar)</value>
+    <value>Stufe 1 — automatisches Landing nach beacon/integration</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>Stufe 2 — automatische Ausführung nach erfolgreicher Vorschau</value>
   </data>
   <data name="GitAutonomyLevelHelp" xml:space="preserve">
-    <value>Stufe 1 ist noch nicht verfügbar, da der Integrations-Branch für Phase 6 geplant ist. Stufe 2 führt nur aus, wenn der geprüfte Kandidat die Preview-Prüfungen besteht.</value>
+    <value>Stufe 1 landet genehmigte Tasks automatisch im gemeinsamen Branch beacon/integration. Stufe 2 landet nach erfolgreicher Preview-Prüfung automatisch im geprüften Ziel-Branch.</value>
   </data>
   <data name="GitAutoRevert" xml:space="preserve">
     <value>Prüfung nach dem Merge</value>
@@ -2890,11 +2890,17 @@ orthstar</value>
   <data name="GitProtectedPathsHelp" xml:space="preserve">
     <value>Ein projektrelatives Glob-Muster pro Zeile. * und ? werden unterstützt. Sicherheitsdateien, GitHub-Workflows, Solution- und Projektdateien sowie Build-Konfigurationen sind ebenfalls immer geschützt.</value>
   </data>
-  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
-    <value>Ein unsauberer oder anderweitig unsicherer Ziel-Checkout wird eskaliert und niemals automatisch überschrieben.</value>
+  <data name="GitDirtyCheckoutBehavior" xml:space="preserve">
+    <value>Verhalten bei unsauberem Ziel-Checkout</value>
   </data>
-  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>Landing über einen Integrations-Branch ist noch nicht verfügbar und für Phase 6 geplant.</value>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve">
+    <value>beacon/integration verwenden</value>
+  </data>
+  <data name="GitDirtyCheckoutHelp" xml:space="preserve">
+    <value>Eskalieren stoppt den Vorgang zur Überprüfung. beacon/integration verwenden leitet das Landing bei nicht committeten Änderungen im geprüften Ziel-Checkout in diesen isolierten Branch um; der unsaubere Checkout wird weder überschrieben noch aktualisiert.</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>Eskalieren</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Git-Richtlinie speichern</value>

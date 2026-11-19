@@ -2869,13 +2869,13 @@ orthstar</value>
     <value>级别 0 — 手动执行</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>级别 1 — 集成分支（第 6 阶段提供）</value>
+    <value>级别 1 — 自动合并到 beacon/integration</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>级别 2 — 预览成功后自动执行</value>
   </data>
   <data name="GitAutonomyLevelHelp" xml:space="preserve">
-    <value>集成分支工作流计划在第 6 阶段实现，因此级别 1 暂不可用。级别 2 仅在已审查的候选版本通过预览检查后才会执行。</value>
+    <value>级别 1 会将已批准任务自动合并到共享的 beacon/integration 分支。级别 2 会在预览检查通过后自动合并到已审查的目标分支。</value>
   </data>
   <data name="GitAutoRevert" xml:space="preserve">
     <value>合并后检查失败时</value>
@@ -2898,11 +2898,17 @@ orthstar</value>
   <data name="GitProtectedPathsHelp" xml:space="preserve">
     <value>每行一个相对于项目根目录的 glob 模式。支持 * 和 ?。安全文件、GitHub 工作流、解决方案和项目文件以及构建配置始终受到保护。</value>
   </data>
-  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
-    <value>目标 checkout 存在未提交更改或无法确认安全时，将升级处理，绝不会自动覆盖。</value>
+  <data name="GitDirtyCheckoutBehavior" xml:space="preserve">
+    <value>目标 checkout 有未提交更改时</value>
   </data>
-  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>集成分支合并尚不可用，计划在第 6 阶段实现。</value>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve">
+    <value>使用 beacon/integration</value>
+  </data>
+  <data name="GitDirtyCheckoutHelp" xml:space="preserve">
+    <value>升级处理会停止操作并等待检查。使用 beacon/integration 会在已审查的目标 checkout 存在未提交更改时，将合并导向独立的该分支；不会覆盖或更新存在未提交更改的 checkout。</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>升级处理</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>保存 Git 策略</value>

@@ -2851,13 +2851,13 @@
     <value>Уровень 0 — ручное выполнение</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>Уровень 1 — интеграционная ветка (появится в фазе 6)</value>
+    <value>Уровень 1 — автоматическая посадка в beacon/integration</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>Уровень 2 — автоматическое выполнение после успешного Preview</value>
   </data>
   <data name="GitAutonomyLevelHelp" xml:space="preserve">
-    <value>Уровень 1 пока недоступен: интеграционная ветка запланирована на фазу 6. Уровень 2 запускает слияние только после успешной проверки кандидата.</value>
+    <value>Уровень 1 автоматически отправляет одобренные задачи в общую ветку beacon/integration. Уровень 2 автоматически выполняет посадку в проверенную целевую ветку после успешного Preview.</value>
   </data>
   <data name="GitAutoRevert" xml:space="preserve">
     <value>Проверка после слияния</value>
@@ -2880,11 +2880,17 @@
   <data name="GitProtectedPathsHelp" xml:space="preserve">
     <value>Один glob-шаблон относительно корня проекта на строку. Поддерживаются * и ?. Также всегда защищены файлы безопасности, GitHub workflows, solution/project-файлы и конфигурация сборки.</value>
   </data>
-  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
-    <value>Грязное или небезопасное целевое состояние передаётся на разбор. Оно никогда не перезаписывается автоматически.</value>
+  <data name="GitDirtyCheckoutBehavior" xml:space="preserve">
+    <value>Поведение при грязном целевом checkout</value>
   </data>
-  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>Посадка через интеграционную ветку пока недоступна; она запланирована на фазу 6.</value>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve">
+    <value>Использовать beacon/integration</value>
+  </data>
+  <data name="GitDirtyCheckoutHelp" xml:space="preserve">
+    <value>«Передать на разбор» останавливает операцию для проверки. «Использовать beacon/integration» направляет посадку в отдельную ветку, если в целевом checkout есть неподтверждённые изменения; грязный checkout не перезаписывается и не обновляется.</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>Передать на разбор</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Сохранить Git-политику</value>

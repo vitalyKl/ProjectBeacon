@@ -2869,13 +2869,13 @@ orthstar</value>
     <value>レベル 0 — 手動実行</value>
   </data>
   <data name="GitAutonomyLevel1Unavailable" xml:space="preserve">
-    <value>レベル 1 — 統合ブランチ（フェーズ 6 で利用可能）</value>
+    <value>レベル 1 — beacon/integration へ自動ランディング</value>
   </data>
   <data name="GitAutonomyLevel2" xml:space="preserve">
     <value>レベル 2 — プレビュー成功後に自動実行</value>
   </data>
   <data name="GitAutonomyLevelHelp" xml:space="preserve">
-    <value>統合ブランチのワークフローはフェーズ 6 で予定されているため、レベル 1 はまだ利用できません。レベル 2 では、レビュー済み候補がプレビュー検査に合格した場合のみ実行します。</value>
+    <value>レベル 1 は承認済みタスクを共有 beacon/integration ブランチへ自動ランディングします。レベル 2 はプレビュー検査に合格した後、レビュー済みのターゲットブランチへ自動ランディングします。</value>
   </data>
   <data name="GitAutoRevert" xml:space="preserve">
     <value>マージ後チェック</value>
@@ -2898,11 +2898,17 @@ orthstar</value>
   <data name="GitProtectedPathsHelp" xml:space="preserve">
     <value>プロジェクト相対の glob パターンを 1 行に 1 つ入力します。* と ? を使用できます。セキュリティファイル、GitHub ワークフロー、ソリューション／プロジェクトファイル、ビルド設定も常に保護されます。</value>
   </data>
-  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
-    <value>変更のある、または安全性を確認できないターゲット checkout はエスカレーションされ、自動で上書きされません。</value>
+  <data name="GitDirtyCheckoutBehavior" xml:space="preserve">
+    <value>ターゲット checkout が未コミットの場合</value>
   </data>
-  <data name="GitIntegrationBranchPhase6" xml:space="preserve">
-    <value>統合ブランチによるランディングはまだ利用できません。フェーズ 6 で実装予定です。</value>
+  <data name="GitDirtyCheckoutLandViaIntegration" xml:space="preserve">
+    <value>beacon/integration を使用</value>
+  </data>
+  <data name="GitDirtyCheckoutHelp" xml:space="preserve">
+    <value>エスカレーションは確認のため処理を停止します。beacon/integration を使用すると、レビュー済みターゲット checkout に未コミット変更がある場合、独立したブランチへランディングします。変更のある checkout を上書き・更新することはありません。</value>
+  </data>
+  <data name="GitDirtyCheckoutEscalate" xml:space="preserve">
+    <value>エスカレーション</value>
   </data>
   <data name="SaveGitPolicy" xml:space="preserve">
     <value>Git ポリシーを保存</value>
