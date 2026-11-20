@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
