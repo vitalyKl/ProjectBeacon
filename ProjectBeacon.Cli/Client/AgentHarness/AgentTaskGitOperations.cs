@@ -124,7 +124,7 @@ internal static class AgentTaskGitOperations
             "action", "title"),
         PipelineToolPolicy.GitPullRequest => Definition(
             name,
-            "Inspect or mark ready the pull request belonging to this exact task branch. Status reports GitHub merge admissibility using the exact task HEAD, pinned review base, GitHub review decision, and required status checks. This tool never merges; server-authorized GitLand remains the only landing path.",
+            "Inspect the pull request belonging to this exact task branch. Any role may request status; only the Actor role may mark its own draft PR ready. Status reports exact task HEAD, pinned review-base freshness, GitHub review decision and required checks. This tool never merges; server-authorized GitLand remains the only landing path.",
             new JsonObject
             {
                 ["action"] = EnumProperty("status", "ready")
@@ -153,7 +153,7 @@ internal static class AgentTaskGitOperations
             return await PublishAsync(opened.Context, arguments, ct);
         if (toolName == PipelineToolPolicy.GitPullRequest)
             return await AgentTaskGitHubPullRequestOperations.ExecuteAsync(
-                opened.Context, arguments, ct);
+                opened.Context, authorization.PipelineRole, arguments, ct);
 
         return toolName switch
         {
