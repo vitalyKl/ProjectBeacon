@@ -965,12 +965,21 @@ internal static class AgentTaskGitOperations
 
     private static IReadOnlyDictionary<string, string>? BuildHostSshAgentEnvironment()
     {
+        var isWindows = OperatingSystem.IsWindows();
         var socket = ResolveSshAgentSocket(
             Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
-            OperatingSystem.IsWindows());
+            isWindows);
         var environment = BuildSshAgentEnvironment(
             socket,
             Environment.GetEnvironmentVariable("SSH_AGENT_PID"));
+        var homeDirectory = isWindows
+            ? Environment.GetEnvironmentVariable("USERPROFILE")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : Environment.GetEnvironmentVariable("HOME")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var knownHostsPath = ResolveHostKnownHostsPath(homeDirectory);
+        if (knownHostsPath is not null)
+            environment["GIT_SSH_COMMAND"] = BuildSshCommand(knownHostsPath, isWindows);
         return environment.Count > 0 ? environment : null;
     }
 
@@ -978,6 +987,20 @@ internal static class AgentTaskGitOperations
         => !string.IsNullOrWhiteSpace(sshAgentSocket)
             ? sshAgentSocket
             : isWindows ? @"\\.\pipe\openssh-ssh-agent" : null;
+
+    internal static string? ResolveHostKnownHostsPath(string? homeDirectory)
+        => string.IsNullOrWhiteSpace(homeDirectory)
+            ? null
+            : Path.Combine(homeDirectory, ".ssh", "known_hosts");
+
+    internal static string BuildSshCommand(string knownHostsPath, bool isWindows)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(knownHostsPath);
+        var normalizedPath = isWindows ? knownHostsPath.Replace('\\', '/') : knownHostsPath;
+        var quotedPath = "'" + normalizedPath.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
+        return "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no"
+            + " -o UserKnownHostsFile=" + quotedPath;
+    }
 
     private static bool HasHostSshAgent()
         => ResolveSshAgentSocket(
