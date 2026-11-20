@@ -1761,6 +1761,6 @@ internal static class AgentTaskGitOperations
         new(false, JsonSerializer.Serialize(value, JsonOptions));
 
     internal static McpToolResult Error(string message) => new(true, message);
-    private static McpToolResult GitFailure(string message, string? detail = null) =>
+    internal static McpToolResult GitFailure(string message, string? detail = null) =>
         new(true, string.IsNullOrWhiteSpace(detail) ? message : message + " " + Clip(detail.Trim()));
 }
