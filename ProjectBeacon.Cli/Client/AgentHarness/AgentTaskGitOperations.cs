@@ -950,18 +950,24 @@ internal static class AgentTaskGitOperations
     }
 
     private static IReadOnlyDictionary<string, string>? BuildHostGitHubCredentialEnvironment()
-        => BuildGitHubCredentialEnvironment(
+    {
+        var isWindows = OperatingSystem.IsWindows();
+        var homeDirectory = isWindows
+            ? Environment.GetEnvironmentVariable("USERPROFILE")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : Environment.GetEnvironmentVariable("HOME")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return BuildGitHubCredentialEnvironment(
             Environment.GetEnvironmentVariable("GH_CONFIG_DIR"),
             Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
             Environment.GetEnvironmentVariable("APPDATA"),
-            Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home
-                ? home
-                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            homeDirectory,
             Environment.GetEnvironmentVariable("GH_TOKEN"),
             Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
             Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
             Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
-            OperatingSystem.IsWindows());
+            isWindows);
+    }
 
     private static IReadOnlyDictionary<string, string>? BuildHostSshAgentEnvironment()
     {
