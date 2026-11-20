@@ -99,6 +99,31 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal(expected, AgentTaskGitOperations.ResolveSshAgentSocket(sshAgentSocket: sshAgentSocket, isWindows: isWindows));
     }
 
+    [Theory]
+    [InlineData("/home/test user/.ssh/known_hosts", false, "UserKnownHostsFile='/home/test user/.ssh/known_hosts'")]
+    [InlineData("C:\\Users\\Test User\\.ssh\\known_hosts", true, "UserKnownHostsFile='C:/Users/Test User/.ssh/known_hosts'")]
+    [InlineData("/home/o'neil/.ssh/known_hosts", false, "UserKnownHostsFile='/home/o'\"'\"'neil/.ssh/known_hosts'")]
+    public void BuildSshCommand_UsesBatchModeAndStrictHostKeyVerification(
+        string knownHostsPath, bool isWindows, string expectedKnownHostsOption)
+    {
+        var command = AgentTaskGitOperations.BuildSshCommand(knownHostsPath, isWindows);
+
+        Assert.Contains("-o BatchMode=yes", command, StringComparison.Ordinal);
+        Assert.Contains("-o StrictHostKeyChecking=yes", command, StringComparison.Ordinal);
+        Assert.Contains("-o UpdateHostKeys=no", command, StringComparison.Ordinal);
+        Assert.Contains(expectedKnownHostsOption, command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildSshCommand_RemainsNonInteractiveWithoutAHostHomeDirectory()
+    {
+        var command = AgentTaskGitOperations.BuildSshCommand(null, isWindows: false);
+
+        Assert.Contains("-o BatchMode=yes", command, StringComparison.Ordinal);
+        Assert.Contains("-o StrictHostKeyChecking=yes", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("UserKnownHostsFile=", command, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BuildSshAgentEnvironment_ForwardsOnlyAgentSocket()
     {
