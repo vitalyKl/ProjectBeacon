@@ -564,7 +564,18 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
         CancellationToken ct,
         IReadOnlyCollection<string> disabledFilterDrivers,
         params string[] arguments)
-        => RunGitAsync(workingDirectory, ct, disabledFilterDrivers, arguments, null);
+        => RunGitAsync(workingDirectory, ct, disabledFilterDrivers, arguments, null, null);
+
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitWithEnvironmentAsync(
+        string workingDirectory,
+        CancellationToken ct,
+        IReadOnlyCollection<string> disabledFilterDrivers,
+        IReadOnlyDictionary<string, string> environmentOverrides,
+        params string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(environmentOverrides);
+        return RunGitAsync(workingDirectory, ct, disabledFilterDrivers, arguments, null, environmentOverrides);
+    }
 
     private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitAsync(
         string workingDirectory,
@@ -572,6 +583,15 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
         IReadOnlyCollection<string> disabledFilterDrivers,
         string[] arguments,
         string? indexPath)
+        => RunGitAsync(workingDirectory, ct, disabledFilterDrivers, arguments, indexPath, null);
+
+    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitAsync(
+        string workingDirectory,
+        CancellationToken ct,
+        IReadOnlyCollection<string> disabledFilterDrivers,
+        string[] arguments,
+        string? indexPath,
+        IReadOnlyDictionary<string, string>? environmentOverrides)
     {
         var hooksDirectory = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "empty-git-hooks");
         Directory.CreateDirectory(hooksDirectory);
@@ -623,6 +643,11 @@ internal sealed class AgentSessionWorktree : IAgentSessionWorktree
 
         if (!string.IsNullOrWhiteSpace(indexPath))
             info.Environment["GIT_INDEX_FILE"] = indexPath;
+        if (environmentOverrides is not null)
+        {
+            foreach (var pair in environmentOverrides)
+                info.Environment[pair.Key] = pair.Value;
+        }
         return ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(60), ct);
     }
 
