@@ -153,7 +153,7 @@ internal static class AgentTaskGitOperations
             return await PublishAsync(opened.Context, arguments, ct);
         if (toolName == PipelineToolPolicy.GitPullRequest)
             return await AgentTaskGitHubPullRequestOperations.ExecuteAsync(
-                opened.Context, authorization.PipelineRole, arguments, ct);
+                opened.Context, arguments, ct);
 
         return toolName switch
         {
