@@ -703,6 +703,23 @@ internal static class AgentTaskGitOperations
         if (auth.ExitCode != 0 || auth.TimedOut)
             return Error("GitHub CLI is not authenticated for github.com. Run gh auth login on this workstation; no credential was requested or stored by ProjectBeacon.");
 
+        // Git runs with an isolated HOME/APPDATA. Point only the bounded credential-helper
+        // subprocesses back at the host gh config and keyring session; never copy a token
+        // into persistent Git configuration or command arguments.
+        var credentialEnvironment = BuildGitHubCredentialEnvironment(
+            Environment.GetEnvironmentVariable("GH_CONFIG_DIR"),
+            Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
+            Environment.GetEnvironmentVariable("APPDATA"),
+            Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home
+                ? home
+                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetEnvironmentVariable("GH_TOKEN"),
+            Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            OperatingSystem.IsWindows());
+        if (credentialEnvironment is null)
+            return Error("Could not resolve the host GitHub CLI configuration or credential environment for the isolated Git helper.");
+
         var existing = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
         if (existing.Error is not null)
             return Error(existing.Error);
@@ -739,7 +756,8 @@ internal static class AgentTaskGitOperations
         credentialedGit.AddRange([
             "ls-remote", "--heads", "origin", "refs/heads/" + baseBranch
         ]);
-        var baseOnRemote = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. credentialedGit]);
+        var baseOnRemote = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
+            context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. credentialedGit]);
         if (!Succeeded(baseOnRemote))
             return GitFailure("Could not verify the review base on the configured GitHub origin.", baseOnRemote.StdErr);
         if (string.IsNullOrWhiteSpace(baseOnRemote.StdOut))
@@ -759,7 +777,8 @@ internal static class AgentTaskGitOperations
             "push", "--no-follow-tags", "--set-upstream", "--porcelain", "origin",
             $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
         };
-        var push = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. pushArguments]);
+        var push = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
+            context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. pushArguments]);
         if (!Succeeded(push))
             return GitFailure(
                 "Could not publish the task branch. The push is non-forced; resolve any remote divergence and retry.",
@@ -897,6 +916,54 @@ internal static class AgentTaskGitOperations
         foreach (var argument in arguments)
             info.ArgumentList.Add(argument);
         return await ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(90), ct);
+    }
+
+    internal static IReadOnlyDictionary<string, string>? BuildGitHubCredentialEnvironment(
+        string? configuredDirectory,
+        string? xdgConfigHome,
+        string? appDataDirectory,
+        string? homeDirectory,
+        string? githubToken,
+        string? dbusSessionBusAddress,
+        string? xdgRuntimeDirectory,
+        bool isWindows)
+    {
+        var configDirectory = ResolveGitHubConfigDirectory(
+            configuredDirectory, xdgConfigHome, appDataDirectory, homeDirectory, isWindows);
+        if (string.IsNullOrWhiteSpace(configDirectory) && string.IsNullOrWhiteSpace(githubToken))
+            return null;
+
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["GH_PROMPT_DISABLED"] = "1"
+        };
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+            environment["GH_CONFIG_DIR"] = configDirectory;
+        if (!string.IsNullOrWhiteSpace(githubToken))
+            environment["GH_TOKEN"] = githubToken;
+        if (!string.IsNullOrWhiteSpace(dbusSessionBusAddress))
+            environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
+        if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
+            environment["XDG_RUNTIME_DIR"] = xdgRuntimeDirectory;
+        return environment;
+    }
+
+    internal static string? ResolveGitHubConfigDirectory(
+        string? configuredDirectory,
+        string? xdgConfigHome,
+        string? appDataDirectory,
+        string? homeDirectory,
+        bool isWindows)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredDirectory))
+            return configuredDirectory;
+        if (!string.IsNullOrWhiteSpace(xdgConfigHome))
+            return Path.Combine(xdgConfigHome, "gh");
+        if (isWindows && !string.IsNullOrWhiteSpace(appDataDirectory))
+            return Path.Combine(appDataDirectory, "GitHub CLI");
+        return !string.IsNullOrWhiteSpace(homeDirectory)
+            ? Path.Combine(homeDirectory, ".config", "gh")
+            : null;
     }
 
     internal static bool TryParseGitHubRemote(string remoteUrl, out string repository)
