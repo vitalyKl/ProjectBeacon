@@ -222,58 +222,58 @@ internal static class AgentTaskGitHubPullRequestOperations
             return AgentTaskGitOperations.Error(
                 "GitHub marked the PR ready, but its final base/head/state does not match the locally reviewed task branch. Re-read git_pr status and do not proceed to landing.");
         return AgentTaskGitOperations.Success(new
-        {
-            ready = true,
-            pullRequestNumber = matching.Number,
-            pullRequestUrl = readyView.Url,
-            headSha = readyView.HeadSha,
-            baseBranch = readyView.BaseBranch
-        });
-    }
-
-    internal static bool CanMarkReady(string? pipelineRole) =>
-        string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
-
-    private static object BuildStatus(
-        string repository,
-        AgentTaskGitOperations.GitContext context,
-        string localHeadSha,
-        string remoteBaseSha,
-        bool worktreeClean,
-        AgentTaskGitOperations.PullRequestInfo listed,
-        PullRequestView view,
-        IReadOnlyList<RequiredCheck> checks,
-        bool headMatches,
-        bool baseUnchanged,
-        bool requiredChecksPassed,
-        bool githubMergeAdmissible,
-        IReadOnlyList<string> blockers) => new
-        {
-            found = true,
-            repository,
-            pullRequestNumber = listed.Number,
-            pullRequestUrl = view.Url,
-            state = view.State,
-            draft = view.IsDraft,
-            branch = context.BranchName,
-            baseBranch = view.BaseBranch,
-            localHeadSha,
-            pullRequestHeadSha = view.HeadSha,
-            remoteBaseSha,
-            pinnedBaseSha = context.BaseSha,
-            headMatchesLocal = headMatches,
-            baseUnchanged,
-            worktreeClean,
-            mergeable = view.Mergeable,
-            mergeStateStatus = view.MergeStateStatus,
-            reviewDecision = view.ReviewDecision,
-            requiredChecks = checks,
-            requiredChecksPassed,
-            mergeCommitSha = view.MergeCommitSha,
-            mergedAt = view.MergedAt,
-            githubMergeAdmissible,
-            mergeBlockers = blockers
-        };
+            {
+                ready = true,
+                pullRequestNumber = matching.Number,
+                pullRequestUrl = readyView.Url,
+                headSha = readyView.HeadSha,
+                baseBranch = readyView.BaseBranch
+            });
+        }
+    
+        internal static bool CanMarkReady(string? pipelineRole) =>
+            string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
+    
+        private static object BuildStatus(
+            string repository,
+            AgentTaskGitOperations.GitContext context,
+            string localHeadSha,
+            string remoteBaseSha,
+            bool worktreeClean,
+            AgentTaskGitOperations.PullRequestInfo listed,
+            PullRequestView view,
+            IReadOnlyList<RequiredCheck> checks,
+            bool headMatches,
+            bool baseUnchanged,
+            bool requiredChecksPassed,
+            bool githubMergeAdmissible,
+            IReadOnlyList<string> blockers) => new
+            {
+                found = true,
+                repository,
+                pullRequestNumber = listed.Number,
+                pullRequestUrl = view.Url,
+                state = view.State,
+                draft = view.IsDraft,
+                branch = context.BranchName,
+                baseBranch = view.BaseBranch,
+                localHeadSha,
+                pullRequestHeadSha = view.HeadSha,
+                remoteBaseSha,
+                pinnedBaseSha = context.BaseSha,
+                headMatchesLocal = headMatches,
+                baseUnchanged,
+                worktreeClean,
+                mergeable = view.Mergeable,
+                mergeStateStatus = view.MergeStateStatus,
+                reviewDecision = view.ReviewDecision,
+                requiredChecks = checks,
+                requiredChecksPassed,
+                mergeCommitSha = view.MergeCommitSha,
+                mergedAt = view.MergedAt,
+                githubMergeAdmissible,
+                mergeBlockers = blockers
+            };
 
     internal static List<string> GetMergeBlockers(
         AgentTaskGitOperations.GitContext context,
