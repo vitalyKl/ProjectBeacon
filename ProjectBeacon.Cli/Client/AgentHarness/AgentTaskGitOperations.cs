@@ -618,7 +618,7 @@ internal static class AgentTaskGitOperations
         var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--all", "origin");
         if (!Succeeded(origin))
             return Error("Could not inspect the configured origin fetch URLs.");
-        var originUrls = origin.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        var originUrls = origin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (originUrls.Length != 1
             || !TryParseGitHubRemote(originUrls[0].Trim(), out var repository))
             return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
@@ -627,7 +627,7 @@ internal static class AgentTaskGitOperations
             context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--push", "--all", "origin");
         if (!Succeeded(pushOrigin))
             return Error("Could not inspect the configured origin push URLs.");
-        var pushUrls = pushOrigin.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        var pushUrls = pushOrigin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (pushUrls.Length != 1
             || !TryParseGitHubRemote(pushUrls[0].Trim(), out var pushRepository)
             || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
