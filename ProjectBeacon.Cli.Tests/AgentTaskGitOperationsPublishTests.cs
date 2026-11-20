@@ -76,7 +76,7 @@ public sealed partial class AgentTaskGitOperationsTests
     public void ResolveSshAgentSocket_UsesWindowsDefaultNamedPipeWhenNeeded(
         bool isWindows, string? sshAgentSocket, string? expected)
     {
-        Assert.Equal(expected, AgentTaskGitOperations.ResolveSshAgentSocket(isWindows: isWindows, sshAgentSocket));
+        Assert.Equal(expected, AgentTaskGitOperations.ResolveSshAgentSocket(sshAgentSocket: sshAgentSocket, isWindows: isWindows));
     }
 
     [Fact]
