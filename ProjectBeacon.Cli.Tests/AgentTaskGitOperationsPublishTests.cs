@@ -35,6 +35,26 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public void RedactCredentialValues_RemovesHostGitHubTokensFromDiagnostics()
+    {
+        var credentials = new Dictionary<string, string?>
+        {
+            ["GH_TOKEN"] = "gh-secret-token",
+            ["GITHUB_TOKEN"] = "github-secret-token",
+            ["GH_ENTERPRISE_TOKEN"] = "enterprise-secret-token"
+        };
+
+        var result = AgentTaskGitOperations.RedactCredentialValues(
+            "Git failed using gh-secret-token and github-secret-token; helper enterprise-secret-token",
+            name => credentials.TryGetValue(name, out var value) ? value : null);
+
+        Assert.DoesNotContain("gh-secret-token", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("github-secret-token", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("enterprise-secret-token", result, StringComparison.Ordinal);
+        Assert.Equal(3, result.Split("[redacted]", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public void BuildGitHubCliEnvironment_ExcludesApplicationAndUnrelatedCredentials()
     {
         var source = new Dictionary<string, string?>
