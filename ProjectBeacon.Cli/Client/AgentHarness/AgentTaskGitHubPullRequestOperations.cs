@@ -40,8 +40,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         var action = ReadString(args, "action");
         if (action is not ("status" or "ready"))
             return AgentTaskGitOperations.Error("git_pr action must be status or ready.");
-        if (action == "ready"
-            && !string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase))
+        if (action == "ready" && !CanMarkReady(pipelineRole))
             return AgentTaskGitOperations.Error("Only the Actor role may mark its own task pull request ready.");
 
         if (string.IsNullOrWhiteSpace(context.BaseBranch))
@@ -231,6 +230,9 @@ internal static class AgentTaskGitHubPullRequestOperations
             baseBranch = readyView.BaseBranch
         });
     }
+
+    internal static bool CanMarkReady(string? pipelineRole) =>
+        string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
 
     private static object BuildStatus(
         string repository,
