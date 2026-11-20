@@ -189,13 +189,14 @@ internal static class AgentTaskGitHubPullRequestOperations
             return AgentTaskGitOperations.Error("Only an open task pull request can be marked ready.");
         if (!view.IsDraft)
             return AgentTaskGitOperations.Success(new
-        {
-            ready = true,
-            pullRequestNumber = matching.Number,
-            pullRequestUrl = readyView.Url,
-            headSha = readyView.HeadSha,
-            baseBranch = readyView.BaseBranch
-        });
+            {
+                ready = true,
+                alreadyReady = true,
+                pullRequestNumber = matching.Number,
+                pullRequestUrl = view.Url,
+                headSha = view.HeadSha,
+                baseBranch = view.BaseBranch
+            });
     }
 
     internal static bool CanMarkReady(string? pipelineRole) =>
