@@ -139,6 +139,14 @@ combination of the following. **All of these must be preserved.**
 
 GitLand has a dedicated 30-minute command lease because it performs multiple bounded Git operations plus candidate and post-merge checks. Stale recovery may requeue it once under the idempotent rule. It is not `ReconcileBacked`: the durable attempt markers, not a background desired-state loop, reconcile an interrupted operation.
 
+### Native task-branch Git publishing
+
+`git_publish` is an Actor-only native workstation tool, not a queued `WorkstationCommand`. It requires GitHub CLI (`gh`) authenticated for `github.com` on the workstation. The agent supplies only the pull-request title/body and optional draft flag. Repository identity comes from the credential-free `origin` URL; branch identity is fixed by task authorization as `beacon/task/{taskId}`; PR base comes from the immutable task-worktree review-base metadata.
+
+Before pushing, the tool requires a clean worktree, at least one committed task change, every committed path inside the authorized project directory, and the remote review-base SHA to equal the saved `BaseSha`. If the base advanced, the agent must run `git_integrate` and review again. It pushes only the task branch with a normal non-forced fast-forward push and establishes its upstream. It never pushes tags or other refs.
+
+Authentication stays with the host GitHub CLI: Git receives `gh auth git-credential` as a per-process credential helper. ProjectBeacon does not store the PAT, return it to the model, add it to Git configuration, or write it to logs. The tool discovers an existing PR for the same head/base before creating one; a PR targeting a different base or an already-closed PR is reported rather than silently retargeted or recreated. New PRs are drafts by default. The tool does not merge PRs.
+
 ## Cross-references
 
 - `command-recovery.md` — the stale-command recovery rule, lease contract,
