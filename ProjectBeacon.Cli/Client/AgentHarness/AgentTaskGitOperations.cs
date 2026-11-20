@@ -1418,16 +1418,23 @@ internal static class AgentTaskGitOperations
     private static int? ReadInt(JsonObject args, string key) =>
         args[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
-    private static string Clip(string value)
+    internal static string RedactCredentialValues(string value, Func<string, string?> lookup)
     {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(lookup);
         var safe = value;
         foreach (var variable in new[] { "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN" })
         {
-            var secret = Environment.GetEnvironmentVariable(variable);
+            var secret = lookup(variable);
             if (!string.IsNullOrEmpty(secret))
                 safe = safe.Replace(secret, "[redacted]", StringComparison.Ordinal);
         }
+        return safe;
+    }
 
+    private static string Clip(string value)
+    {
+        var safe = RedactCredentialValues(value, Environment.GetEnvironmentVariable);
         return safe.Length <= MaxOutputCharacters
             ? safe
             : safe[..MaxOutputCharacters] + "\n[output truncated]";
