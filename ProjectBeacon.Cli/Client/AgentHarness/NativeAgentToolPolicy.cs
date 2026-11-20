@@ -81,9 +81,12 @@ internal static class NativeAgentToolPolicy
             || string.Equals(tool, "run_command", StringComparison.Ordinal)
             || string.Equals(tool, "service_start", StringComparison.Ordinal);
 
-    /// <summary>Repository sync mutates the real checkout and the active snapshot, so it must run alone and last in its tool batch.</summary>
+    /// <summary>Repository and task-branch mutations must run alone so commits, integration and publication cannot race.</summary>
     internal static bool RequiresExclusiveWorktreeExecution(string? tool) =>
-        string.Equals(tool, "repo_sync", StringComparison.Ordinal);
+        string.Equals(tool, "repo_sync", StringComparison.Ordinal)
+        || string.Equals(tool, "git_commit", StringComparison.Ordinal)
+        || string.Equals(tool, "git_integrate", StringComparison.Ordinal)
+        || string.Equals(tool, "git_publish", StringComparison.Ordinal);
 
     public static bool IsCacheableTool(string? name)
         => name is not null && CacheableReadOnlyTools.Contains(name);
