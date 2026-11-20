@@ -375,7 +375,7 @@ internal static class NativeCommandRunner
         return startInfo;
     }
 
-    private static string BuildSafePath(string? path, string workingDirectory)
+    internal static string BuildSafePath(string? path, string workingDirectory)
     {
         var workspaceRoot = FindWorkspaceRoot(workingDirectory);
         var safeEntries = new List<string>();
