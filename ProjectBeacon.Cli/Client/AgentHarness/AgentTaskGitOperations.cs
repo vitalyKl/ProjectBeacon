@@ -1418,8 +1418,20 @@ internal static class AgentTaskGitOperations
     private static int? ReadInt(JsonObject args, string key) =>
         args[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
-    private static string Clip(string value) =>
-        value.Length <= MaxOutputCharacters ? value : value[..MaxOutputCharacters] + "\n[output truncated]";
+    private static string Clip(string value)
+    {
+        var safe = value;
+        foreach (var variable in new[] { "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN" })
+        {
+            var secret = Environment.GetEnvironmentVariable(variable);
+            if (!string.IsNullOrEmpty(secret))
+                safe = safe.Replace(secret, "[redacted]", StringComparison.Ordinal);
+        }
+
+        return safe.Length <= MaxOutputCharacters
+            ? safe
+            : safe[..MaxOutputCharacters] + "\n[output truncated]";
+    }
 
     private static McpToolResult Success<T>(T value) =>
         new(false, JsonSerializer.Serialize(value, JsonOptions));
