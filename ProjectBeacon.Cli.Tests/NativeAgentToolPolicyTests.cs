@@ -14,6 +14,16 @@ public sealed class NativeAgentToolPolicyTests
         Assert.True(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(tool));
     }
 
+    [Theory]
+    [InlineData("git_commit")]
+    [InlineData("git_integrate")]
+    [InlineData("git_publish")]
+    public void PlanMode_BlocksAllMutatingTaskGitTools(string tool)
+    {
+        Assert.True(NativeAgentToolPolicy.IsPlanModeCommandExecutionBlocked("plan", tool));
+        Assert.False(NativeAgentToolPolicy.IsPlanModeCommandExecutionBlocked("act", tool));
+    }
+
     [Fact]
     public void RequiresExclusiveWorktreeExecution_DoesNotSerializeReadOnlyGitInspection()
     {
