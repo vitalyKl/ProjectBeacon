@@ -6,18 +6,19 @@ public static class PipelineToolPolicy
     public const string GitCommit = "git_commit";
     public const string GitIntegrate = "git_integrate";
     public const string GitPublish = "git_publish";
+    public const string GitPullRequest = "git_pr";
 
     public static IReadOnlyList<string> PlannerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitIntegrate
+        GitInfo, GitIntegrate, GitPullRequest
     });
     public static IReadOnlyList<string> ActorGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitCommit, GitIntegrate, GitPublish
+        GitInfo, GitCommit, GitIntegrate, GitPublish, GitPullRequest
     });
     public static IReadOnlyList<string> ReviewerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo
+        GitInfo, GitPullRequest
     });
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GitToolsByRole =
@@ -144,7 +145,7 @@ public static class PipelineToolPolicy
         McpToolNames.WriteFile, McpToolNames.ApplyPatch, McpToolNames.PipelineLandRequest,
         McpToolNames.PipelineLandExecute,
         McpToolNames.PipelineLandRevert, McpToolNames.KnowledgePropose,
-        McpToolNames.KnowledgeWithdraw, "run_command", "service_start", GitCommit, GitIntegrate, GitPublish
+        McpToolNames.KnowledgeWithdraw, "run_command", "service_start", GitCommit, GitIntegrate, GitPublish, GitPullRequest
     });
 
     /// <summary>Shared maximum set of role-scoped Beacon MCP tools; local execution tools have separate guards.</summary>
