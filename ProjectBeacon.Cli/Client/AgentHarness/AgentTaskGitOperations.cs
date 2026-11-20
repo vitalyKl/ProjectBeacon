@@ -1199,11 +1199,10 @@ internal static class AgentTaskGitOperations
         string branch,
         CancellationToken ct)
     {
-        var owner = repository.Split('/')[0];
         var result = await RunGitHubCliAsync(
             ghPath, workingDirectory, ct,
             "pr", "list", "--repo", repository,
-            "--head", owner + ":" + branch,
+            "--head", branch,
             "--state", "all",
             "--json", "number,url,baseRefName,state,isDraft");
         if (result.ExitCode != 0 || result.TimedOut)
