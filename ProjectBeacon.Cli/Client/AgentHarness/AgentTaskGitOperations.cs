@@ -699,12 +699,19 @@ internal static class AgentTaskGitOperations
             return GitFailure("Could not verify the review base on the configured GitHub origin.", baseOnRemote.StdErr);
         if (string.IsNullOrWhiteSpace(baseOnRemote.StdOut))
             return Error($"The configured GitHub origin does not contain the review base branch '{baseBranch}'.");
+        var remoteBaseLine = baseOnRemote.StdOut
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(line => line.EndsWith("\trefs/heads/" + baseBranch, StringComparison.Ordinal));
+        var remoteBaseSha = remoteBaseLine?.Split('\t').FirstOrDefault();
+        if (!IsGitSha(remoteBaseSha ?? string.Empty)
+            || !string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
+            return Error("The remote review base has advanced since this task branch was last integrated. Run git_integrate, review the updated branch, and retry publishing.");
 
         // This is the only refspec: no force option, tags, extra refs, or caller-supplied remote.
         var pushArguments = new List<string>
         {
             "-c", "credential.helper=!gh auth git-credential",
-            "push", "--porcelain", "origin",
+            "push", "--set-upstream", "--porcelain", "origin",
             $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
         };
         var push = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. pushArguments]);
