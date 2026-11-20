@@ -488,22 +488,45 @@ internal static class AgentTaskGitOperations
             if (!string.IsNullOrWhiteSpace(status.StdOut))
                 return Error("Commit or discard task worktree changes with git_commit before integrating a branch.");
 
-            var target = source == "base"
-                ? await FetchBaseAsync(context, ct)
-                : await FetchIntegrationAsync(context, ct);
+            // A pending ref records the source SHA before Git mutates the task branch.
+            // It is intentionally separate from the fetched remote ref: old fetches must
+            // never be mistaken for an unfinished merge from a different source.
+            var basePending = await ReadRefShaAsync(context, IntegrationBasePendingRef(context.TaskId), ct);
+            var integrationPending = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
+            if (basePending.Error is not null || integrationPending.Error is not null)
+                return Error(basePending.Error ?? integrationPending.Error!);
+            if (basePending.Sha is not null && integrationPending.Sha is not null)
+                return Error("Both task integration sources have pending checkpoints. Resolve the existing Git state before starting another integration.");
+
+            var pendingSource = basePending.Sha is not null ? "base"
+                : integrationPending.Sha is not null ? "integration"
+                : null;
+            if (pendingSource is not null && !string.Equals(pendingSource, source, StringComparison.Ordinal))
+                return Error($"A previous {pendingSource} integration is awaiting reconciliation. Retry git_integrate with source={pendingSource} before selecting another source.");
+
+            var target = pendingSource == source
+                ? (Sha: pendingSource == "base" ? basePending.Sha : integrationPending.Sha, Error: (string?)null)
+                : source == "base"
+                    ? await FetchBaseAsync(context, ct)
+                    : await FetchIntegrationAsync(context, ct);
             if (target.Error is not null)
                 return Error(target.Error);
+            if (!IsGitSha(target.Sha ?? string.Empty))
+                return Error("The selected integration source did not resolve to a valid commit SHA.");
 
-            if (source == "integration")
+            if (pendingSource is null)
             {
+                var pendingRef = source == "base"
+                    ? IntegrationBasePendingRef(context.TaskId)
+                    : IntegrationPendingRef(context.TaskId);
                 var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "update-ref", IntegrationPendingRef(context.TaskId), target.Sha!);
+                    "update-ref", pendingRef, target.Sha!);
                 if (!Succeeded(pending))
-                    return GitFailure("Could not persist the integration-branch checkpoint before merging.", pending.StdErr);
+                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
             }
 
             // A retry after a lost acknowledgement, or a task branch that already contains
-            // the selected source, must not create a duplicate merge/rebase.
+            // the selected source, reconciles the checkpoint without creating a duplicate merge.
             var alreadyIntegrated = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
                 "merge-base", "--is-ancestor", target.Sha!, "HEAD");
             if (Succeeded(alreadyIntegrated))
@@ -539,10 +562,9 @@ internal static class AgentTaskGitOperations
                 var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
                 if (mergeConflicts.Count > 0)
                     return Success(new { status = "conflict", source, strategy, targetSha = target.Sha, files = mergeConflicts });
-                if (source == "integration")
-                    _ = await Git(context.WorktreeRoot, context.DisabledFilters, CancellationToken.None,
-                        "update-ref", "-d", IntegrationPendingRef(context.TaskId));
-                return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.");
+
+                _ = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+                return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.", integrate.StdErr);
             }
 
             var update = await CompleteIntegrationSourceAsync(context, source, target.Sha!, ct);
@@ -571,9 +593,11 @@ internal static class AgentTaskGitOperations
                 : await Git(context.WorktreeRoot, context.DisabledFilters, ct, "merge", "--abort");
             if (!Succeeded(abort))
                 return GitFailure("Could not abort the in-progress Git integration.");
-            _ = await Git(context.WorktreeRoot, context.DisabledFilters, CancellationToken.None,
-                "update-ref", "-d", IntegrationPendingRef(context.TaskId));
-            return Success(new { status = "aborted" });
+
+            var clearError = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+            return clearError is null
+                ? Success(new { status = "aborted" })
+                : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
         var conflicts = await ReadConflictsAsync(context, ct);
@@ -618,19 +642,15 @@ internal static class AgentTaskGitOperations
             return GitFailure("Git could not continue the integration.");
         }
 
-        var baseRef = await ReadRefShaAsync(context, IntegrationBaseRef(context.TaskId), ct);
-        var integrationPendingRef = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
-        if (baseRef.Error is not null || integrationPendingRef.Error is not null)
-            return Error(baseRef.Error ?? integrationPendingRef.Error!);
-
-        var basePending = baseRef.Sha is not null
-            && !string.Equals(baseRef.Sha, context.BaseSha, StringComparison.OrdinalIgnoreCase);
-        var integrationPending = integrationPendingRef.Sha is not null;
-        if (basePending == integrationPending)
+        var basePendingAfter = await ReadRefShaAsync(context, IntegrationBasePendingRef(context.TaskId), ct);
+        var integrationPendingAfter = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
+        if (basePendingAfter.Error is not null || integrationPendingAfter.Error is not null)
+            return Error(basePendingAfter.Error ?? integrationPendingAfter.Error!);
+        if ((basePendingAfter.Sha is null) == (integrationPendingAfter.Sha is null))
             return Error("Could not identify a unique daemon-selected source for the completed integration.");
 
-        var sourceName = integrationPending ? "integration" : "base";
-        var targetSha = integrationPending ? integrationPendingRef.Sha! : baseRef.Sha!;
+        var sourceName = integrationPendingAfter.Sha is not null ? "integration" : "base";
+        var targetSha = integrationPendingAfter.Sha ?? basePendingAfter.Sha!;
         var metadataError = await CompleteIntegrationSourceAsync(context, sourceName, targetSha, ct);
         if (metadataError is not null)
             return Error("The integration finished, but the saved source checkpoint could not be updated: " + metadataError);
@@ -774,20 +794,55 @@ internal static class AgentTaskGitOperations
     private static async Task<string?> CompleteIntegrationSourceAsync(
         GitContext context, string source, string targetSha, CancellationToken ct)
     {
-        if (source == "base")
-            return await UpdateMetadataBaseShaAsync(context, targetSha, ct);
-        if (source != "integration" || !IsGitSha(targetSha))
+        if (!IsGitSha(targetSha))
             return "the integration source checkpoint is invalid";
 
-        var checkpoint = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-            "update-ref", IntegrationCheckpointRef(context.TaskId), targetSha);
-        if (!Succeeded(checkpoint))
-            return "the integration branch was merged but its checkpoint could not be persisted";
+        if (source == "base")
+        {
+            var updateBase = await UpdateMetadataBaseShaAsync(context, targetSha, ct);
+            if (updateBase is not null)
+                return updateBase;
+        }
+        else if (source == "integration")
+        {
+            var checkpoint = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", IntegrationCheckpointRef(context.TaskId), targetSha);
+            if (!Succeeded(checkpoint))
+                return "the integration branch was merged but its checkpoint could not be persisted";
+        }
+        else
+        {
+            return "the integration source identity is invalid";
+        }
+
+        var pendingRef = source == "base"
+            ? IntegrationBasePendingRef(context.TaskId)
+            : IntegrationPendingRef(context.TaskId);
         var clearPending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-            "update-ref", "-d", IntegrationPendingRef(context.TaskId));
+            "update-ref", "-d", pendingRef);
         return Succeeded(clearPending)
             ? null
             : "the integration checkpoint was saved but its pending marker could not be cleared";
+    }
+
+    private static async Task<string?> ClearIntegrationPendingRefsAsync(
+        GitContext context, CancellationToken ct)
+    {
+        foreach (var reference in new[]
+        {
+            IntegrationBasePendingRef(context.TaskId),
+            IntegrationPendingRef(context.TaskId)
+        })
+        {
+            var clear = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", "-d", reference);
+            if (!Succeeded(clear) && clear.ExitCode != 1)
+                return clear.StdErr.Trim().Length == 0
+                    ? "a pending source ref could not be deleted"
+                    : Clip(clear.StdErr.Trim());
+        }
+
+        return null;
     }
 
     private static async Task<(string? Sha, string? Error)> ReadRefShaAsync(
@@ -808,6 +863,7 @@ internal static class AgentTaskGitOperations
 
     private static string IntegrationBaseRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base";
     private static string IntegrationBranchRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-branch";
+    private static string IntegrationBasePendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base-pending";
     private static string IntegrationPendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-pending";
     private static string IntegrationCheckpointRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-checkpoint";
 
