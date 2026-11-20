@@ -235,6 +235,95 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+
+    [Fact]
+    public async Task GitIntegrate_UsesLocalIntegrationBranchWhenOriginDoesNotHaveIt()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "local-integration.txt"),
+                "local integration branch contribution\n");
+            await GitAsync(repository, "add", "src/app/local-integration.txt");
+            await GitAsync(repository, "commit", "-m", "Create local integration contribution");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "switch", "main");
+
+            var integrated = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using var document = JsonDocument.Parse(integrated.Text);
+            Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+            Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            Assert.Equal(
+                "local integration branch contribution\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "local-integration.txt")));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitIntegrate_RejectsArbitrarySourceBranchNames()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var headBefore = await GitAsync(worktree.RecoveryPath, "rev-parse", "HEAD");
+
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"feature/agent-selected"}""");
+
+            Assert.True(result.IsError);
+            Assert.Contains("source must be base or integration", result.Text, StringComparison.Ordinal);
+            Assert.Equal(headBefore, await GitAsync(worktree.RecoveryPath, "rev-parse", "HEAD"));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task GitIntegrate_IntegrationConflictCanBeResolvedAndContinued()
     {
