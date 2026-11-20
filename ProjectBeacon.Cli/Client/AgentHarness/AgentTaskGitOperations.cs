@@ -685,7 +685,7 @@ internal static class AgentTaskGitOperations
         if (!Succeeded(remotes))
             return (null, "Could not inspect configured Git remotes.");
 
-        var hasOrigin = remotes.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+        var hasOrigin = remotes.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .Any(name => string.Equals(name.Trim(), "origin", StringComparison.Ordinal));
         if (hasOrigin)
         {
@@ -693,7 +693,7 @@ internal static class AgentTaskGitOperations
                 "remote", "get-url", "--all", "origin");
             if (!Succeeded(remote))
                 return (null, "Could not resolve the configured origin URL safely.");
-            var urls = remote.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+            var urls = remote.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(value => value.Trim()).Where(value => value.Length > 0).ToArray();
             if (urls.Length != 1)
                 return (null, "Integration requires exactly one configured origin URL.");
@@ -709,8 +709,8 @@ internal static class AgentTaskGitOperations
                 "ls-remote", "--heads", "--", url, $"refs/heads/{IntegrationBranchName}");
             if (!Succeeded(remoteBranch))
                 return (null, "Could not inspect the remote integration branch.");
-            var existsRemotely = remoteBranch.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
-                .Any(line => line.EndsWith($"\\trefs/heads/{IntegrationBranchName}", StringComparison.Ordinal));
+            var existsRemotely = remoteBranch.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.EndsWith($"\trefs/heads/{IntegrationBranchName}", StringComparison.Ordinal));
             if (existsRemotely)
             {
                 var fetch = await RunRemoteGitAsync(
