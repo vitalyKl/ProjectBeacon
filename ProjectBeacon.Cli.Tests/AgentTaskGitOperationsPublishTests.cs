@@ -68,6 +68,30 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public void BuildSshAgentEnvironment_ForwardsOnlyAgentSocket()
+    {
+        var environment = AgentTaskGitOperations.BuildSshAgentEnvironment(
+            "/tmp/ssh-agent.sock", "1234");
+
+        Assert.Equal(2, environment.Count);
+        Assert.Equal("/tmp/ssh-agent.sock", environment["SSH_AUTH_SOCK"]);
+        Assert.Equal("1234", environment["SSH_AGENT_PID"]);
+        Assert.False(environment.ContainsKey("GH_TOKEN"));
+        Assert.False(environment.ContainsKey("GITHUB_TOKEN"));
+    }
+
+    [Theory]
+    [InlineData("https://github.com/owner/repository.git", true)]
+    [InlineData("https://github.com.evil.test/owner/repository.git", false)]
+    [InlineData("git@github.com:owner/repository.git", false)]
+    [InlineData("ssh://git@github.com/owner/repository.git", false)]
+    [InlineData("https://gitlab.com/owner/repository.git", false)]
+    public void IsGitHubHttpsRemote_OnlyAllowsValidatedHttpsGitHubUrls(string remote, bool expected)
+    {
+        Assert.Equal(expected, AgentTaskGitOperations.IsGitHubHttpsRemote(remote));
+    }
+
+    [Fact]
     public void BuildGitHubCredentialEnvironment_ForwardsOnlyScopedHelperContext()
     {
         var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
