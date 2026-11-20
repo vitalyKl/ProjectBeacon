@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Tests;
 
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed partial class AgentTaskGitOperationsTests
@@ -81,10 +82,10 @@ public sealed partial class AgentTaskGitOperationsTests
         var definition = AgentTaskGitOperations.ToolDefinition(PipelineToolPolicy.GitPublish);
         var properties = definition["function"]!["parameters"]!["properties"]!.AsObject();
 
-        Assert.Contains("action", properties);
-        Assert.Contains("title", properties);
-        Assert.Contains("body", properties);
-        Assert.Contains("draft", properties);
+        Assert.True(properties.ContainsKey("action"));
+        Assert.True(properties.ContainsKey("title"));
+        Assert.True(properties.ContainsKey("body"));
+        Assert.True(properties.ContainsKey("draft"));
         Assert.False(properties.ContainsKey("remote"));
         Assert.False(properties.ContainsKey("branch"));
         Assert.False(properties.ContainsKey("base"));
