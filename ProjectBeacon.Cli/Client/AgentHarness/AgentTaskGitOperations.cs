@@ -766,16 +766,12 @@ internal static class AgentTaskGitOperations
                 $"Pull request #{closed.Number} for this task branch is already closed ({closed.Url}). "
                 + "Reopen it explicitly or publish a new task branch; ProjectBeacon will not silently recreate it.");
 
-        // Pin the already-validated URLs for each network operation. This prevents a
-        // concurrent local config change from redirecting the destination after validation.
+        // Use the exact URL validated above rather than the mutable origin alias.
         var credentialedGit = new List<string>
         {
             "-c", "credential.helper=!gh auth git-credential",
-            "-c", "remote.origin.url=" + originUrl
+            "ls-remote", "--heads", originUrl, "refs/heads/" + baseBranch
         };
-        credentialedGit.AddRange([
-            "ls-remote", "--heads", "origin", "refs/heads/" + baseBranch
-        ]);
         var baseOnRemote = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
             context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. credentialedGit]);
         if (!Succeeded(baseOnRemote))
@@ -790,15 +786,14 @@ internal static class AgentTaskGitOperations
             || !string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
             return Error("The remote review base has advanced since this task branch was last integrated. Run git_integrate, review the updated branch, and retry publishing.");
 
-        // This is the only refspec: no force option, tags, extra refs, or caller-supplied remote.
+        // Push the already-verified commit SHA directly to the one validated URL and
+        // the task's single fixed destination ref. No remote alias, configured pushurl,
+        // mirror setting, or local branch movement can broaden or redirect this push.
         var pushArguments = new List<string>
         {
             "-c", "credential.helper=!gh auth git-credential",
-            "-c", "remote.origin.url=" + originUrl,
-            "-c", "remote.origin.pushurl=" + pushUrl,
-            "-c", "remote.origin.mirror=false",
-            "push", "--no-follow-tags", "--set-upstream", "--porcelain", "origin",
-            $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
+            "push", "--no-follow-tags", "--porcelain", pushUrl,
+            $"{headSha}:refs/heads/{context.BranchName}"
         };
         var push = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
             context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. pushArguments]);
