@@ -9,7 +9,7 @@ using ProjectBeacon.Cli.Client;
 
 internal static class AgentTaskGitHubPullRequestOperations
 {
-    private sealed record PullRequestView(
+    internal sealed record PullRequestView(
         string State,
         bool IsDraft,
         string BaseBranch,
@@ -21,7 +21,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         string? MergedAt,
         string? MergeCommitSha);
 
-    private sealed record RequiredCheck(
+    internal sealed record RequiredCheck(
         string Name,
         string State,
         string Bucket,
@@ -275,7 +275,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         mergeBlockers = blockers
     };
 
-    private static List<string> GetMergeBlockers(
+    internal static List<string> GetMergeBlockers(
         AgentTaskGitOperations.GitContext context,
         string localHeadSha,
         bool worktreeClean,
