@@ -194,7 +194,9 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal("C:\\Users\\test", environment["HOME"]);
         Assert.Equal("C:\\Users\\test", environment["USERPROFILE"]);
         Assert.Equal("C:\\Users\\test\\AppData\\Roaming", environment["APPDATA"]);
-        Assert.Equal("C:\\Users\\test\\AppData\\Roaming\\GitHub CLI", environment["GH_CONFIG_DIR"]);
+        Assert.Equal(
+            Path.Combine("C:\\Users\\test\\AppData\\Roaming", "GitHub CLI"),
+            environment["GH_CONFIG_DIR"]);
         Assert.False(environment.ContainsKey("XDG_CONFIG_HOME"));
     }
 
