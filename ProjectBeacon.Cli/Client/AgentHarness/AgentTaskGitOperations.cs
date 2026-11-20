@@ -797,6 +797,13 @@ internal static class AgentTaskGitOperations
         if (!IsGitSha(targetSha))
             return "the integration source checkpoint is invalid";
 
+        // Never advance a source checkpoint merely because an operation marker exists.
+        // The exact fetched source commit must be reachable from the completed task HEAD.
+        var included = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", targetSha, "HEAD");
+        if (!Succeeded(included))
+            return "the completed task branch does not contain the recorded integration source commit";
+
         if (source == "base")
         {
             var updateBase = await UpdateMetadataBaseShaAsync(context, targetSha, ct);
