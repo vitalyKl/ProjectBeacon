@@ -84,7 +84,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         Assert.Contains("task worktree has uncommitted changes", blockers);
         Assert.Contains(blockers, value => value.Contains("does not match local task HEAD", StringComparison.Ordinal));
         Assert.Contains(blockers, value => value.Contains("review base advanced", StringComparison.Ordinal));
-        Assert.Contains(blockers, value => value.Contains("not MERGEABLE", StringComparison.Ordinal));
+        Assert.Contains(blockers, value => value.Contains("does not report the PR as MERGEABLE", StringComparison.Ordinal));
         Assert.Contains(blockers, value => value.Contains("not CLEAN", StringComparison.Ordinal));
         Assert.Contains(blockers, value => value.Contains("not APPROVED", StringComparison.Ordinal));
         Assert.Contains("GitHub reports no required status checks", blockers);
