@@ -438,21 +438,30 @@ internal static class AgentTaskGitOperations
 
     private static async Task<McpToolResult> IntegrateAsync(GitContext context, JsonObject args, CancellationToken ct)
     {
+        var allowedArguments = new HashSet<string>(StringComparer.Ordinal)
+            { "action", "strategy", "source" };
+        if (args.Any(pair => !allowedArguments.Contains(pair.Key)))
+            return Error("git_integrate accepts only action, strategy, and source.");
+
         var action = ReadString(args, "action");
         if (action is not ("integrate" or "continue" or "abort"))
             return Error("git_integrate action must be integrate, continue, or abort.");
 
-        if (action != "integrate" && args.ContainsKey("source"))
-            return Error("git_integrate source is available only with action=integrate.");
+        if (action != "integrate" && (args.ContainsKey("source") || args.ContainsKey("strategy")))
+            return Error("git_integrate strategy and source are available only with action=integrate.");
 
         if (action == "integrate")
         {
             var strategy = ReadString(args, "strategy");
             if (strategy is not ("rebase" or "merge"))
                 return Error("git_integrate action=integrate requires strategy=rebase or strategy=merge.");
-            var source = string.IsNullOrWhiteSpace(ReadString(args, "source"))
-                ? "base"
-                : ReadString(args, "source");
+            var source = "base";
+            if (args.ContainsKey("source"))
+            {
+                source = ReadString(args, "source");
+                if (string.IsNullOrWhiteSpace(source))
+                    return Error("git_integrate source must be base or integration.");
+            }
             if (source is not ("base" or "integration"))
                 return Error("git_integrate source must be base or integration.");
 
