@@ -15,7 +15,8 @@ public sealed class NativeAgentToolPolicyTests
             McpToolNames.ApplyPatch,
             "git_commit",
             "git_integrate",
-            "git_publish"
+            "git_publish",
+            PipelineToolPolicy.GitPullRequest
         };
 
         foreach (var tool in mutations)
@@ -26,6 +27,7 @@ public sealed class NativeAgentToolPolicyTests
     [InlineData("git_commit")]
     [InlineData("git_integrate")]
     [InlineData("git_publish")]
+    [InlineData("git_pr")]
     public void PlanMode_BlocksAllMutatingTaskGitTools(string tool)
     {
         Assert.True(NativeAgentToolPolicy.IsPlanModeCommandExecutionBlocked("plan", tool));
