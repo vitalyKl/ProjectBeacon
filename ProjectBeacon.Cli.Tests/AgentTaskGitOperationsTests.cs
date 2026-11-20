@@ -250,7 +250,8 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             PipelineToolPolicy.GitInfo,
             PipelineToolPolicy.GitCommit,
-            PipelineToolPolicy.GitIntegrate
+            PipelineToolPolicy.GitIntegrate,
+            PipelineToolPolicy.GitPublish
         })
         {
             var definition = AgentTaskGitOperations.ToolDefinition(toolName);
