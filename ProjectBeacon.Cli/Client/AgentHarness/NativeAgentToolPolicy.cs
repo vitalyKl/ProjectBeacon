@@ -15,7 +15,8 @@ internal static class NativeAgentToolPolicy
     public static bool IsPlanModeCommandExecutionBlocked(string agentMode, string? toolName)
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
             && toolName is "run_command" or "service_start" or "service_stop"
-                or PipelineToolPolicy.GitCommit or PipelineToolPolicy.GitIntegrate or PipelineToolPolicy.GitPublish;
+                or PipelineToolPolicy.GitCommit or PipelineToolPolicy.GitIntegrate
+                or PipelineToolPolicy.GitPublish or PipelineToolPolicy.GitPullRequest;
 
     public static JsonArray FilterPlanTools(JsonArray tools) =>
         FilterToolsByPolicy(tools, PipelineToolPolicy.InteractivePlanTools, allowList: true);
@@ -88,7 +89,8 @@ internal static class NativeAgentToolPolicy
         || string.Equals(tool, McpToolNames.ApplyPatch, StringComparison.Ordinal)
         || string.Equals(tool, "git_commit", StringComparison.Ordinal)
         || string.Equals(tool, "git_integrate", StringComparison.Ordinal)
-        || string.Equals(tool, "git_publish", StringComparison.Ordinal);
+        || string.Equals(tool, "git_publish", StringComparison.Ordinal)
+        || string.Equals(tool, "git_pr", StringComparison.Ordinal);
 
     public static bool IsCacheableTool(string? name)
         => name is not null && CacheableReadOnlyTools.Contains(name);
