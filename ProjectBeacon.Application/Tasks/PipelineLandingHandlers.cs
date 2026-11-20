@@ -701,7 +701,7 @@ public static class LandingAuthorizationPolicy
             return false;
 
         if (actor.IsHuman)
-            return true;
+            return actor.ProjectId is null || actor.ProjectId == projectId;
 
         return actor.IsApiToken
             && actor.ProjectId == projectId
