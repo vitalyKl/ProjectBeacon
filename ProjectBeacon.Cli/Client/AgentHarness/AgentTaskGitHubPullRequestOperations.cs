@@ -18,8 +18,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         string ReviewDecision,
         string Url,
         string? MergedAt,
-        string? MergeCommitSha,
-        bool HasAutoMergeRequest);
+        string? MergeCommitSha);
 
     private sealed record RequiredCheck(
         string Name,
@@ -30,32 +29,15 @@ internal static class AgentTaskGitHubPullRequestOperations
 
     public static async Task<McpToolResult> ExecuteAsync(
         AgentTaskGitOperations.GitContext context,
-        string? pipelineRole,
         JsonObject args,
         CancellationToken ct)
     {
-        var allowedArguments = new HashSet<string>(StringComparer.Ordinal)
-            { "action", "method" };
-        if (args.Any(pair => !allowedArguments.Contains(pair.Key)))
-            return AgentTaskGitOperations.Error("git_pr accepts only action and method.");
+        if (args.Any(pair => pair.Key != "action"))
+            return AgentTaskGitOperations.Error("git_pr accepts only action.");
 
         var action = ReadString(args, "action");
-        if (action is not ("status" or "ready" or "merge"))
-            return AgentTaskGitOperations.Error("git_pr action must be status, ready, or merge.");
-
-        if (action == "merge"
-            && !string.Equals(pipelineRole, "Review", StringComparison.OrdinalIgnoreCase))
-            return AgentTaskGitOperations.Error("Only the independent Review role may merge a task pull request.");
-
-        var method = "merge";
-        if (args.ContainsKey("method"))
-        {
-            method = ReadString(args, "method");
-            if (method is not ("merge" or "squash" or "rebase"))
-                return AgentTaskGitOperations.Error("git_pr method must be merge, squash, or rebase.");
-            if (action != "merge")
-                return AgentTaskGitOperations.Error("git_pr method is available only with action=merge.");
-        }
+        if (action is not ("status" or "ready"))
+            return AgentTaskGitOperations.Error("git_pr action must be status or ready.");
 
         if (string.IsNullOrWhiteSpace(context.BaseBranch))
             return AgentTaskGitOperations.Error("This task branch has no daemon-selected review base.");
@@ -182,139 +164,52 @@ internal static class AgentTaskGitHubPullRequestOperations
         var headMatches = string.Equals(view.HeadSha, localHeadSha, StringComparison.OrdinalIgnoreCase);
         var requiredChecksPassed = checkList.Count > 0
             && checkList.All(check => string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase));
-        var canMerge = view.State == "OPEN"
-            && !view.IsDraft
-            && headMatches
-            && baseUnchanged
-            && worktreeClean
-            && string.Equals(view.Mergeable, "MERGEABLE", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(view.MergeStateStatus, "CLEAN", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(view.ReviewDecision, "APPROVED", StringComparison.OrdinalIgnoreCase)
-            && requiredChecksPassed;
+        var blockers = GetMergeBlockers(
+            context, localHeadSha, worktreeClean, remoteBaseSha!, view,
+            headMatches, baseUnchanged, checkList, requiredChecksPassed);
+        var githubMergeAdmissible = blockers.Count == 0;
 
         if (action == "status")
             return AgentTaskGitOperations.Success(BuildStatus(
                 repository, context, localHeadSha, remoteBaseSha!, worktreeClean,
-                matching, view, checkList, headMatches, baseUnchanged, requiredChecksPassed, canMerge));
+                matching, view, checkList, headMatches, baseUnchanged, requiredChecksPassed,
+                githubMergeAdmissible, blockers));
 
-        if (action == "ready")
-        {
-            if (view.State != "OPEN")
-                return AgentTaskGitOperations.Error("Only an open task pull request can be marked ready.");
-            if (!view.IsDraft)
-                return AgentTaskGitOperations.Success(new
-                {
-                    ready = true,
-                    alreadyReady = true,
-                    status = BuildStatus(
-                        repository, context, localHeadSha, remoteBaseSha!, worktreeClean,
-                        matching, view, checkList, headMatches, baseUnchanged, requiredChecksPassed, canMerge)
-                });
-            if (!worktreeClean || !headMatches || !baseUnchanged)
-                return AgentTaskGitOperations.Error(
-                    "The task branch must be clean, pushed at the current local HEAD, and based on the unchanged review-base before marking its PR ready. Run git_commit/git_integrate, review again, and republish.");
-
-            var ready = await AgentTaskGitOperations.RunGitHubCliAsync(
-                ghPath, context.WorktreeRoot, ct,
-                "pr", "ready", matching.Number.ToString(CultureInfo.InvariantCulture),
-                "--repo", repository);
-            if (ready.ExitCode != 0 || ready.TimedOut)
-                return AgentTaskGitOperations.Error(
-                    "GitHub could not mark the task PR ready. " + AgentTaskGitOperations.Clip(ready.StdErr.Trim()));
-
-            var refreshed = await ReadSnapshotAsync(
-                ghPath, context.WorktreeRoot, repository, matching.Number, ct);
-            if (refreshed.Error is not null)
-                return AgentTaskGitOperations.Error("The PR was marked ready, but its status could not be re-read: " + refreshed.Error);
+        if (view.State != "OPEN")
+            return AgentTaskGitOperations.Error("Only an open task pull request can be marked ready.");
+        if (!view.IsDraft)
             return AgentTaskGitOperations.Success(new
             {
-                ready = !refreshed.View!.IsDraft,
-                pullRequestNumber = matching.Number,
-                pullRequestUrl = refreshed.View.Url,
-                headSha = refreshed.View.HeadSha,
-                baseBranch = refreshed.View.BaseBranch
+                ready = true,
+                alreadyReady = true,
+                status = BuildStatus(
+                    repository, context, localHeadSha, remoteBaseSha!, worktreeClean,
+                    matching, view, checkList, headMatches, baseUnchanged, requiredChecksPassed,
+                    githubMergeAdmissible, blockers)
             });
-        }
-
-        if (view.State == "MERGED")
-            return AgentTaskGitOperations.Success(new
-            {
-                merged = true,
-                alreadyMerged = true,
-                pullRequestNumber = matching.Number,
-                pullRequestUrl = view.Url,
-                mergeCommitSha = view.MergeCommitSha,
-                mergedAt = view.MergedAt
-            });
-
-        var blockers = GetMergeBlockers(
-            context, localHeadSha, worktreeClean, remoteBaseSha!, matching, view,
-            headMatches, baseUnchanged, checkList, requiredChecksPassed);
-        if (blockers.Count > 0)
+        if (!worktreeClean || !headMatches || !baseUnchanged)
             return AgentTaskGitOperations.Error(
-                "GitHub PR merge refused by ProjectBeacon preflight: " + string.Join("; ", blockers));
+                "The task branch must be clean, pushed at the current local HEAD, and based on the unchanged review-base before marking its PR ready. Commit/integrate, review again, and republish.");
 
-        var allowedMethod = await IsMergeMethodAllowedAsync(
-            ghPath, context.WorktreeRoot, repository, method, ct);
-        if (allowedMethod.Error is not null)
-            return AgentTaskGitOperations.Error(allowedMethod.Error);
-        if (!allowedMethod.Allowed)
+        var ready = await AgentTaskGitOperations.RunGitHubCliAsync(
+            ghPath, context.WorktreeRoot, ct,
+            "pr", "ready", matching.Number.ToString(CultureInfo.InvariantCulture),
+            "--repo", repository);
+        if (ready.ExitCode != 0 || ready.TimedOut)
             return AgentTaskGitOperations.Error(
-                $"Repository settings do not allow the requested '{method}' merge method.");
+                "GitHub could not mark the task PR ready. " + AgentTaskGitOperations.Clip(ready.StdErr.Trim()));
 
-        var mergeArguments = new List<string>
-        {
-            "pr", "merge", matching.Number.ToString(CultureInfo.InvariantCulture),
-            "--repo", repository,
-            "--match-head-commit", view.HeadSha
-        };
-        mergeArguments.Add(method switch
-        {
-            "merge" => "--merge",
-            "squash" => "--squash",
-            "rebase" => "--rebase",
-            _ => throw new InvalidOperationException("Validated merge method changed unexpectedly.")
-        });
-
-        var merge = await AgentTaskGitOperations.RunGitHubCliAsync(
-            ghPath, context.WorktreeRoot, ct, [.. mergeArguments]);
-        if (merge.ExitCode != 0 || merge.TimedOut)
-            return AgentTaskGitOperations.Error(
-                "GitHub refused the PR merge. Branch protection and merge-queue rules were not bypassed. "
-                + AgentTaskGitOperations.Clip(merge.StdErr.Trim()));
-
-        var after = await ReadSnapshotAsync(ghPath, context.WorktreeRoot, repository, matching.Number, ct);
-        if (after.Error is not null)
-            return AgentTaskGitOperations.Error(
-                "GitHub accepted the merge request, but the final PR state could not be verified: " + after.Error);
-
-        if (after.View!.State == "MERGED")
-        {
-            if (string.IsNullOrWhiteSpace(after.View.MergeCommitSha) || string.IsNullOrWhiteSpace(after.View.MergedAt))
-                return AgentTaskGitOperations.Error(
-                    "GitHub reports the PR merged, but returned incomplete merge commit evidence.");
-            return AgentTaskGitOperations.Success(new
-            {
-                merged = true,
-                pullRequestNumber = matching.Number,
-                pullRequestUrl = after.View.Url,
-                mergeCommitSha = after.View.MergeCommitSha,
-                mergedAt = after.View.MergedAt,
-                method
-            });
-        }
-
+        var refreshed = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (refreshed.Error is not null)
+            return AgentTaskGitOperations.Error("The PR was marked ready, but its status could not be re-read: " + refreshed.Error);
         return AgentTaskGitOperations.Success(new
         {
-            merged = false,
-            mergeRequested = true,
-            mergeQueued = merge.StdOut.Contains("queue", StringComparison.OrdinalIgnoreCase)
-                || merge.StdErr.Contains("queue", StringComparison.OrdinalIgnoreCase),
+            ready = !refreshed.View!.IsDraft,
             pullRequestNumber = matching.Number,
-            pullRequestUrl = after.View.Url,
-            state = after.View.State,
-            mergeStateStatus = after.View.MergeStateStatus,
-            message = "GitHub has not yet confirmed the PR as merged. Query git_pr action=status to track the final state."
+            pullRequestUrl = refreshed.View.Url,
+            headSha = refreshed.View.HeadSha,
+            baseBranch = refreshed.View.BaseBranch
         });
     }
 
@@ -330,7 +225,8 @@ internal static class AgentTaskGitHubPullRequestOperations
         bool headMatches,
         bool baseUnchanged,
         bool requiredChecksPassed,
-        bool canMerge) => new
+        bool githubMergeAdmissible,
+        IReadOnlyList<string> blockers) => new
     {
         found = true,
         repository,
@@ -354,7 +250,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         requiredChecksPassed,
         mergeCommitSha = view.MergeCommitSha,
         mergedAt = view.MergedAt,
-        canMerge
+        githubMergeAdmissible
     };
 
     private static List<string> GetMergeBlockers(
@@ -362,7 +258,6 @@ internal static class AgentTaskGitHubPullRequestOperations
         string localHeadSha,
         bool worktreeClean,
         string remoteBaseSha,
-        AgentTaskGitOperations.PullRequestInfo listed,
         PullRequestView view,
         bool headMatches,
         bool baseUnchanged,
@@ -387,7 +282,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         if (!string.Equals(view.ReviewDecision, "APPROVED", StringComparison.OrdinalIgnoreCase))
             blockers.Add($"GitHub review decision is {view.ReviewDecision}, not APPROVED");
         if (checks.Count == 0)
-            blockers.Add("GitHub reports no required status checks; refusing an unverified merge");
+            blockers.Add("GitHub reports no required status checks");
         else if (!requiredChecksPassed)
             blockers.Add("one or more required status checks are not passing");
         return blockers;
@@ -404,7 +299,7 @@ internal static class AgentTaskGitHubPullRequestOperations
             ghPath, workingDirectory, ct,
             "pr", "view", pullRequestNumber.ToString(CultureInfo.InvariantCulture),
             "--repo", repository,
-            "--json", "state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefOid,baseRefName,url,mergedAt,mergeCommit,autoMergeRequest");
+            "--json", "state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefOid,baseRefName,url,mergedAt,mergeCommit");
         if (result.ExitCode != 0 || result.TimedOut)
             return (null, "Could not read GitHub pull request status. " + AgentTaskGitOperations.Clip(result.StdErr.Trim()));
 
@@ -427,9 +322,6 @@ internal static class AgentTaskGitHubPullRequestOperations
                 || draftValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                 return (null, "GitHub returned incomplete pull request draft metadata.");
 
-            var mergedAt = JsonStringOrNull(root, "mergedAt");
-            var autoMerge = root.TryGetProperty("autoMergeRequest", out var autoMergeValue)
-                && autoMergeValue.ValueKind == JsonValueKind.Object;
             return (new PullRequestView(
                 state,
                 draftValue.GetBoolean(),
@@ -439,9 +331,8 @@ internal static class AgentTaskGitHubPullRequestOperations
                 JsonString(root, "mergeStateStatus"),
                 JsonString(root, "reviewDecision"),
                 url,
-                mergedAt,
-                mergeCommitSha,
-                autoMerge), null);
+                JsonStringOrNull(root, "mergedAt"),
+                mergeCommitSha), null);
         }
         catch (JsonException)
         {
@@ -487,38 +378,6 @@ internal static class AgentTaskGitHubPullRequestOperations
         catch (JsonException)
         {
             return (null, "GitHub returned malformed required-check JSON.");
-        }
-    }
-
-    private static async Task<(bool Allowed, string? Error)> IsMergeMethodAllowedAsync(
-        string ghPath,
-        string workingDirectory,
-        string repository,
-        string method,
-        CancellationToken ct)
-    {
-        var result = await AgentTaskGitOperations.RunGitHubCliAsync(
-            ghPath, workingDirectory, ct,
-            "api", "repos/" + repository,
-            "--jq", "{allow_merge_commit,allow_squash_merge,allow_rebase_merge}");
-        if (result.ExitCode != 0 || result.TimedOut)
-            return (false, "Could not read repository merge-method settings. " + AgentTaskGitOperations.Clip(result.StdErr.Trim()));
-        try
-        {
-            using var document = JsonDocument.Parse(result.StdOut);
-            var propertyName = method switch
-            {
-                "merge" => "allow_merge_commit",
-                "squash" => "allow_squash_merge",
-                "rebase" => "allow_rebase_merge",
-                _ => string.Empty
-            };
-            return (document.RootElement.TryGetProperty(propertyName, out var value)
-                && value.ValueKind == JsonValueKind.True, null);
-        }
-        catch (JsonException)
-        {
-            return (false, "GitHub returned malformed repository merge settings.");
         }
     }
 
