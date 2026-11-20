@@ -81,9 +81,11 @@ internal static class NativeAgentToolPolicy
             || string.Equals(tool, "run_command", StringComparison.Ordinal)
             || string.Equals(tool, "service_start", StringComparison.Ordinal);
 
-    /// <summary>Repository and task-branch mutations must run alone so commits, integration and publication cannot race.</summary>
+    /// <summary>Workspace writes and repository mutations run alone so file edits cannot race commits or publication.</summary>
     internal static bool RequiresExclusiveWorktreeExecution(string? tool) =>
         string.Equals(tool, "repo_sync", StringComparison.Ordinal)
+        || string.Equals(tool, McpToolNames.WriteFile, StringComparison.Ordinal)
+        || string.Equals(tool, McpToolNames.ApplyPatch, StringComparison.Ordinal)
         || string.Equals(tool, "git_commit", StringComparison.Ordinal)
         || string.Equals(tool, "git_integrate", StringComparison.Ordinal)
         || string.Equals(tool, "git_publish", StringComparison.Ordinal);
