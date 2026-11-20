@@ -628,8 +628,10 @@ internal static class AgentTaskGitOperations
         if (!Succeeded(origin))
             return Error("Could not inspect the configured origin fetch URLs.");
         var originUrls = origin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (originUrls.Length != 1
-            || !TryParseGitHubRemote(originUrls[0].Trim(), out var repository))
+        if (originUrls.Length != 1)
+            return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
+        var originUrl = originUrls[0].Trim();
+        if (!TryParseGitHubRemote(originUrl, out var repository))
             return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
 
         var pushOrigin = await Git(
@@ -637,8 +639,10 @@ internal static class AgentTaskGitOperations
         if (!Succeeded(pushOrigin))
             return Error("Could not inspect the configured origin push URLs.");
         var pushUrls = pushOrigin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (pushUrls.Length != 1
-            || !TryParseGitHubRemote(pushUrls[0].Trim(), out var pushRepository)
+        if (pushUrls.Length != 1)
+            return Error("The origin push URL must be a single GitHub URL for the same repository as the validated origin fetch URL.");
+        var pushUrl = pushUrls[0].Trim();
+        if (!TryParseGitHubRemote(pushUrl, out var pushRepository)
             || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
             return Error("The origin push URL must be a single GitHub URL for the same repository as the validated origin fetch URL.");
 
@@ -760,9 +764,12 @@ internal static class AgentTaskGitOperations
                 $"Pull request #{closed.Number} for this task branch is already closed ({closed.Url}). "
                 + "Reopen it explicitly or publish a new task branch; ProjectBeacon will not silently recreate it.");
 
+        // Pin the already-validated URLs for each network operation. This prevents a
+        // concurrent local config change from redirecting the destination after validation.
         var credentialedGit = new List<string>
         {
-            "-c", "credential.helper=!gh auth git-credential"
+            "-c", "credential.helper=!gh auth git-credential",
+            "-c", "remote.origin.url=" + originUrl
         };
         credentialedGit.AddRange([
             "ls-remote", "--heads", "origin", "refs/heads/" + baseBranch
@@ -785,6 +792,9 @@ internal static class AgentTaskGitOperations
         var pushArguments = new List<string>
         {
             "-c", "credential.helper=!gh auth git-credential",
+            "-c", "remote.origin.url=" + originUrl,
+            "-c", "remote.origin.pushurl=" + pushUrl,
+            "-c", "remote.origin.mirror=false",
             "push", "--no-follow-tags", "--set-upstream", "--porcelain", "origin",
             $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
         };
@@ -986,6 +996,12 @@ internal static class AgentTaskGitOperations
             environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
         if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
             environment["XDG_RUNTIME_DIR"] = xdgRuntimeDirectory;
+        var sshAgentSocket = Environment.GetEnvironmentVariable("SSH_AUTH_SOCK");
+        var sshAgentPid = Environment.GetEnvironmentVariable("SSH_AGENT_PID");
+        if (!string.IsNullOrWhiteSpace(sshAgentSocket))
+            environment["SSH_AUTH_SOCK"] = sshAgentSocket;
+        if (!string.IsNullOrWhiteSpace(sshAgentPid))
+            environment["SSH_AGENT_PID"] = sshAgentPid;
         return environment;
     }
 
