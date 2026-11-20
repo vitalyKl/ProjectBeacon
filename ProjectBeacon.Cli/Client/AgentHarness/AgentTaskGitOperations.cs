@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -53,7 +54,8 @@ internal static class AgentTaskGitOperations
     public static bool IsGitTool(string? name) =>
         name is PipelineToolPolicy.GitInfo
             or PipelineToolPolicy.GitCommit
-            or PipelineToolPolicy.GitIntegrate;
+            or PipelineToolPolicy.GitIntegrate
+            or PipelineToolPolicy.GitPublish;
 
     public static JsonObject ToolDefinition(string name) => name switch
     {
@@ -97,6 +99,17 @@ internal static class AgentTaskGitOperations
                 ["strategy"] = EnumProperty("rebase", "merge")
             },
             "action"),
+        PipelineToolPolicy.GitPublish => Definition(
+            name,
+            "Publish only this task branch to its configured GitHub origin and create a pull request into the daemon-selected review base. Requires GitHub CLI (gh) authenticated on this workstation. Push is fast-forward-only; arbitrary remotes, target branches, force pushes, and merges are not allowed.",
+            new JsonObject
+            {
+                ["action"] = EnumProperty("publish"),
+                ["title"] = new JsonObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200 },
+                ["body"] = new JsonObject { ["type"] = "string", ["maxLength"] = 20_000 },
+                ["draft"] = new JsonObject { ["type"] = "boolean", ["description"] = "Defaults to true." }
+            },
+            "action", "title"),
         _ => throw new ArgumentOutOfRangeException(nameof(name))
     };
 
@@ -116,6 +129,8 @@ internal static class AgentTaskGitOperations
 
         if (toolName == PipelineToolPolicy.GitIntegrate)
             return await IntegrateAsync(opened.Context, arguments, ct);
+        if (toolName == PipelineToolPolicy.GitPublish)
+            return await PublishAsync(opened.Context, arguments, ct);
 
         return toolName switch
         {
