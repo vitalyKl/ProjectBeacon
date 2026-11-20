@@ -134,8 +134,9 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     {
         EnsureStatus(LandingAttemptStatus.PreviewPending);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranch);
-        if (!string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
-            throw new InvalidOperationException("Preview target branch does not match the branch pinned by the review proof.");
+        if (!string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal)
+            && !string.Equals(targetBranch, "beacon/integration", StringComparison.Ordinal))
+            throw new InvalidOperationException("Preview target branch must be the reviewed base or the ProjectBeacon integration branch.");
         if (!IsGitSha(targetHeadSha))
             throw new ArgumentException("Target HEAD SHA is invalid.", nameof(targetHeadSha));
         if (candidateTreeSha is not null && !IsGitSha(candidateTreeSha))

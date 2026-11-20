@@ -59,7 +59,10 @@ public static class WorkstationProbe
                 var (exitCode, stdout, _, timedOut) = ProcessRunner.RunAsync(
                     info, TimeSpan.FromSeconds(5), CancellationToken.None).GetAwaiter().GetResult();
                 if (exitCode == 0 && !timedOut && AgentTaskWorktree.SupportsBranchWorkflow(stdout))
+                {
                     capabilities.Add(WorkstationCapabilities.GitLandV1);
+                    capabilities.Add(WorkstationCapabilities.GitLandIntegrationV1);
+                }
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
             {

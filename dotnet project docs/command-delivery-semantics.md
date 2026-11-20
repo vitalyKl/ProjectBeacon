@@ -128,13 +128,14 @@ combination of the following. **All of these must be preserved.**
 
 ### GitLand
 
-`GitLand` is an idempotent, project-runtime command available only to the server-side landing workflow. It is not a general-purpose Git tool and its payload contains no remote URL or caller-selected source/target identity. The daemon verifies the task worktree metadata, reviewed source SHA/tree, pinned target branch, and trusted check-command hash before acting.
+`GitLand` is an idempotent, project-runtime command available only to the server-side landing workflow. It is not a general-purpose Git tool and its payload contains no remote URL or caller-selected source/target identity. The daemon verifies the task worktree metadata, reviewed source SHA/tree, pinned review-base branch, selected landing target, and trusted check-command hash before acting. The fixed integration target is `beacon/integration`; it is never supplied as an arbitrary remote or ref by the agent. Workstations must advertise `git-land-integration-v1` before the server may queue autonomy-level-1 or `LandViaIntegration` operations.
 
-- `Preview` uses `git merge-tree --write-tree`, builds a detached candidate worktree, and runs the pinned check without moving the target branch.
+- `Preview` uses `git merge-tree --write-tree`, builds a detached candidate worktree, and runs the pinned check without moving the target branch. Autonomy level 1 previews directly against `beacon/integration`; `LandViaIntegration` may select that fixed branch when the reviewed base checkout is dirty. If the origin has no integration ref, the daemon reuses its local integration ref when present, otherwise seeds it from the reviewed base. The integration ref is local until the separate push/PR workflow is implemented.
 - `Execute` rebuilds the same candidate, compares it with the previewed target HEAD and tree, creates the exact two-parent merge commit, then updates the target ref with compare-and-swap.
 - `Revert` is allowed only while the target ref still equals the recorded merge commit. It creates a normal `git revert -m 1` commit; it never resets or discards later target work.
 - Attempt-scoped refs under `refs/beacon/landing-attempts/<attempt-id>/` record the exact merge and revert commits before target mutation. A repeated delivery validates and resumes those markers, preventing a second merge/revert after a lost acknowledgement or daemon restart.
 - A known failure is returned as a structured result. An ambiguous Execute/Revert completion remains retryable as `CommandCompletionUnknown`; the server does not report success without matching the attempt, action, device, source, target, and commit evidence.
+- A conflict against accumulated integration content is reported as `Conflicted` and escalated. The current `git_integrate` tool still targets only the task's recorded review-base; it does not yet merge `beacon/integration` into the task branch.
 
 GitLand has a dedicated 30-minute command lease because it performs multiple bounded Git operations plus candidate and post-merge checks. Stale recovery may requeue it once under the idempotent rule. It is not `ReconcileBacked`: the durable attempt markers, not a background desired-state loop, reconcile an interrupted operation.
 
