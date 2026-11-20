@@ -46,7 +46,6 @@ public sealed partial class AgentTaskGitOperationsTests
             ["GITHUB_TOKEN"] = "github-token",
             ["DBUS_SESSION_BUS_ADDRESS"] = "host-dbus",
             ["BEACON_API_TOKEN"] = "beacon-secret",
-            ["GITHUB_TOKEN"] = "workflow-secret",
             ["GH_ENTERPRISE_TOKEN"] = "enterprise-secret",
             ["UNRELATED_SECRET"] = "unrelated"
         };
@@ -96,7 +95,8 @@ public sealed partial class AgentTaskGitOperationsTests
 
         Assert.NotNull(environment);
         Assert.False(environment.ContainsKey("GH_CONFIG_DIR"));
-        Assert.Equal("host-token", environment["GH_TOKEN"]);
+        Assert.Equal("github-token", environment["GITHUB_TOKEN"]);
+        Assert.False(environment.ContainsKey("GH_TOKEN"));
     }
 
     [Theory]
