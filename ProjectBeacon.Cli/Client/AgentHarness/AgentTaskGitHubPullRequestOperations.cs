@@ -238,6 +238,15 @@ internal static class AgentTaskGitHubPullRequestOperations
         });
     }
 
+    internal static bool MatchesPublishedPullRequest(
+        PullRequestView view,
+        string expectedState,
+        string expectedBaseBranch,
+        string expectedHeadSha) =>
+        string.Equals(view.State, expectedState, StringComparison.Ordinal)
+        && string.Equals(view.BaseBranch, expectedBaseBranch, StringComparison.Ordinal)
+        && string.Equals(view.HeadSha, expectedHeadSha, StringComparison.OrdinalIgnoreCase);
+
     internal static bool CanMarkReady(string? pipelineRole) =>
         string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
 
@@ -332,7 +341,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         return blockers;
     }
 
-    private static async Task<(PullRequestView? View, string? Error)> ReadSnapshotAsync(
+    internal static async Task<(PullRequestView? View, string? Error)> ReadSnapshotAsync(
         string ghPath,
         string workingDirectory,
         string repository,
