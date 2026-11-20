@@ -6,6 +6,8 @@ public sealed class NativeAgentToolPolicyTests
 {
     [Theory]
     [InlineData("repo_sync")]
+    [InlineData("write_file")]
+    [InlineData("apply_patch")]
     [InlineData("git_commit")]
     [InlineData("git_integrate")]
     [InlineData("git_publish")]
