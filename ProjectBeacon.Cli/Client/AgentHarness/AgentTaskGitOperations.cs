@@ -993,7 +993,7 @@ internal static class AgentTaskGitOperations
         return null;
     }
 
-    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunRemoteGitAsync(
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunRemoteGitAsync(
         string directory,
         IReadOnlyCollection<string> disabledFilters,
         CancellationToken ct,
