@@ -1192,6 +1192,14 @@ internal static class AgentTaskGitOperations
         });
     }
 
+    internal static string[] BuildListPullRequestsArguments(string repository, string branch) =>
+    [
+        "pr", "list", "--repo", repository,
+        "--head", branch,
+        "--state", "all",
+        "--json", "number,url,baseRefName,state,isDraft"
+    ];
+
     internal static async Task<(IReadOnlyList<PullRequestInfo> PullRequests, string? Error)> ListPullRequestsAsync(
         string ghPath,
         string workingDirectory,
@@ -1201,10 +1209,7 @@ internal static class AgentTaskGitOperations
     {
         var result = await RunGitHubCliAsync(
             ghPath, workingDirectory, ct,
-            "pr", "list", "--repo", repository,
-            "--head", branch,
-            "--state", "all",
-            "--json", "number,url,baseRefName,state,isDraft");
+            BuildListPullRequestsArguments(repository, branch));
         if (result.ExitCode != 0 || result.TimedOut)
             return ([], "Could not inspect existing GitHub pull requests. Check GitHub CLI authentication and repository access.");
         try
