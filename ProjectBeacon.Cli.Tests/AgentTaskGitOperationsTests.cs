@@ -324,6 +324,70 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+
+    [Fact]
+    public async Task GitIntegrate_IntegrationSourceIgnoresAnOldReviewBaseFetchRef()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await GitAsync(repository, "switch", "-c", "stale-review-base", reviewBaseSha);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "stale-base-only.txt"),
+                "stale review-base fetch ref\n");
+            await GitAsync(repository, "add", "src/app/stale-base-only.txt");
+            await GitAsync(repository, "commit", "-m", "Create a stale review-base fetch ref");
+            var staleBaseSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "update-ref",
+                $"refs/beacon/task/{taskId:N}/integration-base", staleBaseSha);
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration", reviewBaseSha);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "integration-only.txt"),
+                "fixed integration source\n");
+            await GitAsync(repository, "add", "src/app/integration-only.txt");
+            await GitAsync(repository, "commit", "-m", "Create fixed integration branch");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "switch", "main");
+
+            var result = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+
+            Assert.False(result.IsError, result.Text);
+            using var document = JsonDocument.Parse(result.Text);
+            Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("integration", document.RootElement.GetProperty("source").GetString());
+            Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+            Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            Assert.Equal(
+                "fixed integration source\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "integration-only.txt")));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task GitIntegrate_IntegrationConflictCanBeResolvedAndContinued()
     {
