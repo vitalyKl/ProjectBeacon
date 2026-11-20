@@ -91,6 +91,17 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal(expected, AgentTaskGitOperations.IsGitHubHttpsRemote(remote));
     }
 
+    [Theory]
+    [InlineData("git@github.com:owner/repository.git", true)]
+    [InlineData("developer@gitlab.com:group/repository.git", true)]
+    [InlineData("ssh://git@github.com/owner/repository.git", true)]
+    [InlineData("https://github.com/owner/repository.git", false)]
+    [InlineData("C:\\source\\repository", false)]
+    public void IsSshRemote_RecognizesSshUriAndScpForms(string remote, bool expected)
+    {
+        Assert.Equal(expected, AgentTaskGitOperations.IsSshRemote(remote));
+    }
+
     [Fact]
     public void BuildGitHubCredentialEnvironment_ForwardsOnlyScopedHelperContext()
     {
