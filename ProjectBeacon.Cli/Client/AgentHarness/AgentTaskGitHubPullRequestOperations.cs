@@ -187,6 +187,13 @@ internal static class AgentTaskGitHubPullRequestOperations
 
         if (view.State != "OPEN")
             return AgentTaskGitOperations.Error("Only an open task pull request can be marked ready.");
+
+        var readyBlockers = GetReadyBlockers(worktreeClean, headMatches, baseUnchanged);
+        if (readyBlockers.Count > 0)
+            return AgentTaskGitOperations.Error(
+                "The task PR cannot be confirmed ready: " + string.Join("; ", readyBlockers) +
+                ". Commit/integrate, review again, and republish.");
+
         if (!view.IsDraft)
             return AgentTaskGitOperations.Success(new
             {
@@ -197,10 +204,6 @@ internal static class AgentTaskGitHubPullRequestOperations
                 headSha = view.HeadSha,
                 baseBranch = view.BaseBranch
             });
-
-        if (!worktreeClean || !headMatches || !baseUnchanged)
-            return AgentTaskGitOperations.Error(
-                "The task branch must be clean, pushed at the current local HEAD, and based on the unchanged review-base before marking its PR ready. Commit/integrate, review again, and republish.");
 
         var ready = await AgentTaskGitOperations.RunGitHubCliAsync(
             ghPath, context.WorktreeRoot, ct,
@@ -237,6 +240,21 @@ internal static class AgentTaskGitHubPullRequestOperations
 
     internal static bool CanMarkReady(string? pipelineRole) =>
         string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
+
+    internal static List<string> GetReadyBlockers(
+        bool worktreeClean,
+        bool headMatches,
+        bool baseUnchanged)
+    {
+        var blockers = new List<string>();
+        if (!worktreeClean)
+            blockers.Add("task worktree has uncommitted changes");
+        if (!headMatches)
+            blockers.Add("PR head does not match the local task HEAD");
+        if (!baseUnchanged)
+            blockers.Add("review base advanced from the pinned base");
+        return blockers;
+    }
 
     private static object BuildStatus(
         string repository,
