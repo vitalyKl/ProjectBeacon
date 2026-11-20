@@ -67,6 +67,17 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.False(environment.ContainsKey("UNRELATED_SECRET"));
     }
 
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(false, null, false)]
+    [InlineData(false, "", false)]
+    [InlineData(false, "/tmp/ssh-agent.sock", true)]
+    public void CanUseSshAgent_RecognizesWindowsImplicitAgentAndUnixSocket(
+        bool isWindows, string? sshAgentSocket, bool expected)
+    {
+        Assert.Equal(expected, AgentTaskGitOperations.CanUseSshAgent(isWindows, sshAgentSocket));
+    }
+
     [Fact]
     public void BuildSshAgentEnvironment_ForwardsOnlyAgentSocket()
     {
