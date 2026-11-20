@@ -61,7 +61,9 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> ReviewerSupervisorTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict, McpToolNames.PipelineApprove
+        McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict,
+        McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandStatus,
+        McpToolNames.PipelineApprove
     });
     public static IReadOnlyList<string> PlannerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
