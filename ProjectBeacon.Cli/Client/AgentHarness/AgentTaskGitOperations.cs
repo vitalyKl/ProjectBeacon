@@ -578,6 +578,335 @@ internal static class AgentTaskGitOperations
 
     private static string IntegrationBaseRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base";
 
+    private sealed record PullRequestInfo(int Number, string Url, string BaseRefName, string State, bool IsDraft);
+
+    private static async Task<McpToolResult> PublishAsync(
+        GitContext context,
+        JsonObject args,
+        CancellationToken ct)
+    {
+        var title = ReadString(args, "title").Trim();
+        var body = ReadString(args, "body");
+        var draft = args["draft"] is JsonValue draftValue && draftValue.TryGetValue<bool>(out var requestedDraft)
+            ? requestedDraft
+            : true;
+        if (string.IsNullOrWhiteSpace(title) || title.Length > 200)
+            return Error("git_publish requires a title of 1..200 characters.");
+        if (body.Length > 20_000)
+            return Error("git_publish body is limited to 20,000 characters.");
+        if (context.BaseBranch is not { Length: > 0 } baseBranch
+            || !IsGitSha(context.BaseSha)
+            || string.Equals(baseBranch, context.BranchName, StringComparison.Ordinal))
+            return Error("The task branch has no valid daemon-selected review base.");
+
+        var branchCheck = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "check-ref-format", "--branch", baseBranch);
+        if (!Succeeded(branchCheck))
+            return Error("The daemon-selected review base is not a valid Git branch.");
+
+        var operation = await ReadOperationStateAsync(context, ct);
+        if (operation.Active)
+            return Error("Resolve the active merge or rebase with git_integrate before publishing.");
+
+        var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "status", "--porcelain", "--untracked-files=all");
+        if (!Succeeded(status))
+            return GitFailure("Could not inspect the task worktree before publishing.", status.StdErr);
+        if (!string.IsNullOrWhiteSpace(status.StdOut))
+            return Error("The task worktree is not clean. Commit the task changes with git_commit before publishing; no files were pushed.");
+
+        var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+        if (!Succeeded(head) || !IsGitSha(head.StdOut.Trim()))
+            return GitFailure("Could not resolve the task branch HEAD before publishing.", head.StdErr);
+        var headSha = head.StdOut.Trim();
+
+        var baseIsAncestor = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", context.BaseSha, headSha);
+        if (!Succeeded(baseIsAncestor))
+            return Error("The task branch no longer descends from its pinned review base. Run git_integrate and review it again before publishing.");
+
+        var changedPaths = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "diff", "--name-only", "-z", context.BaseSha + ".." + headSha);
+        if (!Succeeded(changedPaths))
+            return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
+        var outsidePaths = changedPaths.StdOut
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => !IsProjectRelativePath(context, path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (outsidePaths.Length > 0)
+            return Error(
+                "The task branch contains committed changes outside the authorized project directory. "
+                + "Publishing was refused: " + string.Join(", ", outsidePaths.Take(8)));
+
+        var ahead = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "rev-list", "--count", context.BaseSha + ".." + headSha);
+        if (!Succeeded(ahead) || !int.TryParse(ahead.StdOut.Trim(), out var aheadCount) || aheadCount <= 0)
+            return Error("There are no task commits to publish relative to the pinned review base.");
+
+        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "origin");
+        if (!Succeeded(origin) || !TryParseGitHubRemote(origin.StdOut.Trim(), out var repository))
+            return Error("Publishing requires origin to be a credential-free HTTPS or SSH URL for github.com/owner/repository.");
+
+        var ghPath = WorkstationProbe.Which("gh");
+        if (ghPath is null)
+            return Error("GitHub publishing requires GitHub CLI (gh). Install it and run gh auth login on this workstation.");
+        var auth = await RunGitHubCliAsync(ghPath, context.WorktreeRoot, ct, "auth", "status", "--hostname", "github.com");
+        if (auth.ExitCode != 0 || auth.TimedOut)
+            return Error("GitHub CLI is not authenticated for github.com. Run gh auth login on this workstation; no credential was requested or stored by ProjectBeacon.");
+
+        var existing = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
+        if (existing.Error is not null)
+            return Error(existing.Error);
+        var matchingBase = existing.PullRequests.FirstOrDefault(
+            pull => string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal));
+        var differentBase = existing.PullRequests.FirstOrDefault(
+            pull => !string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal));
+        if (differentBase is not null)
+            return Error(
+                $"This task branch already has pull request #{differentBase.Number} targeting '{differentBase.BaseRefName}' ({differentBase.Url}). "
+                + $"The daemon-selected review base is '{baseBranch}'; retarget that PR explicitly before publishing again.");
+        if (matchingBase is { State: "MERGED" } merged)
+            return Success(new
+            {
+                published = true,
+                alreadyMerged = true,
+                repository,
+                branch = context.BranchName,
+                baseBranch,
+                headSha,
+                pullRequestNumber = merged.Number,
+                pullRequestUrl = merged.Url,
+                draft = false
+            });
+        if (matchingBase is { State: "CLOSED" } closed)
+            return Error(
+                $"Pull request #{closed.Number} for this task branch is already closed ({closed.Url}). "
+                + "Reopen it explicitly or publish a new task branch; ProjectBeacon will not silently recreate it.");
+
+        var credentialedGit = new List<string>
+        {
+            "-c", "credential.helper=!gh auth git-credential"
+        };
+        credentialedGit.AddRange([
+            "ls-remote", "--heads", "origin", "refs/heads/" + baseBranch
+        ]);
+        var baseOnRemote = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. credentialedGit]);
+        if (!Succeeded(baseOnRemote))
+            return GitFailure("Could not verify the review base on the configured GitHub origin.", baseOnRemote.StdErr);
+        if (string.IsNullOrWhiteSpace(baseOnRemote.StdOut))
+            return Error($"The configured GitHub origin does not contain the review base branch '{baseBranch}'.");
+
+        // This is the only refspec: no force option, tags, extra refs, or caller-supplied remote.
+        var pushArguments = new List<string>
+        {
+            "-c", "credential.helper=!gh auth git-credential",
+            "push", "--porcelain", "origin",
+            $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
+        };
+        var push = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. pushArguments]);
+        if (!Succeeded(push))
+            return GitFailure(
+                "Could not publish the task branch. The push is non-forced; resolve any remote divergence and retry.",
+                push.StdErr);
+
+        if (matchingBase is { State: "OPEN" } open)
+            return Success(new
+            {
+                published = true,
+                pullRequestCreated = false,
+                repository,
+                branch = context.BranchName,
+                baseBranch,
+                headSha,
+                pullRequestNumber = open.Number,
+                pullRequestUrl = open.Url,
+                draft = open.IsDraft
+            });
+
+        var createArguments = new List<string>
+        {
+            "pr", "create", "--repo", repository,
+            "--head", repository.Split('/')[0] + ":" + context.BranchName,
+            "--base", baseBranch,
+            "--title", title,
+            "--body", body
+        };
+        if (draft)
+            createArguments.Add("--draft");
+
+        var created = await RunGitHubCliAsync(ghPath, context.WorktreeRoot, ct, [.. createArguments]);
+        if (created.ExitCode != 0 || created.TimedOut)
+        {
+            // A concurrent publisher may have created the PR between the list and create calls.
+            var refreshed = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
+            var raced = refreshed.PullRequests.FirstOrDefault(
+                pull => string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal)
+                    && string.Equals(pull.State, "OPEN", StringComparison.Ordinal));
+            if (raced is not null)
+                return Success(new
+                {
+                    published = true,
+                    pullRequestCreated = false,
+                    repository,
+                    branch = context.BranchName,
+                    baseBranch,
+                    headSha,
+                    pullRequestNumber = raced.Number,
+                    pullRequestUrl = raced.Url,
+                    draft = raced.IsDraft
+                });
+            return Error(
+                "The task branch was pushed, but GitHub did not create the pull request. "
+                + "Check GitHub CLI permissions and retry. " + Clip(created.StdErr.Trim()));
+        }
+
+        var pullRequestUrl = created.StdOut
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => value.Trim())
+            .LastOrDefault(value => value.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase));
+        if (pullRequestUrl is null)
+            return Error("The task branch was pushed, but GitHub CLI did not return a pull request URL. Check the repository pull request state before retrying.");
+
+        return Success(new
+        {
+            published = true,
+            pullRequestCreated = true,
+            repository,
+            branch = context.BranchName,
+            baseBranch,
+            headSha,
+            pullRequestUrl,
+            draft
+        });
+    }
+
+    private static async Task<(IReadOnlyList<PullRequestInfo> PullRequests, string? Error)> ListPullRequestsAsync(
+        string ghPath,
+        string workingDirectory,
+        string repository,
+        string branch,
+        CancellationToken ct)
+    {
+        var owner = repository.Split('/')[0];
+        var result = await RunGitHubCliAsync(
+            ghPath, workingDirectory, ct,
+            "pr", "list", "--repo", repository,
+            "--head", owner + ":" + branch,
+            "--state", "all",
+            "--json", "number,url,baseRefName,state,isDraft");
+        if (result.ExitCode != 0 || result.TimedOut)
+            return ([], "Could not inspect existing GitHub pull requests. Check GitHub CLI authentication and repository access.");
+        try
+        {
+            using var document = JsonDocument.Parse(result.StdOut);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return ([], "GitHub CLI returned an invalid pull request list.");
+            var items = new List<PullRequestInfo>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (!item.TryGetProperty("number", out var numberValue)
+                    || !numberValue.TryGetInt32(out var number)
+                    || !TryJsonString(item, "url", out var url)
+                    || !TryJsonString(item, "baseRefName", out var baseName)
+                    || !TryJsonString(item, "state", out var state)
+                    || !item.TryGetProperty("isDraft", out var draftValue)
+                    || draftValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    return ([], "GitHub CLI returned incomplete pull request metadata.");
+                items.Add(new PullRequestInfo(number, url, baseName, state.ToUpperInvariant(), draftValue.GetBoolean()));
+            }
+            return (items, null);
+        }
+        catch (JsonException)
+        {
+            return ([], "GitHub CLI returned malformed pull request metadata.");
+        }
+    }
+
+    private static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitHubCliAsync(
+        string ghPath,
+        string workingDirectory,
+        CancellationToken ct,
+        params string[] arguments)
+    {
+        var info = new ProcessStartInfo
+        {
+            FileName = ghPath,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            info.ArgumentList.Add(argument);
+        return await ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(90), ct);
+    }
+
+    internal static bool TryParseGitHubRemote(string remoteUrl, out string repository)
+    {
+        repository = string.Empty;
+        if (string.IsNullOrWhiteSpace(remoteUrl) || remoteUrl.Contains('\0'))
+            return false;
+        var value = remoteUrl.Trim();
+        string path;
+        if (value.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+        {
+            path = value["git@github.com:".Length..];
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                return false;
+            if (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(uri.UserInfo) || !uri.IsDefaultPort)
+                    return false;
+            }
+            else if (uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(uri.UserInfo, "git", StringComparison.Ordinal)
+                    || (uri.Port != 22 && !uri.IsDefaultPort))
+                    return false;
+            }
+            else
+            {
+                return false;
+            }
+            path = uri.AbsolutePath.Trim('/');
+        }
+        else
+        {
+            return false;
+        }
+
+        path = path.TrimEnd('/');
+        if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            path = path[..^4];
+        var parts = path.Split('/');
+        if (parts.Length != 2 || !IsSafeGitHubPathSegment(parts[0]) || !IsSafeGitHubPathSegment(parts[1]))
+            return false;
+        repository = parts[0] + "/" + parts[1];
+        return true;
+    }
+
+    private static bool IsSafeGitHubPathSegment(string value) =>
+        value.Length is > 0 and <= 100
+        && value is not ("." or "..")
+        && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
+
+    private static bool TryJsonString(JsonElement element, string propertyName, out string value)
+    {
+        value = string.Empty;
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(value = property.GetString() ?? string.Empty);
+    }
+
     private static async Task<OperationState> ReadOperationStateAsync(GitContext context, CancellationToken ct)
     {
         var rebaseMerge = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--git-path", "rebase-merge");
