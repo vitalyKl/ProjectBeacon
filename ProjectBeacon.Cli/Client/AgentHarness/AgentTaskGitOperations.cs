@@ -975,11 +975,10 @@ internal static class AgentTaskGitOperations
         var socket = ResolveSshAgentSocket(
             Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
             isWindows);
-        var environment = new Dictionary<string, string>(
-            BuildSshAgentEnvironment(
+        var environment = BuildSshAgentEnvironment(
                 socket,
-                Environment.GetEnvironmentVariable("SSH_AGENT_PID")),
-            StringComparer.Ordinal);
+                Environment.GetEnvironmentVariable("SSH_AGENT_PID"))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var homeDirectory = isWindows
             ? Environment.GetEnvironmentVariable("USERPROFILE")
                 ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
