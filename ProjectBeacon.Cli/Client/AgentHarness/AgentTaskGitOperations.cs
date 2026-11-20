@@ -948,15 +948,14 @@ internal static class AgentTaskGitOperations
     {
         ArgumentNullException.ThrowIfNull(lookup);
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var environment = new Dictionary<string, string>(
-            ClientConfiguration.CaptureAllowedEnvironment(GitHubCliEnvironmentNames, lookup), comparer)
-        {
-            ["GH_PROMPT_DISABLED"] = "1",
-            ["GH_PAGER"] = "cat",
-            ["PAGER"] = "cat",
-            ["GIT_TERMINAL_PROMPT"] = "0",
-            ["GH_NO_UPDATE_NOTIFIER"] = "1"
-        };
+        var environment = new Dictionary<string, string>(comparer);
+        foreach (var pair in ClientConfiguration.CaptureAllowedEnvironment(GitHubCliEnvironmentNames, lookup))
+            environment[pair.Key] = pair.Value;
+        environment["GH_PROMPT_DISABLED"] = "1";
+        environment["GH_PAGER"] = "cat";
+        environment["PAGER"] = "cat";
+        environment["GIT_TERMINAL_PROMPT"] = "0";
+        environment["GH_NO_UPDATE_NOTIFIER"] = "1";
         return environment;
     }
 
