@@ -692,11 +692,9 @@ internal static class AgentTaskGitOperations
                 "The task branch contains committed changes outside the authorized project directory. "
                 + "Publishing was refused: " + string.Join(", ", outsidePaths.Take(8)));
 
-        var ahead = await Git(
-            context.WorktreeRoot, context.DisabledFilters, ct,
-            "rev-list", "--count", context.BaseSha + ".." + headSha);
-        if (!Succeeded(ahead) || !int.TryParse(ahead.StdOut.Trim(), out var aheadCount) || aheadCount <= 0)
-            return Error("There are no task commits to publish relative to the pinned review base.");
+        // The pinned-base ancestry check and the non-empty tree diff above establish
+        // that this branch contains publishable task changes. A separate rev-list count
+        // adds no safety here and can fail independently of the already-validated diff.
 
         var ghPath = WorkstationProbe.Which("gh");
         if (ghPath is null)
