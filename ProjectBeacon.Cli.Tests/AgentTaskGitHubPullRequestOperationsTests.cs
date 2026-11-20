@@ -108,6 +108,24 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     }
 
     [Fact]
+    public void AlreadyReadyPullRequest_StillRequiresCleanCurrentTaskHeadAndPinnedBase()
+    {
+        Assert.Empty(AgentTaskGitHubPullRequestOperations.GetReadyBlockers(
+            worktreeClean: true,
+            headMatches: true,
+            baseUnchanged: true));
+
+        var blockers = AgentTaskGitHubPullRequestOperations.GetReadyBlockers(
+            worktreeClean: false,
+            headMatches: false,
+            baseUnchanged: false);
+
+        Assert.Contains("task worktree has uncommitted changes", blockers);
+        Assert.Contains("PR head does not match the local task HEAD", blockers);
+        Assert.Contains("review base advanced from the pinned base", blockers);
+    }
+
+    [Fact]
     public void GitPullRequest_IsARegisteredStructuredGitTool()
     {
         Assert.True(AgentTaskGitOperations.IsGitTool(PipelineToolPolicy.GitPullRequest));
