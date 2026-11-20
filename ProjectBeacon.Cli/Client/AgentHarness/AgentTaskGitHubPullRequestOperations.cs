@@ -189,65 +189,32 @@ internal static class AgentTaskGitHubPullRequestOperations
             return AgentTaskGitOperations.Error("Only an open task pull request can be marked ready.");
         if (!view.IsDraft)
             return AgentTaskGitOperations.Success(new
-            {
-                ready = true,
-                alreadyReady = true,
-                status = BuildStatus(
-                    repository, context, localHeadSha, remoteBaseSha!, worktreeClean,
-                    matching, view, checkList, headMatches, baseUnchanged, requiredChecksPassed,
-                    githubMergeAdmissible, blockers)
-            });
-        if (!worktreeClean || !headMatches || !baseUnchanged)
-            return AgentTaskGitOperations.Error(
-                "The task branch must be clean, pushed at the current local HEAD, and based on the unchanged review-base before marking its PR ready. Commit/integrate, review again, and republish.");
+        {
+            ready = true,
+            pullRequestNumber = matching.Number,
+            pullRequestUrl = readyView.Url,
+            headSha = readyView.HeadSha,
+            baseBranch = readyView.BaseBranch
+        });
+    }
 
-        var ready = await AgentTaskGitOperations.RunGitHubCliAsync(
-            ghPath, context.WorktreeRoot, ct,
-            "pr", "ready", matching.Number.ToString(CultureInfo.InvariantCulture),
-            "--repo", repository);
-        if (ready.ExitCode != 0 || ready.TimedOut)
-            return AgentTaskGitOperations.Error(
-                "GitHub could not mark the task PR ready. " + AgentTaskGitOperations.Clip(ready.StdErr.Trim()));
+    internal static bool CanMarkReady(string? pipelineRole) =>
+        string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
 
-        var refreshed = await ReadSnapshotAsync(
-            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
-        if (refreshed.Error is not null)
-            return AgentTaskGitOperations.Error("The PR was marked ready, but its status could not be re-read: " + refreshed.Error);
-        var readyView = refreshed.View!;
-        var stillCurrent = !readyView.IsDraft
-            && readyView.State == "OPEN"
-            && string.Equals(readyView.BaseBranch, context.BaseBranch, StringComparison.Ordinal)
-            && string.Equals(readyView.HeadSha, localHeadSha, StringComparison.OrdinalIgnoreCase);
-        if (!stillCurrent)
-            return AgentTaskGitOperations.Error(
-                "GitHub marked the PR ready, but its final base/head/state does not match the locally reviewed task branch. Re-read git_pr status and do not proceed to landing.");
-        return AgentTaskGitOperations.Success(new
-            {
-                ready = true,
-                pullRequestNumber = matching.Number,
-                pullRequestUrl = readyView.Url,
-                headSha = readyView.HeadSha,
-                baseBranch = readyView.BaseBranch
-            });
-        }
-    
-        internal static bool CanMarkReady(string? pipelineRole) =>
-            string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase);
-    
-        private static object BuildStatus(
-            string repository,
-            AgentTaskGitOperations.GitContext context,
-            string localHeadSha,
-            string remoteBaseSha,
-            bool worktreeClean,
-            AgentTaskGitOperations.PullRequestInfo listed,
-            PullRequestView view,
-            IReadOnlyList<RequiredCheck> checks,
-            bool headMatches,
-            bool baseUnchanged,
-            bool requiredChecksPassed,
-            bool githubMergeAdmissible,
-            IReadOnlyList<string> blockers) => new
+    private static object BuildStatus(
+        string repository,
+        AgentTaskGitOperations.GitContext context,
+        string localHeadSha,
+        string remoteBaseSha,
+        bool worktreeClean,
+        AgentTaskGitOperations.PullRequestInfo listed,
+        PullRequestView view,
+        IReadOnlyList<RequiredCheck> checks,
+        bool headMatches,
+        bool baseUnchanged,
+        bool requiredChecksPassed,
+        bool githubMergeAdmissible,
+        IReadOnlyList<string> blockers) => new
             {
                 found = true,
                 repository,
