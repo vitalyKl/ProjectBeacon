@@ -35,6 +35,37 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public void BuildGitHubCliEnvironment_ExcludesApplicationAndUnrelatedCredentials()
+    {
+        var source = new Dictionary<string, string?>
+        {
+            ["PATH"] = "trusted-path",
+            ["HOME"] = "host-home",
+            ["GH_CONFIG_DIR"] = "host-gh",
+            ["GH_TOKEN"] = "host-token",
+            ["DBUS_SESSION_BUS_ADDRESS"] = "host-dbus",
+            ["BEACON_API_TOKEN"] = "beacon-secret",
+            ["GITHUB_TOKEN"] = "workflow-secret",
+            ["GH_ENTERPRISE_TOKEN"] = "enterprise-secret",
+            ["UNRELATED_SECRET"] = "unrelated"
+        };
+
+        var environment = AgentTaskGitOperations.BuildGitHubCliEnvironment(
+            name => source.TryGetValue(name, out var value) ? value : null);
+
+        Assert.Equal("trusted-path", environment["PATH"]);
+        Assert.Equal("host-home", environment["HOME"]);
+        Assert.Equal("host-gh", environment["GH_CONFIG_DIR"]);
+        Assert.Equal("host-token", environment["GH_TOKEN"]);
+        Assert.Equal("host-dbus", environment["DBUS_SESSION_BUS_ADDRESS"]);
+        Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
+        Assert.False(environment.ContainsKey("BEACON_API_TOKEN"));
+        Assert.False(environment.ContainsKey("GITHUB_TOKEN"));
+        Assert.False(environment.ContainsKey("GH_ENTERPRISE_TOKEN"));
+        Assert.False(environment.ContainsKey("UNRELATED_SECRET"));
+    }
+
+    [Fact]
     public void BuildGitHubCredentialEnvironment_ForwardsOnlyScopedHelperContext()
     {
         var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
