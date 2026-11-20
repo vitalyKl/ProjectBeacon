@@ -12,6 +12,17 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         Assert.True(AgentTaskGitOperations.IsGitTool(PipelineToolPolicy.GitPullRequest));
     }
 
+    [Theory]
+    [InlineData("Actor", true)]
+    [InlineData("Planner", false)]
+    [InlineData("Review", false)]
+    [InlineData("Eval", false)]
+    [InlineData(null, false)]
+    public void OnlyTheActorMayMarkItsTaskPullRequestReady(string? role, bool expected)
+    {
+        Assert.Equal(expected, AgentTaskGitHubPullRequestOperations.CanMarkReady(role));
+    }
+
     [Fact]
     public void GitPullRequestDefinition_OnlyExposesTaskBoundStatusAndReadyActions()
     {
