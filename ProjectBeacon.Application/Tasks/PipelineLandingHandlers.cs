@@ -32,13 +32,13 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         var rationale = command.Request.Rationale?.Trim();
         if (string.IsNullOrWhiteSpace(rationale) || rationale.Length > 1000)
             return Result.Failure<LandingAttemptDto>("Rationale must contain 1 to 1000 characters.", ErrorKind.Validation);
-        if (command.Actor.UserId is not { } userId || userId == Guid.Empty)
-            return Result.Failure<LandingAttemptDto>("A user-bound actor is required to request a landing.");
-
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
-            return Result.Failure<LandingAttemptDto>("Task not found.");
+            return Result.Failure<LandingAttemptDto>("Task not found.", ErrorKind.NotFound);
+        if (!LandingAuthorizationPolicy.CanRequestLanding(command.Actor, task.ProjectId))
+            return Result.Forbidden<LandingAttemptDto>(
+                "A user-bound project member or a project-scoped API token with TaskWrite capability is required to request a landing.");
 
         if (task.PipelineStage != TaskPipelineStage.Approved)
             return Result.Failure<LandingAttemptDto>("The task pipeline must be Approved before requesting a landing.", ErrorKind.Conflict);
@@ -163,7 +163,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>("The review proof does not identify its daemon-selected target branch.", ErrorKind.Conflict);
 
         var attempt = LandingAttempt.Start(
-            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, landingTargetBranch,
+            task.ProjectId, task.Id, reviewRun.Id, command.Actor.UserId!.Value, device.Id, landingTargetBranch,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         attempt.SetGitPolicySnapshot(gitPolicy.Revision, policySnapshot);
         attempt.MarkDispatchPending("Preview");
@@ -693,6 +693,21 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
 /// <summary>Authorization boundary for a request to revert a task landing.</summary>
 public static class LandingAuthorizationPolicy
 {
+    public static bool CanRequestLanding(ActorContext actor, Guid projectId)
+    {
+        if (projectId == Guid.Empty
+            || actor.UserId is not { } userId
+            || userId == Guid.Empty)
+            return false;
+
+        if (actor.IsHuman)
+            return actor.ProjectId is null || actor.ProjectId == projectId;
+
+        return actor.IsApiToken
+            && actor.ProjectId == projectId
+            && (actor.Capabilities & ApiTokenCapability.TaskWrite) == ApiTokenCapability.TaskWrite;
+    }
+
     public static bool CanRequestRevert(ActorContext actor, Guid projectId, bool automatic)
     {
         if (projectId == Guid.Empty)

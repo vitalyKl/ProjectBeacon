@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
+using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -16,6 +18,16 @@ internal static class AgentTaskGitOperations
 {
     private const int MaxOutputCharacters = 12_000;
     private const int MaxPathLength = 400;
+    private const string IntegrationBranchName = "beacon/integration";
+
+    private static readonly string[] GitHubCliEnvironmentNames =
+    [
+        "PATH", "SystemRoot", "WINDIR", "COMSPEC",
+        "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+        "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR",
+        "GH_TOKEN", "GITHUB_TOKEN", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR",
+        "LANG", "LC_ALL"
+    ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,7 +45,7 @@ internal static class AgentTaskGitOperations
         string BaseSha,
         DateTime CreatedAtUtc);
 
-    private sealed record GitContext(
+    internal sealed record GitContext(
         Guid TaskId,
         string RepositoryRoot,
         string WorktreeRoot,
@@ -53,7 +65,9 @@ internal static class AgentTaskGitOperations
     public static bool IsGitTool(string? name) =>
         name is PipelineToolPolicy.GitInfo
             or PipelineToolPolicy.GitCommit
-            or PipelineToolPolicy.GitIntegrate;
+            or PipelineToolPolicy.GitIntegrate
+            or PipelineToolPolicy.GitPublish
+            or PipelineToolPolicy.GitPullRequest;
 
     public static JsonObject ToolDefinition(string name) => name switch
     {
@@ -90,11 +104,31 @@ internal static class AgentTaskGitOperations
             "message"),
         PipelineToolPolicy.GitIntegrate => Definition(
             name,
-            "Refresh this task branch from its daemon-selected base branch, or continue/abort a reported conflict. Remote and branch are never supplied by the agent.",
+            "Refresh this task branch from its daemon-selected review base or the fixed beacon/integration branch, or continue/abort a reported conflict. source defaults to base; the agent cannot supply a remote or branch name.",
             new JsonObject
             {
                 ["action"] = EnumProperty("integrate", "continue", "abort"),
-                ["strategy"] = EnumProperty("rebase", "merge")
+                ["strategy"] = EnumProperty("rebase", "merge"),
+                ["source"] = EnumProperty("base", "integration")
+            },
+            "action"),
+        PipelineToolPolicy.GitPublish => Definition(
+            name,
+            "Publish only this task branch to its configured GitHub origin and create a pull request into the daemon-selected review base. Requires GitHub CLI (gh) authenticated on this workstation. Push is fast-forward-only; arbitrary remotes, target branches, force pushes, and merges are not allowed.",
+            new JsonObject
+            {
+                ["action"] = EnumProperty("publish"),
+                ["title"] = new JsonObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200 },
+                ["body"] = new JsonObject { ["type"] = "string", ["maxLength"] = 20_000 },
+                ["draft"] = new JsonObject { ["type"] = "boolean", ["description"] = "Defaults to true." }
+            },
+            "action", "title"),
+        PipelineToolPolicy.GitPullRequest => Definition(
+            name,
+            "Inspect the pull request belonging to this exact task branch. Any role may request status; only the Actor role may mark its own draft PR ready. Status reports exact task HEAD, pinned review-base freshness, GitHub review decision and required checks. This tool never merges; server-authorized GitLand remains the only landing path.",
+            new JsonObject
+            {
+                ["action"] = EnumProperty("status", "ready")
             },
             "action"),
         _ => throw new ArgumentOutOfRangeException(nameof(name))
@@ -116,6 +150,11 @@ internal static class AgentTaskGitOperations
 
         if (toolName == PipelineToolPolicy.GitIntegrate)
             return await IntegrateAsync(opened.Context, arguments, ct);
+        if (toolName == PipelineToolPolicy.GitPublish)
+            return await PublishAsync(opened.Context, arguments, ct);
+        if (toolName == PipelineToolPolicy.GitPullRequest)
+            return await AgentTaskGitHubPullRequestOperations.ExecuteAsync(
+                opened.Context, authorization.PipelineRole, arguments, ct);
 
         return toolName switch
         {
@@ -249,12 +288,19 @@ internal static class AgentTaskGitOperations
         switch (kind)
         {
             case "branches":
-                return Success(new
                 {
-                    branch = context.BranchName,
-                    baseBranch = context.BaseBranch,
-                    baseSha = context.BaseSha
-                });
+                    var integration = await ReadIntegrationCheckpointAsync(context, ct);
+                    if (integration.Error is not null)
+                        return Error(integration.Error);
+                    return Success(new
+                    {
+                        branch = context.BranchName,
+                        baseBranch = context.BaseBranch,
+                        baseSha = context.BaseSha,
+                        integrationBranch = IntegrationBranchName,
+                        integrationSha = integration.Sha
+                    });
+                }
 
             case "status":
                 {
@@ -264,11 +310,16 @@ internal static class AgentTaskGitOperations
                     var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
                     if (!Succeeded(status) || !Succeeded(head))
                         return GitFailure("Could not read task branch status.");
+                    var integration = await ReadIntegrationCheckpointAsync(context, ct);
+                    if (integration.Error is not null)
+                        return Error(integration.Error);
                     return Success(new
                     {
                         branch = context.BranchName,
                         baseBranch = context.BaseBranch,
                         baseSha = context.BaseSha,
+                        integrationBranch = IntegrationBranchName,
+                        integrationSha = integration.Sha,
                         head = head.StdOut.Trim(),
                         status = Clip(status.StdOut)
                     });
@@ -400,15 +451,32 @@ internal static class AgentTaskGitOperations
 
     private static async Task<McpToolResult> IntegrateAsync(GitContext context, JsonObject args, CancellationToken ct)
     {
+        var allowedArguments = new HashSet<string>(StringComparer.Ordinal)
+            { "action", "strategy", "source" };
+        if (args.Any(pair => !allowedArguments.Contains(pair.Key)))
+            return Error("git_integrate accepts only action, strategy, and source.");
+
         var action = ReadString(args, "action");
         if (action is not ("integrate" or "continue" or "abort"))
             return Error("git_integrate action must be integrate, continue, or abort.");
+
+        if (action != "integrate" && (args.ContainsKey("source") || args.ContainsKey("strategy")))
+            return Error("git_integrate strategy and source are available only with action=integrate.");
 
         if (action == "integrate")
         {
             var strategy = ReadString(args, "strategy");
             if (strategy is not ("rebase" or "merge"))
                 return Error("git_integrate action=integrate requires strategy=rebase or strategy=merge.");
+            var source = "base";
+            if (args.ContainsKey("source"))
+            {
+                source = ReadString(args, "source");
+                if (string.IsNullOrWhiteSpace(source))
+                    return Error("git_integrate source must be base or integration.");
+            }
+            if (source is not ("base" or "integration"))
+                return Error("git_integrate source must be base or integration.");
 
             var state = await ReadOperationStateAsync(context, ct);
             if (state.Active)
@@ -419,11 +487,67 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(status))
                 return GitFailure("Could not inspect task branch status before integration.");
             if (!string.IsNullOrWhiteSpace(status.StdOut))
-                return Error("Commit or discard task worktree changes with git_commit before integrating the base branch.");
+                return Error("Commit or discard task worktree changes with git_commit before integrating a branch.");
 
-            var target = await FetchBaseAsync(context, ct);
+            // A pending ref records the source SHA before Git mutates the task branch.
+            // It is intentionally separate from the fetched remote ref: old fetches must
+            // never be mistaken for an unfinished merge from a different source.
+            var basePending = await ReadRefShaAsync(context, IntegrationBasePendingRef(context.TaskId), ct);
+            var integrationPending = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
+            if (basePending.Error is not null || integrationPending.Error is not null)
+                return Error(basePending.Error ?? integrationPending.Error!);
+            if (basePending.Sha is not null && integrationPending.Sha is not null)
+                return Error("Both task integration sources have pending checkpoints. Resolve the existing Git state before starting another integration.");
+
+            var pendingSource = basePending.Sha is not null ? "base"
+                : integrationPending.Sha is not null ? "integration"
+                : null;
+            if (pendingSource is not null && !string.Equals(pendingSource, source, StringComparison.Ordinal))
+                return Error($"A previous {pendingSource} integration is awaiting reconciliation. Retry git_integrate with source={pendingSource} before selecting another source.");
+
+            var target = pendingSource == source
+                ? (Sha: pendingSource == "base" ? basePending.Sha : integrationPending.Sha, Error: (string?)null)
+                : source == "base"
+                    ? await FetchBaseAsync(context, ct)
+                    : await FetchIntegrationAsync(context, ct);
             if (target.Error is not null)
                 return Error(target.Error);
+            if (!IsGitSha(target.Sha ?? string.Empty))
+                return Error("The selected integration source did not resolve to a valid commit SHA.");
+
+            if (pendingSource is null)
+            {
+                var pendingRef = source == "base"
+                    ? IntegrationBasePendingRef(context.TaskId)
+                    : IntegrationPendingRef(context.TaskId);
+                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", pendingRef, target.Sha!);
+                if (!Succeeded(pending))
+                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
+            }
+
+            // A retry after a lost acknowledgement, or a task branch that already contains
+            // the selected source, reconciles the checkpoint without creating a duplicate merge.
+            var alreadyIntegrated = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "merge-base", "--is-ancestor", target.Sha!, "HEAD");
+            if (Succeeded(alreadyIntegrated))
+            {
+                var checkpointError = await CompleteIntegrationSourceAsync(context, source, target.Sha!, ct);
+                if (checkpointError is not null)
+                    return Error("The selected branch is already integrated, but its checkpoint could not be saved: " + checkpointError);
+                return Success(new
+                {
+                    status = "up-to-date",
+                    source,
+                    strategy,
+                    baseBranch = context.BaseBranch,
+                    baseSha = source == "base" ? target.Sha : context.BaseSha,
+                    integrationBranch = source == "integration" ? IntegrationBranchName : null,
+                    integrationSha = source == "integration" ? target.Sha : null
+                });
+            }
+            if (alreadyIntegrated.TimedOut || alreadyIntegrated.ExitCode != 1)
+                return GitFailure("Could not verify whether the selected branch is already integrated.", alreadyIntegrated.StdErr);
 
             var integrate = strategy == "rebase"
                 ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
@@ -438,14 +562,25 @@ internal static class AgentTaskGitOperations
                 var operation = await ReadOperationStateAsync(context, ct);
                 var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
                 if (mergeConflicts.Count > 0)
-                    return Success(new { status = "conflict", strategy, targetSha = target.Sha, files = mergeConflicts });
-                return GitFailure("Git could not integrate the task base branch. No resolvable conflict state was opened.");
+                    return Success(new { status = "conflict", source, strategy, targetSha = target.Sha, files = mergeConflicts });
+
+                _ = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+                return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.", integrate.StdErr);
             }
 
-            var update = await UpdateMetadataBaseShaAsync(context, target.Sha!, ct);
+            var update = await CompleteIntegrationSourceAsync(context, source, target.Sha!, ct);
             if (update is not null)
-                return Error("The branch was integrated, but the saved base checkpoint could not be updated: " + update);
-            return Success(new { status = "integrated", strategy, baseBranch = context.BaseBranch, baseSha = target.Sha });
+                return Error("The branch was integrated, but the saved source checkpoint could not be updated: " + update);
+            return Success(new
+            {
+                status = "integrated",
+                source,
+                strategy,
+                baseBranch = context.BaseBranch,
+                baseSha = source == "base" ? target.Sha : context.BaseSha,
+                integrationBranch = source == "integration" ? IntegrationBranchName : null,
+                integrationSha = source == "integration" ? target.Sha : null
+            });
         }
 
         var active = await ReadOperationStateAsync(context, ct);
@@ -457,9 +592,13 @@ internal static class AgentTaskGitOperations
             var abort = active.Rebase
                 ? await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rebase", "--abort")
                 : await Git(context.WorktreeRoot, context.DisabledFilters, ct, "merge", "--abort");
-            return Succeeded(abort)
+            if (!Succeeded(abort))
+                return GitFailure("Could not abort the in-progress Git integration.");
+
+            var clearError = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+            return clearError is null
                 ? Success(new { status = "aborted" })
-                : GitFailure("Could not abort the in-progress Git integration.");
+                : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
         var conflicts = await ReadConflictsAsync(context, ct);
@@ -504,15 +643,28 @@ internal static class AgentTaskGitOperations
             return GitFailure("Git could not continue the integration.");
         }
 
-        var baseRef = IntegrationBaseRef(context.TaskId);
-        var targetHead = await Git(context.RepositoryRoot, context.DisabledFilters, ct, "rev-parse", "--verify", baseRef);
-        if (!Succeeded(targetHead) || !IsGitSha(targetHead.StdOut.Trim()))
-            return GitFailure("The integration finished but its fetched base commit could not be verified.");
+        var basePendingAfter = await ReadRefShaAsync(context, IntegrationBasePendingRef(context.TaskId), ct);
+        var integrationPendingAfter = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
+        if (basePendingAfter.Error is not null || integrationPendingAfter.Error is not null)
+            return Error(basePendingAfter.Error ?? integrationPendingAfter.Error!);
+        if ((basePendingAfter.Sha is null) == (integrationPendingAfter.Sha is null))
+            return Error("Could not identify a unique daemon-selected source for the completed integration.");
 
-        var metadataError = await UpdateMetadataBaseShaAsync(context, targetHead.StdOut.Trim(), ct);
+        var sourceName = integrationPendingAfter.Sha is not null ? "integration" : "base";
+        var targetSha = integrationPendingAfter.Sha ?? basePendingAfter.Sha!;
+        var metadataError = await CompleteIntegrationSourceAsync(context, sourceName, targetSha, ct);
         if (metadataError is not null)
-            return Error("The integration finished, but the saved base checkpoint could not be updated: " + metadataError);
-        return Success(new { status = "integrated", baseBranch = context.BaseBranch, baseSha = targetHead.StdOut.Trim() });
+            return Error("The integration finished, but the saved source checkpoint could not be updated: " + metadataError);
+
+        return Success(new
+        {
+            status = "integrated",
+            source = sourceName,
+            baseBranch = context.BaseBranch,
+            baseSha = sourceName == "base" ? targetSha : context.BaseSha,
+            integrationBranch = sourceName == "integration" ? IntegrationBranchName : null,
+            integrationSha = sourceName == "integration" ? targetSha : null
+        });
     }
 
     private static async Task<(string? Sha, string? Error)> FetchBaseAsync(GitContext context, CancellationToken ct)
@@ -533,7 +685,11 @@ internal static class AgentTaskGitOperations
             if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
                 return (null, "The configured origin uses an unsupported Git transport; no integration was attempted.");
 
-            var fetch = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+            if (IsSshRemote(url) && !HasHostSshAgent())
+                return (null, "The origin uses SSH, but no host SSH agent is available. Start ssh-agent and load the GitHub key before integrating.");
+
+            var fetch = await RunRemoteGitAsync(
+                context.RepositoryRoot, context.DisabledFilters, ct, url,
                 "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
                 "--", url, $"+refs/heads/{context.BaseBranch}:{targetRef}");
             if (!Succeeded(fetch))
@@ -546,8 +702,6 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
                 return (null, "No origin remote or local recorded base branch is available.");
 
-            // Keep one task-specific integration target so continue can verify and persist
-            // the exact base SHA even when this repository has no origin remote.
             var updateLocalTarget = await Git(
                 context.WorktreeRoot, context.DisabledFilters, ct,
                 "update-ref", targetRef, local.StdOut.Trim());
@@ -561,7 +715,829 @@ internal static class AgentTaskGitOperations
             : (null, "Could not verify the fetched base branch commit.");
     }
 
+    private static async Task<(string? Sha, string? Error)> FetchIntegrationAsync(GitContext context, CancellationToken ct)
+    {
+        var validate = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+            "check-ref-format", "--branch", IntegrationBranchName);
+        if (!Succeeded(validate))
+            return (null, "The fixed ProjectBeacon integration branch name is invalid.");
+
+        var targetRef = IntegrationBranchRef(context.TaskId);
+        var remotes = await Git(context.RepositoryRoot, context.DisabledFilters, ct, "remote");
+        if (!Succeeded(remotes))
+            return (null, "Could not inspect configured Git remotes.");
+
+        var hasOrigin = remotes.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(name => string.Equals(name.Trim(), "origin", StringComparison.Ordinal));
+        if (hasOrigin)
+        {
+            var remote = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                "remote", "get-url", "--all", "origin");
+            if (!Succeeded(remote))
+                return (null, "Could not resolve the configured origin URL safely.");
+            var urls = remote.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => value.Trim()).Where(value => value.Length > 0).ToArray();
+            if (urls.Length != 1)
+                return (null, "Integration requires exactly one configured origin URL.");
+
+            var url = urls[0];
+            if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
+                return (null, "The configured origin uses an unsupported Git transport.");
+            if (IsSshRemote(url) && !HasHostSshAgent())
+                return (null, "The origin uses SSH, but no host SSH agent is available. Start ssh-agent and load the GitHub key before integrating.");
+
+            var remoteBranch = await RunRemoteGitAsync(
+                context.RepositoryRoot, context.DisabledFilters, ct, url,
+                "ls-remote", "--heads", "--", url, $"refs/heads/{IntegrationBranchName}");
+            if (!Succeeded(remoteBranch))
+                return (null, "Could not inspect the remote integration branch.");
+            var existsRemotely = remoteBranch.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.EndsWith($"\trefs/heads/{IntegrationBranchName}", StringComparison.Ordinal));
+            if (existsRemotely)
+            {
+                var fetch = await RunRemoteGitAsync(
+                    context.RepositoryRoot, context.DisabledFilters, ct, url,
+                    "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                    "--", url, $"+refs/heads/{IntegrationBranchName}:{targetRef}");
+                if (!Succeeded(fetch))
+                    return (null, "Could not fetch the remote integration branch. Check workstation connectivity and origin configuration.");
+            }
+            else
+            {
+                var local = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                    "rev-parse", "--verify", $"refs/heads/{IntegrationBranchName}");
+                if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
+                    return (null, "Neither origin nor the local repository contains the fixed integration branch.");
+                var update = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", targetRef, local.StdOut.Trim());
+                if (!Succeeded(update))
+                    return (null, "Could not record the local integration branch commit.");
+            }
+        }
+        else
+        {
+            var local = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                "rev-parse", "--verify", $"refs/heads/{IntegrationBranchName}");
+            if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
+                return (null, "No origin or local ProjectBeacon integration branch is available.");
+            var update = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", targetRef, local.StdOut.Trim());
+            if (!Succeeded(update))
+                return (null, "Could not record the local integration branch commit.");
+        }
+
+        var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", targetRef);
+        return Succeeded(head) && IsGitSha(head.StdOut.Trim())
+            ? (head.StdOut.Trim(), null)
+            : (null, "Could not verify the fetched integration branch commit.");
+    }
+
+    private static async Task<string?> CompleteIntegrationSourceAsync(
+        GitContext context, string source, string targetSha, CancellationToken ct)
+    {
+        if (!IsGitSha(targetSha))
+            return "the integration source checkpoint is invalid";
+
+        // Never advance a source checkpoint merely because an operation marker exists.
+        // The exact fetched source commit must be reachable from the completed task HEAD.
+        var included = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", targetSha, "HEAD");
+        if (!Succeeded(included))
+            return "the completed task branch does not contain the recorded integration source commit";
+
+        if (source == "base")
+        {
+            var updateBase = await UpdateMetadataBaseShaAsync(context, targetSha, ct);
+            if (updateBase is not null)
+                return updateBase;
+        }
+        else if (source == "integration")
+        {
+            var checkpoint = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", IntegrationCheckpointRef(context.TaskId), targetSha);
+            if (!Succeeded(checkpoint))
+                return "the integration branch was merged but its checkpoint could not be persisted";
+        }
+        else
+        {
+            return "the integration source identity is invalid";
+        }
+
+        var pendingRef = source == "base"
+            ? IntegrationBasePendingRef(context.TaskId)
+            : IntegrationPendingRef(context.TaskId);
+        var clearPending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "update-ref", "-d", pendingRef);
+        return Succeeded(clearPending)
+            ? null
+            : "the integration checkpoint was saved but its pending marker could not be cleared";
+    }
+
+    private static async Task<string?> ClearIntegrationPendingRefsAsync(
+        GitContext context, CancellationToken ct)
+    {
+        foreach (var reference in new[]
+        {
+            IntegrationBasePendingRef(context.TaskId),
+            IntegrationPendingRef(context.TaskId)
+        })
+        {
+            var clear = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", "-d", reference);
+            if (!Succeeded(clear) && clear.ExitCode != 1)
+                return clear.StdErr.Trim().Length == 0
+                    ? "a pending source ref could not be deleted"
+                    : Clip(clear.StdErr.Trim());
+        }
+
+        return null;
+    }
+
+    private static async Task<(string? Sha, string? Error)> ReadRefShaAsync(
+        GitContext context, string reference, CancellationToken ct)
+    {
+        var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "rev-parse", "--verify", reference);
+        if (Succeeded(result) && IsGitSha(result.StdOut.Trim()))
+            return (result.StdOut.Trim(), null);
+        if (!result.TimedOut && result.ExitCode == 128)
+            return (null, null);
+        return (null, "Could not read a saved task integration checkpoint.");
+    }
+
+    private static async Task<(string? Sha, string? Error)> ReadIntegrationCheckpointAsync(
+        GitContext context, CancellationToken ct) =>
+        await ReadRefShaAsync(context, IntegrationCheckpointRef(context.TaskId), ct);
+
     private static string IntegrationBaseRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base";
+    private static string IntegrationBranchRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-branch";
+    private static string IntegrationBasePendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base-pending";
+    private static string IntegrationPendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-pending";
+    private static string IntegrationCheckpointRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-checkpoint";
+
+    internal sealed record PullRequestInfo(int Number, string Url, string BaseRefName, string State, bool IsDraft);
+
+    private static async Task<McpToolResult> PublishAsync(
+        GitContext context,
+        JsonObject args,
+        CancellationToken ct)
+    {
+        var allowedArguments = new HashSet<string>(StringComparer.Ordinal)
+            { "action", "title", "body", "draft" };
+        if (args.Any(pair => !allowedArguments.Contains(pair.Key)))
+            return Error("git_publish accepts only action, title, body, and draft.");
+        if (!string.Equals(ReadString(args, "action"), "publish", StringComparison.Ordinal))
+            return Error("git_publish action must be publish.");
+
+        var title = ReadString(args, "title").Trim();
+        var body = ReadString(args, "body");
+        var draft = args["draft"] is JsonValue draftValue && draftValue.TryGetValue<bool>(out var requestedDraft)
+            ? requestedDraft
+            : true;
+        if (string.IsNullOrWhiteSpace(title) || title.Length > 200)
+            return Error("git_publish requires a title of 1..200 characters.");
+        if (body.Length > 20_000)
+            return Error("git_publish body is limited to 20,000 characters.");
+        if (context.BaseBranch is not { Length: > 0 } baseBranch
+            || !IsGitSha(context.BaseSha)
+            || string.Equals(baseBranch, context.BranchName, StringComparison.Ordinal))
+            return Error("The task branch has no valid daemon-selected review base.");
+
+        var branchCheck = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "check-ref-format", "--branch", baseBranch);
+        if (!Succeeded(branchCheck))
+            return Error("The daemon-selected review base is not a valid Git branch.");
+
+        var operation = await ReadOperationStateAsync(context, ct);
+        if (operation.Active)
+            return Error("Resolve the active merge or rebase with git_integrate before publishing.");
+
+        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--all", "origin");
+        if (!Succeeded(origin))
+            return Error("Could not inspect the configured origin fetch URLs.");
+        var originUrls = origin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (originUrls.Length != 1)
+            return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
+        var originUrl = originUrls[0].Trim();
+        if (!TryParseGitHubRemote(originUrl, out var repository))
+            return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
+
+        var pushOrigin = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--push", "--all", "origin");
+        if (!Succeeded(pushOrigin))
+            return Error("Could not inspect the configured origin push URLs.");
+        var pushUrls = pushOrigin.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (pushUrls.Length != 1)
+            return Error("The origin push URL must be a single GitHub URL for the same repository as the validated origin fetch URL.");
+        var pushUrl = pushUrls[0].Trim();
+        if (!TryParseGitHubRemote(pushUrl, out var pushRepository)
+            || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
+            return Error("The origin push URL must be a single GitHub URL for the same repository as the validated origin fetch URL.");
+
+        var mirror = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "config", "--bool", "--get", "remote.origin.mirror");
+        if (mirror.TimedOut || mirror.ExitCode is not (0 or 1))
+            return Error("Could not verify that origin is not configured for mirror pushes.");
+        if (mirror.ExitCode == 0)
+        {
+            if (!bool.TryParse(mirror.StdOut.Trim(), out var mirrorEnabled))
+                return Error("The origin mirror configuration is invalid; publishing is refused.");
+            if (mirrorEnabled)
+                return Error("Publishing refuses remote.origin.mirror=true because it can push refs beyond the authorized task branch.");
+        }
+
+        var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "status", "--porcelain", "--untracked-files=all");
+        if (!Succeeded(status))
+            return GitFailure("Could not inspect the task worktree before publishing.", status.StdErr);
+        if (!string.IsNullOrWhiteSpace(status.StdOut))
+            return Error("The task worktree is not clean. Commit the task changes with git_commit before publishing; no files were pushed.");
+
+        var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+        if (!Succeeded(head) || !IsGitSha(head.StdOut.Trim()))
+            return GitFailure("Could not resolve the task branch HEAD before publishing.", head.StdErr);
+        var headSha = head.StdOut.Trim();
+
+        var baseIsAncestor = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", context.BaseSha, headSha);
+        if (!Succeeded(baseIsAncestor))
+            return Error("The task branch no longer descends from its pinned review base. Run git_integrate and review it again before publishing.");
+
+        var changedPaths = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z",
+            context.BaseSha, headSha);
+        if (!Succeeded(changedPaths))
+            return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
+        var changedPathList = changedPaths.StdOut
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (changedPathList.Length == 0)
+            return Error("The task branch has no file changes to publish.");
+        var changeSummary = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "diff", "--no-ext-diff", "--no-textconv", "--summary",
+            context.BaseSha, headSha);
+        if (!Succeeded(changeSummary))
+            return GitFailure("Could not inspect file modes before publishing.", changeSummary.StdErr);
+        if (changeSummary.StdOut.Contains("120000", StringComparison.Ordinal)
+            || changeSummary.StdOut.Contains("160000", StringComparison.Ordinal))
+            return Error("Publishing symlink or submodule changes is not supported by the task Git workflow.");
+        var outsidePaths = changedPathList
+            .Where(path => !IsProjectRelativePath(context, path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (outsidePaths.Length > 0)
+            return Error(
+                "The task branch contains committed changes outside the authorized project directory. "
+                + "Publishing was refused: " + string.Join(", ", outsidePaths.Take(8)));
+
+        // The pinned-base ancestry check and the non-empty tree diff above establish
+        // that this branch contains publishable task changes. A separate rev-list count
+        // adds no safety here and can fail independently of the already-validated diff.
+
+        var safePath = NativeCommandRunner.BuildSafePath(
+            Environment.GetEnvironmentVariable("PATH"), context.WorktreeRoot);
+        var ghPath = WorkstationProbe.Which("gh", safePath);
+        if (ghPath is null)
+            return Error("GitHub publishing requires GitHub CLI (gh). Install it and run gh auth login on this workstation.");
+        var auth = await RunGitHubCliAsync(ghPath, context.WorktreeRoot, ct, "auth", "status", "--hostname", "github.com");
+        if (auth.ExitCode != 0 || auth.TimedOut)
+            return Error("GitHub CLI is not authenticated for github.com. Run gh auth login on this workstation; no credential was requested or stored by ProjectBeacon.");
+
+        // Git runs with an isolated HOME/APPDATA. Point only the bounded credential-helper
+        // subprocesses back at the host gh config and keyring session; never copy a token
+        // into persistent Git configuration or command arguments.
+        if ((IsSshRemote(originUrl) || IsSshRemote(pushUrl)) && !HasHostSshAgent())
+            return Error("The configured GitHub SSH remote requires an active host SSH agent. Start ssh-agent and load the GitHub key, or use an authenticated HTTPS origin.");
+
+        var existing = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
+        if (existing.Error is not null)
+            return Error(existing.Error);
+        var matchingBase = existing.PullRequests.FirstOrDefault(
+            pull => string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal));
+        var differentBase = existing.PullRequests.FirstOrDefault(
+            pull => !string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal));
+        if (differentBase is not null)
+            return Error(
+                $"This task branch already has pull request #{differentBase.Number} targeting '{differentBase.BaseRefName}' ({differentBase.Url}). "
+                + $"The daemon-selected review base is '{baseBranch}'; retarget that PR explicitly before publishing again.");
+        if (matchingBase is { State: "MERGED" } merged)
+        {
+            var mergedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                ghPath, context.WorktreeRoot, repository, merged.Number, ct);
+            if (mergedSnapshot.Error is not null)
+                return Error("The task PR is merged, but its exact merged head could not be verified. " + mergedSnapshot.Error);
+            var mergedView = mergedSnapshot.View!;
+            if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                    mergedView, "MERGED", baseBranch, headSha))
+                return Error(
+                    $"Task branch {context.BranchName} has a merged PR #{merged.Number}, but that PR does not contain the current task HEAD {headSha}. "
+                    + "The current task changes have not been confirmed as merged; create a new task branch for additional work.");
+
+            return Success(new
+            {
+                published = true,
+                alreadyMerged = true,
+                repository,
+                branch = context.BranchName,
+                baseBranch,
+                headSha,
+                pullRequestNumber = merged.Number,
+                pullRequestUrl = mergedView.Url,
+                draft = false,
+                mergedAt = mergedView.MergedAt,
+                mergeCommitSha = mergedView.MergeCommitSha
+            });
+        }
+        if (matchingBase is { State: "CLOSED" } closed)
+            return Error(
+                $"Pull request #{closed.Number} for this task branch is already closed ({closed.Url}). "
+                + "Reopen it explicitly or publish a new task branch; ProjectBeacon will not silently recreate it.");
+
+        // Use the exact URL validated above rather than the mutable origin alias.
+        var baseOnRemote = await RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, originUrl,
+            "ls-remote", "--heads", originUrl, "refs/heads/" + baseBranch);
+        if (!Succeeded(baseOnRemote))
+            return GitFailure("Could not verify the review base on the configured GitHub origin.", baseOnRemote.StdErr);
+        if (string.IsNullOrWhiteSpace(baseOnRemote.StdOut))
+            return Error($"The configured GitHub origin does not contain the review base branch '{baseBranch}'.");
+        var remoteBaseLine = baseOnRemote.StdOut
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(line => line.EndsWith("\trefs/heads/" + baseBranch, StringComparison.Ordinal));
+        var remoteBaseSha = remoteBaseLine?.Split('\t').FirstOrDefault();
+        if (!IsGitSha(remoteBaseSha ?? string.Empty)
+            || !string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
+            return Error("The remote review base has advanced since this task branch was last integrated. Run git_integrate, review the updated branch, and retry publishing.");
+
+        // Push the already-verified commit SHA directly to the one validated URL and
+        // the task's single fixed destination ref. No remote alias, configured pushurl,
+        // mirror setting, or local branch movement can broaden or redirect this push.
+        var push = await RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, pushUrl,
+            "push", "--no-follow-tags", "--porcelain", pushUrl,
+            $"{headSha}:refs/heads/{context.BranchName}");
+        if (!Succeeded(push))
+            return GitFailure(
+                "Could not publish the task branch. The push is non-forced; resolve any remote divergence and retry.",
+                push.StdErr);
+
+        if (matchingBase is { State: "OPEN" } open)
+        {
+            var openSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                ghPath, context.WorktreeRoot, repository, open.Number, ct);
+            if (openSnapshot.Error is not null)
+                return Error("The task branch was pushed, but its existing pull request could not be verified. " + openSnapshot.Error);
+            var openView = openSnapshot.View!;
+            if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                    openView, "OPEN", baseBranch, headSha))
+                return Error(
+                    $"The task branch was pushed at {headSha}, but existing PR #{open.Number} does not show that exact HEAD and base. "
+                    + "Inspect git_pr status before proceeding.");
+
+            return Success(new
+            {
+                published = true,
+                pullRequestCreated = false,
+                repository,
+                branch = context.BranchName,
+                baseBranch,
+                headSha,
+                pullRequestNumber = open.Number,
+                pullRequestUrl = openView.Url,
+                draft = openView.IsDraft
+            });
+        }
+
+        var createArguments = new List<string>
+        {
+            "pr", "create", "--repo", repository,
+            "--head", repository.Split('/')[0] + ":" + context.BranchName,
+            "--base", baseBranch,
+            "--title", title,
+            "--body", body
+        };
+        if (draft)
+            createArguments.Add("--draft");
+
+        var created = await RunGitHubCliAsync(ghPath, context.WorktreeRoot, ct, [.. createArguments]);
+        if (created.ExitCode != 0 || created.TimedOut)
+        {
+            // A concurrent publisher may have created the PR between the list and create calls.
+            var refreshed = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
+            var raced = refreshed.PullRequests.FirstOrDefault(
+                pull => string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal)
+                    && string.Equals(pull.State, "OPEN", StringComparison.Ordinal));
+            if (raced is not null)
+            {
+                var racedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                    ghPath, context.WorktreeRoot, repository, raced.Number, ct);
+                if (racedSnapshot.Error is null
+                    && racedSnapshot.View is { } racedView
+                    && AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                        racedView, "OPEN", baseBranch, headSha))
+                    return Success(new
+                    {
+                        published = true,
+                        pullRequestCreated = false,
+                        repository,
+                        branch = context.BranchName,
+                        baseBranch,
+                        headSha,
+                        pullRequestNumber = raced.Number,
+                        pullRequestUrl = racedView.Url,
+                        draft = racedView.IsDraft
+                    });
+            }
+            return Error(
+                "The task branch was pushed, but GitHub did not create the pull request. "
+                + "Check GitHub CLI permissions and retry. " + Clip(created.StdErr.Trim()));
+        }
+
+        var pullRequestUrl = created.StdOut
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => value.Trim())
+            .LastOrDefault(value => value.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase));
+        if (pullRequestUrl is null)
+            return Error("The task branch was pushed, but GitHub CLI did not return a pull request URL. Check the repository pull request state before retrying.");
+
+        var pullRequestNumberText = pullRequestUrl.TrimEnd('/').Split('/').LastOrDefault();
+        if (!int.TryParse(pullRequestNumberText, NumberStyles.None, CultureInfo.InvariantCulture, out var pullRequestNumber)
+            || pullRequestNumber <= 0)
+            return Error("The task branch was pushed and GitHub returned a PR URL, but its pull request number could not be parsed safely: " + pullRequestUrl);
+
+        var createdSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, pullRequestNumber, ct);
+        if (createdSnapshot.Error is not null)
+            return Error("The task branch was pushed and its PR was created, but the resulting PR state could not be verified. " + createdSnapshot.Error);
+        var createdView = createdSnapshot.View!;
+        if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                createdView, "OPEN", baseBranch, headSha)
+            || createdView.IsDraft != draft)
+            return Error(
+                "The task branch was pushed and its PR was created, but GitHub returned a different head, base, or draft state. Inspect git_pr status before proceeding.");
+
+        return Success(new
+        {
+            published = true,
+            pullRequestCreated = true,
+            repository,
+            branch = context.BranchName,
+            baseBranch,
+            headSha,
+            pullRequestNumber,
+            pullRequestUrl = createdView.Url,
+            draft = createdView.IsDraft
+        });
+    }
+
+    internal static string[] BuildListPullRequestsArguments(string repository, string branch) =>
+    [
+        "pr", "list", "--repo", repository,
+        "--head", branch,
+        "--state", "all",
+        "--json", "number,url,baseRefName,state,isDraft"
+    ];
+
+    internal static async Task<(IReadOnlyList<PullRequestInfo> PullRequests, string? Error)> ListPullRequestsAsync(
+        string ghPath,
+        string workingDirectory,
+        string repository,
+        string branch,
+        CancellationToken ct)
+    {
+        var result = await RunGitHubCliAsync(
+            ghPath, workingDirectory, ct,
+            BuildListPullRequestsArguments(repository, branch));
+        if (result.ExitCode != 0 || result.TimedOut)
+            return ([], "Could not inspect existing GitHub pull requests. Check GitHub CLI authentication and repository access.");
+        try
+        {
+            using var document = JsonDocument.Parse(result.StdOut);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return ([], "GitHub CLI returned an invalid pull request list.");
+            var items = new List<PullRequestInfo>();
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (!item.TryGetProperty("number", out var numberValue)
+                    || !numberValue.TryGetInt32(out var number)
+                    || !TryJsonString(item, "url", out var url)
+                    || !TryJsonString(item, "baseRefName", out var baseName)
+                    || !TryJsonString(item, "state", out var state)
+                    || !item.TryGetProperty("isDraft", out var draftValue)
+                    || draftValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    return ([], "GitHub CLI returned incomplete pull request metadata.");
+                items.Add(new PullRequestInfo(number, url, baseName, state.ToUpperInvariant(), draftValue.GetBoolean()));
+            }
+            return (items, null);
+        }
+        catch (JsonException)
+        {
+            return ([], "GitHub CLI returned malformed pull request metadata.");
+        }
+    }
+
+    internal static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitHubCliAsync(
+        string ghPath,
+        string workingDirectory,
+        CancellationToken ct,
+        params string[] arguments)
+    {
+        var info = new ProcessStartInfo
+        {
+            FileName = ghPath,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        var safePath = NativeCommandRunner.BuildSafePath(
+            Environment.GetEnvironmentVariable("PATH"), workingDirectory);
+        var inherited = BuildGitHubCliEnvironment(Environment.GetEnvironmentVariable);
+        info.Environment.Clear();
+        foreach (var pair in inherited)
+        {
+            if (!string.Equals(pair.Key, "PATH", StringComparison.OrdinalIgnoreCase))
+                info.Environment[pair.Key] = pair.Value;
+        }
+        info.Environment["PATH"] = safePath;
+        if (OperatingSystem.IsWindows())
+        {
+            var trustedCmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            info.Environment["COMSPEC"] = trustedCmd;
+        }
+        foreach (var argument in arguments)
+            info.ArgumentList.Add(argument);
+        return await ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(90), ct);
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildGitHubCliEnvironment(
+        Func<string, string?> lookup)
+    {
+        ArgumentNullException.ThrowIfNull(lookup);
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var environment = new Dictionary<string, string>(comparer);
+        foreach (var pair in ClientConfiguration.CaptureAllowedEnvironment(GitHubCliEnvironmentNames, lookup))
+            environment[pair.Key] = pair.Value;
+        environment["GH_PROMPT_DISABLED"] = "1";
+        environment["GH_PAGER"] = "cat";
+        environment["PAGER"] = "cat";
+        environment["GIT_TERMINAL_PROMPT"] = "0";
+        environment["GH_NO_UPDATE_NOTIFIER"] = "1";
+        return environment;
+    }
+
+    private static IReadOnlyDictionary<string, string>? BuildHostGitHubCredentialEnvironment()
+    {
+        var isWindows = OperatingSystem.IsWindows();
+        var homeDirectory = isWindows
+            ? Environment.GetEnvironmentVariable("USERPROFILE")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : Environment.GetEnvironmentVariable("HOME")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return BuildGitHubCredentialEnvironment(
+            Environment.GetEnvironmentVariable("GH_CONFIG_DIR"),
+            Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
+            Environment.GetEnvironmentVariable("APPDATA"),
+            homeDirectory,
+            Environment.GetEnvironmentVariable("GH_TOKEN"),
+            Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
+            Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            isWindows);
+    }
+
+    private static IReadOnlyDictionary<string, string>? BuildHostSshAgentEnvironment()
+    {
+        var isWindows = OperatingSystem.IsWindows();
+        var socket = ResolveSshAgentSocket(
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            isWindows);
+        var environment = BuildSshAgentEnvironment(
+                socket,
+                Environment.GetEnvironmentVariable("SSH_AGENT_PID"))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var homeDirectory = isWindows
+            ? Environment.GetEnvironmentVariable("USERPROFILE")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : Environment.GetEnvironmentVariable("HOME")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var knownHostsPath = ResolveHostKnownHostsPath(homeDirectory);
+        environment["GIT_SSH_COMMAND"] = BuildSshCommand(knownHostsPath, isWindows);
+        return environment.Count > 0 ? environment : null;
+    }
+
+    internal static string? ResolveSshAgentSocket(string? sshAgentSocket, bool isWindows)
+        => !string.IsNullOrWhiteSpace(sshAgentSocket)
+            ? sshAgentSocket
+            : isWindows ? @"\\.\pipe\openssh-ssh-agent" : null;
+
+    internal static string? ResolveHostKnownHostsPath(string? homeDirectory)
+        => string.IsNullOrWhiteSpace(homeDirectory)
+            ? null
+            : Path.Combine(homeDirectory, ".ssh", "known_hosts");
+
+    internal static string BuildSshCommand(string? knownHostsPath, bool isWindows)
+    {
+        const string baseCommand = "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no";
+        if (string.IsNullOrWhiteSpace(knownHostsPath))
+            return baseCommand;
+
+        var normalizedPath = isWindows ? knownHostsPath.Replace('\\', '/') : knownHostsPath;
+        var quotedPath = "'" + normalizedPath.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
+        return baseCommand + " -o UserKnownHostsFile=" + quotedPath;
+    }
+
+    private static bool HasHostSshAgent()
+        => ResolveSshAgentSocket(
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            OperatingSystem.IsWindows()) is not null;
+
+    private static IReadOnlyDictionary<string, string>? BuildGitRemoteCredentialEnvironment(string remoteUrl)
+    {
+        if (IsGitHubHttpsRemote(remoteUrl))
+            return BuildHostGitHubCredentialEnvironment();
+        if (IsSshRemote(remoteUrl))
+            return BuildHostSshAgentEnvironment();
+        return null;
+    }
+
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunRemoteGitAsync(
+        string directory,
+        IReadOnlyCollection<string> disabledFilters,
+        CancellationToken ct,
+        string remoteUrl,
+        params string[] arguments)
+    {
+        var environment = BuildGitRemoteCredentialEnvironment(remoteUrl);
+        var commandArguments = new List<string>(arguments.Length + 2);
+        if (IsGitHubHttpsRemote(remoteUrl) && environment is not null)
+            commandArguments.AddRange(["-c", "credential.helper=!gh auth git-credential"]);
+        commandArguments.AddRange(arguments);
+
+        return environment is null
+            ? Git(directory, disabledFilters, ct, [.. commandArguments])
+            : AgentSessionWorktree.RunGitWithEnvironmentAsync(
+                directory, ct, disabledFilters, environment, [.. commandArguments]);
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildSshAgentEnvironment(
+        string? sshAgentSocket,
+        string? sshAgentPid)
+    {
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(sshAgentSocket))
+            environment["SSH_AUTH_SOCK"] = sshAgentSocket;
+        if (!string.IsNullOrWhiteSpace(sshAgentPid))
+            environment["SSH_AGENT_PID"] = sshAgentPid;
+        return environment;
+    }
+
+    internal static bool IsGitHubHttpsRemote(string remoteUrl)
+        => TryParseGitHubRemote(remoteUrl, out _)
+            && Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsSshRemote(string remoteUrl)
+    {
+        if (Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var value = remoteUrl.Trim();
+        var colon = value.IndexOf(':');
+        var separator = value.IndexOfAny(['/', '\\']);
+        return colon > 0
+            && (separator < 0 || colon < separator)
+            && value[..colon].Contains('@');
+    }
+
+    internal static IReadOnlyDictionary<string, string>? BuildGitHubCredentialEnvironment(
+        string? configuredDirectory,
+        string? xdgConfigHome,
+        string? appDataDirectory,
+        string? homeDirectory,
+        string? ghToken,
+        string? githubToken,
+        string? dbusSessionBusAddress,
+        string? xdgRuntimeDirectory,
+        bool isWindows)
+    {
+        var configDirectory = ResolveGitHubConfigDirectory(
+            configuredDirectory, xdgConfigHome, appDataDirectory, homeDirectory, isWindows);
+        if (string.IsNullOrWhiteSpace(configDirectory)
+            && string.IsNullOrWhiteSpace(ghToken)
+            && string.IsNullOrWhiteSpace(githubToken))
+            return null;
+
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["GH_PROMPT_DISABLED"] = "1"
+        };
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+            environment["GH_CONFIG_DIR"] = configDirectory;
+        if (!string.IsNullOrWhiteSpace(homeDirectory))
+        {
+            environment["HOME"] = homeDirectory;
+            if (isWindows)
+                environment["USERPROFILE"] = homeDirectory;
+        }
+        if (!string.IsNullOrWhiteSpace(xdgConfigHome))
+            environment["XDG_CONFIG_HOME"] = xdgConfigHome;
+        if (isWindows && !string.IsNullOrWhiteSpace(appDataDirectory))
+            environment["APPDATA"] = appDataDirectory;
+        if (!string.IsNullOrWhiteSpace(ghToken))
+            environment["GH_TOKEN"] = ghToken;
+        if (!string.IsNullOrWhiteSpace(githubToken))
+            environment["GITHUB_TOKEN"] = githubToken;
+        if (!string.IsNullOrWhiteSpace(dbusSessionBusAddress))
+            environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
+        if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
+            environment["XDG_RUNTIME_DIR"] = xdgRuntimeDirectory;
+        return environment;
+    }
+
+    internal static string? ResolveGitHubConfigDirectory(
+        string? configuredDirectory,
+        string? xdgConfigHome,
+        string? appDataDirectory,
+        string? homeDirectory,
+        bool isWindows)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredDirectory))
+            return configuredDirectory;
+        if (!string.IsNullOrWhiteSpace(xdgConfigHome))
+            return Path.Combine(xdgConfigHome, "gh");
+        if (isWindows && !string.IsNullOrWhiteSpace(appDataDirectory))
+            return Path.Combine(appDataDirectory, "GitHub CLI");
+        return !string.IsNullOrWhiteSpace(homeDirectory)
+            ? Path.Combine(homeDirectory, ".config", "gh")
+            : null;
+    }
+
+    internal static bool TryParseGitHubRemote(string remoteUrl, out string repository)
+    {
+        repository = string.Empty;
+        if (string.IsNullOrWhiteSpace(remoteUrl) || remoteUrl.Contains('\0'))
+            return false;
+        var value = remoteUrl.Trim();
+        string path;
+        if (value.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+        {
+            path = value["git@github.com:".Length..];
+        }
+        else if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                return false;
+            if (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(uri.UserInfo) || !uri.IsDefaultPort)
+                    return false;
+            }
+            else if (uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(uri.UserInfo, "git", StringComparison.Ordinal)
+                    || (uri.Port != 22 && !uri.IsDefaultPort))
+                    return false;
+            }
+            else
+            {
+                return false;
+            }
+            path = uri.AbsolutePath.Trim('/');
+        }
+        else
+        {
+            return false;
+        }
+
+        path = path.TrimEnd('/');
+        if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            path = path[..^4];
+        var parts = path.Split('/');
+        if (parts.Length != 2 || !IsSafeGitHubPathSegment(parts[0]) || !IsSafeGitHubPathSegment(parts[1]))
+            return false;
+        repository = parts[0] + "/" + parts[1];
+        return true;
+    }
+
+    private static bool IsSafeGitHubPathSegment(string value) =>
+        value.Length is > 0 and <= 100
+        && value is not ("." or "..")
+        && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
+
+    private static bool TryJsonString(JsonElement element, string propertyName, out string value)
+    {
+        value = string.Empty;
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(value = property.GetString() ?? string.Empty);
+    }
 
     private static async Task<OperationState> ReadOperationStateAsync(GitContext context, CancellationToken ct)
     {
@@ -773,14 +1749,14 @@ internal static class AgentTaskGitOperations
 
     private static string Pathspec(string path) => ":(literal)" + path;
 
-    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
         string directory,
         IReadOnlyCollection<string> filters,
         CancellationToken ct,
         params string[] arguments) =>
         AgentSessionWorktree.RunGitAsync(directory, ct, filters, arguments);
 
-    private static bool Succeeded((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
+    internal static bool Succeeded((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
         result.ExitCode == 0 && !result.TimedOut;
 
     private static bool IsReparsePoint(string path)
@@ -815,7 +1791,7 @@ internal static class AgentTaskGitOperations
             && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
-    private static bool IsGitSha(string value) =>
+    internal static bool IsGitSha(string value) =>
         (value.Length == 40 || value.Length == 64) && value.All(Uri.IsHexDigit);
 
     private static string ReadString(JsonObject args, string key) =>
@@ -824,13 +1800,32 @@ internal static class AgentTaskGitOperations
     private static int? ReadInt(JsonObject args, string key) =>
         args[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
-    private static string Clip(string value) =>
-        value.Length <= MaxOutputCharacters ? value : value[..MaxOutputCharacters] + "\n[output truncated]";
+    internal static string RedactCredentialValues(string value, Func<string, string?> lookup)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(lookup);
+        var safe = value;
+        foreach (var variable in new[] { "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN" })
+        {
+            var secret = lookup(variable);
+            if (!string.IsNullOrEmpty(secret))
+                safe = safe.Replace(secret, "[redacted]", StringComparison.Ordinal);
+        }
+        return safe;
+    }
 
-    private static McpToolResult Success<T>(T value) =>
+    internal static string Clip(string value)
+    {
+        var safe = RedactCredentialValues(value, Environment.GetEnvironmentVariable);
+        return safe.Length <= MaxOutputCharacters
+            ? safe
+            : safe[..MaxOutputCharacters] + "\n[output truncated]";
+    }
+
+    internal static McpToolResult Success<T>(T value) =>
         new(false, JsonSerializer.Serialize(value, JsonOptions));
 
-    private static McpToolResult Error(string message) => new(true, message);
-    private static McpToolResult GitFailure(string message, string? detail = null) =>
+    internal static McpToolResult Error(string message) => new(true, message);
+    internal static McpToolResult GitFailure(string message, string? detail = null) =>
         new(true, string.IsNullOrWhiteSpace(detail) ? message : message + " " + Clip(detail.Trim()));
 }

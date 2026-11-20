@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Client;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 /// <summary>
 /// A durable worktree and branch shared by every Actor session for one task.
@@ -178,8 +179,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     }
                     else
                     {
-                        var fetch = await AgentSessionWorktree.RunGitAsync(
-                            repositoryRoot, ct, disabledFilters,
+                        var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
+                            repositoryRoot,
+                            disabledFilters,
+                            ct,
+                            remoteUrl,
                             "fetch", "--no-tags", "--no-recurse-submodules",
                             "--upload-pack=git-upload-pack", "--", remoteUrl,
                             $"+refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");

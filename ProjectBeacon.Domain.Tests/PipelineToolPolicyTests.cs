@@ -37,6 +37,8 @@ public sealed class PipelineToolPolicyTests
         Assert.DoesNotContain(McpToolNames.PipelineLandExecute, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.Contains(McpToolNames.PipelineLandRevert, PipelineToolPolicy.ToolsForRole("Planner"));
         Assert.Contains(McpToolNames.PipelineLandStatus, PipelineToolPolicy.ToolsForRole("Planner"));
+        Assert.Contains(McpToolNames.PipelineLandRequest, PipelineToolPolicy.ToolsForRole("Review"));
+        Assert.Contains(McpToolNames.PipelineLandStatus, PipelineToolPolicy.ToolsForRole("Review"));
         Assert.DoesNotContain(McpToolNames.PipelineLandExecute, PipelineToolPolicy.ToolsForRole("Review"));
         Assert.DoesNotContain(McpToolNames.PipelineLandRevert, PipelineToolPolicy.ToolsForRole("Actor"));
         Assert.Contains(McpToolNames.PipelineLandExecute, PipelineToolPolicy.PipelinePlanDeniedTools);
@@ -59,13 +61,13 @@ public sealed class PipelineToolPolicyTests
     public void StructuredGitTools_AreRestrictedByPipelineRole()
     {
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Planner"));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Actor"));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Review"));
         Assert.Empty(PipelineToolPolicy.GitToolsForRole("Eval"));
         Assert.Empty(PipelineToolPolicy.GitToolsForRole(null));
@@ -77,5 +79,7 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(PipelineToolPolicy.GitInfo, PipelineToolPolicy.InteractivePlanTools);
         Assert.Contains(PipelineToolPolicy.GitCommit, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Contains(PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.Contains(PipelineToolPolicy.GitPublish, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.Contains(PipelineToolPolicy.GitPullRequest, PipelineToolPolicy.PipelinePlanDeniedTools);
     }
 }

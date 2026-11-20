@@ -158,6 +158,327 @@ public sealed partial class AgentTaskGitOperationsTests
         }
     }
 
+
+    [Fact]
+    public async Task GitIntegrate_CanMergeFixedIntegrationBranchWithoutChangingReviewBase()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "integration-only.txt"),
+                "integration branch contribution\n");
+            await GitAsync(repository, "add", "src/app/integration-only.txt");
+            await GitAsync(repository, "commit", "-m", "Add integration branch contribution");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "push", "origin", "beacon/integration");
+            await GitAsync(repository, "switch", "main");
+
+            var integrated = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using (var document = JsonDocument.Parse(integrated.Text))
+            {
+                Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+                Assert.Equal("integration", document.RootElement.GetProperty("source").GetString());
+                Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+                Assert.Equal("beacon/integration", document.RootElement.GetProperty("integrationBranch").GetString());
+                Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            }
+
+            Assert.Equal("integration branch contribution\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "integration-only.txt")));
+            Assert.Equal(string.Empty,
+                await GitAsync(worktree.RecoveryPath, "status", "--porcelain", "--untracked-files=all"));
+
+            var info = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitInfo, """{"kind":"branches"}""");
+            Assert.False(info.IsError, info.Text);
+            using (var document = JsonDocument.Parse(info.Text))
+            {
+                Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+                Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            }
+
+            var repeated = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+            Assert.False(repeated.IsError, repeated.Text);
+            using var repeatedDocument = JsonDocument.Parse(repeated.Text);
+            Assert.Equal("up-to-date", repeatedDocument.RootElement.GetProperty("status").GetString());
+            Assert.Equal(reviewBaseSha, repeatedDocument.RootElement.GetProperty("baseSha").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+
+    [Fact]
+    public async Task GitIntegrate_UsesLocalIntegrationBranchWhenOriginDoesNotHaveIt()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "local-integration.txt"),
+                "local integration branch contribution\n");
+            await GitAsync(repository, "add", "src/app/local-integration.txt");
+            await GitAsync(repository, "commit", "-m", "Create local integration contribution");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "switch", "main");
+
+            var integrated = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using var document = JsonDocument.Parse(integrated.Text);
+            Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+            Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            Assert.Equal(
+                "local integration branch contribution\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "local-integration.txt")));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitIntegrate_RejectsArbitrarySourceBranchNames()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var headBefore = await GitAsync(worktree.RecoveryPath, "rev-parse", "HEAD");
+
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"feature/agent-selected"}""");
+
+            Assert.True(result.IsError);
+            Assert.Contains("source must be base or integration", result.Text, StringComparison.Ordinal);
+            Assert.Equal(headBefore, await GitAsync(worktree.RecoveryPath, "rev-parse", "HEAD"));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+
+    [Fact]
+    public async Task GitIntegrate_IntegrationSourceIgnoresAnOldReviewBaseFetchRef()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await GitAsync(repository, "switch", "-c", "stale-review-base", reviewBaseSha);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "stale-base-only.txt"),
+                "stale review-base fetch ref\n");
+            await GitAsync(repository, "add", "src/app/stale-base-only.txt");
+            await GitAsync(repository, "commit", "-m", "Create a stale review-base fetch ref");
+            var staleBaseSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "update-ref",
+                $"refs/beacon/task/{taskId:N}/integration-base", staleBaseSha);
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration", reviewBaseSha);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "integration-only.txt"),
+                "fixed integration source\n");
+            await GitAsync(repository, "add", "src/app/integration-only.txt");
+            await GitAsync(repository, "commit", "-m", "Create fixed integration branch");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "switch", "main");
+
+            var result = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+
+            Assert.False(result.IsError, result.Text);
+            using var document = JsonDocument.Parse(result.Text);
+            Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("integration", document.RootElement.GetProperty("source").GetString());
+            Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+            Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            Assert.Equal(
+                "fixed integration source\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "integration-only.txt")));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitIntegrate_IntegrationConflictCanBeResolvedAndContinued()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var reviewBaseSha = worktree.BaseSha;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"),
+                "task branch version\n");
+            var committed = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change shared file on task branch"}""");
+            Assert.False(committed.IsError, committed.Text);
+
+            await GitAsync(repository, "switch", "-c", "beacon/integration");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"),
+                "integration branch version\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Change shared file on integration branch");
+            var integrationSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(repository, "push", "origin", "beacon/integration");
+            await GitAsync(repository, "switch", "main");
+
+            var integrated = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using (var document = JsonDocument.Parse(integrated.Text))
+            {
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+                Assert.Equal("integration", document.RootElement.GetProperty("source").GetString());
+                Assert.Equal(integrationSha, document.RootElement.GetProperty("targetSha").GetString());
+                Assert.Contains(
+                    "src/app/shared.txt",
+                    document.RootElement.GetProperty("files").EnumerateArray()
+                        .Select(item => item.GetString() ?? string.Empty));
+            }
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"),
+                "resolved integration conflict\n");
+            var continued = await ExecuteAsync(
+                authorization,
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.False(continued.IsError, continued.Text);
+            using (var document = JsonDocument.Parse(continued.Text))
+            {
+                Assert.Equal("integrated", document.RootElement.GetProperty("status").GetString());
+                Assert.Equal("integration", document.RootElement.GetProperty("source").GetString());
+                Assert.Equal(reviewBaseSha, document.RootElement.GetProperty("baseSha").GetString());
+                Assert.Equal(integrationSha, document.RootElement.GetProperty("integrationSha").GetString());
+            }
+
+            Assert.Equal("resolved integration conflict\n",
+                await File.ReadAllTextAsync(Path.Combine(worktree.WorkingDirectory, "shared.txt")));
+            Assert.Equal(string.Empty,
+                await GitAsync(worktree.RecoveryPath, "status", "--porcelain", "--untracked-files=all"));
+            var info = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitInfo, """{"kind":"branches"}""");
+            Assert.False(info.IsError, info.Text);
+            using var branch = JsonDocument.Parse(info.Text);
+            Assert.Equal(reviewBaseSha, branch.RootElement.GetProperty("baseSha").GetString());
+            Assert.Equal(integrationSha, branch.RootElement.GetProperty("integrationSha").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task GitCommit_WorksWhenProjectIsRepositoryRoot()
     {
@@ -250,7 +571,8 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             PipelineToolPolicy.GitInfo,
             PipelineToolPolicy.GitCommit,
-            PipelineToolPolicy.GitIntegrate
+            PipelineToolPolicy.GitIntegrate,
+            PipelineToolPolicy.GitPublish
         })
         {
             var definition = AgentTaskGitOperations.ToolDefinition(toolName);

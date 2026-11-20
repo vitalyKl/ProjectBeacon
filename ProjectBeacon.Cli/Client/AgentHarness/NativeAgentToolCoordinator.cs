@@ -119,8 +119,8 @@ internal sealed class NativeAgentToolCoordinator(
         foreach (var call in approvalCalls)
             executedTools.Add(await _toolExecutor.ExecuteAsync(executionContext, call, ct));
 
-        // repo_sync updates both the user's checkout and this snapshot. It must not overlap
-        // with any sibling tool that can read or write the worktree; run it after all siblings.
+        // File writes and patches mutate the task worktree; repo_sync updates the real
+        // checkout; task Git mutations update the task branch or remote. None may overlap.
         foreach (var call in exclusiveCalls)
             executedTools.Add(await _toolExecutor.ExecuteAsync(executionContext, call, ct));
 
