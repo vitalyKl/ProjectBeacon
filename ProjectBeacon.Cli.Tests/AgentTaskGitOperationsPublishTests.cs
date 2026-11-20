@@ -68,14 +68,15 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Theory]
-    [InlineData(true, null, true)]
-    [InlineData(false, null, false)]
-    [InlineData(false, "", false)]
-    [InlineData(false, "/tmp/ssh-agent.sock", true)]
-    public void CanUseSshAgent_RecognizesWindowsImplicitAgentAndUnixSocket(
-        bool isWindows, string? sshAgentSocket, bool expected)
+    [InlineData(true, null, @"\\.\pipe\openssh-ssh-agent")]
+    [InlineData(false, null, null)]
+    [InlineData(false, "", null)]
+    [InlineData(false, "/tmp/ssh-agent.sock", "/tmp/ssh-agent.sock")]
+    [InlineData(true, "/custom/agent.sock", "/custom/agent.sock")]
+    public void ResolveSshAgentSocket_UsesWindowsDefaultNamedPipeWhenNeeded(
+        bool isWindows, string? sshAgentSocket, string? expected)
     {
-        Assert.Equal(expected, AgentTaskGitOperations.CanUseSshAgent(isWindows, sshAgentSocket));
+        Assert.Equal(expected, AgentTaskGitOperations.ResolveSshAgentSocket(isWindows: isWindows, sshAgentSocket));
     }
 
     [Fact]
