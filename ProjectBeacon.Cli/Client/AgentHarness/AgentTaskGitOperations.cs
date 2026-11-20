@@ -635,7 +635,7 @@ internal static class AgentTaskGitOperations
 
         var changedPaths = await Git(
             context.WorktreeRoot, context.DisabledFilters, ct,
-            "diff", "--name-only", "-z", context.BaseSha + ".." + headSha);
+            "diff", "--no-renames", "--name-only", "-z", context.BaseSha + ".." + headSha);
         if (!Succeeded(changedPaths))
             return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
         var changedPathList = changedPaths.StdOut
