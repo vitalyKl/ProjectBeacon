@@ -71,6 +71,18 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(result.IsError);
             Assert.Contains("github.com/owner/repository", result.Text, StringComparison.Ordinal);
 
+            // A syntactically valid GitHub origin must get past branch, ancestry and
+            // changed-path verification before it is rejected for missing host auth.
+            await GitAsync(worktree.WorkingDirectory, "remote", "set-url", "origin", "https://github.com/owner/repository.git");
+            var unauthenticated = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitPublish,
+                """{"action":"publish","title":"Publish task branch","body":"Validation only","draft":true}""");
+            Assert.True(unauthenticated.IsError);
+            Assert.True(
+                unauthenticated.Text.Contains("GitHub CLI (gh)", StringComparison.Ordinal)
+                || unauthenticated.Text.Contains("not authenticated", StringComparison.OrdinalIgnoreCase),
+                unauthenticated.Text);
+
             var remoteRefs = await GitAsync(repository + "-origin.git", "show-ref", "--heads");
             Assert.DoesNotContain($"refs/heads/beacon/task/{taskId:N}", remoteRefs, StringComparison.Ordinal);
         }

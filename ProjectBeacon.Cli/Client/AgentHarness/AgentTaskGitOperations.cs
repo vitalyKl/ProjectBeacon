@@ -615,6 +615,10 @@ internal static class AgentTaskGitOperations
         if (operation.Active)
             return Error("Resolve the active merge or rebase with git_integrate before publishing.");
 
+        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "origin");
+        if (!Succeeded(origin) || !TryParseGitHubRemote(origin.StdOut.Trim(), out var repository))
+            return Error("Publishing requires origin to be a credential-free HTTPS or SSH URL for github.com/owner/repository.");
+
         var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
             "status", "--porcelain", "--untracked-files=all");
         if (!Succeeded(status))
@@ -635,7 +639,8 @@ internal static class AgentTaskGitOperations
 
         var changedPaths = await Git(
             context.WorktreeRoot, context.DisabledFilters, ct,
-            "diff", "--no-renames", "--name-only", "-z", context.BaseSha + ".." + headSha);
+            "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z",
+            context.BaseSha + ".." + headSha);
         if (!Succeeded(changedPaths))
             return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
         var changedPathList = changedPaths.StdOut
@@ -644,7 +649,8 @@ internal static class AgentTaskGitOperations
             return Error("The task branch has no file changes to publish.");
         var changeSummary = await Git(
             context.WorktreeRoot, context.DisabledFilters, ct,
-            "diff", "--summary", context.BaseSha + ".." + headSha);
+            "diff", "--no-ext-diff", "--no-textconv", "--summary",
+            context.BaseSha + ".." + headSha);
         if (!Succeeded(changeSummary))
             return GitFailure("Could not inspect file modes before publishing.", changeSummary.StdErr);
         if (changeSummary.StdOut.Contains("120000", StringComparison.Ordinal)
@@ -664,10 +670,6 @@ internal static class AgentTaskGitOperations
             "rev-list", "--count", context.BaseSha + ".." + headSha);
         if (!Succeeded(ahead) || !int.TryParse(ahead.StdOut.Trim(), out var aheadCount) || aheadCount <= 0)
             return Error("There are no task commits to publish relative to the pinned review base.");
-
-        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "origin");
-        if (!Succeeded(origin) || !TryParseGitHubRemote(origin.StdOut.Trim(), out var repository))
-            return Error("Publishing requires origin to be a credential-free HTTPS or SSH URL for github.com/owner/repository.");
 
         var ghPath = WorkstationProbe.Which("gh");
         if (ghPath is null)
