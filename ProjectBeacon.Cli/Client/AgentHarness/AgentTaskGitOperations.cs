@@ -18,6 +18,15 @@ internal static class AgentTaskGitOperations
     private const int MaxOutputCharacters = 12_000;
     private const int MaxPathLength = 400;
 
+    private static readonly string[] GitHubCliEnvironmentNames =
+    [
+        "PATH", "SystemRoot", "WINDIR", "COMSPEC",
+        "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+        "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR",
+        "GH_TOKEN", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR",
+        "LANG", "LC_ALL"
+    ];
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -696,7 +705,9 @@ internal static class AgentTaskGitOperations
         // that this branch contains publishable task changes. A separate rev-list count
         // adds no safety here and can fail independently of the already-validated diff.
 
-        var ghPath = WorkstationProbe.Which("gh");
+        var safePath = NativeCommandRunner.BuildSafePath(
+            Environment.GetEnvironmentVariable("PATH"), context.WorktreeRoot);
+        var ghPath = WorkstationProbe.Which("gh", safePath);
         if (ghPath is null)
             return Error("GitHub publishing requires GitHub CLI (gh). Install it and run gh auth login on this workstation.");
         var auth = await RunGitHubCliAsync(ghPath, context.WorktreeRoot, ct, "auth", "status", "--hostname", "github.com");
@@ -912,10 +923,41 @@ internal static class AgentTaskGitOperations
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        info.Environment["GH_PROMPT_DISABLED"] = "1";
+        var safePath = NativeCommandRunner.BuildSafePath(
+            Environment.GetEnvironmentVariable("PATH"), workingDirectory);
+        var inherited = BuildGitHubCliEnvironment(Environment.GetEnvironmentVariable);
+        info.Environment.Clear();
+        foreach (var pair in inherited)
+        {
+            if (!string.Equals(pair.Key, "PATH", StringComparison.OrdinalIgnoreCase))
+                info.Environment[pair.Key] = pair.Value;
+        }
+        info.Environment["PATH"] = safePath;
+        if (OperatingSystem.IsWindows())
+        {
+            var trustedCmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            info.Environment["COMSPEC"] = trustedCmd;
+        }
         foreach (var argument in arguments)
             info.ArgumentList.Add(argument);
         return await ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(90), ct);
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildGitHubCliEnvironment(
+        Func<string, string?> lookup)
+    {
+        ArgumentNullException.ThrowIfNull(lookup);
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var environment = new Dictionary<string, string>(
+            ClientConfiguration.CaptureAllowedEnvironment(GitHubCliEnvironmentNames, lookup), comparer)
+        {
+            ["GH_PROMPT_DISABLED"] = "1",
+            ["GH_PAGER"] = "cat",
+            ["PAGER"] = "cat",
+            ["GIT_TERMINAL_PROMPT"] = "0",
+            ["GH_NO_UPDATE_NOTIFIER"] = "1"
+        };
+        return environment;
     }
 
     internal static IReadOnlyDictionary<string, string>? BuildGitHubCredentialEnvironment(
