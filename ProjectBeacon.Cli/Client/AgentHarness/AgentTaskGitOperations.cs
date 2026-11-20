@@ -17,6 +17,7 @@ internal static class AgentTaskGitOperations
 {
     private const int MaxOutputCharacters = 12_000;
     private const int MaxPathLength = 400;
+    private const string IntegrationBranchName = "beacon/integration";
 
     private static readonly string[] GitHubCliEnvironmentNames =
     [
@@ -101,11 +102,12 @@ internal static class AgentTaskGitOperations
             "message"),
         PipelineToolPolicy.GitIntegrate => Definition(
             name,
-            "Refresh this task branch from its daemon-selected base branch, or continue/abort a reported conflict. Remote and branch are never supplied by the agent.",
+            "Refresh this task branch from its daemon-selected review base or the fixed beacon/integration branch, or continue/abort a reported conflict. source defaults to base; the agent cannot supply a remote or branch name.",
             new JsonObject
             {
                 ["action"] = EnumProperty("integrate", "continue", "abort"),
-                ["strategy"] = EnumProperty("rebase", "merge")
+                ["strategy"] = EnumProperty("rebase", "merge"),
+                ["source"] = EnumProperty("base", "integration")
             },
             "action"),
         PipelineToolPolicy.GitPublish => Definition(
@@ -273,12 +275,19 @@ internal static class AgentTaskGitOperations
         switch (kind)
         {
             case "branches":
-                return Success(new
                 {
-                    branch = context.BranchName,
-                    baseBranch = context.BaseBranch,
-                    baseSha = context.BaseSha
-                });
+                    var integration = await ReadIntegrationCheckpointAsync(context, ct);
+                    if (integration.Error is not null)
+                        return Error(integration.Error);
+                    return Success(new
+                    {
+                        branch = context.BranchName,
+                        baseBranch = context.BaseBranch,
+                        baseSha = context.BaseSha,
+                        integrationBranch = IntegrationBranchName,
+                        integrationSha = integration.Sha
+                    });
+                }
 
             case "status":
                 {
@@ -288,11 +297,16 @@ internal static class AgentTaskGitOperations
                     var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
                     if (!Succeeded(status) || !Succeeded(head))
                         return GitFailure("Could not read task branch status.");
+                    var integration = await ReadIntegrationCheckpointAsync(context, ct);
+                    if (integration.Error is not null)
+                        return Error(integration.Error);
                     return Success(new
                     {
                         branch = context.BranchName,
                         baseBranch = context.BaseBranch,
                         baseSha = context.BaseSha,
+                        integrationBranch = IntegrationBranchName,
+                        integrationSha = integration.Sha,
                         head = head.StdOut.Trim(),
                         status = Clip(status.StdOut)
                     });
@@ -428,11 +442,19 @@ internal static class AgentTaskGitOperations
         if (action is not ("integrate" or "continue" or "abort"))
             return Error("git_integrate action must be integrate, continue, or abort.");
 
+        if (action != "integrate" && args.ContainsKey("source"))
+            return Error("git_integrate source is available only with action=integrate.");
+
         if (action == "integrate")
         {
             var strategy = ReadString(args, "strategy");
             if (strategy is not ("rebase" or "merge"))
                 return Error("git_integrate action=integrate requires strategy=rebase or strategy=merge.");
+            var source = string.IsNullOrWhiteSpace(ReadString(args, "source"))
+                ? "base"
+                : ReadString(args, "source");
+            if (source is not ("base" or "integration"))
+                return Error("git_integrate source must be base or integration.");
 
             var state = await ReadOperationStateAsync(context, ct);
             if (state.Active)
@@ -443,11 +465,44 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(status))
                 return GitFailure("Could not inspect task branch status before integration.");
             if (!string.IsNullOrWhiteSpace(status.StdOut))
-                return Error("Commit or discard task worktree changes with git_commit before integrating the base branch.");
+                return Error("Commit or discard task worktree changes with git_commit before integrating a branch.");
 
-            var target = await FetchBaseAsync(context, ct);
+            var target = source == "base"
+                ? await FetchBaseAsync(context, ct)
+                : await FetchIntegrationAsync(context, ct);
             if (target.Error is not null)
                 return Error(target.Error);
+
+            if (source == "integration")
+            {
+                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", IntegrationPendingRef(context.TaskId), target.Sha!);
+                if (!Succeeded(pending))
+                    return GitFailure("Could not persist the integration-branch checkpoint before merging.", pending.StdErr);
+            }
+
+            // A retry after a lost acknowledgement, or a task branch that already contains
+            // the selected source, must not create a duplicate merge/rebase.
+            var alreadyIntegrated = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "merge-base", "--is-ancestor", target.Sha!, "HEAD");
+            if (Succeeded(alreadyIntegrated))
+            {
+                var checkpointError = await CompleteIntegrationSourceAsync(context, source, target.Sha!, ct);
+                if (checkpointError is not null)
+                    return Error("The selected branch is already integrated, but its checkpoint could not be saved: " + checkpointError);
+                return Success(new
+                {
+                    status = "up-to-date",
+                    source,
+                    strategy,
+                    baseBranch = context.BaseBranch,
+                    baseSha = source == "base" ? target.Sha : context.BaseSha,
+                    integrationBranch = source == "integration" ? IntegrationBranchName : null,
+                    integrationSha = source == "integration" ? target.Sha : null
+                });
+            }
+            if (alreadyIntegrated.TimedOut || alreadyIntegrated.ExitCode != 1)
+                return GitFailure("Could not verify whether the selected branch is already integrated.", alreadyIntegrated.StdErr);
 
             var integrate = strategy == "rebase"
                 ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
@@ -462,14 +517,26 @@ internal static class AgentTaskGitOperations
                 var operation = await ReadOperationStateAsync(context, ct);
                 var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
                 if (mergeConflicts.Count > 0)
-                    return Success(new { status = "conflict", strategy, targetSha = target.Sha, files = mergeConflicts });
-                return GitFailure("Git could not integrate the task base branch. No resolvable conflict state was opened.");
+                    return Success(new { status = "conflict", source, strategy, targetSha = target.Sha, files = mergeConflicts });
+                if (source == "integration")
+                    _ = await Git(context.WorktreeRoot, context.DisabledFilters, CancellationToken.None,
+                        "update-ref", "-d", IntegrationPendingRef(context.TaskId));
+                return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.");
             }
 
-            var update = await UpdateMetadataBaseShaAsync(context, target.Sha!, ct);
+            var update = await CompleteIntegrationSourceAsync(context, source, target.Sha!, ct);
             if (update is not null)
-                return Error("The branch was integrated, but the saved base checkpoint could not be updated: " + update);
-            return Success(new { status = "integrated", strategy, baseBranch = context.BaseBranch, baseSha = target.Sha });
+                return Error("The branch was integrated, but the saved source checkpoint could not be updated: " + update);
+            return Success(new
+            {
+                status = "integrated",
+                source,
+                strategy,
+                baseBranch = context.BaseBranch,
+                baseSha = source == "base" ? target.Sha : context.BaseSha,
+                integrationBranch = source == "integration" ? IntegrationBranchName : null,
+                integrationSha = source == "integration" ? target.Sha : null
+            });
         }
 
         var active = await ReadOperationStateAsync(context, ct);
@@ -481,9 +548,11 @@ internal static class AgentTaskGitOperations
             var abort = active.Rebase
                 ? await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rebase", "--abort")
                 : await Git(context.WorktreeRoot, context.DisabledFilters, ct, "merge", "--abort");
-            return Succeeded(abort)
-                ? Success(new { status = "aborted" })
-                : GitFailure("Could not abort the in-progress Git integration.");
+            if (!Succeeded(abort))
+                return GitFailure("Could not abort the in-progress Git integration.");
+            _ = await Git(context.WorktreeRoot, context.DisabledFilters, CancellationToken.None,
+                "update-ref", "-d", IntegrationPendingRef(context.TaskId));
+            return Success(new { status = "aborted" });
         }
 
         var conflicts = await ReadConflictsAsync(context, ct);
@@ -528,15 +597,32 @@ internal static class AgentTaskGitOperations
             return GitFailure("Git could not continue the integration.");
         }
 
-        var baseRef = IntegrationBaseRef(context.TaskId);
-        var targetHead = await Git(context.RepositoryRoot, context.DisabledFilters, ct, "rev-parse", "--verify", baseRef);
-        if (!Succeeded(targetHead) || !IsGitSha(targetHead.StdOut.Trim()))
-            return GitFailure("The integration finished but its fetched base commit could not be verified.");
+        var baseRef = await ReadRefShaAsync(context, IntegrationBaseRef(context.TaskId), ct);
+        var integrationPendingRef = await ReadRefShaAsync(context, IntegrationPendingRef(context.TaskId), ct);
+        if (baseRef.Error is not null || integrationPendingRef.Error is not null)
+            return Error(baseRef.Error ?? integrationPendingRef.Error!);
 
-        var metadataError = await UpdateMetadataBaseShaAsync(context, targetHead.StdOut.Trim(), ct);
+        var basePending = baseRef.Sha is not null
+            && !string.Equals(baseRef.Sha, context.BaseSha, StringComparison.OrdinalIgnoreCase);
+        var integrationPending = integrationPendingRef.Sha is not null;
+        if (basePending == integrationPending)
+            return Error("Could not identify a unique daemon-selected source for the completed integration.");
+
+        var sourceName = integrationPending ? "integration" : "base";
+        var targetSha = integrationPending ? integrationPendingRef.Sha! : baseRef.Sha!;
+        var metadataError = await CompleteIntegrationSourceAsync(context, sourceName, targetSha, ct);
         if (metadataError is not null)
-            return Error("The integration finished, but the saved base checkpoint could not be updated: " + metadataError);
-        return Success(new { status = "integrated", baseBranch = context.BaseBranch, baseSha = targetHead.StdOut.Trim() });
+            return Error("The integration finished, but the saved source checkpoint could not be updated: " + metadataError);
+
+        return Success(new
+        {
+            status = "integrated",
+            source = sourceName,
+            baseBranch = context.BaseBranch,
+            baseSha = sourceName == "base" ? targetSha : context.BaseSha,
+            integrationBranch = sourceName == "integration" ? IntegrationBranchName : null,
+            integrationSha = sourceName == "integration" ? targetSha : null
+        });
     }
 
     private static async Task<(string? Sha, string? Error)> FetchBaseAsync(GitContext context, CancellationToken ct)
@@ -574,8 +660,6 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
                 return (null, "No origin remote or local recorded base branch is available.");
 
-            // Keep one task-specific integration target so continue can verify and persist
-            // the exact base SHA even when this repository has no origin remote.
             var updateLocalTarget = await Git(
                 context.WorktreeRoot, context.DisabledFilters, ct,
                 "update-ref", targetRef, local.StdOut.Trim());
@@ -589,7 +673,122 @@ internal static class AgentTaskGitOperations
             : (null, "Could not verify the fetched base branch commit.");
     }
 
+    private static async Task<(string? Sha, string? Error)> FetchIntegrationAsync(GitContext context, CancellationToken ct)
+    {
+        var validate = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+            "check-ref-format", "--branch", IntegrationBranchName);
+        if (!Succeeded(validate))
+            return (null, "The fixed ProjectBeacon integration branch name is invalid.");
+
+        var targetRef = IntegrationBranchRef(context.TaskId);
+        var remotes = await Git(context.RepositoryRoot, context.DisabledFilters, ct, "remote");
+        if (!Succeeded(remotes))
+            return (null, "Could not inspect configured Git remotes.");
+
+        var hasOrigin = remotes.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(name => string.Equals(name.Trim(), "origin", StringComparison.Ordinal));
+        if (hasOrigin)
+        {
+            var remote = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                "remote", "get-url", "--all", "origin");
+            if (!Succeeded(remote))
+                return (null, "Could not resolve the configured origin URL safely.");
+            var urls = remote.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => value.Trim()).Where(value => value.Length > 0).ToArray();
+            if (urls.Length != 1)
+                return (null, "Integration requires exactly one configured origin URL.");
+
+            var url = urls[0];
+            if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
+                return (null, "The configured origin uses an unsupported Git transport.");
+            if (IsSshRemote(url) && !HasHostSshAgent())
+                return (null, "The origin uses SSH, but no host SSH agent is available. Start ssh-agent and load the GitHub key before integrating.");
+
+            var remoteBranch = await RunRemoteGitAsync(
+                context.RepositoryRoot, context.DisabledFilters, ct, url,
+                "ls-remote", "--heads", "--", url, $"refs/heads/{IntegrationBranchName}");
+            if (!Succeeded(remoteBranch))
+                return (null, "Could not inspect the remote integration branch.");
+            var existsRemotely = remoteBranch.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.EndsWith($"\\trefs/heads/{IntegrationBranchName}", StringComparison.Ordinal));
+            if (existsRemotely)
+            {
+                var fetch = await RunRemoteGitAsync(
+                    context.RepositoryRoot, context.DisabledFilters, ct, url,
+                    "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                    "--", url, $"+refs/heads/{IntegrationBranchName}:{targetRef}");
+                if (!Succeeded(fetch))
+                    return (null, "Could not fetch the remote integration branch. Check workstation connectivity and origin configuration.");
+            }
+            else
+            {
+                var local = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                    "rev-parse", "--verify", $"refs/heads/{IntegrationBranchName}");
+                if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
+                    return (null, "Neither origin nor the local repository contains the fixed integration branch.");
+                var update = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", targetRef, local.StdOut.Trim());
+                if (!Succeeded(update))
+                    return (null, "Could not record the local integration branch commit.");
+            }
+        }
+        else
+        {
+            var local = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+                "rev-parse", "--verify", $"refs/heads/{IntegrationBranchName}");
+            if (!Succeeded(local) || !IsGitSha(local.StdOut.Trim()))
+                return (null, "No origin or local ProjectBeacon integration branch is available.");
+            var update = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                "update-ref", targetRef, local.StdOut.Trim());
+            if (!Succeeded(update))
+                return (null, "Could not record the local integration branch commit.");
+        }
+
+        var head = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", targetRef);
+        return Succeeded(head) && IsGitSha(head.StdOut.Trim())
+            ? (head.StdOut.Trim(), null)
+            : (null, "Could not verify the fetched integration branch commit.");
+    }
+
+    private static async Task<string?> CompleteIntegrationSourceAsync(
+        GitContext context, string source, string targetSha, CancellationToken ct)
+    {
+        if (source == "base")
+            return await UpdateMetadataBaseShaAsync(context, targetSha, ct);
+        if (source != "integration" || !IsGitSha(targetSha))
+            return "the integration source checkpoint is invalid";
+
+        var checkpoint = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "update-ref", IntegrationCheckpointRef(context.TaskId), targetSha);
+        if (!Succeeded(checkpoint))
+            return "the integration branch was merged but its checkpoint could not be persisted";
+        var clearPending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "update-ref", "-d", IntegrationPendingRef(context.TaskId));
+        return Succeeded(clearPending)
+            ? null
+            : "the integration checkpoint was saved but its pending marker could not be cleared";
+    }
+
+    private static async Task<(string? Sha, string? Error)> ReadRefShaAsync(
+        GitContext context, string reference, CancellationToken ct)
+    {
+        var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "rev-parse", "--verify", reference);
+        if (Succeeded(result) && IsGitSha(result.StdOut.Trim()))
+            return (result.StdOut.Trim(), null);
+        if (!result.TimedOut && result.ExitCode == 128)
+            return (null, null);
+        return (null, "Could not read a saved task integration checkpoint.");
+    }
+
+    private static async Task<(string? Sha, string? Error)> ReadIntegrationCheckpointAsync(
+        GitContext context, CancellationToken ct) =>
+        await ReadRefShaAsync(context, IntegrationCheckpointRef(context.TaskId), ct);
+
     private static string IntegrationBaseRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-base";
+    private static string IntegrationBranchRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-branch";
+    private static string IntegrationPendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-pending";
+    private static string IntegrationCheckpointRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-checkpoint";
 
     private sealed record PullRequestInfo(int Number, string Url, string BaseRefName, string State, bool IsDraft);
 
