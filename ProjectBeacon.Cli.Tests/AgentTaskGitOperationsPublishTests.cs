@@ -185,7 +185,7 @@ public sealed partial class AgentTaskGitOperationsTests
     public void BuildGitHubCredentialEnvironment_PreservesWindowsProfileVariables()
     {
         var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
-            null, "C:\\Users\\test\\AppData\\Roaming\\GitHub CLI",
+            null, null,
             "C:\\Users\\test\\AppData\\Roaming",
             "C:\\Users\\test",
             null, null, null, null, isWindows: true);
@@ -195,7 +195,7 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal("C:\\Users\\test", environment["USERPROFILE"]);
         Assert.Equal("C:\\Users\\test\\AppData\\Roaming", environment["APPDATA"]);
         Assert.Equal("C:\\Users\\test\\AppData\\Roaming\\GitHub CLI", environment["GH_CONFIG_DIR"]);
-        Assert.Equal("C:\\Users\\test\\AppData\\Roaming\\GitHub CLI", environment["XDG_CONFIG_HOME"]);
+        Assert.False(environment.ContainsKey("XDG_CONFIG_HOME"));
     }
 
     [Fact]
