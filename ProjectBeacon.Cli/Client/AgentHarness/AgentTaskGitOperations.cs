@@ -1091,6 +1091,16 @@ internal static class AgentTaskGitOperations
         };
         if (!string.IsNullOrWhiteSpace(configDirectory))
             environment["GH_CONFIG_DIR"] = configDirectory;
+        if (!string.IsNullOrWhiteSpace(homeDirectory))
+        {
+            environment["HOME"] = homeDirectory;
+            if (isWindows)
+                environment["USERPROFILE"] = homeDirectory;
+        }
+        if (!string.IsNullOrWhiteSpace(xdgConfigHome))
+            environment["XDG_CONFIG_HOME"] = xdgConfigHome;
+        if (isWindows && !string.IsNullOrWhiteSpace(appDataDirectory))
+            environment["APPDATA"] = appDataDirectory;
         if (!string.IsNullOrWhiteSpace(ghToken))
             environment["GH_TOKEN"] = ghToken;
         if (!string.IsNullOrWhiteSpace(githubToken))
