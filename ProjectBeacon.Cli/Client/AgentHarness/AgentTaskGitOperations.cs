@@ -23,7 +23,7 @@ internal static class AgentTaskGitOperations
         "PATH", "SystemRoot", "WINDIR", "COMSPEC",
         "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
         "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "GH_CONFIG_DIR",
-        "GH_TOKEN", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR",
+        "GH_TOKEN", "GITHUB_TOKEN", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR",
         "LANG", "LC_ALL"
     ];
 
@@ -729,6 +729,7 @@ internal static class AgentTaskGitOperations
                 ? home
                 : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Environment.GetEnvironmentVariable("GH_TOKEN"),
+            Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
             Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
             Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
             Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
@@ -971,6 +972,7 @@ internal static class AgentTaskGitOperations
         string? xdgConfigHome,
         string? appDataDirectory,
         string? homeDirectory,
+        string? ghToken,
         string? githubToken,
         string? dbusSessionBusAddress,
         string? xdgRuntimeDirectory,
@@ -980,7 +982,10 @@ internal static class AgentTaskGitOperations
     {
         var configDirectory = ResolveGitHubConfigDirectory(
             configuredDirectory, xdgConfigHome, appDataDirectory, homeDirectory, isWindows);
-        if (string.IsNullOrWhiteSpace(configDirectory) && string.IsNullOrWhiteSpace(githubToken))
+        if (string.IsNullOrWhiteSpace(configDirectory)
+            && string.IsNullOrWhiteSpace(ghToken)
+            && string.IsNullOrWhiteSpace(githubToken)
+            && string.IsNullOrWhiteSpace(sshAgentSocket))
             return null;
 
         var environment = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -989,8 +994,10 @@ internal static class AgentTaskGitOperations
         };
         if (!string.IsNullOrWhiteSpace(configDirectory))
             environment["GH_CONFIG_DIR"] = configDirectory;
+        if (!string.IsNullOrWhiteSpace(ghToken))
+            environment["GH_TOKEN"] = ghToken;
         if (!string.IsNullOrWhiteSpace(githubToken))
-            environment["GH_TOKEN"] = githubToken;
+            environment["GITHUB_TOKEN"] = githubToken;
         if (!string.IsNullOrWhiteSpace(dbusSessionBusAddress))
             environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
         if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
