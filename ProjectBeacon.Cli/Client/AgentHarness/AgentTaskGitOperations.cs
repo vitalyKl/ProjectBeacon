@@ -978,8 +978,7 @@ internal static class AgentTaskGitOperations
             : Environment.GetEnvironmentVariable("HOME")
                 ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var knownHostsPath = ResolveHostKnownHostsPath(homeDirectory);
-        if (knownHostsPath is not null)
-            environment["GIT_SSH_COMMAND"] = BuildSshCommand(knownHostsPath, isWindows);
+        environment["GIT_SSH_COMMAND"] = BuildSshCommand(knownHostsPath, isWindows);
         return environment.Count > 0 ? environment : null;
     }
 
@@ -993,13 +992,15 @@ internal static class AgentTaskGitOperations
             ? null
             : Path.Combine(homeDirectory, ".ssh", "known_hosts");
 
-    internal static string BuildSshCommand(string knownHostsPath, bool isWindows)
+    internal static string BuildSshCommand(string? knownHostsPath, bool isWindows)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(knownHostsPath);
+        const string baseCommand = "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no";
+        if (string.IsNullOrWhiteSpace(knownHostsPath))
+            return baseCommand;
+
         var normalizedPath = isWindows ? knownHostsPath.Replace('\\', '/') : knownHostsPath;
         var quotedPath = "'" + normalizedPath.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
-        return "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no"
-            + " -o UserKnownHostsFile=" + quotedPath;
+        return baseCommand + " -o UserKnownHostsFile=" + quotedPath;
     }
 
     private static bool HasHostSshAgent()
