@@ -163,7 +163,7 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>("The review proof does not identify its daemon-selected target branch.", ErrorKind.Conflict);
 
         var attempt = LandingAttempt.Start(
-            task.ProjectId, task.Id, reviewRun.Id, userId, device.Id, landingTargetBranch,
+            task.ProjectId, task.Id, reviewRun.Id, command.Actor.UserId!.Value, device.Id, landingTargetBranch,
             reviewRun.CheckedSourceSha!, reviewRun.CheckedTreeSha!, expectedCommandHash, rationale);
         attempt.SetGitPolicySnapshot(gitPolicy.Revision, policySnapshot);
         attempt.MarkDispatchPending("Preview");
@@ -695,11 +695,13 @@ public static class LandingAuthorizationPolicy
 {
     public static bool CanRequestLanding(ActorContext actor, Guid projectId)
     {
-        if (projectId == Guid.Empty)
+        if (projectId == Guid.Empty
+            || actor.UserId is not { } userId
+            || userId == Guid.Empty)
             return false;
 
         if (actor.IsHuman)
-            return actor.UserId is { } userId && userId != Guid.Empty;
+            return true;
 
         return actor.IsApiToken
             && actor.ProjectId == projectId
