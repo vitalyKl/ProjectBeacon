@@ -731,6 +731,8 @@ internal static class AgentTaskGitOperations
             Environment.GetEnvironmentVariable("GH_TOKEN"),
             Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
             Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            Environment.GetEnvironmentVariable("SSH_AGENT_PID"),
             OperatingSystem.IsWindows());
         if (credentialEnvironment is null)
             return Error("Could not resolve the host GitHub CLI configuration or credential environment for the isolated Git helper.");
@@ -977,6 +979,8 @@ internal static class AgentTaskGitOperations
         string? githubToken,
         string? dbusSessionBusAddress,
         string? xdgRuntimeDirectory,
+        string? sshAgentSocket,
+        string? sshAgentPid,
         bool isWindows)
     {
         var configDirectory = ResolveGitHubConfigDirectory(
@@ -996,8 +1000,6 @@ internal static class AgentTaskGitOperations
             environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
         if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
             environment["XDG_RUNTIME_DIR"] = xdgRuntimeDirectory;
-        var sshAgentSocket = Environment.GetEnvironmentVariable("SSH_AUTH_SOCK");
-        var sshAgentPid = Environment.GetEnvironmentVariable("SSH_AGENT_PID");
         if (!string.IsNullOrWhiteSpace(sshAgentSocket))
             environment["SSH_AUTH_SOCK"] = sshAgentSocket;
         if (!string.IsNullOrWhiteSpace(sshAgentPid))
