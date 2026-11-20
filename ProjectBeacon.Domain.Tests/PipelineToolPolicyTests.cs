@@ -62,7 +62,7 @@ public sealed class PipelineToolPolicyTests
             new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate },
             PipelineToolPolicy.GitToolsForRole("Planner"));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPublish },
             PipelineToolPolicy.GitToolsForRole("Actor"));
         Assert.Equal(
             new[] { PipelineToolPolicy.GitInfo },
@@ -77,5 +77,6 @@ public sealed class PipelineToolPolicyTests
         Assert.Contains(PipelineToolPolicy.GitInfo, PipelineToolPolicy.InteractivePlanTools);
         Assert.Contains(PipelineToolPolicy.GitCommit, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Contains(PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.PipelinePlanDeniedTools);
+        Assert.Contains(PipelineToolPolicy.GitPublish, PipelineToolPolicy.PipelinePlanDeniedTools);
     }
 }
