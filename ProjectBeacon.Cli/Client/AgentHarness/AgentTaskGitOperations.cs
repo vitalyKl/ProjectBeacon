@@ -866,6 +866,7 @@ internal static class AgentTaskGitOperations
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        info.Environment["GH_PROMPT_DISABLED"] = "1";
         foreach (var argument in arguments)
             info.ArgumentList.Add(argument);
         return await ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(90), ct);

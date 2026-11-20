@@ -59,6 +59,12 @@ public sealed partial class AgentTaskGitOperationsTests
                 """{"message":"Prepare task branch for GitHub publish test"}""");
             Assert.False(committed.IsError, committed.Text);
 
+            var invalidArguments = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitPublish,
+                """{"action":"publish","title":"Publish task branch","remote":"https://github.com/attacker/repository"}""");
+            Assert.True(invalidArguments.IsError);
+            Assert.Contains("only action, title, body, and draft", invalidArguments.Text, StringComparison.Ordinal);
+
             var result = await ExecuteAsync(
                 authorization, PipelineToolPolicy.GitPublish,
                 """{"action":"publish","title":"Publish task branch","body":"Test only","draft":true}""");
