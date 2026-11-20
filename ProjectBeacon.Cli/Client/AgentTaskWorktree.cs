@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Client;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 /// <summary>
 /// A durable worktree and branch shared by every Actor session for one task.
