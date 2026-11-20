@@ -168,6 +168,9 @@ public sealed partial class AgentTaskGitOperationsTests
 
         Assert.NotNull(environment);
         Assert.Equal("custom-gh", environment["GH_CONFIG_DIR"]);
+        Assert.Equal("home", environment["HOME"]);
+        Assert.Equal("xdg", environment["XDG_CONFIG_HOME"]);
+        Assert.Equal("appdata", environment["APPDATA"]);
         Assert.Equal("gh-token", environment["GH_TOKEN"]);
         Assert.Equal("github-token", environment["GITHUB_TOKEN"]);
         Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
@@ -186,6 +189,7 @@ public sealed partial class AgentTaskGitOperationsTests
 
         Assert.NotNull(environment);
         Assert.False(environment.ContainsKey("GH_CONFIG_DIR"));
+        Assert.False(environment.ContainsKey("HOME"));
         Assert.Equal("github-token", environment["GITHUB_TOKEN"]);
         Assert.False(environment.ContainsKey("GH_TOKEN"));
     }
