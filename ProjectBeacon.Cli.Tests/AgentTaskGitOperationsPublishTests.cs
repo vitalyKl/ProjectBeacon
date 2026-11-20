@@ -44,8 +44,6 @@ public sealed partial class AgentTaskGitOperationsTests
             ["GH_CONFIG_DIR"] = "host-gh",
             ["GH_TOKEN"] = "host-token",
             ["DBUS_SESSION_BUS_ADDRESS"] = "host-dbus",
-            ["SSH_AUTH_SOCK"] = "/tmp/ssh-agent.sock",
-            ["SSH_AGENT_PID"] = "1234",
             ["BEACON_API_TOKEN"] = "beacon-secret",
             ["GITHUB_TOKEN"] = "workflow-secret",
             ["GH_ENTERPRISE_TOKEN"] = "enterprise-secret",
@@ -60,12 +58,12 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal("host-gh", environment["GH_CONFIG_DIR"]);
         Assert.Equal("host-token", environment["GH_TOKEN"]);
         Assert.Equal("host-dbus", environment["DBUS_SESSION_BUS_ADDRESS"]);
-        Assert.Equal("/tmp/ssh-agent.sock", environment["SSH_AUTH_SOCK"]);
-        Assert.Equal("1234", environment["SSH_AGENT_PID"]);
         Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
         Assert.False(environment.ContainsKey("BEACON_API_TOKEN"));
         Assert.False(environment.ContainsKey("GITHUB_TOKEN"));
         Assert.False(environment.ContainsKey("GH_ENTERPRISE_TOKEN"));
+        Assert.False(environment.ContainsKey("SSH_AUTH_SOCK"));
+        Assert.False(environment.ContainsKey("SSH_AGENT_PID"));
         Assert.False(environment.ContainsKey("UNRELATED_SECRET"));
     }
 
@@ -74,7 +72,8 @@ public sealed partial class AgentTaskGitOperationsTests
     {
         var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
             "custom-gh", "xdg", "appdata", "home", "host-token",
-            "unix:abstract=/tmp/dbus", "/run/user/1000", isWindows: false);
+            "unix:abstract=/tmp/dbus", "/run/user/1000",
+            "/tmp/ssh-agent.sock", "1234", isWindows: false);
 
         Assert.NotNull(environment);
         Assert.Equal("custom-gh", environment["GH_CONFIG_DIR"]);
@@ -82,6 +81,8 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
         Assert.Equal("unix:abstract=/tmp/dbus", environment["DBUS_SESSION_BUS_ADDRESS"]);
         Assert.Equal("/run/user/1000", environment["XDG_RUNTIME_DIR"]);
+        Assert.Equal("/tmp/ssh-agent.sock", environment["SSH_AUTH_SOCK"]);
+        Assert.Equal("1234", environment["SSH_AGENT_PID"]);
         Assert.False(environment.ContainsKey("BEACON_API_TOKEN"));
         Assert.False(environment.ContainsKey("GITHUB_TOKEN"));
     }
@@ -90,7 +91,7 @@ public sealed partial class AgentTaskGitOperationsTests
     public void BuildGitHubCredentialEnvironment_AllowsEnvironmentTokenWithoutConfigDirectory()
     {
         var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
-            null, null, null, null, "host-token", null, null, isWindows: true);
+            null, null, null, null, "host-token", null, null, null, null, isWindows: true);
 
         Assert.NotNull(environment);
         Assert.False(environment.ContainsKey("GH_CONFIG_DIR"));
