@@ -1007,9 +1007,18 @@ internal static class AgentTaskGitOperations
             && uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsSshRemote(string remoteUrl)
-        => remoteUrl.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
-            || Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
-                && uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase);
+    {
+        if (Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var value = remoteUrl.Trim();
+        var colon = value.IndexOf(':');
+        var separator = value.IndexOfAny(['/', '\\']);
+        return colon > 0
+            && (separator < 0 || colon < separator)
+            && value[..colon].Contains('@');
+    }
 
     internal static IReadOnlyDictionary<string, string>? BuildGitHubCredentialEnvironment(
         string? configuredDirectory,
