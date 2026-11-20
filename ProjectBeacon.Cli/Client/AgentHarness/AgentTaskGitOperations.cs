@@ -1023,6 +1023,18 @@ internal static class AgentTaskGitOperations
                 $"This task branch already has pull request #{differentBase.Number} targeting '{differentBase.BaseRefName}' ({differentBase.Url}). "
                 + $"The daemon-selected review base is '{baseBranch}'; retarget that PR explicitly before publishing again.");
         if (matchingBase is { State: "MERGED" } merged)
+        {
+            var mergedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                ghPath, context.WorktreeRoot, repository, merged.Number, ct);
+            if (mergedSnapshot.Error is not null)
+                return Error("The task PR is merged, but its exact merged head could not be verified. " + mergedSnapshot.Error);
+            var mergedView = mergedSnapshot.View!;
+            if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                    mergedView, "MERGED", baseBranch, headSha))
+                return Error(
+                    $"Task branch {context.BranchName} has a merged PR #{merged.Number}, but that PR does not contain the current task HEAD {headSha}. "
+                    + "The current task changes have not been confirmed as merged; create a new task branch for additional work.");
+
             return Success(new
             {
                 published = true,
@@ -1032,9 +1044,12 @@ internal static class AgentTaskGitOperations
                 baseBranch,
                 headSha,
                 pullRequestNumber = merged.Number,
-                pullRequestUrl = merged.Url,
-                draft = false
+                pullRequestUrl = mergedView.Url,
+                draft = false,
+                mergedAt = mergedView.MergedAt,
+                mergeCommitSha = mergedView.MergeCommitSha
             });
+        }
         if (matchingBase is { State: "CLOSED" } closed)
             return Error(
                 $"Pull request #{closed.Number} for this task branch is already closed ({closed.Url}). "
@@ -1069,6 +1084,18 @@ internal static class AgentTaskGitOperations
                 push.StdErr);
 
         if (matchingBase is { State: "OPEN" } open)
+        {
+            var openSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                ghPath, context.WorktreeRoot, repository, open.Number, ct);
+            if (openSnapshot.Error is not null)
+                return Error("The task branch was pushed, but its existing pull request could not be verified. " + openSnapshot.Error);
+            var openView = openSnapshot.View!;
+            if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                    openView, "OPEN", baseBranch, headSha))
+                return Error(
+                    $"The task branch was pushed at {headSha}, but existing PR #{open.Number} does not show that exact HEAD and base. "
+                    + "Inspect git_pr status before proceeding.");
+
             return Success(new
             {
                 published = true,
@@ -1078,9 +1105,10 @@ internal static class AgentTaskGitOperations
                 baseBranch,
                 headSha,
                 pullRequestNumber = open.Number,
-                pullRequestUrl = open.Url,
-                draft = open.IsDraft
+                pullRequestUrl = openView.Url,
+                draft = openView.IsDraft
             });
+        }
 
         var createArguments = new List<string>
         {
@@ -1102,18 +1130,26 @@ internal static class AgentTaskGitOperations
                 pull => string.Equals(pull.BaseRefName, baseBranch, StringComparison.Ordinal)
                     && string.Equals(pull.State, "OPEN", StringComparison.Ordinal));
             if (raced is not null)
-                return Success(new
-                {
-                    published = true,
-                    pullRequestCreated = false,
-                    repository,
-                    branch = context.BranchName,
-                    baseBranch,
-                    headSha,
-                    pullRequestNumber = raced.Number,
-                    pullRequestUrl = raced.Url,
-                    draft = raced.IsDraft
-                });
+            {
+                var racedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                    ghPath, context.WorktreeRoot, repository, raced.Number, ct);
+                if (racedSnapshot.Error is null
+                    && racedSnapshot.View is { } racedView
+                    && AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                        racedView, "OPEN", baseBranch, headSha))
+                    return Success(new
+                    {
+                        published = true,
+                        pullRequestCreated = false,
+                        repository,
+                        branch = context.BranchName,
+                        baseBranch,
+                        headSha,
+                        pullRequestNumber = raced.Number,
+                        pullRequestUrl = racedView.Url,
+                        draft = racedView.IsDraft
+                    });
+            }
             return Error(
                 "The task branch was pushed, but GitHub did not create the pull request. "
                 + "Check GitHub CLI permissions and retry. " + Clip(created.StdErr.Trim()));
@@ -1126,6 +1162,22 @@ internal static class AgentTaskGitOperations
         if (pullRequestUrl is null)
             return Error("The task branch was pushed, but GitHub CLI did not return a pull request URL. Check the repository pull request state before retrying.");
 
+        var pullRequestNumberText = pullRequestUrl.TrimEnd('/').Split('/').LastOrDefault();
+        if (!int.TryParse(pullRequestNumberText, NumberStyles.None, CultureInfo.InvariantCulture, out var pullRequestNumber)
+            || pullRequestNumber <= 0)
+            return Error("The task branch was pushed and GitHub returned a PR URL, but its pull request number could not be parsed safely: " + pullRequestUrl);
+
+        var createdSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, pullRequestNumber, ct);
+        if (createdSnapshot.Error is not null)
+            return Error("The task branch was pushed and its PR was created, but the resulting PR state could not be verified. " + createdSnapshot.Error);
+        var createdView = createdSnapshot.View!;
+        if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                createdView, "OPEN", baseBranch, headSha)
+            || createdView.IsDraft != draft)
+            return Error(
+                "The task branch was pushed and its PR was created, but GitHub returned a different head, base, or draft state. Inspect git_pr status before proceeding.");
+
         return Success(new
         {
             published = true,
@@ -1134,8 +1186,9 @@ internal static class AgentTaskGitOperations
             branch = context.BranchName,
             baseBranch,
             headSha,
-            pullRequestUrl,
-            draft
+            pullRequestNumber,
+            pullRequestUrl = createdView.Url,
+            draft = createdView.IsDraft
         });
     }
 
