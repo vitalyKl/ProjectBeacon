@@ -159,6 +159,24 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     }
 
     [Fact]
+    public void GitHubPullRequestLookup_UsesSupportedLocalHeadBranchFilter()
+    {
+        var arguments = AgentTaskGitOperations.BuildListPullRequestsArguments(
+            "example/repository",
+            "beacon/task/0123456789abcdef0123456789abcdef");
+
+        Assert.Equal(
+            new[]
+            {
+                "pr", "list", "--repo", "example/repository",
+                "--head", "beacon/task/0123456789abcdef0123456789abcdef",
+                "--state", "all",
+                "--json", "number,url,baseRefName,state,isDraft"
+            },
+            arguments);
+    }
+
+    [Fact]
     public void GitPullRequest_IsARegisteredStructuredGitTool()
     {
         Assert.True(AgentTaskGitOperations.IsGitTool(PipelineToolPolicy.GitPullRequest));
