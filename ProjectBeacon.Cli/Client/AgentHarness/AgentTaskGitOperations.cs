@@ -557,9 +557,28 @@ internal static class AgentTaskGitOperations
             if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
                 return (null, "The configured origin uses an unsupported Git transport; no integration was attempted.");
 
-            var fetch = await Git(context.RepositoryRoot, context.DisabledFilters, ct,
+            var fetchArguments = new List<string>();
+            IReadOnlyDictionary<string, string>? fetchEnvironment = null;
+            if (IsGitHubHttpsRemote(url))
+            {
+                fetchEnvironment = BuildHostGitHubCredentialEnvironment();
+                if (fetchEnvironment is not null)
+                    fetchArguments.AddRange(["-c", "credential.helper=!gh auth git-credential"]);
+            }
+            else if (IsSshRemote(url))
+            {
+                fetchEnvironment = BuildSshAgentEnvironment(
+                    Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+                    Environment.GetEnvironmentVariable("SSH_AGENT_PID"));
+            }
+            fetchArguments.AddRange([
                 "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
-                "--", url, $"+refs/heads/{context.BaseBranch}:{targetRef}");
+                "--", url, $"+refs/heads/{context.BaseBranch}:{targetRef}"
+            ]);
+            var fetch = fetchEnvironment is null
+                ? await Git(context.RepositoryRoot, context.DisabledFilters, ct, [.. fetchArguments])
+                : await AgentSessionWorktree.RunGitWithEnvironmentAsync(
+                    context.RepositoryRoot, ct, context.DisabledFilters, fetchEnvironment, [.. fetchArguments]);
             if (!Succeeded(fetch))
                 return (null, "Could not fetch the recorded base branch. Check workstation connectivity and origin configuration.");
         }
@@ -721,20 +740,7 @@ internal static class AgentTaskGitOperations
         // Git runs with an isolated HOME/APPDATA. Point only the bounded credential-helper
         // subprocesses back at the host gh config and keyring session; never copy a token
         // into persistent Git configuration or command arguments.
-        var credentialEnvironment = BuildGitHubCredentialEnvironment(
-            Environment.GetEnvironmentVariable("GH_CONFIG_DIR"),
-            Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
-            Environment.GetEnvironmentVariable("APPDATA"),
-            Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home
-                ? home
-                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Environment.GetEnvironmentVariable("GH_TOKEN"),
-            Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
-            Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
-            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
-            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
-            Environment.GetEnvironmentVariable("SSH_AGENT_PID"),
-            OperatingSystem.IsWindows());
+        var credentialEnvironment = BuildHostGitHubCredentialEnvironment();
         if (credentialEnvironment is null)
             return Error("Could not resolve the host GitHub CLI configuration or credential environment for the isolated Git helper.");
 
@@ -966,6 +972,44 @@ internal static class AgentTaskGitOperations
         environment["GH_NO_UPDATE_NOTIFIER"] = "1";
         return environment;
     }
+
+    private static IReadOnlyDictionary<string, string>? BuildHostGitHubCredentialEnvironment()
+        => BuildGitHubCredentialEnvironment(
+            Environment.GetEnvironmentVariable("GH_CONFIG_DIR"),
+            Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
+            Environment.GetEnvironmentVariable("APPDATA"),
+            Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home
+                ? home
+                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetEnvironmentVariable("GH_TOKEN"),
+            Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
+            Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            Environment.GetEnvironmentVariable("SSH_AGENT_PID"),
+            OperatingSystem.IsWindows());
+
+    internal static IReadOnlyDictionary<string, string> BuildSshAgentEnvironment(
+        string? sshAgentSocket,
+        string? sshAgentPid)
+    {
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(sshAgentSocket))
+            environment["SSH_AUTH_SOCK"] = sshAgentSocket;
+        if (!string.IsNullOrWhiteSpace(sshAgentPid))
+            environment["SSH_AGENT_PID"] = sshAgentPid;
+        return environment;
+    }
+
+    internal static bool IsGitHubHttpsRemote(string remoteUrl)
+        => TryParseGitHubRemote(remoteUrl, out _)
+            && Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsSshRemote(string remoteUrl)
+        => remoteUrl.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
+            || Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri)
+                && uri.Scheme.Equals("ssh", StringComparison.OrdinalIgnoreCase);
 
     internal static IReadOnlyDictionary<string, string>? BuildGitHubCredentialEnvironment(
         string? configuredDirectory,
