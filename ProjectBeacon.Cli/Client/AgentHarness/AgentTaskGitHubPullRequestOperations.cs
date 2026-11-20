@@ -30,6 +30,7 @@ internal static class AgentTaskGitHubPullRequestOperations
 
     public static async Task<McpToolResult> ExecuteAsync(
         AgentTaskGitOperations.GitContext context,
+        string? pipelineRole,
         JsonObject args,
         CancellationToken ct)
     {
@@ -39,6 +40,9 @@ internal static class AgentTaskGitHubPullRequestOperations
         var action = ReadString(args, "action");
         if (action is not ("status" or "ready"))
             return AgentTaskGitOperations.Error("git_pr action must be status or ready.");
+        if (action == "ready"
+            && !string.Equals(pipelineRole, "Actor", StringComparison.OrdinalIgnoreCase))
+            return AgentTaskGitOperations.Error("Only the Actor role may mark its own task pull request ready.");
 
         if (string.IsNullOrWhiteSpace(context.BaseBranch))
             return AgentTaskGitOperations.Error("This task branch has no daemon-selected review base.");
