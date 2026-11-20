@@ -44,7 +44,7 @@ internal static class AgentTaskGitOperations
         string BaseSha,
         DateTime CreatedAtUtc);
 
-    private sealed record GitContext(
+    internal sealed record GitContext(
         Guid TaskId,
         string RepositoryRoot,
         string WorktreeRoot,
@@ -65,7 +65,8 @@ internal static class AgentTaskGitOperations
         name is PipelineToolPolicy.GitInfo
             or PipelineToolPolicy.GitCommit
             or PipelineToolPolicy.GitIntegrate
-            or PipelineToolPolicy.GitPublish;
+            or PipelineToolPolicy.GitPublish
+            or PipelineToolPolicy.GitPullRequest;
 
     public static JsonObject ToolDefinition(string name) => name switch
     {
@@ -121,6 +122,20 @@ internal static class AgentTaskGitOperations
                 ["draft"] = new JsonObject { ["type"] = "boolean", ["description"] = "Defaults to true." }
             },
             "action", "title"),
+        PipelineToolPolicy.GitPullRequest => Definition(
+            name,
+            "Inspect, mark ready, or merge the pull request belonging to this exact task branch. Merge is Review-role-only and requires the PR to match the local HEAD and pinned base, a non-draft open PR, an approved GitHub review, all required checks passing, and GitHub reporting a clean merge state. It never bypasses branch protection or uses admin privileges.",
+            new JsonObject
+            {
+                ["action"] = EnumProperty("status", "ready", "merge"),
+                ["method"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["enum"] = new JsonArray("merge", "squash", "rebase"),
+                    ["description"] = "GitHub merge method. Defaults to merge."
+                }
+            },
+            "action"),
         _ => throw new ArgumentOutOfRangeException(nameof(name))
     };
 
@@ -142,6 +157,9 @@ internal static class AgentTaskGitOperations
             return await IntegrateAsync(opened.Context, arguments, ct);
         if (toolName == PipelineToolPolicy.GitPublish)
             return await PublishAsync(opened.Context, arguments, ct);
+        if (toolName == PipelineToolPolicy.GitPullRequest)
+            return await AgentTaskGitHubPullRequestOperations.ExecuteAsync(
+                opened.Context, authorization.PipelineRole, arguments, ct);
 
         return toolName switch
         {
@@ -799,7 +817,7 @@ internal static class AgentTaskGitOperations
     private static string IntegrationPendingRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-pending";
     private static string IntegrationCheckpointRef(Guid taskId) => $"refs/beacon/task/{taskId:N}/integration-checkpoint";
 
-    private sealed record PullRequestInfo(int Number, string Url, string BaseRefName, string State, bool IsDraft);
+    internal sealed record PullRequestInfo(int Number, string Url, string BaseRefName, string State, bool IsDraft);
 
     private static async Task<McpToolResult> PublishAsync(
         GitContext context,
@@ -1064,7 +1082,7 @@ internal static class AgentTaskGitOperations
         });
     }
 
-    private static async Task<(IReadOnlyList<PullRequestInfo> PullRequests, string? Error)> ListPullRequestsAsync(
+    internal static async Task<(IReadOnlyList<PullRequestInfo> PullRequests, string? Error)> ListPullRequestsAsync(
         string ghPath,
         string workingDirectory,
         string repository,
@@ -1106,7 +1124,7 @@ internal static class AgentTaskGitOperations
         }
     }
 
-    private static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitHubCliAsync(
+    internal static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunGitHubCliAsync(
         string ghPath,
         string workingDirectory,
         CancellationToken ct,
@@ -1616,14 +1634,14 @@ internal static class AgentTaskGitOperations
 
     private static string Pathspec(string path) => ":(literal)" + path;
 
-    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
+    internal static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
         string directory,
         IReadOnlyCollection<string> filters,
         CancellationToken ct,
         params string[] arguments) =>
         AgentSessionWorktree.RunGitAsync(directory, ct, filters, arguments);
 
-    private static bool Succeeded((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
+    internal static bool Succeeded((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
         result.ExitCode == 0 && !result.TimedOut;
 
     private static bool IsReparsePoint(string path)
@@ -1681,7 +1699,7 @@ internal static class AgentTaskGitOperations
         return safe;
     }
 
-    private static string Clip(string value)
+    internal static string Clip(string value)
     {
         var safe = RedactCredentialValues(value, Environment.GetEnvironmentVariable);
         return safe.Length <= MaxOutputCharacters
@@ -1689,10 +1707,10 @@ internal static class AgentTaskGitOperations
             : safe[..MaxOutputCharacters] + "\n[output truncated]";
     }
 
-    private static McpToolResult Success<T>(T value) =>
+    internal static McpToolResult Success<T>(T value) =>
         new(false, JsonSerializer.Serialize(value, JsonOptions));
 
-    private static McpToolResult Error(string message) => new(true, message);
+    internal static McpToolResult Error(string message) => new(true, message);
     private static McpToolResult GitFailure(string message, string? detail = null) =>
         new(true, string.IsNullOrWhiteSpace(detail) ? message : message + " " + Clip(detail.Trim()));
 }
