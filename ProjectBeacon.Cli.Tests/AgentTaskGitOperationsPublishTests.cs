@@ -170,7 +170,7 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Equal("custom-gh", environment["GH_CONFIG_DIR"]);
         Assert.Equal("home", environment["HOME"]);
         Assert.Equal("xdg", environment["XDG_CONFIG_HOME"]);
-        Assert.Equal("appdata", environment["APPDATA"]);
+        Assert.False(environment.ContainsKey("APPDATA"));
         Assert.Equal("gh-token", environment["GH_TOKEN"]);
         Assert.Equal("github-token", environment["GITHUB_TOKEN"]);
         Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
@@ -179,6 +179,23 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.False(environment.ContainsKey("SSH_AUTH_SOCK"));
         Assert.False(environment.ContainsKey("SSH_AGENT_PID"));
         Assert.False(environment.ContainsKey("BEACON_API_TOKEN"));
+    }
+
+    [Fact]
+    public void BuildGitHubCredentialEnvironment_PreservesWindowsProfileVariables()
+    {
+        var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
+            null, "C:\\Users\\test\\AppData\\Roaming\\GitHub CLI",
+            "C:\\Users\\test\\AppData\\Roaming",
+            "C:\\Users\\test",
+            null, null, null, null, isWindows: true);
+
+        Assert.NotNull(environment);
+        Assert.Equal("C:\\Users\\test", environment["HOME"]);
+        Assert.Equal("C:\\Users\\test", environment["USERPROFILE"]);
+        Assert.Equal("C:\\Users\\test\\AppData\\Roaming", environment["APPDATA"]);
+        Assert.Equal("C:\\Users\\test\\AppData\\Roaming\\GitHub CLI", environment["GH_CONFIG_DIR"]);
+        Assert.Equal("C:\\Users\\test\\AppData\\Roaming\\GitHub CLI", environment["XDG_CONFIG_HOME"]);
     }
 
     [Fact]
