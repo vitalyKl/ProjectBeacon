@@ -615,9 +615,36 @@ internal static class AgentTaskGitOperations
         if (operation.Active)
             return Error("Resolve the active merge or rebase with git_integrate before publishing.");
 
-        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "origin");
-        if (!Succeeded(origin) || !TryParseGitHubRemote(origin.StdOut.Trim(), out var repository))
-            return Error("Publishing requires origin to be a credential-free HTTPS or SSH URL for github.com/owner/repository.");
+        var origin = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--all", "origin");
+        if (!Succeeded(origin))
+            return Error("Could not inspect the configured origin fetch URLs.");
+        var originUrls = origin.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (originUrls.Length != 1
+            || !TryParseGitHubRemote(originUrls[0].Trim(), out var repository))
+            return Error("Publishing requires exactly one credential-free HTTPS or SSH origin URL for github.com/owner/repository.");
+
+        var pushOrigin = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, "remote", "get-url", "--push", "--all", "origin");
+        if (!Succeeded(pushOrigin))
+            return Error("Could not inspect the configured origin push URLs.");
+        var pushUrls = pushOrigin.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (pushUrls.Length != 1
+            || !TryParseGitHubRemote(pushUrls[0].Trim(), out var pushRepository)
+            || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
+            return Error("The origin push URL must be a single GitHub URL for the same repository as the validated origin fetch URL.");
+
+        var mirror = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "config", "--bool", "--get", "remote.origin.mirror");
+        if (mirror.TimedOut || mirror.ExitCode is not (0 or 1))
+            return Error("Could not verify that origin is not configured for mirror pushes.");
+        if (mirror.ExitCode == 0)
+        {
+            if (!bool.TryParse(mirror.StdOut.Trim(), out var mirrorEnabled))
+                return Error("The origin mirror configuration is invalid; publishing is refused.");
+            if (mirrorEnabled)
+                return Error("Publishing refuses remote.origin.mirror=true because it can push refs beyond the authorized task branch.");
+        }
 
         var status = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
             "status", "--porcelain", "--untracked-files=all");
@@ -731,7 +758,7 @@ internal static class AgentTaskGitOperations
         var pushArguments = new List<string>
         {
             "-c", "credential.helper=!gh auth git-credential",
-            "push", "--set-upstream", "--porcelain", "origin",
+            "push", "--no-follow-tags", "--set-upstream", "--porcelain", "origin",
             $"refs/heads/{context.BranchName}:refs/heads/{context.BranchName}"
         };
         var push = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. pushArguments]);

@@ -32,6 +32,101 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitPublish_RejectsPushUrlThatDiffersFromValidatedOrigin()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
+                "publish must reject a redirected push URL\\n");
+            var committed = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitCommit,
+                """{"message":"Prepare redirected push URL test"}""");
+            Assert.False(committed.IsError, committed.Text);
+
+            await GitAsync(worktree.WorkingDirectory, "remote", "set-url", "origin",
+                "https://github.com/owner/repository.git");
+            var localPushUrl = new Uri(repository + "-origin.git").AbsoluteUri;
+            await GitAsync(worktree.WorkingDirectory, "remote", "set-url", "--push", "origin", localPushUrl);
+
+            var result = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitPublish,
+                """{"action":"publish","title":"Publish task branch","body":"Test only","draft":true}""");
+            Assert.True(result.IsError);
+            Assert.Contains("push URL", result.Text, StringComparison.OrdinalIgnoreCase);
+
+            var remoteRefs = await GitAsync(repository + "-origin.git", "show-ref", "--heads");
+            Assert.DoesNotContain($"refs/heads/beacon/task/{taskId:N}", remoteRefs, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitPublish_RejectsMirrorPushConfiguration()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            worktree = opened.Worktree!;
+            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
+                "publish must reject mirror origin\\n");
+            var committed = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitCommit,
+                """{"message":"Prepare mirror origin test"}""");
+            Assert.False(committed.IsError, committed.Text);
+
+            await GitAsync(worktree.WorkingDirectory, "remote", "set-url", "origin",
+                "https://github.com/owner/repository.git");
+            await GitAsync(worktree.WorkingDirectory, "config", "remote.origin.mirror", "true");
+
+            var result = await ExecuteAsync(
+                authorization, PipelineToolPolicy.GitPublish,
+                """{"action":"publish","title":"Publish task branch","body":"Test only","draft":true}""");
+            Assert.True(result.IsError);
+            Assert.Contains("mirror=true", result.Text, StringComparison.Ordinal);
+
+            var localRefs = await GitAsync(repository, "show-ref", "--heads");
+            Assert.DoesNotContain($"refs/heads/beacon/task/{taskId:N}", localRefs, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task GitPublish_RefusesLocalOriginWithoutPushingTaskBranch()
     {
         var root = CreateTempRoot();
