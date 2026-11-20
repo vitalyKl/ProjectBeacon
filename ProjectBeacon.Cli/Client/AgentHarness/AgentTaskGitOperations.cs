@@ -631,8 +631,19 @@ internal static class AgentTaskGitOperations
             "diff", "--name-only", "-z", context.BaseSha + ".." + headSha);
         if (!Succeeded(changedPaths))
             return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
-        var outsidePaths = changedPaths.StdOut
-            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+        var changedPathList = changedPaths.StdOut
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (changedPathList.Length == 0)
+            return Error("The task branch has no file changes to publish.");
+        var changeSummary = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "diff", "--summary", context.BaseSha + ".." + headSha);
+        if (!Succeeded(changeSummary))
+            return GitFailure("Could not inspect file modes before publishing.", changeSummary.StdErr);
+        if (changeSummary.StdOut.Contains("120000", StringComparison.Ordinal)
+            || changeSummary.StdOut.Contains("160000", StringComparison.Ordinal))
+            return Error("Publishing symlink or submodule changes is not supported by the task Git workflow.");
+        var outsidePaths = changedPathList
             .Where(path => !IsProjectRelativePath(context, path))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
