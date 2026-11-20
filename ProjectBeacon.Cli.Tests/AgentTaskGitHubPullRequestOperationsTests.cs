@@ -108,6 +108,39 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     }
 
     [Fact]
+    public void PublishedPullRequest_MustMatchExactStateBaseAndTaskHead()
+    {
+        var view = CreateView();
+
+        Assert.True(AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+            view,
+            "OPEN",
+            "main",
+            view.HeadSha));
+        Assert.True(AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+            view with { HeadSha = view.HeadSha.ToUpperInvariant() },
+            "OPEN",
+            "main",
+            view.HeadSha));
+
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+            view,
+            "MERGED",
+            "main",
+            view.HeadSha));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+            view,
+            "OPEN",
+            "release",
+            view.HeadSha));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+            view,
+            "OPEN",
+            "main",
+            new string('c', 40)));
+    }
+
+    [Fact]
     public void AlreadyReadyPullRequest_StillRequiresCleanCurrentTaskHeadAndPinnedBase()
     {
         Assert.Empty(AgentTaskGitHubPullRequestOperations.GetReadyBlockers(
