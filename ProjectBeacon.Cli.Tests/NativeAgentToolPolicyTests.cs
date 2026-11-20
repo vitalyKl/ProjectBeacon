@@ -1,19 +1,25 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using Domain.Common;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeAgentToolPolicyTests
 {
-    [Theory]
-    [InlineData("repo_sync")]
-    [InlineData("write_file")]
-    [InlineData("apply_patch")]
-    [InlineData("git_commit")]
-    [InlineData("git_integrate")]
-    [InlineData("git_publish")]
-    public void RequiresExclusiveWorktreeExecution_ForRepositoryMutations(string tool)
+    [Fact]
+    public void RequiresExclusiveWorktreeExecution_ForWorkspaceAndRepositoryMutations()
     {
-        Assert.True(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(tool));
+        var mutations = new[]
+        {
+            "repo_sync",
+            McpToolNames.WriteFile,
+            McpToolNames.ApplyPatch,
+            "git_commit",
+            "git_integrate",
+            "git_publish"
+        };
+
+        foreach (var tool in mutations)
+            Assert.True(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(tool), tool);
     }
 
     [Theory]
