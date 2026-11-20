@@ -965,21 +965,24 @@ internal static class AgentTaskGitOperations
 
     private static IReadOnlyDictionary<string, string>? BuildHostSshAgentEnvironment()
     {
-        var environment = BuildSshAgentEnvironment(
+        var socket = ResolveSshAgentSocket(
             Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            OperatingSystem.IsWindows());
+        var environment = BuildSshAgentEnvironment(
+            socket,
             Environment.GetEnvironmentVariable("SSH_AGENT_PID"));
         return environment.Count > 0 ? environment : null;
     }
 
-    internal static bool CanUseSshAgent(bool isWindows, string? sshAgentSocket)
-        // Windows OpenSSH can locate the per-user ssh-agent named pipe implicitly when
-        // SSH_AUTH_SOCK is unset. Unix clients require the forwarded socket path.
-        => isWindows || !string.IsNullOrWhiteSpace(sshAgentSocket);
+    internal static string? ResolveSshAgentSocket(string? sshAgentSocket, bool isWindows)
+        => !string.IsNullOrWhiteSpace(sshAgentSocket)
+            ? sshAgentSocket
+            : isWindows ? @"\\.\pipe\openssh-ssh-agent" : null;
 
     private static bool HasHostSshAgent()
-        => CanUseSshAgent(
-            OperatingSystem.IsWindows(),
-            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"));
+        => ResolveSshAgentSocket(
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            OperatingSystem.IsWindows()) is not null;
 
     private static IReadOnlyDictionary<string, string>? BuildGitRemoteCredentialEnvironment(string remoteUrl)
     {
