@@ -22,7 +22,7 @@ public sealed class LandingAuthorizationPolicyTests
     {
         var projectId = Guid.NewGuid();
         var actor = new ActorContext(
-            ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null,
+            ActorType.ApiToken, Guid.NewGuid(), false, Guid.NewGuid(), null, projectId, null,
             ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite);
 
         Assert.True(LandingAuthorizationPolicy.CanRequestLanding(actor, projectId));
@@ -37,7 +37,7 @@ public sealed class LandingAuthorizationPolicyTests
     {
         var projectId = Guid.NewGuid();
         var actor = new ActorContext(
-            ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null, capabilities);
+            ActorType.ApiToken, Guid.NewGuid(), false, Guid.NewGuid(), null, projectId, null, capabilities);
 
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(actor, projectId));
     }
@@ -47,7 +47,7 @@ public sealed class LandingAuthorizationPolicyTests
     {
         var projectId = Guid.NewGuid();
         var token = new ActorContext(
-            ActorType.ApiToken, null, false, Guid.NewGuid(), null, Guid.NewGuid(), null,
+            ActorType.ApiToken, Guid.NewGuid(), false, Guid.NewGuid(), null, Guid.NewGuid(), null,
             ApiTokenCapability.TaskWrite);
         var worker = new ActorContext(
             ActorType.Worker, null, false, null, null, projectId, null,
@@ -55,10 +55,14 @@ public sealed class LandingAuthorizationPolicyTests
         var device = new ActorContext(
             ActorType.Device, null, false, null, Guid.NewGuid(), projectId, null,
             ApiTokenCapability.TaskWrite);
+        var tokenWithoutUser = new ActorContext(
+            ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null,
+            ApiTokenCapability.TaskWrite);
 
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(token, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(worker, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(device, projectId));
+        Assert.False(LandingAuthorizationPolicy.CanRequestLanding(tokenWithoutUser, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(ActorContext.Anonymous, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(
             new ActorContext(ActorType.Human, null, false, null, null, null, null, ApiTokenCapability.None),
