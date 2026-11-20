@@ -557,28 +557,13 @@ internal static class AgentTaskGitOperations
             if (!AgentTaskWorktree.IsSupportedFetchRemote(url))
                 return (null, "The configured origin uses an unsupported Git transport; no integration was attempted.");
 
-            var fetchArguments = new List<string>();
-            IReadOnlyDictionary<string, string>? fetchEnvironment = null;
-            if (IsGitHubHttpsRemote(url))
-            {
-                fetchEnvironment = BuildHostGitHubCredentialEnvironment();
-                if (fetchEnvironment is not null)
-                    fetchArguments.AddRange(["-c", "credential.helper=!gh auth git-credential"]);
-            }
-            else if (IsSshRemote(url))
-            {
-                fetchEnvironment = BuildSshAgentEnvironment(
-                    Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
-                    Environment.GetEnvironmentVariable("SSH_AGENT_PID"));
-            }
-            fetchArguments.AddRange([
+            if (IsSshRemote(url) && !HasHostSshAgent())
+                return (null, "The origin uses SSH, but no host SSH agent is available. Start ssh-agent and load the GitHub key before integrating.");
+
+            var fetch = await RunRemoteGitAsync(
+                context.RepositoryRoot, context.DisabledFilters, ct, url,
                 "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
-                "--", url, $"+refs/heads/{context.BaseBranch}:{targetRef}"
-            ]);
-            var fetch = fetchEnvironment is null
-                ? await Git(context.RepositoryRoot, context.DisabledFilters, ct, [.. fetchArguments])
-                : await AgentSessionWorktree.RunGitWithEnvironmentAsync(
-                    context.RepositoryRoot, ct, context.DisabledFilters, fetchEnvironment, [.. fetchArguments]);
+                "--", url, $"+refs/heads/{context.BaseBranch}:{targetRef}");
             if (!Succeeded(fetch))
                 return (null, "Could not fetch the recorded base branch. Check workstation connectivity and origin configuration.");
         }
@@ -740,9 +725,8 @@ internal static class AgentTaskGitOperations
         // Git runs with an isolated HOME/APPDATA. Point only the bounded credential-helper
         // subprocesses back at the host gh config and keyring session; never copy a token
         // into persistent Git configuration or command arguments.
-        var credentialEnvironment = BuildHostGitHubCredentialEnvironment();
-        if (credentialEnvironment is null)
-            return Error("Could not resolve the host GitHub CLI configuration or credential environment for the isolated Git helper.");
+        if ((IsSshRemote(originUrl) || IsSshRemote(pushUrl)) && !HasHostSshAgent())
+            return Error("The configured GitHub SSH remote requires an active host SSH agent. Start ssh-agent and load the GitHub key, or use an authenticated HTTPS origin.");
 
         var existing = await ListPullRequestsAsync(ghPath, context.WorktreeRoot, repository, context.BranchName, ct);
         if (existing.Error is not null)
@@ -774,13 +758,9 @@ internal static class AgentTaskGitOperations
                 + "Reopen it explicitly or publish a new task branch; ProjectBeacon will not silently recreate it.");
 
         // Use the exact URL validated above rather than the mutable origin alias.
-        var credentialedGit = new List<string>
-        {
-            "-c", "credential.helper=!gh auth git-credential",
-            "ls-remote", "--heads", originUrl, "refs/heads/" + baseBranch
-        };
-        var baseOnRemote = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
-            context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. credentialedGit]);
+        var baseOnRemote = await RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, originUrl,
+            "ls-remote", "--heads", originUrl, "refs/heads/" + baseBranch);
         if (!Succeeded(baseOnRemote))
             return GitFailure("Could not verify the review base on the configured GitHub origin.", baseOnRemote.StdErr);
         if (string.IsNullOrWhiteSpace(baseOnRemote.StdOut))
@@ -796,14 +776,10 @@ internal static class AgentTaskGitOperations
         // Push the already-verified commit SHA directly to the one validated URL and
         // the task's single fixed destination ref. No remote alias, configured pushurl,
         // mirror setting, or local branch movement can broaden or redirect this push.
-        var pushArguments = new List<string>
-        {
-            "-c", "credential.helper=!gh auth git-credential",
+        var push = await RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, pushUrl,
             "push", "--no-follow-tags", "--porcelain", pushUrl,
-            $"{headSha}:refs/heads/{context.BranchName}"
-        };
-        var push = await AgentSessionWorktree.RunGitWithEnvironmentAsync(
-            context.WorktreeRoot, ct, context.DisabledFilters, credentialEnvironment, [.. pushArguments]);
+            $"{headSha}:refs/heads/{context.BranchName}");
         if (!Succeeded(push))
             return GitFailure(
                 "Could not publish the task branch. The push is non-forced; resolve any remote divergence and retry.",
@@ -985,9 +961,46 @@ internal static class AgentTaskGitOperations
             Environment.GetEnvironmentVariable("GITHUB_TOKEN"),
             Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS"),
             Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
-            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
-            Environment.GetEnvironmentVariable("SSH_AGENT_PID"),
             OperatingSystem.IsWindows());
+
+    private static IReadOnlyDictionary<string, string>? BuildHostSshAgentEnvironment()
+    {
+        var environment = BuildSshAgentEnvironment(
+            Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"),
+            Environment.GetEnvironmentVariable("SSH_AGENT_PID"));
+        return environment.Count > 0 ? environment : null;
+    }
+
+    private static bool HasHostSshAgent()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SSH_AUTH_SOCK"));
+
+    private static IReadOnlyDictionary<string, string>? BuildGitRemoteCredentialEnvironment(string remoteUrl)
+    {
+        if (IsGitHubHttpsRemote(remoteUrl))
+            return BuildHostGitHubCredentialEnvironment();
+        if (IsSshRemote(remoteUrl))
+            return BuildHostSshAgentEnvironment();
+        return null;
+    }
+
+    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> RunRemoteGitAsync(
+        string directory,
+        IReadOnlyCollection<string> disabledFilters,
+        CancellationToken ct,
+        string remoteUrl,
+        params string[] arguments)
+    {
+        var environment = BuildGitRemoteCredentialEnvironment(remoteUrl);
+        var commandArguments = new List<string>(arguments.Length + 2);
+        if (IsGitHubHttpsRemote(remoteUrl) && environment is not null)
+            commandArguments.AddRange(["-c", "credential.helper=!gh auth git-credential"]);
+        commandArguments.AddRange(arguments);
+
+        return environment is null
+            ? Git(directory, disabledFilters, ct, [.. commandArguments])
+            : AgentSessionWorktree.RunGitWithEnvironmentAsync(
+                directory, ct, disabledFilters, environment, [.. commandArguments]);
+    }
 
     internal static IReadOnlyDictionary<string, string> BuildSshAgentEnvironment(
         string? sshAgentSocket,
@@ -1029,16 +1042,13 @@ internal static class AgentTaskGitOperations
         string? githubToken,
         string? dbusSessionBusAddress,
         string? xdgRuntimeDirectory,
-        string? sshAgentSocket,
-        string? sshAgentPid,
         bool isWindows)
     {
         var configDirectory = ResolveGitHubConfigDirectory(
             configuredDirectory, xdgConfigHome, appDataDirectory, homeDirectory, isWindows);
         if (string.IsNullOrWhiteSpace(configDirectory)
             && string.IsNullOrWhiteSpace(ghToken)
-            && string.IsNullOrWhiteSpace(githubToken)
-            && string.IsNullOrWhiteSpace(sshAgentSocket))
+            && string.IsNullOrWhiteSpace(githubToken))
             return null;
 
         var environment = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -1055,10 +1065,6 @@ internal static class AgentTaskGitOperations
             environment["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress;
         if (!string.IsNullOrWhiteSpace(xdgRuntimeDirectory))
             environment["XDG_RUNTIME_DIR"] = xdgRuntimeDirectory;
-        if (!string.IsNullOrWhiteSpace(sshAgentSocket))
-            environment["SSH_AUTH_SOCK"] = sshAgentSocket;
-        if (!string.IsNullOrWhiteSpace(sshAgentPid))
-            environment["SSH_AGENT_PID"] = sshAgentPid;
         return environment;
     }
 
