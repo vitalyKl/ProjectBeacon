@@ -124,16 +124,10 @@ internal static class AgentTaskGitOperations
             "action", "title"),
         PipelineToolPolicy.GitPullRequest => Definition(
             name,
-            "Inspect, mark ready, or merge the pull request belonging to this exact task branch. Merge is Review-role-only and requires the PR to match the local HEAD and pinned base, a non-draft open PR, an approved GitHub review, all required checks passing, and GitHub reporting a clean merge state. It never bypasses branch protection or uses admin privileges.",
+            "Inspect or mark ready the pull request belonging to this exact task branch. Status reports GitHub merge admissibility using the exact task HEAD, pinned review base, GitHub review decision, and required status checks. This tool never merges; server-authorized GitLand remains the only landing path.",
             new JsonObject
             {
-                ["action"] = EnumProperty("status", "ready", "merge"),
-                ["method"] = new JsonObject
-                {
-                    ["type"] = "string",
-                    ["enum"] = new JsonArray("merge", "squash", "rebase"),
-                    ["description"] = "GitHub merge method. Defaults to merge."
-                }
+                ["action"] = EnumProperty("status", "ready")
             },
             "action"),
         _ => throw new ArgumentOutOfRangeException(nameof(name))
@@ -1676,7 +1670,7 @@ internal static class AgentTaskGitOperations
             && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
-    private static bool IsGitSha(string value) =>
+    internal static bool IsGitSha(string value) =>
         (value.Length == 40 || value.Length == 64) && value.All(Uri.IsHexDigit);
 
     private static string ReadString(JsonObject args, string key) =>
