@@ -6,6 +6,62 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed partial class AgentTaskGitOperationsTests
 {
+    [Fact]
+    public void ResolveGitHubConfigDirectory_PrefersExplicitDirectoryThenXdgConfig()
+    {
+        Assert.Equal(
+            "custom-gh",
+            AgentTaskGitOperations.ResolveGitHubConfigDirectory(
+                "custom-gh", "xdg", "appdata", "home", isWindows: true));
+        Assert.Equal(
+            Path.Combine("xdg", "gh"),
+            AgentTaskGitOperations.ResolveGitHubConfigDirectory(
+                null, "xdg", "appdata", "home", isWindows: true));
+    }
+
+    [Fact]
+    public void ResolveGitHubConfigDirectory_UsesPlatformDefaultFallbacks()
+    {
+        Assert.Equal(
+            Path.Combine("appdata", "GitHub CLI"),
+            AgentTaskGitOperations.ResolveGitHubConfigDirectory(
+                null, null, "appdata", "home", isWindows: true));
+        Assert.Equal(
+            Path.Combine("home", ".config", "gh"),
+            AgentTaskGitOperations.ResolveGitHubConfigDirectory(
+                null, null, "appdata", "home", isWindows: false));
+        Assert.Null(AgentTaskGitOperations.ResolveGitHubConfigDirectory(
+            null, null, null, null, isWindows: false));
+    }
+
+    [Fact]
+    public void BuildGitHubCredentialEnvironment_ForwardsOnlyScopedHelperContext()
+    {
+        var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
+            "custom-gh", "xdg", "appdata", "home", "host-token",
+            "unix:abstract=/tmp/dbus", "/run/user/1000", isWindows: false);
+
+        Assert.NotNull(environment);
+        Assert.Equal("custom-gh", environment["GH_CONFIG_DIR"]);
+        Assert.Equal("host-token", environment["GH_TOKEN"]);
+        Assert.Equal("1", environment["GH_PROMPT_DISABLED"]);
+        Assert.Equal("unix:abstract=/tmp/dbus", environment["DBUS_SESSION_BUS_ADDRESS"]);
+        Assert.Equal("/run/user/1000", environment["XDG_RUNTIME_DIR"]);
+        Assert.False(environment.ContainsKey("BEACON_API_TOKEN"));
+        Assert.False(environment.ContainsKey("GITHUB_TOKEN"));
+    }
+
+    [Fact]
+    public void BuildGitHubCredentialEnvironment_AllowsEnvironmentTokenWithoutConfigDirectory()
+    {
+        var environment = AgentTaskGitOperations.BuildGitHubCredentialEnvironment(
+            null, null, null, null, "host-token", null, null, isWindows: true);
+
+        Assert.NotNull(environment);
+        Assert.False(environment.ContainsKey("GH_CONFIG_DIR"));
+        Assert.Equal("host-token", environment["GH_TOKEN"]);
+    }
+
     [Theory]
     [InlineData("https://github.com/owner/repository.git", "owner/repository")]
     [InlineData("https://github.com/owner/repository", "owner/repository")]
