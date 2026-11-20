@@ -115,8 +115,8 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(result.IsError);
             Assert.Contains("mirror=true", result.Text, StringComparison.Ordinal);
 
-            var localRefs = await GitAsync(repository, "show-ref", "--heads");
-            Assert.DoesNotContain($"refs/heads/beacon/task/{taskId:N}", localRefs, StringComparison.Ordinal);
+            var remoteRefs = await GitAsync(repository + "-origin.git", "show-ref", "--heads");
+            Assert.DoesNotContain($"refs/heads/beacon/task/{taskId:N}", remoteRefs, StringComparison.Ordinal);
         }
         finally
         {

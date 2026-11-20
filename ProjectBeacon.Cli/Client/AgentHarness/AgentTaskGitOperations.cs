@@ -667,7 +667,7 @@ internal static class AgentTaskGitOperations
         var changedPaths = await Git(
             context.WorktreeRoot, context.DisabledFilters, ct,
             "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z",
-            context.BaseSha + ".." + headSha);
+            context.BaseSha, headSha);
         if (!Succeeded(changedPaths))
             return GitFailure("Could not verify the task branch change scope before publishing.", changedPaths.StdErr);
         var changedPathList = changedPaths.StdOut
@@ -677,7 +677,7 @@ internal static class AgentTaskGitOperations
         var changeSummary = await Git(
             context.WorktreeRoot, context.DisabledFilters, ct,
             "diff", "--no-ext-diff", "--no-textconv", "--summary",
-            context.BaseSha + ".." + headSha);
+            context.BaseSha, headSha);
         if (!Succeeded(changeSummary))
             return GitFailure("Could not inspect file modes before publishing.", changeSummary.StdErr);
         if (changeSummary.StdOut.Contains("120000", StringComparison.Ordinal)
