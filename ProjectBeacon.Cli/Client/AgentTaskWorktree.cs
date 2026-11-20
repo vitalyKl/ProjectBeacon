@@ -178,8 +178,11 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     }
                     else
                     {
-                        var fetch = await AgentSessionWorktree.RunGitAsync(
-                            repositoryRoot, ct, disabledFilters,
+                        var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
+                            repositoryRoot,
+                            disabledFilters,
+                            ct,
+                            remoteUrl,
                             "fetch", "--no-tags", "--no-recurse-submodules",
                             "--upload-pack=git-upload-pack", "--", remoteUrl,
                             $"+refs/heads/{baseBranch}:refs/remotes/origin/{baseBranch}");
