@@ -137,6 +137,9 @@ internal static class AgentTaskGitHubPullRequestOperations
             return AgentTaskGitOperations.Error(
                 $"Task branch already has pull request #{differentBase.Number} targeting '{differentBase.BaseRefName}' ({differentBase.Url}); the daemon-selected review base is '{context.BaseBranch}'.");
 
+        if (matching is null && action == "ready")
+            return AgentTaskGitOperations.Error("No open pull request exists for this task branch and the daemon-selected review base. Publish the task branch first.");
+
         if (matching is null)
             return AgentTaskGitOperations.Success(new
             {
@@ -162,6 +165,9 @@ internal static class AgentTaskGitHubPullRequestOperations
 
         var view = snapshot.View!;
         var checkList = checks.Checks!;
+        if (!string.Equals(view.BaseBranch, context.BaseBranch, StringComparison.Ordinal))
+            return AgentTaskGitOperations.Error(
+                $"The task PR base changed from daemon-selected '{context.BaseBranch}' to '{view.BaseBranch}'. Retarget it explicitly and create fresh review proof.");
         var headMatches = string.Equals(view.HeadSha, localHeadSha, StringComparison.OrdinalIgnoreCase);
         var requiredChecksPassed = checkList.Count > 0
             && checkList.All(check => string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase));
@@ -204,13 +210,21 @@ internal static class AgentTaskGitHubPullRequestOperations
             ghPath, context.WorktreeRoot, repository, matching.Number, ct);
         if (refreshed.Error is not null)
             return AgentTaskGitOperations.Error("The PR was marked ready, but its status could not be re-read: " + refreshed.Error);
+        var readyView = refreshed.View!;
+        var stillCurrent = !readyView.IsDraft
+            && readyView.State == "OPEN"
+            && string.Equals(readyView.BaseBranch, context.BaseBranch, StringComparison.Ordinal)
+            && string.Equals(readyView.HeadSha, localHeadSha, StringComparison.OrdinalIgnoreCase);
+        if (!stillCurrent)
+            return AgentTaskGitOperations.Error(
+                "GitHub marked the PR ready, but its final base/head/state does not match the locally reviewed task branch. Re-read git_pr status and do not proceed to landing.");
         return AgentTaskGitOperations.Success(new
         {
-            ready = !refreshed.View!.IsDraft,
+            ready = true,
             pullRequestNumber = matching.Number,
-            pullRequestUrl = refreshed.View.Url,
-            headSha = refreshed.View.HeadSha,
-            baseBranch = refreshed.View.BaseBranch
+            pullRequestUrl = readyView.Url,
+            headSha = readyView.HeadSha,
+            baseBranch = readyView.BaseBranch
         });
     }
 
@@ -251,7 +265,8 @@ internal static class AgentTaskGitHubPullRequestOperations
         requiredChecksPassed,
         mergeCommitSha = view.MergeCommitSha,
         mergedAt = view.MergedAt,
-        githubMergeAdmissible
+        githubMergeAdmissible,
+        mergeBlockers = blockers
     };
 
     private static List<string> GetMergeBlockers(
