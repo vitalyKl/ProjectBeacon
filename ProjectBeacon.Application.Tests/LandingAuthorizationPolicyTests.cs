@@ -58,8 +58,12 @@ public sealed class LandingAuthorizationPolicyTests
         var tokenWithoutUser = new ActorContext(
             ActorType.ApiToken, null, false, Guid.NewGuid(), null, projectId, null,
             ApiTokenCapability.TaskWrite);
+        var crossProjectHuman = new ActorContext(
+            ActorType.Human, Guid.NewGuid(), false, null, null, Guid.NewGuid(), null,
+            ApiTokenCapability.None);
 
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(token, projectId));
+        Assert.False(LandingAuthorizationPolicy.CanRequestLanding(crossProjectHuman, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(worker, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(device, projectId));
         Assert.False(LandingAuthorizationPolicy.CanRequestLanding(tokenWithoutUser, projectId));
