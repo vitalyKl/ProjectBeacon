@@ -585,6 +585,13 @@ internal static class AgentTaskGitOperations
         JsonObject args,
         CancellationToken ct)
     {
+        var allowedArguments = new HashSet<string>(StringComparer.Ordinal)
+            { "action", "title", "body", "draft" };
+        if (args.Any(pair => !allowedArguments.Contains(pair.Key)))
+            return Error("git_publish accepts only action, title, body, and draft.");
+        if (!string.Equals(ReadString(args, "action"), "publish", StringComparison.Ordinal))
+            return Error("git_publish action must be publish.");
+
         var title = ReadString(args, "title").Trim();
         var body = ReadString(args, "body");
         var draft = args["draft"] is JsonValue draftValue && draftValue.TryGetValue<bool>(out var requestedDraft)
