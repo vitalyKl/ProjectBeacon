@@ -758,4 +758,58 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Empty(malformed.Files);
         }
     }
+
+
+    [Fact]
+    public async Task GitInfo_DiffDisablesConfiguredTextconvDrivers()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, ".gitattributes"),
+                "*.bin diff=beacon-textconv\n");
+            await File.WriteAllBytesAsync(
+                Path.Combine(projectRoot, "payload.bin"),
+                [0x01, 0x02, 0x03]);
+            await GitAsync(repository, "add", "-A");
+            await GitAsync(repository, "commit", "-m", "Add binary textconv fixture");
+            await GitAsync(repository, "config", "diff.beacon-textconv.binary", "true");
+            await GitAsync(repository, "config", "diff.beacon-textconv.textconv", "git hash-object");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await File.WriteAllBytesAsync(
+                Path.Combine(worktree.WorkingDirectory, "payload.bin"),
+                [0x01, 0x02, 0x03, 0x04]);
+            var currentBlob = await GitAsync(
+                worktree.RecoveryPath, "hash-object", "src/app/payload.bin");
+
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitInfo,
+                """{"kind":"diff","path":"payload.bin"}""");
+
+            Assert.False(result.IsError, result.Text);
+            Assert.Contains("Binary files", result.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(currentBlob, result.Text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }
