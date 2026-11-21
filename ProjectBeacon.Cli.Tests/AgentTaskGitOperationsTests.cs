@@ -773,7 +773,7 @@ public sealed partial class AgentTaskGitOperationsTests
             var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
             await File.WriteAllTextAsync(
                 Path.Combine(projectRoot, ".gitattributes"),
-                "*.bin diff=beacon-textconv\\n");
+                "*.bin diff=beacon-textconv\n");
             await File.WriteAllBytesAsync(
                 Path.Combine(projectRoot, "payload.bin"),
                 [0x01, 0x02, 0x03]);
