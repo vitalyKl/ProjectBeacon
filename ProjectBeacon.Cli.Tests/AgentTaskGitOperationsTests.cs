@@ -997,4 +997,107 @@ public sealed partial class AgentTaskGitOperationsTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+
+    [Fact]
+    public async Task GitIntegrate_RebaseContinueAlsoNeutralizesCustomMergeDrivers()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"), "base-alpha\\nbase-beta\\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Prepare two-commit rebase conflict");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, ".gitattributes"), "*.txt merge=beacon\\n");
+            await GitAsync(repository, "add", "src/app/.gitattributes");
+            await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
+            await GitAsync(repository, "push", "origin", "main");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await GitAsync(repository, "config", "merge.beacon.name", "External test merge driver");
+            await GitAsync(repository, "config", "merge.beacon.driver",
+                "git update-ref refs/beacon/tests/merge-driver-executed HEAD");
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\\nbase-beta\\n");
+            var firstCommit = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change first line in task branch"}""");
+            Assert.False(firstCommit.IsError, firstCommit.Text);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\\ntask-beta\\n");
+            var secondCommit = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change second line in task branch"}""");
+            Assert.False(secondCommit.IsError, secondCommit.Text);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"), "upstream-alpha\\nupstream-beta\\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Change both lines on base");
+            await GitAsync(repository, "push", "origin", "main");
+
+            var integrated = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"rebase","source":"base"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using (var document = JsonDocument.Parse(integrated.Text))
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "resolved-alpha\\nupstream-beta\\n");
+            var continued = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.False(continued.IsError, continued.Text);
+            using (var document = JsonDocument.Parse(continued.Text))
+            {
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+                Assert.Contains(
+                    "src/app/shared.txt",
+                    document.RootElement.GetProperty("files").EnumerateArray()
+                        .Select(item => item.GetString() ?? string.Empty));
+            }
+
+            var markerRefs = await GitAsync(
+                worktree.RecoveryPath,
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/beacon/tests/merge-driver-executed");
+            Assert.Equal(string.Empty, markerRefs);
+
+            var aborted = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"abort"}""");
+            Assert.False(aborted.IsError, aborted.Text);
+            using var abortDocument = JsonDocument.Parse(aborted.Text);
+            Assert.Equal("aborted", abortDocument.RootElement.GetProperty("status").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }
