@@ -673,4 +673,27 @@ public sealed partial class AgentTaskGitOperationsTests
             throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {stderr}");
         return stdout.TrimEnd('\r', '\n');
     }
+
+    [Fact]
+    public void GitOperationStateRead_RequiresAllThreeGitPathQueriesToSucceed()
+    {
+        var rebaseMerge = (0, "rebase-merge", string.Empty, false);
+        var rebaseApply = (0, "rebase-apply", string.Empty, false);
+        var mergeHead = (0, "MERGE_HEAD", string.Empty, false);
+
+        Assert.Null(AgentTaskGitOperations.GetOperationStateReadError(
+            rebaseMerge, rebaseApply, mergeHead));
+        Assert.NotNull(AgentTaskGitOperations.GetOperationStateReadError(
+            (1, string.Empty, "fatal: bad git directory", false),
+            rebaseApply,
+            mergeHead));
+        Assert.NotNull(AgentTaskGitOperations.GetOperationStateReadError(
+            rebaseMerge,
+            (0, string.Empty, string.Empty, false),
+            mergeHead));
+        Assert.NotNull(AgentTaskGitOperations.GetOperationStateReadError(
+            rebaseMerge,
+            rebaseApply,
+            (0, "MERGE_HEAD", string.Empty, true)));
+    }
 }
