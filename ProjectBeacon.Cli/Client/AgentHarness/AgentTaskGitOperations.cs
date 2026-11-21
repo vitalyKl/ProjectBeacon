@@ -1590,7 +1590,20 @@ internal static class AgentTaskGitOperations
             var path = result.StdOut.Trim();
             if (!Path.IsPathRooted(path))
                 path = Path.GetFullPath(Path.Combine(context.WorktreeRoot, path));
-            return Directory.Exists(path) || File.Exists(path);
+
+            try
+            {
+                _ = File.GetAttributes(path);
+                return true;
+            }
+            catch (FileNotFoundException)
+            {
+                return false;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return false;
+            }
         }
 
         return new OperationState(
