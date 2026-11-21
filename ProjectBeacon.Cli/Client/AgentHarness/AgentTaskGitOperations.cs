@@ -493,10 +493,6 @@ internal static class AgentTaskGitOperations
             if (!string.IsNullOrWhiteSpace(status.StdOut))
                 return Error("Commit or discard task worktree changes with git_commit before integrating a branch.");
 
-            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
-            if (mergeDriverConfig.Error is not null)
-                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
-
             // A pending ref records the source SHA before Git mutates the task branch.
             // It is intentionally separate from the fetched remote ref: old fetches must
             // never be mistaken for an unfinished merge from a different source.
@@ -522,6 +518,12 @@ internal static class AgentTaskGitOperations
                 return Error(target.Error);
             if (!IsGitSha(target.Sha ?? string.Empty))
                 return Error("The selected integration source did not resolve to a valid commit SHA.");
+
+            // Read this immediately before the operation so remote fetches do not leave
+            // a wide window in which repository merge-driver configuration can change.
+            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+            if (mergeDriverConfig.Error is not null)
+                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
 
             if (pendingSource is null)
             {
