@@ -342,7 +342,7 @@ internal static class AgentTaskGitOperations
 
             case "diff":
                 {
-                    var diffArgs = new List<string> { "diff", "--no-ext-diff", "--no-color", "--find-renames", context.BaseSha };
+                    var diffArgs = new List<string> { "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", context.BaseSha };
                     AddProjectPathspec(context, diffArgs, path);
                     var diff = await Git(context.WorktreeRoot, context.DisabledFilters, ct, [.. diffArgs]);
                     return Succeeded(diff) ? Success(new { diff = Clip(diff.StdOut) }) : GitFailure("Could not read task branch diff.");
