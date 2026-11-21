@@ -775,8 +775,10 @@ internal static class AgentTaskGitOperations
                 return ([], "Git returned a malformed configured merge-driver key.");
 
             var driver = key[prefix.Length..^suffix.Length];
-            if (driver.Any(char.IsControl))
-                return ([], "Git returned a configured merge-driver name containing control characters.");
+            if (driver.Length == 0
+                || driver.Any(character => !char.IsAsciiLetterOrDigit(character)
+                    && character is not ('.' or '_' or '-')))
+                return ([], "Git returned a configured merge-driver name that cannot be safely overridden.");
             if (seen.Add(driver))
                 drivers.Add(driver);
         }
