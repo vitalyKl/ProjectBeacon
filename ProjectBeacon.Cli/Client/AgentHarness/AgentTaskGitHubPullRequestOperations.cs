@@ -216,6 +216,18 @@ internal static class AgentTaskGitHubPullRequestOperations
                 "The configured GitHub origin no longer exposes the daemon-selected review base.");
         baseUnchanged = string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase);
 
+        // The local/base revalidation above is also an asynchronous window. Confirm
+        // once more that the PR snapshot still matches the commit whose checks were read.
+        var finalPreflightSnapshot = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (finalPreflightSnapshot.Error is not null)
+            return AgentTaskGitOperations.Error(
+                "Could not confirm the pull request after task-state revalidation. " + finalPreflightSnapshot.Error);
+        if (!MatchesStatusSnapshot(view, finalPreflightSnapshot.View!))
+            return AgentTaskGitOperations.Error(
+                "The pull request changed during task-state revalidation. Retry git_pr status to inspect one consistent snapshot.");
+        view = finalPreflightSnapshot.View!;
+
         if (!string.Equals(view.BaseBranch, context.BaseBranch, StringComparison.Ordinal))
             return AgentTaskGitOperations.Error(
                 $"The task PR base changed from daemon-selected '{context.BaseBranch}' to '{view.BaseBranch}'. Retarget it explicitly and create fresh review proof.");
