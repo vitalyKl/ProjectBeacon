@@ -704,17 +704,17 @@ public sealed partial class AgentTaskGitOperationsTests
         var sha1 = new string('a', 40);
         var sha256 = new string('b', 64);
         var output = string.Concat(
-            $"100644 {sha1} 1\\tsrc/app/conflicted file.txt\\0",
-            $"100644 {sha1} 2\\tsrc/app/conflicted file.txt\\0",
-            $"100644 {sha1} 3\\tsrc/app/conflicted file.txt\\0",
-            $"100755 {sha256} 2\\tsrc/app/file\\twith-tab\\nname.txt\\0");
+            $"100644 {sha1} 1\tsrc/app/conflicted file.txt\0",
+            $"100644 {sha1} 2\tsrc/app/conflicted file.txt\0",
+            $"100644 {sha1} 3\tsrc/app/conflicted file.txt\0",
+            $"100755 {sha256} 2\tsrc/app/file\twith-tab\nname.txt\0");
 
         var result = AgentTaskGitOperations.ParseConflictListResult(
             (0, output, string.Empty, false));
 
         Assert.Null(result.Error);
         Assert.Equal(
-            new[] { "src/app/conflicted file.txt", "src/app/file\\twith-tab\\nname.txt" },
+            new[] { "src/app/conflicted file.txt", "src/app/file\twith-tab\nname.txt" },
             result.Files);
     }
 
@@ -722,7 +722,7 @@ public sealed partial class AgentTaskGitOperationsTests
     public void GitConflictListRead_FailsClosedForCommandFailuresAndMalformedOutput()
     {
         var sha = new string('a', 40);
-        var validRecord = $"100644 {sha} 2\\tconflicted.txt\\0";
+        var validRecord = $"100644 {sha} 2\tconflicted.txt\0";
 
         var empty = AgentTaskGitOperations.ParseConflictListResult(
             (0, string.Empty, string.Empty, false));
@@ -742,12 +742,12 @@ public sealed partial class AgentTaskGitOperationsTests
         var malformedOutputs = new[]
         {
             validRecord[..^1],
-            $"100644 {sha} 4\\tconflicted.txt\\0",
-            $"10066z {sha} 2\\tconflicted.txt\\0",
-            $"100644 not-a-git-object 2\\tconflicted.txt\\0",
-            $"100644 {sha} 2\\t\\0",
-            "not-a-git-index-record\\0",
-            validRecord + "\\0"
+            $"100644 {sha} 4\tconflicted.txt\0",
+            $"10066z {sha} 2\tconflicted.txt\0",
+            $"100644 not-a-git-object 2\tconflicted.txt\0",
+            $"100644 {sha} 2\t\0",
+            "not-a-git-index-record\0",
+            validRecord + "\0"
         };
 
         foreach (var output in malformedOutputs)
