@@ -493,6 +493,10 @@ internal static class AgentTaskGitOperations
             if (!string.IsNullOrWhiteSpace(status.StdOut))
                 return Error("Commit or discard task worktree changes with git_commit before integrating a branch.");
 
+            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+            if (mergeDriverConfig.Error is not null)
+                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
+
             // A pending ref records the source SHA before Git mutates the task branch.
             // It is intentionally separate from the fetched remote ref: old fetches must
             // never be mistaken for an unfinished merge from a different source.
@@ -553,14 +557,27 @@ internal static class AgentTaskGitOperations
             if (alreadyIntegrated.TimedOut || alreadyIntegrated.ExitCode != 1)
                 return GitFailure("Could not verify whether the selected branch is already integrated.", alreadyIntegrated.StdErr);
 
-            var integrate = strategy == "rebase"
-                ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "-c", "core.editor=true", "-c", "sequence.editor=true", "rebase", target.Sha!)
-                : await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            var integrateArguments = new List<string>(mergeDriverConfig.Arguments);
+            if (strategy == "rebase")
+            {
+                integrateArguments.AddRange([
+                    "-c", "core.editor=true",
+                    "-c", "sequence.editor=true",
+                    "rebase", target.Sha!
+                ]);
+            }
+            else
+            {
+                integrateArguments.AddRange([
                     "-c", "user.name=ProjectBeacon Agent",
                     "-c", "user.email=projectbeacon-agent@localhost",
                     "-c", "commit.gpgsign=false",
-                    "-c", "core.editor=true", "merge", "--no-edit", target.Sha!);
+                    "-c", "core.editor=true",
+                    "merge", "--no-edit", target.Sha!
+                ]);
+            }
+            var integrate = await Git(
+                context.WorktreeRoot, context.DisabledFilters, ct, [.. integrateArguments]);
             if (!Succeeded(integrate))
             {
                 var operation = await ReadOperationStateAsync(context, ct);
@@ -629,6 +646,10 @@ internal static class AgentTaskGitOperations
                 : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
+        var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+        if (mergeDriverConfig.Error is not null)
+            return Error("Cannot continue integration because configured Git merge drivers could not be safely neutralized. The source checkpoint was retained. " + mergeDriverConfig.Error);
+
         var conflictsResult = await ReadConflictsAsync(context, ct);
         if (conflictsResult.Error is not null)
             return Error("Cannot continue integration because unresolved conflict paths could not be verified. The source checkpoint was retained. " + conflictsResult.Error);
@@ -656,17 +677,18 @@ internal static class AgentTaskGitOperations
         if (remainingResult.Files.Count > 0)
             return Success(new { status = "conflict", files = remainingResult.Files });
 
-        var continuation = active.Rebase
-            ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                "-c", "user.name=ProjectBeacon Agent",
-                "-c", "user.email=projectbeacon-agent@localhost",
-                "-c", "commit.gpgsign=false",
-                "-c", "core.editor=true", "-c", "sequence.editor=true", "rebase", "--continue")
-            : await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                "-c", "user.name=ProjectBeacon Agent",
-                "-c", "user.email=projectbeacon-agent@localhost",
-                "-c", "commit.gpgsign=false",
-                "-c", "core.editor=true", "merge", "--continue");
+        var continuationArguments = new List<string>(mergeDriverConfig.Arguments);
+        continuationArguments.AddRange([
+            "-c", "user.name=ProjectBeacon Agent",
+            "-c", "user.email=projectbeacon-agent@localhost",
+            "-c", "commit.gpgsign=false",
+            "-c", "core.editor=true"
+        ]);
+        continuationArguments.AddRange(active.Rebase
+            ? ["-c", "sequence.editor=true", "rebase", "--continue"]
+            : ["merge", "--continue"]);
+        var continuation = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, [.. continuationArguments]);
         if (!Succeeded(continuation))
         {
             var stillActive = await ReadOperationStateAsync(context, ct);
@@ -705,6 +727,61 @@ internal static class AgentTaskGitOperations
             integrationBranch = sourceName == "integration" ? IntegrationBranchName : null,
             integrationSha = sourceName == "integration" ? targetSha : null
         });
+    }
+
+    private static async Task<(string[] Arguments, string? Error)> ReadSafeMergeDriverArgumentsAsync(
+        GitContext context, CancellationToken ct)
+    {
+        var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "config", "--null", "--name-only", "--get-regexp", "^merge\\..*\\.driver$");
+        var parsed = ParseConfiguredMergeDriversResult(result);
+        if (parsed.Error is not null)
+            return ([], parsed.Error);
+
+        var arguments = new List<string>(parsed.Drivers.Count * 4);
+        foreach (var driver in parsed.Drivers)
+        {
+            var key = "merge." + driver;
+            arguments.Add("-c");
+            arguments.Add(key + ".driver=git merge-file --marker-size=%L %A %O %B");
+            arguments.Add("-c");
+            arguments.Add(key + ".recursive=text");
+        }
+
+        return ([.. arguments], null);
+    }
+
+    internal static (IReadOnlyList<string> Drivers, string? Error) ParseConfiguredMergeDriversResult(
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) result)
+    {
+        if (result.TimedOut)
+            return ([], "Git timed out while inspecting configured merge drivers.");
+        if (result.ExitCode == 1 && result.StdOut.Length == 0)
+            return ([], null);
+        if (!Succeeded(result))
+            return ([], "Git could not read configured merge drivers.");
+        if (result.StdOut.Length == 0 || result.StdOut[^1] != '\\0')
+            return ([], "Git returned an incomplete configured merge-driver listing.");
+
+        var drivers = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in result.StdOut.Split('\\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            const string prefix = "merge.";
+            const string suffix = ".driver";
+            if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || !key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                || key.Length <= prefix.Length + suffix.Length)
+                return ([], "Git returned a malformed configured merge-driver key.");
+
+            var driver = key[prefix.Length..^suffix.Length];
+            if (driver.Any(char.IsControl))
+                return ([], "Git returned a configured merge-driver name containing control characters.");
+            if (seen.Add(driver))
+                drivers.Add(driver);
+        }
+
+        return (drivers, null);
     }
 
     private static async Task<(string? Sha, string? Error)> FetchBaseAsync(GitContext context, CancellationToken ct)
