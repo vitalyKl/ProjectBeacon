@@ -168,6 +168,54 @@ internal static class AgentTaskGitHubPullRequestOperations
 
         var view = snapshot.View!;
         var checkList = checks.Checks!;
+
+        // gh pr checks resolves the PR's current head independently from gh pr view.
+        // Re-read the PR after the checks request and refuse to combine data from
+        // different heads or review states.
+        var confirmedSnapshot = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (confirmedSnapshot.Error is not null)
+            return AgentTaskGitOperations.Error(
+                "Could not confirm the pull request remained stable while required checks were read. " + confirmedSnapshot.Error);
+        var confirmedView = confirmedSnapshot.View!;
+        if (!MatchesStatusSnapshot(view, confirmedView))
+            return AgentTaskGitOperations.Error(
+                "The pull request changed while its required checks were being read. Retry git_pr status to inspect one consistent head and review snapshot.");
+        view = confirmedView;
+
+        // Re-read local worktree and remote base after the network calls so status
+        // and ready decisions use the latest observable task state, not the earlier
+        // preflight values.
+        var confirmedStatus = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "status", "--porcelain", "--untracked-files=all");
+        if (!AgentTaskGitOperations.Succeeded(confirmedStatus))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the task worktree after reading GitHub checks.", confirmedStatus.StdErr);
+        worktreeClean = string.IsNullOrWhiteSpace(confirmedStatus.StdOut);
+
+        var confirmedHead = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+        if (!AgentTaskGitOperations.Succeeded(confirmedHead)
+            || !AgentTaskGitOperations.IsGitSha(confirmedHead.StdOut.Trim()))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the task branch HEAD after reading GitHub checks.", confirmedHead.StdErr);
+        localHeadSha = confirmedHead.StdOut.Trim();
+
+        var confirmedRemoteBase = await AgentTaskGitOperations.RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, originUrls[0],
+            "ls-remote", "--heads", "--", originUrls[0], "refs/heads/" + context.BaseBranch);
+        if (!AgentTaskGitOperations.Succeeded(confirmedRemoteBase))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the remote review base after reading GitHub checks.", confirmedRemoteBase.StdErr);
+        var confirmedBaseLine = SplitLines(confirmedRemoteBase.StdOut)
+            .FirstOrDefault(line => line.EndsWith("\trefs/heads/" + context.BaseBranch, StringComparison.Ordinal));
+        remoteBaseSha = confirmedBaseLine?.Split('\t').FirstOrDefault();
+        if (!AgentTaskGitOperations.IsGitSha(remoteBaseSha ?? string.Empty))
+            return AgentTaskGitOperations.Error(
+                "The configured GitHub origin no longer exposes the daemon-selected review base.");
+        baseUnchanged = string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase);
+
         if (!string.Equals(view.BaseBranch, context.BaseBranch, StringComparison.Ordinal))
             return AgentTaskGitOperations.Error(
                 $"The task PR base changed from daemon-selected '{context.BaseBranch}' to '{view.BaseBranch}'. Retarget it explicitly and create fresh review proof.");
