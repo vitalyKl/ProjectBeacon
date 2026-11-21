@@ -746,7 +746,7 @@ internal static class AgentTaskGitOperations
         {
             var key = "merge." + driver;
             arguments.Add("-c");
-            arguments.Add(key + ".driver=git merge-file --marker-size=%L %A %O %B");
+            arguments.Add(key + ".driver=git merge-file --marker-size=%L -L current -L base -L incoming %A %O %B");
             arguments.Add("-c");
             arguments.Add(key + ".recursive=text");
         }
