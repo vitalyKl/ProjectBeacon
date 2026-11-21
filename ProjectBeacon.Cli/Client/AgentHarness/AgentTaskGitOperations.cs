@@ -738,6 +738,9 @@ internal static class AgentTaskGitOperations
         if (parsed.Error is not null)
             return ([], parsed.Error);
 
+        // Git executes merge.<driver>.driver as a shell command. Replace every configured
+        // driver with Git's built-in file-level text merge, and force recursive ancestor
+        // merges to the built-in text driver as well.
         var arguments = new List<string>(parsed.Drivers.Count * 4);
         foreach (var driver in parsed.Drivers)
         {
