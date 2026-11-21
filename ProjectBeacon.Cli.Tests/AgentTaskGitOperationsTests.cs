@@ -887,6 +887,11 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Null(none.Error);
         Assert.Empty(none.Drivers);
 
+        var unreadable = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+            (1, string.Empty, "fatal: unable to read config", false));
+        Assert.NotNull(unreadable.Error);
+        Assert.Empty(unreadable.Drivers);
+
         var timedOut = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
             (0, "merge.beacon.driver\0", string.Empty, true));
         Assert.NotNull(timedOut.Error);
@@ -896,6 +901,7 @@ public sealed partial class AgentTaskGitOperationsTests
             "merge.beacon.driver",
             "merge..driver\0",
             "merge.beacon.driver\0unexpected.key\0",
+            "merge.beacon.driver\0\0",
             "merge.bad name.driver\0"
         };
         foreach (var output in malformed)
