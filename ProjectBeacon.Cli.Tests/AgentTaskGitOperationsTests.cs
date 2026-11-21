@@ -501,7 +501,7 @@ public sealed partial class AgentTaskGitOperationsTests
 
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "root-project-change.txt"),
-                "root project change\\n");
+                "root project change\n");
 
             var committed = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
@@ -877,7 +877,7 @@ public sealed partial class AgentTaskGitOperationsTests
     public void ConfiguredMergeDriverRead_ParsesDriverNamesAndFailsClosedForInvalidResults()
     {
         var parsed = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
-            (0, "merge.beacon.driver\\0merge.xml.driver\\0merge.beacon.driver\\0", string.Empty, false));
+            (0, "merge.beacon.driver\0merge.xml.driver\0merge.beacon.driver\0", string.Empty, false));
 
         Assert.Null(parsed.Error);
         Assert.Equal(new[] { "beacon", "xml" }, parsed.Drivers);
@@ -888,15 +888,15 @@ public sealed partial class AgentTaskGitOperationsTests
         Assert.Empty(none.Drivers);
 
         var timedOut = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
-            (0, "merge.beacon.driver\\0", string.Empty, true));
+            (0, "merge.beacon.driver\0", string.Empty, true));
         Assert.NotNull(timedOut.Error);
 
         var malformed = new[]
         {
             "merge.beacon.driver",
-            "merge..driver\\0",
-            "merge.beacon.driver\\0unexpected.key\\0",
-            "merge.bad name.driver\\0"
+            "merge..driver\0",
+            "merge.beacon.driver\0unexpected.key\0",
+            "merge.bad name.driver\0"
         };
         foreach (var output in malformed)
         {
@@ -922,7 +922,7 @@ public sealed partial class AgentTaskGitOperationsTests
             var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
             await File.WriteAllTextAsync(
                 Path.Combine(projectRoot, ".gitattributes"),
-                "*.txt merge=beacon\\n");
+                "*.txt merge=beacon\n");
             await GitAsync(repository, "add", "src/app/.gitattributes");
             await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
             await GitAsync(repository, "push", "origin", "main");
@@ -940,7 +940,7 @@ public sealed partial class AgentTaskGitOperationsTests
                 "git update-ref refs/beacon/tests/merge-driver-executed HEAD");
 
             await File.WriteAllTextAsync(
-                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task branch version\\n");
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task branch version\n");
             var taskCommit = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitCommit,
@@ -948,7 +948,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.False(taskCommit.IsError, taskCommit.Text);
 
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, "shared.txt"), "upstream version\\n");
+                Path.Combine(projectRoot, "shared.txt"), "upstream version\n");
             await GitAsync(repository, "add", "src/app/shared.txt");
             await GitAsync(repository, "commit", "-m", "Change shared file on base");
             await GitAsync(repository, "push", "origin", "main");
