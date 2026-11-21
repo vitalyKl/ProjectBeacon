@@ -544,9 +544,9 @@ internal static class AgentTaskGitOperations
 
             // Only inspect merge drivers after the no-op path has been ruled out, and
             // immediately before Git mutates the task branch.
-            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
-            if (mergeDriverConfig.Error is not null)
-                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
+            var integrationMergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+            if (integrationMergeDriverConfig.Error is not null)
+                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + integrationMergeDriverConfig.Error);
 
             if (pendingSource is null)
             {
@@ -559,7 +559,7 @@ internal static class AgentTaskGitOperations
                     return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
             }
 
-            var integrateArguments = new List<string>(mergeDriverConfig.Arguments);
+            var integrateArguments = new List<string>(integrationMergeDriverConfig.Arguments);
             if (strategy == "rebase")
             {
                 integrateArguments.AddRange([
@@ -648,9 +648,9 @@ internal static class AgentTaskGitOperations
                 : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
-        var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
-        if (mergeDriverConfig.Error is not null)
-            return Error("Cannot continue integration because configured Git merge drivers could not be safely neutralized. The source checkpoint was retained. " + mergeDriverConfig.Error);
+        var continueMergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+        if (continueMergeDriverConfig.Error is not null)
+            return Error("Cannot continue integration because configured Git merge drivers could not be safely neutralized. The source checkpoint was retained. " + continueMergeDriverConfig.Error);
 
         var conflictsResult = await ReadConflictsAsync(context, ct);
         if (conflictsResult.Error is not null)
@@ -679,7 +679,7 @@ internal static class AgentTaskGitOperations
         if (remainingResult.Files.Count > 0)
             return Success(new { status = "conflict", files = remainingResult.Files });
 
-        var continuationArguments = new List<string>(mergeDriverConfig.Arguments);
+        var continuationArguments = new List<string>(continueMergeDriverConfig.Arguments);
         continuationArguments.AddRange([
             "-c", "user.name=ProjectBeacon Agent",
             "-c", "user.email=projectbeacon-agent@localhost",
