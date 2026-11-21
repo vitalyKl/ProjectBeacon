@@ -586,7 +586,11 @@ internal static class AgentTaskGitOperations
                     });
                 }
 
-                _ = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+                var clearError = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
+                if (clearError is not null)
+                    return Error(
+                        "Git could not integrate the selected branch, and its pending source checkpoint could not be cleared: "
+                        + clearError);
                 return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.", integrate.StdErr);
             }
 
@@ -864,9 +868,10 @@ internal static class AgentTaskGitOperations
             : IntegrationPendingRef(context.TaskId);
         var clearPending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
             "update-ref", "-d", pendingRef);
-        return Succeeded(clearPending)
+        var deleteError = GetPendingRefDeleteError(clearPending);
+        return deleteError is null
             ? null
-            : "the integration checkpoint was saved but its pending marker could not be cleared";
+            : "the integration checkpoint was saved but its pending marker could not be cleared: " + deleteError;
     }
 
     private static async Task<string?> ClearIntegrationPendingRefsAsync(
