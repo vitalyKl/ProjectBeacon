@@ -359,7 +359,7 @@ internal static class AgentTaskGitOperations
             case "blame":
                 {
                     var blame = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                        "blame", "--no-ext-diff", "--no-color", "--", path!);
+                        "blame", "--no-ext-diff", "--no-textconv", "--no-color", "--", path!);
                     return Succeeded(blame) ? Success(new { path, blame = Clip(blame.StdOut) }) : GitFailure("Could not read file history.");
                 }
 
