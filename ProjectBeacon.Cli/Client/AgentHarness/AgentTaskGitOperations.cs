@@ -880,7 +880,7 @@ internal static class AgentTaskGitOperations
         {
             var clear = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
                 "update-ref", "-d", reference);
-            if (!Succeeded(clear) && clear.ExitCode != 1)
+            if (!Succeeded(clear))
                 return clear.StdErr.Trim().Length == 0
                     ? "a pending source ref could not be deleted"
                     : Clip(clear.StdErr.Trim());
@@ -892,13 +892,24 @@ internal static class AgentTaskGitOperations
     private static async Task<(string? Sha, string? Error)> ReadRefShaAsync(
         GitContext context, string reference, CancellationToken ct)
     {
-        var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-            "rev-parse", "--verify", reference);
-        if (Succeeded(result) && IsGitSha(result.StdOut.Trim()))
-            return (result.StdOut.Trim(), null);
-        if (!result.TimedOut && result.ExitCode == 128)
-            return (null, null);
-        return (null, "Could not read a saved task integration checkpoint.");
+        // show-ref --verify --quiet gives exit code 1 only when this ref is absent.
+        // rev-parse alone uses fatal exit code 128 for both a missing ref and some
+        // repository errors, so it cannot safely distinguish "not set" from "unreadable".
+        var exists = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "show-ref", "--verify", "--quiet", reference);
+        if (!Succeeded(exists))
+        {
+            if (!exists.TimedOut && exists.ExitCode == 1 && string.IsNullOrWhiteSpace(exists.StdOut))
+                return (null, null);
+            return (null, "Could not verify whether a saved task integration checkpoint exists.");
+        }
+
+        var commit = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "rev-parse", "--verify", "--quiet", $"{reference}^{{commit}}");
+        if (!Succeeded(commit) || !IsGitSha(commit.StdOut.Trim()))
+            return (null, "A saved task integration checkpoint exists but does not resolve to a readable commit.");
+
+        return (commit.StdOut.Trim(), null);
     }
 
     private static async Task<(string? Sha, string? Error)> ReadIntegrationCheckpointAsync(
