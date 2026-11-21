@@ -405,12 +405,24 @@ internal static class AgentTaskGitHubPullRequestOperations
             "pr", "checks", pullRequestNumber.ToString(CultureInfo.InvariantCulture),
             "--repo", repository, "--required",
             "--json", "name,state,bucket,link,workflow");
-        if (result.TimedOut || string.IsNullOrWhiteSpace(result.StdOut))
-            return (null, "Could not read required GitHub status checks. " + AgentTaskGitOperations.Clip(result.StdErr.Trim()));
+        return ParseRequiredChecksResult(result.ExitCode, result.TimedOut, result.StdOut, result.StdErr);
+    }
+
+    internal static (IReadOnlyList<RequiredCheck>? Checks, string? Error) ParseRequiredChecksResult(
+        int exitCode,
+        bool timedOut,
+        string standardOutput,
+        string standardError)
+    {
+        // gh pr checks uses exit code 8 when checks are pending. Keep that JSON result
+        // so the caller can report pending checks as blockers; every other non-zero code
+        // means the status lookup itself failed and must not be treated as trustworthy.
+        if (timedOut || exitCode is not (0 or 8) || string.IsNullOrWhiteSpace(standardOutput))
+            return (null, "Could not read required GitHub status checks. " + AgentTaskGitOperations.Clip(standardError.Trim()));
 
         try
         {
-            using var document = JsonDocument.Parse(result.StdOut);
+            using var document = JsonDocument.Parse(standardOutput);
             if (document.RootElement.ValueKind != JsonValueKind.Array)
                 return (null, "GitHub returned a non-array required-check result.");
             var checks = new List<RequiredCheck>();
