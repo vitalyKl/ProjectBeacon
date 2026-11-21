@@ -756,16 +756,20 @@ internal static class AgentTaskGitOperations
     {
         if (result.TimedOut)
             return ([], "Git timed out while inspecting configured merge drivers.");
-        if (result.ExitCode == 1 && result.StdOut.Length == 0)
+        if (result.ExitCode == 1
+            && result.StdOut.Length == 0
+            && string.IsNullOrWhiteSpace(result.StdErr))
             return ([], null);
         if (!Succeeded(result))
             return ([], "Git could not read configured merge drivers.");
-        if (result.StdOut.Length == 0 || result.StdOut[^1] != '\0')
+
+        var keys = result.StdOut.Split('\0', StringSplitOptions.None);
+        if (keys.Length < 2 || keys[^1].Length != 0 || keys[..^1].Any(string.IsNullOrEmpty))
             return ([], "Git returned an incomplete configured merge-driver listing.");
 
         var drivers = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var key in result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var key in keys[..^1])
         {
             const string prefix = "merge.";
             const string suffix = ".driver";
