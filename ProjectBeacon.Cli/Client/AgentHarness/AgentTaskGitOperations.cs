@@ -567,19 +567,24 @@ internal static class AgentTaskGitOperations
                 if (operation.Error is not null)
                     return Error("Git integration failed and its operation state could not be verified. The source checkpoint was retained. " + operation.Error);
 
-                var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
                 if (operation.Active)
+                {
+                    var mergeConflicts = await ReadConflictsAsync(context, ct);
+                    if (mergeConflicts.Error is not null)
+                        return Error("Git integration failed and unresolved conflict paths could not be verified. The source checkpoint was retained. " + mergeConflicts.Error);
+
                     return Success(new
                     {
                         status = "conflict",
                         source,
                         strategy,
                         targetSha = target.Sha,
-                        files = mergeConflicts,
-                        error = mergeConflicts.Count > 0
+                        files = mergeConflicts.Files,
+                        error = mergeConflicts.Files.Count > 0
                             ? null
                             : "Git still has an active merge or rebase without unmerged paths. Continue or abort this saved integration before starting another operation."
                     });
+                }
 
                 _ = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
                 return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.", integrate.StdErr);
@@ -620,7 +625,10 @@ internal static class AgentTaskGitOperations
                 : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
-        var conflicts = await ReadConflictsAsync(context, ct);
+        var conflictsResult = await ReadConflictsAsync(context, ct);
+        if (conflictsResult.Error is not null)
+            return Error("Cannot continue integration because unresolved conflict paths could not be verified. The source checkpoint was retained. " + conflictsResult.Error);
+        var conflicts = conflictsResult.Files;
         if (conflicts.Any(path => !IsProjectRelativePath(context, path)))
             return Success(new
             {
@@ -638,9 +646,11 @@ internal static class AgentTaskGitOperations
                 return GitFailure("Could not stage resolved conflict files.");
         }
 
-        var remaining = await ReadConflictsAsync(context, ct);
-        if (remaining.Count > 0)
-            return Success(new { status = "conflict", files = remaining });
+        var remainingResult = await ReadConflictsAsync(context, ct);
+        if (remainingResult.Error is not null)
+            return Error("Could not verify unresolved conflict paths after staging. The source checkpoint was retained. " + remainingResult.Error);
+        if (remainingResult.Files.Count > 0)
+            return Success(new { status = "conflict", files = remainingResult.Files });
 
         var continuation = active.Rebase
             ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
@@ -658,9 +668,14 @@ internal static class AgentTaskGitOperations
             var stillActive = await ReadOperationStateAsync(context, ct);
             if (stillActive.Error is not null)
                 return Error("Git could not continue the integration and its operation state could not be verified. The source checkpoint was retained. " + stillActive.Error);
-            var nextConflicts = stillActive.Active ? await ReadConflictsAsync(context, ct) : [];
-            if (nextConflicts.Count > 0)
-                return Success(new { status = "conflict", files = nextConflicts });
+            if (stillActive.Active)
+            {
+                var nextConflicts = await ReadConflictsAsync(context, ct);
+                if (nextConflicts.Error is not null)
+                    return Error("Git could not continue the integration and unresolved conflict paths could not be verified. The source checkpoint was retained. " + nextConflicts.Error);
+                if (nextConflicts.Files.Count > 0)
+                    return Success(new { status = "conflict", files = nextConflicts.Files });
+            }
             return GitFailure("Git could not continue the integration.");
         }
 
@@ -1611,20 +1626,51 @@ internal static class AgentTaskGitOperations
             Exists(mergeHead));
     }
 
-    private static async Task<List<string>> ReadConflictsAsync(GitContext context, CancellationToken ct)
+    private static async Task<(List<string> Files, string? Error)> ReadConflictsAsync(
+        GitContext context, CancellationToken ct)
     {
         var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "ls-files", "-u", "-z");
+        return ParseConflictListResult(result);
+    }
+
+    internal static (List<string> Files, string? Error) ParseConflictListResult(
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) result)
+    {
         if (!Succeeded(result))
-            return [];
-        return result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Select(entry =>
-            {
-                var tab = entry.IndexOf('\t');
-                return tab >= 0 ? entry[(tab + 1)..] : string.Empty;
-            })
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+            return ([], "Git did not successfully enumerate unresolved conflict paths.");
+        if (result.StdOut.Length == 0)
+            return ([], null);
+        if (result.StdOut[^1] != '\0')
+            return ([], "Git returned an incomplete unresolved-conflict listing.");
+
+        var entries = result.StdOut.Split('\0', StringSplitOptions.None);
+        if (entries.Length < 2 || entries[^1].Length != 0)
+            return ([], "Git returned an invalid unresolved-conflict listing.");
+
+        var files = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in entries[..^1])
+        {
+            var tab = entry.IndexOf('\t');
+            if (tab <= 0 || tab == entry.Length - 1)
+                return ([], "Git returned a malformed unresolved-conflict record.");
+
+            var header = entry[..tab].Split(' ', StringSplitOptions.None);
+            if (header.Length != 3
+                || header[0].Length != 6
+                || !header[0].All(character => character is >= '0' and <= '7')
+                || !IsGitSha(header[1])
+                || header[2] is not ("1" or "2" or "3"))
+                return ([], "Git returned a malformed unresolved-conflict record.");
+
+            var path = entry[(tab + 1)..];
+            if (path.Length == 0)
+                return ([], "Git returned an unresolved-conflict record without a path.");
+            if (seen.Add(path))
+                files.Add(path);
+        }
+
+        return (files, null);
     }
 
     private static async Task<string?> UpdateMetadataBaseShaAsync(
