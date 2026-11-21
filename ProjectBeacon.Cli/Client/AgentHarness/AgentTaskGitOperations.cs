@@ -519,23 +519,6 @@ internal static class AgentTaskGitOperations
             if (!IsGitSha(target.Sha ?? string.Empty))
                 return Error("The selected integration source did not resolve to a valid commit SHA.");
 
-            // Read this immediately before the operation so remote fetches do not leave
-            // a wide window in which repository merge-driver configuration can change.
-            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
-            if (mergeDriverConfig.Error is not null)
-                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
-
-            if (pendingSource is null)
-            {
-                var pendingRef = source == "base"
-                    ? IntegrationBasePendingRef(context.TaskId)
-                    : IntegrationPendingRef(context.TaskId);
-                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "update-ref", pendingRef, target.Sha!);
-                if (!Succeeded(pending))
-                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
-            }
-
             // A retry after a lost acknowledgement, or a task branch that already contains
             // the selected source, reconciles the checkpoint without creating a duplicate merge.
             var alreadyIntegrated = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
@@ -558,6 +541,23 @@ internal static class AgentTaskGitOperations
             }
             if (alreadyIntegrated.TimedOut || alreadyIntegrated.ExitCode != 1)
                 return GitFailure("Could not verify whether the selected branch is already integrated.", alreadyIntegrated.StdErr);
+
+            // Only inspect merge drivers after the no-op path has been ruled out, and
+            // immediately before Git mutates the task branch.
+            var mergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+            if (mergeDriverConfig.Error is not null)
+                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + mergeDriverConfig.Error);
+
+            if (pendingSource is null)
+            {
+                var pendingRef = source == "base"
+                    ? IntegrationBasePendingRef(context.TaskId)
+                    : IntegrationPendingRef(context.TaskId);
+                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", pendingRef, target.Sha!);
+                if (!Succeeded(pending))
+                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
+            }
 
             var integrateArguments = new List<string>(mergeDriverConfig.Arguments);
             if (strategy == "rebase")
