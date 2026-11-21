@@ -213,4 +213,46 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         Assert.False(properties.ContainsKey("base"));
         Assert.False(properties.ContainsKey("merge"));
     }
+
+    [Fact]
+    public void RequiredCheckLookup_AcceptsSuccessfulAndPendingExitCodes()
+    {
+        const string passedJson = """[{"name":"CI","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/repo/actions/runs/1","workflow":"CI"}]""";
+        const string pendingJson = """[{"name":"CI","state":"PENDING","bucket":"pending","link":"https://github.com/example/repo/actions/runs/2","workflow":"CI"}]""";
+
+        var passed = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
+            0, timedOut: false, passedJson, string.Empty);
+        var pending = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
+            8, timedOut: false, pendingJson, string.Empty);
+
+        Assert.Null(passed.Error);
+        Assert.Equal("pass", Assert.Single(passed.Checks!).Bucket);
+        Assert.Null(pending.Error);
+        Assert.Equal("pending", Assert.Single(pending.Checks!).Bucket);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void RequiredCheckLookup_RejectsErrorExitCodesEvenWhenOutputLooksValid(int exitCode)
+    {
+        const string plausibleJson = """[{"name":"CI","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/repo/actions/runs/1","workflow":"CI"}]""";
+
+        var result = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
+            exitCode, timedOut: false, plausibleJson, "GitHub CLI request failed.");
+
+        Assert.Null(result.Checks);
+        Assert.Contains("Could not read required GitHub status checks", result.Error ?? string.Empty);
+    }
+
+    [Fact]
+    public void RequiredCheckLookup_AllowsAnEmptySuccessfulResultToFailClosedAtTheMergePolicy()
+    {
+        var result = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
+            0, timedOut: false, "[]", string.Empty);
+
+        Assert.Null(result.Error);
+        Assert.Empty(result.Checks!);
+    }
 }
