@@ -255,4 +255,27 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         Assert.Null(result.Error);
         Assert.Empty(result.Checks!);
     }
+
+    [Fact]
+    public void PullRequestStatusSnapshot_RequiresTheSameHeadBaseAndReviewState()
+    {
+        var original = CreateView();
+
+        Assert.True(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { Url = "https://github.com/example/repo/pull/1" }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { HeadSha = new string('c', 40) }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { BaseBranch = "release" }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { State = "MERGED" }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { IsDraft = true }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { Mergeable = "UNKNOWN" }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { MergeStateStatus = "BEHIND" }));
+        Assert.False(AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+            original, original with { ReviewDecision = "REVIEW_REQUIRED" }));
+    }
 }
