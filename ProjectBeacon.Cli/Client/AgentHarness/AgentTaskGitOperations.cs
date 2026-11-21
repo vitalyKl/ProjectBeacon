@@ -880,14 +880,21 @@ internal static class AgentTaskGitOperations
         {
             var clear = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
                 "update-ref", "-d", reference);
-            if (!Succeeded(clear))
-                return clear.StdErr.Trim().Length == 0
-                    ? "a pending source ref could not be deleted"
-                    : Clip(clear.StdErr.Trim());
+            var deleteError = GetPendingRefDeleteError(clear);
+            if (deleteError is not null)
+                return deleteError;
         }
 
         return null;
     }
+
+    internal static string? GetPendingRefDeleteError(
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
+        Succeeded(result)
+            ? null
+            : string.IsNullOrWhiteSpace(result.StdErr)
+                ? "a pending source ref could not be deleted"
+                : Clip(result.StdErr.Trim());
 
     private static async Task<(string? Sha, string? Error)> ReadRefShaAsync(
         GitContext context, string reference, CancellationToken ct)
