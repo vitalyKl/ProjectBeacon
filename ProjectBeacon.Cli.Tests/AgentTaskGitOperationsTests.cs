@@ -812,4 +812,63 @@ public sealed partial class AgentTaskGitOperationsTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+
+    [Fact]
+    public async Task GitIntegrate_RejectsSavedCheckpointThatDoesNotResolveToACommit()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await File.WriteAllTextAsync(Path.Combine(repository, "checkpoint-blob.txt"), "not a commit\n");
+            var blobSha = await GitAsync(repository, "hash-object", "-w", "checkpoint-blob.txt");
+            var pendingRef = $"refs/beacon/task/{taskId:N}/integration-pending";
+            await GitAsync(worktree.RecoveryPath, "update-ref", pendingRef, blobSha);
+
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"merge","source":"integration"}""");
+
+            Assert.True(result.IsError, result.Text);
+            Assert.Contains("checkpoint", result.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("commit", result.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(blobSha, await GitAsync(worktree.RecoveryPath, "rev-parse", pendingRef));
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void PendingRefDelete_FailsClosedForEveryUnsuccessfulGitCommand()
+    {
+        Assert.Null(AgentTaskGitOperations.GetPendingRefDeleteError(
+            (0, string.Empty, string.Empty, false)));
+
+        var lockFailure = AgentTaskGitOperations.GetPendingRefDeleteError(
+            (1, string.Empty, "error: cannot lock ref", false));
+        Assert.NotNull(lockFailure);
+        Assert.Contains("cannot lock ref", lockFailure, StringComparison.Ordinal);
+
+        var timeout = AgentTaskGitOperations.GetPendingRefDeleteError(
+            (0, string.Empty, string.Empty, true));
+        Assert.NotNull(timeout);
+    }
 }
