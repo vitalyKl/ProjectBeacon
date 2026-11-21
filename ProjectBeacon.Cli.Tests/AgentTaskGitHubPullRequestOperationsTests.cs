@@ -226,11 +226,9 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
             8, timedOut: false, pendingJson, string.Empty);
 
         Assert.Null(passed.Error);
-        Assert.Single(passed.Checks!);
-        Assert.Equal("pass", passed.Checks[0].Bucket);
+        Assert.Equal("pass", Assert.Single(passed.Checks!).Bucket);
         Assert.Null(pending.Error);
-        Assert.Single(pending.Checks!);
-        Assert.Equal("pending", pending.Checks[0].Bucket);
+        Assert.Equal("pending", Assert.Single(pending.Checks!).Bucket);
     }
 
     [Theory]
@@ -245,7 +243,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
             exitCode, timedOut: false, plausibleJson, "GitHub CLI request failed.");
 
         Assert.Null(result.Checks);
-        Assert.Contains("Could not read required GitHub status checks", result.Error);
+        Assert.Contains("Could not read required GitHub status checks", result.Error ?? string.Empty);
     }
 
     [Fact]
