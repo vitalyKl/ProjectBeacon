@@ -57,7 +57,7 @@ internal static class AgentTaskGitOperations
         string MetadataPath,
         string[] DisabledFilters);
 
-    private sealed record OperationState(bool Rebase, bool Merge)
+    private sealed record OperationState(bool Rebase, bool Merge, string? Error = null)
     {
         public bool Active => Rebase || Merge;
     }
@@ -380,6 +380,8 @@ internal static class AgentTaskGitOperations
             return Error("git_commit message must be a single line of 1..180 characters.");
 
         var operation = await ReadOperationStateAsync(context, ct);
+        if (operation.Error is not null)
+            return Error("Cannot commit because the current Git operation state could not be verified. " + operation.Error);
         if (operation.Active)
             return Error("Cannot commit while a merge or rebase is in progress. Resolve it with git_integrate first.");
 
@@ -479,6 +481,8 @@ internal static class AgentTaskGitOperations
                 return Error("git_integrate source must be base or integration.");
 
             var state = await ReadOperationStateAsync(context, ct);
+            if (state.Error is not null)
+                return Error("Cannot start integration because the current Git operation state could not be verified. " + state.Error);
             if (state.Active)
                 return Error("A merge or rebase is already in progress. Use action=continue or action=abort.");
 
@@ -560,9 +564,22 @@ internal static class AgentTaskGitOperations
             if (!Succeeded(integrate))
             {
                 var operation = await ReadOperationStateAsync(context, ct);
+                if (operation.Error is not null)
+                    return Error("Git integration failed and its operation state could not be verified. The source checkpoint was retained. " + operation.Error);
+
                 var mergeConflicts = operation.Active ? await ReadConflictsAsync(context, ct) : [];
-                if (mergeConflicts.Count > 0)
-                    return Success(new { status = "conflict", source, strategy, targetSha = target.Sha, files = mergeConflicts });
+                if (operation.Active)
+                    return Success(new
+                    {
+                        status = "conflict",
+                        source,
+                        strategy,
+                        targetSha = target.Sha,
+                        files = mergeConflicts,
+                        error = mergeConflicts.Count > 0
+                            ? null
+                            : "Git still has an active merge or rebase without unmerged paths. Continue or abort this saved integration before starting another operation."
+                    });
 
                 _ = await ClearIntegrationPendingRefsAsync(context, CancellationToken.None);
                 return GitFailure("Git could not integrate the selected branch. No resolvable conflict state was opened.", integrate.StdErr);
@@ -584,6 +601,8 @@ internal static class AgentTaskGitOperations
         }
 
         var active = await ReadOperationStateAsync(context, ct);
+        if (active.Error is not null)
+            return Error("Cannot continue or abort because the current Git operation state could not be verified. " + active.Error);
         if (!active.Active)
             return Error("There is no merge or rebase in progress for this task branch.");
 
@@ -637,6 +656,8 @@ internal static class AgentTaskGitOperations
         if (!Succeeded(continuation))
         {
             var stillActive = await ReadOperationStateAsync(context, ct);
+            if (stillActive.Error is not null)
+                return Error("Git could not continue the integration and its operation state could not be verified. The source checkpoint was retained. " + stillActive.Error);
             var nextConflicts = stillActive.Active ? await ReadConflictsAsync(context, ct) : [];
             if (nextConflicts.Count > 0)
                 return Success(new { status = "conflict", files = nextConflicts });
@@ -909,6 +930,8 @@ internal static class AgentTaskGitOperations
             return Error("The daemon-selected review base is not a valid Git branch.");
 
         var operation = await ReadOperationStateAsync(context, ct);
+        if (operation.Error is not null)
+            return Error("Publishing is refused because the current Git operation state could not be verified. " + operation.Error);
         if (operation.Active)
             return Error("Resolve the active merge or rebase with git_integrate before publishing.");
 
@@ -1539,16 +1562,31 @@ internal static class AgentTaskGitOperations
             && !string.IsNullOrWhiteSpace(value = property.GetString() ?? string.Empty);
     }
 
+    internal static string? GetOperationStateReadError(
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) rebaseMerge,
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) rebaseApply,
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) mergeHead)
+    {
+        static bool IsReadable((int ExitCode, string StdOut, string StdErr, bool TimedOut) result) =>
+            Succeeded(result) && !string.IsNullOrWhiteSpace(result.StdOut);
+
+        return IsReadable(rebaseMerge) && IsReadable(rebaseApply) && IsReadable(mergeHead)
+            ? null
+            : "Git did not return all merge/rebase state markers successfully.";
+    }
+
     private static async Task<OperationState> ReadOperationStateAsync(GitContext context, CancellationToken ct)
     {
         var rebaseMerge = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--git-path", "rebase-merge");
         var rebaseApply = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--git-path", "rebase-apply");
         var mergeHead = await Git(context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--git-path", "MERGE_HEAD");
 
+        var error = GetOperationStateReadError(rebaseMerge, rebaseApply, mergeHead);
+        if (error is not null)
+            return new OperationState(false, false, error);
+
         bool Exists((int ExitCode, string StdOut, string StdErr, bool TimedOut) result)
         {
-            if (!Succeeded(result) || string.IsNullOrWhiteSpace(result.StdOut))
-                return false;
             var path = result.StdOut.Trim();
             if (!Path.IsPathRooted(path))
                 path = Path.GetFullPath(Path.Combine(context.WorktreeRoot, path));
