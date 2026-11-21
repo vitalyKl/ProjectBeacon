@@ -168,6 +168,66 @@ internal static class AgentTaskGitHubPullRequestOperations
 
         var view = snapshot.View!;
         var checkList = checks.Checks!;
+
+        // gh pr checks resolves the PR's current head independently from gh pr view.
+        // Re-read the PR after the checks request and refuse to combine data from
+        // different heads or review states.
+        var confirmedSnapshot = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (confirmedSnapshot.Error is not null)
+            return AgentTaskGitOperations.Error(
+                "Could not confirm the pull request remained stable while required checks were read. " + confirmedSnapshot.Error);
+        var confirmedView = confirmedSnapshot.View!;
+        if (!MatchesStatusSnapshot(view, confirmedView))
+            return AgentTaskGitOperations.Error(
+                "The pull request changed while its required checks were being read. Retry git_pr status to inspect one consistent head and review snapshot.");
+        view = confirmedView;
+
+        // Re-read local worktree and remote base after the network calls so status
+        // and ready decisions use the latest observable task state, not the earlier
+        // preflight values.
+        var confirmedStatus = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "status", "--porcelain", "--untracked-files=all");
+        if (!AgentTaskGitOperations.Succeeded(confirmedStatus))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the task worktree after reading GitHub checks.", confirmedStatus.StdErr);
+        worktreeClean = string.IsNullOrWhiteSpace(confirmedStatus.StdOut);
+
+        var confirmedHead = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+        if (!AgentTaskGitOperations.Succeeded(confirmedHead)
+            || !AgentTaskGitOperations.IsGitSha(confirmedHead.StdOut.Trim()))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the task branch HEAD after reading GitHub checks.", confirmedHead.StdErr);
+        localHeadSha = confirmedHead.StdOut.Trim();
+
+        var confirmedRemoteBase = await AgentTaskGitOperations.RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, originUrls[0],
+            "ls-remote", "--heads", "--", originUrls[0], "refs/heads/" + context.BaseBranch);
+        if (!AgentTaskGitOperations.Succeeded(confirmedRemoteBase))
+            return AgentTaskGitOperations.GitFailure(
+                "Could not revalidate the remote review base after reading GitHub checks.", confirmedRemoteBase.StdErr);
+        var confirmedBaseLine = SplitLines(confirmedRemoteBase.StdOut)
+            .FirstOrDefault(line => line.EndsWith("\trefs/heads/" + context.BaseBranch, StringComparison.Ordinal));
+        remoteBaseSha = confirmedBaseLine?.Split('\t').FirstOrDefault();
+        if (!AgentTaskGitOperations.IsGitSha(remoteBaseSha ?? string.Empty))
+            return AgentTaskGitOperations.Error(
+                "The configured GitHub origin no longer exposes the daemon-selected review base.");
+        baseUnchanged = string.Equals(remoteBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase);
+
+        // The local/base revalidation above is also an asynchronous window. Confirm
+        // once more that the PR snapshot still matches the commit whose checks were read.
+        var finalPreflightSnapshot = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (finalPreflightSnapshot.Error is not null)
+            return AgentTaskGitOperations.Error(
+                "Could not confirm the pull request after task-state revalidation. " + finalPreflightSnapshot.Error);
+        if (!MatchesStatusSnapshot(view, finalPreflightSnapshot.View!))
+            return AgentTaskGitOperations.Error(
+                "The pull request changed during task-state revalidation. Retry git_pr status to inspect one consistent snapshot.");
+        view = finalPreflightSnapshot.View!;
+
         if (!string.Equals(view.BaseBranch, context.BaseBranch, StringComparison.Ordinal))
             return AgentTaskGitOperations.Error(
                 $"The task PR base changed from daemon-selected '{context.BaseBranch}' to '{view.BaseBranch}'. Retarget it explicitly and create fresh review proof.");
@@ -228,6 +288,42 @@ internal static class AgentTaskGitHubPullRequestOperations
             return AgentTaskGitOperations.Error(
                 "GitHub marked the PR ready, but its final base/head/state does not match the locally reviewed task branch. Re-read git_pr status and do not proceed to landing.");
 
+        var finalStatus = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct,
+            "status", "--porcelain", "--untracked-files=all");
+        var finalHead = await AgentTaskGitOperations.Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, "rev-parse", "--verify", "HEAD");
+        if (!AgentTaskGitOperations.Succeeded(finalStatus)
+            || !AgentTaskGitOperations.Succeeded(finalHead)
+            || !AgentTaskGitOperations.IsGitSha(finalHead.StdOut.Trim())
+            || !string.IsNullOrWhiteSpace(finalStatus.StdOut)
+            || !string.Equals(finalHead.StdOut.Trim(), localHeadSha, StringComparison.OrdinalIgnoreCase))
+            return AgentTaskGitOperations.Error(
+                "GitHub marked the PR ready, but the local task worktree changed during the operation. Re-read git_pr status before proceeding.");
+
+        var finalRemoteBase = await AgentTaskGitOperations.RunRemoteGitAsync(
+            context.WorktreeRoot, context.DisabledFilters, ct, originUrls[0],
+            "ls-remote", "--heads", "--", originUrls[0], "refs/heads/" + context.BaseBranch);
+        if (!AgentTaskGitOperations.Succeeded(finalRemoteBase))
+            return AgentTaskGitOperations.GitFailure(
+                "The PR was marked ready, but the final remote review-base check failed.", finalRemoteBase.StdErr);
+        var finalBaseLine = SplitLines(finalRemoteBase.StdOut)
+            .FirstOrDefault(line => line.EndsWith("\trefs/heads/" + context.BaseBranch, StringComparison.Ordinal));
+        var finalBaseSha = finalBaseLine?.Split('\t').FirstOrDefault();
+        if (!AgentTaskGitOperations.IsGitSha(finalBaseSha ?? string.Empty)
+            || !string.Equals(finalBaseSha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
+            return AgentTaskGitOperations.Error(
+                "The PR was marked ready, but the pinned review base advanced during the operation. Integrate and review again.");
+
+        var finalSnapshot = await ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, matching.Number, ct);
+        if (finalSnapshot.Error is not null)
+            return AgentTaskGitOperations.Error(
+                "The PR was marked ready, but its final state could not be confirmed: " + finalSnapshot.Error);
+        if (!MatchesStatusSnapshot(readyView, finalSnapshot.View!))
+            return AgentTaskGitOperations.Error(
+                "The PR changed after it was marked ready. Re-read git_pr status before proceeding to landing.");
+
         return AgentTaskGitOperations.Success(new
         {
             ready = true,
@@ -237,6 +333,17 @@ internal static class AgentTaskGitHubPullRequestOperations
             baseBranch = readyView.BaseBranch
         });
     }
+
+    internal static bool MatchesStatusSnapshot(
+        PullRequestView before,
+        PullRequestView after) =>
+        string.Equals(before.State, after.State, StringComparison.Ordinal)
+        && before.IsDraft == after.IsDraft
+        && string.Equals(before.BaseBranch, after.BaseBranch, StringComparison.Ordinal)
+        && string.Equals(before.HeadSha, after.HeadSha, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(before.Mergeable, after.Mergeable, StringComparison.Ordinal)
+        && string.Equals(before.MergeStateStatus, after.MergeStateStatus, StringComparison.Ordinal)
+        && string.Equals(before.ReviewDecision, after.ReviewDecision, StringComparison.Ordinal);
 
     internal static bool MatchesPublishedPullRequest(
         PullRequestView view,
