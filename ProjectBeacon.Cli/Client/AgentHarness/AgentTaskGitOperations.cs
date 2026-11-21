@@ -760,12 +760,12 @@ internal static class AgentTaskGitOperations
             return ([], null);
         if (!Succeeded(result))
             return ([], "Git could not read configured merge drivers.");
-        if (result.StdOut.Length == 0 || result.StdOut[^1] != '\\0')
+        if (result.StdOut.Length == 0 || result.StdOut[^1] != '\0')
             return ([], "Git returned an incomplete configured merge-driver listing.");
 
         var drivers = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var key in result.StdOut.Split('\\0', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var key in result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries))
         {
             const string prefix = "merge.";
             const string suffix = ".driver";
