@@ -1114,9 +1114,9 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, ".gitattributes"), "*.txt diff=beacon-textconv\\n");
+                Path.Combine(projectRoot, ".gitattributes"), "*.txt diff=beacon-textconv\n");
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, "blame.txt"), "alpha\\nbeta\\ngamma\\n");
+                Path.Combine(projectRoot, "blame.txt"), "alpha\nbeta\ngamma\n");
             await GitAsync(repository, "add", "-A");
             await GitAsync(repository, "commit", "-m", "Configure textconv blame fixture");
             await GitAsync(repository, "config", "diff.beacon-textconv.textconv", "git hash-object");
