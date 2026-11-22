@@ -192,7 +192,6 @@ internal static class AgentTaskGitOperations
     };
 
     private static async Task<bool> IsExpectedTaskRebaseAsync(
-        string repositoryRoot,
         string worktreeRoot,
         string expectedBranch,
         CancellationToken ct)
@@ -213,24 +212,32 @@ internal static class AgentTaskGitOperations
             if (!string.Equals(headName, "refs/heads/" + expectedBranch, StringComparison.Ordinal))
                 return false;
 
-            var originalHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "ORIG_HEAD");
+            // Use the rebase backend's per-worktree orig-head marker, not the shared
+            // ORIG_HEAD pseudo-ref, which another task worktree could overwrite.
+            var rebaseDirectory = Path.GetDirectoryName(statePath);
+            if (string.IsNullOrWhiteSpace(rebaseDirectory))
+                return false;
+            var originalHeadPath = Path.Combine(rebaseDirectory, "orig-head");
+            if (!File.Exists(originalHeadPath) || IsReparsePoint(originalHeadPath))
+                return false;
+            var originalHeadSha = (await File.ReadAllTextAsync(originalHeadPath, ct)).Trim();
+
             var branchHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "refs/heads/" + expectedBranch);
             var currentHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "HEAD");
             var rebaseHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "REBASE_HEAD");
 
-            if (!Succeeded(originalHead) || !Succeeded(branchHead)
-                || !Succeeded(currentHead) || !Succeeded(rebaseHead)
-                || !IsGitSha(originalHead.StdOut.Trim())
+            if (!Succeeded(branchHead) || !Succeeded(currentHead) || !Succeeded(rebaseHead)
+                || !IsGitSha(originalHeadSha)
                 || !IsGitSha(branchHead.StdOut.Trim())
                 || !IsGitSha(currentHead.StdOut.Trim())
                 || !IsGitSha(rebaseHead.StdOut.Trim()))
                 return false;
 
             // During a rebase Git detaches HEAD but leaves the task branch ref at its
-            // original tip. Require Git's rebase metadata and ORIG_HEAD to identify that
-            // exact authorized branch; arbitrary detached HEADs remain rejected.
+            // original tip. Require that worktree's own rebase metadata to identify
+            // that exact authorized branch; arbitrary detached HEADs remain rejected.
             return string.Equals(
-                originalHead.StdOut.Trim(), branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase);
+                originalHeadSha, branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         return false;
@@ -277,7 +284,7 @@ internal static class AgentTaskGitOperations
             else if (branch.TimedOut || branch.ExitCode != 1
                 || !string.IsNullOrWhiteSpace(branch.StdOut)
                 || !string.IsNullOrWhiteSpace(branch.StdErr)
-                || !await IsExpectedTaskRebaseAsync(repositoryRoot, worktreeRoot, expectedBranch, ct))
+                || !await IsExpectedTaskRebaseAsync(worktreeRoot, expectedBranch, ct))
             {
                 return (null, "The task worktree is not checked out on its assigned task branch.");
             }
