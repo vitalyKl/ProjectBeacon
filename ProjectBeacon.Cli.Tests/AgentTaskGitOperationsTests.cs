@@ -1011,11 +1011,11 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, "shared.txt"), "base-alpha\\nbase-beta\\n");
+                Path.Combine(projectRoot, "shared.txt"), "base-alpha\nbase-beta\n");
             await GitAsync(repository, "add", "src/app/shared.txt");
             await GitAsync(repository, "commit", "-m", "Prepare two-commit rebase conflict");
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, ".gitattributes"), "*.txt merge=beacon\\n");
+                Path.Combine(projectRoot, ".gitattributes"), "*.txt merge=beacon\n");
             await GitAsync(repository, "add", "src/app/.gitattributes");
             await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
             await GitAsync(repository, "push", "origin", "main");
@@ -1033,7 +1033,7 @@ public sealed partial class AgentTaskGitOperationsTests
                 "git update-ref refs/beacon/tests/merge-driver-executed HEAD");
 
             await File.WriteAllTextAsync(
-                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\\nbase-beta\\n");
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\nbase-beta\n");
             var firstCommit = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitCommit,
@@ -1041,7 +1041,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.False(firstCommit.IsError, firstCommit.Text);
 
             await File.WriteAllTextAsync(
-                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\\ntask-beta\\n");
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\ntask-beta\n");
             var secondCommit = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitCommit,
@@ -1049,7 +1049,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.False(secondCommit.IsError, secondCommit.Text);
 
             await File.WriteAllTextAsync(
-                Path.Combine(projectRoot, "shared.txt"), "upstream-alpha\\nupstream-beta\\n");
+                Path.Combine(projectRoot, "shared.txt"), "upstream-alpha\nupstream-beta\n");
             await GitAsync(repository, "add", "src/app/shared.txt");
             await GitAsync(repository, "commit", "-m", "Change both lines on base");
             await GitAsync(repository, "push", "origin", "main");
@@ -1063,7 +1063,21 @@ public sealed partial class AgentTaskGitOperationsTests
                 Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
 
             await File.WriteAllTextAsync(
-                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "resolved-alpha\\nupstream-beta\\n");
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "resolved-alpha\nupstream-beta\n");
+
+            var rebaseHeadNamePath = await GitAsync(
+                worktree.RecoveryPath, "rev-parse", "--git-path", "rebase-merge/head-name");
+            rebaseHeadNamePath = Path.GetFullPath(rebaseHeadNamePath, worktree.RecoveryPath);
+            var originalHeadName = await File.ReadAllTextAsync(rebaseHeadNamePath);
+            await File.WriteAllTextAsync(rebaseHeadNamePath, "refs/heads/beacon/task/not-this-task\n");
+
+            var mismatchedRebase = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.True(mismatchedRebase.IsError, mismatchedRebase.Text);
+
+            await File.WriteAllTextAsync(rebaseHeadNamePath, originalHeadName);
             var continued = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitIntegrate,
@@ -1097,6 +1111,46 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             if (worktree is not null)
                 await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+
+    [Fact]
+    public async Task GitInfo_RejectsDetachedTaskHeadOutsideAnActiveTaskRebase()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await GitAsync(worktree.RecoveryPath, "checkout", "--detach", "HEAD");
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitInfo,
+                """{"kind":"status"}""");
+
+            Assert.True(result.IsError, result.Text);
+            Assert.Contains("not checked out on its assigned task branch", result.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (worktree is not null)
+            {
+                try { await GitAsync(worktree.RecoveryPath, "checkout", worktree.BranchName); } catch { }
+                await worktree.DisposeAsync();
+            }
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
