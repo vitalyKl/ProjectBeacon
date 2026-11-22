@@ -215,7 +215,7 @@ internal static class AgentTaskGitOperations
             // Use the rebase backend's per-worktree orig-head marker, not the shared
             // ORIG_HEAD pseudo-ref, which another task worktree could overwrite.
             var rebaseDirectory = Path.GetDirectoryName(statePath);
-            if (string.IsNullOrWhiteSpace(rebaseDirectory))
+            if (string.IsNullOrWhiteSpace(rebaseDirectory) || IsReparsePoint(rebaseDirectory))
                 return false;
             var originalHeadPath = Path.Combine(rebaseDirectory, "orig-head");
             if (!File.Exists(originalHeadPath) || IsReparsePoint(originalHeadPath))
