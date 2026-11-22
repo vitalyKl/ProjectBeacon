@@ -622,6 +622,14 @@ public sealed partial class AgentTaskGitOperationsTests
         return path;
     }
 
+    private static string CreateShortTempRoot()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "pb-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+
     private static async Task<string> InitializeRepositoryAsync(
         string repository, bool withOrigin, bool projectAtRepositoryRoot = false)
     {
@@ -918,9 +926,11 @@ public sealed partial class AgentTaskGitOperationsTests
     [InlineData("rebase")]
     public async Task GitIntegrate_DoesNotExecuteConfiguredExternalMergeDrivers(string strategy)
     {
-        var root = CreateTempRoot();
-        var repository = Path.Combine(root, "repository");
-        var worktreeRoot = Path.Combine(root, "worktrees");
+        // Keep Windows' full path below MAX_PATH while Git rebase inspects its
+        // internal A...B paths from this nested task worktree.
+        var root = CreateShortTempRoot();
+        var repository = Path.Combine(root, "r");
+        var worktreeRoot = Path.Combine(root, "w");
         Directory.CreateDirectory(repository);
         AgentTaskWorktree? worktree = null;
         try
@@ -1002,9 +1012,11 @@ public sealed partial class AgentTaskGitOperationsTests
     [Fact]
     public async Task GitIntegrate_RebaseContinueAlsoNeutralizesCustomMergeDrivers()
     {
-        var root = CreateTempRoot();
-        var repository = Path.Combine(root, "repository");
-        var worktreeRoot = Path.Combine(root, "worktrees");
+        // Keep Windows' full path below MAX_PATH while Git rebase inspects its
+        // internal A...B paths from this nested task worktree.
+        var root = CreateShortTempRoot();
+        var repository = Path.Combine(root, "r");
+        var worktreeRoot = Path.Combine(root, "w");
         Directory.CreateDirectory(repository);
         AgentTaskWorktree? worktree = null;
         try
