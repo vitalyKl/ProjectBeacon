@@ -215,7 +215,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     }
 
     [Fact]
-    public void RequiredCheckLookup_AcceptsSuccessfulAndPendingExitCodes()
+    public void RequiredCheckLookup_ReadsPendingStateFromJsonWithSuccessfulExitCode()
     {
         const string passedJson = """[{"name":"CI","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/repo/actions/runs/1","workflow":"CI"}]""";
         const string pendingJson = """[{"name":"CI","state":"PENDING","bucket":"pending","link":"https://github.com/example/repo/actions/runs/2","workflow":"CI"}]""";
@@ -223,7 +223,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         var passed = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
             0, timedOut: false, passedJson, string.Empty);
         var pending = AgentTaskGitHubPullRequestOperations.ParseRequiredChecksResult(
-            8, timedOut: false, pendingJson, string.Empty);
+            0, timedOut: false, pendingJson, string.Empty);
 
         Assert.Null(passed.Error);
         Assert.Equal("pass", Assert.Single(passed.Checks!).Bucket);
@@ -235,7 +235,8 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(4)]
-    public void RequiredCheckLookup_RejectsErrorExitCodesEvenWhenOutputLooksValid(int exitCode)
+    [InlineData(8)]
+    public void RequiredCheckLookup_RejectsEveryNonzeroJsonExitCodeEvenWhenOutputLooksValid(int exitCode)
     {
         const string plausibleJson = """[{"name":"CI","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/repo/actions/runs/1","workflow":"CI"}]""";
 
