@@ -1078,6 +1078,18 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(mismatchedRebase.IsError, mismatchedRebase.Text);
 
             await File.WriteAllTextAsync(rebaseHeadNamePath, originalHeadName);
+
+            var rebaseDirectory = Path.GetDirectoryName(rebaseHeadNamePath)!;
+            var rebaseOriginalHeadPath = Path.Combine(rebaseDirectory, "orig-head");
+            var originalRebaseHead = await File.ReadAllTextAsync(rebaseOriginalHeadPath);
+            await File.WriteAllTextAsync(rebaseOriginalHeadPath, new string('0', 40) + "\n");
+            var mismatchedOriginalHead = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.True(mismatchedOriginalHead.IsError, mismatchedOriginalHead.Text);
+            await File.WriteAllTextAsync(rebaseOriginalHeadPath, originalRebaseHead);
+
             var continued = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitIntegrate,
