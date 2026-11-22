@@ -1065,6 +1065,14 @@ public sealed partial class AgentTaskGitOperationsTests
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "shared.txt"), "resolved-alpha\nupstream-beta\n");
 
+            var commitDuringRebase = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Must not commit during rebase"}""");
+            Assert.True(commitDuringRebase.IsError, commitDuringRebase.Text);
+            Assert.Contains("not checked out on its assigned task branch",
+                commitDuringRebase.Text, StringComparison.OrdinalIgnoreCase);
+
             var rebaseHeadNamePath = await GitAsync(
                 worktree.RecoveryPath, "rev-parse", "--git-path", "rebase-merge/head-name");
             rebaseHeadNamePath = Path.GetFullPath(rebaseHeadNamePath, worktree.RecoveryPath);
