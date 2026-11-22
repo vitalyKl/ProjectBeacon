@@ -144,7 +144,10 @@ internal static class AgentTaskGitOperations
             .Contains(toolName, StringComparer.Ordinal))
             return Error("The current execution role is not authorized for this structured Git operation.");
 
-        var opened = await OpenAsync(authorization, ct);
+        var allowDetachedRebase = toolName == PipelineToolPolicy.GitInfo
+            || (toolName == PipelineToolPolicy.GitIntegrate
+                && ReadString(arguments, "action") is "continue" or "abort");
+        var opened = await OpenAsync(authorization, allowDetachedRebase, ct);
         if (opened.Context is null)
             return Error(opened.Error ?? "The task branch workspace is unavailable.");
 
@@ -245,6 +248,7 @@ internal static class AgentTaskGitOperations
 
     private static async Task<(GitContext? Context, string? Error)> OpenAsync(
         AgentHarnessAuthorization authorization,
+        bool allowDetachedRebase,
         CancellationToken ct)
     {
         if (!authorization.IsolatedWorkspace
@@ -284,6 +288,7 @@ internal static class AgentTaskGitOperations
             else if (branch.TimedOut || branch.ExitCode != 1
                 || !string.IsNullOrWhiteSpace(branch.StdOut)
                 || !string.IsNullOrWhiteSpace(branch.StdErr)
+                || !allowDetachedRebase
                 || !await IsExpectedTaskRebaseAsync(worktreeRoot, expectedBranch, ct))
             {
                 return (null, "The task worktree is not checked out on its assigned task branch.");
