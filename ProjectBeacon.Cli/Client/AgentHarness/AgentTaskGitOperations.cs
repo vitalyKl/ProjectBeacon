@@ -191,6 +191,51 @@ internal static class AgentTaskGitOperations
         ["enum"] = new JsonArray(values.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray())
     };
 
+    private static async Task<bool> IsExpectedTaskRebaseAsync(
+        string repositoryRoot,
+        string worktreeRoot,
+        string expectedBranch,
+        CancellationToken ct)
+    {
+        foreach (var stateFile in new[] { "rebase-merge/head-name", "rebase-apply/head-name" })
+        {
+            var pathResult = await Git(worktreeRoot, [], ct, "rev-parse", "--git-path", stateFile);
+            if (!Succeeded(pathResult) || string.IsNullOrWhiteSpace(pathResult.StdOut))
+                return false;
+
+            var statePath = Path.GetFullPath(pathResult.StdOut.Trim(), worktreeRoot);
+            if (!File.Exists(statePath))
+                continue;
+            if (IsReparsePoint(statePath))
+                return false;
+
+            var headName = (await File.ReadAllTextAsync(statePath, ct)).Trim();
+            if (!string.Equals(headName, "refs/heads/" + expectedBranch, StringComparison.Ordinal))
+                return false;
+
+            var originalHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "ORIG_HEAD");
+            var branchHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "refs/heads/" + expectedBranch);
+            var currentHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "HEAD");
+            var rebaseHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "REBASE_HEAD");
+
+            if (!Succeeded(originalHead) || !Succeeded(branchHead)
+                || !Succeeded(currentHead) || !Succeeded(rebaseHead)
+                || !IsGitSha(originalHead.StdOut.Trim())
+                || !IsGitSha(branchHead.StdOut.Trim())
+                || !IsGitSha(currentHead.StdOut.Trim())
+                || !IsGitSha(rebaseHead.StdOut.Trim()))
+                return false;
+
+            // During a rebase Git detaches HEAD but leaves the task branch ref at its
+            // original tip. Require Git's rebase metadata and ORIG_HEAD to identify that
+            // exact authorized branch; arbitrary detached HEADs remain rejected.
+            return string.Equals(
+                originalHead.StdOut.Trim(), branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
     private static async Task<(GitContext? Context, string? Error)> OpenAsync(
         AgentHarnessAuthorization authorization,
         CancellationToken ct)
@@ -224,8 +269,18 @@ internal static class AgentTaskGitOperations
                 return (null, "The authorized task directory is no longer the expected Git worktree.");
 
             var branch = await Git(worktreeRoot, [], ct, "symbolic-ref", "--quiet", "--short", "HEAD");
-            if (!Succeeded(branch) || !string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
+            if (Succeeded(branch))
+            {
+                if (!string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
+                    return (null, "The task worktree is not checked out on its assigned task branch.");
+            }
+            else if (branch.TimedOut || branch.ExitCode != 1
+                || !string.IsNullOrWhiteSpace(branch.StdOut)
+                || !string.IsNullOrWhiteSpace(branch.StdErr)
+                || !await IsExpectedTaskRebaseAsync(repositoryRoot, worktreeRoot, expectedBranch, ct))
+            {
                 return (null, "The task worktree is not checked out on its assigned task branch.");
+            }
 
             var metadataPath = worktreeRoot + ".beacon.json";
             if (IsReparsePoint(metadataPath))
