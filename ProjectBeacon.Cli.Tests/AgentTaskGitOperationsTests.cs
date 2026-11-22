@@ -1009,8 +1009,10 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
 
-    [Fact]
-    public async Task GitIntegrate_RebaseContinueAlsoNeutralizesCustomMergeDrivers()
+    [Theory]
+    [InlineData("merge")]
+    [InlineData("apply")]
+    public async Task GitIntegrate_RebaseContinueAlsoNeutralizesCustomMergeDrivers(string rebaseBackend)
     {
         // Keep Windows' full path below MAX_PATH while Git rebase inspects its
         // internal A...B paths from this nested task worktree.
@@ -1031,6 +1033,7 @@ public sealed partial class AgentTaskGitOperationsTests
             await GitAsync(repository, "add", "src/app/.gitattributes");
             await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
             await GitAsync(repository, "push", "origin", "main");
+            await GitAsync(repository, "config", "rebase.backend", rebaseBackend);
 
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
@@ -1085,8 +1088,9 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Contains("not checked out on its assigned task branch",
                 commitDuringRebase.Text, StringComparison.OrdinalIgnoreCase);
 
+            var rebaseStateDirectory = rebaseBackend == "merge" ? "rebase-merge" : "rebase-apply";
             var rebaseHeadNamePath = await GitAsync(
-                worktree.RecoveryPath, "rev-parse", "--git-path", "rebase-merge/head-name");
+                worktree.RecoveryPath, "rev-parse", "--git-path", Path.Combine(rebaseStateDirectory, "head-name"));
             rebaseHeadNamePath = Path.GetFullPath(rebaseHeadNamePath, worktree.RecoveryPath);
             var originalHeadName = await File.ReadAllTextAsync(rebaseHeadNamePath);
             await File.WriteAllTextAsync(rebaseHeadNamePath, "refs/heads/beacon/task/not-this-task\n");
