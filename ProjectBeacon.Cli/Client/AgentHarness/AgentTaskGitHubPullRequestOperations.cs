@@ -521,10 +521,10 @@ internal static class AgentTaskGitHubPullRequestOperations
         string standardOutput,
         string standardError)
     {
-        // gh pr checks uses exit code 8 when checks are pending. Keep that JSON result
-        // so the caller can report pending checks as blockers; every other non-zero code
-        // means the status lookup itself failed and must not be treated as trustworthy.
-        if (timedOut || exitCode is not (0 or 8) || string.IsNullOrWhiteSpace(standardOutput))
+        // In JSON mode gh pr checks exports the check array before applying the
+        // text-mode PendingError/SilentError exit codes. Pending/failing states live
+        // in each JSON item's bucket; a non-zero process exit means the lookup failed.
+        if (timedOut || exitCode != 0 || string.IsNullOrWhiteSpace(standardOutput))
             return (null, "Could not read required GitHub status checks. " + AgentTaskGitOperations.Clip(standardError.Trim()));
 
         try
