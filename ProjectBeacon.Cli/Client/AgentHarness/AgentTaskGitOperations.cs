@@ -144,7 +144,10 @@ internal static class AgentTaskGitOperations
             .Contains(toolName, StringComparer.Ordinal))
             return Error("The current execution role is not authorized for this structured Git operation.");
 
-        var opened = await OpenAsync(authorization, ct);
+        var allowDetachedRebase = toolName == PipelineToolPolicy.GitInfo
+            || (toolName == PipelineToolPolicy.GitIntegrate
+                && ReadString(arguments, "action") is "continue" or "abort");
+        var opened = await OpenAsync(authorization, allowDetachedRebase, ct);
         if (opened.Context is null)
             return Error(opened.Error ?? "The task branch workspace is unavailable.");
 
@@ -191,8 +194,61 @@ internal static class AgentTaskGitOperations
         ["enum"] = new JsonArray(values.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray())
     };
 
+    private static async Task<bool> IsExpectedTaskRebaseAsync(
+        string worktreeRoot,
+        string expectedBranch,
+        CancellationToken ct)
+    {
+        foreach (var stateFile in new[] { "rebase-merge/head-name", "rebase-apply/head-name" })
+        {
+            var pathResult = await Git(worktreeRoot, [], ct, "rev-parse", "--git-path", stateFile);
+            if (!Succeeded(pathResult) || string.IsNullOrWhiteSpace(pathResult.StdOut))
+                return false;
+
+            var statePath = Path.GetFullPath(pathResult.StdOut.Trim(), worktreeRoot);
+            if (!File.Exists(statePath))
+                continue;
+            if (IsReparsePoint(statePath))
+                return false;
+
+            var headName = (await File.ReadAllTextAsync(statePath, ct)).Trim();
+            if (!string.Equals(headName, "refs/heads/" + expectedBranch, StringComparison.Ordinal))
+                return false;
+
+            // Use the rebase backend's per-worktree orig-head marker, not the shared
+            // ORIG_HEAD pseudo-ref, which another task worktree could overwrite.
+            var rebaseDirectory = Path.GetDirectoryName(statePath);
+            if (string.IsNullOrWhiteSpace(rebaseDirectory) || IsReparsePoint(rebaseDirectory))
+                return false;
+            var originalHeadPath = Path.Combine(rebaseDirectory, "orig-head");
+            if (!File.Exists(originalHeadPath) || IsReparsePoint(originalHeadPath))
+                return false;
+            var originalHeadSha = (await File.ReadAllTextAsync(originalHeadPath, ct)).Trim();
+
+            var branchHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "refs/heads/" + expectedBranch);
+            var currentHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "HEAD");
+            var rebaseHead = await Git(worktreeRoot, [], ct, "rev-parse", "--verify", "REBASE_HEAD");
+
+            if (!Succeeded(branchHead) || !Succeeded(currentHead) || !Succeeded(rebaseHead)
+                || !IsGitSha(originalHeadSha)
+                || !IsGitSha(branchHead.StdOut.Trim())
+                || !IsGitSha(currentHead.StdOut.Trim())
+                || !IsGitSha(rebaseHead.StdOut.Trim()))
+                return false;
+
+            // During a rebase Git detaches HEAD but leaves the task branch ref at its
+            // original tip. Require that worktree's own rebase metadata to identify
+            // that exact authorized branch; arbitrary detached HEADs remain rejected.
+            return string.Equals(
+                originalHeadSha, branchHead.StdOut.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
     private static async Task<(GitContext? Context, string? Error)> OpenAsync(
         AgentHarnessAuthorization authorization,
+        bool allowDetachedRebase,
         CancellationToken ct)
     {
         if (!authorization.IsolatedWorkspace
@@ -224,8 +280,19 @@ internal static class AgentTaskGitOperations
                 return (null, "The authorized task directory is no longer the expected Git worktree.");
 
             var branch = await Git(worktreeRoot, [], ct, "symbolic-ref", "--quiet", "--short", "HEAD");
-            if (!Succeeded(branch) || !string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
+            if (Succeeded(branch))
+            {
+                if (!string.Equals(branch.StdOut.Trim(), expectedBranch, StringComparison.Ordinal))
+                    return (null, "The task worktree is not checked out on its assigned task branch.");
+            }
+            else if (branch.TimedOut || branch.ExitCode != 1
+                || !string.IsNullOrWhiteSpace(branch.StdOut)
+                || !string.IsNullOrWhiteSpace(branch.StdErr)
+                || !allowDetachedRebase
+                || !await IsExpectedTaskRebaseAsync(worktreeRoot, expectedBranch, ct))
+            {
                 return (null, "The task worktree is not checked out on its assigned task branch.");
+            }
 
             var metadataPath = worktreeRoot + ".beacon.json";
             if (IsReparsePoint(metadataPath))
@@ -519,17 +586,6 @@ internal static class AgentTaskGitOperations
             if (!IsGitSha(target.Sha ?? string.Empty))
                 return Error("The selected integration source did not resolve to a valid commit SHA.");
 
-            if (pendingSource is null)
-            {
-                var pendingRef = source == "base"
-                    ? IntegrationBasePendingRef(context.TaskId)
-                    : IntegrationPendingRef(context.TaskId);
-                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "update-ref", pendingRef, target.Sha!);
-                if (!Succeeded(pending))
-                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
-            }
-
             // A retry after a lost acknowledgement, or a task branch that already contains
             // the selected source, reconciles the checkpoint without creating a duplicate merge.
             var alreadyIntegrated = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
@@ -553,14 +609,44 @@ internal static class AgentTaskGitOperations
             if (alreadyIntegrated.TimedOut || alreadyIntegrated.ExitCode != 1)
                 return GitFailure("Could not verify whether the selected branch is already integrated.", alreadyIntegrated.StdErr);
 
-            var integrate = strategy == "rebase"
-                ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                    "-c", "core.editor=true", "-c", "sequence.editor=true", "rebase", target.Sha!)
-                : await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            // Only inspect merge drivers after the no-op path has been ruled out, and
+            // immediately before Git mutates the task branch.
+            var integrationMergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+            if (integrationMergeDriverConfig.Error is not null)
+                return Error("Cannot integrate because configured Git merge drivers could not be safely neutralized. " + integrationMergeDriverConfig.Error);
+
+            if (pendingSource is null)
+            {
+                var pendingRef = source == "base"
+                    ? IntegrationBasePendingRef(context.TaskId)
+                    : IntegrationPendingRef(context.TaskId);
+                var pending = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+                    "update-ref", pendingRef, target.Sha!);
+                if (!Succeeded(pending))
+                    return GitFailure("Could not persist the selected integration source checkpoint before merging.", pending.StdErr);
+            }
+
+            var integrateArguments = new List<string>(integrationMergeDriverConfig.Arguments);
+            if (strategy == "rebase")
+            {
+                integrateArguments.AddRange([
+                    "-c", "core.editor=true",
+                    "-c", "sequence.editor=true",
+                    "rebase", target.Sha!
+                ]);
+            }
+            else
+            {
+                integrateArguments.AddRange([
                     "-c", "user.name=ProjectBeacon Agent",
                     "-c", "user.email=projectbeacon-agent@localhost",
                     "-c", "commit.gpgsign=false",
-                    "-c", "core.editor=true", "merge", "--no-edit", target.Sha!);
+                    "-c", "core.editor=true",
+                    "merge", "--no-edit", target.Sha!
+                ]);
+            }
+            var integrate = await Git(
+                context.WorktreeRoot, context.DisabledFilters, ct, [.. integrateArguments]);
             if (!Succeeded(integrate))
             {
                 var operation = await ReadOperationStateAsync(context, ct);
@@ -629,6 +715,10 @@ internal static class AgentTaskGitOperations
                 : Error("The Git operation was aborted, but its pending source checkpoint could not be cleared: " + clearError);
         }
 
+        var continueMergeDriverConfig = await ReadSafeMergeDriverArgumentsAsync(context, ct);
+        if (continueMergeDriverConfig.Error is not null)
+            return Error("Cannot continue integration because configured Git merge drivers could not be safely neutralized. The source checkpoint was retained. " + continueMergeDriverConfig.Error);
+
         var conflictsResult = await ReadConflictsAsync(context, ct);
         if (conflictsResult.Error is not null)
             return Error("Cannot continue integration because unresolved conflict paths could not be verified. The source checkpoint was retained. " + conflictsResult.Error);
@@ -656,17 +746,18 @@ internal static class AgentTaskGitOperations
         if (remainingResult.Files.Count > 0)
             return Success(new { status = "conflict", files = remainingResult.Files });
 
-        var continuation = active.Rebase
-            ? await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                "-c", "user.name=ProjectBeacon Agent",
-                "-c", "user.email=projectbeacon-agent@localhost",
-                "-c", "commit.gpgsign=false",
-                "-c", "core.editor=true", "-c", "sequence.editor=true", "rebase", "--continue")
-            : await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                "-c", "user.name=ProjectBeacon Agent",
-                "-c", "user.email=projectbeacon-agent@localhost",
-                "-c", "commit.gpgsign=false",
-                "-c", "core.editor=true", "merge", "--continue");
+        var continuationArguments = new List<string>(continueMergeDriverConfig.Arguments);
+        continuationArguments.AddRange([
+            "-c", "user.name=ProjectBeacon Agent",
+            "-c", "user.email=projectbeacon-agent@localhost",
+            "-c", "commit.gpgsign=false",
+            "-c", "core.editor=true"
+        ]);
+        continuationArguments.AddRange(active.Rebase
+            ? ["-c", "sequence.editor=true", "rebase", "--continue"]
+            : ["merge", "--continue"]);
+        var continuation = await Git(
+            context.WorktreeRoot, context.DisabledFilters, ct, [.. continuationArguments]);
         if (!Succeeded(continuation))
         {
             var stillActive = await ReadOperationStateAsync(context, ct);
@@ -705,6 +796,70 @@ internal static class AgentTaskGitOperations
             integrationBranch = sourceName == "integration" ? IntegrationBranchName : null,
             integrationSha = sourceName == "integration" ? targetSha : null
         });
+    }
+
+    private static async Task<(string[] Arguments, string? Error)> ReadSafeMergeDriverArgumentsAsync(
+        GitContext context, CancellationToken ct)
+    {
+        var result = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
+            "config", "--null", "--name-only", "--get-regexp", "^merge\\..*\\.driver$");
+        var parsed = ParseConfiguredMergeDriversResult(result);
+        if (parsed.Error is not null)
+            return ([], parsed.Error);
+
+        // Git executes merge.<driver>.driver as a shell command. Replace every configured
+        // driver with Git's built-in file-level text merge, and force recursive ancestor
+        // merges to the built-in text driver as well.
+        var arguments = new List<string>(parsed.Drivers.Count * 4);
+        foreach (var driver in parsed.Drivers)
+        {
+            var key = "merge." + driver;
+            arguments.Add("-c");
+            arguments.Add(key + ".driver=git merge-file --marker-size=%L -L current -L base -L incoming %A %O %B");
+            arguments.Add("-c");
+            arguments.Add(key + ".recursive=text");
+        }
+
+        return ([.. arguments], null);
+    }
+
+    internal static (IReadOnlyList<string> Drivers, string? Error) ParseConfiguredMergeDriversResult(
+        (int ExitCode, string StdOut, string StdErr, bool TimedOut) result)
+    {
+        if (result.TimedOut)
+            return ([], "Git timed out while inspecting configured merge drivers.");
+        if (result.ExitCode == 1
+            && result.StdOut.Length == 0
+            && string.IsNullOrWhiteSpace(result.StdErr))
+            return ([], null);
+        if (!Succeeded(result))
+            return ([], "Git could not read configured merge drivers.");
+
+        var keys = result.StdOut.Split('\0', StringSplitOptions.None);
+        if (keys.Length < 2 || keys[^1].Length != 0 || keys[..^1].Any(string.IsNullOrEmpty))
+            return ([], "Git returned an incomplete configured merge-driver listing.");
+
+        var drivers = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in keys[..^1])
+        {
+            const string prefix = "merge.";
+            const string suffix = ".driver";
+            if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || !key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                || key.Length <= prefix.Length + suffix.Length)
+                return ([], "Git returned a malformed configured merge-driver key.");
+
+            var driver = key[prefix.Length..^suffix.Length];
+            if (driver.Length == 0
+                || driver.Any(character => !char.IsAsciiLetterOrDigit(character)
+                    && character is not ('.' or '_' or '-')))
+                return ([], "Git returned a configured merge-driver name that cannot be safely overridden.");
+            if (seen.Add(driver))
+                drivers.Add(driver);
+        }
+
+        return (drivers, null);
     }
 
     private static async Task<(string? Sha, string? Error)> FetchBaseAsync(GitContext context, CancellationToken ct)

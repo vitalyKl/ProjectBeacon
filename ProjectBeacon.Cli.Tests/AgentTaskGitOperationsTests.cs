@@ -501,7 +501,7 @@ public sealed partial class AgentTaskGitOperationsTests
 
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "root-project-change.txt"),
-                "root project change\\n");
+                "root project change\n");
 
             var committed = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
@@ -621,6 +621,14 @@ public sealed partial class AgentTaskGitOperationsTests
         Directory.CreateDirectory(path);
         return path;
     }
+
+    private static string CreateShortTempRoot()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "pb-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
 
     private static async Task<string> InitializeRepositoryAsync(
         string repository, bool withOrigin, bool projectAtRepositoryRoot = false)
@@ -870,5 +878,316 @@ public sealed partial class AgentTaskGitOperationsTests
         var timeout = AgentTaskGitOperations.GetPendingRefDeleteError(
             (0, string.Empty, string.Empty, true));
         Assert.NotNull(timeout);
+    }
+
+
+    [Fact]
+    public void ConfiguredMergeDriverRead_ParsesDriverNamesAndFailsClosedForInvalidResults()
+    {
+        var parsed = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+            (0, "merge.beacon.driver\0merge.xml.driver\0merge.beacon.driver\0", string.Empty, false));
+
+        Assert.Null(parsed.Error);
+        Assert.Equal(new[] { "beacon", "xml" }, parsed.Drivers);
+
+        var none = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+            (1, string.Empty, string.Empty, false));
+        Assert.Null(none.Error);
+        Assert.Empty(none.Drivers);
+
+        var unreadable = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+            (1, string.Empty, "fatal: unable to read config", false));
+        Assert.NotNull(unreadable.Error);
+        Assert.Empty(unreadable.Drivers);
+
+        var timedOut = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+            (0, "merge.beacon.driver\0", string.Empty, true));
+        Assert.NotNull(timedOut.Error);
+
+        var malformed = new[]
+        {
+            "merge.beacon.driver",
+            "merge..driver\0",
+            "merge.beacon.driver\0unexpected.key\0",
+            "merge.beacon.driver\0\0",
+            "merge.bad name.driver\0"
+        };
+        foreach (var output in malformed)
+        {
+            var result = AgentTaskGitOperations.ParseConfiguredMergeDriversResult(
+                (0, output, string.Empty, false));
+            Assert.NotNull(result.Error);
+            Assert.Empty(result.Drivers);
+        }
+    }
+
+    [Theory]
+    [InlineData("merge")]
+    [InlineData("rebase")]
+    public async Task GitIntegrate_DoesNotExecuteConfiguredExternalMergeDrivers(string strategy)
+    {
+        // Keep Windows' full path below MAX_PATH while Git rebase inspects its
+        // internal A...B paths from this nested task worktree.
+        var root = CreateShortTempRoot();
+        var repository = Path.Combine(root, "r");
+        var worktreeRoot = Path.Combine(root, "w");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, ".gitattributes"),
+                "*.txt merge=beacon\n");
+            await GitAsync(repository, "add", "src/app/.gitattributes");
+            await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
+            await GitAsync(repository, "push", "origin", "main");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await GitAsync(repository, "config", "merge.beacon.name", "External test merge driver");
+            await GitAsync(repository, "config", "merge.beacon.driver",
+                "git update-ref refs/beacon/tests/merge-driver-executed HEAD");
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task branch version\n");
+            var taskCommit = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change shared file in task branch"}""");
+            Assert.False(taskCommit.IsError, taskCommit.Text);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"), "upstream version\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Change shared file on base");
+            await GitAsync(repository, "push", "origin", "main");
+
+            var integrated = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                $$"""{"action":"integrate","strategy":"{{strategy}}","source":"base"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using (var document = JsonDocument.Parse(integrated.Text))
+            {
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+                Assert.Contains(
+                    "src/app/shared.txt",
+                    document.RootElement.GetProperty("files").EnumerateArray()
+                        .Select(item => item.GetString() ?? string.Empty));
+            }
+
+            var markerRefs = await GitAsync(
+                worktree.RecoveryPath,
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/beacon/tests/merge-driver-executed");
+            Assert.Equal(string.Empty, markerRefs);
+            Assert.Contains("<<<<<<<", await File.ReadAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt")), StringComparison.Ordinal);
+
+            var aborted = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"abort"}""");
+            Assert.False(aborted.IsError, aborted.Text);
+            using var abortDocument = JsonDocument.Parse(aborted.Text);
+            Assert.Equal("aborted", abortDocument.RootElement.GetProperty("status").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+
+    [Theory]
+    [InlineData("merge")]
+    [InlineData("apply")]
+    public async Task GitIntegrate_RebaseContinueAlsoNeutralizesCustomMergeDrivers(string rebaseBackend)
+    {
+        // Keep Windows' full path below MAX_PATH while Git rebase inspects its
+        // internal A...B paths from this nested task worktree.
+        var root = CreateShortTempRoot();
+        var repository = Path.Combine(root, "r");
+        var worktreeRoot = Path.Combine(root, "w");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: true);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"), "base-alpha\nbase-beta\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Prepare two-commit rebase conflict");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, ".gitattributes"), "*.txt merge=beacon\n");
+            await GitAsync(repository, "add", "src/app/.gitattributes");
+            await GitAsync(repository, "commit", "-m", "Configure custom merge-driver attribute");
+            await GitAsync(repository, "push", "origin", "main");
+            await GitAsync(repository, "config", "rebase.backend", rebaseBackend);
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await GitAsync(repository, "config", "merge.beacon.name", "External test merge driver");
+            await GitAsync(repository, "config", "merge.beacon.driver",
+                "git update-ref refs/beacon/tests/merge-driver-executed HEAD");
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\nbase-beta\n");
+            var firstCommit = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change first line in task branch"}""");
+            Assert.False(firstCommit.IsError, firstCommit.Text);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "task-alpha\ntask-beta\n");
+            var secondCommit = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Change second line in task branch"}""");
+            Assert.False(secondCommit.IsError, secondCommit.Text);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "shared.txt"), "upstream-alpha\nupstream-beta\n");
+            await GitAsync(repository, "add", "src/app/shared.txt");
+            await GitAsync(repository, "commit", "-m", "Change both lines on base");
+            await GitAsync(repository, "push", "origin", "main");
+
+            var integrated = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"integrate","strategy":"rebase","source":"base"}""");
+            Assert.False(integrated.IsError, integrated.Text);
+            using (var document = JsonDocument.Parse(integrated.Text))
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "shared.txt"), "resolved-alpha\nupstream-beta\n");
+
+            var commitDuringRebase = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitCommit,
+                """{"message":"Must not commit during rebase"}""");
+            Assert.True(commitDuringRebase.IsError, commitDuringRebase.Text);
+            Assert.Contains("not checked out on its assigned task branch",
+                commitDuringRebase.Text, StringComparison.OrdinalIgnoreCase);
+
+            var rebaseStateDirectory = rebaseBackend == "merge" ? "rebase-merge" : "rebase-apply";
+            var rebaseHeadNamePath = await GitAsync(
+                worktree.RecoveryPath, "rev-parse", "--git-path", Path.Combine(rebaseStateDirectory, "head-name"));
+            rebaseHeadNamePath = Path.GetFullPath(rebaseHeadNamePath, worktree.RecoveryPath);
+            var originalHeadName = await File.ReadAllTextAsync(rebaseHeadNamePath);
+            await File.WriteAllTextAsync(rebaseHeadNamePath, "refs/heads/beacon/task/not-this-task\n");
+
+            var mismatchedRebase = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.True(mismatchedRebase.IsError, mismatchedRebase.Text);
+
+            await File.WriteAllTextAsync(rebaseHeadNamePath, originalHeadName);
+
+            var rebaseDirectory = Path.GetDirectoryName(rebaseHeadNamePath)!;
+            var rebaseOriginalHeadPath = Path.Combine(rebaseDirectory, "orig-head");
+            var originalRebaseHead = await File.ReadAllTextAsync(rebaseOriginalHeadPath);
+            await File.WriteAllTextAsync(rebaseOriginalHeadPath, new string('0', 40) + "\n");
+            var mismatchedOriginalHead = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.True(mismatchedOriginalHead.IsError, mismatchedOriginalHead.Text);
+            await File.WriteAllTextAsync(rebaseOriginalHeadPath, originalRebaseHead);
+
+            var continued = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"continue"}""");
+            Assert.False(continued.IsError, continued.Text);
+            using (var document = JsonDocument.Parse(continued.Text))
+            {
+                Assert.Equal("conflict", document.RootElement.GetProperty("status").GetString());
+                Assert.Contains(
+                    "src/app/shared.txt",
+                    document.RootElement.GetProperty("files").EnumerateArray()
+                        .Select(item => item.GetString() ?? string.Empty));
+            }
+
+            var markerRefs = await GitAsync(
+                worktree.RecoveryPath,
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/beacon/tests/merge-driver-executed");
+            Assert.Equal(string.Empty, markerRefs);
+
+            var aborted = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitIntegrate,
+                """{"action":"abort"}""");
+            Assert.False(aborted.IsError, aborted.Text);
+            using var abortDocument = JsonDocument.Parse(aborted.Text);
+            Assert.Equal("aborted", abortDocument.RootElement.GetProperty("status").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+
+    [Fact]
+    public async Task GitInfo_RejectsDetachedTaskHeadOutsideAnActiveTaskRebase()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            await GitAsync(worktree.RecoveryPath, "checkout", "--detach", "HEAD");
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitInfo,
+                """{"kind":"status"}""");
+
+            Assert.True(result.IsError, result.Text);
+            Assert.Contains("not checked out on its assigned task branch", result.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (worktree is not null)
+            {
+                try { await GitAsync(worktree.RecoveryPath, "checkout", worktree.BranchName); } catch { }
+                await worktree.DisposeAsync();
+            }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 }
