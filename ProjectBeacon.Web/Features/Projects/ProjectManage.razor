@@ -870,6 +870,7 @@ else
                     or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 {
                     GitSyncResultDto? result = null;
+                    string? resultDiagnosticId = null;
                     if (current.Value.Status == WorkstationCommandStatus.Succeeded
                         && !string.IsNullOrWhiteSpace(current.Value.ResultJson))
                     {
@@ -881,10 +882,10 @@ else
                         }
                         catch (JsonException exception)
                         {
-                            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+                            resultDiagnosticId = Guid.NewGuid().ToString("N")[..8];
                             Logger.LogWarning(exception,
                                 "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
-                                commandId, diagnosticId, projectId);
+                                commandId, resultDiagnosticId, projectId);
                         }
                     }
 
@@ -909,10 +910,11 @@ else
                         }
                         else if (result is null)
                         {
-                            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-                            Logger.LogWarning(
-                                "GitSync command {CommandId} completed without a readable result. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
-                                commandId, diagnosticId, projectId);
+                            var diagnosticId = resultDiagnosticId ?? Guid.NewGuid().ToString("N")[..8];
+                            if (resultDiagnosticId is null)
+                                Logger.LogWarning(
+                                    "GitSync command {CommandId} completed without a result payload. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
+                                    commandId, diagnosticId, projectId);
                             Snackbar.Add(L.WithDiagnosticId("GitSyncResultUnavailable", diagnosticId), Severity.Error);
                         }
                         else if (IsVerifiedFastForward(result))

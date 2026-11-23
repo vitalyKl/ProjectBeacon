@@ -1341,6 +1341,7 @@ else
         else if (command.Status == WorkstationCommandStatus.Succeeded)
         {
             GitSyncResultDto? result = null;
+            string? resultDiagnosticId = null;
             if (!string.IsNullOrWhiteSpace(command.ResultJson))
             {
                 var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -1351,19 +1352,20 @@ else
                 }
                 catch (JsonException exception)
                 {
-                    var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+                    resultDiagnosticId = Guid.NewGuid().ToString("N")[..8];
                     Logger.LogWarning(exception,
                         "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
-                        command.Id, diagnosticId, TaskId);
+                        command.Id, resultDiagnosticId, TaskId);
                 }
             }
 
             if (result is null)
             {
-                var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-                Logger.LogWarning(
-                    "GitSync command {CommandId} completed without a readable result. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
-                    command.Id, diagnosticId, TaskId);
+                var diagnosticId = resultDiagnosticId ?? Guid.NewGuid().ToString("N")[..8];
+                if (resultDiagnosticId is null)
+                    Logger.LogWarning(
+                        "GitSync command {CommandId} completed without a result payload. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
+                        command.Id, diagnosticId, TaskId);
                 Snackbar.Add(L.WithDiagnosticId("GitSyncResultUnavailable", diagnosticId), Severity.Error);
             }
             else if (IsVerifiedFastForward(result))
