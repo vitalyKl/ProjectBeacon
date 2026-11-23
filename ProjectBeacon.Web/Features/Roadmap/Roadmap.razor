@@ -22,7 +22,6 @@
 @inject CloseMilestoneHandler CloseMilestoneHandler
 @inject ReopenMilestoneHandler ReopenMilestoneHandler
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
 
 <PageTitle>@L["Roadmap"]</PageTitle>
 <PageHeader Title="@L["Roadmap"]">
@@ -253,7 +252,7 @@ else
             ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.Milestone).ToList()
             : [];
         if (!deleted.Success)
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
         var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
         _tasks = tasks.Success ? tasks.Value!.ToList() : [];
     }
@@ -285,12 +284,12 @@ else
                 deleted.TargetId));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored.Error, L["Roadmap"].Value);
                 return;
             }
 
             await Reload();
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -319,7 +318,7 @@ else
     {
         if (_project is null)
         {
-            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Add(L["NoProjectAvailable"].Value, Severity.Error);
             return;
         }
 
@@ -330,13 +329,13 @@ else
             _newOrder), _actor));
         if (!created.Success)
         {
-            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(created.Error, L["Roadmap"].Value);
             return;
         }
 
         _showCreateForm = false;
         _editName = _editDescription = null;
-        Snackbar.Add(L["MilestoneCreated"].Value, Severity.Success);
+        Notifications.Add(L["MilestoneCreated"].Value, Severity.Success);
         await Reload();
     }
 
@@ -357,12 +356,12 @@ else
             _editingId.Value, _editName, _editDescription, _editOrder, _editRevision, _project?.Id), _actor));
         if (!updated.Success)
         {
-            Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(updated.Error, L["Roadmap"].Value);
             return;
         }
         _editingId = null;
         _editRevision = null;
-        Snackbar.Add(L["MilestoneUpdated"].Value, Severity.Success);
+        Notifications.Add(L["MilestoneUpdated"].Value, Severity.Success);
         await Reload();
     }
 
@@ -391,7 +390,7 @@ else
             _project.Id, ContentTargetKind.Milestone, milestoneId, _actor, 50);
         _milestoneHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(history.Error ?? L["Error"].Value, Severity.Warning);
     }
 
     private async Task RestoreMilestoneVersion(ContentVersionDto version)
@@ -412,7 +411,7 @@ else
                 milestoneId));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored.Error, L["Roadmap"].Value);
                 return;
             }
 
@@ -420,7 +419,7 @@ else
             _open = _milestones.FirstOrDefault(item => item.Id == milestoneId);
             if (_open is not null)
                 await ReloadMilestoneHistory(milestoneId);
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -464,10 +463,10 @@ else
             new CloseMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Roadmap"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -477,10 +476,10 @@ else
             new ReopenMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Roadmap"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -494,10 +493,10 @@ else
         var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), _actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Roadmap"].Value);
             return;
         }
-        Snackbar.Add(L["MilestoneDeleted"].Value, Severity.Success);
+        Notifications.Add(L["MilestoneDeleted"].Value, Severity.Success);
         await Reload();
     }
 }

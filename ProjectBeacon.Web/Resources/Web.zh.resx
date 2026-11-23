@@ -3066,4 +3066,7 @@ orthstar</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>无法读取仓库同步状态：{0}</value>
   </data>
+  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>更新已交接，但工作站尚未报告新版本。重试前请检查工作站状态或日志。</value>
+  </data>
 </root>

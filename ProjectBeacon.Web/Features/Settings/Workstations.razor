@@ -20,8 +20,6 @@
 @inject ListCommandsHandler ListCommands
 @inject GetTotpStatusHandler GetTotp
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
-@inject ILogger<Workstations> Logger
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Workstations"]</PageTitle>
@@ -421,12 +419,12 @@
                 new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode);
                 return;
             }
             _deviceToken = result.Value!.Token;
             _deviceName = string.Empty;
-            Snackbar.Add(L["DeviceCreated"].Value, Severity.Success);
+            Notifications.Add(L["DeviceCreated"].Value, Severity.Success);
             await ReloadDevices();
         }
         finally
@@ -444,10 +442,10 @@
         var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode);
             return;
         }
-        Snackbar.Add(L["DeviceRevoked"].Value, Severity.Success);
+        Notifications.Add(L["DeviceRevoked"].Value, Severity.Success);
         await ReloadDevices();
     }
 
@@ -474,16 +472,16 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.SaveWorkstation, payload, null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
                 return;
             }
-            Snackbar.Add(L["WorkstationSaved"].Value, Severity.Success);
+            Notifications.Add(L["WorkstationSaved"].Value, Severity.Success);
             // The next heartbeat reports the workstation's new settings. Refresh diagnostics
             // now, but do not overwrite the just-saved form with the previous heartbeat snapshot.
             await ReloadDevices(loadWorkstationSettings: false);
@@ -512,16 +510,16 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.Install, JsonSerializer.Serialize(new { id }), null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
                 return;
             }
-            Snackbar.Add(L["CommandSucceeded"].Value, Severity.Success);
+            Notifications.Add(L["CommandSucceeded"].Value, Severity.Success);
         }
         finally
         {
@@ -539,13 +537,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.CheckClientUpdate, "{}", null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
                 return;
             }
             using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
@@ -553,16 +551,12 @@
             _clientCurrentVersion = JsonValue(root, "CurrentVersion", "currentVersion");
             _clientLatestVersion = JsonValue(root, "LatestVersion", "latestVersion");
             _clientUpdateAvailable = JsonBoolean(root, "UpdateAvailable", "updateAvailable");
-            Snackbar.Add(_clientUpdateAvailable == true ? L["DaemonUpdateAvailable"].Value : L["DaemonUpToDate"].Value,
+            Notifications.Add(_clientUpdateAvailable == true ? L["DaemonUpdateAvailable"].Value : L["DaemonUpToDate"].Value,
                 _clientUpdateAvailable == true ? Severity.Info : Severity.Success);
         }
         catch (Exception ex)
         {
-            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-            Logger.LogError(ex,
-                "Could not check workstation update availability. DiagnosticId={DiagnosticId}, DeviceId={DeviceId}",
-                diagnosticId, deviceId);
-            Snackbar.Add(L.WithDiagnosticId("WorkstationCheckUpdateFailed", diagnosticId), Severity.Error);
+            Notifications.ReportException(ex, "WorkstationCheckUpdateFailed", "check workstation update availability", new { DeviceId = deviceId });
         }
         finally
         {
@@ -589,13 +583,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.UpdateClient, "{}", null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id, 660);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
                 return;
             }
             _clientUpdateAvailable = null;
@@ -604,17 +598,13 @@
             _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
             var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
             if (restarted)
-                Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+                Notifications.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
             else
-                Snackbar.Add("The update was handed off, but the new daemon version has not reported yet. Check the workstation log.", Severity.Warning);
+                Notifications.Add(L["WorkstationUpdatePending"].Value, Severity.Warning);
         }
         catch (Exception ex)
         {
-            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-            Logger.LogError(ex,
-                "Could not complete workstation update. DiagnosticId={DiagnosticId}, DeviceId={DeviceId}",
-                diagnosticId, deviceId);
-            Snackbar.Add(L.WithDiagnosticId("WorkstationUpdateFailed", diagnosticId), Severity.Error);
+            Notifications.ReportException(ex, "WorkstationUpdateFailed", "update workstation daemon", new { DeviceId = deviceId });
         }
         finally
         {

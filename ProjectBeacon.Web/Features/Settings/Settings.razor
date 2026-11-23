@@ -16,7 +16,6 @@
 @inject BeginTotpHandler BeginTotp
 @inject ConfirmTotpHandler ConfirmTotp
 @inject DisableTotpHandler DisableTotp
-@inject ISnackbar Snackbar
 @inject BeaconThemeState Theme
 @inject IJSRuntime Js
 
@@ -134,7 +133,7 @@
         }
         catch (JSException)
         {
-            Snackbar.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);
+            Notifications.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);
         }
     }
 
@@ -144,11 +143,11 @@
         {
             await Js.InvokeAsync<string>("beaconTimeZone.setPreference", value);
             _timeZone = value;
-            Snackbar.Add(L["TimeZoneSaved"].Value, Severity.Success);
+            Notifications.Add(L["TimeZoneSaved"].Value, Severity.Success);
         }
         catch (JSException)
         {
-            Snackbar.Add(L["TimeZoneInvalid"].Value, Severity.Error);
+            Notifications.Add(L["TimeZoneInvalid"].Value, Severity.Error);
         }
     }
 
@@ -185,7 +184,7 @@
         var begun = await BeginTotp.HandleAsync(new BeginTotpCommand(_userId));
         if (!begun.Success)
         {
-            Snackbar.Add(begun.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(begun.Error, L["Settings"].Value);
             return;
         }
         await ReloadTotp();
@@ -196,7 +195,7 @@
         var confirmed = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(_userId, _totpCode)));
         if (!confirmed.Success)
         {
-            Snackbar.Add(confirmed.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(confirmed.Error, L["Settings"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -209,7 +208,7 @@
         var disabled = await DisableTotp.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(_userId, _totpCode)));
         if (!disabled.Success)
         {
-            Snackbar.Add(disabled.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(disabled.Error, L["Settings"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -236,10 +235,10 @@
             var saved = await SetChatModel.HandleAsync(new SetChatModelCommand(new SetChatModelRequest(_userId, _chatModelId)));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["Settings"].Value);
                 return;
             }
-            Snackbar.Add(L["ChatModelSaved"].Value, Severity.Success);
+            Notifications.Add(L["ChatModelSaved"].Value, Severity.Success);
             await NudgeModels.HandleAsync(new NudgeModelsCommand(_userId));
         }
         finally
@@ -259,12 +258,12 @@
             var result = await ChangePassword.HandleAsync(new ChangePasswordRequest(_userId, _currentPassword, _newPassword));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Settings"].Value);
                 return;
             }
             _currentPassword = string.Empty;
             _newPassword = string.Empty;
-            Snackbar.Add(L["PasswordChanged"].Value, Severity.Success);
+            Notifications.Add(L["PasswordChanged"].Value, Severity.Success);
         }
         finally
         {

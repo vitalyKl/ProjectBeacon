@@ -5,7 +5,6 @@
 @inject UpdateLabelHandler UpdateLabel
 @inject DeleteLabelHandler DeleteLabel
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
 
 <MudText Typo="Typo.subtitle1" Class="mb-3">@L["Labels"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -100,7 +99,7 @@ else
                     projectId, id, _labelName.Trim(), null, _labelPrefix));
                 if (!updated.Success)
                 {
-                    Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+                    Notifications.Failure(updated.Error, L["Projects"].Value);
                     return;
                 }
             }
@@ -110,12 +109,12 @@ else
                     projectId, _labelName.Trim(), null, _labelPrefix));
                 if (!created.Success)
                 {
-                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    Notifications.Failure(created.Error, L["Projects"].Value);
                     return;
                 }
             }
             CancelLabelEdit();
-            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            Notifications.Add(L["Saved"].Value, Severity.Success);
             await Reload();
         }
         finally
@@ -135,12 +134,12 @@ else
         var result = await DeleteLabel.HandleAsync(new DeleteLabelRequest(projectId, label.Id));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Projects"].Value);
             return;
         }
         if (_editingLabelId == label.Id)
             CancelLabelEdit();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 }

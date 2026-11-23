@@ -35,7 +35,7 @@
             }
             @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Session.FailureReason</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value)</MudAlert>
             }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {
@@ -103,7 +103,7 @@
     private string ActivityLabel => Session.IsQueued
         ? L["PipelineQueued"].Value
         : !string.IsNullOrWhiteSpace(Session.FailureReason)
-            ? Session.FailureReason
+            ? Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value)
             : Session.Status == SessionStatus.Active && !HasRecentSignal
             ? L["PipelineNoRecentSignal"].Value
             : !string.IsNullOrWhiteSpace(_activity)

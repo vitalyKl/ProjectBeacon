@@ -8,8 +8,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject IAttachmentService Attachments
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
-@inject ILogger<TaskAttachmentsPanel> Logger
 @inject IJSRuntime JS
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -117,13 +115,13 @@
             {
                 if (file.Size is <= 0 or > DatabaseAttachmentService.MaxFileLength)
                 {
-                    Snackbar.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
+                    Notifications.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
                     continue;
                 }
                 await using var stream = file.OpenReadStream(DatabaseAttachmentService.MaxFileLength);
                 await Attachments.UploadTaskAsync(Task.ProjectId, Task.Id, actor, stream, file.Name, file.ContentType, file.Size);
             }
-            Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
+            Notifications.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
         }
         catch (Exception ex) { ReportFailure(ex, "TaskAttachmentsUploadFailed", "upload"); }
         finally { _busy = false; }
@@ -132,11 +130,7 @@
 
     private void ReportFailure(Exception exception, string resourceKey, string operation)
     {
-        var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-        Logger.LogError(exception,
-            "Task attachment {Operation} failed. DiagnosticId={DiagnosticId}, TaskId={TaskId}, ProjectId={ProjectId}",
-            operation, diagnosticId, Task?.Id, Task?.ProjectId);
-        Snackbar.Add(L.WithDiagnosticId(resourceKey, diagnosticId), Severity.Error);
+        Notifications.ReportException(exception, resourceKey, $"task attachment {operation}", new { TaskId = Task?.Id, ProjectId = Task?.ProjectId });
     }
 
     private static bool IsPreviewableImage(string contentType) =>

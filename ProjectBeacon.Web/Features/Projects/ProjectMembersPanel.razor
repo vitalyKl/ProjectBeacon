@@ -8,7 +8,6 @@
 @inject ListProjectInvitesHandler ListInvites
 @inject RevokeProjectInviteHandler RevokeInvite
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
 
 <MudText Typo="Typo.subtitle1" Class="mb-3">@L["Members"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -114,12 +113,12 @@
                 projectId, _inviteEmail.Trim(), _inviteRole, Actor));
             if (!created.Success)
             {
-                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(created.Error, L["Projects"].Value);
                 return;
             }
             _inviteUrl = created.Value!.Url;
             _inviteEmail = string.Empty;
-            Snackbar.Add(L["InviteSent"].Value, Severity.Success);
+            Notifications.Add(L["InviteSent"].Value, Severity.Success);
             await Reload();
         }
         finally
@@ -137,10 +136,10 @@
         var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, Actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Projects"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 }

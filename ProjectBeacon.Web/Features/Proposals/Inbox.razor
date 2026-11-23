@@ -28,7 +28,6 @@
 @inject ReviewContextDraftHandler ReviewContextDraft
 @inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
 @inject IBeaconDbFactory DbFactory
-@inject ISnackbar Snackbar
 
 <PageTitle>@L["ProposalInbox"]</PageTitle>
 <PageHeader Title="@L["ProposalInbox"]" ShowTitle="true">
@@ -383,7 +382,7 @@ else
             var summary = await GetProposalInboxSummary(_project.Id);
             if (!summary.Success)
             {
-                _error = summary.Error ?? L["ProjectAccessRequired"].Value;
+                _error = Notifications.FormatFailure(summary.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, summary.ErrorCode);
                 return;
             }
             _summary = summary.Value;
@@ -391,7 +390,7 @@ else
             var proposals = await ListProposals.HandleAsync(new ListProposalsQuery(_project.Id, Limit: 100), _actor);
             if (!proposals.Success)
             {
-                _error = proposals.Error ?? L["ProjectAccessRequired"].Value;
+                _error = Notifications.FormatFailure(proposals.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, proposals.ErrorCode);
                 return;
             }
             _proposals = proposals.Value!.ToList();
@@ -498,7 +497,7 @@ else
             : null;
         if (version is null)
         {
-            Snackbar.Add(L["BaseSnapshotMissing"].Value, Severity.Warning);
+            Notifications.Add(L["BaseSnapshotMissing"].Value, Severity.Warning);
             return;
         }
         _baseSnapshots[proposal.Id] = version.ContentJson;
@@ -730,7 +729,7 @@ else
                 _project.Id, proposal.Id, _actor, GetAcceptedPayload(proposal)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value,
+                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode),
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -739,7 +738,7 @@ else
                 }
                 return;
             }
-            Snackbar.Add(result.Value?.Status == ProposalStatus.Applying
+            Notifications.Add(result.Value?.Status == ProposalStatus.Applying
                 ? L["ProposalApplyQueued"].Value
                 : L["ProposalAccepted"].Value,
                 result.Value?.Status == ProposalStatus.Applying ? Severity.Info : Severity.Success);
@@ -758,7 +757,7 @@ else
                 _project.Id, proposal.Id, _actor, string.IsNullOrWhiteSpace(_decisionNote) ? null : _decisionNote));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value,
+                Notifications.Add(result.Error ?? L["Error"].Value,
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -768,7 +767,7 @@ else
                 return;
             }
             _decisionNote = string.Empty;
-            Snackbar.Add(L["ProposalRejected"].Value, Severity.Success);
+            Notifications.Add(L["ProposalRejected"].Value, Severity.Success);
             await Reload();
         }
         finally { _busy = false; }
@@ -795,7 +794,7 @@ else
                     var conflict = result.Kind == ErrorKind.Conflict;
                     var status = conflict ? L["Conflicted"].Value : L["Error"].Value;
                     batchResults.Add(new BatchAcceptResult(
-                        $"{itemName}: {status} — {result.Error ?? L["Error"].Value}",
+                        $"{itemName}: {Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode)}",
                         conflict ? Severity.Warning : Severity.Error));
                 }
                 else if (result.Value?.Status == ProposalStatus.Applying)
@@ -815,10 +814,10 @@ else
             _statusFilter = string.Empty;
             await Reload();
             _batchResults.AddRange(batchResults);
-            Snackbar.Add(string.Format(L["BatchAcceptResults"].Value, succeeded + queued, failed),
+            Notifications.Add(string.Format(L["BatchAcceptResults"].Value, succeeded + queued, failed),
                 failed == 0 ? (queued > 0 ? Severity.Info : Severity.Success) : Severity.Warning);
             if (queued > 0)
-                Snackbar.Add(string.Format(L["ProposalPatchQueuedCount"].Value, queued), Severity.Info);
+                Notifications.Add(string.Format(L["ProposalPatchQueuedCount"].Value, queued), Severity.Info);
         }
         finally { _busy = false; }
     }
@@ -833,10 +832,10 @@ else
                 _project.Id, draft.Id, draft.Revision, accept, _actor));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
                 return;
             }
-            Snackbar.Add(accept ? L["ContextDraftApproved"].Value : L["ContextDraftRejected"].Value, Severity.Success);
+            Notifications.Add(accept ? L["ContextDraftApproved"].Value : L["ContextDraftRejected"].Value, Severity.Success);
             await Reload();
         }
         finally { _busy = false; }
@@ -846,31 +845,31 @@ else
     {
         if (!_canGovernance) return;
         var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
     private async Task DeprecateLegacyDecision(DecisionDto decision)
     {
         if (!_canGovernance) return;
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
     private async Task ActivateLegacyConstraint(ConstraintDto constraint)
     {
         if (!_canGovernance) return;
         var result = await ActivateConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
     private async Task RejectLegacyConstraint(ConstraintDto constraint)
     {
         if (!_canGovernance) return;
         var result = await RejectConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-        else { Snackbar.Add(L["Saved"].Value, Severity.Success); await Reload(); }
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 }

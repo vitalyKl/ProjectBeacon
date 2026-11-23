@@ -10,7 +10,6 @@
 @inject SaveAgentProviderConnectionHandler SaveConnection
 @inject DeleteAgentProviderConnectionHandler DeleteConnection
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
 
 <PageTitle>@L["AgentProviderConnections"]</PageTitle>
 <PageHeader Title="@L["AgentProviderConnections"]" />
@@ -143,7 +142,7 @@
         var slash = _model.IndexOf('/');
         if (slash <= 0 || slash == _model.Length - 1)
         {
-            Snackbar.Add(L["AgentProviderModelExample"].Value, Severity.Warning);
+            Notifications.Add(L["AgentProviderModelExample"].Value, Severity.Warning);
             return;
         }
         _busy = true;
@@ -153,11 +152,11 @@
                 new SaveAgentProviderConnectionRequest(_userId, _model[..slash], _model[(slash + 1)..], _custom ? _baseUrl : null, _apiKey)));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["Connections"].Value);
                 return;
             }
             _apiKey = string.Empty;
-            Snackbar.Add(L["AgentProviderConnectionSaved"].Value, Severity.Success);
+            Notifications.Add(L["AgentProviderConnectionSaved"].Value, Severity.Success);
             await Reload();
         }
         finally
@@ -176,7 +175,7 @@
         var deleted = await DeleteConnection.HandleAsync(new DeleteAgentProviderConnectionCommand(new DeleteAgentProviderConnectionRequest(_userId, row.Id)));
         if (!deleted.Success)
         {
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(deleted.Error, L["Connections"].Value);
             return;
         }
         await Reload();

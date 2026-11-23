@@ -22,7 +22,6 @@
 @inject GetTaskHandler GetTask
 @inject ListWaitingPipelineTasksHandler ListWaitingTasks
 @inject ChatEventSignal Events
-@inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Logging.ILogger<ChatDock> Logger
 @inject AuthenticationStateProvider Auth
 
@@ -278,7 +277,7 @@
                 CreateChatSessionHandler.ClientRequired => "client",
                 _ => null
             };
-            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(created.Error, L["Chat"].Value);
             return;
         }
         _block = null;
@@ -315,7 +314,7 @@
             if (!sent.Success)
             {
                 _failed = true;
-                Snackbar.Add(sent.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(sent.Error, L["Chat"].Value);
                 return;
             }
             _draft = string.Empty;
@@ -341,7 +340,7 @@
             if (result.Success)
                 _session = result.Value;
             else
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Chat"].Value);
         }
         finally
         {

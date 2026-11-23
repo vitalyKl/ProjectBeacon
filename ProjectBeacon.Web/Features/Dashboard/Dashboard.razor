@@ -40,7 +40,7 @@
 }
 else if (_error)
 {
-    <MudAlert Severity="Severity.Error" Class="mt-4">@L["AnErrorOccurred"]</MudAlert>
+    <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
 }
 else if (_pulse is null)
 {
@@ -238,6 +238,7 @@ else
     private static readonly string[] StageKeys = ["StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed"];
     private bool _loading = true;
     private bool _error;
+    private string? _errorMessage;
     private Guid _userId;
     private CancellationTokenSource? _poll;
     private List<DeviceHostSampleDto> _samples = [];
@@ -310,6 +311,7 @@ else
         if (!result.Success)
         {
             _error = true;
+            _errorMessage = Notifications.FormatFailure(result.Error, L["Dashboard"].Value, result.ErrorCode);
             _loading = false;
             return;
         }

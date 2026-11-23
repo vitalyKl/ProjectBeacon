@@ -3048,4 +3048,7 @@
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>Не удалось получить состояние синхронизации репозитория: {0}</value>
   </data>
+  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>Обновление передано рабочей станции, но новая версия ещё не вышла на связь. Проверьте состояние станции или её журнал, прежде чем повторять обновление.</value>
+  </data>
 </root>

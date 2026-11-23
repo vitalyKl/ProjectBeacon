@@ -14,7 +14,6 @@
 @inject CreateProjectHandler CreateProject
 @inject AuthenticationStateProvider Auth
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject ListDevicesHandler ListDevices
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
@@ -144,7 +143,7 @@
             var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
             if (!org.Success)
             {
-                _error = org.Error;
+                _error = Notifications.FormatFailure(org.Error, L["CreateProject"].Value, org.ErrorCode);
                 return;
             }
 
@@ -152,7 +151,7 @@
                 _projectName, _description, org.Value!.Id), actor));
             if (!project.Success)
             {
-                _error = project.Error;
+                _error = Notifications.FormatFailure(project.Error, L["CreateProject"].Value, project.ErrorCode);
                 return;
             }
 
@@ -162,7 +161,7 @@
                     new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
                 if (!attached.Success)
                 {
-                    _error = attached.Error;
+                    _error = Notifications.FormatFailure(attached.Error, L["CreateProject"].Value, attached.ErrorCode);
                     return;
                 }
                 if (_initOnDevice)
@@ -186,19 +185,19 @@
                         new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.InitProject, payload, project.Value.Id)));
                     if (!queued.Success)
                     {
-                        _error = queued.Error;
+                        _error = Notifications.FormatFailure(queued.Error, L["CreateProject"].Value, queued.ErrorCode);
                         return;
                     }
                     var finished = await WaitAsync(queued.Value!.Id);
                     if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
                     {
-                        _error = finished?.Error ?? L["Error"].Value;
+                        _error = Notifications.FormatFailure(finished?.Error, L["CreateProject"].Value);
                         return;
                     }
                 }
             }
 
-            Snackbar.Add(L["ProjectCreated"].Value, Severity.Success);
+            Notifications.Add(L["ProjectCreated"].Value, Severity.Success);
             Navigation.NavigateTo($"/project/switch?projectId={project.Value!.Id}&returnUrl={Uri.EscapeDataString("/board")}", forceLoad: true);
         }
         finally

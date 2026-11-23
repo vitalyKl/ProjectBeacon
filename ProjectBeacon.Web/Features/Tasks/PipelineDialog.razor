@@ -9,7 +9,6 @@
 @inject RecordReviewVerdictHandler RecordVerdict
 @inject ApprovePipelineHandler ApprovePipeline
 @inject ForceClosePipelineHandler ForceClosePipeline
-@inject ISnackbar Snackbar
 
 @switch (Params.Mode)
 {
@@ -198,10 +197,10 @@
             }
             if (!outcome.Ok)
             {
-                Snackbar.Add(outcome.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(outcome.Error, L["Tasks"].Value);
                 return;
             }
-            Snackbar.Add(outcome.Success, Severity.Success);
+            Notifications.Add(outcome.Success, Severity.Success);
             Dialog?.Close(true);
         }
         finally

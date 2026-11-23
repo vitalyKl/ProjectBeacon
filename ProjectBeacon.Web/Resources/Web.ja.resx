@@ -3066,4 +3066,7 @@ orthstar</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>リポジトリ同期の状態を取得できませんでした: {0}</value>
   </data>
+  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>更新処理は引き渡されましたが、新しいワークステーションのバージョンからまだ応答がありません。再試行する前に、状態またはログを確認してください。</value>
+  </data>
 </root>

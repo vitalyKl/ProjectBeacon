@@ -7,7 +7,6 @@
 @inject NudgeModelsHandler NudgeModels
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
-@inject ISnackbar Snackbar
 
 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["HowToAddModel"]</MudText>
 <MudSelect T="ModelBackendType" Value="_type" ValueChanged="OnTypeChanged" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -115,7 +114,7 @@
                 new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ScanGguf, "{}", null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued.Error, L["Agents"].Value);
                 return;
             }
             WorkstationCommandDto? finished = null;
@@ -132,7 +131,7 @@
             }
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
             {
-                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(finished?.Error, L["Agents"].Value);
                 return;
             }
             using var doc = JsonDocument.Parse(finished.ResultJson);
@@ -148,7 +147,7 @@
                 }
             }
             if (_ggufs.Count == 0)
-                Snackbar.Add(L["NoGgufFiles"].Value, Severity.Info);
+                Notifications.Add(L["NoGgufFiles"].Value, Severity.Info);
         }
         finally
         {
@@ -161,12 +160,12 @@
         if (_saving) return;
         if (_type == ModelBackendType.LlamaCpp && string.IsNullOrWhiteSpace(_launchCommand))
         {
-            Snackbar.Add(L["PickGgufFirst"].Value, Severity.Warning);
+            Notifications.Add(L["PickGgufFirst"].Value, Severity.Warning);
             return;
         }
         if (_type != ModelBackendType.LlamaCpp && !_providerModelId.Contains('/'))
         {
-            Snackbar.Add(L["ProviderModelIdHint"].Value, Severity.Warning);
+            Notifications.Add(L["ProviderModelIdHint"].Value, Severity.Warning);
             return;
         }
         if (_type == ModelBackendType.LlamaCpp && !_launchCommand.Contains("${PORT}", StringComparison.Ordinal)
@@ -183,7 +182,7 @@
                 flags.Count > 0 ? flags : null, _concurrent, _note, _providerModelId)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Agents"].Value);
                 return;
             }
             await NudgeModels.HandleAsync(new NudgeModelsCommand(UserId));

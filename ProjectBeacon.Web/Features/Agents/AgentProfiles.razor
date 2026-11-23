@@ -3,7 +3,6 @@
 @inject SaveAgentProfileOverrideHandler SaveOverride
 @inject ResetAgentProfileOverrideHandler ResetOverride
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
-@inject ISnackbar Snackbar
 
 @if (_loading)
 {
@@ -130,7 +129,7 @@ else
         var result = await GetOverrides.HandleAsync(new GetAgentProfileOverridesCommand(UserId));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Agents"].Value);
             _profiles = [];
         }
         else
@@ -182,10 +181,10 @@ else
                     profile.ApplyPolicy)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Agents"].Value);
                 return;
             }
-            Snackbar.Add(L["ExecutionProfileSaved"].Value, Severity.Success);
+            Notifications.Add(L["ExecutionProfileSaved"].Value, Severity.Success);
             await Reload();
         }
         finally
@@ -205,10 +204,10 @@ else
                 new ResetAgentProfileOverrideRequest(UserId, profile.Basis.Key)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Agents"].Value);
                 return;
             }
-            Snackbar.Add(L["ExecutionProfileResetDone"].Value, Severity.Success);
+            Notifications.Add(L["ExecutionProfileResetDone"].Value, Severity.Success);
             await Reload();
         }
         finally

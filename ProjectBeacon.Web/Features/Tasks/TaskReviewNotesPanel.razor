@@ -4,7 +4,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AddReviewNotesHandler AddReviewNotes
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
 
 <section class="beacon-panel beacon-surface-section">
     <header class="beacon-ops-head">
@@ -44,10 +43,10 @@
             new AddReviewNotesRequest(Task.Id, _draft.Trim(), Task.ContentRevision), actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result.Error, L["Tasks"].Value);
             return;
         }
         await OnSaved.InvokeAsync();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
     }
 }

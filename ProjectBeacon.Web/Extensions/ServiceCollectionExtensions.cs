@@ -22,6 +22,7 @@ using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
+using ProjectBeacon.Web.Shared;
 
 namespace ProjectBeacon.Web.Extensions;
 /// <summary>
@@ -167,6 +168,7 @@ public static class ServiceCollectionExtensions
         {
             options.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
         });
+        services.AddUiNotifications();
         services.AddRazorComponents().AddInteractiveServerComponents();
         // Revalidate circuit identity/tenant on a 60s tick and on every reconnect.
         // Registered after the framework's TryAddScoped so it wins base-type resolution.

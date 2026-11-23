@@ -109,4 +109,26 @@ public sealed class LocalizationTests
     {
         Assert.Equal("Proposed", _rm.GetString("Proposed", new System.Globalization.CultureInfo("en")));
     }
+    [Theory]
+    [InlineData("en")]
+    [InlineData("ru")]
+    [InlineData("de")]
+    [InlineData("ja")]
+    [InlineData("zh")]
+    public void UiNotificationResources_AreAvailableInEverySupportedCulture(string cultureName)
+    {
+        var culture = new System.Globalization.CultureInfo(cultureName);
+        foreach (var key in new[]
+        {
+            "UiEmptyNotification", "UiGenericOperation", "UiOperationFailed",
+            "UiOperationFailedWithDetail", "UiOperationNotAllowed", "UiOperationTargetNotFound",
+            "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
+            "AuthRequestFailed", "AuthBootstrapOperation", "AuthForgotOperation",
+            "AuthInviteOperation", "AuthRecoverOperation", "AuthRegisterOperation", "AuthResetOperation",
+            "ChatAnswerUnexpectedFailed", "WorkstationUpdatePending"
+        })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(_rm.GetString(key, culture)), $"{key} is missing for {cultureName}.");
+        }
+    }
 }

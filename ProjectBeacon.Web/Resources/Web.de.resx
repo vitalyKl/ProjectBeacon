@@ -3058,4 +3058,7 @@ orthstar</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden: {0}</value>
   </data>
+  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>Das Update wurde übergeben, aber die neue Workstation-Version hat sich noch nicht gemeldet. Prüfen Sie den Workstation-Status oder das Protokoll, bevor Sie es erneut versuchen.</value>
+  </data>
 </root>

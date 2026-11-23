@@ -11,7 +11,6 @@
 @inject UpdateTaskHandler UpdateTask
 @inject ListTaskKindsHandler ListKinds
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
 
 <MudTextField @bind-Value="_title" Label="@L["Title"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
 @if (Task is null)
@@ -119,7 +118,7 @@
 
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result.Error, L["Tasks"].Value);
                 return;
             }
 

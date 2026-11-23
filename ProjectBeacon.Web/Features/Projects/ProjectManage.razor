@@ -34,7 +34,6 @@
 @inject DeleteProjectHandler DeleteProject
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
 @inject GetProjectGitSyncCommandHandler GetGitSyncCommand
-@inject ISnackbar Snackbar
 @inject ILogger<ProjectManage> Logger
 @inject IDialogService Dialogs
 @inject NavigationManager Navigation
@@ -495,7 +494,7 @@ else
         var result = await ListProposalPolicies.HandleAsync(projectId, _actor);
         if (!result.Success || result.Value is null)
         {
-            Snackbar.Add(result.Error ?? L["ProposalPoliciesUnavailable"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProposalPoliciesUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode), Severity.Warning);
             return;
         }
 
@@ -534,7 +533,7 @@ else
         if (!result.Success || result.Value is null)
         {
             _gitPolicy = null;
-            Snackbar.Add(result.Error ?? L["ProjectGitPolicyUnavailable"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProjectGitPolicyUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode), Severity.Warning);
             return;
         }
         ApplyGitPolicy(result.Value);
@@ -554,12 +553,12 @@ else
                 _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
             if (!saved.Success || saved.Value is null)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
                 await ReloadGitPolicy();
                 return;
             }
             ApplyGitPolicy(saved.Value);
-            Snackbar.Add(L["GitPolicySaved"].Value, Severity.Success);
+            Notifications.Add(L["GitPolicySaved"].Value, Severity.Success);
         }
         finally
         {
@@ -594,12 +593,12 @@ else
                 projectId, policy.TargetKind, policy.Operation, selected, policy.PolicyRevision, _actor));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
                 await ReloadProposalPolicies();
                 return;
             }
 
-            Snackbar.Add(L["ProposalPolicySaved"].Value, Severity.Success);
+            Notifications.Add(L["ProposalPolicySaved"].Value, Severity.Success);
             await ReloadProposalPolicies();
         }
         finally
@@ -631,7 +630,7 @@ else
             projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
         _projectDescriptionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history.Error, L["ProjectSettings"].Value, history.ErrorCode), Severity.Warning);
     }
 
     private async Task RestoreProjectDescriptionVersion(ContentVersionDto version)
@@ -651,14 +650,14 @@ else
                 projectId));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored.Error, L["ProjectSettings"].Value, restored.ErrorCode);
                 return;
             }
 
             var current = await CurrentProject.HandleAsync(_actor);
             if (!current.Success || current.Value is null)
             {
-                Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(current.Error, L["ProjectSettings"].Value, current.ErrorCode);
                 return;
             }
 
@@ -666,7 +665,7 @@ else
             _projectDescription = current.Value.Description ?? string.Empty;
             _projectRevision = current.Value.Revision;
             await LoadProjectDescriptionHistory();
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -696,7 +695,7 @@ else
             return;
         if (string.IsNullOrWhiteSpace(_projectName))
         {
-            Snackbar.Add(L["ProjectNameRequired"].Value, Severity.Error);
+            Notifications.Add(L["ProjectNameRequired"].Value, Severity.Error);
             return;
         }
         _busy = true;
@@ -706,13 +705,13 @@ else
                 new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription, null, _projectRevision), _actor));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
                 return;
             }
             _projectName = saved.Value!.Name;
             _projectDescription = saved.Value.Description ?? string.Empty;
             _projectRevision = saved.Value.Revision;
-            Snackbar.Add(L["ProjectRenamed"].Value, Severity.Success);
+            Notifications.Add(L["ProjectRenamed"].Value, Severity.Success);
             await ReloadProjects();
         }
         finally
@@ -736,7 +735,7 @@ else
             var deleted = await DeleteProject.HandleAsync(new DeleteProjectCommand(projectId, _actor));
             if (!deleted.Success)
             {
-                Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(deleted.Error, L["ProjectSettings"].Value, deleted.ErrorCode);
                 return;
             }
             var next = _projects.FirstOrDefault(p => p.Id != projectId);
@@ -750,7 +749,7 @@ else
                 Navigation.NavigateTo("/projects/new", forceLoad: true);
                 return;
             }
-            Snackbar.Add(L["ProjectDeleted"].Value, Severity.Success);
+            Notifications.Add(L["ProjectDeleted"].Value, Severity.Success);
             await ReloadProjects();
         }
         finally
@@ -781,7 +780,7 @@ else
             {
                 _gitSyncBusy = false;
                 _gitSyncCommandPending = false;
-                Snackbar.Add(string.IsNullOrWhiteSpace(queued.Error)
+                Notifications.Add(string.IsNullOrWhiteSpace(queued.Error)
                     ? L["GitSyncQueueFailed"].Value
                     : L["GitSyncQueueRejected", queued.Error].Value, Severity.Error);
                 return;
@@ -795,13 +794,9 @@ else
         }
         catch (Exception exception)
         {
-            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-            Logger.LogError(exception,
-                "Project repository synchronization could not be queued. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
-                diagnosticId, projectId);
+            Notifications.ReportException(exception, "GitSyncQueueFailed", "queue repository synchronization", new { ProjectId = projectId });
             _gitSyncBusy = false;
             _gitSyncCommandPending = false;
-            Snackbar.Add(L.WithDiagnosticId("GitSyncQueueFailed", diagnosticId), Severity.Error);
         }
     }
 
@@ -860,7 +855,7 @@ else
                                 _gitSyncCommandPending = false;
                                 _canManageRepositorySync = current.Kind != ErrorKind.Forbidden;
                             }
-                            Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Warning);
+                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode), Severity.Warning);
                             StateHasChanged();
                         });
                         return;
@@ -903,12 +898,12 @@ else
 
                         if (current.Value.Status == WorkstationCommandStatus.Failed)
                         {
-                            Snackbar.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
+                            Notifications.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
                                 + string.Format(L["WorkstationCommandId"].Value, commandId), Severity.Error);
                         }
                         else if (current.Value.Status == WorkstationCommandStatus.Cancelled)
                         {
-                            Snackbar.Add(L["CommandCancelled"].Value, Severity.Warning);
+                            Notifications.Add(L["CommandCancelled"].Value, Severity.Warning);
                         }
                         else if (result is null)
                         {
@@ -917,36 +912,36 @@ else
                                 Logger.LogWarning(
                                     "GitSync command {CommandId} completed without a result payload. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
                                     commandId, diagnosticId, projectId);
-                            Snackbar.Add(L.WithDiagnosticId("GitSyncResultUnavailable", diagnosticId), Severity.Error);
+                            Notifications.Add(Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", diagnosticId), Severity.Error);
                         }
                         else if (IsVerifiedFastForward(result))
                         {
-                            Snackbar.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
+                            Notifications.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
                         }
                         else if (result.ReasonCode is { } reason)
                         {
-                            Snackbar.Add(GitSyncReasonText(reason), Severity.Warning);
+                            Notifications.Add(GitSyncReasonText(reason), Severity.Warning);
                         }
                         else if (result.Detached || !result.HasUpstream)
                         {
-                            Snackbar.Add(GitSyncReasonText(
+                            Notifications.Add(GitSyncReasonText(
                                 result.Detached ? GitSyncRefusalCode.Detached : GitSyncRefusalCode.NoUpstream),
                                 Severity.Warning);
                         }
                         else if (result.Behind > 0)
                         {
-                            Snackbar.Add(string.Format(
+                            Notifications.Add(string.Format(
                                 L["GitSyncRepositoryBehindWarning"].Value,
                                 result.Behind,
                                 result.Branch ?? "—"), Severity.Warning);
                         }
                         else if (IsVerifiedUpToDate(result))
                         {
-                            Snackbar.Add(L["GitSyncOutcomeUpToDate"].Value, Severity.Success);
+                            Notifications.Add(L["GitSyncOutcomeUpToDate"].Value, Severity.Success);
                         }
                         else
                         {
-                            Snackbar.Add(L["GitSyncOutcomeFailed"].Value, Severity.Warning);
+                            Notifications.Add(L["GitSyncOutcomeFailed"].Value, Severity.Warning);
                         }
 
                         StateHasChanged();
@@ -959,7 +954,7 @@ else
                     stillRunningNoticeShown = true;
                     await InvokeAsync(() =>
                     {
-                        Snackbar.Add(L["GitSyncStillRunning"].Value, Severity.Info);
+                        Notifications.Add(L["GitSyncStillRunning"].Value, Severity.Info);
                         StateHasChanged();
                     });
                 }
@@ -971,10 +966,7 @@ else
         }
         catch (Exception exception)
         {
-            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-            Logger.LogError(exception,
-                "Project GitSync polling failed. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}, CommandId={CommandId}",
-                diagnosticId, projectId, commandId);
+
             try
             {
                 await InvokeAsync(() =>
@@ -984,7 +976,7 @@ else
                         _gitSyncBusy = false;
                         _gitSyncCommandPending = true;
                     }
-                    Snackbar.Add(L.WithDiagnosticId("GitSyncStatusFailed", diagnosticId), Severity.Error);
+                    Notifications.ReportException(exception, "GitSyncStatusFailed", "read repository synchronization status", new { ProjectId = projectId, CommandId = commandId });
                     StateHasChanged();
                 });
             }
@@ -1030,10 +1022,10 @@ else
                 new AttachRuntimeRequest(projectId, deviceId, _userId, _folderPath)));
             if (!attached.Success)
             {
-                Snackbar.Add(attached.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(attached.Error, L["ProjectSettings"].Value, attached.ErrorCode);
                 return;
             }
-            Snackbar.Add(L["ProjectFolderSaved"].Value, Severity.Success);
+            Notifications.Add(L["ProjectFolderSaved"].Value, Severity.Success);
             await ReloadRuntimes();
         }
         finally

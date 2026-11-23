@@ -3257,4 +3257,7 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>Could not read repository synchronization status: {0}</value>
   </data>
+  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>The update was handed off, but the new workstation version has not reported yet. Check the workstation status or its log before retrying.</value>
+  </data>
 </root>
