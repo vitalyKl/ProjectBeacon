@@ -121,7 +121,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             {
                 if (exception is OperationCanceledException && ct.IsCancellationRequested)
                     throw;
-                return Result.Failure<PipelineSessionDto>(exception.Message);
+                return Result.Failure<PipelineSessionDto>(exception.Message, ErrorCodes.InternalError);
             }
 
             var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
