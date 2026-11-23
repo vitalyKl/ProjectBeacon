@@ -200,7 +200,7 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Result.Failure<PipelineSessionDto>(ex.Message);
+                    return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
                 }
             }
 

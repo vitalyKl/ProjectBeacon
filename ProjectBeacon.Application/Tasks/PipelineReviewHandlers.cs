@@ -128,7 +128,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
                 ct);
             if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
                 throw canceled;
-            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
+            return Result.Failure<PipelineSessionDto>(spawnFailure.Message, ErrorCodes.InternalError);
         }
 
         var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Review, ct);

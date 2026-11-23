@@ -90,7 +90,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             }
             catch (InvalidOperationException exception)
             {
-                return Result.Failure<PipelineSessionDto>(exception.Message);
+                return Result.Failure<PipelineSessionDto>(exception.Message, ErrorCodes.InternalError);
             }
 
             // Retain the guarded update as a defense against task-state changes by writers
@@ -274,7 +274,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
             }
 
             var launched = await db.PipelineSessions
