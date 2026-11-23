@@ -748,7 +748,7 @@ else
                 limit: 50);
             if (!result.Success)
             {
-                Notifications.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+                Notifications.Add(Notifications.FormatFailure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Load"].Value), Severity.Warning);
                 _taskContentHistory = [];
                 return;
             }
@@ -1434,7 +1434,7 @@ else
                 new RequestLandingRequest(TaskId, rationale), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Preview"].Value);
+                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Request"].Value);
                 return;
             }
             Notifications.Add(L["LandingPreviewQueued"].Value, Severity.Success);

@@ -3204,4 +3204,28 @@ orthstar</value>
   <data name="Reopen" xml:space="preserve">
     <value>再開</value>
   </data>
+  <data name="Request" xml:space="preserve">
+    <value>リクエスト</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>タイムゾーン設定を保存できませんでした。もう一度お試しください。問題が続く場合は、診断 ID をサポートにお知らせください。</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>有効にする</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>無効にする</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>変更</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>初期化</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>ワークステーションから読み取れないディレクトリ一覧が返されました。ワークステーションのログを確認して、もう一度お試しください。</value>
+  </data>
 </root>

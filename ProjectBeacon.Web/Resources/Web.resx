@@ -3395,4 +3395,28 @@ No Beacon-hosted coding agent.</value>
   <data name="Reopen" xml:space="preserve">
     <value>Reopen</value>
   </data>
+  <data name="Request" xml:space="preserve">
+    <value>Request</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Could not save the time-zone preference. Try again. If the problem persists, share the diagnostic ID with support.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Change</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Initialize</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>The workstation returned a directory listing that could not be read. Check the workstation log and try again.</value>
+  </data>
 </root>

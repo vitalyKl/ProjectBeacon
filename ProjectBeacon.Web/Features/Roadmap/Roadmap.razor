@@ -246,6 +246,8 @@ else
 
         var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(
             new ListProjectMilestonesRequest(_project.Id), _actor));
+        if (!milestones.Success)
+            Notifications.Failure(milestones.Error, L["Roadmap"].Value, milestones.ErrorCode, L["Load"].Value);
         _milestones = milestones.Success ? milestones.Value!.ToList() : [];
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
         _deletedMilestones = deleted.Success
@@ -254,6 +256,8 @@ else
         if (!deleted.Success)
             Notifications.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
         var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
+        if (!tasks.Success)
+            Notifications.Failure(tasks.Error, L["Roadmap"].Value, tasks.ErrorCode, L["Load"].Value);
         _tasks = tasks.Success ? tasks.Value!.ToList() : [];
     }
 

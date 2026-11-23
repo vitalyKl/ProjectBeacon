@@ -382,7 +382,7 @@ else
             var summary = await GetProposalInboxSummary(_project.Id);
             if (!summary.Success)
             {
-                _error = Notifications.FormatFailure(summary.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, summary.ErrorCode);
+                _error = Notifications.FormatFailure(summary.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, summary.ErrorCode, L["Load"].Value);
                 return;
             }
             _summary = summary.Value;
@@ -390,7 +390,7 @@ else
             var proposals = await ListProposals.HandleAsync(new ListProposalsQuery(_project.Id, Limit: 100), _actor);
             if (!proposals.Success)
             {
-                _error = Notifications.FormatFailure(proposals.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, proposals.ErrorCode);
+                _error = Notifications.FormatFailure(proposals.Error ?? L["ProjectAccessRequired"].Value, L["ProposalInbox"].Value, proposals.ErrorCode, L["Load"].Value);
                 return;
             }
             _proposals = proposals.Value!.ToList();
@@ -729,7 +729,7 @@ else
                 _project.Id, proposal.Id, _actor, GetAcceptedPayload(proposal)));
             if (!result.Success)
             {
-                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode),
+                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value),
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -757,7 +757,7 @@ else
                 _project.Id, proposal.Id, _actor, string.IsNullOrWhiteSpace(_decisionNote) ? null : _decisionNote));
             if (!result.Success)
             {
-                Notifications.Add(result.Error ?? L["Error"].Value,
+                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Reject"].Value),
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -794,7 +794,7 @@ else
                     var conflict = result.Kind == ErrorKind.Conflict;
                     var status = conflict ? L["Conflicted"].Value : L["Error"].Value;
                     batchResults.Add(new BatchAcceptResult(
-                        $"{itemName}: {Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode)}",
+                        $"{itemName}: {Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value)}",
                         conflict ? Severity.Warning : Severity.Error));
                 }
                 else if (result.Value?.Status == ProposalStatus.Applying)

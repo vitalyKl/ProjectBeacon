@@ -35,7 +35,7 @@
             }
             @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value)</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value, operationLabel: L["Execute"].Value)</MudAlert>
             }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {

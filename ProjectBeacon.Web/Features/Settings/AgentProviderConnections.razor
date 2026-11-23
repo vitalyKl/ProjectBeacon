@@ -131,6 +131,8 @@
     private async Task Reload()
     {
         var listed = await ListConnections.HandleAsync(new ListAgentProviderConnectionsCommand(_userId));
+        if (!listed.Success)
+            Notifications.Failure(listed.Error, L["Connections"].Value, listed.ErrorCode, L["Load"].Value);
         _rows = listed.Success ? listed.Value!.ToList() : [];
     }
 

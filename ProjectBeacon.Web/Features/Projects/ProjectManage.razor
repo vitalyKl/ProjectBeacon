@@ -593,7 +593,7 @@ else
                 projectId, policy.TargetKind, policy.Operation, selected, policy.PolicyRevision, _actor));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode, L["Save"].Value);
                 await ReloadProposalPolicies();
                 return;
             }
@@ -705,7 +705,7 @@ else
                 new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription, null, _projectRevision), _actor));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode, L["Save"].Value);
                 return;
             }
             _projectName = saved.Value!.Name;

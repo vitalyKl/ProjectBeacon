@@ -3186,4 +3186,28 @@
   <data name="Reopen" xml:space="preserve">
     <value>Открыть заново</value>
   </data>
+  <data name="Request" xml:space="preserve">
+    <value>Запросить</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Не удалось сохранить часовой пояс. Повторите попытку. Если проблема повторится, передайте диагностический ID в службу поддержки.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Включить</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Подтвердить</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Отключить</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Изменить</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Инициализировать</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула список каталогов, который не удалось прочитать. Проверьте журнал станции и повторите попытку.</value>
+  </data>
 </root>

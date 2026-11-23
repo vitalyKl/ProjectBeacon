@@ -3204,4 +3204,28 @@ orthstar</value>
   <data name="Reopen" xml:space="preserve">
     <value>重新打开</value>
   </data>
+  <data name="Request" xml:space="preserve">
+    <value>请求</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>无法保存时区设置。请重试。如果问题仍然存在，请向支持人员提供诊断 ID。</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>验证</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>禁用</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>更改</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>初始化</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>工作站返回的目录列表无法读取。请检查工作站日志后重试。</value>
+  </data>
 </root>

@@ -93,8 +93,12 @@
             return;
 
         var result = await GetAgentProfileOverrides.HandleAsync(new GetAgentProfileOverridesCommand(userId));
-        if (result.Success)
-            _profileOverrides = result.Value!.ToDictionary(profile => profile.Key, StringComparer.OrdinalIgnoreCase);
+        if (!result.Success)
+        {
+            Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Load"].Value);
+            return;
+        }
+        _profileOverrides = result.Value!.ToDictionary(profile => profile.Key, StringComparer.OrdinalIgnoreCase);
     }
 
     private string ProfileName(BuiltInAgentProfile profile) =>

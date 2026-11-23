@@ -284,7 +284,7 @@
             var saved = await SaveServers.HandleAsync(new SaveProjectMcpServersCommand(ProjectId, entries, _actor));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["McpServers"].Value, saved.ErrorCode);
+                Notifications.Failure(saved.Error, L["McpServers"].Value, saved.ErrorCode, successMessage == L["McpDeleted"].Value ? L["Delete"].Value : L["Save"].Value);
                 return false;
             }
             _servers = saved.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();

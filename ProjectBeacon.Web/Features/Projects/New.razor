@@ -143,7 +143,7 @@
             var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
             if (!org.Success)
             {
-                _error = Notifications.FormatFailure(org.Error, L["CreateProject"].Value, org.ErrorCode);
+                _error = Notifications.FormatFailure(org.Error, L["Projects"].Value, org.ErrorCode, L["Create"].Value);
                 return;
             }
 
@@ -151,7 +151,7 @@
                 _projectName, _description, org.Value!.Id), actor));
             if (!project.Success)
             {
-                _error = Notifications.FormatFailure(project.Error, L["CreateProject"].Value, project.ErrorCode);
+                _error = Notifications.FormatFailure(project.Error, L["Projects"].Value, project.ErrorCode, L["Create"].Value);
                 return;
             }
 
@@ -161,7 +161,7 @@
                     new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
                 if (!attached.Success)
                 {
-                    _error = Notifications.FormatFailure(attached.Error, L["CreateProject"].Value, attached.ErrorCode);
+                    _error = Notifications.FormatFailure(attached.Error, L["Projects"].Value, attached.ErrorCode, L["Attach"].Value);
                     return;
                 }
                 if (_initOnDevice)
@@ -185,13 +185,13 @@
                         new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.InitProject, payload, project.Value.Id)));
                     if (!queued.Success)
                     {
-                        _error = Notifications.FormatFailure(queued.Error, L["CreateProject"].Value, queued.ErrorCode);
+                        _error = Notifications.FormatFailure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Initialize"].Value);
                         return;
                     }
                     var finished = await WaitAsync(queued.Value!.Id);
                     if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
                     {
-                        _error = Notifications.FormatFailure(finished?.Error, L["CreateProject"].Value);
+                        _error = Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, operationLabel: L["Initialize"].Value);
                         return;
                     }
                 }

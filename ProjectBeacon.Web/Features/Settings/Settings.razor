@@ -131,9 +131,10 @@
             _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference") ?? string.Empty;
             await InvokeAsync(StateHasChanged);
         }
-        catch (JSException)
+        catch (JSException exception)
         {
-            Notifications.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);
+            var diagnosticId = Notifications.LogException(exception, "load time-zone preferences");
+            Notifications.Warning(Notifications.FormatDiagnosticMessage("TimeZoneLoadFailed", diagnosticId));
         }
     }
 
@@ -145,9 +146,9 @@
             _timeZone = value;
             Notifications.Add(L["TimeZoneSaved"].Value, Severity.Success);
         }
-        catch (JSException)
+        catch (JSException exception)
         {
-            Notifications.Add(L["TimeZoneInvalid"].Value, Severity.Error);
+            Notifications.ReportException(exception, "TimeZoneSaveFailed", "save time-zone preference", new { TimeZone = value });
         }
     }
 
@@ -156,7 +157,12 @@
         if (_userId == Guid.Empty)
             return;
         var status = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
-        _totpEnabled = status.Success && status.Value!.Enabled;
+        if (!status.Success)
+        {
+            Notifications.Failure(status.Error, L["Settings"].Value, status.ErrorCode, L["Load"].Value);
+            return;
+        }
+        _totpEnabled = status.Value!.Enabled;
         if (status.Success && status.Value!.Pending && !string.IsNullOrEmpty(status.Value.OtpAuthUri))
             ShowSetup(status.Value.OtpAuthUri, status.Value.Secret ?? string.Empty);
         else if (_totpEnabled)
@@ -184,7 +190,7 @@
         var begun = await BeginTotp.HandleAsync(new BeginTotpCommand(_userId));
         if (!begun.Success)
         {
-            Notifications.Failure(begun.Error, L["Settings"].Value);
+            Notifications.Failure(begun.Error, L["Settings"].Value, begun.ErrorCode, L["Enable"].Value);
             return;
         }
         await ReloadTotp();
@@ -195,7 +201,7 @@
         var confirmed = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(_userId, _totpCode)));
         if (!confirmed.Success)
         {
-            Notifications.Failure(confirmed.Error, L["Settings"].Value);
+            Notifications.Failure(confirmed.Error, L["Settings"].Value, confirmed.ErrorCode, L["Verify"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -208,7 +214,7 @@
         var disabled = await DisableTotp.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(_userId, _totpCode)));
         if (!disabled.Success)
         {
-            Notifications.Failure(disabled.Error, L["Settings"].Value);
+            Notifications.Failure(disabled.Error, L["Settings"].Value, disabled.ErrorCode, L["Disable"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -220,8 +226,12 @@
         if (_userId == Guid.Empty)
             return;
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
+        if (!registry.Success)
+            Notifications.Failure(registry.Error, L["Settings"].Value, registry.ErrorCode, L["Load"].Value);
         _chatModels = registry.Success ? registry.Value!.Backends.ToList() : [];
         var current = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
+        if (!current.Success)
+            Notifications.Failure(current.Error, L["Settings"].Value, current.ErrorCode, L["Load"].Value);
         _chatModelId = current.Success ? current.Value : null;
     }
 
@@ -235,7 +245,7 @@
             var saved = await SetChatModel.HandleAsync(new SetChatModelCommand(new SetChatModelRequest(_userId, _chatModelId)));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["Settings"].Value);
+                Notifications.Failure(saved.Error, L["Settings"].Value, saved.ErrorCode, L["Save"].Value);
                 return;
             }
             Notifications.Add(L["ChatModelSaved"].Value, Severity.Success);
@@ -258,7 +268,7 @@
             var result = await ChangePassword.HandleAsync(new ChangePasswordRequest(_userId, _currentPassword, _newPassword));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Settings"].Value);
+                Notifications.Failure(result.Error, L["Settings"].Value, result.ErrorCode, L["Change"].Value);
                 return;
             }
             _currentPassword = string.Empty;

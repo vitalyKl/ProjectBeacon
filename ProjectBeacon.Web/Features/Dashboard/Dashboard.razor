@@ -311,7 +311,7 @@ else
         if (!result.Success)
         {
             _error = true;
-            _errorMessage = Notifications.FormatFailure(result.Error, L["Dashboard"].Value, result.ErrorCode);
+            _errorMessage = Notifications.FormatFailure(result.Error, L["Dashboard"].Value, result.ErrorCode, L["Load"].Value);
             _loading = false;
             return;
         }

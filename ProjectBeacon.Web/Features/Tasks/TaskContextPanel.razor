@@ -62,7 +62,7 @@
                 Task.ProjectId, null, null, Task.Id, _budget, false, false, false)));
             if (!result.Success)
             {
-                _error = Notifications.FormatFailure(result.Error, L["Tasks"].Value, result.ErrorCode);
+                _error = Notifications.FormatFailure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Compile"].Value);
                 return;
             }
             _markdown = result.Value!.BriefMarkdown;

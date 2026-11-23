@@ -3196,4 +3196,28 @@ orthstar</value>
   <data name="Reopen" xml:space="preserve">
     <value>Wieder öffnen</value>
   </data>
+  <data name="Request" xml:space="preserve">
+    <value>Anfordern</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Die Zeitzoneneinstellung konnte nicht gespeichert werden. Versuchen Sie es erneut. Falls das Problem weiterhin besteht, teilen Sie dem Support die Diagnose-ID mit.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Aktivieren</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Bestätigen</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Deaktivieren</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Ändern</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Initialisieren</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>Die Workstation hat eine nicht lesbare Verzeichnisliste zurückgegeben. Prüfen Sie das Workstation-Protokoll und versuchen Sie es erneut.</value>
+  </data>
 </root>
