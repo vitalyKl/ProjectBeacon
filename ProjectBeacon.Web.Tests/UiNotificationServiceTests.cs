@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Web.Tests;
 
 using System.Globalization;
-using Bunit;
+using TestContext = global::Bunit.TestContext;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using ProjectBeacon.Application.Common;
