@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Web.Tests;
 
 using System.Globalization;
+using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using ProjectBeacon.Application.Common;
@@ -15,8 +16,8 @@ public sealed class UiNotificationServiceTests
         try
         {
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
-            using var provider = CreateProvider();
-            var notifications = provider.GetRequiredService<IUiNotificationService>();
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
 
             var message = notifications.FormatFailure("Проект недоступен.", "настройки проекта");
 
@@ -36,8 +37,8 @@ public sealed class UiNotificationServiceTests
         try
         {
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
-            using var provider = CreateProvider();
-            var notifications = provider.GetRequiredService<IUiNotificationService>();
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
 
             var message = notifications.FormatFailure(
                 "NpgsqlException: connection refused at db.internal:5432",
@@ -55,13 +56,13 @@ public sealed class UiNotificationServiceTests
         }
     }
 
-    private static ServiceProvider CreateProvider()
+    private static TestContext CreateContext()
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddLocalization();
-        services.AddMudServices();
-        services.AddUiNotifications();
-        return services.BuildServiceProvider();
+        var context = new TestContext();
+        context.Services.AddLogging();
+        context.Services.AddLocalization();
+        context.Services.AddMudServices();
+        context.Services.AddUiNotifications();
+        return context;
     }
 }
