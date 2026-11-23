@@ -3228,4 +3228,13 @@ orthstar</value>
   <data name="FolderListingInvalid" xml:space="preserve">
     <value>工作站返回的目录列表无法读取。请检查工作站日志后重试。</value>
   </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>同步仓库</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>代理会话运行期间此子任务失败。请展开上方的会话活动面板，查看错误详情和诊断 ID。</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>由于项目文件已更改或包含冲突修改，无法应用代理的更改。隔离工作树已保留。请检查命令结果并解决冲突后再重试。</value>
+  </data>
 </root>

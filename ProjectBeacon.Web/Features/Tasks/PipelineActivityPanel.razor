@@ -3,6 +3,7 @@
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Features.Chat
@@ -30,12 +31,12 @@
             @if (_state == "conflict")
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">
-                    Patch conflict: the agent's changes could not be applied to the current project files. The isolated worktree was preserved; inspect the command result for its recovery path.
+                    @L["PipelinePatchConflict"]
                 </MudAlert>
             }
-            @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
+            @if (!string.IsNullOrWhiteSpace(_failureMessage))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value, operationLabel: L["Execute"].Value)</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_failureMessage</MudAlert>
             }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {
@@ -74,6 +75,8 @@
     private List<ChatPartDto> Parts { get; set; } = [];
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
+    private string? _failureMessage;
+    private string _failureSnapshotKey = string.Empty;
 
     private string LastActivityLabel => Session.LastActivityAt is not { } lastActivity
         ? string.Empty
@@ -102,8 +105,8 @@
         && _state is not ("completed" or "failed" or "waiting-for-user");
     private string ActivityLabel => Session.IsQueued
         ? L["PipelineQueued"].Value
-        : !string.IsNullOrWhiteSpace(Session.FailureReason)
-            ? Notifications.FormatFailure(Session.FailureReason, L["Tasks"].Value)
+        : !string.IsNullOrWhiteSpace(_failureMessage)
+            ? _failureMessage
             : Session.Status == SessionStatus.Active && !HasRecentSignal
             ? L["PipelineNoRecentSignal"].Value
             : !string.IsNullOrWhiteSpace(_activity)
@@ -145,6 +148,20 @@
 
     protected override void OnParametersSet()
     {
+        var failureKey = $"{Session.Id:N}:{Session.FailureReason}";
+        if (!string.Equals(failureKey, _failureSnapshotKey, StringComparison.Ordinal))
+        {
+            _failureSnapshotKey = failureKey;
+            _failureMessage = string.IsNullOrWhiteSpace(Session.FailureReason)
+                ? null
+                : Notifications.FormatFailure(
+                    Session.FailureReason,
+                    L["Tasks"].Value,
+                    ErrorCodes.InternalError,
+                    L["Execute"].Value,
+                    new { TaskId, SessionId = Session.Id });
+        }
+
         var body = Session.ActivityJson ?? "{}";
         if (body == SnapshotKey)
             return;

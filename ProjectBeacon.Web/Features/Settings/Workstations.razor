@@ -6,6 +6,7 @@
 @using Microsoft.Extensions.Logging
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Shared
@@ -478,7 +479,7 @@
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Save"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Save"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
                 return;
             }
             Notifications.Add(L["WorkstationSaved"].Value, Severity.Success);
@@ -516,7 +517,7 @@
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Install"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Install"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
                 return;
             }
             Notifications.Add(L["CommandSucceeded"].Value, Severity.Success);
@@ -543,7 +544,7 @@
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Check"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Check"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
                 return;
             }
             using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
@@ -589,7 +590,7 @@
             var finished = await WaitAsync(queued.Value!.Id, 660);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Update"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Update"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
                 return;
             }
             _clientUpdateAvailable = null;

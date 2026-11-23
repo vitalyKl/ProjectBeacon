@@ -3419,4 +3419,13 @@ No Beacon-hosted coding agent.</value>
   <data name="FolderListingInvalid" xml:space="preserve">
     <value>The workstation returned a directory listing that could not be read. Check the workstation log and try again.</value>
   </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Synchronize repository</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>This subtask failed while an agent session was running. Expand the session activity above for the failure details and diagnostic ID.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>The agent's changes could not be applied because project files changed or contain conflicting edits. The isolated worktree was preserved; inspect the command result and resolve the conflict before retrying.</value>
+  </data>
 </root>

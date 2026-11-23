@@ -15,9 +15,13 @@
         }
         <StatusChip Color="Color.Info" Label="@AgentModeLabel(Subtask.AgentMode)" />
     </MudStack>
-    @if (!string.IsNullOrWhiteSpace(Subtask.Summary))
+    @if (!string.IsNullOrWhiteSpace(Subtask.Summary) && !HasSessionFailure)
     {
         <MarkdownView Text="@Subtask.Summary" MaxHeight="220" Class="mt-1" />
+    }
+    else if (HasSessionFailure)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-1">@L["SubtaskFailedOpenActivity"]</MudText>
     }
     @if (!string.IsNullOrWhiteSpace(Subtask.DiffRef))
     {
@@ -84,6 +88,9 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public PipelinePreflightDto? Preflight { get; set; }
     [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
+
+    private bool HasSessionFailure => Subtask.Status == SubtaskStatus.Failed
+        && Sessions.Any(session => !string.IsNullOrWhiteSpace(session.FailureReason));
 
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };

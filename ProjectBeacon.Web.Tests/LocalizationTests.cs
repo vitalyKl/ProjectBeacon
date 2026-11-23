@@ -125,7 +125,7 @@ public sealed class LocalizationTests
             "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
             "AuthRequestFailed", "AuthBootstrapOperation", "AuthForgotOperation",
             "AuthInviteOperation", "AuthRecoverOperation", "AuthRegisterOperation", "AuthResetOperation",
-            "ChatAnswerUnexpectedFailed", "WorkstationUpdatePending", "WorkstationUpdateProgress", "FolderListingInvalid", "TimeZoneSaveFailed", "Initialize", "Enable", "Verify", "Disable", "Change", "Request", "Fail", "Close", "Reopen", "Activate", "Add", "ChangeStatus", "Preview", "Revert", "Export", "Accept", "Deprecate", "Replace", "Read"
+            "ChatAnswerUnexpectedFailed", "WorkstationUpdatePending", "WorkstationUpdateProgress", "PipelinePatchConflict", "SubtaskFailedOpenActivity", "SynchronizeRepository", "FolderListingInvalid", "TimeZoneSaveFailed", "Initialize", "Enable", "Verify", "Disable", "Change", "Request", "Fail", "Close", "Reopen", "Activate", "Add", "ChangeStatus", "Preview", "Revert", "Export", "Accept", "Deprecate", "Replace", "Read", "Install", "Browse", "Execute", "Save", "Delete", "Create", "Update", "Restore", "Start", "Restart", "Send", "Cancel", "Attach", "Compile"
         })
         {
             Assert.False(string.IsNullOrWhiteSpace(_rm.GetString(key, culture)), $"{key} is missing for {cultureName}.");

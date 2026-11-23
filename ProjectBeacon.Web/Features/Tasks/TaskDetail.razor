@@ -1237,9 +1237,12 @@ else
                 targetDeviceId: deviceId);
             if (!queued.Success || queued.Value is null)
             {
-                Notifications.Add(string.IsNullOrWhiteSpace(queued.Error)
-                    ? L["GitSyncQueueFailed"].Value
-                    : L["GitSyncQueueRejected", queued.Error].Value, Severity.Error);
+                Notifications.Failure(
+                    queued.Error,
+                    L["Tasks"].Value,
+                    queued.Success ? ErrorCodes.Unclassified : queued.ErrorCode,
+                    L["SynchronizeRepository"].Value,
+                    new { TaskId, ProjectId = _task.ProjectId, DeviceId = deviceId });
                 await ReloadPipeline(ct);
                 return;
             }
@@ -1256,9 +1259,12 @@ else
                     _task.ProjectId, queued.Value.Id, _actorContext, ct);
                 if (!current.Success || current.Value is null)
                 {
-                    Notifications.Add(string.IsNullOrWhiteSpace(current.Error)
-                        ? L["GitSyncStatusFailed"].Value
-                        : L["GitSyncStatusReadFailed", current.Error].Value, Severity.Error);
+                    Notifications.Failure(
+                        current.Error,
+                        L["Tasks"].Value,
+                        current.ErrorCode,
+                        L["Read"].Value,
+                        new { TaskId, ProjectId = _task.ProjectId, CommandId = queued.Value.Id });
                     await ReloadPipeline(ct);
                     return;
                 }

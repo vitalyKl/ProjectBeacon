@@ -3220,4 +3220,13 @@ orthstar</value>
   <data name="FolderListingInvalid" xml:space="preserve">
     <value>Die Workstation hat eine nicht lesbare Verzeichnisliste zurückgegeben. Prüfen Sie das Workstation-Protokoll und versuchen Sie es erneut.</value>
   </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Repository synchronisieren</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>Diese Unteraufgabe ist während einer Agentensitzung fehlgeschlagen. Öffnen Sie oben die Sitzungsaktivität, um Fehlerdetails und Diagnose-ID zu sehen.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>Die Änderungen des Agenten konnten nicht angewendet werden, da sich Projektdateien geändert haben oder widersprüchliche Änderungen enthalten. Der isolierte Worktree wurde beibehalten. Prüfen Sie das Befehlsergebnis und lösen Sie den Konflikt vor einem erneuten Versuch.</value>
+  </data>
 </root>

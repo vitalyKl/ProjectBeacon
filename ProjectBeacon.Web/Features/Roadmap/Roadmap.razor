@@ -254,7 +254,7 @@ else
             ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.Milestone).ToList()
             : [];
         if (!deleted.Success)
-            Notifications.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(deleted.Error, L["Roadmap"].Value, deleted.ErrorCode, L["Delete"].Value), Severity.Warning);
         var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
         if (!tasks.Success)
             Notifications.Failure(tasks.Error, L["Roadmap"].Value, tasks.ErrorCode, L["Load"].Value);

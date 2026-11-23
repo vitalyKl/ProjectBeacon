@@ -118,7 +118,7 @@ else
             }
             if (finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
             {
-                _error = Notifications.FormatFailure(finished.Error ?? L["CommandFailed"].Value, Label ?? L["Projects"].Value, operationLabel: L["Browse"].Value);
+                _error = Notifications.FormatFailure(finished.Error ?? L["CommandFailed"].Value, Label ?? L["Projects"].Value, ErrorCodes.InternalError, L["Browse"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id, Path = path, RootKind });
                 return;
             }
             try

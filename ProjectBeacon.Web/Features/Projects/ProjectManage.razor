@@ -780,9 +780,12 @@ else
             {
                 _gitSyncBusy = false;
                 _gitSyncCommandPending = false;
-                Notifications.Add(string.IsNullOrWhiteSpace(queued.Error)
-                    ? L["GitSyncQueueFailed"].Value
-                    : L["GitSyncQueueRejected", queued.Error].Value, Severity.Error);
+                Notifications.Failure(
+                    queued.Error,
+                    L["ProjectSettings"].Value,
+                    queued.Success ? ErrorCodes.Unclassified : queued.ErrorCode,
+                    L["SynchronizeRepository"].Value,
+                    new { ProjectId = projectId });
                 return;
             }
 
@@ -855,7 +858,7 @@ else
                                 _gitSyncCommandPending = false;
                                 _canManageRepositorySync = current.Kind != ErrorKind.Forbidden;
                             }
-                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode, L["Load"].Value), Severity.Warning);
+                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode, L["Load"].Value, new { ProjectId = projectId, CommandId = commandId }), Severity.Warning);
                             StateHasChanged();
                         });
                         return;

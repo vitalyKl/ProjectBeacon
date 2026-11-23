@@ -3210,4 +3210,13 @@
   <data name="FolderListingInvalid" xml:space="preserve">
     <value>Рабочая станция вернула список каталогов, который не удалось прочитать. Проверьте журнал станции и повторите попытку.</value>
   </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Синхронизировать репозиторий</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>Подзадача завершилась с ошибкой во время работы агента. Разверните панель активности выше, чтобы увидеть причину и диагностический ID.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>Не удалось применить изменения агента: файлы проекта изменились или содержат конфликтующие правки. Изолированная рабочая копия сохранена. Проверьте результат команды и разрешите конфликт перед повторной попыткой.</value>
+  </data>
 </root>

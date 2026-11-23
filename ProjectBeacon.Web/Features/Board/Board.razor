@@ -143,7 +143,7 @@ else if (_error)
             new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier))));
         if (!result.Success)
         {
-            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode, L["ChangeStatus"].Value), Severity.Warning);
             await ReloadTasks();
             return;
         }
@@ -167,7 +167,7 @@ else if (_error)
             new ChangeTaskStatusRequest(task.Id, status)));
         if (!result.Success)
         {
-            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode, L["ChangeStatus"].Value), Severity.Warning);
             await ReloadTasks();
             return;
         }
@@ -189,7 +189,7 @@ else if (_error)
         if (!listed.Success)
         {
             _error = true;
-            _errorMessage = Notifications.FormatFailure(listed.Error, L["Board"].Value, listed.ErrorCode);
+            _errorMessage = Notifications.FormatFailure(listed.Error, L["Board"].Value, listed.ErrorCode, L["Load"].Value);
             _allTasks = [];
             _container?.Refresh();
             return;
