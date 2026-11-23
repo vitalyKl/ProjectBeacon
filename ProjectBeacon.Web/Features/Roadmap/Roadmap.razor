@@ -411,7 +411,7 @@ else
                 milestoneId));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Roadmap"].Value);
+                Notifications.Failure(restored.Error, L["Roadmap"].Value, restored.ErrorCode, L["Restore"].Value);
                 return;
             }
 

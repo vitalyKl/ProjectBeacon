@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>关闭</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,8 +918,8 @@
 <data name="Constraints" xml:space="preserve">
     <value>约束</value>
   </data>
-<data name="Activate" xml:space="preserve">
-    <value>启用</value>
+  <data name="Activate" xml:space="preserve">
+    <value>激活</value>
   </data>
 <data name="Reject" xml:space="preserve">
     <value>拒绝</value>
@@ -3194,5 +3194,14 @@ orthstar</value>
   </data>
   <data name="Read" xml:space="preserve">
     <value>读取</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>更新已交接。正在等待工作站重启并报告新版本。</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>标记为失败</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>重新打开</value>
   </data>
 </root>

@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>Abbrechen</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Schließen</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,7 +918,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>Einschränkungen</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Aktivieren</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -3186,5 +3186,14 @@ orthstar</value>
   </data>
   <data name="Read" xml:space="preserve">
     <value>Lesen</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>Das Update wurde übergeben. Warten auf den Neustart der Workstation und die Meldung der neuen Version.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Als fehlgeschlagen markieren</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Wieder öffnen</value>
   </data>
 </root>

@@ -494,7 +494,7 @@ else
         var result = await ListProposalPolicies.HandleAsync(projectId, _actor);
         if (!result.Success || result.Value is null)
         {
-            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProposalPoliciesUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProposalPoliciesUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode, L["Load"].Value), Severity.Warning);
             return;
         }
 
@@ -533,7 +533,7 @@ else
         if (!result.Success || result.Value is null)
         {
             _gitPolicy = null;
-            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProjectGitPolicyUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProjectGitPolicyUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode, L["Load"].Value), Severity.Warning);
             return;
         }
         ApplyGitPolicy(result.Value);
@@ -553,7 +553,7 @@ else
                 _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
             if (!saved.Success || saved.Value is null)
             {
-                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode);
+                Notifications.Failure(saved.Error, L["ProjectSettings"].Value, saved.ErrorCode, L["Save"].Value);
                 await ReloadGitPolicy();
                 return;
             }
@@ -630,7 +630,7 @@ else
             projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
         _projectDescriptionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history.Error, L["ProjectSettings"].Value, history.ErrorCode), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history.Error, L["ProjectSettings"].Value, history.ErrorCode, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreProjectDescriptionVersion(ContentVersionDto version)
@@ -650,14 +650,14 @@ else
                 projectId));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["ProjectSettings"].Value, restored.ErrorCode);
+                Notifications.Failure(restored.Error, L["ProjectSettings"].Value, restored.ErrorCode, L["Restore"].Value);
                 return;
             }
 
             var current = await CurrentProject.HandleAsync(_actor);
             if (!current.Success || current.Value is null)
             {
-                Notifications.Failure(current.Error, L["ProjectSettings"].Value, current.ErrorCode);
+                Notifications.Failure(current.Error, L["ProjectSettings"].Value, current.ErrorCode, L["Load"].Value);
                 return;
             }
 
@@ -735,7 +735,7 @@ else
             var deleted = await DeleteProject.HandleAsync(new DeleteProjectCommand(projectId, _actor));
             if (!deleted.Success)
             {
-                Notifications.Failure(deleted.Error, L["ProjectSettings"].Value, deleted.ErrorCode);
+                Notifications.Failure(deleted.Error, L["ProjectSettings"].Value, deleted.ErrorCode, L["Delete"].Value);
                 return;
             }
             var next = _projects.FirstOrDefault(p => p.Id != projectId);
@@ -855,7 +855,7 @@ else
                                 _gitSyncCommandPending = false;
                                 _canManageRepositorySync = current.Kind != ErrorKind.Forbidden;
                             }
-                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode), Severity.Warning);
+                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode, L["Load"].Value), Severity.Warning);
                             StateHasChanged();
                         });
                         return;
@@ -1022,7 +1022,7 @@ else
                 new AttachRuntimeRequest(projectId, deviceId, _userId, _folderPath)));
             if (!attached.Success)
             {
-                Notifications.Failure(attached.Error, L["ProjectSettings"].Value, attached.ErrorCode);
+                Notifications.Failure(attached.Error, L["ProjectSettings"].Value, attached.ErrorCode, L["Attach"].Value);
                 return;
             }
             Notifications.Add(L["ProjectFolderSaved"].Value, Severity.Success);

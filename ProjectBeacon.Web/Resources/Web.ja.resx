@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>閉じる</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,7 +918,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>制約</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>有効化</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -3194,5 +3194,14 @@ orthstar</value>
   </data>
   <data name="Read" xml:space="preserve">
     <value>読み取り</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>更新処理を引き渡しました。ワークステーションの再起動と新しいバージョンの報告を待っています。</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>失敗として記録</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>再開</value>
   </data>
 </root>

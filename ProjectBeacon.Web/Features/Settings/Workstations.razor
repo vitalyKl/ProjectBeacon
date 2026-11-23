@@ -419,7 +419,7 @@
                 new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode);
+                Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode, L["Create"].Value);
                 return;
             }
             _deviceToken = result.Value!.Token;
@@ -442,7 +442,7 @@
         var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode);
+            Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode, L["Delete"].Value);
             return;
         }
         Notifications.Add(L["DeviceRevoked"].Value, Severity.Success);
@@ -472,13 +472,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.SaveWorkstation, payload, null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Save"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Save"].Value);
                 return;
             }
             Notifications.Add(L["WorkstationSaved"].Value, Severity.Success);
@@ -510,13 +510,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.Install, JsonSerializer.Serialize(new { id }), null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Install"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Install"].Value);
                 return;
             }
             Notifications.Add(L["CommandSucceeded"].Value, Severity.Success);
@@ -537,13 +537,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.CheckClientUpdate, "{}", null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Check"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Check"].Value);
                 return;
             }
             using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
@@ -583,19 +583,19 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.UpdateClient, "{}", null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode);
+                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Update"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id, 660);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value);
+                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, operationLabel: L["Update"].Value);
                 return;
             }
             _clientUpdateAvailable = null;
             _clientUpdateActive = true;
             _clientUpdatePercent = null;
-            _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
+            _clientUpdateMessage = L["WorkstationUpdateProgress"].Value;
             var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
             if (restarted)
                 Notifications.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);

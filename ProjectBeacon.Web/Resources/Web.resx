@@ -67,7 +67,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Close</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -1003,7 +1003,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>Constraints</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Activate</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -3385,5 +3385,14 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="Read" xml:space="preserve">
     <value>Read</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>The update was handed off. Waiting for the workstation to restart and report its new version.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Fail</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Reopen</value>
   </data>
 </root>

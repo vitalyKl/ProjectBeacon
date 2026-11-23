@@ -103,6 +103,16 @@
     private string ProfileDescription(BuiltInAgentProfile profile) =>
         _profileOverrides.TryGetValue(profile.Key, out var custom) ? custom.Description : profile.Description;
 
+    private string OperationLabel => Params.Mode switch
+    {
+        PipelineDialogMode.CreateSubtask => L["Create"].Value,
+        PipelineDialogMode.ReportResult => L["Submit"].Value,
+        PipelineDialogMode.FailSubtask => L["Fail"].Value,
+        PipelineDialogMode.ReviewApprove => L["Accept"].Value,
+        PipelineDialogMode.ReviewReopen => L["Reopen"].Value,
+        PipelineDialogMode.ConfirmClose or PipelineDialogMode.ForceClose => L["Close"].Value,
+        _ => L["Update"].Value
+    };
     private string ConfirmLabel => Params.Mode == PipelineDialogMode.CreateSubtask ? L["Create"].Value : L["Confirm"].Value;
 
     private BuiltInAgentProfile? SelectedProfile => BuiltInAgentProfiles.Get(_profileKey);
@@ -144,7 +154,7 @@
         _saving = true;
         try
         {
-            (bool Ok, string? Error, string Success) outcome;
+            (bool Ok, string? Error, string? ErrorCode, string Success) outcome;
             switch (Params.Mode)
             {
                 case PipelineDialogMode.CreateSubtask:
@@ -155,49 +165,49 @@
                             AllowedPaths: ParsedAllowedPaths,
                             Profile: string.IsNullOrWhiteSpace(_profileKey) ? null : _profileKey),
                         ProfileActor));
-                    outcome = (result.Success, result.Error, L["SubtaskCreated"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["SubtaskCreated"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReportResult:
                 {
                     var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim())));
-                    outcome = (result.Success, result.Error, L["ResultReported"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["ResultReported"].Value);
                     break;
                 }
                 case PipelineDialogMode.FailSubtask:
                 {
                     var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim())));
-                    outcome = (result.Success, result.Error, L["SubtaskFailedMsg"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["SubtaskFailedMsg"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewApprove:
                 {
                     var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim())));
-                    outcome = (result.Success, result.Error, L["VerdictRecorded"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["VerdictRecorded"].Value);
                     break;
                 }
                 case PipelineDialogMode.ReviewReopen:
                 {
                     var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id)));
-                    outcome = (result.Success, result.Error, L["SubtaskReopened"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["SubtaskReopened"].Value);
                     break;
                 }
                 case PipelineDialogMode.ConfirmClose:
                 {
                     var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim(), Params.ActorId)));
-                    outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["PipelineClosed"].Value);
                     break;
                 }
                 default:
                 {
                     var result = await ForceClosePipeline.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(Params.TaskId, Params.ActorId ?? string.Empty, _reason.Trim())));
-                    outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
+                    outcome = (result.Success, result.Error, result.ErrorCode, L["PipelineClosed"].Value);
                     break;
                 }
             }
             if (!outcome.Ok)
             {
-                Notifications.Failure(outcome.Error, L["Tasks"].Value, outcome.ErrorCode, L["Execute"].Value);
+                Notifications.Failure(outcome.Error, L["Tasks"].Value, outcome.ErrorCode, OperationLabel);
                 return;
             }
             Notifications.Add(outcome.Success, Severity.Success);

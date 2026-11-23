@@ -832,7 +832,7 @@ else
                 _project.Id, draft.Id, draft.Revision, accept, _actor));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+                Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, accept ? L["Accept"].Value : L["Reject"].Value);
                 return;
             }
             Notifications.Add(accept ? L["ContextDraftApproved"].Value : L["ContextDraftRejected"].Value, Severity.Success);
@@ -845,7 +845,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -853,7 +853,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Deprecate"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -861,7 +861,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await ActivateConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Activate"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -869,7 +869,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await RejectConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode);
+        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Reject"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 }

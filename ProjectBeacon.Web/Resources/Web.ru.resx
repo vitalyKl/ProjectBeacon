@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>Отменить</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Закрыть</value>
   </data>
 <data name="Clear" xml:space="preserve">
@@ -939,7 +939,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>Ограничения</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Активировать</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -3176,5 +3176,14 @@
   </data>
   <data name="Read" xml:space="preserve">
     <value>Читать</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>Обновление передано рабочей станции. Ожидаем перезапуска и сообщения о новой версии.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Отметить ошибку</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Открыть заново</value>
   </data>
 </root>

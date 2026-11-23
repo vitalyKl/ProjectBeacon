@@ -114,7 +114,7 @@ else
         var result = await GetReport.HandleAsync(new GetReportRequest(_project.Id, report.Id));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode);
+            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode, L["Read"].Value);
             return;
         }
         _open = result.Value;

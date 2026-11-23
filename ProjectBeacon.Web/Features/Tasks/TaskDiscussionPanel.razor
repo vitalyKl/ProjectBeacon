@@ -39,7 +39,7 @@
         var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(Task.Id, _draft.Trim()), actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Tasks"].Value);
+            Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Save"].Value);
             return;
         }
         _draft = string.Empty;
