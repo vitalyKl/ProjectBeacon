@@ -192,7 +192,7 @@
                     var finished = await WaitAsync(queued.Value!.Id);
                     if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
                     {
-                        _error = Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, operationLabel: L["Initialize"].Value);
+                        _error = Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.InternalError, L["Initialize"].Value, new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value!.Id });
                         return;
                     }
                 }

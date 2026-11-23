@@ -408,6 +408,7 @@
             }
             bool success;
             string? error;
+            string? errorCode;
             if (PipelineTaskId is { } taskId && PipelineSessionId is { } pipelineSessionId)
             {
                 var result = await ReplyPipelineForm.HandleAsync(new ReplyPipelineFormCommand(
@@ -415,6 +416,7 @@
                     CancellationToken.None);
                 success = result.Success;
                 error = result.Error;
+                errorCode = result.ErrorCode;
             }
             else
             {
@@ -422,12 +424,14 @@
                     Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
                 success = result.Success;
                 error = result.Error;
+                errorCode = result.ErrorCode;
             }
 
             if (success)
                 Notifications.Add(L["ChatAnswered"].Value, Severity.Info);
             else
-                Notifications.Failure(error, L["Chat"].Value);
+                Notifications.Failure(error, L["Chat"].Value, errorCode, L["Submit"].Value,
+                    new { TaskId = PipelineTaskId, SessionId = PipelineSessionId, FormId = QFormId, PartId = Part.Id });
             StateHasChanged();
         }
         catch (Exception ex)

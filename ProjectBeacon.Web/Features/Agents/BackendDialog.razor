@@ -132,7 +132,7 @@
             }
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
             {
-                Notifications.Failure(finished?.Error, L["Agents"].Value, operationLabel: L["Create"].Value);
+                Notifications.Failure(finished?.Error, L["Agents"].Value, ErrorCodes.InternalError, L["Create"].Value, new { DeviceId = deviceId, CommandId = queued.Value!.Id });
                 return;
             }
             using var doc = JsonDocument.Parse(finished.ResultJson);
