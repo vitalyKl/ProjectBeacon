@@ -16,7 +16,6 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject DeleteTaskHandler DeleteTaskHandler
-@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService Dialogs
 
@@ -133,7 +132,7 @@ else
     {
         if (_project is null)
         {
-            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Add(L["NoProjectAvailable"].Value, Severity.Error);
             return;
         }
 
@@ -148,7 +147,7 @@ else
         var result = await reference.Result;
         if (result?.Data is TaskItemDto)
         {
-            Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
+            Notifications.Add(L["TaskCreated"].Value, Severity.Success);
             await LoadTasks();
         }
     }
@@ -163,11 +162,11 @@ else
         var deleted = await DeleteTaskHandler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId)));
         if (!deleted.Success)
         {
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(deleted.Error, L["Backlog"].Value, deleted.ErrorCode, L["Delete"].Value);
             return;
         }
 
-        Snackbar.Add(L["TaskDeleted"].Value, Severity.Success);
+        Notifications.Add(L["TaskDeleted"].Value, Severity.Success);
         await LoadTasks();
     }
 }
