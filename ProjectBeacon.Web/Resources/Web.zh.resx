@@ -3031,7 +3031,7 @@ orthstar</value>
     <value>页面：{0}</value>
   </data>
   <data name="GitSyncQueueFailed" xml:space="preserve">
-    <value>无法将仓库同步操作加入队列。命令尚未启动。请检查工作站连接后重试。</value>
+    <value>无法确认仓库同步是否已加入队列。命令可能已被接受，请先检查仓库状态，再决定是否重试。</value>
   </data>
   <data name="GitSyncStatusFailed" xml:space="preserve">
     <value>无法读取仓库同步状态。操作可能仍在运行；请重新加载此页面以恢复状态监控，然后再启动其他操作。</value>

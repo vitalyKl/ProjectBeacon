@@ -1238,7 +1238,9 @@ else
                 targetDeviceId: deviceId);
             if (!queued.Success || queued.Value is null)
             {
-                Snackbar.Add(L["GitSyncQueueRejected", queued.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
+                Snackbar.Add(string.IsNullOrWhiteSpace(queued.Error)
+                    ? L["GitSyncQueueFailed"].Value
+                    : L["GitSyncQueueRejected", queued.Error].Value, Severity.Error);
                 await ReloadPipeline(ct);
                 return;
             }
@@ -1255,7 +1257,9 @@ else
                     _task.ProjectId, queued.Value.Id, _actorContext, ct);
                 if (!current.Success || current.Value is null)
                 {
-                    Snackbar.Add(L["GitSyncStatusReadFailed", current.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
+                    Snackbar.Add(string.IsNullOrWhiteSpace(current.Error)
+                        ? L["GitSyncStatusFailed"].Value
+                        : L["GitSyncStatusReadFailed", current.Error].Value, Severity.Error);
                     await ReloadPipeline(ct);
                     return;
                 }

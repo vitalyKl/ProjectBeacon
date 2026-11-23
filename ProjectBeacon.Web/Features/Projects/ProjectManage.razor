@@ -781,7 +781,9 @@ else
             {
                 _gitSyncBusy = false;
                 _gitSyncCommandPending = false;
-                Snackbar.Add(L["GitSyncQueueRejected", queued.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
+                Snackbar.Add(string.IsNullOrWhiteSpace(queued.Error)
+                    ? L["GitSyncQueueFailed"].Value
+                    : L["GitSyncQueueRejected", queued.Error].Value, Severity.Error);
                 return;
             }
 

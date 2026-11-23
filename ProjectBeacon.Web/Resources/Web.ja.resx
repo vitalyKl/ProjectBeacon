@@ -3031,7 +3031,7 @@ orthstar</value>
     <value>ページ: {0}</value>
   </data>
   <data name="GitSyncQueueFailed" xml:space="preserve">
-    <value>リポジトリの同期をキューに追加できませんでした。コマンドは開始されていません。ワークステーションの接続を確認して、もう一度お試しください。</value>
+    <value>リポジトリ同期がキューに登録されたか確認できませんでした。コマンドはすでに受け付けられている可能性があるため、再試行する前にリポジトリの状態を確認してください。</value>
   </data>
   <data name="GitSyncStatusFailed" xml:space="preserve">
     <value>リポジトリ同期の状態を取得できませんでした。処理はまだ実行中の可能性があります。別の処理を開始する前に、このページを再読み込みして監視を再開してください。</value>

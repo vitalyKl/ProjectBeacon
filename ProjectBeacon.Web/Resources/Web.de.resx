@@ -3023,7 +3023,7 @@ orthstar</value>
     <value>Seite: {0}</value>
   </data>
   <data name="GitSyncQueueFailed" xml:space="preserve">
-    <value>Die Repository-Synchronisierung konnte nicht eingereiht werden. Der Befehl wurde nicht gestartet. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut.</value>
+    <value>Es konnte nicht bestätigt werden, dass die Repository-Synchronisierung eingereiht wurde. Prüfen Sie vor einem erneuten Versuch den Repository-Status; der Befehl wurde möglicherweise bereits angenommen.</value>
   </data>
   <data name="GitSyncStatusFailed" xml:space="preserve">
     <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden. Der Vorgang läuft möglicherweise noch. Laden Sie diese Seite neu, um die Überwachung fortzusetzen, bevor Sie einen weiteren Vorgang starten.</value>

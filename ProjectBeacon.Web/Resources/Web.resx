@@ -3222,7 +3222,7 @@ No Beacon-hosted coding agent.</value>
     <value>Page: {0}</value>
   </data>
   <data name="GitSyncQueueFailed" xml:space="preserve">
-    <value>Could not queue repository synchronization. The command was not started. Check the workstation connection and try again.</value>
+    <value>Could not confirm that repository synchronization was queued. Check the repository status before retrying; the command may already have been accepted.</value>
   </data>
   <data name="GitSyncStatusFailed" xml:space="preserve">
     <value>Could not read repository synchronization status. The operation may still be running; reload this page to resume monitoring before starting another operation.</value>
