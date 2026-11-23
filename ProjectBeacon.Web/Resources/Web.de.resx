@@ -21,7 +21,7 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Bootstrap bereits abgeschlossen.</value>
   </data>
-<data name="Cancel" xml:space="preserve">
+  <data name="Cancel" xml:space="preserve">
     <value>Abbrechen</value>
   </data>
 <data name="Close" xml:space="preserve">
@@ -30,13 +30,13 @@
 <data name="Confirm" xml:space="preserve">
     <value>Bestätigen</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>Erstellen</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>Löschen</value>
   </data>
 <data name="Edit" xml:space="preserve">
@@ -81,7 +81,7 @@
 <data name="Projects" xml:space="preserve">
     <value>Projekte</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>Speichern</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -282,8 +282,8 @@
 <data name="Phase_check" xml:space="preserve">
     <value>Ergebnis prüfen</value>
   </data>
-<data name="Submit" xml:space="preserve">
-    <value>Senden</value>
+  <data name="Submit" xml:space="preserve">
+    <value>Absenden</value>
   </data>
 <data name="Clear" xml:space="preserve">
     <value>Leeren</value>
@@ -858,7 +858,7 @@
 <data name="Reload" xml:space="preserve">
     <value>Neu laden</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>Entladen</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -924,7 +924,7 @@
 <data name="Reject" xml:space="preserve">
     <value>Ablehnen</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>Annehmen</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1359,8 +1359,8 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>AGENTS.md exportieren</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
-    <value>Veralten</value>
+  <data name="Deprecate" xml:space="preserve">
+    <value>Außer Betrieb nehmen</value>
   </data>
 <data name="Supersede" xml:space="preserve">
     <value>Ersetzen</value>
@@ -1696,7 +1696,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
 <data name="Message" xml:space="preserve">
     <value>Nachricht</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>Senden</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -3058,7 +3058,133 @@ orthstar</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden: {0}</value>
   </data>
-  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <data name="WorkstationUpdatePending" xml:space="preserve">
     <value>Das Update wurde übergeben, aber die neue Workstation-Version hat sich noch nicht gemeldet. Prüfen Sie den Workstation-Status oder das Protokoll, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>Zurücksetzen</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Anwenden</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>Laden</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Aktualisieren</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Wiederherstellen</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>Starten</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>Neu starten</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Umbenennen</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>Hochladen</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>Herunterladen</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>Ausführen</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>Zuordnen</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>Prüfen</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Trennen</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>Ausführen</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>Kompilieren</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>Verschieben</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Vorschau</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>Zurücksetzen</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Exportieren</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>Ersetzen</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>Status ändern</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>Der Vorgang konnte nicht erfolgreich abgeschlossen werden.</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>Der Vorgang konnte nicht abgeschlossen werden. Prüfen Sie die Meldung auf der Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>diesen Vorgang</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden.</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden. Details: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>Sie haben keine Berechtigung, „{1}“ im Bereich „{0}“ auszuführen.</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Das benötigte Element wurde nicht gefunden.</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Die Daten wurden geändert oder stehen im Konflikt mit einem anderen Vorgang. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte aufgrund eines internen Fehlers nicht abgeschlossen werden. Diagnose-ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>Bei der Bearbeitung Ihrer Anfrage ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es erneut. Diagnose-ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>Die Anfrage konnte nicht abgeschlossen werden. Prüfen Sie die Angaben und versuchen Sie es erneut.</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>erste Kontoeinrichtung</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>Passwortwiederherstellung</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>Annahme der Einladung</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>Wiederherstellung des Administratorkontos</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>Kontoregistrierung</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>Zurücksetzen des Passworts</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>Das Chat-Formular konnte nicht gesendet werden. Prüfen Sie die erforderlichen Felder und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Hinzufügen</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>Lesen</value>
   </data>
 </root>

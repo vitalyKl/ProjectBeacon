@@ -277,7 +277,7 @@
                 CreateChatSessionHandler.ClientRequired => "client",
                 _ => null
             };
-            Notifications.Failure(created.Error, L["Chat"].Value);
+            Notifications.Failure(created.Error, L["Chat"].Value, created.ErrorCode, L["Create"].Value);
             return;
         }
         _block = null;
@@ -314,7 +314,7 @@
             if (!sent.Success)
             {
                 _failed = true;
-                Notifications.Failure(sent.Error, L["Chat"].Value);
+                Notifications.Failure(sent.Error, L["Chat"].Value, sent.ErrorCode, L["Send"].Value);
                 return;
             }
             _draft = string.Empty;
@@ -340,7 +340,7 @@
             if (result.Success)
                 _session = result.Value;
             else
-                Notifications.Failure(result.Error, L["Chat"].Value);
+                Notifications.Failure(result.Error, L["Chat"].Value, result.ErrorCode, L["Cancel"].Value);
         }
         finally
         {

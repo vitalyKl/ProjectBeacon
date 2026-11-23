@@ -197,7 +197,7 @@
             }
             if (!outcome.Ok)
             {
-                Notifications.Failure(outcome.Error, L["Tasks"].Value);
+                Notifications.Failure(outcome.Error, L["Tasks"].Value, outcome.ErrorCode, L["Execute"].Value);
                 return;
             }
             Notifications.Add(outcome.Success, Severity.Success);

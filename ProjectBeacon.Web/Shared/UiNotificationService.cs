@@ -36,17 +36,17 @@ internal sealed class UiNotificationService : IUiNotificationService
     public void Warning(string message) => Add(message, Severity.Warning);
     public void Error(string message) => Add(message, Severity.Error);
 
-    public string? Failure(string? detail, string operation, string? errorCode = null, object? context = null)
+    public string? Failure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null)
     {
-        var diagnosticId = UnexpectedFailureDiagnosticId(detail, operation, errorCode, context);
-        Add(FormatFailureMessage(detail, operation, errorCode, diagnosticId), Severity.Error);
+        var diagnosticId = UnexpectedFailureDiagnosticId(detail, section, operationLabel, errorCode, context);
+        Add(FormatFailureMessage(detail, section, errorCode, diagnosticId, operationLabel), Severity.Error);
         return diagnosticId;
     }
 
-    public string FormatFailure(string? detail, string operation, string? errorCode = null, object? context = null)
+    public string FormatFailure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null)
     {
-        var diagnosticId = UnexpectedFailureDiagnosticId(detail, operation, errorCode, context);
-        return FormatFailureMessage(detail, operation, errorCode, diagnosticId);
+        var diagnosticId = UnexpectedFailureDiagnosticId(detail, section, operationLabel, errorCode, context);
+        return FormatFailureMessage(detail, section, errorCode, diagnosticId, operationLabel);
     }
 
     public string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId) =>
@@ -69,11 +69,10 @@ internal sealed class UiNotificationService : IUiNotificationService
         return diagnosticId;
     }
 
-    private string FormatFailureMessage(string? detail, string operation, string? errorCode, string? diagnosticId)
+    private string FormatFailureMessage(string? detail, string section, string? errorCode, string? diagnosticId, string? operationLabel)
     {
-        operation = string.IsNullOrWhiteSpace(operation)
-            ? _localizer["UiGenericOperation"].Value
-            : operation.Trim();
+        section = string.IsNullOrWhiteSpace(section) ? _localizer["UiGenericOperation"].Value : section.Trim();
+        operationLabel = string.IsNullOrWhiteSpace(operationLabel) ? _localizer["UiGenericOperation"].Value : operationLabel.Trim();
 
         if (IsGenericError(detail))
             detail = null;
@@ -82,31 +81,31 @@ internal sealed class UiNotificationService : IUiNotificationService
         {
             case ErrorCodes.Unauthorized:
             case ErrorCodes.Forbidden:
-                return _localizer["UiOperationNotAllowed", operation].Value;
+                return _localizer["UiOperationNotAllowed", section, operationLabel].Value;
             case ErrorCodes.NotFound:
-                return _localizer["UiOperationTargetNotFound", operation].Value;
+                return _localizer["UiOperationTargetNotFound", section, operationLabel].Value;
             case ErrorCodes.Conflict:
-                return _localizer["UiOperationConflict", operation].Value;
+                return _localizer["UiOperationConflict", section, operationLabel].Value;
             case ErrorCodes.Unavailable:
             case ErrorCodes.InternalError:
             case ErrorCodes.Unclassified:
-                return _localizer["UiOperationUnexpectedFailed", operation, diagnosticId ?? CreateDiagnosticId()].Value;
+                return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
         }
 
         return string.IsNullOrWhiteSpace(detail)
-            ? _localizer["UiOperationFailed", operation].Value
-            : _localizer["UiOperationFailedWithDetail", operation, detail].Value;
+            ? _localizer["UiOperationFailed", section, operationLabel].Value
+            : _localizer["UiOperationFailedWithDetail", section, operationLabel, detail].Value;
     }
 
-    private string? UnexpectedFailureDiagnosticId(string? detail, string operation, string? errorCode, object? context)
+    private string? UnexpectedFailureDiagnosticId(string? detail, string section, string? operationLabel, string? errorCode, object? context)
     {
         if (errorCode is not (ErrorCodes.Unavailable or ErrorCodes.InternalError or ErrorCodes.Unclassified))
             return null;
 
         var diagnosticId = CreateDiagnosticId();
         _logger.LogError(
-            "UI operation {Operation} returned an unexpected failure. ErrorCode={ErrorCode}, Detail={Detail}, DiagnosticId={DiagnosticId}, Context={Context}",
-            operation, errorCode, detail, diagnosticId, context);
+            "UI operation {Section}/{Operation} returned an unexpected failure. ErrorCode={ErrorCode}, Detail={Detail}, DiagnosticId={DiagnosticId}, Context={Context}",
+            section, operationLabel, errorCode, detail, diagnosticId, context);
         return diagnosticId;
     }
 

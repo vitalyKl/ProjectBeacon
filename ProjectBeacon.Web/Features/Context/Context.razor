@@ -284,7 +284,7 @@ else
             ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList()
             : [];
         if (!deleted.Success)
-            Notifications.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(deleted.Error, L["Context"].Value, deleted.ErrorCode, L["Load"].Value), Severity.Warning);
         var selectedConstraintId = _selectedConstraint?.Id;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
@@ -324,7 +324,7 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Save"].Value);
             return;
         }
         _sectionRevision = result.Value!.Revision;
@@ -352,7 +352,7 @@ else
             _project.Id, ContentTargetKind.ContextSection, node.Id, _actor, 50);
         _sectionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Notifications.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history.Error, L["Context"].Value, history.ErrorCode, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreDeletedSection(DeletedContentTargetDto deleted)
@@ -372,7 +372,7 @@ else
                 deleted.TargetId));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Context"].Value);
+                Notifications.Failure(restored.Error, L["Context"].Value, restored.ErrorCode, L["Restore"].Value);
                 return;
             }
 
@@ -401,7 +401,7 @@ else
                 ContentTargetKind.ContextSection, _selectedNode.Id));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Context"].Value);
+                Notifications.Failure(restored.Error, L["Context"].Value, restored.ErrorCode, L["Restore"].Value);
                 return;
             }
 
@@ -447,7 +447,7 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Compile"].Value);
             return;
         }
         _preview = result.Value!.BriefMarkdown;
@@ -470,7 +470,7 @@ else
         var result = await ExportAgents.HandleAsync(new ExportAgentsMdCommand(new ExportAgentsMdRequest(_project.Id, null, null)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Export"].Value);
             return;
         }
         _preview = result.Value;
@@ -487,7 +487,7 @@ else
             _project.Id, ContentTargetKind.Constraint, constraint.Id, _actor, 50);
         _constraintHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Notifications.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history.Error, L["Context"].Value, history.ErrorCode, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreConstraintVersion(ContentVersionDto version)
@@ -508,7 +508,7 @@ else
                 constraintId));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Context"].Value);
+                Notifications.Failure(restored.Error, L["Context"].Value, restored.ErrorCode, L["Restore"].Value);
                 return;
             }
 
@@ -549,7 +549,7 @@ else
         var result = await CreateConstraint.HandleAsync(new CreateConstraintRequest(_project.Id, _constraintBody.Trim(), _constraintKind, _actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Create"].Value);
             return;
         }
         _constraintBody = string.Empty;
@@ -562,7 +562,7 @@ else
         var result = await ActivateConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Apply"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);
@@ -574,7 +574,7 @@ else
         var result = await RejectConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Context"].Value);
+            Notifications.Failure(result.Error, L["Context"].Value, result.ErrorCode, L["Reject"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);

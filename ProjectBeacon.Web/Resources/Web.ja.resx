@@ -21,7 +21,7 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>初期化は既に完了しています。</value>
   </data>
-<data name="Cancel" xml:space="preserve">
+  <data name="Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
 <data name="Close" xml:space="preserve">
@@ -30,13 +30,13 @@
 <data name="Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>作成</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>ダッシュボード</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>削除</value>
   </data>
 <data name="Edit" xml:space="preserve">
@@ -81,7 +81,7 @@
 <data name="Projects" xml:space="preserve">
     <value>プロジェクト</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>保存</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -282,7 +282,7 @@
 <data name="Phase_check" xml:space="preserve">
     <value>結果を確認する</value>
   </data>
-<data name="Submit" xml:space="preserve">
+  <data name="Submit" xml:space="preserve">
     <value>送信</value>
   </data>
 <data name="Clear" xml:space="preserve">
@@ -858,7 +858,7 @@
 <data name="Reload" xml:space="preserve">
     <value>再読み込み</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>アンロード</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -924,7 +924,7 @@
 <data name="Reject" xml:space="preserve">
     <value>却下</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>承認</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1359,8 +1359,8 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>AGENTS.md を書き出す</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
-    <value>非推奨にする</value>
+  <data name="Deprecate" xml:space="preserve">
+    <value>廃止</value>
   </data>
 <data name="Supersede" xml:space="preserve">
     <value>置き換える</value>
@@ -1696,7 +1696,7 @@ Beacon がホストするコーディングエージェントは置かない。<
 <data name="Message" xml:space="preserve">
     <value>メッセージ</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>送信</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -3066,7 +3066,133 @@ orthstar</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>リポジトリ同期の状態を取得できませんでした: {0}</value>
   </data>
-  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <data name="WorkstationUpdatePending" xml:space="preserve">
     <value>更新処理は引き渡されましたが、新しいワークステーションのバージョンからまだ応答がありません。再試行する前に、状態またはログを確認してください。</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>リセット</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>適用</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>読み込み</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>復元</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>開始</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>再起動</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>名前の変更</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>アップロード</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>ダウンロード</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>実行</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>関連付け</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>切断</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>実行</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>コンパイル</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>移動</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>プレビュー</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>元に戻す</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>エクスポート</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>置換</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>ステータスを変更</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>操作を正常に完了できませんでした。</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>操作を完了できませんでした。ページのメッセージを確認して、もう一度お試しください。</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>この操作</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>{0} で「{1}」を完了できませんでした。</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>{0} で「{1}」を完了できませんでした。詳細: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>{0} で「{1}」を実行する権限がありません。</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>必要な項目が見つからないため、{0} で「{1}」を実行できませんでした。</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>データが変更されたか、別の操作と競合しているため、{0} で「{1}」を実行できませんでした。ページを再読み込みして、もう一度お試しください。</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>予期しない内部エラーにより、{0} で「{1}」を完了できませんでした。診断 ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>リクエストの処理中に予期しないエラーが発生しました。もう一度お試しください。診断 ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>リクエストを完了できませんでした。入力内容を確認して、もう一度お試しください。</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>アカウントの初期設定</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>パスワードの再設定</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>招待の承認</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>管理者アカウントの復旧</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>アカウント登録</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>パスワードのリセット</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>チャットフォームを送信できませんでした。必須項目を確認して、もう一度お試しください。</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>追加</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>読み取り</value>
   </data>
 </root>

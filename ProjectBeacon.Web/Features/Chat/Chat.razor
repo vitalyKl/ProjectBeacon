@@ -235,7 +235,7 @@ else
                     _ => null
                 };
                 if (_block is null)
-                    Notifications.Failure(created.Error, L["Chat"].Value);
+                    Notifications.Failure(created.Error, L["Chat"].Value, created.ErrorCode, L["Create"].Value);
                 return;
             }
             _block = null;
@@ -266,7 +266,7 @@ else
         var result = await ArchiveSession.HandleAsync(new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(session.Id, _userId)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Chat"].Value);
+            Notifications.Failure(result.Error, L["Chat"].Value, result.ErrorCode, L["Delete"].Value);
             return;
         }
         _sessions.RemoveAll(s => s.Id == session.Id);
@@ -289,7 +289,7 @@ else
             if (!sent.Success)
             {
                 _failed = true;
-                Notifications.Failure(sent.Error, L["Chat"].Value);
+                Notifications.Failure(sent.Error, L["Chat"].Value, sent.ErrorCode, L["Send"].Value);
                 return;
             }
             _draft = string.Empty;

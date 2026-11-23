@@ -358,7 +358,7 @@
             }
             else
             {
-                Notifications.Failure(result.Error, L["Chat"].Value);
+                Notifications.Failure(result.Error, L["Chat"].Value, result.ErrorCode, L["Update"].Value);
             }
         }
         finally

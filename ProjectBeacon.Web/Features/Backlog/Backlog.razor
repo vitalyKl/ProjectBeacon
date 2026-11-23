@@ -114,7 +114,7 @@ else
         if (!listed.Success)
         {
             _error = true;
-            _errorMessage = Notifications.FormatFailure(listed.Error, L["Backlog"].Value, listed.ErrorCode);
+            _errorMessage = Notifications.FormatFailure(listed.Error, L["Backlog"].Value, listed.ErrorCode, L["Load"].Value);
             _tasks = [];
             return;
         }

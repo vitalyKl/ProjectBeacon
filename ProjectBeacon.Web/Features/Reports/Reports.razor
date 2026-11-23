@@ -101,7 +101,7 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode);
+            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode, L["Run"].Value);
             return;
         }
         await Reload();

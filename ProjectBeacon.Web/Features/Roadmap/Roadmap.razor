@@ -284,7 +284,7 @@ else
                 deleted.TargetId));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Roadmap"].Value);
+                Notifications.Failure(restored.Error, L["Roadmap"].Value, result.ErrorCode, L["Restore"].Value);
                 return;
             }
 
@@ -329,7 +329,7 @@ else
             _newOrder), _actor));
         if (!created.Success)
         {
-            Notifications.Failure(created.Error, L["Roadmap"].Value);
+            Notifications.Failure(created.Error, L["Roadmap"].Value, result.ErrorCode, L["Create"].Value);
             return;
         }
 
@@ -356,7 +356,7 @@ else
             _editingId.Value, _editName, _editDescription, _editOrder, _editRevision, _project?.Id), _actor));
         if (!updated.Success)
         {
-            Notifications.Failure(updated.Error, L["Roadmap"].Value);
+            Notifications.Failure(updated.Error, L["Roadmap"].Value, result.ErrorCode, L["Update"].Value);
             return;
         }
         _editingId = null;
@@ -390,7 +390,7 @@ else
             _project.Id, ContentTargetKind.Milestone, milestoneId, _actor, 50);
         _milestoneHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Notifications.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history.Error, L["Roadmap"].Value, history.ErrorCode, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreMilestoneVersion(ContentVersionDto version)
@@ -463,7 +463,7 @@ else
             new CloseMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Roadmap"].Value);
+            Notifications.Failure(result.Error, L["Roadmap"].Value, result.ErrorCode, L["Load"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);
@@ -476,7 +476,7 @@ else
             new ReopenMilestoneRequest(milestone.Id, milestone.ProjectId), _actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Roadmap"].Value);
+            Notifications.Failure(result.Error, L["Roadmap"].Value, result.ErrorCode, L["Close"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);
@@ -493,7 +493,7 @@ else
         var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id), _actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Roadmap"].Value);
+            Notifications.Failure(result.Error, L["Roadmap"].Value, result.ErrorCode, L["Open"].Value);
             return;
         }
         Notifications.Add(L["MilestoneDeleted"].Value, Severity.Success);

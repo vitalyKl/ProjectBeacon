@@ -93,14 +93,15 @@
             var response = await Http.PostAsync($"/v1/invites/{Uri.EscapeDataString(_token)}/accept", null);
             if (!response.IsSuccessStatusCode)
             {
-                _error = L["Error"].Value;
+                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthInviteOperation"].Value);
                 return;
             }
             _accepted = true;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "accept invitation");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

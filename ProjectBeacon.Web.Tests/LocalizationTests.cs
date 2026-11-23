@@ -125,7 +125,7 @@ public sealed class LocalizationTests
             "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
             "AuthRequestFailed", "AuthBootstrapOperation", "AuthForgotOperation",
             "AuthInviteOperation", "AuthRecoverOperation", "AuthRegisterOperation", "AuthResetOperation",
-            "ChatAnswerUnexpectedFailed", "WorkstationUpdatePending"
+            "ChatAnswerUnexpectedFailed", "WorkstationUpdatePending", "Add", "ChangeStatus", "Preview", "Revert", "Export", "Accept", "Deprecate", "Replace", "Read"
         })
         {
             Assert.False(string.IsNullOrWhiteSpace(_rm.GetString(key, culture)), $"{key} is missing for {cultureName}.");

@@ -263,7 +263,7 @@ else
         }
         else
         {
-            Notifications.Failure(registry.Error, L["Agents"].Value);
+            Notifications.Failure(registry.Error, L["Agents"].Value, registry.ErrorCode, L["Load"].Value);
         }
         var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
         if (status.Success)
@@ -316,7 +316,7 @@ else
         var deleted = await DeleteBackend.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, _userId)));
         if (!deleted.Success)
         {
-            Notifications.Failure(deleted.Error, L["Agents"].Value);
+            Notifications.Failure(deleted.Error, L["Agents"].Value, deleted.ErrorCode, L["Delete"].Value);
             return;
         }
         Notifications.Add(L["ModelDeleted"].Value, Severity.Success);
@@ -444,7 +444,7 @@ else
                 _plannerInstructions, _actorInstructions, _reviewInstructions)));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["Agents"].Value);
+                Notifications.Failure(saved.Error, L["Agents"].Value, saved.ErrorCode, L["Save"].Value);
                 return;
             }
             _templateId = saved.Value!.Id;
@@ -467,7 +467,7 @@ else
         var deleted = await DeleteTemplate.HandleAsync(new DeleteAgentTemplateCommand(new DeleteAgentTemplateRequest(id, _userId)));
         if (!deleted.Success)
         {
-            Notifications.Failure(deleted.Error, L["Agents"].Value);
+            Notifications.Failure(deleted.Error, L["Agents"].Value, deleted.ErrorCode, L["Delete"].Value);
             return;
         }
         _templateId = null;
@@ -521,7 +521,7 @@ else
             var result = await ReloadProxy.HandleAsync(new ReloadProxyCommand());
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Agents"].Value);
+                Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Reload"].Value);
                 if (result.Value is not null)
                     _status = result.Value;
                 return;
@@ -545,7 +545,7 @@ else
             var result = await UnloadProxy.HandleAsync(new UnloadProxyCommand());
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Agents"].Value);
+                Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Unload"].Value);
                 if (result.Value is not null)
                     _status = result.Value;
                 return;
@@ -571,7 +571,7 @@ else
                 _plannerInstructions, _actorInstructions, _reviewInstructions), _caller));
             if (!applied.Success)
             {
-                Notifications.Failure(applied.Error, L["Agents"].Value);
+                Notifications.Failure(applied.Error, L["Agents"].Value, applied.ErrorCode, L["Apply"].Value);
                 return;
             }
 

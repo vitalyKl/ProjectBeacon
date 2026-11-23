@@ -64,7 +64,7 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Bootstrap already completed.</value>
   </data>
-<data name="Cancel" xml:space="preserve">
+  <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
 <data name="Close" xml:space="preserve">
@@ -73,13 +73,13 @@
 <data name="Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>Create</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
 <data name="Edit" xml:space="preserve">
@@ -124,7 +124,7 @@
 <data name="Projects" xml:space="preserve">
     <value>Projects</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -346,7 +346,7 @@
 <data name="Phase_check" xml:space="preserve">
     <value>Check the result</value>
   </data>
-<data name="Submit" xml:space="preserve">
+  <data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>
 <data name="Clear" xml:space="preserve">
@@ -946,7 +946,7 @@
 <data name="Reload" xml:space="preserve">
     <value>Reload</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>Unload</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -1009,7 +1009,7 @@
 <data name="Reject" xml:space="preserve">
     <value>Reject</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>Accept</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1450,7 +1450,7 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>Export AGENTS.md</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
+  <data name="Deprecate" xml:space="preserve">
     <value>Deprecate</value>
   </data>
 <data name="Supersede" xml:space="preserve">
@@ -1787,7 +1787,7 @@ No Beacon-hosted coding agent.</value>
 <data name="Message" xml:space="preserve">
     <value>Message</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>Send</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -3257,7 +3257,133 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncStatusReadFailed" xml:space="preserve">
     <value>Could not read repository synchronization status: {0}</value>
   </data>
-  <data name="WorkstationUpdatePending" xml:space="preserve">
+    <data name="WorkstationUpdatePending" xml:space="preserve">
     <value>The update was handed off, but the new workstation version has not reported yet. Check the workstation status or its log before retrying.</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>Load</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>Attach</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>Check</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Disconnect</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>Execute</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>Compile</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>Change status</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>The operation did not complete successfully.</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>This operation could not be completed. Check the page for more information and try again.</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>this operation</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>Could not complete {1} in {0}.</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>Could not complete {1} in {0}. Details: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>You don't have permission to {1} in {0}.</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>Could not {1} in {0} because the required item was not found.</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>Could not {1} in {0} because the data changed or conflicts with another operation. Refresh and try again.</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>Could not complete {1} in {0} because an unexpected error occurred. Diagnostic ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>An unexpected error occurred while processing your request. Please try again. Diagnostic ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>The request could not be completed. Check the information and try again.</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>initial account setup</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>password recovery</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>invitation acceptance</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>administrator account recovery</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>account registration</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>password reset</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>Could not submit the chat form. Check the requested fields and try again.</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>Read</value>
   </data>
 </root>

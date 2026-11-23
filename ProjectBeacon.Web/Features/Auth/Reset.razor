@@ -62,14 +62,15 @@
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _error = string.IsNullOrWhiteSpace(body) ? L["Error"].Value : body;
+                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthResetOperation"].Value);
                 return;
             }
             _success = true;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "reset account password");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

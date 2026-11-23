@@ -12,8 +12,8 @@ public interface IUiNotificationService
     void Error(string message);
 
     /// <summary>Shows a failure with operation context and safe application-level details.</summary>
-    string? Failure(string? detail, string operation, string? errorCode = null, object? context = null);
-    string FormatFailure(string? detail, string operation, string? errorCode = null, object? context = null);
+    string? Failure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null);
+    string FormatFailure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null);
     string LogException(Exception exception, string operation, object? context = null);
     string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId);
 

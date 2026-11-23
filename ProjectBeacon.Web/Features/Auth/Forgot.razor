@@ -50,14 +50,15 @@
             var response = await Http.PostAsJsonAsync("/v1/auth/forgot-password", new { email = _email });
             if (!response.IsSuccessStatusCode)
             {
-                _error = L["Error"].Value;
+                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthForgotOperation"].Value);
                 return;
             }
             _sent = true;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "request password reset");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

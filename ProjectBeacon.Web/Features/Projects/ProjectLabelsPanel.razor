@@ -99,7 +99,7 @@ else
                     projectId, id, _labelName.Trim(), null, _labelPrefix));
                 if (!updated.Success)
                 {
-                    Notifications.Failure(updated.Error, L["Projects"].Value);
+                    Notifications.Failure(updated.Error, L["Projects"].Value, updated.ErrorCode, L["Update"].Value);
                     return;
                 }
             }
@@ -109,7 +109,7 @@ else
                     projectId, _labelName.Trim(), null, _labelPrefix));
                 if (!created.Success)
                 {
-                    Notifications.Failure(created.Error, L["Projects"].Value);
+                    Notifications.Failure(created.Error, L["Projects"].Value, created.ErrorCode, L["Create"].Value);
                     return;
                 }
             }
@@ -134,7 +134,7 @@ else
         var result = await DeleteLabel.HandleAsync(new DeleteLabelRequest(projectId, label.Id));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Projects"].Value);
+            Notifications.Failure(result.Error, L["Projects"].Value, result.ErrorCode, L["Delete"].Value);
             return;
         }
         if (_editingLabelId == label.Id)

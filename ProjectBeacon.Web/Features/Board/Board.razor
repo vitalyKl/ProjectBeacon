@@ -16,7 +16,6 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject ChangeTaskStatusHandler ChangeStatus
-@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService Dialogs
 
@@ -144,13 +143,13 @@ else if (_error)
             new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier))));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode), Severity.Warning);
             await ReloadTasks();
             return;
         }
 
         await ReloadTasks();
-        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
+        Notifications.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
     }
 
     private async Task MoveTask(TaskItemDto task, TaskItemStatus status)
@@ -168,13 +167,13 @@ else if (_error)
             new ChangeTaskStatusRequest(task.Id, status)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result.Error, L["Board"].Value, result.ErrorCode), Severity.Warning);
             await ReloadTasks();
             return;
         }
 
         await ReloadTasks();
-        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
+        Notifications.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
     }
 
     private async Task ReloadTasks()
@@ -209,7 +208,7 @@ else if (_error)
     {
         if (_project is null)
         {
-            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Add(L["NoProjectAvailable"].Value, Severity.Error);
             return;
         }
 
