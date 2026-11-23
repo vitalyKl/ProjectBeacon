@@ -2430,7 +2430,7 @@ orthstar</value>
     <value>Noch keine Anhänge vorhanden.</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>Anhänge konnten nicht geladen werden: {0}</value>
+    <value>Die Aufgabenanhänge konnten nicht geladen werden.</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}: Die Datei überschreitet das Limit von 10 MB.</value>
@@ -2439,7 +2439,7 @@ orthstar</value>
     <value>Anhänge wurden hochgeladen.</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>Upload fehlgeschlagen: {0}</value>
+    <value>Die Aufgabenanhänge konnten nicht hochgeladen werden.</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>Rollenspezifische Anweisungen</value>
@@ -3012,5 +3012,50 @@ orthstar</value>
   </data>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing-Revert wurde eingeplant.</value>
+  </data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>Diagnose-ID: {0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>Diese Seite konnte aufgrund eines unerwarteten Fehlers nicht angezeigt werden. Laden Sie die Seite neu. Falls der Fehler erneut auftritt, teilen Sie dem Support die Diagnose-ID mit.</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>Seite: {0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung konnte nicht eingereiht werden. Der Befehl wurde nicht gestartet. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut.</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden. Der Vorgang läuft möglicherweise noch. Laden Sie diese Seite neu, um die Überwachung fortzusetzen, bevor Sie einen weiteren Vorgang starten.</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung konnte nicht gestartet oder bestätigt werden. Die Workstation hat den Befehl möglicherweise bereits erhalten. Aktualisieren Sie die Aufgabe, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>Die Workstation hat den Git-Vorgang abgeschlossen, aber kein lesbares Ergebnis zurückgegeben. Prüfen Sie vor einem erneuten Versuch das Workstation-Protokoll.</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>Die Workstation konnte den Repository-Synchronisierungsbefehl nicht ausführen. Weitere Informationen finden Sie im Workstation-Protokoll.</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>Workstation-Befehls-ID: {0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>Es konnte nicht geprüft werden, ob ein Update für die Workstation verfügbar ist. Prüfen Sie, ob die Workstation online ist, und versuchen Sie es erneut.</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>Der Abschluss des Workstation-Updates konnte nicht bestätigt werden. Das Update wurde möglicherweise bereits übergeben. Prüfen Sie den Workstation-Status, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>Die MCP-Serverkonfiguration des Projekts konnte nicht geladen werden. Aktualisieren Sie diesen Bereich und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>Dieser Anhang konnte nicht geöffnet oder heruntergeladen werden.</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>Die Repository-Synchronisierung konnte nicht eingereiht werden: {0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden: {0}</value>
   </data>
 </root>

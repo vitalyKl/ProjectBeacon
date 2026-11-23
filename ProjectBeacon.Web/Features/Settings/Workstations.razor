@@ -20,6 +20,7 @@
 @inject GetTotpStatusHandler GetTotp
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject ILogger<Workstations> Logger
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Workstations"]</PageTitle>
@@ -556,7 +557,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+            Logger.LogError(ex,
+                "Could not check workstation update availability. DiagnosticId={DiagnosticId}, DeviceId={DeviceId}",
+                diagnosticId, deviceId);
+            Snackbar.Add(L.WithDiagnosticId("WorkstationCheckUpdateFailed", diagnosticId), Severity.Error);
         }
         finally
         {
@@ -604,7 +609,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+            Logger.LogError(ex,
+                "Could not complete workstation update. DiagnosticId={DiagnosticId}, DeviceId={DeviceId}",
+                diagnosticId, deviceId);
+            Snackbar.Add(L.WithDiagnosticId("WorkstationUpdateFailed", diagnosticId), Severity.Error);
         }
         finally
         {

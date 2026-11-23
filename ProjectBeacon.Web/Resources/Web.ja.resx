@@ -2438,7 +2438,7 @@ orthstar</value>
     <value>添付ファイルはまだありません。</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>添付ファイルを読み込めませんでした: {0}</value>
+    <value>タスクの添付ファイルを読み込めませんでした。</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}: ファイルサイズが10 MBの上限を超えています。</value>
@@ -2447,7 +2447,7 @@ orthstar</value>
     <value>添付ファイルをアップロードしました。</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>アップロードに失敗しました: {0}</value>
+    <value>タスクの添付ファイルをアップロードできませんでした。</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>役割プロファイルの指示</value>
@@ -3020,5 +3020,50 @@ orthstar</value>
   </data>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>ランディングの取り消しをキューに登録しました。</value>
+  </data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>診断 ID: {0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>予期しないエラーが発生したため、このページを表示できませんでした。ページを再読み込みしてください。問題が再発する場合は、診断 ID をサポートにお知らせください。</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>ページ: {0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>リポジトリの同期をキューに追加できませんでした。コマンドは開始されていません。ワークステーションの接続を確認して、もう一度お試しください。</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>リポジトリ同期の状態を取得できませんでした。処理はまだ実行中の可能性があります。別の処理を開始する前に、このページを再読み込みして監視を再開してください。</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>リポジトリ同期を開始できなかったか、開始を確認できませんでした。ワークステーションにはすでにコマンドが届いている可能性があります。再試行する前にタスクを更新してください。</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>ワークステーションは Git 操作を完了しましたが、読み取り可能な結果を返しませんでした。再試行する前にワークステーションのログを確認してください。</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>ワークステーションがリポジトリ同期コマンドを実行できませんでした。詳細はワークステーションのログを確認してください。</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>ワークステーション コマンド ID: {0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>ワークステーションの更新が利用可能か確認できませんでした。ワークステーションがオンラインであることを確認して、もう一度お試しください。</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>ワークステーションの更新が完了したことを確認できませんでした。更新処理はすでに引き渡されている可能性があります。再試行する前に状態を確認してください。</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>プロジェクトの MCP サーバー設定を読み込めませんでした。このセクションを更新して、もう一度お試しください。</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>この添付ファイルを開くかダウンロードできませんでした。</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>リポジトリの同期をキューに追加できませんでした: {0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>リポジトリ同期の状態を取得できませんでした: {0}</value>
   </data>
 </root>

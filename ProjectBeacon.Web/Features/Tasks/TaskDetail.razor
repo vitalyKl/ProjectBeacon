@@ -1238,7 +1238,7 @@ else
                 targetDeviceId: deviceId);
             if (!queued.Success || queued.Value is null)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Snackbar.Add(L["GitSyncQueueRejected", queued.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
                 await ReloadPipeline(ct);
                 return;
             }
@@ -1255,7 +1255,7 @@ else
                     _task.ProjectId, queued.Value.Id, _actorContext, ct);
                 if (!current.Success || current.Value is null)
                 {
-                    Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                    Snackbar.Add(L["GitSyncStatusReadFailed", current.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
                     await ReloadPipeline(ct);
                     return;
                 }
@@ -1300,7 +1300,7 @@ else
                     "Could not refresh repository preflight after sync exception. TaskId={TaskId}", TaskId);
             }
 
-            Snackbar.Add($"{L["Error"].Value} (ID: {diagnosticId})", Severity.Error);
+            Snackbar.Add(L.WithDiagnosticId("GitSyncStartFailed", diagnosticId), Severity.Error);
         }
         finally
         {
@@ -1331,7 +1331,8 @@ else
 
         if (command.Status == WorkstationCommandStatus.Failed)
         {
-            Snackbar.Add(command.Error ?? L["Error"].Value, Severity.Error);
+            Snackbar.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
+                + string.Format(L["WorkstationCommandId"].Value, command.Id), Severity.Error);
         }
         else if (command.Status == WorkstationCommandStatus.Cancelled)
         {
@@ -1350,15 +1351,20 @@ else
                 }
                 catch (JsonException exception)
                 {
+                    var diagnosticId = Guid.NewGuid().ToString("N")[..8];
                     Logger.LogWarning(exception,
-                        "GitSync command {CommandId} returned malformed result JSON for task {TaskId}",
-                        command.Id, TaskId);
+                        "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
+                        command.Id, diagnosticId, TaskId);
                 }
             }
 
             if (result is null)
             {
-                Snackbar.Add(L["Error"].Value, Severity.Error);
+                var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+                Logger.LogWarning(
+                    "GitSync command {CommandId} completed without a readable result. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
+                    command.Id, diagnosticId, TaskId);
+                Snackbar.Add(L.WithDiagnosticId("GitSyncResultUnavailable", diagnosticId), Severity.Error);
             }
             else if (IsVerifiedFastForward(result))
             {

@@ -781,7 +781,7 @@ else
             {
                 _gitSyncBusy = false;
                 _gitSyncCommandPending = false;
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Snackbar.Add(L["GitSyncQueueRejected", queued.Error ?? L["GitSyncWorkstationCommandFailed"].Value].Value, Severity.Error);
                 return;
             }
 
@@ -799,7 +799,7 @@ else
                 diagnosticId, projectId);
             _gitSyncBusy = false;
             _gitSyncCommandPending = false;
-            Snackbar.Add($"{L["Error"].Value} (ID: {diagnosticId})", Severity.Error);
+            Snackbar.Add(L.WithDiagnosticId("GitSyncQueueFailed", diagnosticId), Severity.Error);
         }
     }
 
@@ -881,9 +881,10 @@ else
                         }
                         catch (JsonException exception)
                         {
+                            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
                             Logger.LogWarning(exception,
-                                "GitSync command {CommandId} returned malformed result JSON for project {ProjectId}",
-                                commandId, projectId);
+                                "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
+                                commandId, diagnosticId, projectId);
                         }
                     }
 
@@ -899,7 +900,8 @@ else
 
                         if (current.Value.Status == WorkstationCommandStatus.Failed)
                         {
-                            Snackbar.Add(current.Value.Error ?? L["Error"].Value, Severity.Error);
+                            Snackbar.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
+                                + string.Format(L["WorkstationCommandId"].Value, commandId), Severity.Error);
                         }
                         else if (current.Value.Status == WorkstationCommandStatus.Cancelled)
                         {
@@ -907,7 +909,11 @@ else
                         }
                         else if (result is null)
                         {
-                            Snackbar.Add(L["Error"].Value, Severity.Error);
+                            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+                            Logger.LogWarning(
+                                "GitSync command {CommandId} completed without a readable result. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
+                                commandId, diagnosticId, projectId);
+                            Snackbar.Add(L.WithDiagnosticId("GitSyncResultUnavailable", diagnosticId), Severity.Error);
                         }
                         else if (IsVerifiedFastForward(result))
                         {
@@ -974,7 +980,7 @@ else
                         _gitSyncBusy = false;
                         _gitSyncCommandPending = true;
                     }
-                    Snackbar.Add($"{L["Error"].Value} (ID: {diagnosticId})", Severity.Error);
+                    Snackbar.Add(L.WithDiagnosticId("GitSyncStatusFailed", diagnosticId), Severity.Error);
                     StateHasChanged();
                 });
             }

@@ -2438,7 +2438,7 @@ orthstar</value>
     <value>暂无附件。</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>无法加载附件：{0}</value>
+    <value>无法加载任务附件。</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}：文件超过 10 MB 限制。</value>
@@ -2447,7 +2447,7 @@ orthstar</value>
     <value>附件已上传。</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>上传失败：{0}</value>
+    <value>无法上传任务附件。</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>角色配置说明</value>
@@ -3020,5 +3020,50 @@ orthstar</value>
   </data>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>合并回滚已排队。</value>
+  </data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>诊断 ID：{0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>由于发生意外错误，无法显示此页面。请重新加载页面。如果问题再次出现，请向支持人员提供诊断 ID。</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>页面：{0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>无法将仓库同步操作加入队列。命令尚未启动。请检查工作站连接后重试。</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>无法读取仓库同步状态。操作可能仍在运行；请重新加载此页面以恢复状态监控，然后再启动其他操作。</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>无法启动仓库同步，或无法确认其是否已启动。工作站可能已经收到命令。请先刷新任务，再决定是否重试。</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>工作站已完成 Git 操作，但未返回可读取的结果。重试前请检查工作站日志。</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>工作站无法执行仓库同步命令。请查看工作站日志以了解详情。</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>工作站命令 ID：{0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>无法检查工作站是否有可用更新。请确认工作站处于在线状态，然后重试。</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>无法确认工作站更新是否完成。更新可能已经交接执行。重试前请检查工作站状态。</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>无法加载项目的 MCP 服务器配置。请刷新此区域后重试。</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>无法打开或下载此附件。</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>无法将仓库同步操作加入队列：{0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>无法读取仓库同步状态：{0}</value>
   </data>
 </root>

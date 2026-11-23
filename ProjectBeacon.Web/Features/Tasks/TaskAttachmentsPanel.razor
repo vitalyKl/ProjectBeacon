@@ -3,10 +3,12 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Infrastructure.Attachments
+@using ProjectBeacon.Web.Shared
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject IAttachmentService Attachments
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
+@inject ILogger<TaskAttachmentsPanel> Logger
 @inject IJSRuntime JS
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -68,7 +70,7 @@
             _items.AddRange(metadata.Select(item => new AttachmentView(item)));
             _loadedTaskId = Task.Id;
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentsLoadFailed", "load"); }
         finally { _busy = false; }
     }
 
@@ -99,7 +101,7 @@
                     Convert.ToBase64String(bytes));
             }
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentOpenFailed", "open or download"); }
         finally { _busy = false; }
     }
 
@@ -122,9 +124,18 @@
             }
             Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsUploadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentsUploadFailed", "upload"); }
         finally { _busy = false; }
         await Reload();
+    }
+
+    private void ReportFailure(Exception exception, string resourceKey, string operation)
+    {
+        var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+        Logger.LogError(exception,
+            "Task attachment {Operation} failed. DiagnosticId={DiagnosticId}, TaskId={TaskId}, ProjectId={ProjectId}",
+            operation, diagnosticId, Task?.Id, Task?.ProjectId);
+        Snackbar.Add(L.WithDiagnosticId(resourceKey, diagnosticId), Severity.Error);
     }
 
     private static bool IsPreviewableImage(string contentType) =>

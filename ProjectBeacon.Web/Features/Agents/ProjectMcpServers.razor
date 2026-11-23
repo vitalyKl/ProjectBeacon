@@ -1,6 +1,7 @@
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Runtime
+@using ProjectBeacon.Web.Shared
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
@@ -180,8 +181,11 @@
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Failed to load MCP servers for project {ProjectId}.", ProjectId);
-            var message = L["Error"].Value;
+            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
+            Logger.LogError(exception,
+                "Failed to load MCP servers for project {ProjectId}. DiagnosticId={DiagnosticId}",
+                ProjectId, diagnosticId);
+            var message = L.WithDiagnosticId("ProjectMcpServersLoadFailed", diagnosticId);
             _loadError = message;
             Snackbar.Add(message, Severity.Error);
         }
