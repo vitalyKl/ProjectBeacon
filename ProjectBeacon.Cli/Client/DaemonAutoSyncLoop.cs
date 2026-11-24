@@ -1,0 +1,161 @@
+namespace ProjectBeacon.Cli.Client;
+
+using System.Net.Http.Json;
+using System.Text.Json;
+using Application.Devices;
+
+internal sealed class DaemonAutoSyncLoop : IDaemonLoop
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly HttpClient _http;
+    private readonly GitSyncService _gitSync;
+    private readonly IDaemonRuntimeState _state;
+    private readonly DaemonTiming _timing;
+    private readonly Dictionary<Guid, string> _lastStates = [];
+
+    public DaemonAutoSyncLoop(
+        DaemonDependencies deps,
+        GitSyncService gitSync,
+        IDaemonRuntimeState state,
+        DaemonTiming timing)
+    {
+        _http = deps.Http;
+        _gitSync = gitSync;
+        _state = state;
+        _timing = timing;
+    }
+
+    public async Task RunAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await SynchronizeEnabledProjectsAsync(ct);
+                await _timing.DelayAsync(_timing.AutoSyncInterval, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                _state.Log($"AutoSync cycle failed: {exception.Message}");
+                try
+                {
+                    await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private async Task SynchronizeEnabledProjectsAsync(CancellationToken ct)
+    {
+        using var response = await _http.GetAsync("v1/devices/me/auto-sync-targets", ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            _state.Log($"AutoSync target discovery returned HTTP {(int)response.StatusCode}");
+            return;
+        }
+
+        var targets = await response.Content.ReadFromJsonAsync<List<DeviceAutoSyncTargetDto>>(JsonOptions, ct)
+            ?? [];
+        foreach (var target in targets)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (target.ProjectId == Guid.Empty || string.IsNullOrWhiteSpace(target.LocalRoot))
+                continue;
+
+            await SynchronizeProjectAsync(target, ct);
+        }
+    }
+
+    private async Task SynchronizeProjectAsync(DeviceAutoSyncTargetDto target, CancellationToken ct)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = target.ProjectId,
+            mode = "PullFastForward"
+        }, JsonOptions);
+        var branch = await _gitSync.ExecuteAsync(
+            target.LocalRoot, target.ProjectId, payload, ct);
+        if (!branch.Ok)
+        {
+            RecordState(target.ProjectId, "branch-error:" + branch.Error,
+                $"AutoSync project {target.ProjectId}: fetch/fast-forward failed: {branch.Error}");
+            return;
+        }
+
+        var (outcome, reason, behind) = ReadBranchOutcome(branch.Result);
+        var branchState = $"branch:{outcome}:{reason}:{behind}";
+        if (string.Equals(outcome, "FastForwarded", StringComparison.Ordinal))
+        {
+            RecordState(target.ProjectId, branchState,
+                $"AutoSync project {target.ProjectId}: upstream fast-forward completed.");
+        }
+        else if (!string.Equals(outcome, "UpToDate", StringComparison.Ordinal))
+        {
+            RecordState(target.ProjectId, branchState,
+                $"AutoSync project {target.ProjectId}: repository was not advanced ({outcome}, {reason ?? "no reason"}).");
+        }
+        else
+        {
+            _lastStates[target.ProjectId] = branchState;
+        }
+
+        // Tags are a ref-only operation. It may run even when the working tree is dirty,
+        // but GitSyncService refuses to change refs while an agent session is active.
+        var tags = await _gitSync.SyncTagsAsync(target.LocalRoot, ct);
+        if (!tags.Success)
+        {
+            RecordState(target.ProjectId, "tag-error:" + tags.Error,
+                $"AutoSync project {target.ProjectId}: tag fetch failed: {tags.Error}");
+        }
+        else if (!tags.Skipped && tags.NewTags > 0)
+        {
+            RecordState(target.ProjectId, $"tags:{tags.NewTags}",
+                $"AutoSync project {target.ProjectId}: fetched {tags.NewTags} new tag(s).");
+        }
+    }
+
+    private void RecordState(Guid projectId, string state, string message)
+    {
+        if (_lastStates.TryGetValue(projectId, out var previous)
+            && string.Equals(previous, state, StringComparison.Ordinal))
+            return;
+        _lastStates[projectId] = state;
+        _state.Log(message);
+    }
+
+    private static (string Outcome, string? Reason, int Behind) ReadBranchOutcome(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return ("Unknown", null, 0);
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var outcome = root.TryGetProperty("outcome", out var outcomeElement)
+                && outcomeElement.ValueKind == JsonValueKind.String
+                    ? outcomeElement.GetString() ?? "Unknown"
+                    : "Unknown";
+            var reason = root.TryGetProperty("reasonCode", out var reasonElement)
+                && reasonElement.ValueKind == JsonValueKind.String
+                    ? reasonElement.GetString()
+                    : null;
+            var behind = root.TryGetProperty("behind", out var behindElement)
+                && behindElement.TryGetInt32(out var count)
+                    ? count
+                    : 0;
+            return (outcome, reason, behind);
+        }
+        catch (JsonException)
+        {
+            return ("Unknown", null, 0);
+        }
+    }
+}
