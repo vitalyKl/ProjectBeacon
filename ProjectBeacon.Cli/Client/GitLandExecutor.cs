@@ -1450,7 +1450,8 @@ internal static class GitLandExecutor
 
     private static bool SamePath(string left, string right) =>
         string.Equals(
-            Path.GetFullPath(left), Path.GetFullPath(right),
+            GitRepositoryOperationGate.NormalizeRoot(left),
+            GitRepositoryOperationGate.NormalizeRoot(right),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static bool IsWithin(string root, string path)

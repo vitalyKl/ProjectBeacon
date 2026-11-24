@@ -361,10 +361,9 @@ public sealed class ListDeviceProjectRuntimesHandler
             return [];
 
         await using var db = _dbFactory.CreateDbContext();
-        var device = await db.DaemonDevices.AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == deviceId && candidate.RevokedAt == null, ct);
-        if (device is null
-            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitAutoSyncV1))
+        var deviceExists = await db.DaemonDevices.AsNoTracking()
+            .AnyAsync(candidate => candidate.Id == deviceId && candidate.RevokedAt == null, ct);
+        if (!deviceExists)
             return [];
 
         var runtimes = await db.ProjectRuntimes.AsNoTracking()

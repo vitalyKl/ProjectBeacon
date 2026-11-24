@@ -47,6 +47,42 @@ public sealed class GitCheckoutGateTests
     }
 
     [Fact]
+    public void CheckoutMutationCanProtectANotYetCreatedDirectory()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-checkout-not-created-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "new", "checkout");
+
+        using var lease = GitCheckoutGate.Acquire(root);
+
+        Assert.False(Directory.Exists(root));
+    }
+
+    [Fact]
+    public async Task CheckoutAliasesShareTheSamePhysicalGate()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-checkout-alias-" + Guid.NewGuid().ToString("N"));
+        var realRoot = Path.Combine(parent, "real");
+        var aliasRoot = Path.Combine(parent, "alias");
+        Directory.CreateDirectory(realRoot);
+        try
+        {
+            Directory.CreateSymbolicLink(aliasRoot, realRoot);
+            using var first = await GitCheckoutGate.AcquireAsync(realRoot, CancellationToken.None);
+            var blocked = await GitCheckoutGate.TryAcquireAsync(
+                aliasRoot, TimeSpan.FromMilliseconds(25), CancellationToken.None);
+
+            Assert.Null(blocked);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task CheckoutMutationDoesNotWaitForAgentSessionLease()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-checkout-session-" + Guid.NewGuid().ToString("N"));

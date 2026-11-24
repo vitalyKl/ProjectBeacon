@@ -64,6 +64,49 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDeviceProjectRuntimes_ReturnsOnlyRuntimesAttachedToTheCallingDevice()
+    {
+        var (user, project, deviceId) = await SeedOnlineProjectDeviceAsync();
+        var otherDevice = await new CreateDeviceHandler(Factory())
+            .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest(
+                "other device", "fp-other-" + Guid.NewGuid().ToString("N"), user.Id)), TestContext.Current.CancellationToken);
+        Assert.True(otherDevice.Success, otherDevice.Error);
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(otherDevice.Value!.Id, "{}", "{}")),
+            TestContext.Current.CancellationToken);
+
+        Project secondProject;
+        using (TenantScope.EnterUnscoped())
+        {
+            secondProject = Project.Create("P2", null, project.OrgId);
+            _db.Projects.Add(secondProject);
+            await _db.ProjectMembers.AddAsync(ProjectMember.Create(secondProject.Id, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await AttachRuntimeAsync(project.Id, deviceId, user.Id, @"A:\work\app");
+        await AttachRuntimeAsync(secondProject.Id, deviceId, user.Id, @"A:\work\second");
+        await AttachRuntimeAsync(secondProject.Id, otherDevice.Value.Id, user.Id, @"B:\other\second");
+
+        var result = await new ListDeviceProjectRuntimesHandler(Factory())
+            .HandleAsync(deviceId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, result.Count);
+        Assert.Collection(
+            result.OrderBy(runtime => runtime.ProjectId),
+            first =>
+            {
+                Assert.Equal(project.Id, first.ProjectId);
+                Assert.Equal(@"A:\work\app", first.LocalRoot);
+            },
+            second =>
+            {
+                Assert.Equal(secondProject.Id, second.ProjectId);
+                Assert.Equal(@"A:\work\second", second.LocalRoot);
+            });
+    }
+
+    [Fact]
     public async Task ResolveAsync_ValidRuntime_ReturnsRuntime()
     {
         var (user, project, deviceId) = await SeedOnlineProjectDeviceAsync();
