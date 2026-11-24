@@ -3447,4 +3447,16 @@ orthstar</value>
   <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>リリース「{0}」をバージョン {1}、タグ「{2}」、ブランチ「{3}」で公開しますか？不変の Git タグを作成し、本番環境へデプロイする可能性のある GitHub Release ワークフローを開始します。push 済みタグは移動・削除されず、再試行では同じ Candidate とタグを使用します。</value></data>
   <data name="ReleasePublicationQueued" xml:space="preserve"><value>固定されたワークステーションに公開処理をキュー登録しました。Beacon は GitHub ワークフローとデプロイ済みバージョン/SHA を検証します。</value></data>
   <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不変のリリースタグはすでに push 済みです。再試行しても移動しません。</value></data>
+  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>バージョンへの影響</value></data>
+  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor はこのタスクのバージョンへの影響をまだ宣言していません。</value></data>
+  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>宣言された影響</value></data>
+  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Actor の理由</value></data>
+  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Reviewer の判断</value></data>
+  <data name="TaskVersionImpactNone" xml:space="preserve"><value>バージョン変更なし</value></data>
+  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>確認済み</value></data>
+  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>異議あり</value></data>
+  <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer 待ち</value></data>
 </root>
