@@ -31,6 +31,7 @@ internal static class ProjectGitSyncPreflight
     /// Resolves the one workstation that owns a task's persistent branch workspace.
     /// A saved pin always wins. Legacy tasks are inferred only when every claimed
     /// pipeline command identifies the same workstation; ambiguous history fails closed.
+    /// This resolver never chooses a replacement workstation when an existing owner is offline.
     /// </summary>
     public static async Task<PipelineWorkstationResolution> ResolveTaskWorkstationAsync(
         IBeaconDb db,
