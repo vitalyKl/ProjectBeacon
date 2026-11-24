@@ -1218,6 +1218,15 @@ public sealed partial class AgentTaskGitOperationsTests
                 WorkspaceMode = "Branch",
                 WorktreeRoot = worktreeRoot
             };
+            var mainBefore = await GitAsync(repository, "rev-parse", "refs/heads/main");
+
+            var preview = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Preview", sourceSha, treeSha, commandHash, command),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(preview.Ok, preview.Error ?? preview.Result);
+            using var previewJson = JsonDocument.Parse(preview.Result!);
+            Assert.Equal("previewed", previewJson.RootElement.GetProperty("status").GetString());
 
             var execute = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
@@ -1229,7 +1238,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.Equal("failed", executeJson.RootElement.GetProperty("status").GetString());
             Assert.Equal("GitHubRemoteRequiresPullRequest", executeJson.RootElement.GetProperty("errorCode").GetString());
             Assert.Equal(
-                await GitAsync(repository, "rev-parse", "main"),
+                mainBefore,
                 await GitAsync(repository, "rev-parse", "refs/heads/main"));
             Assert.Equal(string.Empty, await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
 
