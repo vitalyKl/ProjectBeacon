@@ -820,4 +820,151 @@ public sealed class GitSyncAuthorizationTests
         Assert.Equal(ErrorKind.Forbidden, result.Kind);
         Assert.Contains("project GitSync endpoint", result.Error, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task GitSyncPending_ExpiresAfterTenMinutesButRunningCommandIsPreserved()
+    {
+        var (connection, db, unscoped) = HandlerSqlite.Open();
+        using (connection)
+        using (db)
+        {
+            var org = Org.Create("GitSyncExpiryOrg", null);
+            var project = Project.Create("GitSyncExpiryProject", null, org.Id);
+            var owner = User.Create("git-expiry-owner", $"git-expiry-{Guid.NewGuid():N}@beacon.local", "hash");
+            var device = DaemonDevice.Create(
+                "git-expiry-device",
+                owner.Id,
+                "fp-" + Guid.NewGuid().ToString("N"),
+                "hash-" + Guid.NewGuid().ToString("N"),
+                "bcd_" + Guid.NewGuid().ToString("N"));
+            device.Heartbeat(probeJson: """{"capabilities":["git-sync-v1"]}""");
+            var pending = WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.GitSync,
+                JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+                project.Id,
+                owner.Id);
+            var running = WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.GitSync,
+                JsonSerializer.Serialize(new { projectId = project.Id, mode = "Status" }),
+                project.Id,
+                owner.Id);
+            running.Claim(TimeSpan.FromMinutes(15), "active-daemon-instance");
+
+            db.Orgs.Add(org);
+            db.Projects.Add(project);
+            db.Users.Add(owner);
+            db.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+            db.DaemonDevices.Add(device);
+            db.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, Path.GetTempPath()));
+            db.WorkstationCommands.AddRange(pending, running);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            unscoped.Dispose();
+
+            var tenant = new TenantContext();
+            tenant.Assign(project.Id, org.Id, unscoped: false);
+            var factory = HandlerSqlite.Factory(connection, tenant);
+            using (TenantScope.EnterUnscoped())
+            {
+                var staleCreatedAt = DateTime.UtcNow - ProjectGitSyncPreflight.PendingCommandLifetime - TimeSpan.FromMinutes(1);
+                await db.WorkstationCommands.IgnoreQueryFilters()
+                    .Where(command => command.Id == pending.Id)
+                    .ExecuteUpdateAsync(update => update.SetProperty(command => command.CreatedAt, staleCreatedAt),
+                        TestContext.Current.CancellationToken);
+            }
+
+            var actor = new ActorContext(
+                ActorType.Human, owner.Id, false, null, null, project.Id, org.Id, ApiTokenCapability.None);
+            var inspect = new GetProjectGitSyncCommandHandler(factory, new AuthorizationService());
+            var restored = await inspect.GetPendingAsync(
+                project.Id, actor, TestContext.Current.CancellationToken, device.Id);
+
+            Assert.True(restored.Success, restored.Error);
+            Assert.NotNull(restored.Value);
+            Assert.Equal(running.Id, restored.Value!.Id);
+            Assert.Equal(WorkstationCommandStatus.Running, restored.Value.Status);
+
+            using (TenantScope.EnterUnscoped())
+            {
+                var expired = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == pending.Id, TestContext.Current.CancellationToken);
+                var stillRunning = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == running.Id, TestContext.Current.CancellationToken);
+                Assert.Equal(WorkstationCommandStatus.Cancelled, expired.Status);
+                Assert.Equal("GitSyncPendingExpired", expired.Error);
+                Assert.NotNull(expired.CompletedAt);
+                Assert.Equal(WorkstationCommandStatus.Running, stillRunning.Status);
+                Assert.NotNull(stillRunning.LeaseExpiresAt);
+            }
+
+            var preflight = await ProjectGitSyncPreflight.EvaluateAsync(
+                factory.CreateDbContext(), project.Id, device, TestContext.Current.CancellationToken);
+            Assert.True(preflight.InProgress);
+        }
+    }
+
+    [Fact]
+    public async Task GitSyncCancellation_CancelsOnlyAnUnclaimedPendingCommand()
+    {
+        var (connection, db, unscoped) = HandlerSqlite.Open();
+        using (connection)
+        using (db)
+        {
+            var org = Org.Create("GitSyncCancelOrg", null);
+            var project = Project.Create("GitSyncCancelProject", null, org.Id);
+            var owner = User.Create("git-cancel-owner", $"git-cancel-{Guid.NewGuid():N}@beacon.local", "hash");
+            var device = DaemonDevice.Create(
+                "git-cancel-device",
+                owner.Id,
+                "fp-" + Guid.NewGuid().ToString("N"),
+                "hash-" + Guid.NewGuid().ToString("N"),
+                "bcd_" + Guid.NewGuid().ToString("N"));
+            var pending = WorkstationCommand.Create(
+                device.Id, WorkstationCommandKind.GitSync, "{}", project.Id, owner.Id);
+            var running = WorkstationCommand.Create(
+                device.Id, WorkstationCommandKind.GitSync, "{}", project.Id, owner.Id);
+            running.Claim(TimeSpan.FromMinutes(15), "already-running-instance");
+
+            db.Orgs.Add(org);
+            db.Projects.Add(project);
+            db.Users.Add(owner);
+            db.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+            db.DaemonDevices.Add(device);
+            db.WorkstationCommands.AddRange(pending, running);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            unscoped.Dispose();
+
+            var tenant = new TenantContext();
+            tenant.Assign(project.Id, org.Id, unscoped: false);
+            var factory = HandlerSqlite.Factory(connection, tenant);
+            var actor = new ActorContext(
+                ActorType.Human, owner.Id, false, null, null, project.Id, org.Id, ApiTokenCapability.None);
+            var cancel = new CancelPendingProjectGitSyncCommandHandler(factory, new AuthorizationService());
+
+            var cancelled = await cancel.HandleAsync(
+                project.Id, pending.Id, actor, TestContext.Current.CancellationToken);
+            var runningResult = await cancel.HandleAsync(
+                project.Id, running.Id, actor, TestContext.Current.CancellationToken);
+
+            Assert.True(cancelled.Success, cancelled.Error);
+            Assert.Equal(WorkstationCommandStatus.Cancelled, cancelled.Value!.Status);
+            Assert.Equal("GitSyncCancelledByUser", cancelled.Value.Error);
+            Assert.False(runningResult.Success);
+            Assert.Equal(ErrorKind.Conflict, runningResult.Kind);
+            Assert.Contains("already been claimed", runningResult.Error, StringComparison.OrdinalIgnoreCase);
+
+            using (TenantScope.EnterUnscoped())
+            {
+                var persistedPending = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == pending.Id, TestContext.Current.CancellationToken);
+                var persistedRunning = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == running.Id, TestContext.Current.CancellationToken);
+                Assert.Equal(WorkstationCommandStatus.Cancelled, persistedPending.Status);
+                Assert.Equal(WorkstationCommandStatus.Running, persistedRunning.Status);
+                Assert.NotNull(persistedRunning.LeaseExpiresAt);
+            }
+        }
+    }
+
 }
