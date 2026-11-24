@@ -208,7 +208,10 @@ public sealed class CreateReleaseHandler
             orgId, command.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                release.Name, release.TargetVersion, release.TargetBranch, status = release.Status
+                newState = release.Status.ToString(),
+                targetVersion = release.TargetVersion ?? "Unspecified",
+                targetBranch = release.TargetBranch,
+                count = release.Order
             })));
         await db.SaveChangesAsync(ct);
 
@@ -281,7 +284,11 @@ public sealed class UpdateReleaseHandler
                 orgId, request.ProjectId,
                 detailsJson: JsonSerializer.Serialize(new
                 {
-                    previous, release.Name, release.TargetVersion, release.TargetBranch
+                    previousState = ((ReleaseStatus)previous.status).ToString(),
+                    newState = "Release.FieldsUpdated",
+                    targetVersion = release.TargetVersion ?? "Unspecified",
+                    targetBranch = release.TargetBranch,
+                    count = release.Revision
                 })));
             await db.SaveChangesAsync(ct);
         }
@@ -345,7 +352,11 @@ public sealed class SetReleaseStatusHandler
             _auditWriter.Stage(db, AuditEventFactory.ForActor(
                 command.Actor, "project.release.status_changed", "Release", release.Id.ToString("D"),
                 orgId, request.ProjectId,
-                detailsJson: JsonSerializer.Serialize(new { from = previous, to = release.Status })));
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    previousState = previous.ToString(),
+                    newState = release.Status.ToString()
+                })));
             await db.SaveChangesAsync(ct);
         }
         catch (InvalidOperationException exception)
@@ -407,8 +418,11 @@ public sealed class DeleteReleaseHandler
             orgId, request.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                release.Name, release.TargetVersion, release.TargetBranch,
-                detachedMilestones = linked.Count
+                previousState = release.Status.ToString(),
+                newState = "Release.Deleted",
+                targetVersion = release.TargetVersion ?? "Unspecified",
+                targetBranch = release.TargetBranch,
+                count = linked.Count
             })));
         db.Releases.Remove(release);
         try
@@ -494,9 +508,9 @@ public sealed class SetMilestoneReleaseHandler
             request.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                previousReleaseId,
-                releaseId = milestone.ReleaseId,
-                milestoneRevision = milestone.Revision
+                previousReleaseId = previousReleaseId?.ToString("D") ?? "Unassigned",
+                releaseId = milestone.ReleaseId?.ToString("D") ?? "Unassigned",
+                count = milestone.Revision
             })));
         try
         {
