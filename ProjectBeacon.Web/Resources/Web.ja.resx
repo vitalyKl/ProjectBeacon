@@ -3398,7 +3398,7 @@ orthstar</value>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>バージョンポリシーを保存しました</value></data>
 <data name="NotConfigured" xml:space="preserve"><value>未設定</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>このプロジェクトでリリース管理を有効にする</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>有効にすると Roadmap で Release を管理でき、Milestone を Release に関連付けられます。既存の Milestone は独立したままです。既定では無効です。</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>有効にすると Roadmap に Release が表示され、Milestone を Release にまとめられます。タスクは関連付けられた Milestone を通じて Release コンテキストを継承します。最初に上のバージョン方式とマニフェスト投影を設定してください。既定では無効で、有効化だけでは公開やデプロイは行われません。</value></data>>
   <data name="ProjectReleases" xml:space="preserve"><value>プロジェクトのリリース</value></data>
   <data name="Releases" xml:space="preserve"><value>件のリリース</value></data>
   <data name="NewRelease" xml:space="preserve"><value>新しいリリース</value></data>
@@ -3435,4 +3435,5 @@ orthstar</value>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix とフォワードポートのタスク</value></data>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>このタスクは本番環境にデプロイされた正確なコミットを基点にしています。ブランチとベースコミットは Beacon によって保護されます。</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>この通常タスクは、元の Hotfix の landing が確認された後に作成されました。通常の Planner、Actor、Reviewer、landing ワークフローで完了してください。</value></data>
+  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release の流れ: Project Settings で正本となるバージョンとマニフェストファイルを設定し、ここで Release を作成して Milestone を関連付けます。関連 Milestone のタスクは Planner コンテキストで目標バージョンとブランチを受け取ります。Release の準備で不変の Candidate が作成され、本番公開には別途明示的な確認が必要です。</value></data>
 </root>
