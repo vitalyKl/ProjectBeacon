@@ -1978,8 +1978,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProjectId", "ReleaseId", "Order");
 
-                    b.HasIndex("ReleaseId");
-
                     b.ToTable("Milestones");
                 });
 
