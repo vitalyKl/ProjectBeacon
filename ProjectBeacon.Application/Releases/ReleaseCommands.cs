@@ -1,0 +1,44 @@
+namespace ProjectBeacon.Application.Releases;
+
+using Application.Authorization;
+using Domain.Enums;
+
+public sealed record ReleaseDto(
+    Guid Id,
+    Guid ProjectId,
+    string Name,
+    string? Description,
+    string? TargetVersion,
+    string TargetBranch,
+    ReleaseStatus Status,
+    int Order,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    DateTime? PublishedAt,
+    int Revision,
+    int MilestoneCount);
+
+public sealed record CreateReleaseRequest(
+    string Name,
+    string? Description,
+    string? TargetVersion,
+    string TargetBranch,
+    int Order);
+
+public sealed record CreateReleaseCommand(Guid ProjectId, CreateReleaseRequest Request, ActorContext Actor);
+public sealed record UpdateReleaseRequest(
+    Guid ReleaseId, Guid ProjectId, string? Name, string? Description, string? TargetVersion,
+    string? TargetBranch, int? Order, int ExpectedRevision);
+public sealed record UpdateReleaseCommand(UpdateReleaseRequest Request, ActorContext Actor);
+public sealed record SetReleaseStatusRequest(Guid ReleaseId, Guid ProjectId, ReleaseStatus Status, int ExpectedRevision);
+public sealed record SetReleaseStatusCommand(SetReleaseStatusRequest Request, ActorContext Actor);
+public sealed record DeleteReleaseRequest(Guid ReleaseId, Guid ProjectId);
+public sealed record DeleteReleaseCommand(DeleteReleaseRequest Request, ActorContext Actor);
+public sealed record GetReleaseRequest(Guid ReleaseId, Guid ProjectId);
+public sealed record GetReleaseCommand(GetReleaseRequest Request, ActorContext Actor);
+public sealed record ListProjectReleasesRequest(Guid ProjectId);
+public sealed record ListProjectReleasesCommand(ListProjectReleasesRequest Request, ActorContext Actor);
+
+public sealed record SetMilestoneReleaseRequest(
+    Guid MilestoneId, Guid ProjectId, Guid? ReleaseId, int ExpectedRevision);
+public sealed record SetMilestoneReleaseCommand(SetMilestoneReleaseRequest Request, ActorContext Actor);
