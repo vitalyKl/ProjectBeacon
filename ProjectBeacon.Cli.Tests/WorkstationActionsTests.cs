@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Diagnostics;
 using Application.Common;
 using ProjectBeacon.Cli.Client;
 using System.Text.Json;
@@ -19,13 +20,36 @@ public sealed class WorkstationActionsTests : IDisposable
         try { Directory.Delete(_dir, true); } catch { }
     }
 
-    [Fact]
-    public async Task InitProject_WaitsForCheckoutLockBeforeCreatingTargetDirectory()
+    private static async Task RunGitAsync(string directory, params string[] arguments)
     {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start Git in the workstation action test.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {await stderr}{await stdout}");
+    }
+
+    [Fact]
+    public async Task InitProject_WaitsForContainingCheckoutLockBeforeCreatingTargetDirectory()
+    {
+        await RunGitAsync(_dir, "init", "-b", "main");
         var target = Path.Combine(_dir, "new-project");
         var payload = JsonSerializer.Serialize(new { path = "new-project", createGit = false });
 
-        using var checkoutLease = GitCheckoutGate.Acquire(target);
+        using var checkoutLease = GitCheckoutGate.Acquire(_dir);
         var initialization = Task.Run(() => WorkstationSetup.InitProject(_dir, payload));
 
         await Task.Delay(TimeSpan.FromMilliseconds(150));
