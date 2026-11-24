@@ -177,6 +177,20 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Theory]
+    [InlineData("fatal: Authentication failed for 'https://[redacted]@github.com/org/repo.git'", "AuthenticationFailed")]
+    [InlineData("fatal: could not read Username for 'https://github.com': terminal prompts disabled", "AuthenticationFailed")]
+    [InlineData("fatal: unable to access remote: Could not resolve host", "FetchFailed")]
+    public void ClassifyFailure_UsesSanitizedDiagnosticWithoutPublishingIt(string diagnostic, string expected)
+    {
+        var result = new GitSyncResultDto(
+            "main", "origin/main", 0, 1, true, false, true, false,
+            new string('a', 40), new string('a', 40),
+            GitSyncOutcome.Failed, GitSyncRefusalCode.FetchFailed, diagnostic);
+
+        Assert.Equal(expected, GitAutoSyncLoop.ClassifyFailure(result));
+    }
+
+    [Theory]
     [InlineData("/workspace/project", "/workspace/project/", true)]
     [InlineData("/workspace/project-a", "/workspace/project-b", false)]
     [InlineData("", "/workspace/project", false)]

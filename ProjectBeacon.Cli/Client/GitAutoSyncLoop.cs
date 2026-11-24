@@ -161,7 +161,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             var result = status.Result;
             if (result.Outcome == GitSyncOutcome.Failed)
             {
-                RecordFailure(project, result.ReasonCode?.ToString() ?? "GitFetchFailed", now, result);
+                RecordFailure(project, ClassifyFailure(result), now, result);
                 continue;
             }
 
@@ -230,7 +230,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     }
                     else if (pullResult.Outcome == GitSyncOutcome.Failed)
                     {
-                        var code = pullResult.ReasonCode?.ToString() ?? "GitFetchFailed";
+                        var code = ClassifyFailure(pullResult);
                         RecordFailure(project, code, _timing.TimeProvider.GetUtcNow(), pullResult);
                         continue;
                     }
@@ -377,6 +377,25 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         if (error?.Contains("directory does not exist", StringComparison.OrdinalIgnoreCase) == true)
             return "ProjectDirectoryUnavailable";
         return "GitSyncFailed";
+    }
+
+    internal static string ClassifyFailure(GitSyncResultDto result)
+    {
+        var diagnostic = result.Stderr ?? string.Empty;
+        string[] authenticationMarkers =
+        [
+            "authentication failed",
+            "authentication is required",
+            "could not read username",
+            "could not read password",
+            "permission denied (publickey)",
+            "http basic: access denied",
+            "invalid username or password"
+        ];
+        return authenticationMarkers.Any(marker =>
+                diagnostic.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            ? "AuthenticationFailed"
+            : result.ReasonCode?.ToString() ?? "GitFetchFailed";
     }
 
     internal static bool SameLocalRoot(string? left, string? right)
