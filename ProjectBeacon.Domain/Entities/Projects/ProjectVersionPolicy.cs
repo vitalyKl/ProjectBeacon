@@ -10,7 +10,7 @@ using System.Xml.XPath;
 /// <summary>Known-safe default. No version source is guessed for a new customer project.</summary>
 public static class ProjectVersionPolicyDefaults
 {
-    public const string Json = """{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"sources":[]}""";
+    public const string Json = """{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"deploymentVersionEndpoint":null,"sources":[]}""";
 }
 
 /// <summary>File projection source configured by a project Owner/Admin.</summary>
@@ -24,7 +24,8 @@ public sealed record ProjectVersionPolicy(
     string TagPattern,
     bool AllowPrerelease,
     IReadOnlyList<ProjectVersionSourcePolicy> Sources,
-    bool ReleaseManagementEnabled = false);
+    bool ReleaseManagementEnabled = false,
+    string? DeploymentVersionEndpoint = null);
 
 /// <summary>Deterministic parsing/validation for version policies and source files.</summary>
 public static class ProjectVersionPolicyCatalog
@@ -51,7 +52,7 @@ public static class ProjectVersionPolicyCatalog
             }
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
-                "scheme", "componentCount", "calendarFormat", "tagPattern", "allowPrerelease", "releaseManagementEnabled", "sources"
+                "scheme", "componentCount", "calendarFormat", "tagPattern", "allowPrerelease", "releaseManagementEnabled", "deploymentVersionEndpoint", "sources"
             };
             var names = document.RootElement.EnumerateObject().Select(item => item.Name).ToArray();
             if (names.Distinct(StringComparer.Ordinal).Count() != names.Length
@@ -73,6 +74,27 @@ public static class ProjectVersionPolicyCatalog
 
     public static string Serialize(ProjectVersionPolicy policy) =>
         JsonSerializer.Serialize(policy, JsonOptions);
+
+    public static bool TryValidateDeploymentVersionEndpoint(string? value, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        var normalized = value.Trim();
+        if (normalized.Length > 512
+            || !Uri.TryCreate(normalized, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || string.IsNullOrWhiteSpace(uri.Host)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || !uri.AbsolutePath.EndsWith("/v1/version", StringComparison.Ordinal))
+        {
+            error = "Deployment version endpoint must be an HTTPS URL ending in /v1/version, without credentials, query, or fragment.";
+            return false;
+        }
+        return true;
+    }
 
     public static bool IsSafeBranchName(string? value)
     {
@@ -140,6 +162,8 @@ public static class ProjectVersionPolicyCatalog
             error = "Tag pattern must contain exactly one {version} placeholder and produce a safe Git tag name.";
             return false;
         }
+        if (!TryValidateDeploymentVersionEndpoint(policy.DeploymentVersionEndpoint, out error))
+            return false;
         if (policy.Sources is null || policy.Sources.Count > 16)
         {
             error = "A version policy may define at most 16 file sources.";
