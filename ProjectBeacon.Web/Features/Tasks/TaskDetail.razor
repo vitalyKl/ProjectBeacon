@@ -76,6 +76,22 @@ else
                 <span class="beacon-ops-sub">@ChromeLabels.Type(L, _task.Type)</span>
             </div>
             <div class="beacon-task-title" title="@_task.Title">@_task.Title</div>
+            @if (_task.HotfixSourceReleaseId is { } hotfixReleaseId)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                    <MudText Typo="Typo.body2">@L["HotfixOriginNotice"]</MudText>
+                    <MudText Typo="Typo.caption">@L["HotfixSourceRelease"]: @hotfixReleaseId</MudText>
+                    <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">@L["HotfixDeployedSha"]: @(_task.HotfixDeployedSha ?? "—")</MudText>
+                    <MudText Typo="Typo.caption">@L["ReleaseTargetBranch"]: @(_task.HotfixTargetBranch ?? "—")</MudText>
+                </MudAlert>
+            }
+            else if (_task.ForwardPortOfTaskId is { } hotfixTaskId)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                    <MudText Typo="Typo.body2">@L["ForwardPortNotice"]</MudText>
+                    <MudText Typo="Typo.caption">@L["ForwardPortOfHotfix"]: @hotfixTaskId</MudText>
+                </MudAlert>
+            }
             @if (!string.IsNullOrEmpty(_task.Description))
             {
                 <div class="beacon-task-goal">
