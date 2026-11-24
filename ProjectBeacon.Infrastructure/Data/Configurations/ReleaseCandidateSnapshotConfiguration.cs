@@ -32,6 +32,12 @@ public sealed class ReleaseCandidateSnapshotConfiguration : IEntityTypeConfigura
             .HasForeignKey(snapshot => snapshot.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        entity.HasOne(snapshot => snapshot.Release)
+            .WithOne()
+            .HasForeignKey<ReleaseCandidateSnapshot>(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId })
+            .HasPrincipalKey<Release>(release => new { release.ProjectId, release.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
         entity.HasIndex(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId })
             .IsUnique();
         entity.HasIndex(snapshot => new { snapshot.ProjectId, snapshot.CandidateSha });
