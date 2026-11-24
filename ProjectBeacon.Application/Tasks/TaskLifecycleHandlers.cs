@@ -93,7 +93,12 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             task.CompletedAt,
             [],
             [],
-            task.ContentRevision);
+            task.ContentRevision,
+            task.HotfixSourceReleaseId,
+            task.HotfixDeployedSha,
+            task.HotfixTargetBranch,
+            task.HotfixRequestId,
+            task.ForwardPortOfTaskId);
 }
 /// <summary>
 /// Updates a task title, description, priority, type, label, or milestone. Description edits require the caller's expected content revision; state transitions use the separate StateRevision.
