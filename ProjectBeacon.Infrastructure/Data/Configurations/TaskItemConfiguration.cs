@@ -32,6 +32,11 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.Property(e => e.CompletedAt);
         entity.Property(e => e.PipelineStage).HasConversion<string>();
         entity.Property(e => e.PipelineDeviceId);
+        entity.Property(e => e.HotfixSourceReleaseId);
+        entity.Property(e => e.HotfixDeployedSha).HasMaxLength(64);
+        entity.Property(e => e.HotfixTargetBranch).HasMaxLength(200);
+        entity.Property(e => e.HotfixRequestId);
+        entity.Property(e => e.ForwardPortOfTaskId);
         entity.Property(e => e.StateRevision).HasDefaultValue(0).IsRequired();
         entity.Property(e => e.ContentRevision).HasDefaultValue(1).IsRequired().IsConcurrencyToken();
 
@@ -50,6 +55,20 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasForeignKey(e => e.MilestoneId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        entity.HasOne<Release>()
+            .WithMany()
+            .HasForeignKey(e => new { e.ProjectId, e.HotfixSourceReleaseId })
+            .HasPrincipalKey(release => new { release.ProjectId, release.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<TaskItem>()
+            .WithMany()
+            .HasForeignKey(e => new { e.ProjectId, e.ForwardPortOfTaskId })
+            .HasPrincipalKey(task => new { task.ProjectId, task.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasAlternateKey(e => new { e.ProjectId, e.Id });
+
         entity.HasMany(e => e.Comments)
             .WithOne(e => e.Task)
             .HasForeignKey(e => e.TaskId)
@@ -66,5 +85,11 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .OnDelete(DeleteBehavior.Cascade);
 
         entity.HasIndex(e => new { e.ProjectId, e.Status });
+        entity.HasIndex(e => new { e.ProjectId, e.HotfixRequestId })
+            .IsUnique()
+            .HasFilter("\\"HotfixRequestId\\" IS NOT NULL");
+        entity.HasIndex(e => new { e.ProjectId, e.ForwardPortOfTaskId })
+            .IsUnique()
+            .HasFilter("\\"ForwardPortOfTaskId\\" IS NOT NULL");
     }
 }
