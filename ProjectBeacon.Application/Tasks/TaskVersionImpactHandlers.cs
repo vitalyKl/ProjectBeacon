@@ -67,10 +67,9 @@ public sealed class GetTaskVersionImpactHandler
         if (actor.IsApiToken)
         {
             var required = readOnly ? ApiTokenCapability.TaskRead : ApiTokenCapability.TaskWrite;
-            return actor.Capabilities.HasFlag(ApiTokenCapability.Admin)
-                || actor.Capabilities.HasFlag(required)
-                    ? actor.ProjectId is null || actor.ProjectId == projectId
-                    : false;
+            return actor.ProjectId == projectId
+                && (actor.Capabilities.HasFlag(ApiTokenCapability.Admin)
+                    || actor.Capabilities.HasFlag(required));
         }
         if (!actor.IsHuman || actor.UserId is null)
             return false;
@@ -161,7 +160,7 @@ public sealed class ReviewTaskVersionImpactHandler
         var task = await db.Tasks.FirstOrDefaultAsync(item => item.Id == command.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskVersionImpactDto>("Task not found.", ErrorKind.NotFound);
-        if (command.Actor.ProjectId is { } tokenProjectId && tokenProjectId != task.ProjectId)
+        if (command.Actor.ProjectId != task.ProjectId)
             return Result.Forbidden<TaskVersionImpactDto>();
 
         var session = await db.PipelineSessions.FirstOrDefaultAsync(
