@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Domain.Entities.Projects;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Mcp;
@@ -474,9 +475,9 @@ internal static class ReleasePublishExecutor
         }
     }
 
-    private static JsonObject ResultJson(
+    private static string ResultJson(
         PublishRequest request, bool tagPushed, long? runId, string? runUrl, string? workflowStatus,
-        string? conclusion, JsonObject? deployment, string? error, DateTime? deployedAt = null) => new()
+        string? conclusion, JsonObject? deployment, string? error, DateTime? deployedAt = null) => new JsonObject
     {
         ["action"] = "Publish",
         ["projectId"] = request.ProjectId.ToString("D"),
@@ -495,7 +496,7 @@ internal static class ReleasePublishExecutor
         ["deploymentStatus"] = deployment?["status"]?.DeepClone(),
         ["deployedAtUtc"] = deployedAt?.ToString("O"),
         ["error"] = error
-    };
+    }.ToJsonString();
 
     private static bool IsWorkflowRunUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -503,7 +504,7 @@ internal static class ReleasePublishExecutor
         && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
         && Regex.IsMatch(uri.AbsolutePath, @"^/[^/]+/[^/]+/actions/runs/[1-9][0-9]*$", RegexOptions.CultureInvariant);
 
-    private static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
+    private static Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
         string directory, CancellationToken ct, IReadOnlyCollection<string> filters, params string[] args) =>
         AgentSessionWorktree.RunGitAsync(directory, ct, filters, args);
 
@@ -530,8 +531,14 @@ internal static class ReleasePublishExecutor
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 
     private static string Text(JsonObject obj, string key) => obj[key]?.GetValue<string>() ?? string.Empty;
+    private static string Text(JsonElement obj, string key) =>
+        obj.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
     private static Guid GuidValue(JsonObject obj, string key) => Guid.TryParse(Text(obj, key), out var id) ? id : Guid.Empty;
     private static int Integer(JsonObject obj, string key) => obj[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0;
+    private static long Integer(JsonElement obj, string key) =>
+        obj.TryGetProperty(key, out var value) && value.TryGetInt64(out var number) ? number : 0;
     private static string Clip(string? value) => string.IsNullOrWhiteSpace(value) ? "No diagnostic details returned." : value.Length > 1200 ? value[..1200] : value;
     private static (bool Ok, string? Result, string? Error) Fail(string error) => (false, null, error);
 }
