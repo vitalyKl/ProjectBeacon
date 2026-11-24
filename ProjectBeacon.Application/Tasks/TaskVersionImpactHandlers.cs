@@ -5,6 +5,7 @@ using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -116,6 +117,10 @@ public sealed class SetTaskVersionImpactHandler
         if (!await GetTaskVersionImpactHandler.CanAccessProjectAsync(
             db, task.ProjectId, command.Actor, readOnly: false, ct))
             return Result.Forbidden<TaskVersionImpactDto>();
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskVersionImpactDto>(milestoneBlock, ErrorKind.Conflict);
         if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
             return Result.Failure<TaskVersionImpactDto>(
                 "Version impact changed since it was loaded. Read it again and retry.", ErrorKind.Conflict);
@@ -190,6 +195,10 @@ public sealed class ReviewTaskVersionImpactHandler
             return Result.Failure<TaskVersionImpactDto>("Task not found.", ErrorKind.NotFound);
         if (command.Actor.ProjectId != task.ProjectId)
             return Result.Forbidden<TaskVersionImpactDto>();
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskVersionImpactDto>(milestoneBlock, ErrorKind.Conflict);
 
         var session = await db.PipelineSessions.FirstOrDefaultAsync(
             item => item.Id == reviewSessionId
