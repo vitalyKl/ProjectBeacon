@@ -403,6 +403,115 @@ else
             _releases = [];
     }
 
+    private void ShowCreateReleaseForm()
+    {
+        _releaseName = string.Empty;
+        _releaseDescription = null;
+        _releaseTargetVersion = null;
+        _releaseTargetBranch = "main";
+        _releaseOrder = _releases.Count + 1;
+        _showCreateReleaseForm = true;
+        _showCreateForm = false;
+        _editingId = null;
+    }
+
+    private void HideCreateReleaseForm() => _showCreateReleaseForm = false;
+
+    private async Task CreateRelease()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await CreateReleaseHandler.HandleAsync(new CreateReleaseCommand(
+                _project.Id,
+                new CreateReleaseRequest(_releaseName, _releaseDescription, _releaseTargetVersion,
+                    _releaseTargetBranch, _releaseOrder),
+                _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Create"].Value);
+                return;
+            }
+            _showCreateReleaseForm = false;
+            Notifications.Add(L["ReleaseCreated"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task ChangeReleaseStatus(ReleaseDto release, ReleaseStatus status)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await SetReleaseStatus.HandleAsync(new SetReleaseStatusCommand(
+                new SetReleaseStatusRequest(release.Id, _project.Id, status, release.Revision), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                return;
+            }
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task DeleteRelease(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await DeleteReleaseHandler.HandleAsync(new DeleteReleaseCommand(
+                new DeleteReleaseRequest(release.Id, _project.Id), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Delete"].Value);
+                return;
+            }
+            Notifications.Add(L["ReleaseDeleted"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task SetMilestoneReleaseAsync(MilestoneDto milestone, Guid? releaseId)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy || milestone.ReleaseId == releaseId)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await SetMilestoneRelease.HandleAsync(new SetMilestoneReleaseCommand(
+                new SetMilestoneReleaseRequest(milestone.Id, _project.Id, releaseId, milestone.Revision), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                await Reload();
+                return;
+            }
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
     private void ShowCreateForm()
     {
         _newOrder = _milestones.Count + 1;
