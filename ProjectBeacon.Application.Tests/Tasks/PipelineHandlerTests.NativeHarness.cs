@@ -118,7 +118,7 @@ public sealed partial class PipelineHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.False(launched.Success);
-        Assert.Contains("native pipeline workstation is offline", launched.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No native workstation is attached", launched.Error, StringComparison.OrdinalIgnoreCase);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.PipelineSessions.AsNoTracking()
