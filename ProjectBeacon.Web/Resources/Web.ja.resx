@@ -3419,4 +3419,5 @@ orthstar</value>
   <data name="ReleaseStatusCandidate" xml:space="preserve"><value>候補</value></data>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>公開済み</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>キャンセル済み</value></data>
+
 </root>
