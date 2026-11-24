@@ -3072,4 +3072,5 @@ orthstar</value>
   <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>只有项目 Owner 和 Admin 可以修改版本策略。</value></data>
   <data name="ProjectVersionSave" xml:space="preserve"><value>保存版本策略</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
+  <data name="NotConfigured" xml:space="preserve"><value>未配置</value></data>
 </root>
