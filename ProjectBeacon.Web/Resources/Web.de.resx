@@ -3373,4 +3373,13 @@ orthstar</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>Die Anmeldung ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.</value>
+  </data>
+  <data name="ProjectSwitchFailed" xml:space="preserve">
+    <value>Das aktive Projekt konnte nicht gewechselt werden. Möglicherweise haben sich Ihre Zugriffsrechte geändert. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ProjectSwitchUnavailable" xml:space="preserve">
+    <value>Das aktive Projekt konnte aufgrund eines unerwarteten Fehlers nicht gewechselt werden. Diagnose-ID: {0}</value>
+  </data>
 </root>

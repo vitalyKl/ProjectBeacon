@@ -6,6 +6,7 @@ public static class UiNotificationServiceCollectionExtensions
 {
     public static IServiceCollection AddUiNotifications(this IServiceCollection services)
     {
+        services.AddScoped<IUiDiagnosticService, UiDiagnosticService>();
         services.AddScoped<IUiNotificationService, UiNotificationService>();
         return services;
     }

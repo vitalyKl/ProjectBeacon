@@ -3363,4 +3363,13 @@
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>Вход временно недоступен. Повторите попытку.</value>
+  </data>
+  <data name="ProjectSwitchFailed" xml:space="preserve">
+    <value>Не удалось переключить активный проект. Возможно, ваши права доступа изменились. Обновите страницу и повторите попытку.</value>
+  </data>
+  <data name="ProjectSwitchUnavailable" xml:space="preserve">
+    <value>Не удалось изменить активный проект из-за непредвиденной ошибки. Диагностический ID: {0}</value>
+  </data>
 </root>

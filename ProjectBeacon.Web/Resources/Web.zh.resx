@@ -3381,4 +3381,13 @@ orthstar</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>等待您处理的任务列表暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>登录服务暂时不可用。请重试。</value>
+  </data>
+  <data name="ProjectSwitchFailed" xml:space="preserve">
+    <value>无法切换当前项目。您的访问权限可能已更改。请刷新页面后重试。</value>
+  </data>
+  <data name="ProjectSwitchUnavailable" xml:space="preserve">
+    <value>由于发生意外错误，无法更改当前项目。诊断 ID：{0}</value>
+  </data>
 </root>

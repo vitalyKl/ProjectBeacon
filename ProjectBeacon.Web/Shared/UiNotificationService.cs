@@ -11,15 +11,18 @@ internal sealed class UiNotificationService : IUiNotificationService
     private readonly ISnackbar _snackbar;
     private readonly IStringLocalizer _localizer;
     private readonly ILogger<UiNotificationService> _logger;
+    private readonly IUiDiagnosticService _diagnostics;
 
     public UiNotificationService(
         ISnackbar snackbar,
         IStringLocalizerFactory localizerFactory,
-        ILogger<UiNotificationService> logger)
+        ILogger<UiNotificationService> logger,
+        IUiDiagnosticService diagnostics)
     {
         _snackbar = snackbar;
         _localizer = localizerFactory.Create(typeof(Web));
         _logger = logger;
+        _diagnostics = diagnostics;
     }
 
     public void Add(string message, Severity severity)
@@ -109,15 +112,8 @@ internal sealed class UiNotificationService : IUiNotificationService
     public string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId) =>
         $"{_localizer[messageResourceKey].Value}{Environment.NewLine}{_localizer["DiagnosticId", diagnosticId].Value}";
 
-    public string LogException(Exception exception, string operation, object? context = null)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        var diagnosticId = CreateDiagnosticId();
-        _logger.LogError(exception,
-            "UI operation {Operation} failed. DiagnosticId={DiagnosticId}, Context={Context}",
-            operation, diagnosticId, context);
-        return diagnosticId;
-    }
+    public string LogException(Exception exception, string operation, object? context = null) =>
+        _diagnostics.LogException(exception, operation, context);
 
     public string ReportException(Exception exception, string messageResourceKey, string operation, object? context = null)
     {

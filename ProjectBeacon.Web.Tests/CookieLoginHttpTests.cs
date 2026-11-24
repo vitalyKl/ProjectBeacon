@@ -30,6 +30,52 @@ public sealed class CookieLoginHttpTests
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith("BeaconAuth=", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("admin")]
+    [InlineData("missing-user")]
+    public async Task CookieLogin_RejectedCredentials_UsesSameGenericRedirect(string login)
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        _ = await WebTestFactory.GetBootstrapPasswordAsync(client);
+
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = login,
+            ["password"] = "definitely-not-the-password"
+        });
+        var response = await client.PostAsync(
+            "/v1/auth/cookie-login",
+            form,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/login?error=invalid_credentials", response.Headers.Location?.ToString());
+        Assert.False(response.Headers.TryGetValues("Set-Cookie", out var cookies)
+            && cookies.Any(cookie => cookie.StartsWith("BeaconAuth=", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task CookieLogin_UnexpectedFormFailure_RedirectsWithDiagnosticId()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/cookie-login")
+        {
+            Content = new StringContent("not a form body")
+        };
+
+        var response = await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location?.ToString() ?? string.Empty;
+        Assert.StartsWith("/login?error=unavailable&diagnosticId=", location, StringComparison.Ordinal);
+        var diagnosticId = location["/login?error=unavailable&diagnosticId=".Length..];
+        Assert.Equal(8, diagnosticId.Length);
+        Assert.All(diagnosticId, character => Assert.True(char.IsAsciiHexDigit(character)));
+        Assert.DoesNotContain("not a form body", location, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Landing_Anonymous_Ok_NotPermanentRedirect()
     {
