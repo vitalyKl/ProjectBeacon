@@ -409,8 +409,11 @@ public sealed class DeleteReleaseHandler
             item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, ct);
         if (release is null)
             return Result.Failure("Release not found.", ErrorKind.NotFound);
+        var cancelledFailedPreparation =
+            release.Status == ReleaseStatus.Cancelled
+            && release.PreparationStatus == ReleasePreparationStatus.Failed;
         if (release.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
-            || release.PreparationStatus != ReleasePreparationStatus.NotStarted)
+            || (release.PreparationStatus != ReleasePreparationStatus.NotStarted && !cancelledFailedPreparation))
             return Result.Failure("A Release with a prepared or in-flight Candidate cannot be deleted.", ErrorKind.Conflict);
 
         var linked = await db.Milestones
@@ -487,7 +490,9 @@ public sealed class SetMilestoneReleaseHandler
                 .FirstOrDefaultAsync(ct);
             if (currentState is not null
                 && (currentState.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
-                    || currentState.PreparationStatus != ReleasePreparationStatus.NotStarted))
+                    || (currentState.PreparationStatus != ReleasePreparationStatus.NotStarted
+                        && !(currentState.Status == ReleaseStatus.Cancelled
+                            && currentState.PreparationStatus == ReleasePreparationStatus.Failed))))
                 return Result.Failure(
                     "Milestones cannot be detached or moved after ReleasePrepare has started.",
                     ErrorKind.Conflict);
