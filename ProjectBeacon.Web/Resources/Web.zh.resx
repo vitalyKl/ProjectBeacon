@@ -3423,4 +3423,14 @@ orthstar</value>
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>只有在版本策略、影响声明、landing 和验证检查全部通过后，ReleasePrepare 才会创建 Candidate。</value></data>
   <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>生产版本端点</value></data>
   <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>以 /v1/version 结尾的 HTTPS URL。发布工作流成功后，Beacon 会检查此端点，并要求 version 和 gitSha 与 Candidate 完全一致。</value></data>
+  <data name="CreateHotfixTask" xml:space="preserve"><value>创建 Hotfix 任务</value></data>
+  <data name="HotfixTaskTitle" xml:space="preserve"><value>Hotfix 任务标题</value></data>
+  <data name="HotfixTaskDescription" xml:space="preserve"><value>描述生产环境问题及所需修复</value></data>
+  <data name="HotfixTaskCreated" xml:space="preserve"><value>已从已部署的 Release 创建 Hotfix 任务</value></data>
+  <data name="HotfixSourceRelease" xml:space="preserve"><value>来源 Release</value></data>
+  <data name="HotfixDeployedVersion" xml:space="preserve"><value>已部署版本</value></data>
+  <data name="HotfixDeployedSha" xml:space="preserve"><value>部署到生产环境的提交</value></data>
+  <data name="HotfixDeploymentRun" xml:space="preserve"><value>打开部署工作流运行</value></data>
+  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix 的向前移植任务</value></data>
+  <data name="HotfixTasks" xml:space="preserve"><value>Hotfix 与向前移植任务</value></data>
 </root>
