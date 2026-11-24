@@ -6,6 +6,7 @@ using System.Text.Json;
 using Application.Agents;
 using Application.Common;
 using Application.Devices;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Domain.Entities.Devices;
 using Domain.Enums;
@@ -55,6 +56,10 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
                 .FirstOrDefaultAsync(candidate => candidate.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineSessionDto>(releaseBlock, ErrorKind.Conflict);
 
             // Do not rely on the Web button to enforce these prerequisites: API callers
             // must not be able to move a task into Planning when there is no online native
@@ -181,6 +186,10 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineSessionDto>(releaseBlock, ErrorKind.Conflict);
 
             // Serialize the final repository gate and pipeline command insert with GitSync enqueue.
             // Both operations update the same project row inside their transaction, so a new
