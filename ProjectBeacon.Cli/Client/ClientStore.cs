@@ -174,6 +174,9 @@ public sealed class WorkstationSettings
             root.Remove("agentRuntime");
             var settings = JsonSerializer.Deserialize<WorkstationSettings>(root.ToJsonString(), JsonOptions)
                 ?? new WorkstationSettings();
+            settings.AutoPullMode = string.Equals(settings.AutoPullMode?.Trim(), "Off", StringComparison.OrdinalIgnoreCase)
+                ? "Off" : "WhenSafe";
+            settings.AutoSyncIntervalMinutes = Math.Clamp(settings.AutoSyncIntervalMinutes, 2, 120);
             // Snapshot was the old implicit default, not an intentional opt-out. Migrate
             // those settings to Branch; the TUI persists WorkspaceModeConfigured=true
             // whenever the user deliberately chooses Branch or Snapshot.
