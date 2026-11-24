@@ -153,7 +153,9 @@ internal static class ReleasePrepareExecutor
 
         if (metadata.PreparedCommitSha is not null)
         {
-            var existing = await ReadExistingPreparationAsync(worktree, filters, releaseId, version, tagName, targetBranch, ct);
+            var existing = await ReadExistingPreparationAsync(
+                worktree, filters, releaseId, candidateId, version, tagName, targetBranch,
+                versionPolicyRevision, releaseRevision, snapshotJson, ct);
             if (existing.Error is not null || existing.CommitSha is null)
                 return Fail(existing.Error ?? "Saved ReleasePrepare commit could not be verified.");
             return await PublishBranchAsync(worktree, filters, originUrl, repository, metadata,
