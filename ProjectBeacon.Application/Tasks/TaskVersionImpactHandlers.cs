@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using System.Text.Json;
+using Application.Audit;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
@@ -89,8 +91,13 @@ public sealed class GetTaskVersionImpactHandler
 public sealed class SetTaskVersionImpactHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter _auditWriter;
 
-    public SetTaskVersionImpactHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public SetTaskVersionImpactHandler(IBeaconDbFactory dbFactory, IAuditWriter auditWriter)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result<TaskVersionImpactDto>> HandleAsync(
         SetTaskVersionImpactCommand command, CancellationToken ct = default)
@@ -113,9 +120,26 @@ public sealed class SetTaskVersionImpactHandler
             return Result.Failure<TaskVersionImpactDto>(
                 "Version impact changed since it was loaded. Read it again and retry.", ErrorKind.Conflict);
 
+        var previousImpact = task.VersionImpact;
+        task.SetVersionImpact(command.Impact, command.Rationale);
+        var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
+            .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(ct);
+        _auditWriter.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "task.version_impact.declared",
+            "TaskVersionImpact",
+            task.Id.ToString("D"),
+            orgId,
+            task.ProjectId,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                previousImpact,
+                impact = task.VersionImpact,
+                rationale = task.VersionImpactRationale,
+                revision = task.VersionImpactRevision
+            })));
         try
         {
-            task.SetVersionImpact(command.Impact, command.Rationale);
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateConcurrencyException)
@@ -135,8 +159,13 @@ public sealed class SetTaskVersionImpactHandler
 public sealed class ReviewTaskVersionImpactHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuditWriter _auditWriter;
 
-    public ReviewTaskVersionImpactHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ReviewTaskVersionImpactHandler(IBeaconDbFactory dbFactory, IAuditWriter auditWriter)
+    {
+        _dbFactory = dbFactory;
+        _auditWriter = auditWriter;
+    }
 
     public async Task<Result<TaskVersionImpactDto>> HandleAsync(
         ReviewTaskVersionImpactCommand command, CancellationToken ct = default)
@@ -181,9 +210,29 @@ public sealed class ReviewTaskVersionImpactHandler
             return Result.Failure<TaskVersionImpactDto>(
                 "Version impact changed since it was reviewed. Read it again and retry.", ErrorKind.Conflict);
 
+        task.ReviewVersionImpact(command.Decision, command.Note, reviewSessionId);
+        var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
+            .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(ct);
+        _auditWriter.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            command.Decision == "Confirmed"
+                ? "task.version_impact.confirmed"
+                : "task.version_impact.challenged",
+            "TaskVersionImpact",
+            task.Id.ToString("D"),
+            orgId,
+            task.ProjectId,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                impact = task.VersionImpact,
+                rationale = task.VersionImpactRationale,
+                decision = command.Decision,
+                note = task.VersionImpactReviewNote,
+                reviewSessionId,
+                revision = task.VersionImpactRevision
+            })));
         try
         {
-            task.ReviewVersionImpact(command.Decision, command.Note, reviewSessionId);
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateConcurrencyException)
