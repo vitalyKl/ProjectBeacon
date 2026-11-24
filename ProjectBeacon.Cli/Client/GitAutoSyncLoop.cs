@@ -119,6 +119,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 RecordSkipped(project, "NotGitRepository", now);
                 continue;
             }
+            if (status.Error == "GitSyncBusy")
+            {
+                RecordSkipped(project, "GitSyncBusy", now);
+                continue;
+            }
             if (status.Error is not null || status.Result is null)
             {
                 RecordFailure(project, status.Error ?? "GitSyncResultUnavailable", now);
@@ -146,6 +151,28 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 && result.HasUpstream
                 && !result.Diverged)
             {
+                var permission = await RecheckProjectMutationStateAsync(project.ProjectId, ct);
+                if (permission.Error is not null)
+                {
+                    RecordFailure(project, permission.Error, _timing.TimeProvider.GetUtcNow(), result);
+                    continue;
+                }
+                if (permission.Project is null || permission.Project.ManualGitSyncActive)
+                {
+                    RecordSkipped(project, "ManualGitSyncActive", _timing.TimeProvider.GetUtcNow());
+                    continue;
+                }
+                if (permission.Project.GitLandActive)
+                {
+                    RecordSkipped(project, "GitLandActive", _timing.TimeProvider.GetUtcNow());
+                    continue;
+                }
+                if (permission.Project.CheckoutMutationActive)
+                {
+                    RecordSkipped(project, "CheckoutMutationActive", _timing.TimeProvider.GetUtcNow());
+                    continue;
+                }
+
                 var pull = await ExecuteGitSyncAsync(project, GitSyncMode.PullFastForward, automatic: true, ct);
                 if (pull.Result is { } pullResult)
                 {
@@ -189,6 +216,28 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 lastAutoPull, lastError, blockedReason);
             if (_snapshot.Set(state))
                 _runtimeState.Log($"repository status changed for project {project.ProjectId}: {Describe(state)}");
+        }
+    }
+
+    private async Task<(DeviceProjectRuntimeDto? Project, string? Error)> RecheckProjectMutationStateAsync(
+        Guid projectId,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var response = await _http.GetAsync("/v1/devices/me/project-runtimes", ct);
+            if (!response.IsSuccessStatusCode)
+                return (null, "RuntimeDiscoveryUnavailable");
+            var projects = await response.Content.ReadFromJsonAsync<List<DeviceProjectRuntimeDto>>(_json, ct) ?? [];
+            return (projects.FirstOrDefault(project => project.ProjectId == projectId), null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or IOException)
+        {
+            return (null, "RuntimeDiscoveryUnavailable");
         }
     }
 
@@ -282,6 +331,8 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
     {
         if (error?.Contains("not a Git repository", StringComparison.OrdinalIgnoreCase) == true)
             return "NotGitRepository";
+        if (error?.Equals("GitSyncBusy", StringComparison.Ordinal) == true)
+            return "GitSyncBusy";
         if (error?.Contains("directory does not exist", StringComparison.OrdinalIgnoreCase) == true)
             return "ProjectDirectoryUnavailable";
         return "GitSyncFailed";

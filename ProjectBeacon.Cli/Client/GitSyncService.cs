@@ -70,6 +70,13 @@ internal sealed class GitSyncService
             return (false, null, "The configured project directory is not a Git repository.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+        IDisposable? syncLease = automatic
+            ? await GitSyncExecutionGate.TryAcquireAsync(repositoryRoot, ct)
+            : await GitSyncExecutionGate.AcquireAsync(repositoryRoot, ct);
+        if (syncLease is null)
+            return (false, null, "GitSyncBusy");
+        using var syncOperation = syncLease;
+
         var hooksDirectory = CreateHooksDirectory();
         try
         {
