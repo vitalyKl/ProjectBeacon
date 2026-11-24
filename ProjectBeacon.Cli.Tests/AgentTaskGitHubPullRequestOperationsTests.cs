@@ -308,7 +308,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
         Assert.Equal(12L, comment["id"]!.GetValue<long>());
         Assert.Equal("src/Version.cs", comment["path"]!.GetValue<string>());
         Assert.Equal(42, comment["line"]!.GetValue<int>());
-        Assert.False(comment.ContainsKey("diff_hunk"));
+        Assert.False(comment.AsObject().ContainsKey("diff_hunk"));
     }
 
     [Fact]
