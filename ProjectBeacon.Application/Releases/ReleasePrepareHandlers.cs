@@ -47,9 +47,20 @@ internal static class ReleasePreparePayload
         var milestones = await db.Milestones.AsNoTracking()
             .Where(milestone => milestone.ProjectId == release.ProjectId && milestone.ReleaseId == release.Id)
             .Include(milestone => milestone.Tasks)
+                .ThenInclude(task => task.Dependencies)
             .OrderBy(milestone => milestone.Order)
             .ThenBy(milestone => milestone.Id)
             .ToListAsync(ct);
+        var taskIds = milestones.SelectMany(milestone => milestone.Tasks)
+            .Select(task => task.Id).Distinct().ToArray();
+        var checklistSteps = taskIds.Length == 0
+            ? []
+            : await db.TaskSteps.AsNoTracking()
+                .Where(step => taskIds.Contains(step.TaskId))
+                .OrderBy(step => step.TaskId)
+                .ThenBy(step => step.SortOrder)
+                .ThenBy(step => step.Id)
+                .ToListAsync(ct);
 
         var warnings = new List<string>();
         var milestoneSnapshots = new List<object>();
@@ -72,11 +83,26 @@ internal static class ReleasePreparePayload
                 taskSnapshots.Add(new
                 {
                     taskId = task.Id,
+                    milestoneId = task.MilestoneId,
                     title = task.Title,
+                    description = task.Description,
                     status = task.Status.ToString(),
                     priority = task.Priority.ToString(),
                     type = task.Type.ToString(),
+                    labelId = task.LabelId,
                     subStage = task.SubStage.ToString(),
+                    reviewNotes = task.ReviewNotes,
+                    dependencies = task.Dependencies.Select(dependency => dependency.DependentTaskId)
+                        .OrderBy(dependencyId => dependencyId).ToArray(),
+                    checklistSteps = checklistSteps.Where(step => step.TaskId == task.Id)
+                        .Select(step => new
+                        {
+                            step.Id,
+                            step.Title,
+                            step.SortOrder,
+                            step.DoneAt,
+                            step.IsDone
+                        }).ToArray(),
                     stateRevision = task.StateRevision,
                     contentRevision = task.ContentRevision,
                     versionImpact = task.VersionImpact,
