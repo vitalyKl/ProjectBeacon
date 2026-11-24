@@ -90,6 +90,35 @@ public sealed class ProjectVersionPolicyCatalogTests
             () => project.InitializeOfficialVersion("0.7.5.9"));
     }
 
+    [Theory]
+    [InlineData("https://beacon.example/v1/version", true)]
+    [InlineData("http://beacon.example/v1/version", false)]
+    [InlineData("https://beacon.example/version", false)]
+    [InlineData("https://user:secret@beacon.example/v1/version", false)]
+    [InlineData("https://beacon.example/v1/version?token=x", false)]
+    [InlineData("https://beacon.example/v1/version#fragment", false)]
+    public void Validate_RequiresSafeDeploymentVersionEndpoint(string endpoint, bool expected)
+    {
+        var policy = new ProjectVersionPolicy(
+            "SemVer", 3, null, "v{version}", false, [],
+            DeploymentVersionEndpoint: endpoint);
+
+        Assert.Equal(expected, ProjectVersionPolicyCatalog.Validate(policy, out _));
+    }
+
+    [Fact]
+    public void TryRead_RoundTripsDeploymentVersionEndpoint()
+    {
+        var original = new ProjectVersionPolicy(
+            "SemVer", 3, null, "v{version}", false, [],
+            DeploymentVersionEndpoint: "https://beacon.example/v1/version");
+
+        var json = ProjectVersionPolicyCatalog.Serialize(original);
+
+        Assert.True(ProjectVersionPolicyCatalog.TryRead(json, out var parsed, out var error), error);
+        Assert.Equal(original.DeploymentVersionEndpoint, parsed.DeploymentVersionEndpoint);
+    }
+
     [Fact]
     public void TryRead_RejectsUnknownPolicyProperties()
     {
