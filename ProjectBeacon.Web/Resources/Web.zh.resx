@@ -3348,4 +3348,10 @@ orthstar</value>
   <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
     <value>无法在“{0}”中取消仓库同步：工作站已领取该命令。服务器无法停止正在运行的 Git 操作。请等待其完成并检查结果。</value>
   </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>无法浏览工作站目录。请检查工作站是否在线，以及所选根目录是否可用。</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>无法加载可用项目列表。请刷新页面后重试。</value>
+  </data>
 </root>

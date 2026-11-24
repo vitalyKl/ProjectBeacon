@@ -3330,4 +3330,10 @@
   <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
     <value>Нельзя отменить синхронизацию репозитория в разделе «{0}»: рабочая станция уже забрала команду. Сервер не может остановить выполняющуюся Git-операцию. Дождитесь её завершения и проверьте результат.</value>
   </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Не удалось открыть каталог на рабочей станции. Проверьте, что станция подключена и выбранный корневой каталог доступен.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить список доступных проектов. Обновите страницу и повторите попытку.</value>
+  </data>
 </root>

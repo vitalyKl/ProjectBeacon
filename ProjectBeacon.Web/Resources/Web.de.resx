@@ -3340,4 +3340,10 @@ orthstar</value>
   <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
     <value>Die Repository-Synchronisierung im Bereich „{0}“ kann nicht abgebrochen werden: Die Workstation hat den Befehl bereits übernommen. Ein laufender Git-Vorgang kann nicht vom Server gestoppt werden. Warten Sie den Abschluss ab und prüfen Sie das Ergebnis.</value>
   </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Das Verzeichnis auf der Workstation konnte nicht geöffnet werden. Prüfen Sie, ob die Workstation online und das ausgewählte Stammverzeichnis verfügbar ist.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Die verfügbaren Projekte konnten nicht geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
+  </data>
 </root>

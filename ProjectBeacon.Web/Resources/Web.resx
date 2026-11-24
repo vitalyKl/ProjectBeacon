@@ -3539,4 +3539,10 @@ No Beacon-hosted coding agent.</value>
   <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
     <value>Cannot cancel repository synchronization in {0}: the workstation has already claimed the command. A running Git operation cannot be stopped from the server. Let it finish and review the result.</value>
   </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Could not browse the workstation directory. Check that the workstation is online and that the selected root is available.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Could not load the available projects. Refresh the page and try again.</value>
+  </data>
 </root>

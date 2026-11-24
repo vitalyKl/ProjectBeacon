@@ -51,24 +51,34 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var state = await Auth.GetAuthenticationStateAsync();
-        var user = state.User;
-        if (user.Identity?.IsAuthenticated != true
-            || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
-            return;
-
-        var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
-        var result = await MyProjects.HandleAsync(uid, isAdmin);
-        if (!result.Success || result.Value is null)
+        try
         {
-            Notifications.Failure(result, L["Projects"].Value, L["Load"].Value);
-            return;
-        }
+            var state = await Auth.GetAuthenticationStateAsync();
+            var user = state.User;
+            if (user.Identity?.IsAuthenticated != true
+                || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
+                return;
 
-        _projects = [.. result.Value.Projects.OrderBy(p => p.Name)];
-        if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var activeId)
-            && _projects.Any(p => p.Id == activeId))
-            _selected = activeId;
+            var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
+            var result = await MyProjects.HandleAsync(uid, isAdmin);
+            if (!result.Success || result.Value is null)
+            {
+                Notifications.Failure(result, L["Projects"].Value, L["Load"].Value);
+                return;
+            }
+
+            _projects = [.. result.Value.Projects.OrderBy(p => p.Name)];
+            if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var activeId)
+                && _projects.Any(p => p.Id == activeId))
+                _selected = activeId;
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(
+                exception,
+                "ProjectSwitcherLoadFailed",
+                "load available projects");
+        }
     }
 
     private void OnSelected(Guid projectId)

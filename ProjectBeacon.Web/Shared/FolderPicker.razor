@@ -133,6 +133,14 @@ else
                 _error = Notifications.FormatDiagnosticMessage("FolderListingInvalid", diagnosticId);
             }
         }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception,
+                "browse workstation directory",
+                new { DeviceId = deviceId, Path = path, RootKind });
+            _error = Notifications.FormatDiagnosticMessage("FolderBrowseFailed", diagnosticId);
+        }
         finally
         {
             _busy = false;

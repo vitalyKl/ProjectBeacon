@@ -3348,4 +3348,10 @@ orthstar</value>
   <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
     <value>{0} でリポジトリ同期をキャンセルできません。ワークステーションがすでにコマンドを取得しています。実行中の Git 操作はサーバーから停止できません。完了を待って結果を確認してください。</value>
   </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>ワークステーションのフォルダーを参照できませんでした。ワークステーションがオンラインで、選択したルートが利用可能であることを確認してください。</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>利用可能なプロジェクトを読み込めませんでした。ページを再読み込みして、もう一度お試しください。</value>
+  </data>
 </root>
