@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Common;
 using Application.Tasks;
 using Infrastructure.Data;
 using Domain.Entities.Tasks;
