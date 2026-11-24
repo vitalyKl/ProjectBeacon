@@ -72,7 +72,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
 
                 var interval = Math.Clamp(settings.AutoSyncIntervalMinutes, 2, 120);
                 var jitter = Math.Clamp(_timing.GitAutoSyncJitterFactor(), -0.2, 0.2);
-                var delay = TimeSpan.FromMinutes(interval * (1d + jitter));
+                var delay = TimeSpan.FromMinutes(Math.Clamp(interval * (1d + jitter), 2d, 120d));
                 try { await _timing.DelayAsync(delay, ct); }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             }

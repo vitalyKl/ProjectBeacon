@@ -166,7 +166,7 @@
                     <MudTd DataLabel="@L["Project"]"><span title="@context.ProjectId">@context.ProjectId.ToString("N")[..8]</span></MudTd>
                     <MudTd DataLabel="@L["Branch"]">@(context.Branch ?? "-")</MudTd>
                     <MudTd DataLabel="@L["Status"]">
-                        <StatusChip Color="@(context.LastErrorCode is not null || context.Diverged ? Color.Error : context.Behind > 0 ? Color.Warning : Color.Success)"
+                        <StatusChip Color="@(context.LastErrorCode is not null || context.Diverged ? Color.Error : context.Behind > 0 || context.BlockedReason is not null || !context.Clean || context.Detached || !context.HasUpstream ? Color.Warning : Color.Success)"
                                     Label="@RepoSyncStatusLabel(context)" />
                     </MudTd>
                     <MudTd DataLabel="@L["Updated"]">
