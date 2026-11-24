@@ -137,7 +137,7 @@ else
                                     <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">@L["HotfixDeployedSha"]: @(release.DeployedCommitSha ?? "—")</MudText>
                                     @if (!string.IsNullOrWhiteSpace(release.DeploymentWorkflowRunUrl))
                                     {
-                                        <MudLink Href="@release.DeploymentWorkflowRunUrl" Target="_blank" Rel="noopener noreferrer">
+                                        <MudLink Href="@release.DeploymentWorkflowRunUrl" Target="_blank">
                                             @L["HotfixDeploymentRun"]
                                         </MudLink>
                                     }
