@@ -500,7 +500,7 @@ else
     [Parameter] public Guid TaskId { get; set; }
     private TaskItemDto? _task;
     private string? _taskLoadErrorMessage;
-    private TaskItemStatus _status = TaskItemStatus.Todo;
+    private readonly UiBackgroundFailureTracker _taskLoadFailures = new();    private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
     private CancellationTokenSource? _pipelinePoll;
     private PipelineStateDto? _pipeline;
@@ -644,6 +644,22 @@ else
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
+
+                if (_task is null && _taskLoadErrorMessage is not null)
+                {
+                    await TryRecoverTaskLoadAsync();
+                    if (_task is not null)
+                    {
+                        await ReloadPipeline(ct, isBackground: true);
+                        await ReloadSteps();
+                        await ReloadWorkspace();
+                        await RestorePendingGitSyncCommandAsync();
+                    }
+
+                    await InvokeAsync(StateHasChanged);
+                    continue;
+                }
+
                 var repositorySyncPending = _pipeline?.Preflight?.RepositorySyncInProgress == true
                     || _gitSyncCommandPending
                     || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null
@@ -780,9 +796,89 @@ else
         _pipelinePoll?.Dispose();
     }
 
+    private async Task TryRecoverTaskLoadAsync()
+    {
+        Result<TaskItemDto> result;
+        try
+        {
+            result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        }
+        catch (Exception exception)
+        {
+            if (_taskLoadFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(
+                    exception, "load task details", new { TaskId });
+                _taskLoadErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "TaskLoadUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient task detail recovery exception. TaskId={TaskId}", TaskId);
+            return;
+        }
+
+        if (!result.Success)
+        {
+            var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+            var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                or ErrorCodes.NotFound or ErrorCodes.Conflict;
+            if (isPermanentFailure || _taskLoadFailures.RecordFailure())
+            {
+                if (isPermanentFailure)
+                    _taskLoadFailures.RecordSuccess();
+                _taskLoadErrorMessage = Notifications.FormatFailure(
+                    result, L["Tasks"].Value, L["Load"].Value, new { TaskId });
+            }
+            else
+                Logger.LogWarning(
+                    "Transient task detail recovery failed. TaskId={TaskId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                    TaskId, errorCode, result.Error);
+            return;
+        }
+
+        _taskLoadFailures.RecordSuccess();
+        _taskLoadErrorMessage = null;
+        _task = result.Value;
+        _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus)
+            ? parsedStatus
+            : TaskItemStatus.Todo;
+
+        if (_task is null)
+            return;
+
+        _canManageRepositorySync = await GetGitSyncCommand.CanAdministerAsync(_task.ProjectId, _actorContext);
+        var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
+        if (labels.Success)
+            _labels = labels.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                labels, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "labels" }));
+
+        var milestones = await ListMilestones.HandleAsync(
+            new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
+        if (milestones.Success)
+            _milestones = milestones.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                milestones, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "milestones" }));
+
+        await ReloadTaskProposals();
+    }
+
     private async Task Reload()
     {
-        var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        Result<TaskItemDto> result;
+        try
+        {
+            result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception, "load task details", new { TaskId });
+            _taskLoadErrorMessage = Notifications.FormatDiagnosticMessage("TaskLoadUnavailable", diagnosticId);
+            return;
+        }
         if (!result.Success)
         {
             _taskLoadErrorMessage = Notifications.FormatFailure(
@@ -790,6 +886,7 @@ else
             return;
         }
 
+        _taskLoadFailures.RecordSuccess();
         _taskLoadErrorMessage = null;
         _task = result.Value;
         _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus) ? parsedStatus : TaskItemStatus.Todo;
@@ -1072,16 +1169,23 @@ else
             var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)), ct);
             if (!result.Success)
             {
-                if (!isBackground || _pipelineRefreshFailures.RecordFailure())
+                var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _pipelineRefreshFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _pipelineRefreshFailures.RecordSuccess();
                     _pipelineRefreshErrorMessage = Notifications.FormatFailure(
                         result,
                         L["Tasks"].Value,
                         L["Load"].Value,
                         new { TaskId });
+                }
                 else
                     Logger.LogWarning(
                         "Transient task pipeline read failure. TaskId={TaskId}, ErrorCode={ErrorCode}, Detail={Detail}",
-                        TaskId, result.ErrorCode ?? ErrorCodes.For(result.Kind), result.Error);
+                        TaskId, errorCode, result.Error);
                 return false;
             }
 

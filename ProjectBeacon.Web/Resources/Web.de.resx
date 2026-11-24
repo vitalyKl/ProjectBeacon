@@ -3364,4 +3364,7 @@ orthstar</value>
   <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>Der Aufgabenkontext für diesen Chat konnte nicht geladen werden. Der Chat kann ohne diesen Kontext fortgesetzt werden.</value>
   </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Die Aufgabe konnte nicht geladen werden. Der Dienst für Aufgabendetails ist nicht verfügbar. Solange diese Seite geöffnet bleibt, wird automatisch erneut versucht. Diagnose-ID: {0}</value>
+  </data>
 </root>

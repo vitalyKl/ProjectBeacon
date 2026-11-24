@@ -3354,4 +3354,7 @@
   <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>Не удалось загрузить контекст задачи для этого чата. Можно продолжить диалог без контекста задачи.</value>
   </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Не удалось загрузить задачу. Сервис получения сведений о задаче недоступен. Страница будет автоматически повторять запрос. Диагностический ID: {0}</value>
+  </data>
 </root>

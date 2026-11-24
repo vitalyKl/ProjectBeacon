@@ -275,8 +275,9 @@
             return;
         }
 
-        if (_waitingTasksFailures.RecordSuccess())
-            _waitingTasksErrorMessage = null;
+        // Clear a permanent or previously reported background error on any successful poll.
+        _waitingTasksFailures.RecordSuccess();
+        _waitingTasksErrorMessage = null;
         _waitingTasks = result.Value!.ToList();
     }
 
@@ -564,8 +565,10 @@
                                 "Transient chat dock poll result failure. SessionId={SessionId}, ErrorCode={ErrorCode}, Detail={Detail}",
                                 sessionId, pollErrorCode, pollError);
                     }
-                    else if (_pollFailures.RecordSuccess())
+                    else
                     {
+                        // Clear permanent errors as soon as a subsequent refresh succeeds.
+                        _pollFailures.RecordSuccess();
                         _pollErrorMessage = null;
                     }
 
@@ -644,7 +647,7 @@
             if (!isBackground || _proxyStatusFailures.RecordFailure())
             {
                 if (!isBackground)
-                    _proxyStatusFailures.RecordFailure();
+                    _proxyStatusFailures.RecordSuccess();
                 var diagnosticId = Notifications.LogException(exception, "read chat dock model runtime status");
                 _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
                     "ProxyStatusUnavailable", diagnosticId);

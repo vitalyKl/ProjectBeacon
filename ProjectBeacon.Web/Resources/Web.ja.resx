@@ -3372,4 +3372,7 @@ orthstar</value>
   <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>このチャットのタスクコンテキストを読み込めませんでした。コンテキストなしで会話を続けることができます。</value>
   </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>タスクを読み込めませんでした。タスク詳細サービスを利用できません。このページを開いている間、自動的に再試行します。診断 ID: {0}</value>
+  </data>
 </root>

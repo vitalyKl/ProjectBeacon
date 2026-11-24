@@ -3563,4 +3563,7 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>Could not load the task context for this chat. The conversation can continue without it.</value>
   </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Could not load this task. The task details service is unavailable. Retry automatically while this page remains open. Diagnostic ID: {0}</value>
+  </data>
 </root>
