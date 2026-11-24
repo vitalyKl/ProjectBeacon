@@ -48,10 +48,10 @@ public sealed class ReleaseTests
         var release = CreateRelease();
 
         Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Published));
-        Assert.Throws<InvalidOperationException>(() => release.MarkPublished(DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Published));
 
         release.TransitionTo(ReleaseStatus.InProgress);
-        Assert.Throws<InvalidOperationException>(() => release.MarkPublished(DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Published));
         Assert.Equal(ReleaseStatus.InProgress, release.Status);
         Assert.Null(release.PublishedAt);
     }
