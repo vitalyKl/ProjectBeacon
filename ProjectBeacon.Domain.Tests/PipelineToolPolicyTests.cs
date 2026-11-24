@@ -86,10 +86,10 @@ public sealed class PipelineToolPolicyTests
     public void StructuredGitTools_AreRestrictedByPipelineRole()
     {
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest, PipelineToolPolicy.ForgeRead },
             PipelineToolPolicy.GitToolsForRole("Planner"));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest, PipelineToolPolicy.ForgeRead },
             PipelineToolPolicy.GitToolsForRole("Actor"));
         Assert.DoesNotContain(PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitToolsForRole("Actor"));
         Assert.DoesNotContain(PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitToolsForRole("Planner"));
@@ -98,7 +98,7 @@ public sealed class PipelineToolPolicyTests
         Assert.True(PipelineToolPolicy.IsGitToolAllowed("Actor", PipelineToolPolicy.GitPublish, allowAgentGitPublish: true));
         Assert.False(PipelineToolPolicy.IsGitToolAllowed("Review", PipelineToolPolicy.GitPublish, allowAgentGitPublish: true));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitPullRequest },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitPullRequest, PipelineToolPolicy.ForgeRead },
             PipelineToolPolicy.GitToolsForRole("Review"));
         Assert.Empty(PipelineToolPolicy.GitToolsForRole("Eval"));
         Assert.Empty(PipelineToolPolicy.GitToolsForRole(null));
@@ -108,6 +108,8 @@ public sealed class PipelineToolPolicyTests
     public void InteractivePlan_AllowsGitInspectionButDeniesGitMutation()
     {
         Assert.Contains(PipelineToolPolicy.GitInfo, PipelineToolPolicy.InteractivePlanTools);
+        Assert.Contains(PipelineToolPolicy.ForgeRead, PipelineToolPolicy.InteractivePlanTools);
+        Assert.DoesNotContain(PipelineToolPolicy.ForgeRead, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Contains(PipelineToolPolicy.GitCommit, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Contains(PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.PipelinePlanDeniedTools);
         Assert.Contains(PipelineToolPolicy.GitPublish, PipelineToolPolicy.PipelinePlanDeniedTools);
