@@ -2772,11 +2772,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProjectId", "HotfixRequestId")
                         .IsUnique()
-                        .HasFilter("\\"HotfixRequestId\\" IS NOT NULL");
+            .HasFilter("\"HotfixRequestId\" IS NOT NULL");
 
                     b.HasIndex("ProjectId", "ForwardPortOfTaskId")
                         .IsUnique()
-                        .HasFilter("\\"ForwardPortOfTaskId\\" IS NOT NULL");
+            .HasFilter("\"ForwardPortOfTaskId\" IS NOT NULL");
 
                     b.HasIndex("ProjectId", "HotfixSourceReleaseId");
 
