@@ -501,8 +501,11 @@ else
             }
             catch (Exception exception)
             {
-                Logger.LogWarning(exception,
-                    "Could not restore pending GitSync command for project {ProjectId}", projectId);
+                Notifications.ReportException(
+                    exception,
+                    "GitSyncStatusFailed",
+                    "restore pending repository synchronization command",
+                    new { ProjectId = projectId });
             }
         }
     }
