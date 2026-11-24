@@ -19,6 +19,7 @@ using Domain.Enums;
 using Application.Persistence;
 using Application.Proposals;
 using Application.Projects;
+using Application.Releases;
 using Application.Tasks;
 using Microsoft.EntityFrameworkCore;
 
@@ -1156,6 +1157,33 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
                 "Project version policy or Release changed after Prepare. Candidate evidence was not committed.");
             AddAudit(db, project, releaseId, "project.release.verify_failed",
                 new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+            return;
+        }
+
+        if (!ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var currentPolicy, out _))
+        {
+            release.RecordVerificationFailure(row.Id,
+                "The project version policy became invalid after Prepare. Candidate evidence was not committed.");
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+            return;
+        }
+
+        var currentScope = await ReleasePreparePayload.BuildSnapshotAsync(
+            db, release, project, currentPolicy, ct);
+        if (currentScope.Error is not null
+            || !ReleasePreparePayload.MatchesSnapshot(verified.SnapshotJson, currentScope.Json))
+        {
+            release.RecordVerificationFailure(row.Id,
+                "The Release milestone/task scope changed after Prepare. Candidate evidence was not committed; cancel this Release and prepare a new one from the updated task scope.");
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new
+                {
+                    candidateId,
+                    workstationId = row.DeviceId,
+                    error = release.PreparationError,
+                    snapshotBuildError = currentScope.Error
+                });
             return;
         }
 
