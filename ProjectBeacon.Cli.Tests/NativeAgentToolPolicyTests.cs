@@ -35,6 +35,16 @@ public sealed class NativeAgentToolPolicyTests
     }
 
     [Fact]
+    public void ForgeRead_IsReadOnlyAndDoesNotReserveTheTaskWorktree()
+    {
+        Assert.False(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(PipelineToolPolicy.ForgeRead));
+        Assert.False(NativeAgentToolPolicy.IsPlanModeCommandExecutionBlocked("plan", PipelineToolPolicy.ForgeRead));
+        Assert.True(PipelineToolPolicy.InteractivePlanTools.Contains(
+            PipelineToolPolicy.ForgeRead, StringComparer.Ordinal));
+        Assert.DoesNotContain(PipelineToolPolicy.ForgeRead, PipelineToolPolicy.PipelinePlanDeniedTools);
+    }
+
+    [Fact]
     public void RequiresExclusiveWorktreeExecution_DoesNotSerializeReadOnlyGitInspection()
     {
         Assert.False(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution("git_info"));
