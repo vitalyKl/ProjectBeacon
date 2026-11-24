@@ -46,7 +46,15 @@ public sealed class AuditEventTests
     {
         var previousReleaseId = Guid.NewGuid();
         var releaseId = Guid.NewGuid();
-        const string detailsJson = """{"newState":"Planned","targetVersion":"0.7.5.9","targetBranch":"release/0.7.5.9","previousReleaseId":"11111111-1111-1111-1111-111111111111","releaseId":"22222222-2222-2222-2222-222222222222","count":3}""";
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            newState = "Planned",
+            targetVersion = "0.7.5.9",
+            targetBranch = "release/0.7.5.9",
+            previousReleaseId = previousReleaseId.ToString("D"),
+            releaseId = releaseId.ToString("D"),
+            count = 3
+        });
 
         var auditEvent = Create(detailsJson);
 
