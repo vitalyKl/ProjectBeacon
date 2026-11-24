@@ -3611,4 +3611,5 @@ No Beacon-hosted coding agent.</value>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>Published</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Cancelled</value></data>
 
+  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate is created by ReleasePrepare after policy, impact, landing, and validation checks pass.</value></data>
 </root>
