@@ -3018,4 +3018,24 @@
   <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Автоматически синхронизировать с удалённым репозиторием</value></data>
   <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon периодически получает изменения из upstream и выполняет fast-forward только для чистого репозитория без активной работы. Локальные изменения, расхождение истории, detached HEAD и активные сессии агентов не затрагиваются. Существующие локальные теги не перезаписываются и не удаляются.</value></data>
   <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Для включения настройки подключите рабочую станцию с версией клиента Beacon, поддерживающей AutoSync.</value></data>
+  <data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Политика версионирования проекта</value></data>
+  <data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon хранит официальную версию проекта и сверяет с ней настроенные version-файлы репозитория. Файлы репозитория являются проекциями; обычные сессии агентов не могут публиковать или менять официальную версию.</value></data>
+  <data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>Не удалось загрузить политику версионирования.</value></data>
+  <data name="OfficialProjectVersion" xml:space="preserve"><value>Официальная версия</value></data>
+  <data name="VersionNotInitialized" xml:space="preserve"><value>Не задана</value></data>
+  <data name="VersionScheme" xml:space="preserve"><value>Схема версионирования</value></data>
+  <data name="VersionSchemeNumeric" xml:space="preserve"><value>Числовые компоненты</value></data>
+  <data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="VersionSchemeCalendar" xml:space="preserve"><value>Календарная версия</value></data>
+  <data name="VersionComponentCount" xml:space="preserve"><value>Количество числовых компонентов</value></data>
+  <data name="VersionCalendarFormat" xml:space="preserve"><value>Формат даты</value></data>
+  <data name="VersionTagPattern" xml:space="preserve"><value>Шаблон Git-тега</value></data>
+  <data name="VersionTagPatternHelp" xml:space="preserve"><value>Используйте ровно один placeholder {version}, например v{version}.</value></data>
+  <data name="VersionAllowPrerelease" xml:space="preserve"><value>Разрешить prerelease-версии SemVer</value></data>
+  <data name="VersionManifestSources" xml:space="preserve"><value>Источники версии в manifest-файлах</value></data>
+  <data name="VersionManifestSourcesHelp" xml:space="preserve"><value>Один источник на строку: path|Format|selector. Примеры: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; для Regex укажите именованную группу (?&lt;version>...) или первую capture-группу.</value></data>
+  <data name="InitialOfficialVersion" xml:space="preserve"><value>Инициализировать официальную версию</value></data>
+  <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>Значение можно задать только один раз. Дальнейшее изменение официальной версии выполняется только через ReleasePrepare.</value></data>
+  <data name="SaveVersionPolicy" xml:space="preserve"><value>Сохранить политику версии</value></data>
+  <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Источник должен иметь формат path|Format|selector.</value></data>
 </root>
