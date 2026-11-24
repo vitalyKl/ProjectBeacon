@@ -3402,4 +3402,5 @@
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>Опубликован</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Отменён</value></data>
 
+  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate создаётся только через ReleasePrepare после проверок политики версии, impact, landing и валидации.</value></data>
 </root>
