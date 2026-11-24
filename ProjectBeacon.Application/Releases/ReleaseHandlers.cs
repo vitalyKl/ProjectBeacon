@@ -190,12 +190,14 @@ public sealed class CreateReleaseHandler
         if (!enabled.Success)
             return Result.Failure<ReleaseDto>(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
 
-        if (version is not null
-            && !ProjectVersionPolicyCatalog.TryNormalizeVersion(enabled.Value!, version, out var normalized, out var versionError))
-            return Result.Failure<ReleaseDto>(
-                versionError ?? "Target version does not match the project version policy.", ErrorKind.Validation);
-        else if (version is not null)
+        if (version is not null)
+        {
+            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
+                enabled.Value!, version, out var normalized, out var versionError))
+                return Result.Failure<ReleaseDto>(
+                    versionError ?? "Target version does not match the project version policy.", ErrorKind.Validation);
             version = normalized;
+        }
 
         var release = Release.Create(name, description, command.ProjectId, version, branch, request.Order);
         db.Releases.Add(release);
@@ -262,7 +264,8 @@ public sealed class UpdateReleaseHandler
 
         if (version is not null)
         {
-            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(enabled.Value!, version, out var normalized, out var versionError))
+            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
+                enabled.Value!, version, out var normalized, out var versionError))
                 return Result.Failure<ReleaseDto>(
                     versionError ?? "Target version does not match the project version policy.", ErrorKind.Validation);
             version = normalized;
