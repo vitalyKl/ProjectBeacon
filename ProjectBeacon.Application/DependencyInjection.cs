@@ -188,6 +188,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetReleaseStatusHandler>();
         services.AddTransient<DeleteReleaseHandler>();
         services.AddTransient<SetMilestoneReleaseHandler>();
+        services.AddTransient<PrepareReleaseHandler>();
+        services.AddTransient<VerifyReleaseLandingHandler>();
 
         services.AddTransient<CreateDeviceHandler>();
         services.AddTransient<ListDevicesHandler>();
