@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Client;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Application.Devices;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 internal sealed class DaemonAutoSyncLoop : IDaemonLoop
 {
@@ -120,6 +121,47 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
             RecordState(target.ProjectId, $"tags:{tags.NewTags}",
                 $"AutoSync project {target.ProjectId}: fetched {tags.NewTags} new tag(s).");
         }
+
+        foreach (var remoteLanding in target.RemoteLandings ?? [])
+        {
+            ct.ThrowIfCancellationRequested();
+            var verification = await AgentTaskGitHubRemoteLandingOperations.VerifyAsync(
+                target.LocalRoot, target.ProjectId, remoteLanding, ct);
+            if (verification.Request is null)
+            {
+                if (!string.IsNullOrWhiteSpace(verification.Status))
+                    RecordState(remoteLanding.TaskId, "remote-landing-check:" + verification.Status,
+                        $"AutoSync task {remoteLanding.TaskId}: {verification.Status}");
+                continue;
+            }
+
+            using var response = await _http.PostAsJsonAsync(
+                "v1/devices/me/remote-landings/reconcile",
+                verification.Request, JsonOptions, ct);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<DeviceRemoteLandingReconciliationResult>(
+                    JsonOptions, ct);
+                var status = result?.AlreadyRecorded == true ? "already-reconciled" : "reconciled";
+                RecordState(remoteLanding.TaskId, status,
+                    $"AutoSync task {remoteLanding.TaskId}: GitHub PR #{verification.Request.PullRequestNumber} merge was reconciled and the task is {result?.TaskStatus ?? "closed"}.");
+            }
+            else
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                var state = $"remote-landing-http:{(int)response.StatusCode}";
+                RecordState(remoteLanding.TaskId, state,
+                    $"AutoSync task {remoteLanding.TaskId}: remote merge proof was not accepted (HTTP {(int)response.StatusCode}). {Clip(errorBody)}");
+            }
+        }
+    }
+
+    private static string Clip(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+        var safe = value.Replace('\\r', ' ').Replace('\\n', ' ').Trim();
+        return safe.Length <= 500 ? safe : safe[..500];
     }
 
     private void RecordState(Guid projectId, string state, string message)
