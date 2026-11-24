@@ -15,7 +15,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         DeviceRemoteLandingReconciliationRequest? Request,
         string? Status);
 
-    private sealed record WorktreeEntry(string Path, string? Branch);
+    internal sealed record WorktreeEntry(string Path, string? Branch);
 
     public static async Task<VerificationResult> VerifyAsync(
         string localRoot,
