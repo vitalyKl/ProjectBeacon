@@ -236,21 +236,6 @@ public sealed partial class PipelineHandlerTests
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
 
-        await using (var projectDb = factory.CreateDbContext())
-        {
-            var updatedProject = await projectDb.Projects.IgnoreQueryFilters()
-                .Where(project => project.Id == projectId)
-                .ExecuteUpdateAsync(update => update.SetProperty(
-                    project => project.ReviewCheckCommand, "dotnet test"),
-                    TestContext.Current.CancellationToken);
-            Assert.Equal(1, updatedProject);
-
-            var configuredCommand = await projectDb.Projects.IgnoreQueryFilters()
-                .Where(project => project.Id == projectId)
-                .Select(project => project.ReviewCheckCommand)
-                .SingleAsync(TestContext.Current.CancellationToken);
-            Assert.Equal("dotnet test", configuredCommand);
-        }
         var commandHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes("dotnet test"))).ToLowerInvariant();
@@ -268,7 +253,28 @@ public sealed partial class PipelineHandlerTests
                 otherDeviceId,
                 "main");
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
+        // Configure the project command after saving the tracked ReviewRun so a stale
+        // project entity in the shared test DbContext cannot overwrite this update.
+        await using (var projectDb = factory.CreateDbContext())
+        {
+            var updatedProject = await projectDb.Projects.IgnoreQueryFilters()
+                .Where(project => project.Id == projectId)
+                .ExecuteUpdateAsync(update => update.SetProperty(
+                    project => project.ReviewCheckCommand, "dotnet test"),
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(1, updatedProject);
+
+            var configuredCommand = await projectDb.Projects.IgnoreQueryFilters()
+                .Where(project => project.Id == projectId)
+                .Select(project => project.ReviewCheckCommand)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            Assert.Equal("dotnet test", configuredCommand);
+        }
+
+        using (TenantScope.EnterUnscoped())
+        {
             var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Equal(pinnedDevice.Id, persistedTask.PipelineDeviceId);
