@@ -117,6 +117,9 @@ public sealed class CreateHotfixTaskHandlerTests : IDisposable
             """{"files":[],"checks":[]}""",
             deployedAtUtc.AddMinutes(-2));
         release.MarkCandidate(candidate);
+        // CandidateSnapshot is deliberately ignored as an EF navigation; persist the immutable
+        // evidence row explicitly just as ReleasePrepareCompletion does in production.
+        _db.ReleaseCandidateSnapshots.Add(candidate);
 
         release.BeginPublication(_deviceId, publishCommandId, """{"candidateId":"immutable"}""");
         release.CompletePublication(
