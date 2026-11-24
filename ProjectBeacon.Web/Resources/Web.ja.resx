@@ -3441,4 +3441,7 @@ orthstar</value>
   <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>このワークステーションでプロジェクトフォルダーを利用できません。</value>
   </data>
+  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+    <value>同期中にプロジェクトの割り当て先ディレクトリが変更されました — 更新を延期</value>
+  </data>
 </root>

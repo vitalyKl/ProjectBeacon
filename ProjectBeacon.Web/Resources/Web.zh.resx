@@ -3441,4 +3441,7 @@ orthstar</value>
   <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>此工作站上的项目文件夹不可用。</value>
   </data>
+  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+    <value>同步期间项目绑定目录已更改 — 延后更新</value>
+  </data>
 </root>

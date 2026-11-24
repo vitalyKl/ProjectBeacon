@@ -3632,4 +3632,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>The project folder is unavailable on this workstation.</value>
   </data>
+  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+    <value>The attached project directory changed during synchronization — update deferred</value>
+  </data>
 </root>

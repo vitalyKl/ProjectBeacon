@@ -3433,4 +3433,7 @@ orthstar</value>
   <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>Der Projektordner ist auf dieser Workstation nicht verfügbar.</value>
   </data>
+  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+    <value>Das zugeordnete Projektverzeichnis wurde während der Synchronisierung geändert — Update verschoben</value>
+  </data>
 </root>

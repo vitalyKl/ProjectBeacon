@@ -3423,4 +3423,7 @@
   <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>Каталог проекта недоступен на этой рабочей станции.</value>
   </data>
+  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+    <value>Каталог проекта на станции изменился во время синхронизации — обновление отложено</value>
+  </data>
 </root>
