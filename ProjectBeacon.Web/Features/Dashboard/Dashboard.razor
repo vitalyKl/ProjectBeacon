@@ -239,6 +239,7 @@ else
     private bool _loading = true;
     private bool _error;
     private string? _errorMessage;
+    private string? _projectSwitchErrorMessage;
     private Guid _userId;
     private CancellationTokenSource? _poll;
     private List<DeviceHostSampleDto> _samples = [];
@@ -465,6 +466,11 @@ else
         }
         _loadSeries = series;
     }
+
+    private string ProjectSwitchUnavailableMessage(string? diagnosticId) =>
+        diagnosticId is { Length: 8 } && diagnosticId.All(char.IsAsciiHexDigit)
+            ? Notifications.FormatDiagnosticMessage("ProjectSwitchUnavailable", diagnosticId)
+            : L["ProjectSwitchUnavailable"].Value;
 
     private static string[] SparseTimes(IReadOnlyList<DeviceHostSampleDto> rows)
     {

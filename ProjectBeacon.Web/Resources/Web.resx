@@ -3551,4 +3551,10 @@ No Beacon-hosted coding agent.</value>
   <data name="LoginUnavailable" xml:space="preserve">
     <value>Sign-in is temporarily unavailable. Please try again.</value>
   </data>
+  <data name="ProjectSwitchFailed" xml:space="preserve">
+    <value>Could not switch the active project. Your access may have changed. Refresh the page and try again.</value>
+  </data>
+  <data name="ProjectSwitchUnavailable" xml:space="preserve">
+    <value>The active project could not be changed because an unexpected error occurred. Diagnostic ID: {0}</value>
+  </data>
 </root>

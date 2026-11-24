@@ -86,37 +86,61 @@ public static class EndpointExtensions
             }
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
 
-        app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
+        app.MapGet("/project/switch", async (
+            HttpContext ctx,
+            BeaconDbContext db,
+            IUiNotificationService notifications) =>
         {
-            var actor = ActorContextFactory.FromPrincipal(ctx.User);
-            if (ctx.User.Identity?.IsAuthenticated != true
-                || actor.UserId is not { } uid
-                || !Guid.TryParse(ctx.Request.Query["projectId"].ToString(), out var target))
-                return Results.Redirect("/dashboard");
+            try
+            {
+                var actor = ActorContextFactory.FromPrincipal(ctx.User);
+                if (ctx.User.Identity?.IsAuthenticated != true
+                    || actor.UserId is not { } uid
+                    || !Guid.TryParse(ctx.Request.Query["projectId"].ToString(), out var target))
+                    return Results.Redirect("/dashboard?projectSwitchError=failed");
 
-            var isAdmin = actor.IsAdmin;
-            var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, uid, isAdmin, target);
-            if (projectId != target)
-                return Results.Redirect("/dashboard");
+                var isAdmin = actor.IsAdmin;
+                var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, uid, isAdmin, target);
+                // Do not disclose whether a foreign project exists or whether access was denied.
+                if (projectId != target)
+                    return Results.Redirect("/dashboard?projectSwitchError=failed");
 
-            var identity = new ClaimsIdentity(
-                ctx.User.Claims.Where(c => c.Type != "project_id" && c.Type != "org_id"),
-                CookieAuthenticationDefaults.AuthenticationScheme);
-            identity.AddClaim(new Claim("project_id", target.ToString()));
-            if (orgId is { } oid)
-                identity.AddClaim(new Claim("org_id", oid.ToString()));
+                var identity = new ClaimsIdentity(
+                    ctx.User.Claims.Where(c => c.Type != "project_id" && c.Type != "org_id"),
+                    CookieAuthenticationDefaults.AuthenticationScheme);
+                identity.AddClaim(new Claim("project_id", target.ToString()));
+                if (orgId is { } oid)
+                    identity.AddClaim(new Claim("org_id", oid.ToString()));
 
-            await ctx.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                new ClaimsPrincipal(identity),
-                new AuthenticationProperties { IsPersistent = true });
+                await ctx.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(identity),
+                    new AuthenticationProperties { IsPersistent = true });
 
-            var returnUrl = ctx.Request.Query["returnUrl"].ToString();
-            if (string.IsNullOrWhiteSpace(returnUrl)
-                || !returnUrl.StartsWith("/", StringComparison.Ordinal)
-                || returnUrl.StartsWith("//", StringComparison.Ordinal))
-                return Results.Redirect("/dashboard");
-            return Results.Redirect(returnUrl);
+                var returnUrl = ctx.Request.Query["returnUrl"].ToString();
+                if (string.IsNullOrWhiteSpace(returnUrl)
+                    || !returnUrl.StartsWith("/", StringComparison.Ordinal)
+                    || returnUrl.StartsWith("//", StringComparison.Ordinal))
+                    return Results.Redirect("/dashboard");
+                return Results.Redirect(returnUrl);
+            }
+            catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                var diagnosticId = notifications.LogException(
+                    exception,
+                    "switch active project",
+                    new
+                    {
+                        UserId = ActorContextFactory.FromPrincipal(ctx.User).UserId,
+                        ProjectId = ctx.Request.Query["projectId"].ToString()
+                    });
+                return Results.Redirect(
+                    $"/dashboard?projectSwitchError=unavailable&diagnosticId={Uri.EscapeDataString(diagnosticId)}");
+            }
         }).RequireAuthorization();
 
         return app;
