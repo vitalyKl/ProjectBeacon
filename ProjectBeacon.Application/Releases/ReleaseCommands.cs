@@ -24,7 +24,17 @@ public sealed record ReleaseDto(
     Guid? PreparationCommandId = null,
     Guid? VerificationCommandId = null,
     string? PreparationResultJson = null,
-    string? PreparationError = null);
+    string? PreparationError = null,
+    ReleasePublicationStatus PublicationStatus = ReleasePublicationStatus.NotStarted,
+    int PublicationRevision = 1,
+    bool PublicationTagPushed = false,
+    string? PublicationError = null,
+    string? PublishedTagName = null,
+    long? DeploymentWorkflowRunId = null,
+    string? DeploymentWorkflowRunUrl = null,
+    string? DeployedVersion = null,
+    string? DeployedCommitSha = null,
+    DateTime? DeployedAtUtc = null);
 
 public sealed record CreateReleaseRequest(
     string Name,
