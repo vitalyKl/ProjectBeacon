@@ -26,6 +26,7 @@
 @inject GetProjectVersionPolicyHandler GetVersionPolicy
 @inject ListProjectReleasesHandler ListProjectReleases
 @inject CreateReleaseHandler CreateReleaseHandler
+@inject CreateHotfixTaskHandler CreateHotfixTaskHandler
 @inject UpdateReleaseHandler UpdateReleaseHandler
 @inject SetReleaseStatusHandler SetReleaseStatus
 @inject DeleteReleaseHandler DeleteReleaseHandler
@@ -126,6 +127,51 @@ else
                                 <MudText Typo="Typo.caption" Class="mt-2">@L["ReleaseTargetVersion"]: @(release.TargetVersion ?? "—")</MudText>
                                 <MudText Typo="Typo.caption">@L["ReleaseTargetBranch"]: @release.TargetBranch</MudText>
                                 <MudText Typo="Typo.caption">@L["Milestones"]: @release.MilestoneCount</MudText>
+                                @if (release.Status == ReleaseStatus.Published
+                                    && release.PublicationStatus == ReleasePublicationStatus.Published
+                                    && release.PublicationTagPushed)
+                                {
+                                    <MudDivider Class="my-2" />
+                                    <MudText Typo="Typo.subtitle2">@L["HotfixSourceRelease"]</MudText>
+                                    <MudText Typo="Typo.caption">@L["HotfixDeployedVersion"]: @(release.DeployedVersion ?? "—")</MudText>
+                                    <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">@L["HotfixDeployedSha"]: @(release.DeployedCommitSha ?? "—")</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(release.DeploymentWorkflowRunUrl))
+                                    {
+                                        <MudLink Href="@release.DeploymentWorkflowRunUrl" Target="_blank" Rel="noopener noreferrer">
+                                            @L["HotfixDeploymentRun"]
+                                        </MudLink>
+                                    }
+                                    @if (_canManageReleases)
+                                    {
+                                        @if (_hotfixReleaseId == release.Id)
+                                        {
+                                            <MudStack Spacing="2" Class="mt-2">
+                                                <MudText Typo="Typo.subtitle2">@L["CreateHotfixTask"]</MudText>
+                                                <MudTextField T="string" @bind-Value="_hotfixTitle"
+                                                              Label="@L["HotfixTaskTitle"]" Required="true"
+                                                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                <MarkdownEditor @bind-Value="_hotfixDescription"
+                                                                Label="@L["HotfixTaskDescription"]" Lines="3" />
+                                                <MudStack Row="true" Spacing="2">
+                                                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                               Disabled="@_releaseBusy" OnClick="CreateHotfixTask">
+                                                        @L["CreateHotfixTask"]
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy"
+                                                               OnClick="CancelCreateHotfixTask">@L["Cancel"]</MudButton>
+                                                </MudStack>
+                                            </MudStack>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                       Color="Color.Warning" Disabled="@_releaseBusy"
+                                                       OnClick="() => ShowCreateHotfixTask(release)">
+                                                @L["CreateHotfixTask"]
+                                            </MudButton>
+                                        }
+                                    }
+                                }
                                 @if (_canManageReleases)
                                 {
                                     <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
@@ -165,6 +211,30 @@ else
                 </MudGrid>
             }
         </MudPaper>
+        @{
+            var hotfixTasks = _tasks.Where(task =>
+                task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null).ToList();
+        }
+        @if (hotfixTasks.Count > 0)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-3">
+                <MudText Typo="Typo.subtitle1">@L["HotfixTasks"]</MudText>
+                @foreach (var task in hotfixTasks.OrderByDescending(task => task.CreatedAt))
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="py-1">
+                        <MudText Typo="Typo.body2">@task.Title</MudText>
+                        @if (task.HotfixSourceReleaseId is { } sourceReleaseId)
+                        {
+                            <MudText Typo="Typo.caption">@L["HotfixSourceRelease"]: @(_releases.FirstOrDefault(item => item.Id == sourceReleaseId)?.Name ?? task.HotfixDeployedSha ?? "—")</MudText>
+                        }
+                        else if (task.ForwardPortOfTaskId is { } sourceTaskId)
+                        {
+                            <MudText Typo="Typo.caption">@L["ForwardPortOfHotfix"]: @(_tasks.FirstOrDefault(item => item.Id == sourceTaskId)?.Title ?? sourceTaskId.ToString("N"))</MudText>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        }
     }
 
     @if (_showCreateForm)
@@ -379,6 +449,10 @@ else
     private string? _releaseTargetVersion;
     private string _releaseTargetBranch = "main";
     private int _releaseOrder = 1;
+    private Guid? _hotfixReleaseId;
+    private Guid _hotfixRequestId;
+    private string _hotfixTitle = string.Empty;
+    private string? _hotfixDescription;
 
     protected override async Task OnInitializedAsync()
     {
@@ -433,6 +507,69 @@ else
         }
         else
             _releases = [];
+    }
+
+    private void ShowCreateHotfixTask(ReleaseDto release)
+    {
+        if (!_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.Published
+            || release.PublicationStatus != ReleasePublicationStatus.Published
+            || !release.PublicationTagPushed
+            || string.IsNullOrWhiteSpace(release.DeployedCommitSha))
+            return;
+
+        _hotfixReleaseId = release.Id;
+        _hotfixRequestId = Guid.NewGuid();
+        _hotfixTitle = $"Hotfix for {release.Name}";
+        _hotfixDescription =
+            $"Production fix for deployed version {release.DeployedVersion ?? release.TargetVersion ?? "unknown"}.\n\n" +
+            $"Deployed commit: {release.DeployedCommitSha}\n" +
+            $"Production branch: {release.TargetBranch}";
+    }
+
+    private void CancelCreateHotfixTask()
+    {
+        if (_releaseBusy)
+            return;
+        _hotfixReleaseId = null;
+        _hotfixRequestId = Guid.Empty;
+        _hotfixTitle = string.Empty;
+        _hotfixDescription = null;
+    }
+
+    private async Task CreateHotfixTask()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || _hotfixReleaseId is not { } releaseId || _hotfixRequestId == Guid.Empty
+            || string.IsNullOrWhiteSpace(_hotfixTitle))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await CreateHotfixTaskHandler.HandleAsync(new CreateHotfixTaskCommand(
+                _project.Id,
+                releaseId,
+                new CreateHotfixTaskRequest(
+                    _hotfixTitle.Trim(), _hotfixDescription, _hotfixRequestId),
+                _actor));
+            if (!result.Success || result.Value is null)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["CreateHotfixTask"].Value);
+                return;
+            }
+
+            _hotfixReleaseId = null;
+            _hotfixRequestId = Guid.Empty;
+            _hotfixTitle = string.Empty;
+            _hotfixDescription = null;
+            Notifications.Add(L["HotfixTaskCreated"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
     }
 
     private void ShowCreateReleaseForm()
