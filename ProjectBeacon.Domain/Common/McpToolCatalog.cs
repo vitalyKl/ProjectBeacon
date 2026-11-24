@@ -70,9 +70,6 @@ public static class McpToolNames
     public const string ToggleTaskStep = "toggle_task_step";
     public const string DeleteTaskStep = "delete_task_step";
     public const string FinishWork = "finish_work";
-    public const string VersionCheck = "version_check";
-    public const string ReleaseContext = "release_context";
-    public const string VersionImpact = "version_impact";
     public const string GetTaskVersionImpact = "get_task_version_impact";
     public const string ContextCompile = "context_compile";
     public const string ContextCreateDraft = "context_create_draft";
@@ -208,10 +205,7 @@ public static class McpToolCatalog
                 McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork),
 
             // Project version management uses the same project/task authorization as other API tools.
-            ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
-                McpToolNames.VersionCheck, McpToolNames.ReleaseContext),
-            ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
-                McpToolNames.VersionImpact),
+
 
             // Context and governance tools use the explicit context capability.
             ..Api(McpToolScope.Read, ApiTokenCapability.ContextRead,
