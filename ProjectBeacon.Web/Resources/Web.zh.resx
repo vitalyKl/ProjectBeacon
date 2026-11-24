@@ -3447,4 +3447,16 @@ orthstar</value>
   <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>要将发布“{0}”以版本 {1}、标签“{2}”从分支“{3}”发布吗？此操作会创建不可变的 Git 标签并启动可能部署到生产环境的 GitHub 发布工作流。已推送的标签不会被移动或删除；重试会使用相同的 Candidate 和标签。</value></data>
   <data name="ReleasePublicationQueued" xml:space="preserve"><value>已在固定的工作站上排队发布。Beacon 将验证 GitHub 工作流以及实际部署的版本/SHA。</value></data>
   <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不可变的发布标签已推送。重试不会移动该标签。</value></data>
+  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>版本影响</value></data>
+  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor 尚未声明此任务对版本的影响。</value></data>
+  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>已声明的影响</value></data>
+  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Actor 的理由</value></data>
+  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Reviewer 决定</value></data>
+  <data name="TaskVersionImpactNone" xml:space="preserve"><value>不改变版本</value></data>
+  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>已确认</value></data>
+  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>有异议</value></data>
+  <data name="TaskVersionImpactPending" xml:space="preserve"><value>等待 Reviewer</value></data>
 </root>
