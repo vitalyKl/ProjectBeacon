@@ -227,6 +227,23 @@ public record ListHostSamplesRequest(Guid UserId, Guid? DeviceId = null);
 public record ListHostSamplesCommand(ListHostSamplesRequest Request) : ICommand<Result<IList<DeviceHostSampleDto>>>;
 
 
+/// <summary>Sanitized automatic repository synchronization metadata from a workstation heartbeat.</summary>
+public sealed record GitAutoPullEventDto(DateTimeOffset At, string FromSha, string ToSha, int Commits);
+public sealed record GitAutoSyncErrorDto(string Code, DateTimeOffset At);
+public sealed record RepositoryAutoSyncStatusDto(
+    string? Branch,
+    string? Upstream,
+    int Ahead,
+    int Behind,
+    bool Clean,
+    bool Detached,
+    bool HasUpstream,
+    bool Diverged,
+    DateTimeOffset? CheckedAt,
+    GitAutoPullEventDto? LastAutoPull,
+    GitAutoSyncErrorDto? LastError,
+    string? AutoPullBlockedReason);
+
 /// <summary>Supported repository synchronization operation.</summary>
 public enum GitSyncMode
 {

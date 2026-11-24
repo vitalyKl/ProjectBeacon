@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using Application.Persistence;
 using Application.Security;
@@ -54,7 +55,8 @@ internal static class ProjectGitSyncPreflight
         int? Behind,
         string? Branch,
         DateTime? CheckedAt,
-        GitSyncRefusalCode? ReasonCode);
+        GitSyncRefusalCode? ReasonCode,
+        RepositoryAutoSyncStatusDto? AutoSync = null);
 
     internal sealed record PipelineWorkstationResolution(
         DaemonDevice? Device,
@@ -306,6 +308,8 @@ internal static class ProjectGitSyncPreflight
         if (device is null)
             return new State(false, false, false, null, null, null, null);
 
+        var autoSync = ReadAutoSyncStatus(device.ProbeJson, projectId);
+
         // Expire only the current Pending interval before checking whether the task
         // workspace is blocked. Requeued commands get a fresh PendingSince timestamp.
         await ExpireStalePendingCommandsAsync(db, DateTime.UtcNow, ct, projectId, device.Id);
@@ -327,10 +331,11 @@ internal static class ProjectGitSyncPreflight
                 null,
                 null,
                 null,
-                null);
+                null,
+                autoSync);
 
         if (!WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitSyncV1))
-            return new State(false, false, false, null, null, null, null);
+            return new State(false, false, false, null, null, null, null, autoSync);
 
         // Cancelled commands are often superseded by a replacement Pull. They must not
         // erase the last usable repository observation.
@@ -352,7 +357,7 @@ internal static class ProjectGitSyncPreflight
             .ToListAsync(ct);
 
         if (attempts.Count == 0)
-            return new State(true, false, false, null, null, null, GitSyncRefusalCode.NeverSynced);
+            return new State(true, false, false, null, null, null, GitSyncRefusalCode.NeverSynced, autoSync);
 
         // A transport/worker failure does not invalidate the last successful Git result.
         // Prefer the newest parseable command result and retain that older result when a
@@ -380,7 +385,7 @@ internal static class ProjectGitSyncPreflight
                 or WorkstationCommandStatus.Succeeded
                     ? GitSyncRefusalCode.FetchFailed
                     : null;
-            return new State(true, false, false, null, null, attempts[0].CompletedAt, reason);
+            return new State(true, false, false, null, null, attempts[0].CompletedAt, reason, autoSync);
         }
 
         var verification = attempts[verificationIndex];
@@ -432,7 +437,91 @@ internal static class ProjectGitSyncPreflight
 
         // Behind, dirty, detached, divergent, missing-upstream, and failed-fetch states are
         // surfaced to the UI as warnings. They do not make a local pipeline un-runnable.
-        return new State(true, false, false, result.Behind, result.Branch, verification.CompletedAt, reasonCode);
+        return new State(true, false, false, result.Behind, result.Branch, verification.CompletedAt, reasonCode, autoSync);
+    }
+
+    private static RepositoryAutoSyncStatusDto? ReadAutoSyncStatus(string? probeJson, Guid projectId)
+    {
+        if (string.IsNullOrWhiteSpace(probeJson))
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(probeJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("repoSync", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+                return null;
+
+            foreach (var item in items.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object
+                    || !item.TryGetProperty("projectId", out var idElement)
+                    || idElement.ValueKind != JsonValueKind.String
+                    || !Guid.TryParse(idElement.GetString(), out var parsedId)
+                    || parsedId != projectId)
+                    continue;
+
+                string? ReadString(string name) =>
+                    item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                        ? value.GetString() : null;
+                int ReadInt(string name) =>
+                    item.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) && number >= 0
+                        ? number : 0;
+                bool ReadBool(string name) =>
+                    item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+
+                DateTimeOffset? ReadDate(JsonElement element, string name)
+                {
+                    return element.TryGetProperty(name, out var value)
+                        && value.ValueKind == JsonValueKind.String
+                        && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture,
+                            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+                                ? parsed : null;
+                }
+
+                GitAutoPullEventDto? lastPull = null;
+                if (item.TryGetProperty("lastAutoPull", out var pull)
+                    && pull.ValueKind == JsonValueKind.Object
+                    && ReadDate(pull, "at") is { } at
+                    && pull.TryGetProperty("fromSha", out var from)
+                    && from.ValueKind == JsonValueKind.String
+                    && pull.TryGetProperty("toSha", out var to)
+                    && to.ValueKind == JsonValueKind.String
+                    && pull.TryGetProperty("commits", out var commits)
+                    && commits.TryGetInt32(out var commitCount)
+                    && commitCount >= 0)
+                    lastPull = new GitAutoPullEventDto(at, from.GetString()!, to.GetString()!, commitCount);
+
+                GitAutoSyncErrorDto? lastError = null;
+                if (item.TryGetProperty("lastError", out var error)
+                    && error.ValueKind == JsonValueKind.Object
+                    && error.TryGetProperty("code", out var code)
+                    && code.ValueKind == JsonValueKind.String
+                    && ReadDate(error, "at") is { } errorAt)
+                    lastError = new GitAutoSyncErrorDto(code.GetString()!, errorAt);
+
+                return new RepositoryAutoSyncStatusDto(
+                    ReadString("branch"),
+                    ReadString("upstream"),
+                    ReadInt("ahead"),
+                    ReadInt("behind"),
+                    ReadBool("clean"),
+                    ReadBool("detached"),
+                    ReadBool("hasUpstream"),
+                    ReadBool("diverged"),
+                    ReadDate(item, "checkedAt"),
+                    lastPull,
+                    lastError,
+                    ReadString("autoPullBlockedReason"));
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static bool TryReadSuccessfulResult(string json, out GitSyncResultDto result)
