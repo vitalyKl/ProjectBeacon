@@ -63,15 +63,23 @@ public class Release : Entity, IProjectScoped
             Name = name;
             changed = true;
         }
-        if (description is not null && !string.Equals(Description, description, StringComparison.Ordinal))
+        if (description is not null)
         {
-            Description = description;
-            changed = true;
+            var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            if (!string.Equals(Description, normalizedDescription, StringComparison.Ordinal))
+            {
+                Description = normalizedDescription;
+                changed = true;
+            }
         }
-        if (targetVersion is not null && !string.Equals(TargetVersion, targetVersion, StringComparison.Ordinal))
+        if (targetVersion is not null)
         {
-            TargetVersion = targetVersion;
-            changed = true;
+            var normalizedVersion = string.IsNullOrWhiteSpace(targetVersion) ? null : targetVersion.Trim();
+            if (!string.Equals(TargetVersion, normalizedVersion, StringComparison.Ordinal))
+            {
+                TargetVersion = normalizedVersion;
+                changed = true;
+            }
         }
         if (targetBranch is not null && !string.Equals(TargetBranch, targetBranch, StringComparison.Ordinal))
         {
