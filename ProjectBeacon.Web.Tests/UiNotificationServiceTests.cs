@@ -19,9 +19,13 @@ public sealed class UiNotificationServiceTests
             using var context = CreateContext();
             var notifications = context.Services.GetRequiredService<IUiNotificationService>();
 
-            var message = notifications.FormatFailure("Проект недоступен.", "настройки проекта");
+            var message = notifications.FormatFailure(
+                "Проект недоступен.",
+                "Настройки проекта",
+                operationLabel: "Загрузить");
 
-            Assert.Contains("настройки проекта", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Настройки проекта", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Загрузить", message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Проект недоступен.", message, StringComparison.Ordinal);
         }
         finally

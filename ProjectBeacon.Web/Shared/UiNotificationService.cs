@@ -140,9 +140,12 @@ internal sealed class UiNotificationService : IUiNotificationService
             case ErrorCodes.Unclassified:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
             case null:
-                return diagnosticId is null
+                if (diagnosticId is not null)
+                    return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId].Value;
+
+                return string.IsNullOrWhiteSpace(detail)
                     ? _localizer["UiOperationFailed", section, operationLabel].Value
-                    : _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId].Value;
+                    : _localizer["UiOperationFailedWithDetail", section, operationLabel, detail].Value;
             case ErrorCodes.ValidationFailed:
                 return string.IsNullOrWhiteSpace(detail)
                     ? _localizer["UiOperationFailed", section, operationLabel].Value
