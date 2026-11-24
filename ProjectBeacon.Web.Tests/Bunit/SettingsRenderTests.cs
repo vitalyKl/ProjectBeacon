@@ -215,9 +215,17 @@ public sealed class SettingsRenderTests : BUnitRenderBase
 
         var cut = Bunit.RenderComponent<Features.Settings.Workstations>();
 
-        Assert.Contains("Project repository status", cut.Markup, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Local changes", cut.Markup, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Updated", cut.Markup);
+        // Repository status lives in the Probe tab, not the default Workstation settings tab.
+        var probeTab = cut.FindAll("[role='tab']")
+            .Single(tab => string.Equals(tab.TextContent.Trim(), "Probe", StringComparison.OrdinalIgnoreCase));
+        probeTab.Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Project repository status", cut.Markup, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Local changes", cut.Markup, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Updated", cut.Markup);
+        });
     }
 
     [Fact]
