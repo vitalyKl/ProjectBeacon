@@ -3295,4 +3295,13 @@ orthstar</value>
   <data name="GitSyncTechnicalDetails" xml:space="preserve">
     <value>Technische Git-Details</value>
   </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Der Befehlsverlauf der Workstation konnte nicht geladen werden. Aktualisieren Sie diesen Bereich und versuchen Sie es erneut.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>Die Workstation hat Einstellungen in einem nicht lesbaren Format zurückgegeben. Aktualisieren Sie die Workstation-Daten und prüfen Sie bei erneutem Auftreten das Protokoll.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>Die Workstation hat Diagnosedaten in einem nicht lesbaren Format zurückgegeben. Aktualisieren Sie die Diagnose und prüfen Sie bei erneutem Auftreten das Workstation-Protokoll.</value>
+  </data>
 </root>

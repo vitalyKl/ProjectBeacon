@@ -3494,4 +3494,13 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncTechnicalDetails" xml:space="preserve">
     <value>Technical details from Git</value>
   </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Could not load workstation command history. Refresh this section and try again.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>The workstation returned settings in an unreadable format. Refresh the workstation data and check its log if the problem persists.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>The workstation returned diagnostics in an unreadable format. Refresh the diagnostics and check the workstation log if the problem persists.</value>
+  </data>
 </root>

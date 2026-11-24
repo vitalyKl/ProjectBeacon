@@ -3285,4 +3285,13 @@
   <data name="GitSyncTechnicalDetails" xml:space="preserve">
     <value>Технические подробности Git</value>
   </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить историю команд рабочей станции. Обновите этот раздел и повторите попытку.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула настройки в нечитаемом формате. Обновите данные станции и проверьте её журнал, если проблема повторится.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула диагностику в нечитаемом формате. Обновите диагностику и проверьте журнал станции, если проблема повторится.</value>
+  </data>
 </root>

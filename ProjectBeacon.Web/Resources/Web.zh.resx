@@ -3303,4 +3303,13 @@ orthstar</value>
   <data name="GitSyncTechnicalDetails" xml:space="preserve">
     <value>Git 技术详情</value>
   </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>无法加载工作站命令历史记录。请刷新此区域后重试。</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>工作站返回了无法读取格式的设置。请刷新工作站数据；如果问题仍然存在，请检查工作站日志。</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>工作站返回了无法读取格式的诊断信息。请刷新诊断信息；如果问题仍然存在，请检查工作站日志。</value>
+  </data>
 </root>

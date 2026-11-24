@@ -3303,4 +3303,13 @@ orthstar</value>
   <data name="GitSyncTechnicalDetails" xml:space="preserve">
     <value>Git の技術的な詳細</value>
   </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>ワークステーションのコマンド履歴を読み込めませんでした。このセクションを再読み込みして、もう一度お試しください。</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>ワークステーションから読み取り不能な形式の設定が返されました。ワークステーションのデータを更新し、問題が続く場合はログを確認してください。</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>ワークステーションから読み取り不能な形式の診断情報が返されました。診断情報を更新し、問題が続く場合はログを確認してください。</value>
+  </data>
 </root>
