@@ -54,8 +54,8 @@ public class Release : Entity, IProjectScoped
         string? targetBranch = null,
         int? order = null)
     {
-        if (Status is ReleaseStatus.Published or ReleaseStatus.Cancelled)
-            throw new InvalidOperationException($"A {Status} release cannot be edited.");
+        if (Status is ReleaseStatus.Candidate or ReleaseStatus.Published or ReleaseStatus.Cancelled)
+            throw new InvalidOperationException($"A {Status} release is immutable and cannot be edited.");
 
         var changed = false;
         if (name is not null && !string.Equals(Name, name, StringComparison.Ordinal))
@@ -96,11 +96,14 @@ public class Release : Entity, IProjectScoped
         if (target == Status)
             return;
 
+        if (target == ReleaseStatus.Candidate)
+            throw new InvalidOperationException("Only the authorized ReleasePrepare workflow can create an immutable Candidate.");
+
         var allowed = Status switch
         {
             ReleaseStatus.Planned => target is ReleaseStatus.InProgress or ReleaseStatus.Cancelled,
-            ReleaseStatus.InProgress => target is ReleaseStatus.Candidate or ReleaseStatus.Cancelled,
-            ReleaseStatus.Candidate => target is ReleaseStatus.InProgress or ReleaseStatus.Cancelled,
+            ReleaseStatus.InProgress => target == ReleaseStatus.Cancelled,
+            ReleaseStatus.Candidate => target == ReleaseStatus.Cancelled,
             ReleaseStatus.Published or ReleaseStatus.Cancelled => false,
             _ => false
         };
