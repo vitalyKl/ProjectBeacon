@@ -516,6 +516,7 @@ else
     private Guid? _gitSyncCommandId;
     private Guid? _gitSyncProjectId;
     private Guid? _gitSyncTargetDeviceId;
+    private WorkstationCommandDto? _gitSyncTerminalCommandAwaitingPipelineRefresh;
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
     private List<ProposalDto> _taskProposals = [];
@@ -644,7 +645,8 @@ else
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
                 var repositorySyncPending = _pipeline?.Preflight?.RepositorySyncInProgress == true
-                    || _gitSyncCommandPending;
+                    || _gitSyncCommandPending
+                    || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null;
                 if ((_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled)
                     && !repositorySyncPending)
                     continue;
@@ -655,6 +657,14 @@ else
                     {
                         await InvokeAsync(StateHasChanged);
                         continue;
+                    }
+
+                    // A terminal result is not reported until a fresh preflight confirms
+                    // which workstation is currently selected for this task.
+                    if (_gitSyncTerminalCommandAwaitingPipelineRefresh is { } terminalAwaitingRefresh)
+                    {
+                        _gitSyncTerminalCommandAwaitingPipelineRefresh = null;
+                        ReportGitSyncTerminalCommand(terminalAwaitingRefresh);
                     }
 
                     // Recover the command reference if the initial restore or a transient
@@ -695,7 +705,11 @@ else
                             if (current.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                             {
                                 _gitSyncRestoreFailures.RecordSuccess();
-                                _gitSyncRestoreErrorMessage = null;
+                                _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                                    current,
+                                    L["Tasks"].Value,
+                                    L["Read"].Value,
+                                    new { TaskId, ProjectId = projectId, CommandId = commandId });
                             }
                             else if (_gitSyncRestoreFailures.RecordFailure())
                             {
@@ -995,14 +1009,21 @@ else
             }
             else if (pending.Success)
             {
-                _gitSyncRestoreErrorMessage = null;
+                // A successful query with no pending command does not prove that a previously
+                // reported command lookup failure has recovered while preflight still says Sync is active.
+                if (pending.Value is not null)
+                    _gitSyncRestoreErrorMessage = null;
             }
             else if (!pending.Success)
             {
                 if (pending.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                 {
                     _gitSyncRestoreFailures.RecordSuccess();
-                    _gitSyncRestoreErrorMessage = null;
+                    _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                        pending,
+                        L["Tasks"].Value,
+                        L["Read"].Value,
+                        new { TaskId, ProjectId = task.ProjectId });
                 }
                 else if (_gitSyncRestoreFailures.RecordFailure())
                 {
@@ -1016,13 +1037,14 @@ else
                     Logger.LogWarning(
                         "Transient pending GitSync command restore result failure. TaskId={TaskId}, ProjectId={ProjectId}, ErrorCode={ErrorCode}, Detail={Detail}",
                         TaskId, task.ProjectId, pending.ErrorCode ?? ErrorCodes.For(pending.Kind), pending.Error);
-                if (pending.Kind == ErrorKind.Forbidden)
+                if (pending.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                 {
-                    _canManageRepositorySync = false;
+                    _canManageRepositorySync = pending.Kind != ErrorKind.Forbidden && _canManageRepositorySync;
                     _gitSyncCommandId = null;
                     _gitSyncProjectId = null;
                     _gitSyncTargetDeviceId = null;
                     _gitSyncCommandPending = false;
+                    _gitSyncCommandCancellable = false;
                 }
             }
         }
@@ -1082,6 +1104,14 @@ else
                 _pipelineRefreshErrorMessage = Notifications.FormatDiagnosticMessage(
                     "TaskPipelineRefreshUnavailable", diagnosticId);
             }
+            else
+            {
+                Logger.LogWarning(
+                    exception,
+                    "Transient task pipeline read exception. TaskId={TaskId}; will retry.",
+                    TaskId);
+            }
+
             return false;
         }
     }
@@ -1414,7 +1444,8 @@ else
 
     private async Task OnSynchronizeRepository()
     {
-        if (!_canManageRepositorySync || _busy || _gitSyncBusy || _gitSyncCommandPending || _task is null
+        if (!_canManageRepositorySync || _busy || _gitSyncBusy || _gitSyncCommandPending
+            || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null || _task is null
             || _pipeline?.Preflight is not { PipelineGitSyncSupported: true, PipelineDeviceId: { } deviceId })
             return;
 
@@ -1565,7 +1596,17 @@ else
         // The selected native workstation may change while GitSync is running. Re-read
         // preflight before reporting success: only a result for both the originally queued
         // target and the currently selected pipeline target can unblock this task.
-        await ReloadPipeline(ct);
+        if (!await ReloadPipeline(ct))
+        {
+            _gitSyncTerminalCommandAwaitingPipelineRefresh = command;
+            return;
+        }
+
+        ReportGitSyncTerminalCommand(command);
+    }
+
+    private void ReportGitSyncTerminalCommand(WorkstationCommandDto command)
+    {
         var currentTargetDeviceId = _pipeline?.Preflight?.PipelineDeviceId;
         if (_gitSyncTargetDeviceId is not { } targetDeviceId
             || targetDeviceId != command.DeviceId

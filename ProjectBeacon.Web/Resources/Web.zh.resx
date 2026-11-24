@@ -3369,4 +3369,7 @@ orthstar</value>
   <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>聊天模型的运行状态暂时不可用。聊天仍可继续使用，但模型就绪状态可能已过期。</value>
   </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>无法加载此聊天的任务上下文。您仍可在不使用该上下文的情况下继续对话。</value>
+  </data>
 </root>

@@ -3361,4 +3361,7 @@ orthstar</value>
   <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>Der Laufzeitstatus des Chat-Modells ist vorübergehend nicht verfügbar. Der Chat kann weiter verwendet werden, aber die Modellbereitschaft ist möglicherweise nicht aktuell.</value>
   </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Der Aufgabenkontext für diesen Chat konnte nicht geladen werden. Der Chat kann ohne diesen Kontext fortgesetzt werden.</value>
+  </data>
 </root>

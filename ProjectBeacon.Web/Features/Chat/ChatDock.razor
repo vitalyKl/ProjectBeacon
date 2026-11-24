@@ -43,6 +43,10 @@
                         aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
+            @if (_routeContextErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_routeContextErrorMessage</MudAlert>
+            }
             @if (_waitingTasksErrorMessage is not null)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_waitingTasksErrorMessage</MudAlert>
@@ -149,6 +153,7 @@
     private List<ChatSessionDto> _sessions = [];
     private List<WaitingPipelineTaskDto> _waitingTasks = [];
     private string? _waitingTasksErrorMessage;
+    private string? _routeContextErrorMessage;
     private readonly UiBackgroundFailureTracker _waitingTasksFailures = new();
     private Guid? _contextTaskId;
     private string? _contextTaskTitle;
@@ -272,6 +277,7 @@
     {
         _contextTaskId = null;
         _contextTaskTitle = null;
+        _routeContextErrorMessage = null;
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var pageSegments = segments.Where(segment => !Guid.TryParse(segment, out _)).ToArray();
@@ -281,12 +287,39 @@
         if (segments.Length < 2 || !string.Equals(segments[0], "task", StringComparison.OrdinalIgnoreCase)
             || !Guid.TryParse(segments[1], out var taskId))
             return;
-        var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
-        if (!task.Success || task.Value is null)
-            return;
-        _contextTaskId = task.Value.Id;
-        _contextTaskTitle = task.Value.Title;
-        _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+        try
+        {
+            var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+            if (!task.Success)
+            {
+                _routeContextErrorMessage = Notifications.FormatFailure(
+                    task, L["Tasks"].Value, L["Load"].Value, new { TaskId = taskId, Resource = "chat context" });
+                return;
+            }
+
+            if (task.Value is null)
+            {
+                _routeContextErrorMessage = L["ChatTaskContextUnavailable"].Value;
+                return;
+            }
+
+            _contextTaskId = task.Value.Id;
+            _contextTaskTitle = task.Value.Title;
+            _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+        }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception,
+                "load task context for chat",
+                new { TaskId = taskId });
+            _routeContextErrorMessage = Notifications.FormatDiagnosticMessage(
+                "ChatTaskContextUnavailable",
+                diagnosticId);
+        }
+
+        return;
+
     }
 
     private static string HumanizeRoute(string route)

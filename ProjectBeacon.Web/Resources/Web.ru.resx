@@ -3351,4 +3351,7 @@
   <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>Состояние среды выполнения чат-модели временно недоступно. Чатом можно пользоваться, но сведения о готовности модели могут быть устаревшими.</value>
   </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Не удалось загрузить контекст задачи для этого чата. Можно продолжить диалог без контекста задачи.</value>
+  </data>
 </root>

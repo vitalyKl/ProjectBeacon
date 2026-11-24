@@ -3369,4 +3369,7 @@ orthstar</value>
   <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>チャットモデルの実行状態を一時的に取得できません。チャットは引き続き使用できますが、モデルの準備状態が古い可能性があります。</value>
   </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>このチャットのタスクコンテキストを読み込めませんでした。コンテキストなしで会話を続けることができます。</value>
+  </data>
 </root>

@@ -3560,4 +3560,7 @@ No Beacon-hosted coding agent.</value>
   <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>The chat model runtime status is temporarily unavailable. Chat can continue, but model readiness may be out of date.</value>
   </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Could not load the task context for this chat. The conversation can continue without it.</value>
+  </data>
 </root>
