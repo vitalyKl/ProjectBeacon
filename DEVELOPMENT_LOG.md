@@ -11,9 +11,9 @@ This log is maintained in the repository and updated in the same branch as imple
 ## Status
 
 - Overall: **In progress**
-- Current slice: **S0 — AutoSync foundations**, with S1 discovery/design running in parallel
-- Completed implementation slices: none
-- Build/tests: not run
+- Current slice: **S1 — Version Policy and task impact**
+- S0 implementation is present; **S0 is not accepted as complete until the post-fix CI run is green**
+- S1 implementation is present but **not yet build/test verified**
 
 ## Initial repository findings
 
@@ -45,11 +45,11 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Inspect the daemon heartbeat/workstation command lifecycle and identify a non-queue-flooding AutoSync scheduling point.
-2. Design bounded remote fetch semantics, including branch refs and tags, preserving task workstation pins and dirty/active workspace safety.
-3. Add S0 tests first; then implement the background loop and visible per-project AutoSync status/settings.
-4. In parallel map the S1 entity, handler, MCP, authorization/RLS, migration, localization and UI integration points.
-5. Record every commit, test command/result, CI run, unresolved risk and next step here.
+1. Trigger CI on the current branch head and fix every compile, migration, test, localization or platform failure.
+2. Complete S1 productization and add any missing API/handler authorization and UI tests.
+3. Start S2: add the separate Release entity, milestone association, task/release context and project Roadmap UI.
+4. Resolve the GitHub-versus-GitLand landing authority before wiring release publication.
+5. Continue S3–S6 on this branch, keeping this log current after each verified checkpoint.
 
 ## Blockers and decisions
 
@@ -96,6 +96,60 @@ This log is maintained in the repository and updated in the same branch as imple
 2. Start S1: `VersionPolicy`, deterministic `version_check`/`version_impact` tools, Reviewer support, protected version-file writes, project settings/UI/localization/RLS/tests, and a project-scoped feature flag.
 3. Preserve the open landing-authority decision: current PR #194 contract keeps GitLand as landing executor, while the plan prefers GitHub as remote authority. Do not implement two competing merge authorities before this is resolved.
 4. Before S3 publication, reconcile the current four-component `0.7.5.8` version with the release workflow's current three-component version validator, and verify GitHub tag protection / production environment reviewers.
+
+
+
+## 2026-11-24 — S1 Version Policy and task version impact implementation checkpoint
+
+**Branch head before this journal update:** `92626421094bb6fe19f7f5435e12b9b607ba47ce`  
+**Branch relation to main:** 128 commits ahead, 0 behind at this checkpoint.  
+**Draft PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230).
+
+### Implemented
+
+- Added project-owned `VersionPolicyJson`, concurrency revision, and authoritative `OfficialVersion` state to the existing Project entity. Ordinary settings can initialize the official version once but cannot change it afterwards; a future server-authorized ReleasePrepare will use the dedicated release setter.
+- Added deterministic policy parsing/validation for `NumericComponents` (1–8 components), `SemVer`, and `Calendar`, with safe tag patterns and project-relative version source paths. XML/XPath, JSON Pointer (including array indexes), dotted TOML key, and Regex selectors are supported.
+- Added task-owned `VersionImpact`, rationale, timestamp, and concurrency revision. A task title/description scope change clears stale impact and its Reviewer decision.
+- Added Reviewer decision state (`Confirmed`/`Challenged`, note, timestamp, Review session id). A decision is bound server-side to the currently active Review pipeline session for the exact task/project and to the current impact revision.
+- Added project version-policy GET/PUT handlers and task impact GET/PUT/review handlers, with human Owner/Admin checks, project/token scope checks, optimistic concurrency, and audit events for declarations and Reviewer decisions.
+- Added API routes and role-enforced MCP tools: `version_check`, `release_context`, `get_task_version_impact`, `version_impact`, and `review_version_impact`.
+- Added deterministic `version_check` file comparison in the isolated workspace. It reports the Beacon official version, policy revision, tag name, and per-file projection state; it explicitly does not claim tag or deployment verification.
+- Added ordinary MCP `write_file`/`apply_patch` protection for configured version-source files. The protection lookup fails closed when policy cannot be verified. Landing proof independently unions configured version-source paths into the protected path snapshot, so policy edits do not silently change an existing landing attempt's protection.
+- Added Owner/Admin project settings UI for scheme, component count, calendar format, prerelease handling, tag pattern, initial official version, and version-source selectors.
+- Added English, German, Russian, Japanese, and Chinese resource strings for the complete settings form.
+- Added role-specific Actor and Reviewer instructions in session prompts and the native-agent system prompt.
+- Added migrations and model snapshot updates for project policy/version state and task impact/review state.
+
+### Tests added (pending CI verification)
+
+- Version catalog tests: 4-component numeric versions, SemVer prerelease policy, calendar format, XML/JSON/TOML/Regex extraction, JSON Pointer arrays, path escape rejection, unknown policy property rejection, round-trip, invalid Git tag syntax.
+- Domain task tests: validation of impact/rationale, Reviewer confirmation/challenge, clearing stale review after impact or task-scope change.
+- API authorization tests: explicit Actor tool grants, Planner/Reviewer read-only version context, Reviewer-only impact confirmation route.
+- MCP tests: projection comparison against the official version and exact Actor/Reviewer request routes/revisions.
+
+### S0 CI result and fixes
+
+- First CI run: [run #45378007002](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45378007002), head `d2e3f786f88bd718a1fcef392c310ae0bd725a6f`.
+- Linux, Windows and macOS builds passed; Linux and macOS EF snapshot checks passed. Linux tests reported two failures:
+  1. The new `DeviceAutoSyncTargetsHandler.cs` was absent from `docs/ignore-query-filters.allowlist`.
+  2. The new-tag test tried to delete a tag that was never implicitly fetched into the working clone.
+- Both were fixed. The allowlist now records the actual three explicit `IgnoreQueryFilters()` call sites (device, runtime, project join); the tag test no longer deletes a nonexistent local tag.
+- The run above is **still a failing run on the pre-fix head**. No green CI run exists yet for the current branch head.
+
+### Remaining work / blockers
+
+- [ ] Run CI on the current branch head and repair any failures before marking S0/S1 verified.
+- [ ] Add any tests that CI or review reveals are missing, especially API integration tests for the project policy and Reviewer session handler.
+- [ ] Add the separate Release entity and milestone association in S2; it is intentionally not conflated with the existing Milestone.
+- [ ] Resolve the GitHub remote authority versus GitLand landing executor design before S2/S3; do not create two merge authorities.
+- [ ] Verify GitHub tag protection/rulesets and required reviewers on the `production` Environment before publication work.
+- [ ] Fix the release workflow's current three-component validator before S3; current Beacon version is four-component `0.7.5.8`.
+
+### Validation limitations
+
+- Local .NET build/test execution remains unavailable because this environment has no .NET SDK.
+- ProjectBeacon MCP and Context7 are not exposed in this execution environment. Source-level review and GitHub Actions are the available verification path.
+- The branch remains isolated; PR #230 is not merged and main is unchanged.
 
 ## Update format
 
