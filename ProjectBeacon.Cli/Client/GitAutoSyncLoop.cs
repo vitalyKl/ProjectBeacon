@@ -203,8 +203,9 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 continue;
             }
 
-            _backoff.Remove(project.ProjectId);
-            var previous = _snapshot.Get(project.ProjectId);
+            // Keep a previous failure count until both status and any required
+            // AutoPull operation succeed. Pull performs its own fetch and can fail
+            // independently after a successful Status fetch.
             var lastAutoPull = previous?.LastAutoPull;
             GitAutoSyncError? lastError = null;
             string? blockedReason = null;
@@ -297,6 +298,9 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             else if (!result.Clean)
                 blockedReason = "DirtyWorkingTree";
 
+            // Reaching this point means the repository check completed successfully;
+            // safety refusals are not network failures and must not retain retry backoff.
+            _backoff.Remove(project.ProjectId);
             var state = ToState(project.ProjectId, current, _timing.TimeProvider.GetUtcNow(),
                 lastAutoPull, lastError, blockedReason);
             if (_snapshot.Set(state))
@@ -395,8 +399,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
     {
         var failures = _backoff.TryGetValue(project.ProjectId, out var prior)
             ? Math.Min(prior.Failures + 1, 10) : 1;
-        var minutes = Math.Min(60, Math.Pow(2, failures - 1));
-        _backoff[project.ProjectId] = new BackoffState(failures, now.AddMinutes(minutes));
+        _backoff[project.ProjectId] = new BackoffState(failures, now + FailureBackoff(failures));
         var previous = _snapshot.Get(project.ProjectId);
         var state = result is null
             ? new GitAutoSyncProjectState(project.ProjectId, previous?.Branch, previous?.Upstream,
@@ -443,6 +446,12 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         if (error?.Contains("directory does not exist", StringComparison.OrdinalIgnoreCase) == true)
             return "ProjectDirectoryUnavailable";
         return "GitSyncFailed";
+    }
+
+    internal static TimeSpan FailureBackoff(int consecutiveFailures)
+    {
+        var failures = Math.Clamp(consecutiveFailures, 1, 10);
+        return TimeSpan.FromMinutes(Math.Min(60, Math.Pow(2, failures - 1)));
     }
 
     internal static string ClassifyFailure(GitSyncResultDto result)

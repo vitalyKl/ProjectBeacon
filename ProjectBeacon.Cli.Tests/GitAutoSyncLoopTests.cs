@@ -365,6 +365,29 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public void FailureBackoff_GrowsExponentiallyAndCapsAtOneHour()
+    {
+        var expected = new[]
+        {
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32),
+            TimeSpan.FromMinutes(60),
+            TimeSpan.FromMinutes(60),
+            TimeSpan.FromMinutes(60),
+            TimeSpan.FromMinutes(60)
+        };
+
+        for (var failure = 1; failure <= expected.Length; failure++)
+            Assert.Equal(expected[failure - 1], GitAutoSyncLoop.FailureBackoff(failure));
+        Assert.Equal(TimeSpan.FromMinutes(1), GitAutoSyncLoop.FailureBackoff(0));
+        Assert.Equal(TimeSpan.FromMinutes(60), GitAutoSyncLoop.FailureBackoff(int.MaxValue));
+    }
+
+    [Fact]
     public void CalculateNextDelay_WakesForRetryBeforeTheConfiguredInterval()
     {
         var now = DateTimeOffset.Parse("2026-11-24T12:00:00Z");
