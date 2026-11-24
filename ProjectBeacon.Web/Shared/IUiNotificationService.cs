@@ -16,6 +16,7 @@ public interface IUiNotificationService
     string FormatFailure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null);
     string LogException(Exception exception, string operation, object? context = null);
     string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId);
+    string FormatUnknownReasonCode(string reasonCode, string messageResourceKey, string operation, object? context = null);
 
     /// <summary>Logs an unexpected exception and shows a localized message with its diagnostic ID.</summary>
     string ReportException(Exception exception, string messageResourceKey, string operation, object? context = null);

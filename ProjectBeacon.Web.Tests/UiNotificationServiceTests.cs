@@ -113,6 +113,24 @@ public sealed class UiNotificationServiceTests
         }
     }
 
+    [Fact]
+    public void FormatUnknownReasonCode_UsesLocalizedFallbackAndDoesNotExposeMachineCode()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+            var message = notifications.FormatUnknownReasonCode(
+                "FutureLandingFailureCode", "LandingReasonUnknown", "display Git landing reason");
+            Assert.Contains("Причина сбоя слияния не распознана", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("FutureLandingFailureCode", message, StringComparison.Ordinal);
+        }
+        finally { CultureInfo.CurrentUICulture = previousCulture; }
+    }
+
     private static TestContext CreateContext()
     {
         var context = new TestContext();

@@ -69,6 +69,15 @@ internal sealed class UiNotificationService : IUiNotificationService
         return diagnosticId;
     }
 
+    public string FormatUnknownReasonCode(string reasonCode, string messageResourceKey, string operation, object? context = null)
+    {
+        var diagnosticId = CreateDiagnosticId();
+        _logger.LogWarning(
+            "UI received an unrecognized operation reason code {ReasonCode}. Operation={Operation}, DiagnosticId={DiagnosticId}, Context={Context}",
+            reasonCode, operation, diagnosticId, context);
+        return FormatDiagnosticMessage(messageResourceKey, diagnosticId);
+    }
+
     private string FormatFailureMessage(string? detail, string section, string? errorCode, string? diagnosticId, string? operationLabel)
     {
         section = string.IsNullOrWhiteSpace(section) ? _localizer["UiGenericOperation"].Value : section.Trim();

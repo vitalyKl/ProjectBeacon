@@ -3235,4 +3235,46 @@ orthstar</value>
   <data name="UiOperationUnavailable" xml:space="preserve">
     <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden, da der Dienst vorübergehend nicht verfügbar ist. Versuchen Sie es später erneut. Diagnose-ID: {2}</value>
   </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>Die für diesen Merge erforderliche Workstation oder Task-Worktree ist nicht verfügbar. Verbinden Sie die Workstation erneut und versuchen Sie es noch einmal.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>Der Task-Branch entspricht nicht mehr der vom letzten Review geprüften Revision. Aktualisieren Sie den Task-Branch, führen Sie Review erneut aus und fordern Sie eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>Die Freigabe, das Review-Ergebnis oder der festgelegte Prüf-Befehl wurde nach der Vorschau geändert. Führen Sie ein neues Review aus und fordern Sie vor dem Merge eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>Der Ziel-Branch oder sein Checkout wurde nach der Vorschau geändert oder konnte nicht sicher geprüft werden. Aktualisieren Sie den Zustand des Ziel-Branches und fordern Sie eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>Die Git-Konfiguration oder die Workstation-Umgebung erfüllt die Landing-Anforderungen nicht. Prüfen Sie Git-Richtlinie, Remote, Filter und installierte Git-Version.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>Der Merge-Kandidat konnte nicht erstellt oder geprüft werden. Prüfen Sie das Merge-Ergebnis und den konfigurierten ReviewCheckCommand und führen Sie die Vorschau erneut aus.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>Die Änderungen enthalten geschützte oder projektfremde Pfade, überschreiten konfigurierte Grenzen oder enthalten einen nicht erlaubten Symlink bzw. ein Submodul. Prüfen Sie Umfang und Git-Richtlinie des Projekts.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>Der Landing-Vorgang konnte nicht sicher abgeglichen werden. Der Ziel-Branch wurde möglicherweise bereits geändert. Prüfen Sie Ziel-Branch und Versuchsdaten, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>Der Merge konnte nicht sicher zurückgesetzt oder der Revert-Commit nicht verifiziert werden. Prüfen Sie den Ziel-Branch, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>Die Workstation hat den Landing-Befehl nicht angenommen. Prüfen Sie, ob sie online und GitLand-fähig ist, und aktualisieren Sie den Landing-Status vor einem erneuten Versuch.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Die Projekt-Richtlinie verlangt, dass eine Person diesen Landing-Vorgang manuell ausführt oder erneut versucht.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>Der Task muss bis zum Einreihen von Execute den Status Approved behalten. Führen Sie Review erneut aus und bestätigen Sie den Task vor einem neuen Landing-Auftrag.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>Der Merge befindet sich möglicherweise bereits im Ziel-Branch, aber die Prüfung nach dem Merge ist fehlgeschlagen oder konnte nicht bestätigt werden. Prüfen Sie den Ziel-Branch, bevor Sie einen Revert anfordern.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>Der Landing-Versuch hat einen Grund gemeldet, den die Oberfläche nicht kennt. Prüfen Sie das Workstation-Protokoll und geben Sie dem Support die Diagnose-ID unten.</value>
+  </data>
 </root>

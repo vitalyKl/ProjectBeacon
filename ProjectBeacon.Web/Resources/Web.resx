@@ -3434,4 +3434,46 @@ No Beacon-hosted coding agent.</value>
   <data name="UiOperationUnavailable" xml:space="preserve">
     <value>Could not complete {1} in {0} because the service is temporarily unavailable. Try again later. Diagnostic ID: {2}</value>
   </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>The workstation or task worktree required for this landing is unavailable. Reconnect the workstation and retry the operation.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>The task branch no longer matches the revision checked by the latest Review. Update the task branch, run Review again, and request a new Preview.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>The approval, review result, or pinned review command changed after Preview. Run a fresh Review and request a new Preview before executing.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>The target branch or its checkout changed after Preview, or could not be inspected safely. Refresh the target branch state and request a new Preview.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>The Git configuration or workstation environment does not meet the landing requirements. Check the project Git policy, remote, filters, and installed Git version.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>The merge candidate could not be built or verified. Check the merge result and the configured ReviewCheckCommand, then run Preview again.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>The proposed changes include protected or out-of-project paths, exceed configured limits, or contain a disallowed symlink or submodule. Review the change scope and project Git policy.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>The landing operation could not be safely reconciled. The target branch may already have changed. Inspect the target branch and attempt details before retrying.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>The landing could not be safely reverted or the revert commit could not be verified. Inspect the target branch before retrying.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>The workstation did not accept the landing command. Check that it is online and GitLand-capable, then refresh the landing status before retrying.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Project policy requires a person to execute or retry this landing operation manually.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>The task must remain Approved until Execute is queued. Review and approve the task again before requesting a new landing.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>The merge may already be on the target branch, but post-merge verification failed or could not be confirmed. Inspect the target before requesting a revert.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>The landing attempt reported a reason the UI does not recognize. Check the workstation log and share the diagnostic ID below with support.</value>
+  </data>
 </root>

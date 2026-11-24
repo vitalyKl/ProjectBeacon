@@ -3243,4 +3243,46 @@ orthstar</value>
   <data name="UiOperationUnavailable" xml:space="preserve">
     <value>サービスが一時的に利用できないため、{0} で「{1}」を完了できませんでした。後でもう一度お試しください。診断 ID: {2}</value>
   </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>このマージに必要なワークステーションまたはタスクの作業ツリーを利用できません。ワークステーションを再接続して、もう一度お試しください。</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>タスクブランチが最新の Review で確認されたリビジョンと一致しなくなりました。タスクブランチを更新し、Review を再実行して、新しい Preview を要求してください。</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>Preview 後に承認、Review 結果、または固定されたチェックコマンドが変更されました。マージを実行する前に Review を再実行し、新しい Preview を要求してください。</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>Preview 後にターゲットブランチまたはそのチェックアウトが変更されたか、安全に確認できませんでした。ターゲットブランチの状態を更新し、新しい Preview を要求してください。</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>Git 設定またはワークステーション環境がランディング要件を満たしていません。プロジェクトの Git ポリシー、remote、filter、Git のバージョンを確認してください。</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>マージ候補を作成または検証できませんでした。マージ結果と設定済みの ReviewCheckCommand を確認し、Preview を再実行してください。</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>変更に保護対象またはプロジェクト外のパスが含まれるか、設定済みの上限を超えているか、許可されていないシンボリックリンクまたはサブモジュールが含まれています。変更範囲と Git ポリシーを確認してください。</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>ランディング処理の状態を安全に照合できませんでした。ターゲットブランチはすでに変更されている可能性があります。再試行する前にターゲットブランチと試行の詳細を確認してください。</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>マージを安全に取り消せなかったか、revert コミットを検証できませんでした。再試行する前にターゲットブランチを確認してください。</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>ワークステーションがランディングコマンドを受け付けませんでした。オンラインで GitLand に対応していることを確認し、再試行する前にランディング状態を更新してください。</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>プロジェクトポリシーにより、このランディング操作は人が手動で実行または再試行する必要があります。</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>Execute をキューに入れるまで、タスクは Approved の状態を維持する必要があります。新しいランディングを要求する前に Review を再実行して承認してください。</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>マージはすでにターゲットブランチに反映されている可能性がありますが、マージ後の検証に失敗したか、結果を確認できませんでした。revert を要求する前にターゲットを確認してください。</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
+  </data>
 </root>

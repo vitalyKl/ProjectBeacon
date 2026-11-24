@@ -3225,4 +3225,46 @@
   <data name="UiOperationUnavailable" xml:space="preserve">
     <value>Не удалось выполнить действие «{1}» в разделе «{0}»: сервис временно недоступен. Повторите попытку позже. Диагностический ID: {2}</value>
   </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>Рабочая станция или рабочая копия задачи, необходимые для слияния, недоступны. Подключите станцию и повторите операцию.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>Ветка задачи больше не соответствует ревизии, проверенной последним Review. Обновите ветку задачи, повторите Review и запросите новый Preview.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>После Preview изменились подтверждение согласования, результат Review или закреплённая команда проверки. Повторите Review и запросите новый Preview перед слиянием.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>Целевая ветка или её рабочая копия изменились после Preview либо не могут быть безопасно проверены. Обновите состояние целевой ветки и запросите новый Preview.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>Настройки Git или окружение рабочей станции не соответствуют требованиям слияния. Проверьте Git-политику проекта, remote, фильтры и установленную версию Git.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>Не удалось построить или проверить кандидата на слияние. Проверьте результат объединения и команду ReviewCheckCommand, затем повторите Preview.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>Изменения затрагивают защищённые пути или файлы вне проекта, превышают заданные ограничения либо содержат запрещённую символическую ссылку или submodule. Проверьте состав изменений и Git-политику проекта.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>Не удалось безопасно восстановить состояние операции слияния. Целевая ветка уже могла измениться. Перед повтором проверьте целевую ветку и детали попытки.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>Не удалось безопасно отменить слияние или проверить revert-коммит. Перед повторной попыткой проверьте целевую ветку.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>Рабочая станция не приняла команду слияния. Убедитесь, что станция подключена и поддерживает GitLand, затем обновите состояние попытки перед повтором.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Политика проекта требует, чтобы человек вручную выполнил эту операцию слияния или повторил её.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>До постановки Execute задача должна оставаться в статусе Approved. Повторите Review и подтвердите задачу перед новым запросом на слияние.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>Слияние могло уже попасть в целевую ветку, но проверка после слияния завершилась ошибкой или её результат не удалось подтвердить. Проверьте целевую ветку, прежде чем запрашивать откат.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
+  </data>
 </root>
