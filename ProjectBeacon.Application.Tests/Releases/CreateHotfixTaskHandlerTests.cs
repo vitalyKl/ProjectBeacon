@@ -252,19 +252,29 @@ public sealed class CreateHotfixTaskHandlerTests : IDisposable
             "Previous production", "0.7.5.7", oldSha, DateTime.UtcNow.AddHours(-1));
         _db.Releases.Add(oldRelease);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // The Release is current at the moment the Hotfix is created.
         var hotfix = await CreateHandler().HandleAsync(new CreateHotfixTaskCommand(
             _projectId,
             oldRelease.Id,
             new CreateHotfixTaskRequest("Old base Hotfix", null, Guid.NewGuid()),
             OwnerActor()), TestContext.Current.CancellationToken);
-        Assert.False(hotfix.Success); // A stale Release is rejected before a Hotfix can be pinned.
-        Assert.Contains("current production", hotfix.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(hotfix.Success, hotfix.Error);
 
+        // Production moves forward before the pinned workstation starts the Hotfix.
         var newest = CreatePublishedRelease(
             "Newest production", "0.7.5.8", new string('e', 40), DateTime.UtcNow);
         _db.Releases.Add(newest);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(await _db.Tasks.ToListAsync(TestContext.Current.CancellationToken));
+        var bootstrap = await new GetDeviceTaskWorkspaceBootstrapHandler(Factory()).HandleAsync(
+            _deviceId, hotfix.Value!.Id, TestContext.Current.CancellationToken);
+
+        Assert.False(bootstrap.Success);
+        Assert.Equal(ErrorKind.Conflict, bootstrap.Kind);
+        Assert.Contains("newer production Release", bootstrap.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, await _db.Tasks.CountAsync(
+            task => task.HotfixSourceReleaseId == oldRelease.Id,
+            TestContext.Current.CancellationToken));
     }
 }
