@@ -1,0 +1,260 @@
+namespace ProjectBeacon.Application.Devices;
+
+using System.Text.Json;
+using Application.Audit;
+using Application.Common;
+using Application.Persistence;
+using Domain.Common;
+using Domain.Entities.Tasks;
+using Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
+/// <summary>Exact GitHub merge evidence reported by the task's pinned workstation.</summary>
+public sealed record DeviceRemoteLandingReconciliationRequest(
+    Guid ProjectId,
+    Guid TaskId,
+    Guid ReviewRunId,
+    string Repository,
+    int PullRequestNumber,
+    string PullRequestUrl,
+    string SourceBranch,
+    string TargetBranch,
+    string SourceSha,
+    string MergeCommitSha,
+    string RemoteBaseSha,
+    DateTime MergedAtUtc,
+    DateTime VerifiedAtUtc);
+
+public sealed record DeviceRemoteLandingReconciliationResult(
+    Guid ProofId,
+    Guid ProjectId,
+    Guid TaskId,
+    int PullRequestNumber,
+    string PullRequestUrl,
+    string SourceSha,
+    string MergeCommitSha,
+    string TargetBranch,
+    string RemoteBaseSha,
+    string TaskStatus,
+    string PipelineStage,
+    bool AlreadyRecorded);
+
+/// <summary>
+/// Records a workstation-verified GitHub PR merge only when it matches the task's immutable
+/// workstation pin and latest successful Review proof. It never invokes a Git merge or GH merge.
+/// </summary>
+public sealed class ReconcileDeviceRemoteLandingHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ReconcileDeviceRemoteLandingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<DeviceRemoteLandingReconciliationResult>> HandleAsync(
+        Guid deviceId,
+        DeviceRemoteLandingReconciliationRequest request,
+        CancellationToken ct = default)
+    {
+        if (deviceId == Guid.Empty || request.ProjectId == Guid.Empty
+            || request.TaskId == Guid.Empty || request.ReviewRunId == Guid.Empty)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "Device, project, task, and review identifiers are required.", ErrorKind.Validation);
+
+        if (request.VerifiedAtUtc > DateTime.UtcNow.AddMinutes(2)
+            || request.MergedAtUtc > DateTime.UtcNow.AddMinutes(2)
+            || request.MergedAtUtc == default || request.VerifiedAtUtc == default)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "GitHub merge and workstation verification timestamps are invalid.", ErrorKind.Validation);
+
+        await using var db = _dbFactory.CreateDbContext();
+        var device = await db.DaemonDevices.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == deviceId, ct);
+        if (device is null || device.IsRevoked
+            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.AutoSyncV1))
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "An active AutoSync-capable device token is required.");
+
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "Project not found.", ErrorKind.NotFound);
+        if (!ProjectGitPolicyCatalog.TryRead(
+            project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy)
+            || !gitPolicy.AutoSyncEnabled)
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "Remote landing reconciliation is disabled for this project.");
+
+        var runtimeAttached = await db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(runtime => runtime.ProjectId == request.ProjectId
+                && runtime.DeviceId == deviceId, ct);
+        if (!runtimeAttached)
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "The device is not attached to the requested project.");
+
+        var existing = await db.RemoteLandingProofs.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(proof => proof.ProjectId == request.ProjectId
+                && proof.TaskId == request.TaskId, ct);
+        if (existing is not null)
+        {
+            if (Matches(existing, deviceId, request))
+                return Result.Ok(ToResult(existing, TaskItemStatus.Done, TaskPipelineStage.Closed, alreadyRecorded: true));
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "A different remote landing proof is already recorded for this task.", ErrorKind.Conflict);
+        }
+
+        var task = await db.Tasks.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == request.TaskId
+                && item.ProjectId == request.ProjectId, ct);
+        if (task is null)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "Task not found.", ErrorKind.NotFound);
+        if (task.PipelineDeviceId != deviceId)
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "Only the workstation pinned to this task can report its remote landing.");
+        if (task.Status != TaskItemStatus.InProgress
+            || task.PipelineStage != TaskPipelineStage.Approved)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "The task must still be InProgress and pipeline-approved before a remote merge can close it.",
+                ErrorKind.Conflict);
+
+        var reviewRun = await db.ReviewRuns.IgnoreQueryFilters().AsNoTracking()
+            .Where(run => run.ProjectId == request.ProjectId && run.TaskId == request.TaskId)
+            .OrderByDescending(run => run.StartedAt)
+            .ThenByDescending(run => run.Id)
+            .FirstOrDefaultAsync(ct);
+        if (reviewRun is null || reviewRun.Id != request.ReviewRunId
+            || !reviewRun.IsLandingProof()
+            || reviewRun.CheckedDeviceId != deviceId
+            || !string.Equals(reviewRun.CheckedSourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(reviewRun.CheckedBaseBranch, request.TargetBranch, StringComparison.Ordinal))
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "The reported merge does not match the latest successful Review proof for this pinned task workstation.",
+                ErrorKind.Conflict);
+
+        var latestVerdict = await db.ReviewVerdicts.IgnoreQueryFilters().AsNoTracking()
+            .Where(verdict => verdict.ProjectId == request.ProjectId && verdict.TaskId == request.TaskId)
+            .OrderByDescending(verdict => verdict.CreatedAt)
+            .ThenByDescending(verdict => verdict.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestVerdict is null || latestVerdict.Kind != ReviewVerdictKind.Approve)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "The latest pipeline review verdict must still be Approve.", ErrorKind.Conflict);
+
+        var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(session => session.ProjectId == request.ProjectId
+                && session.TaskId == request.TaskId
+                && session.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser, ct);
+        if (activeSession)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "A pipeline session is still active or queued for this task. Remote landing was not recorded.",
+                ErrorKind.Conflict);
+
+        RemoteLandingProof proof;
+        try
+        {
+            proof = RemoteLandingProof.Create(
+                request.ProjectId, request.TaskId, deviceId, request.ReviewRunId,
+                request.Repository, request.PullRequestNumber, request.PullRequestUrl,
+                request.SourceBranch, request.TargetBranch, request.SourceSha,
+                request.MergeCommitSha, request.RemoteBaseSha,
+                request.MergedAtUtc, request.VerifiedAtUtc);
+        }
+        catch (ArgumentException exception)
+        {
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                exception.Message, ErrorKind.Validation);
+        }
+
+        var mergeNote =
+            $"Merged through GitHub PR #{proof.PullRequestNumber} ({proof.PullRequestUrl}).\n" +
+            $"Reviewed task commit: {proof.SourceSha}\n" +
+            $"GitHub merge commit: {proof.MergeCommitSha}\n" +
+            $"Target branch: {proof.TargetBranch}\n" +
+            $"Fetched origin/{proof.TargetBranch} at: {proof.RemoteBaseSha}\n" +
+            $"GitHub merged at: {proof.MergedAtUtc:O}; verified by pinned workstation at: {proof.VerifiedAtUtc:O}.";
+        try
+        {
+            task.ClosePipeline(mergeNote);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                exception.Message, ErrorKind.Conflict);
+        }
+        catch (ArgumentException exception)
+        {
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                exception.Message, ErrorKind.Validation);
+        }
+
+        db.RemoteLandingProofs.Add(proof);
+        _ = db.Projects; // Keep all proof and task changes on this same unit of work.
+        var actor = new ActorContext(
+            ActorType.Device, null, false, null, deviceId,
+            request.ProjectId, project.OrgId, ApiTokenCapability.None);
+        db.AuditEvents.Add(AuditEventFactory.ForActor(
+            actor,
+            "task.remote_landing.reconciled",
+            "RemoteLandingProof",
+            proof.Id.ToString("D"),
+            project.OrgId,
+            request.ProjectId,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                taskId = request.TaskId,
+                deviceId,
+                repository = proof.GitHubRepository,
+                pullRequestNumber = proof.PullRequestNumber,
+                pullRequestUrl = proof.PullRequestUrl,
+                sourceBranch = proof.SourceBranch,
+                sourceSha = proof.SourceSha,
+                targetBranch = proof.TargetBranch,
+                mergeCommitSha = proof.MergeCommitSha,
+                remoteBaseSha = proof.RemoteBaseSha,
+                reviewRunId = proof.ReviewRunId,
+                result = "TaskClosed"
+            })));
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "The task changed while the remote merge was being reconciled. Refresh and retry.", ErrorKind.Conflict);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "A concurrent remote landing proof was recorded for this task. Read the task state before retrying.",
+                ErrorKind.Conflict);
+        }
+
+        return Result.Ok(ToResult(proof, task.Status, task.PipelineStage ?? TaskPipelineStage.None, alreadyRecorded: false));
+    }
+
+    private static bool Matches(
+        RemoteLandingProof proof,
+        Guid deviceId,
+        DeviceRemoteLandingReconciliationRequest request) =>
+        proof.DeviceId == deviceId
+        && proof.ReviewRunId == request.ReviewRunId
+        && string.Equals(proof.GitHubRepository, request.Repository, StringComparison.OrdinalIgnoreCase)
+        && proof.PullRequestNumber == request.PullRequestNumber
+        && string.Equals(proof.PullRequestUrl, request.PullRequestUrl, StringComparison.Ordinal)
+        && string.Equals(proof.SourceBranch, request.SourceBranch, StringComparison.Ordinal)
+        && string.Equals(proof.TargetBranch, request.TargetBranch, StringComparison.Ordinal)
+        && string.Equals(proof.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(proof.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(proof.RemoteBaseSha, request.RemoteBaseSha, StringComparison.OrdinalIgnoreCase);
+
+    private static DeviceRemoteLandingReconciliationResult ToResult(
+        RemoteLandingProof proof,
+        TaskItemStatus status,
+        TaskPipelineStage stage,
+        bool alreadyRecorded) =>
+        new(proof.Id, proof.ProjectId, proof.TaskId, proof.PullRequestNumber,
+            proof.PullRequestUrl, proof.SourceSha, proof.MergeCommitSha,
+            proof.TargetBranch, proof.RemoteBaseSha, status.ToString(), stage.ToString(), alreadyRecorded);
+}
