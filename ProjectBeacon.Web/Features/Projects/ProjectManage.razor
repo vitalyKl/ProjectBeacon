@@ -455,10 +455,18 @@ else
         if (_userId != Guid.Empty)
         {
             var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
-            _devices = listed.Success ? listed.Value!.ToList() : [];
+            if (listed.Success)
+                _devices = listed.Value!.ToList();
+            else
+                Notifications.Warning(Notifications.FormatFailure(listed, L["Workstations"].Value, L["Load"].Value));
         }
         await ReloadProjects();
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+        {
+            Notifications.Failure(current, L["ProjectSettings"].Value, L["Load"].Value);
+            return;
+        }
         if (current.Value is null)
             return;
         _projectId = current.Value.Id;
@@ -478,9 +486,14 @@ else
                 if (pending.Success && pending.Value is { } command)
                     StartGitSyncPolling(projectId, command.Id);
                 else if (!pending.Success)
+                {
                     Logger.LogWarning(
                         "Could not restore pending GitSync command for project {ProjectId}: {Error}",
                         projectId, pending.Error);
+                    Notifications.Warning(Notifications.FormatFailure(
+                        pending, L["ProjectSettings"].Value, L["Load"].Value,
+                        new { ProjectId = projectId }));
+                }
             }
             catch (OperationCanceledException) when (_gitSyncPoll.IsCancellationRequested)
             {
@@ -623,7 +636,13 @@ else
         if (_userId == Guid.Empty)
             return;
         var listed = await MyProjects.HandleAsync(_userId, _isAdmin);
-        _projects = listed.Success ? listed.Value!.Projects.ToList() : [];
+        if (!listed.Success)
+        {
+            _projects = [];
+            Notifications.Failure(listed, L["Projects"].Value, L["Load"].Value);
+            return;
+        }
+        _projects = listed.Value!.Projects.ToList();
     }
 
     private void OpenProject(Guid projectId)
@@ -1049,7 +1068,10 @@ else
             return;
         var listed = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, _userId)));
         if (!listed.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(listed, L["Workstations"].Value, L["Load"].Value));
             return;
+        }
         _runtimes = listed.Value!.ToList();
         var current = _runtimes.FirstOrDefault();
         _primaryLocalRoot = null;
@@ -1062,6 +1084,12 @@ else
                 _primaryLocalRoot = diag.Value!.LocalRoot;
                 if (string.IsNullOrWhiteSpace(_folderPath))
                     _folderPath = _primaryLocalRoot;
+            }
+            else
+            {
+                Notifications.Warning(Notifications.FormatFailure(
+                    diag, L["Workstations"].Value, L["Load"].Value,
+                    new { DeviceId = current.DeviceId }));
             }
         }
         _folderDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
