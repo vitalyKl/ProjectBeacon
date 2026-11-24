@@ -369,7 +369,10 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(r => r.ReviewerActorId, (string?)null)
                     .SetProperty(r => r.CheckCommandHash, (string?)null), ct);
-            return Result.Failure<PipelineStateDto>(queued);
+            return Result.Failure<PipelineStateDto>(
+                queued.Error ?? "Failed to enqueue review check.",
+                queued.ErrorCode ?? ErrorCodes.For(queued.Kind),
+                queued.Kind);
         }
 
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
