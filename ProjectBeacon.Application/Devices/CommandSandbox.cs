@@ -215,15 +215,17 @@ public static class CommandSandbox
             var publicationRevision = ReadInt(obj, "publicationRevision");
             var releaseRevision = ReadInt(obj, "releaseRevision");
 
+            if (!ProjectVersionPolicyCatalog.TryValidateDeploymentVersionEndpoint(endpoint, out var endpointError)
+                || string.IsNullOrWhiteSpace(endpoint))
+                return Result.Failure<string>(endpointError ?? "PublishRelease requires a configured deployment version endpoint.");
+
             if (projectId == Guid.Empty || releaseId == Guid.Empty || candidateId == Guid.Empty
                 || string.IsNullOrWhiteSpace(version) || version.Length > 100 || version.Any(char.IsWhiteSpace)
                 || !ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch)
                 || !ProjectVersionPolicyCatalog.IsSafeGitTagName(tagName)
                 || !IsGitSha(candidateSha) || !IsGitSha(candidateTreeSha)
-                || publicationRevision < 1 || releaseRevision < 1
-                || !ProjectVersionPolicyCatalog.TryValidateDeploymentVersionEndpoint(endpoint, out var endpointError)
-                || string.IsNullOrWhiteSpace(endpoint))
-                return Result.Failure<string>(endpointError ?? "PublishRelease payload is invalid.");
+                || publicationRevision < 1 || releaseRevision < 1)
+                return Result.Failure<string>("PublishRelease payload is invalid.");
 
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
