@@ -117,8 +117,9 @@ else
                                         }
                                         @if (release.Status == ReleaseStatus.InProgress)
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@_releaseBusy"
-                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Candidate)">@L["ReleaseMarkCandidate"]</MudButton>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @L["ReleaseCandidateViaPrepare"]
+                                            </MudText>
                                         }
                                         @if (release.Status == ReleaseStatus.Candidate)
                                         {
