@@ -140,6 +140,9 @@ internal sealed class UiNotificationService : IUiNotificationService
             case ErrorCodes.Unclassified:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
             case null:
+                return diagnosticId is null
+                    ? _localizer["UiOperationFailed", section, operationLabel].Value
+                    : _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId].Value;
             case ErrorCodes.ValidationFailed:
                 return string.IsNullOrWhiteSpace(detail)
                     ? _localizer["UiOperationFailed", section, operationLabel].Value
@@ -151,11 +154,18 @@ internal sealed class UiNotificationService : IUiNotificationService
 
     private string? UnexpectedFailureDiagnosticId(string? detail, string section, string? operationLabel, string? errorCode, object? context)
     {
-        if (errorCode is null or ErrorCodes.ValidationFailed
+        if (errorCode is null)
+        {
+            if (!IsGenericError(detail))
+                return null;
+        }
+        else if (errorCode is ErrorCodes.ValidationFailed
             or ErrorCodes.Unauthorized or ErrorCodes.Forbidden or ErrorCodes.NotFound or ErrorCodes.Conflict
             or ErrorCodes.GitSyncAlreadyClaimed
             or ErrorCodes.InviteEmailMismatch or ErrorCodes.InviteInvalidOrExpired)
+        {
             return null;
+        }
 
         var diagnosticId = CreateDiagnosticId();
         _logger.LogError(
