@@ -15,7 +15,6 @@ public sealed class GitSyncServiceTests
         await using var repo = await RepositoryFixture.CreateAsync();
         await Git(repo.Seed, "tag", "v1.0.0");
         await Git(repo.Seed, "push", "origin", "refs/tags/v1.0.0");
-        await Git(repo.Root, "tag", "-d", "v1.0.0");
         await File.WriteAllTextAsync(Path.Combine(repo.Root, "local-edit.txt"), "keep this edit");
         var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
 
