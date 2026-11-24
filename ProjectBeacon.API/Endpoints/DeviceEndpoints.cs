@@ -36,6 +36,8 @@ public static class DeviceEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/devices/me/auto-sync-targets", GetAutoSyncTargets).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/devices/me/remote-landings/reconcile", ReconcileRemoteLanding)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/tasks/{taskId:guid}/workspace-bootstrap", GetTaskWorkspaceBootstrap)
             .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
@@ -249,6 +251,17 @@ public static class DeviceEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(actor.DeviceId!.Value, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReconcileRemoteLanding(
+        [FromBody] DeviceRemoteLandingReconciliationRequest body,
+        ReconcileDeviceRemoteLandingHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(actor.DeviceId!.Value, body, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
