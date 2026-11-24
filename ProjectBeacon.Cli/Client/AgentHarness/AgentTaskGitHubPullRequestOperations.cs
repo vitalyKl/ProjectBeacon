@@ -977,6 +977,11 @@ internal static class AgentTaskGitHubPullRequestOperations
                 ? property.GetString()
                 : null;
 
+    private static int? ReadInt(JsonObject args, string name) =>
+        args[name] is JsonValue value && value.TryGetValue<int>(out var number)
+            ? number
+            : null;
+
     private static string ReadString(JsonObject args, string name) =>
         args[name] is JsonValue value && value.TryGetValue<string>(out var text)
             ? text
