@@ -45,7 +45,12 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
             task.CompletedAt,
             task.Comments.Select(c => new TaskCommentDto(c.Id, c.Content, c.UserId, c.CreatedAt, c.UpdatedAt)).ToList(),
             task.Dependencies.Select(d => d.DependentTaskId).ToList(),
-            task.ContentRevision));
+            task.ContentRevision,
+            task.HotfixSourceReleaseId,
+            task.HotfixDeployedSha,
+            task.HotfixTargetBranch,
+            task.HotfixRequestId,
+            task.ForwardPortOfTaskId));
     }
 }
 /// <summary>
@@ -71,7 +76,9 @@ public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, 
             t.Priority, t.Type,
             t.Status == TaskItemStatus.InProgress ? t.SubStage : null,
             t.ProjectId, t.LabelId, t.MilestoneId, t.ReviewNotes,
-            t.CreatedAt, t.CompletedAt, [], [], t.ContentRevision));
+            t.CreatedAt, t.CompletedAt, [], [], t.ContentRevision,
+            t.HotfixSourceReleaseId, t.HotfixDeployedSha, t.HotfixTargetBranch,
+            t.HotfixRequestId, t.ForwardPortOfTaskId));
 
         return Result.Ok((IList<TaskItemDto>)result.ToList());
     }
