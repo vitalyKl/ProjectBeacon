@@ -182,6 +182,30 @@ def extract_source(source: dict[str, Any]) -> str:
     fail(f"unsupported version source format: {fmt!r}")
 
 
+def is_safe_git_tag_name(value: Any) -> bool:
+    if not isinstance(value, str) or not value or len(value) > 200:
+        return False
+    if value.startswith("/") or value.endswith("/") or ".." in value or "@{" in value:
+        return False
+    if not all(ch.isascii() and (ch.isalnum() or ch in "._-/") for ch in value):
+        return False
+    for segment in value.split("/"):
+        if not segment or segment.startswith(".") or segment.endswith(".") or segment.lower().endswith(".lock"):
+            return False
+    return True
+
+
+def validate_tag_pattern(pattern: Any, version: str, tag: str) -> str:
+    if not isinstance(pattern, str) or pattern.count(VERSION_TOKEN) != 1:
+        fail("release manifest tagPattern must contain exactly one {version} placeholder")
+    sample = pattern.replace(VERSION_TOKEN, version)
+    if not is_safe_git_tag_name(sample):
+        fail(f"release manifest tagPattern produces an unsafe Git tag name: {sample!r}")
+    if tag != sample or not is_safe_git_tag_name(tag):
+        fail(f"release tag mismatch: manifest expects {sample!r}, workflow tag is {tag!r}")
+    return sample
+
+
 def validate_version(policy: dict[str, Any], version: str) -> None:
     scheme = policy.get("scheme")
     if scheme == "NumericComponents":
@@ -226,8 +250,8 @@ def validate_version(policy: dict[str, Any], version: str) -> None:
 
 def main() -> None:
     tag = os.environ.get("GITHUB_REF_NAME", "")
-    if not tag.startswith("v") or len(tag) <= 1:
-        fail("release workflow must be triggered by a non-empty v-prefixed tag")
+    if not is_safe_git_tag_name(tag):
+        fail("release workflow must be triggered by a safe, non-empty Git tag")
     if not MANIFEST.is_file() or MANIFEST.is_symlink():
         fail("tagged commit does not contain a regular .beacon/release.json file")
     if MANIFEST.stat().st_size > MAX_MANIFEST_BYTES:
@@ -253,11 +277,9 @@ def main() -> None:
     policy = manifest.get("policy")
     if not isinstance(version, str) or not version or len(version) > 100 or any(ch.isspace() for ch in version):
         fail("release manifest version must be a non-empty version string of at most 100 characters")
-    if not isinstance(tag_pattern, str) or not tag_pattern.startswith("v") or tag_pattern.count(VERSION_TOKEN) != 1:
-        fail("release manifest tagPattern must start with 'v' and contain exactly one {version} placeholder")
-    expected_tag = tag_pattern.replace(VERSION_TOKEN, version)
-    if tag_name != expected_tag or tag_name != tag:
-        fail(f"release tag mismatch: manifest expects {expected_tag!r}, workflow tag is {tag!r}")
+    expected_tag = validate_tag_pattern(tag_pattern, version, tag)
+    if tag_name != expected_tag:
+        fail(f"release manifest tagName {tag_name!r} differs from the configured tag pattern {expected_tag!r}")
     if not isinstance(policy, dict):
         fail("release manifest policy must be an object")
     if manifest.get("versionPolicyRevision", 0) < 1:
@@ -311,6 +333,12 @@ def main() -> None:
     trailers = git("log", "-1", "--format=%(trailers:key=Beacon-Release,valueonly)", release_commit).splitlines()
     if len(trailers) != 1 or trailers[0].strip() != release_id:
         fail("ReleasePrepare commit must contain exactly one Beacon-Release trailer matching releaseId")
+
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if output_path:
+        with open(output_path, "a", encoding="utf-8") as output:
+            output.write(f"version={version}\n")
+            output.write(f"tag_name={tag}\n")
 
     print(
         f"Release manifest verified: project={project_id} release={release_id} "
