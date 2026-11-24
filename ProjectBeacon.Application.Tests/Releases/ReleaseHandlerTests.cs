@@ -155,6 +155,32 @@ public sealed class ReleaseHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task PlannedReleaseCanBeEditedAndOptionalFieldsCanBeCleared()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Initial name", "Release notes", "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var updated = await new UpdateReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new UpdateReleaseCommand(
+                new UpdateReleaseRequest(
+                    created.Value!.Id, _projectId, "Updated name", "", "", "release/0.7.5.9", 2,
+                    created.Value.Revision),
+                OwnerActor()), TestContext.Current.CancellationToken);
+
+        Assert.True(updated.Success, updated.Error);
+        Assert.Equal("Updated name", updated.Value!.Name);
+        Assert.Null(updated.Value.Description);
+        Assert.Null(updated.Value.TargetVersion);
+        Assert.Equal("release/0.7.5.9", updated.Value.TargetBranch);
+        Assert.Equal(2, updated.Value.Order);
+        Assert.Equal(created.Value.Revision + 1, updated.Value.Revision);
+    }
+
+    [Fact]
     public async Task ManualCandidateTransitionIsRejected()
     {
         var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
