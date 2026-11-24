@@ -401,6 +401,31 @@ No SaaS Control Plane or billing changes. Main remains unchanged by this impleme
 
 No release tag or production deployment was created. No SaaS Control Plane or billing changes.
 
+
+
+## 2026-11-24 — Configurable Git tag patterns propagated through release CI
+
+**Implementation commits:** `01d8fe15`, `edc1e4ba`, `0f595874`, `3bd77d3f`, `9593d5d8`.
+
+### Fixed incompatibility
+- The release workflow no longer assumes that tags start with `v`. It is triggered for Git tags generally (`**`), then the first validation step rejects any tag that is not safe and does not exactly match the tagged commit's `.beacon/release.json` `tagPattern` + version.
+- `scripts/verify_release_manifest.py` now validates arbitrary safe tag patterns, including `release-{version}` and hierarchical patterns such as `customer/releases/{version}`. It still verifies the exact tag, manifest, version scheme, source projections, ReleasePrepare commit trailer and allowed changed paths.
+- The manifest verifier writes the verified `version` and `tag_name` to `GITHUB_OUTPUT`. The release workflow exposes these as outputs from its tests job.
+- Client archives, container build metadata and production version verification now consume the validated version output instead of stripping a leading `v` from the tag.
+- Container images are tagged with the immutable commit SHA only. This avoids trying to use a Git tag containing `/` as a Docker image tag; scanning and deployment remain digest-bound.
+- Added `scripts/test_verify_release_manifest.py` for the default four-component numeric format, SemVer with a custom prefix, hierarchical tags, exact mismatch rejection, missing/duplicate placeholders and invalid Git refs.
+- The same Python tag-policy tests now run in the ordinary Linux PR CI lane as well as the release workflow's test job.
+
+### Safety boundary
+- An arbitrary Git tag push starts the release workflow, but the manifest validation step is the first gate. A tag without a valid Beacon release manifest or exact configured tag match fails before any tests/image/client/deployment jobs can proceed.
+- No tag was pushed, no GitHub Release was created and no production deployment was invoked.
+- GitHub tag protection / ruleset coverage for customer-configured tag patterns remains unverified. Do not test publication until protection and production Environment reviewers are verified.
+
+### Validation
+- Manually exercised the safe-tag rules against standard, customer-prefixed, hierarchical and invalid examples.
+- The current execution container cannot resolve `github.com`, and no local .NET SDK is installed; the complete Python tests, YAML/workflow validation and .NET checks must be confirmed by GitHub Actions on the latest head.
+- Exact-head CI has not yet been rerun after these workflow and validator changes.
+
 ## Update format
 
 For every subsequent work session append:
