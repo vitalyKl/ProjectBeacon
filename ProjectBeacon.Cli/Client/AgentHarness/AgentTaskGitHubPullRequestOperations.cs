@@ -695,7 +695,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         {
             var reviewResult = await ReadForgeApiAsync(
                 ghPath, context.WorktreeRoot, ct,
-                $"repos/{repository}/pulls/{number}/reviews?per_page={limit}");
+                $"repos/{repository}/pulls/{number}/reviews?per_page=100");
             if (reviewResult.Error is not null)
                 return AgentTaskGitOperations.Error(reviewResult.Error);
             var parsedReviews = ParseForgeCollection(reviewResult.Json!, "reviews", limit);
@@ -705,7 +705,7 @@ internal static class AgentTaskGitHubPullRequestOperations
 
             var conversationResult = await ReadForgeApiAsync(
                 ghPath, context.WorktreeRoot, ct,
-                $"repos/{repository}/issues/{number}/comments?per_page={limit}&sort=updated&direction=desc");
+                $"repos/{repository}/issues/{number}/comments?per_page=100&sort=updated&direction=desc");
             if (conversationResult.Error is not null)
                 return AgentTaskGitOperations.Error(conversationResult.Error);
             var parsedConversation = ParseForgeCollection(conversationResult.Json!, "comments", limit);
@@ -715,7 +715,7 @@ internal static class AgentTaskGitHubPullRequestOperations
 
             var inlineResult = await ReadForgeApiAsync(
                 ghPath, context.WorktreeRoot, ct,
-                $"repos/{repository}/pulls/{number}/comments?per_page={limit}&sort=updated&direction=desc");
+                $"repos/{repository}/pulls/{number}/comments?per_page=100&sort=updated&direction=desc");
             if (inlineResult.Error is not null)
                 return AgentTaskGitOperations.Error(inlineResult.Error);
             var parsedInline = ParseForgeCollection(inlineResult.Json!, "inline", limit);
@@ -839,7 +839,11 @@ internal static class AgentTaskGitHubPullRequestOperations
             else
                 return (null, "GitHub returned an invalid review/comment collection.");
 
-            var selected = items.EnumerateArray().TakeLast(limit);
+            // Workflow and comment endpoints are requested newest-first; reviews are
+            // returned chronologically, so take the tail to retain the latest decisions.
+            var selected = collection is "comments" or "inline" or "workflows"
+                ? items.EnumerateArray().Take(limit)
+                : items.EnumerateArray().TakeLast(limit);
             var output = new JsonArray();
             foreach (var item in selected)
             {
