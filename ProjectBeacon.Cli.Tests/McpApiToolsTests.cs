@@ -708,8 +708,8 @@ public sealed class McpApiToolsTests
         var call = Assert.Single(handler.Calls);
         Assert.Equal("PUT", call.Method);
         Assert.Equal($"/v1/tasks/{taskId:D}/version-impact", call.Path);
-        Assert.Contains("\\"expectedRevision\\":3", call.Body, StringComparison.Ordinal);
-        Assert.Contains("\\"impact\\":\\"patch\\"", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"expectedRevision\":3", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"impact\":\"patch\"", call.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -737,8 +737,8 @@ public sealed class McpApiToolsTests
         var call = Assert.Single(handler.Calls);
         Assert.Equal("POST", call.Method);
         Assert.Equal($"/v1/tasks/{taskId:D}/version-impact/review", call.Path);
-        Assert.Contains("\\"expectedRevision\\":4", call.Body, StringComparison.Ordinal);
-        Assert.Contains("\\"decision\\":\\"Challenged\\"", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"expectedRevision\":4", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"decision\":\"Challenged\"", call.Body, StringComparison.Ordinal);
     }
 
 
