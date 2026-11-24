@@ -101,6 +101,7 @@ internal static class ReleasePreparePayload
             });
         }
 
+        var taskCount = milestones.Sum(milestone => milestone.Tasks.Count);
         var snapshot = new
         {
             schemaVersion = 1,
@@ -130,7 +131,7 @@ internal static class ReleasePreparePayload
                 releaseOrder = release.Order
             },
             milestoneCount = milestoneSnapshots.Count,
-            taskCount = milestoneSnapshots.Sum(item => (int)item.GetType().GetProperty("tasks")!.GetValue(item)!.GetType().GetProperty("Count")!.GetValue(item.GetType().GetProperty("tasks")!.GetValue(item))!),
+            taskCount,
             milestones = milestoneSnapshots,
             warnings = warnings.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
         };
@@ -316,11 +317,11 @@ public sealed class PrepareReleaseHandler
                     sanitized.Error ?? "ReleasePrepare payload failed sandbox validation.", ErrorKind.Validation);
 
             var commandRow = WorkstationCommand.Create(
-                selected.Value.Device.Id, WorkstationCommandKind.ReleasePrepare, sanitized.Value,
+                selected.Device!.Id, WorkstationCommandKind.ReleasePrepare, sanitized.Value,
                 command.ProjectId, command.Actor.UserId);
             try
             {
-                release.BeginPreparation(selected.Value.Device.Id, candidateId, commandRow.Id, sanitized.Value!);
+                release.BeginPreparation(selected.Device!.Id, candidateId, commandRow.Id, sanitized.Value!);
             }
             catch (InvalidOperationException exception)
             {
@@ -338,7 +339,7 @@ public sealed class PrepareReleaseHandler
                 detailsJson: JsonSerializer.Serialize(new
                 {
                     candidateId,
-                    workstationId = selected.Value.Device.Id,
+                    workstationId = selected.Device!.Id,
                     targetVersion = release.TargetVersion,
                     targetBranch = release.TargetBranch,
                     preparationRevision = release.PreparationRevision
@@ -359,11 +360,11 @@ public sealed class PrepareReleaseHandler
                 milestone => milestone.ProjectId == command.ProjectId && milestone.ReleaseId == release.Id, ct);
             return Result.Ok(new ReleasePrepareOperationDto(
                 ReleaseMapping.ToDto(release, milestoneCount),
-                ReleasePreparePayload.ToCommandDto(commandRow, selected.Value.Runtime.LocalRoot)));
+                ReleasePreparePayload.ToCommandDto(commandRow, selected.Runtime!.LocalRoot)));
         });
     }
 
-    private static async Task<(bool Success, (DaemonDevice Device, ProjectRuntime Runtime)? Value, ErrorKind Kind, string? Error)> ResolvePinnedWorkstationAsync(
+    private static async Task<(bool Success, DaemonDevice? Device, ProjectRuntime? Runtime, ErrorKind Kind, string? Error)> ResolvePinnedWorkstationAsync(
         IBeaconDb db,
         Release release,
         Guid userId,
@@ -378,9 +379,9 @@ public sealed class PrepareReleaseHandler
                 device => device.Id == pinnedDeviceId && device.UserId == userId, ct);
             if (pinnedRuntime is null || pinnedDevice is null || !pinnedDevice.IsOnline(nowUtc)
                 || !WorkstationCapabilities.Supports(pinnedDevice.ProbeJson, WorkstationCapabilities.ReleasePrepareV1))
-                return (false, null, ErrorKind.Conflict,
+                return (false, null, null, ErrorKind.Conflict,
                     "The Release's pinned workstation is offline, detached or no longer supports ReleasePrepare. Automatic workstation switching is forbidden.");
-            return (true, (pinnedDevice, pinnedRuntime), ErrorKind.Validation, null);
+            return (true, pinnedDevice, pinnedRuntime, ErrorKind.Validation, null);
         }
 
         var runtimes = await db.ProjectRuntimes
@@ -388,7 +389,7 @@ public sealed class PrepareReleaseHandler
             .ToListAsync(ct);
         var deviceIds = runtimes.Select(runtime => runtime.DeviceId).Distinct().ToArray();
         if (deviceIds.Length == 0)
-            return (false, null, ErrorKind.Conflict, "Attach a project runtime to a ReleasePrepare-capable workstation first.");
+            return (false, null, null, ErrorKind.Conflict, "Attach a project runtime to a ReleasePrepare-capable workstation first.");
 
         var devices = await db.DaemonDevices
             .Where(device => deviceIds.Contains(device.Id) && device.UserId == userId && device.RevokedAt == null)
@@ -402,7 +403,7 @@ public sealed class PrepareReleaseHandler
             .FirstOrDefault();
         return selected.Device is null
             ? (false, null, ErrorKind.Conflict, "No online workstation owned by the requesting user advertises ReleasePrepare support.")
-            : (true, (selected.Device, selected.Runtime), ErrorKind.Validation, null);
+            : (true, selected.Device, selected.Runtime, ErrorKind.Validation, null);
     }
 }
 
@@ -485,16 +486,10 @@ public sealed class VerifyReleaseLandingHandler
                     ErrorKind.Conflict);
 
             var expectedCandidateId = release.CandidateId;
-            if (expectedCandidateId is null || expectedCandidateId != ReleasePreparePayload.GuidValue(preparePayload, "candidateId")
-                || !string.Equals(ReleasePreparePayload.Text(prepareResult, "preparedCommitSha"),
-                    ReleasePreparePayload.Text(preparePayload, "preparedCommitSha"), StringComparison.Ordinal))
-            {
-                // preparedCommitSha lives in the Prepare result, while the immutable request intentionally does not contain it.
-                if (expectedCandidateId is null
-                    || expectedCandidateId != ReleasePreparePayload.GuidValue(preparePayload, "candidateId"))
-                    return Result.Failure<ReleasePrepareOperationDto>(
-                        "Stored Candidate identity does not match the Release.", ErrorKind.Conflict);
-            }
+            if (expectedCandidateId is null
+                || expectedCandidateId != ReleasePreparePayload.GuidValue(preparePayload, "candidateId"))
+                return Result.Failure<ReleasePrepareOperationDto>(
+                    "Stored Candidate identity does not match the Release.", ErrorKind.Conflict);
 
             var runtime = await db.ProjectRuntimes.FirstOrDefaultAsync(
                 item => item.ProjectId == command.ProjectId && item.DeviceId == pinnedDeviceId, ct);
