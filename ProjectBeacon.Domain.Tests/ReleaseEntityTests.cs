@@ -32,10 +32,10 @@ public sealed class ReleaseEntityTests
     public void Release_CannotPublishBeforeReleasePrepareHasCreatedCandidate()
     {
         var planned = Release.Create("1.0", null, Guid.NewGuid(), "1.0.0", "main", 1);
-        Assert.Throws<InvalidOperationException>(() => planned.MarkPublished(DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => planned.TransitionTo(ReleaseStatus.Published));
 
         planned.TransitionTo(ReleaseStatus.InProgress);
-        Assert.Throws<InvalidOperationException>(() => planned.MarkPublished(DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => planned.TransitionTo(ReleaseStatus.Published));
         Assert.Null(planned.PublishedAt);
     }
 
