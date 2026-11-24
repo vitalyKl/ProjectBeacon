@@ -585,6 +585,9 @@ public sealed class ApiTokenAuthMiddleware
             && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "milestones")
             return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
                 || IsMcpToolGranted(grants, McpToolNames.ListMilestones);
+        if (segments.Length == 4 && segments[1] == "projects"
+            && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "releases")
+            return IsMcpToolGranted(grants, McpToolNames.ReleaseContext);
         if (segments.Length == 4 && segments[1] == "tasks"
             && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
             return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
@@ -668,7 +671,7 @@ public sealed class ApiTokenAuthMiddleware
         if (segments.Length == 3 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId))
             return true;
         if (segments.Length == 4 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
-            && segments[3] is "tasks" or "constraints" or "decisions" or "milestones" or "labels" or "reports" or "version-policy")
+            && segments[3] is "tasks" or "constraints" or "decisions" or "milestones" or "releases" or "labels" or "reports" or "version-policy")
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "tasks" && Guid.TryParse(segments[4], out _))
