@@ -382,14 +382,14 @@ public sealed class ApiTokenAuthMiddleware
             if (TaskAttachmentToolForRequest(segments, projectId, scopedTaskId, method) is { } attachmentTool)
                 return IsMcpToolGranted(allowedMcpTools, attachmentTool);
 
+            if (ActorVersionContextRequest(segments, projectId, scopedTaskId, method, allowedMcpTools))
+                return true;
+
             if (ActorReadToolForRequest(segments, projectId, scopedTaskId, method) is { } actorReadTool)
                 return IsMcpToolGranted(allowedMcpTools, actorReadTool);
 
             if (ActorVersionImpactToolForRequest(segments, scopedTaskId, method) is { } versionImpactTool)
                 return IsMcpToolGranted(allowedMcpTools, versionImpactTool);
-
-            if (ActorVersionContextRequest(segments, projectId, scopedTaskId, method, allowedMcpTools))
-                return true;
 
             if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
             {
@@ -585,6 +585,10 @@ public sealed class ApiTokenAuthMiddleware
             && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "milestones")
             return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
                 || IsMcpToolGranted(grants, McpToolNames.ListMilestones);
+        if (segments.Length == 4 && segments[1] == "tasks"
+            && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
+            return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
+                || IsMcpToolGranted(grants, McpToolNames.GetTaskVersionImpact);
         if (segments.Length == 4 && segments[1] == "tasks"
             && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
             return IsMcpToolGranted(grants, McpToolNames.GetTaskVersionImpact);
