@@ -145,7 +145,9 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
             .AnyAsync(session => session.ProjectId == request.ProjectId
                 && session.TaskId == request.TaskId
-                && session.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser, ct);
+                && (session.Status == SessionStatus.Ready
+                    || session.Status == SessionStatus.Active
+                    || session.Status == SessionStatus.WaitingForUser), ct);
         if (activeSession)
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "A pipeline session is still active or queued for this task. Remote landing was not recorded.",
