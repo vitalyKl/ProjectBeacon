@@ -163,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetProjectVersionPolicyHandler>();
         services.AddTransient<GetTaskVersionImpactHandler>();
         services.AddTransient<SetTaskVersionImpactHandler>();
+        services.AddTransient<ReviewTaskVersionImpactHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
