@@ -3073,4 +3073,6 @@ orthstar</value>
   <data name="ProjectVersionSave" xml:space="preserve"><value>保存版本策略</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
   <data name="NotConfigured" xml:space="preserve"><value>未配置</value></data>
+  <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>为此项目启用发布管理</value></data>
+  <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>启用后，Roadmap 中将提供 Release 管理，并可将 Milestone 关联到 Release。现有 Milestone 仍保持独立。默认关闭。</value></data>
 </root>
