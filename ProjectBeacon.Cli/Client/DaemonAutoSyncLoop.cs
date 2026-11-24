@@ -137,21 +137,12 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
             return ("Unknown", null, 0);
         try
         {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            var outcome = root.TryGetProperty("outcome", out var outcomeElement)
-                && outcomeElement.ValueKind == JsonValueKind.String
-                    ? outcomeElement.GetString() ?? "Unknown"
-                    : "Unknown";
-            var reason = root.TryGetProperty("reasonCode", out var reasonElement)
-                && reasonElement.ValueKind == JsonValueKind.String
-                    ? reasonElement.GetString()
-                    : null;
-            var behind = root.TryGetProperty("behind", out var behindElement)
-                && behindElement.TryGetInt32(out var count)
-                    ? count
-                    : 0;
-            return (outcome, reason, behind);
+            // GitSyncService currently serializes enum values numerically and record
+            // properties in PascalCase. Web defaults keep property matching compatible.
+            var result = JsonSerializer.Deserialize<GitSyncResultDto>(json, JsonOptions);
+            return result is null
+                ? ("Unknown", null, 0)
+                : (result.Outcome.ToString(), result.ReasonCode?.ToString(), result.Behind);
         }
         catch (JsonException)
         {
