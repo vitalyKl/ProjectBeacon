@@ -3015,4 +3015,7 @@
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Откат посадки поставлен в очередь.</value>
   </data>
+  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Автоматически синхронизировать с удалённым репозиторием</value></data>
+  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon периодически получает изменения из upstream и выполняет fast-forward только для чистого репозитория без активной работы. Локальные изменения, расхождение истории, detached HEAD и активные сессии агентов не затрагиваются. Существующие локальные теги не перезаписываются и не удаляются.</value></data>
+  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Для включения настройки подключите рабочую станцию с версией клиента Beacon, поддерживающей AutoSync.</value></data>
 </root>
