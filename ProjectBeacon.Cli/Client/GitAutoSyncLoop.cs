@@ -70,9 +70,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     settings = new WorkstationSettings();
                 }
 
-                var interval = Math.Clamp(settings.AutoSyncIntervalMinutes, 2, 120);
-                var jitter = Math.Clamp(_timing.GitAutoSyncJitterFactor(), -0.2, 0.2);
-                var delay = TimeSpan.FromMinutes(Math.Clamp(interval * (1d + jitter), 2d, 120d));
+                var delay = CalculateNextDelay(
+                    settings.AutoSyncIntervalMinutes,
+                    _timing.GitAutoSyncJitterFactor(),
+                    _backoff.Values.Select(state => state.RetryAt),
+                    _timing.TimeProvider.GetUtcNow());
                 try { await _timing.DelayAsync(delay, ct); }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             }
@@ -81,6 +83,23 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         {
             Volatile.Write(ref _running, 0);
         }
+    }
+
+    internal static TimeSpan CalculateNextDelay(
+        int intervalMinutes,
+        double jitterFactor,
+        IEnumerable<DateTimeOffset> retryTimes,
+        DateTimeOffset now)
+    {
+        var interval = Math.Clamp(intervalMinutes, 2, 120);
+        var jitter = Math.Clamp(jitterFactor, -0.2, 0.2);
+        var delay = TimeSpan.FromMinutes(Math.Clamp(interval * (1d + jitter), 2d, 120d));
+        var nextRetry = retryTimes
+            .Where(retryAt => retryAt > now)
+            .Select(retryAt => retryAt - now)
+            .DefaultIfEmpty(delay)
+            .Min();
+        return nextRetry < delay ? nextRetry : delay;
     }
 
     private async Task RunCycleAsync(CancellationToken ct)

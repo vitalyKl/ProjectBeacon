@@ -102,6 +102,23 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public void CalculateNextDelay_WakesForRetryBeforeTheConfiguredInterval()
+    {
+        var now = DateTimeOffset.Parse("2026-11-24T12:00:00Z");
+
+        Assert.Equal(TimeSpan.FromMinutes(1), GitAutoSyncLoop.CalculateNextDelay(
+            10, 0, [now.AddMinutes(1)], now));
+        Assert.Equal(TimeSpan.FromMinutes(2), GitAutoSyncLoop.CalculateNextDelay(
+            10, 0, [now.AddMinutes(4), now.AddMinutes(2)], now));
+        Assert.Equal(TimeSpan.FromMinutes(10), GitAutoSyncLoop.CalculateNextDelay(
+            10, 0, [], now));
+        Assert.Equal(TimeSpan.FromMinutes(2), GitAutoSyncLoop.CalculateNextDelay(
+            120, 0.2, [now.AddHours(1)], now));
+        Assert.Equal(TimeSpan.FromMinutes(10), GitAutoSyncLoop.CalculateNextDelay(
+            10, 0.2, [], now));
+    }
+
+    [Fact]
     public async Task RunCycle_ReportsDetachedHeadInsteadOfMissingUpstream()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-detached-" + Guid.NewGuid().ToString("N"));
