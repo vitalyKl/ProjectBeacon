@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <Version>0.7.5.8</Version>
-    <InformationalVersion>0.7.5.8</InformationalVersion>
+    <Version>0.7.5.9</Version>
+    <InformationalVersion>0.7.5.9</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
