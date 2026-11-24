@@ -578,7 +578,9 @@ public sealed class ApiTokenAuthMiddleware
         if (segments.Length == 4 && segments[1] == "projects"
             && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "version-policy")
             return IsMcpToolGranted(grants, McpToolNames.VersionCheck)
-                || IsMcpToolGranted(grants, McpToolNames.ReleaseContext);
+                || IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
+                || IsMcpToolGranted(grants, McpToolNames.WriteFile)
+                || IsMcpToolGranted(grants, McpToolNames.ApplyPatch);
         if (segments.Length == 4 && segments[1] == "projects"
             && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "milestones")
             return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
