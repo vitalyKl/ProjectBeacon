@@ -207,7 +207,7 @@
 
     private string UnknownReasonMessage(string code, string resourceKey, string operation, object? context = null)
     {
-        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{resourceKey}:{operation}:{code}";
+        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{Pipeline?.TaskId}:{resourceKey}:{operation}:{code}";
         if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
             return message;
 
