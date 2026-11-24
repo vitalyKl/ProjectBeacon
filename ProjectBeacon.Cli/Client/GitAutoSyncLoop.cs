@@ -300,6 +300,9 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
 
     private void RecordSkipped(DeviceProjectRuntimeDto project, string reason, DateTimeOffset now)
     {
+        if (reason is "NotGitRepository" or "RuntimeChanged")
+            _backoff.Remove(project.ProjectId);
+
         var previous = _snapshot.Get(project.ProjectId);
         var state = new GitAutoSyncProjectState(
             project.ProjectId,
@@ -313,7 +316,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             previous?.Diverged ?? false,
             now,
             previous?.LastAutoPull,
-            reason == "NotGitRepository" ? null : previous?.LastError,
+            reason is "NotGitRepository" or "RuntimeChanged" ? null : previous?.LastError,
             reason);
         if (_snapshot.Set(state))
             _runtimeState.Log($"repository auto-sync skipped for project {project.ProjectId}: {reason}");
