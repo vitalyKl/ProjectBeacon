@@ -17,6 +17,7 @@ using Application.Milestones;
 using Application.Context;
 using Application.Decisions;
 using Application.Reports;
+using Application.Releases;
 using Application.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
