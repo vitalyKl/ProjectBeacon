@@ -439,7 +439,7 @@ else
         return localized.ResourceNotFound
             ? Notifications.FormatUnknownReasonCode(
                 reason.ToString(), "GitSyncReasonUnknown", "read repository synchronization status",
-                new { ProjectId })
+                new { ProjectId = _projectId })
             : localized.Value;
     }
 
