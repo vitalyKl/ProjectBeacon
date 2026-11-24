@@ -3423,4 +3423,14 @@ orthstar</value>
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate は ReleasePrepare によって、ポリシー、影響、landing、検証の各チェックに合格した後に作成されます。</value></data>
   <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>本番バージョンエンドポイント</value></data>
   <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>末尾が /v1/version の HTTPS URL。リリースワークフロー成功後、Beacon はこのエンドポイントを確認し、version と gitSha が Candidate と一致することを要求します。</value></data>
+  <data name="CreateHotfixTask" xml:space="preserve"><value>Hotfix タスクを作成</value></data>
+  <data name="HotfixTaskTitle" xml:space="preserve"><value>Hotfix タスク名</value></data>
+  <data name="HotfixTaskDescription" xml:space="preserve"><value>本番環境の問題と必要な修正を説明</value></data>
+  <data name="HotfixTaskCreated" xml:space="preserve"><value>デプロイ済みリリースから Hotfix タスクを作成しました</value></data>
+  <data name="HotfixSourceRelease" xml:space="preserve"><value>元のリリース</value></data>
+  <data name="HotfixDeployedVersion" xml:space="preserve"><value>デプロイ済みバージョン</value></data>
+  <data name="HotfixDeployedSha" xml:space="preserve"><value>本番環境にデプロイされたコミット</value></data>
+  <data name="HotfixDeploymentRun" xml:space="preserve"><value>デプロイワークフローを開く</value></data>
+  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix のフォワードポート</value></data>
+  <data name="HotfixTasks" xml:space="preserve"><value>Hotfix とフォワードポートのタスク</value></data>
 </root>
