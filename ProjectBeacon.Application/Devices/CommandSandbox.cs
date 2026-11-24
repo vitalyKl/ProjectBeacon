@@ -154,10 +154,12 @@ public static class CommandSandbox
                 || string.IsNullOrWhiteSpace(snapshotJson) || snapshotJson.Length > 1_000_000)
                 return Result.Failure<string>("ReleasePrepare payload is invalid.");
 
-            if (!ProjectVersionPolicyCatalog.TryRead(policyJson, out var policy, out var policyError)
-                || !policy.ReleaseManagementEnabled
-                || !ProjectVersionPolicyCatalog.TryNormalizeVersion(policy, version, out _, out var versionError))
-                return Result.Failure<string>(policyError ?? versionError ?? "ReleasePrepare version policy or version is invalid.");
+            if (!ProjectVersionPolicyCatalog.TryRead(policyJson, out var policy, out var policyError))
+                return Result.Failure<string>(policyError ?? "ReleasePrepare version policy is invalid.");
+            if (!policy.ReleaseManagementEnabled)
+                return Result.Failure<string>("Release Management is disabled for this project.");
+            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(policy, version, out _, out var versionError))
+                return Result.Failure<string>(versionError ?? "ReleasePrepare version is invalid.");
 
             try
             {
