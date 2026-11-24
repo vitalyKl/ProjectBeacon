@@ -12,7 +12,7 @@ This log is maintained in the repository and updated in the same branch as imple
 ## Status
 
 - Overall: **In progress**
-- Current slice: **S3 — ReleasePrepare and immutable Candidate evidence**
+- Current slice: **S4 — GitHub Awareness / bounded forge feedback**
 - S0 AutoSync implementation is present; **not accepted until green CI on the current head**
 - S1 Version Policy / task impact implementation is present; **not yet fully CI verified**
 - S2 Release entity, Milestone association, feature gate, API and Roadmap UI are implemented; **not yet fully CI verified**
@@ -48,16 +48,16 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Trigger CI on the exact current branch head and fix compile, migration, domain, authorization, UI, localization and platform failures.
-2. Complete S3 verification: inspect immutable candidate snapshot, remote target SHA and ReleasePrepare/VerifyLanding reconciliation paths.
-3. Resolve the GitHub-versus-GitLand authority boundary before release publication; do not add a second merge executor.
-4. Complete gated tag creation and GitHub Actions workflow observation only after tag protection and production reviewers are verified.
-5. Continue S4–S6 on this branch, keeping this log current after every verified checkpoint.
+1. Trigger CI on the exact current head and fix every build, migration, test, formatting, and platform failure before accepting S0–S4.
+2. Complete S4 verification and add any missing tests or corrections revealed by CI; keep GitHub feedback read-only.
+3. Continue S5: hotfix releases must start from the actual deployed SHA, with forward-port work tracked as ordinary tasks.
+4. Continue S6: release-aware Planner workflows, onboarding and a second project with a different version scheme.
+5. Complete the human-confirmed tag publication and workflow observation only after tag protection and production reviewers are verifiably configured.
 
 ## Blockers and decisions
 
 - **Landing authority:** current PR #194 contract and plan recommendation differ. No code change may make GitHub and local GitLand competing authorities. Keep existing GitLand semantics until a single remote-authoritative transaction is designed and tested.
-- **GitHub protection:** rulesets and production environment reviewers not yet read.
+- **GitHub protection:** repository rulesets API returned an empty list on 2026-11-24. The legacy tag-protection and production Environment endpoints are not readable through the current GitHub connection (HTTP 400), and branch-protection read returned HTTP 403. This does not prove the settings are absent, but they are unverified; tag publication/deployment remains disabled.
 - **Validation environment:** the current execution environment has no .NET SDK and cannot resolve github.com from the shell. GitHub connector writes are available, but local build/test execution is not. Before claiming validation, use GitHub Actions on the exact branch head or a working .NET-enabled environment.
 - **ProjectBeacon MCP / Context7:** repository `AGENTS.md` requires both for project implementation. They are not exposed in this execution environment; this limitation must be reported and repository source remains the fallback, not represented as MCP/Context7 verification.
 
@@ -252,6 +252,48 @@ Run [#45409649488](https://github.com/vitalyKl/ProjectBeacon/actions/runs/454096
 - [ ] Finish publication path only after repository rulesets and production environment reviewers are verified.
 - [ ] Verify the release workflow handles NumericComponents (including four-part versions) and other configured schemes without hard-coded SemVer assumptions.
 
+
+
+
+## 2026-11-24 — S4 GitHub Awareness / forge_read implementation checkpoint
+
+**Branch head before this journal update:** `125fdc38e2ecc02be9c64a2f44bf1e7708f7c946`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), open, ready for review, unmerged.  
+**PR base:** `main` at `1290eae570d48c79f8523222b3293c5b536de99f`; branch is 338 commits ahead and 0 behind at this checkpoint.
+
+### Implemented
+
+- Added native structured Git tool `forge_read` for Planner, Actor, and Reviewer roles. It is read-only and does not reserve/exclusively lock the task worktree.
+- Tool arguments are limited to `view` (`all`, `pull_request`, `reviews`, `workflows`) and a bounded `limit` (1–10, default 6). It accepts no repository, remote, branch, URL, or PR number from the model.
+- Repository identity and task branch come from the daemon-authorized persistent task worktree. The tool validates the GitHub.com origin and same-repository push URL, rejects mirror remotes, authenticates through the workstation's existing GitHub CLI, and uses the daemon-selected review base.
+- Reads the task branch's PR summary and required checks, PR reviews, conversation comments, inline review comments, and GitHub Actions run summaries. It re-reads the PR snapshot before returning to avoid combining results from different PR heads/review states.
+- Returns bounded external content: up to 10 items per collection, comment bodies capped at 800 characters, author, URL and source ID retained, inline file/line retained, and diff hunks excluded. Actions results are summaries only; no logs or arbitrary artifacts are returned.
+- The response explicitly marks GitHub content as untrusted evidence, not instructions or authorization.
+- Updated native-agent instructions: Planner should turn actionable external review findings into Beacon subtasks/task notes with original author/link; Reviewer should consider them in review. No instruction asks the user to paste GitHub comments into chat.
+- Updated `docs/mcp-host.md` and added role, schema, parser, truncation, malformed-response and non-exclusive execution tests.
+
+### Validation
+
+- CI has **not** run on the exact S4 head `125fdc38e2ecc02be9c64a2f44bf1e7708f7c946`; GitHub reports no workflow run or status for this SHA.
+- Local .NET build/tests cannot run because `dotnet` is not installed in the current execution environment.
+- ProjectBeacon MCP and Context7 tools are not exposed in this environment. Repository code and documented conventions were used as the fallback; they were not represented as MCP/Context7 verification.
+- The only prior CI runs were interrupted or targeted older heads, so none is a passing validation for the current branch.
+
+### Publication safety
+
+- Repository rulesets API returned `[]` at this checkpoint.
+- The legacy tag-protection endpoint and `production` Environment endpoint were unavailable through the current GitHub connector (HTTP 400); reading branch protection returned HTTP 403.
+- Therefore existing tag protection and required production reviewers remain unverified. No release tag is being pushed and no production workflow is being triggered.
+- The release tag workflow remains a separate human-confirmed operation; `forge_read` cannot create or modify tags, PRs, comments, workflows or remote refs.
+
+### Remaining work
+
+- [ ] Obtain a green Linux/Windows/macOS CI run on the exact final branch head for all current slices.
+- [ ] Fix every compile/test/formatting issue from that run and re-trigger CI using a supported PR event.
+- [ ] Confirm review comments and workflow summaries against a real workstation `gh` session in an integration environment; no GitHub write path is part of this tool.
+- [ ] Complete S5 hotfix-from-deployed-SHA and forward-port task workflow.
+- [ ] Complete S6 release-aware Planner mode, onboarding and a second version scheme proof project.
+- [ ] Keep tag/deploy publication fail-closed until tag protection and production Environment reviewers are verified.
 
 ## Update format
 
