@@ -37,7 +37,7 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task GetPipeline_IncludesAutoSyncHeartbeatAsInformationalPreflightOnly()
     {
-        var (projectId, task) = await SeedTaskAsync("AutoSync informational preflight");
+        var (projectId, task) = await SeedTaskAsync("AutoSync informational preflight", seedPipelinePrerequisites: false);
         var device = await SeedGitSyncRuntimeAsync(projectId);
         var checkedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
         var probe = JsonSerializer.Serialize(new
