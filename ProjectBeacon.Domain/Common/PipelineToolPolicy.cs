@@ -92,7 +92,7 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> PlannerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
-            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject, "repo_status",
+            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject, McpToolNames.VersionCheck, McpToolNames.ReleaseContext, "repo_status",
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint, McpToolNames.ListDecisions,
             McpToolNames.GetDecision, McpToolNames.ListMilestones,
@@ -101,14 +101,14 @@ public static class PipelineToolPolicy
     public static IReadOnlyList<string> ReviewerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
-            McpToolNames.GetProject, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
+            McpToolNames.GetProject, McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint,
             McpToolNames.ListDecisions, McpToolNames.GetDecision
         }).Concat(ReviewerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
-        "repo_status", McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        "repo_status", McpToolNames.GetTask, McpToolNames.VersionCheck, McpToolNames.VersionImpact, McpToolNames.ReleaseContext, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
         McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
