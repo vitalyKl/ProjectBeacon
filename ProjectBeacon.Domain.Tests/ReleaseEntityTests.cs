@@ -156,6 +156,80 @@ public sealed class ReleaseEntityTests
             1, 1, hash, """{"schemaVersion":1}""", DateTime.Now));
     }
 
+    [Fact]
+    public void CandidateCanBeCancelledBeforePublicationStarts()
+    {
+        var (release, _) = CreateCandidateRelease();
+
+        release.TransitionTo(ReleaseStatus.Cancelled);
+
+        Assert.Equal(ReleaseStatus.Cancelled, release.Status);
+        Assert.Equal(ReleasePublicationStatus.NotStarted, release.PublicationStatus);
+        Assert.NotNull(release.CandidateSnapshot);
+    }
+
+    [Fact]
+    public void CandidateCannotBeCancelledWhilePublicationIsQueued()
+    {
+        var (release, deviceId) = CreateCandidateRelease();
+        release.BeginPublication(deviceId, Guid.NewGuid(), """{"candidate":"immutable"}""");
+
+        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Cancelled));
+        Assert.Equal(ReleaseStatus.Candidate, release.Status);
+        Assert.Equal(ReleasePublicationStatus.Queued, release.PublicationStatus);
+    }
+
+    [Fact]
+    public void CandidateCanBeCancelledAfterPublicationFailsBeforeTag()
+    {
+        var (release, deviceId) = CreateCandidateRelease();
+        var commandId = Guid.NewGuid();
+        release.BeginPublication(deviceId, commandId, """{"candidate":"immutable"}""");
+        release.RecordPublicationFailure(commandId, "GitHub auth failed before tag creation.", tagPushed: false);
+
+        release.TransitionTo(ReleaseStatus.Cancelled);
+
+        Assert.Equal(ReleaseStatus.Cancelled, release.Status);
+        Assert.Equal(ReleasePublicationStatus.FailedBeforeTag, release.PublicationStatus);
+        Assert.False(release.PublicationTagPushed);
+    }
+
+    [Fact]
+    public void CandidateCannotBeCancelledAfterImmutableTagWasPushed()
+    {
+        var (release, deviceId) = CreateCandidateRelease();
+        var commandId = Guid.NewGuid();
+        release.BeginPublication(deviceId, commandId, """{"candidate":"immutable"}""");
+        release.RecordPublicationFailure(commandId, "Workflow failed after immutable tag push.", tagPushed: true);
+
+        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Cancelled));
+        Assert.Equal(ReleaseStatus.Candidate, release.Status);
+        Assert.Equal(ReleasePublicationStatus.FailedAfterTag, release.PublicationStatus);
+        Assert.True(release.PublicationTagPushed);
+    }
+
+    private static (Release Release, Guid DeviceId) CreateCandidateRelease()
+    {
+        var projectId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+        var release = Release.Create("1.0", null, projectId, "1.0.0", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+
+        var prepareCommandId = Guid.NewGuid();
+        release.BeginPreparation(deviceId, candidateId, prepareCommandId, """{"action":"Prepare"}""");
+        release.RecordPrepareSuccess(prepareCommandId, """{"preparedCommitSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}""");
+        release.BeginVerification(deviceId, Guid.NewGuid());
+
+        var snapshot = ReleaseCandidateSnapshot.Create(
+            projectId, release.Id, candidateId, deviceId, "1.0.0", "v1.0.0", "main",
+            Sha('a'), Sha('b'), Sha('c'), Sha('d'),
+            1, release.Revision, new string('e', 64),
+            """{"schemaVersion":1}""", DateTime.UtcNow);
+        release.MarkCandidate(snapshot);
+        return (release, deviceId);
+    }
+
     private static string Sha(char value) => new(value, 40);
 
     [Fact]
