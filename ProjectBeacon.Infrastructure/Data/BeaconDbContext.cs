@@ -37,6 +37,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<LabelPath> LabelPaths => Set<LabelPath>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Milestone> Milestones => Set<Milestone>();
+    public DbSet<Release> Releases => Set<Release>();
     public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
