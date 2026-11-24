@@ -204,7 +204,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 }
                 if (!SameLocalRoot(project.LocalRoot, permission.Project.LocalRoot))
                 {
-                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow());
+                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
                 if (permission.Project.GitLandActive)
