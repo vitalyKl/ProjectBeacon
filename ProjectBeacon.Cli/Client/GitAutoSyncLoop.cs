@@ -67,7 +67,9 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 catch (Exception)
                 {
                     SetLoopError("SettingsUnavailable");
-                    settings = new WorkstationSettings();
+                    // Status remains useful while local settings are unavailable, but
+                    // never infer permission to mutate the checkout from fallback defaults.
+                    settings = new WorkstationSettings { AutoPullMode = "Off" };
                 }
 
                 var delay = CalculateNextDelay(
