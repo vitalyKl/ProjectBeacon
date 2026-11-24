@@ -2492,6 +2492,20 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("VersionImpactAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("VersionImpactReviewStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("VersionImpactReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("VersionImpactReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VersionImpactReviewedBySessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("VersionImpactRevision")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
