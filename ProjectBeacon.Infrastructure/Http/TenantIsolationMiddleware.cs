@@ -29,7 +29,7 @@ public sealed class TenantIsolationMiddleware
             && HttpMethods.IsGet(ctx.Request.Method)
             && string.Equals(ctx.Request.Path.Value, "/v1/devices/me/project-runtimes", StringComparison.OrdinalIgnoreCase))
         {
-            ctx.RequestServices.GetService<ITenantContext>()?.Assign(null, null, unscoped: true);
+            ctx.RequestServices?.GetService<ITenantContext>()?.Assign(null, null, unscoped: true);
             using (TenantScope.EnterUnscoped())
             {
                 await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
