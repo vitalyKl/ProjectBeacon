@@ -541,6 +541,8 @@
     {
         if (row.BlockedReason == "NotGitRepository")
             return L["RepoSyncNotGit"].Value;
+        if (row.BlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
         if (!string.IsNullOrWhiteSpace(row.LastErrorCode))
             return string.Format(L["RepoSyncError"].Value, row.LastErrorCode);
         if (row.Diverged || row.BlockedReason == "Diverged")

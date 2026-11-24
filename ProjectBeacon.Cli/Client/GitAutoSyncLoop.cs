@@ -96,10 +96,15 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         foreach (var project in projects)
         {
             ct.ThrowIfCancellationRequested();
-            if (project.ManualGitSyncActive || string.IsNullOrWhiteSpace(project.LocalRoot))
+            if (string.IsNullOrWhiteSpace(project.LocalRoot))
                 continue;
 
             var now = _timing.TimeProvider.GetUtcNow();
+            if (project.ManualGitSyncActive)
+            {
+                RecordSkipped(project, "ManualGitSyncActive", now);
+                continue;
+            }
             if (project.GitLandActive)
             {
                 RecordSkipped(project, "GitLandActive", now);

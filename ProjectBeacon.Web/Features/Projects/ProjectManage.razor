@@ -1104,6 +1104,8 @@ else
 
     private string RepoSyncLabel(RepositoryAutoSyncStatusDto status)
     {
+        if (status.AutoPullBlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
         if (status.LastError is { } error)
             return string.Format(L["RepoSyncError"].Value, error.Code);
         if (status.AutoPullBlockedReason == "NotGitRepository")
