@@ -23,7 +23,7 @@ public class Project : Entity, IOrgScoped
     /// <summary>Validated ProjectGitPolicy JSON. Defaults to manual landing, Escalate, and no auto-revert.</summary>
     public string GitPolicyJson { get; private set; } = "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
     /// <summary>Version and release rules configured for this project.</summary>
-    public string VersionPolicyJson { get; private set; } = ProjectVersionPolicyCatalogDefaults.Json;
+    public string VersionPolicyJson { get; private set; } = ProjectVersionPolicyDefaults.Json;
     /// <summary>Optimistic-concurrency token for version-policy edits.</summary>
     public int VersionPolicyRevision { get; private set; } = 1;
     /// <summary>Authoritative project version. Repository manifests are projections of this value.</summary>
