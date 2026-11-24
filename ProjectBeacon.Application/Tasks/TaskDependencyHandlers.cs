@@ -69,5 +69,11 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
             task.CreatedAt,
             task.CompletedAt,
             [],
-            task.Dependencies.Select(d => d.DependentTaskId).ToList());
+            task.Dependencies.Select(d => d.DependentTaskId).ToList(),
+            task.ContentRevision,
+            task.HotfixSourceReleaseId,
+            task.HotfixDeployedSha,
+            task.HotfixTargetBranch,
+            task.HotfixRequestId,
+            task.ForwardPortOfTaskId);
 }
