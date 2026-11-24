@@ -19,12 +19,11 @@ public sealed class AddWorkstationCommandPendingSince : Migration
             nullable: true);
 
         migrationBuilder.Sql(
-            """UPDATE "WorkstationCommands"
-               SET "PendingSince" = CASE
-                   WHEN "Attempts" > 0 OR "ClaimInstanceId" IS NOT NULL THEN CURRENT_TIMESTAMP
-                   ELSE "CreatedAt"
-               END
-               WHERE "Status" = 'Pending';""");
+            "UPDATE \"WorkstationCommands\" "
+            + "SET \"PendingSince\" = CASE "
+            + "WHEN \"Attempts\" > 0 OR \"ClaimInstanceId\" IS NOT NULL THEN CURRENT_TIMESTAMP "
+            + "ELSE \"CreatedAt\" END "
+            + "WHERE \"Status\" = 'Pending';");
 
         migrationBuilder.CreateIndex(
             name: "IX_WorkstationCommands_Kind_Status_PendingSince",
