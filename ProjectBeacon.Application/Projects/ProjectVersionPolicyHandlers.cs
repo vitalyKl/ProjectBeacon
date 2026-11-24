@@ -168,6 +168,17 @@ public sealed class SetProjectVersionPolicyHandler
         var policyJson = ProjectVersionPolicyCatalog.Serialize(command.Policy);
         var currentJson = project.VersionPolicyJson;
         var currentState = project.OfficialVersion;
+        var policyOrInitialVersionChanges =
+            !string.Equals(currentJson, policyJson, StringComparison.Ordinal)
+            || (currentState is null && initialVersion is not null);
+        if (policyOrInitialVersionChanges
+            && await db.Releases.AnyAsync(release => release.ProjectId == command.ProjectId
+                && release.Status != ReleaseStatus.Cancelled
+                && release.PreparationStatus != ReleasePreparationStatus.NotStarted, ct))
+            return Result.Failure<ProjectVersionPolicyDto>(
+                "Version policy and initial official version are locked while a ReleasePrepare workflow is active. Cancel a failed Release before changing policy.",
+                ErrorKind.Conflict);
+
         if (string.Equals(currentJson, policyJson, StringComparison.Ordinal)
             && (initialVersion is null || currentState is not null))
             return Result.Ok(GetProjectVersionPolicyHandler.Map(
