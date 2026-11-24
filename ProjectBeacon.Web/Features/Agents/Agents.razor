@@ -358,13 +358,11 @@ else
             bool ok;
             string? error = null;
             string? errorCode = null;
-            string? errorCode = null;
             if (backendId is { } id)
             {
                 var set = await SetBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, id), _caller));
                 ok = set.Success;
                 error = set.Error;
-                errorCode = set.ErrorCode;
                 errorCode = set.ErrorCode;
             }
             else
@@ -372,7 +370,6 @@ else
                 var removed = await RemoveBinding.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(role), _caller));
                 ok = removed.Success;
                 error = removed.Error;
-                errorCode = removed.ErrorCode;
                 errorCode = removed.ErrorCode;
             }
             if (!ok)
