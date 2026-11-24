@@ -1795,7 +1795,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("VersionPolicyJson")
                         .IsRequired()
                         .HasColumnType("jsonb")
-                        .HasDefaultValue("""{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"sources":[]}""");
+                        .HasDefaultValue("""{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"deploymentVersionEndpoint":null,"sources":[]}""");
 
                     b.Property<int>("VersionPolicyRevision")
                         .IsConcurrencyToken()
