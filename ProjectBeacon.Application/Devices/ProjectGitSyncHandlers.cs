@@ -390,6 +390,7 @@ public sealed class GetProjectGitSyncCommandHandler
 /// <summary>
 /// Cancels a GitSync command only while it is still queued and unclaimed.
 /// Running Git operations require a cooperative workstation-side stop protocol.
+/// </summary>
 public sealed class CancelPendingProjectGitSyncCommandHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
