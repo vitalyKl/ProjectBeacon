@@ -300,7 +300,18 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             var state = ToState(project.ProjectId, current, _timing.TimeProvider.GetUtcNow(),
                 lastAutoPull, lastError, blockedReason);
             if (_snapshot.Set(state))
-                _runtimeState.Log($"repository status changed for project {project.ProjectId}: {Describe(state)}");
+            {
+                if (lastAutoPull is { } pullEvent && pullEvent != previous?.LastAutoPull)
+                {
+                    _runtimeState.Log(
+                        $"repository auto-pull completed for project {project.ProjectId} at {pullEvent.At:O}: "
+                        + $"{pullEvent.Commits} commits, {pullEvent.FromSha} -> {pullEvent.ToSha}");
+                }
+                else
+                {
+                    _runtimeState.Log($"repository status changed for project {project.ProjectId}: {Describe(state)}");
+                }
+            }
         }
     }
 

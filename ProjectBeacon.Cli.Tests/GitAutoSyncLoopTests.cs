@@ -94,6 +94,11 @@ public sealed class GitAutoSyncLoopTests
             Assert.Equal(remoteHead, status.LastAutoPull.ToSha);
             Assert.Equal(40, status.LastAutoPull.FromSha.Length);
             Assert.Null(status.LastError);
+            var pullLog = Assert.Single(state.Snapshot.Log.Where(line =>
+                line.Contains("repository auto-pull completed", StringComparison.Ordinal)));
+            Assert.Contains("1 commits", pullLog, StringComparison.Ordinal);
+            Assert.Contains(status.LastAutoPull.FromSha + " -> " + status.LastAutoPull.ToSha, pullLog, StringComparison.Ordinal);
+            Assert.Contains(status.LastAutoPull.At.ToString("O"), pullLog, StringComparison.Ordinal);
         }
         finally
         {
