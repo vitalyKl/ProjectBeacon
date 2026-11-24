@@ -304,6 +304,81 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task RunCycle_SkipsLocalBranchUpstreamInsteadOfFastForwardingIt()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-local-upstream-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            await Git(root, "init", "-b", "main");
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+
+            await Git(root, "branch", "local-upstream");
+            await Git(root, "checkout", "local-upstream");
+            await File.WriteAllTextAsync(Path.Combine(root, "local-upstream.txt"), "local-only");
+            await Git(root, "add", "local-upstream.txt");
+            await Git(root, "commit", "-m", "advance local upstream");
+            var localHead = await Git(root, "rev-parse", "HEAD");
+
+            await Git(root, "checkout", "main");
+            await Git(root, "config", "branch.main.remote", ".");
+            await Git(root, "config", "branch.main.merge", "refs/heads/local-upstream");
+            var mainHead = await Git(root, "rev-parse", "HEAD");
+
+            var projectId = Guid.NewGuid();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var http = new HttpClient(new RecordingHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                })))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "WhenSafe", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies, new GitSyncService(), snapshot, timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(mainHead, await Git(root, "rev-parse", "HEAD"));
+            Assert.Equal(localHead, await Git(root, "rev-parse", "refs/heads/local-upstream"));
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal(1, status.Behind);
+            Assert.Equal("NoRemote", status.AutoPullBlockedReason);
+            Assert.Null(status.LastAutoPull);
+            Assert.Null(status.LastError);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task RunCycle_ReportsDetachedHeadInsteadOfMissingUpstream()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-detached-" + Guid.NewGuid().ToString("N"));

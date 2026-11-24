@@ -290,4 +290,5 @@ public sealed record GitSyncResultDto(
     string? HeadAfter,
     GitSyncOutcome Outcome,
     GitSyncRefusalCode? ReasonCode,
-    string? Stderr);
+    string? Stderr,
+    string? UpstreamRemote = null);

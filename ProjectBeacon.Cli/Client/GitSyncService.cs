@@ -374,7 +374,7 @@ internal sealed class GitSyncService
         string? stderr,
         string? headAfter) =>
         new(state.Branch, state.Upstream, state.Ahead, state.Behind, state.Clean, state.Detached,
-            state.HasUpstream, state.Diverged, state.Head, headAfter, outcome, reason, SanitizeStderr(stderr));
+            state.HasUpstream, state.Diverged, state.Head, headAfter, outcome, reason, SanitizeStderr(stderr), state.Remote);
 
     private static async Task<RepositoryState> ReadStateAsync(
         string root, string hooks, CancellationToken ct, IReadOnlyList<string>? filters = null)

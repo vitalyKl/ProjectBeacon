@@ -172,7 +172,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             string? blockedReason = null;
             var current = result;
 
-            if (string.Equals(settings.AutoPullMode, "WhenSafe", StringComparison.OrdinalIgnoreCase)
+            if (string.Equals(result.UpstreamRemote, ".", StringComparison.Ordinal))
+            {
+                blockedReason = "NoRemote";
+            }
+            else if (string.Equals(settings.AutoPullMode, "WhenSafe", StringComparison.OrdinalIgnoreCase)
                 && result.Behind > 0
                 && result.Clean
                 && !result.Detached
