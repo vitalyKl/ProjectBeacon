@@ -120,7 +120,7 @@ public sealed class LocalizationTests
         var culture = new System.Globalization.CultureInfo(cultureName);
         foreach (var key in new[]
         {
-            "UiEmptyNotification", "UiGenericOperation", "UiOperationFailed",
+            "UiEmptyNotification", "UiGenericFailure", "UiGenericOperation", "UiOperationFailed",
             "UiOperationFailedWithDetail", "UiOperationNotAllowed", "UiOperationTargetNotFound",
             "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
             "AuthRequestFailed", "AuthBootstrapOperation", "AuthForgotOperation",

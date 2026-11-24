@@ -56,6 +56,36 @@ public sealed class UiNotificationServiceTests
         }
     }
 
+    [Theory]
+    [InlineData(ErrorCodes.Unauthorized, "Недостаточно прав")]
+    [InlineData(ErrorCodes.Forbidden, "Недостаточно прав")]
+    [InlineData(ErrorCodes.NotFound, "не найден")]
+    [InlineData(ErrorCodes.Conflict, "конфликт")]
+    public void FormatFailure_MapsBusinessErrorCodesToSpecificMessages(string errorCode, string expectedText)
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(
+                "A backend detail that is not needed for this error category.",
+                "сохранение шаблона",
+                errorCode,
+                "Сохранить");
+
+            Assert.Contains("сохранение шаблона", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Сохранить", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(expectedText, message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
     private static TestContext CreateContext()
     {
         var context = new TestContext();
