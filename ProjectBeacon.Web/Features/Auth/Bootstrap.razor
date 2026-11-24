@@ -82,7 +82,7 @@
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthBootstrapOperation"].Value);
+                _error = Notifications.FormatHttpFailure(response.StatusCode, null, L["AuthBootstrapOperation"].Value, L["Initialize"].Value);
                 return;
             }
 

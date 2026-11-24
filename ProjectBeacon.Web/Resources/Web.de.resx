@@ -3346,4 +3346,7 @@ orthstar</value>
   <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
     <value>Die verfügbaren Projekte konnten nicht geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
   </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Wiederherstellen</value>
+  </data>
 </root>

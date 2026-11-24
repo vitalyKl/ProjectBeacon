@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Web.Tests;
 
 using System.Globalization;
+using System.Net;
 using TestContext = global::Bunit.TestContext;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
@@ -121,6 +122,72 @@ public sealed class UiNotificationServiceTests
         }
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, "validation detail", "validation detail")]
+    [InlineData(HttpStatusCode.UnprocessableEntity, "field is required", "field is required")]
+    public void FormatHttpFailure_ValidationStatus_PreservesSafeValidationDetail(HttpStatusCode statusCode, string detail, string expected)
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatHttpFailure(statusCode, detail, "регистрация", "Отправить");
+
+            Assert.Contains("регистрация", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Отправить", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(expected, message, StringComparison.Ordinal);
+            Assert.DoesNotContain("Диагностический ID:", message, StringComparison.Ordinal);
+        }
+        finally { CultureInfo.CurrentUICulture = previousCulture; }
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, "войдите в систему")]
+    [InlineData(HttpStatusCode.Forbidden, "Недостаточно прав")]
+    [InlineData(HttpStatusCode.NotFound, "не найден")]
+    [InlineData(HttpStatusCode.Conflict, "конфликтуют")]
+    public void FormatHttpFailure_MapsKnownStatusCodes(HttpStatusCode statusCode, string expected)
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatHttpFailure(statusCode, "internal response detail", "настройки", "Сохранить");
+
+            Assert.Contains("настройки", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Сохранить", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(expected, message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("internal response detail", message, StringComparison.Ordinal);
+        }
+        finally { CultureInfo.CurrentUICulture = previousCulture; }
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "временно недоступен")]
+    [InlineData(HttpStatusCode.InternalServerError, "внутренней ошибке")]
+    public void FormatHttpFailure_ServerStatus_HidesResponseDetailsAndAddsDiagnosticId(HttpStatusCode statusCode, string expected)
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatHttpFailure(statusCode, "private-db.internal:5432 connection failed", "регистрация", "Отправить");
+
+            Assert.Contains(expected, message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("private-db.internal", message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { CultureInfo.CurrentUICulture = previousCulture; }
+    }
     [Fact]
     public void FormatUnknownReasonCode_UsesLocalizedFallbackAndDoesNotExposeMachineCode()
     {

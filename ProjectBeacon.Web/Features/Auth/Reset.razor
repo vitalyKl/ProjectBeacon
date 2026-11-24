@@ -62,7 +62,7 @@
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthResetOperation"].Value);
+                _error = Notifications.FormatHttpFailure(response.StatusCode, null, L["AuthResetOperation"].Value, L["Reset"].Value);
                 return;
             }
             _success = true;

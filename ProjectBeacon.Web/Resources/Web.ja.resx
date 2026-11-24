@@ -3354,4 +3354,7 @@ orthstar</value>
   <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
     <value>利用可能なプロジェクトを読み込めませんでした。ページを再読み込みして、もう一度お試しください。</value>
   </data>
+  <data name="Recover" xml:space="preserve">
+    <value>復旧</value>
+  </data>
 </root>

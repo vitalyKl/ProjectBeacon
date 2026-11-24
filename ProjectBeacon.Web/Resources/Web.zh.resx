@@ -3354,4 +3354,7 @@ orthstar</value>
   <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
     <value>无法加载可用项目列表。请刷新页面后重试。</value>
   </data>
+  <data name="Recover" xml:space="preserve">
+    <value>恢复</value>
+  </data>
 </root>

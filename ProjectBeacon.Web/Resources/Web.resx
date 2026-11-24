@@ -3545,4 +3545,7 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
     <value>Could not load the available projects. Refresh the page and try again.</value>
   </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Recover</value>
+  </data>
 </root>

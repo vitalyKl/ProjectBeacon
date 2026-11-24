@@ -80,7 +80,7 @@
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _error = Notifications.FormatFailure(ErrorText(body, L["AuthRequestFailed"].Value), L["AuthRegisterOperation"].Value);
+                _error = Notifications.FormatHttpFailure(response.StatusCode, ErrorText(body, L["AuthRequestFailed"].Value), L["AuthRegisterOperation"].Value, L["Register"].Value);
                 return;
             }
             _success = true;

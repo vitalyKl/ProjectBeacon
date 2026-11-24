@@ -3336,4 +3336,7 @@
   <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
     <value>Не удалось загрузить список доступных проектов. Обновите страницу и повторите попытку.</value>
   </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Восстановить</value>
+  </data>
 </root>

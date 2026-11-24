@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Web.Shared;
 
+using System.Net;
 using MudBlazor;
 using Microsoft.Extensions.Localization;
 using ProjectBeacon.Application.Common;
@@ -79,6 +80,30 @@ internal sealed class UiNotificationService : IUiNotificationService
     {
         var diagnosticId = UnexpectedFailureDiagnosticId(detail, section, operationLabel, errorCode, context);
         return FormatFailureMessage(detail, section, errorCode, diagnosticId, operationLabel);
+    }
+
+    public string FormatHttpFailure(HttpStatusCode statusCode, string? detail, string section, string? operationLabel = null, object? context = null)
+    {
+        var errorCode = statusCode switch
+        {
+            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => ErrorCodes.ValidationFailed,
+            HttpStatusCode.Unauthorized => ErrorCodes.Unauthorized,
+            HttpStatusCode.Forbidden => ErrorCodes.Forbidden,
+            HttpStatusCode.NotFound => ErrorCodes.NotFound,
+            HttpStatusCode.Conflict => ErrorCodes.Conflict,
+            HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+                or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable
+                or HttpStatusCode.GatewayTimeout => ErrorCodes.Unavailable,
+            _ when (int)statusCode >= 500 => ErrorCodes.InternalError,
+            _ => ErrorCodes.Unclassified
+        };
+
+        return FormatFailure(
+            detail,
+            section,
+            errorCode,
+            operationLabel,
+            new { HttpStatusCode = (int)statusCode, Context = context });
     }
 
     public string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId) =>

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Web.Shared;
 
+using System.Net;
 using MudBlazor;
 using ProjectBeacon.Application.Common;
 
@@ -19,6 +20,7 @@ public interface IUiNotificationService
     string FormatFailure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null);
     string FormatFailure(Result result, string section, string? operationLabel = null, object? context = null);
     string FormatFailure<T>(Result<T> result, string section, string? operationLabel = null, object? context = null);
+    string FormatHttpFailure(HttpStatusCode statusCode, string? detail, string section, string? operationLabel = null, object? context = null);
     string LogException(Exception exception, string operation, object? context = null);
     string FormatDiagnosticMessage(string messageResourceKey, string diagnosticId);
     string FormatUnknownReasonCode(string reasonCode, string messageResourceKey, string operation, object? context = null);

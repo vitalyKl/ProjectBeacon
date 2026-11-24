@@ -82,9 +82,11 @@
             {
                 var json = System.Text.Json.JsonSerializer.Deserialize<ErrorResult>(body,
                     new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                _error = Notifications.FormatFailure(
-                    string.IsNullOrWhiteSpace(json?.Error) ? L["AuthRequestFailed"].Value : json!.Error,
-                    L["AuthRecoverOperation"].Value);
+                _error = Notifications.FormatHttpFailure(
+                    response.StatusCode,
+                    string.IsNullOrWhiteSpace(json?.Error) ? null : json!.Error,
+                    L["AuthRecoverOperation"].Value,
+                    L["Recover"].Value);
                 return;
             }
 

@@ -50,7 +50,7 @@
             var response = await Http.PostAsJsonAsync("/v1/auth/forgot-password", new { email = _email });
             if (!response.IsSuccessStatusCode)
             {
-                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthForgotOperation"].Value);
+                _error = Notifications.FormatHttpFailure(response.StatusCode, null, L["AuthForgotOperation"].Value, L["Request"].Value);
                 return;
             }
             _sent = true;
