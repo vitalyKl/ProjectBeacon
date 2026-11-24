@@ -116,6 +116,9 @@ public record EnqueueCommandRequest(
     // Execute must match the policy snapshot revision after the project row has been locked
     // inside the command-creation transaction.
     internal int? TrustedGitPolicyRevision { get; init; }
+
+    // ReleasePrepare is queued only by the server-authorized Release Management workflow.
+    internal bool TrustedReleasePrepare { get; init; }
 }
 /// <summary>
 /// Command for enqueue command.
