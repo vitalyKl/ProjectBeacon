@@ -1160,15 +1160,6 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
             return;
         }
 
-        if (!ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var currentPolicy, out _))
-        {
-            release.RecordVerificationFailure(row.Id,
-                "The project version policy became invalid after Prepare. Candidate evidence was not committed.");
-            AddAudit(db, project, releaseId, "project.release.verify_failed",
-                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
-            return;
-        }
-
         var currentScope = await ReleasePreparePayload.BuildSnapshotAsync(
             db, release, project, currentPolicy, ct);
         if (currentScope.Error is not null
