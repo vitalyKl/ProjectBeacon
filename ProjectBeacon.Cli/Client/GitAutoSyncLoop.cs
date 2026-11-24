@@ -48,10 +48,24 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             await _timing.DelayAsync(_timing.GitAutoSyncStartupDelay, ct);
             while (!ct.IsCancellationRequested)
             {
+                WorkstationSettings settings;
+                var settingsUnavailable = false;
                 try
                 {
-                    await RunCycleAsync(ct);
-                    SetLoopError(null);
+                    settings = _loadSettings();
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Keep read-only status checks working, but never infer permission
+                    // to mutate the checkout from fallback defaults.
+                    settings = new WorkstationSettings { AutoPullMode = "Off" };
+                    settingsUnavailable = true;
+                }
+
+                string? loopError = settingsUnavailable ? "SettingsUnavailable" : null;
+                try
+                {
+                    await RunCycleAsync(settings, ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -59,18 +73,9 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 }
                 catch (Exception ex)
                 {
-                    SetLoopError(ex.GetType().Name);
+                    loopError ??= ex.GetType().Name;
                 }
-
-                WorkstationSettings settings;
-                try { settings = _loadSettings(); }
-                catch (Exception)
-                {
-                    SetLoopError("SettingsUnavailable");
-                    // Status remains useful while local settings are unavailable, but
-                    // never infer permission to mutate the checkout from fallback defaults.
-                    settings = new WorkstationSettings { AutoPullMode = "Off" };
-                }
+                SetLoopError(loopError);
 
                 var delay = CalculateNextDelay(
                     settings.AutoSyncIntervalMinutes,
@@ -104,7 +109,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         return nextRetry < delay ? nextRetry : delay;
     }
 
-    private async Task RunCycleAsync(CancellationToken ct)
+    private async Task RunCycleAsync(WorkstationSettings settings, CancellationToken ct)
     {
         using var response = await _http.GetAsync("/v1/devices/me/project-runtimes", ct);
         if (!response.IsSuccessStatusCode)
@@ -115,7 +120,6 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         foreach (var staleProjectId in _backoff.Keys.Where(projectId => !ids.Contains(projectId)).ToArray())
             _backoff.Remove(staleProjectId);
 
-        var settings = _loadSettings();
         foreach (var project in projects)
         {
             ct.ThrowIfCancellationRequested();
