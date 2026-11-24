@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Tasks;
+using Application.Security;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Entities.Identity;
@@ -119,6 +120,69 @@ public sealed partial class PipelineHandlerTests
                     && command.Status == WorkstationCommandStatus.Pending)
                 .SingleAsync(TestContext.Current.CancellationToken);
             Assert.Equal(historicalDeviceId, newlyQueued.DeviceId);
+        }
+    }
+
+    [Fact]
+    public async Task LaunchSession_IgnoresCommandRejectedBeforeWorkstationClaimWhenInferringLegacyPin()
+    {
+        var (projectId, task) = await SeedTaskAsync("Legacy task with pre-claim failure");
+        Guid originalDeviceId;
+        Guid plannerBackendId;
+        using (TenantScope.EnterUnscoped())
+        {
+            originalDeviceId = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(runtime => runtime.ProjectId == projectId)
+                .Select(runtime => runtime.DeviceId)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            plannerBackendId = await _db.RoleBindings.IgnoreQueryFilters()
+                .Where(binding => binding.ProjectId == projectId && binding.Role == PipelineRole.Planner)
+                .Select(binding => binding.ModelBackendId)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        await Task.Delay(TimeSpan.FromMilliseconds(25), TestContext.Current.CancellationToken);
+        var currentNativeDevice = await AddNativeWorkstationAsync(projectId, "Current native workstation");
+        var rejectedBeforeClaim = WorkstationCommand.Create(
+            originalDeviceId,
+            WorkstationCommandKind.RunPipelineSession,
+            JsonSerializer.Serialize(new { projectId, taskId = task.Id }),
+            projectId);
+        rejectedBeforeClaim.Fail(CommandSandbox.RuntimeRequired);
+        var session = PipelineSession.Create(
+            task.Id,
+            projectId,
+            PipelineRole.Planner,
+            "Legacy Planner after pre-claim rejection",
+            modelBackendId: plannerBackendId);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.WorkstationCommands.Add(rejectedBeforeClaim);
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var launched = await new LaunchSessionHandler(factory)
+            .HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(launched.Success, launched.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(currentNativeDevice.Id, persistedTask.PipelineDeviceId);
+            Assert.NotEqual(originalDeviceId, persistedTask.PipelineDeviceId);
+
+            var queued = await _db.WorkstationCommands.IgnoreQueryFilters()
+                .Where(command => command.ProjectId == projectId
+                    && command.Kind == WorkstationCommandKind.RunPipelineSession
+                    && command.Status == WorkstationCommandStatus.Pending)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(currentNativeDevice.Id, queued.DeviceId);
         }
     }
 
