@@ -87,7 +87,8 @@ public static class PipelineToolPolicy
     {
         McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict,
         McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandStatus,
-        McpToolNames.PipelineApprove
+        McpToolNames.PipelineApprove, McpToolNames.GetTaskVersionImpact,
+        McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.ReviewVersionImpact
     });
     public static IReadOnlyList<string> PlannerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
