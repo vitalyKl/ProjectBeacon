@@ -113,10 +113,28 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 ErrorKind.Conflict);
 
         var reviewBaseBranch = reviewRun.CheckedBaseBranch!;
+        string landingTargetBranch;
+        if (task.HotfixSourceReleaseId is not null)
+        {
+            if (string.IsNullOrWhiteSpace(task.HotfixTargetBranch)
+                || !string.Equals(reviewBaseBranch, task.HotfixTargetBranch, StringComparison.Ordinal))
+                return Result.Failure<LandingAttemptDto>(
+                    "A Hotfix review proof must target the exact production branch recorded by its published Release.",
+                    ErrorKind.Conflict);
+            if (gitPolicy.AutonomyLevel == 1
+                || string.Equals(gitPolicy.DirtyCheckoutBehavior, "LandViaIntegration", StringComparison.Ordinal))
+                return Result.Failure<LandingAttemptDto>(
+                    "Hotfix landing must target the deployed production branch directly. Disable integration-branch landing/fallback in Project Git Settings before requesting the Hotfix landing.",
+                    ErrorKind.Conflict);
+            landingTargetBranch = task.HotfixTargetBranch;
+        }
+        else
+        {
+            landingTargetBranch = gitPolicy.AutonomyLevel == 1
+                ? ProjectGitPolicyCatalog.IntegrationBranchName
+                : reviewBaseBranch;
+        }
         var policySnapshot = ProjectGitPolicyCatalog.SerializeAttemptSnapshot(gitPolicy, reviewBaseBranch);
-        var landingTargetBranch = gitPolicy.AutonomyLevel == 1
-            ? ProjectGitPolicyCatalog.IntegrationBranchName
-            : reviewBaseBranch;
 
         var latestLanding = await db.LandingAttempts
             .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
