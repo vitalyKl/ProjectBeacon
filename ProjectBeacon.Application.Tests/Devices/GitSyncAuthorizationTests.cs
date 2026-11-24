@@ -898,8 +898,9 @@ public sealed class GitSyncAuthorizationTests
                 Assert.NotNull(stillRunning.LeaseExpiresAt);
             }
 
+            await using var preflightDb = factory.CreateDbContext();
             var preflight = await ProjectGitSyncPreflight.EvaluateAsync(
-                factory.CreateDbContext(), project.Id, device, TestContext.Current.CancellationToken);
+                preflightDb, project.Id, device, TestContext.Current.CancellationToken);
             Assert.True(preflight.InProgress);
         }
     }
