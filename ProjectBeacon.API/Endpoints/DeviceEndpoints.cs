@@ -88,6 +88,13 @@ public static class DeviceEndpoints
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
+    private static async Task<IResult> ListDeviceProjectRuntimes(
+        ListDeviceProjectRuntimesHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        return Results.Ok(await handler.HandleAsync(actor.DeviceId!.Value, ct));
+    }
+
     private static async Task<IResult> Heartbeat(
         [FromBody] WorkstationHeartbeatRequest? body, HeartbeatDeviceHandler handler, HttpContext ctx, CancellationToken ct)
     {

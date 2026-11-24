@@ -21,7 +21,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
         IDaemonAgentRuntimeGate gate,
         IDaemonRuntimeState state,
         DaemonTiming timing,
-        GitAutoSyncSnapshot repoSync)
+        GitAutoSyncSnapshot? repoSync = null)
     {
         _http = deps.Http;
         _llama = deps.Llama;
@@ -30,7 +30,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
         _gate = gate;
         _state = state;
         _timing = timing;
-        _repoSync = repoSync;
+        _repoSync = repoSync ?? new GitAutoSyncSnapshot();
     }
 
     public async Task RunAsync(CancellationToken ct)
