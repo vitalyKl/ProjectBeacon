@@ -28,6 +28,7 @@ public class TaskItem : Entity, IProjectScoped
     public string? VersionImpact { get; private set; }
     public string? VersionImpactRationale { get; private set; }
     public DateTime? VersionImpactAt { get; private set; }
+    public int VersionImpactRevision { get; private set; } = 1;
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public TaskPipelineStage? PipelineStage { get; private set; }
@@ -110,6 +111,7 @@ public class TaskItem : Entity, IProjectScoped
         VersionImpact = impact;
         VersionImpactRationale = rationale.Trim();
         VersionImpactAt = DateTime.UtcNow;
+        VersionImpactRevision++;
     }
 
     /// <summary>Clears a declaration when a task is reopened for a materially different change.</summary>
@@ -118,6 +120,7 @@ public class TaskItem : Entity, IProjectScoped
         VersionImpact = null;
         VersionImpactRationale = null;
         VersionImpactAt = null;
+        VersionImpactRevision++;
     }
 
     public void AssignLabel(Guid? labelId)
