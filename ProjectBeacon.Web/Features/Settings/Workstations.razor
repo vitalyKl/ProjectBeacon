@@ -245,6 +245,8 @@
     private string? _probeAgentRuntime;
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
+    private string? _probeAgentRuntimeErrorCacheKey;
+    private string? _probeAgentRuntimeErrorCacheValue;
     private List<WorkstationCommandDto> _commands = [];
     private readonly Dictionary<Guid, (string Error, string Culture, string Message)> _commandErrorMessages = [];
     private string _clientCurrentVersion = "-";
@@ -393,7 +395,7 @@
         var device = _devices.FirstOrDefault(d => d.Id == deviceId);
         if (device is null) return;
         _wsRevision = device.DesiredRevision;
-        FillProbe(device.ProbeJson);
+        FillProbe(device.ProbeJson, device.Id);
         if (!loadSettings) return;
         try
         {
@@ -426,7 +428,7 @@
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
 
-    private void FillProbe(string probeJson)
+    private void FillProbe(string probeJson, Guid deviceId)
     {
         _probeGit = _probeNode = _probeDocker = _probeLlamaSwap = null;
         _probeAgentRuntime = null;
@@ -450,7 +452,19 @@
                     if (runtimeStatus.TryGetProperty("healthy", out var healthy)
                         && healthy.ValueKind is JsonValueKind.True or JsonValueKind.False)
                         _probeAgentRuntimeHealthy = healthy.GetBoolean();
-                    _probeAgentRuntimeError = Str(runtimeStatus, "error");
+                    var rawRuntimeError = Str(runtimeStatus, "error");
+                    if (!string.IsNullOrWhiteSpace(rawRuntimeError))
+                    {
+                        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{deviceId:N}:{rawRuntimeError}";
+                        if (!string.Equals(cacheKey, _probeAgentRuntimeErrorCacheKey, StringComparison.Ordinal))
+                        {
+                            _probeAgentRuntimeErrorCacheKey = cacheKey;
+                            _probeAgentRuntimeErrorCacheValue = Notifications.FormatFailure(
+                                rawRuntimeError, L["Workstations"].Value, ErrorCodes.InternalError,
+                                L["Check"].Value, new { DeviceId = deviceId });
+                        }
+                        _probeAgentRuntimeError = _probeAgentRuntimeErrorCacheValue;
+                    }
                 }
             }
         }
