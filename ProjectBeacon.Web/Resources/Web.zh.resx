@@ -3056,4 +3056,20 @@ orthstar</value>
   <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>此值只能初始化一次。之后更改正式版本必须通过 ReleasePrepare 工作流。</value></data>
   <data name="SaveVersionPolicy" xml:space="preserve"><value>保存版本策略</value></data>
   <data name="VersionSourceLineInvalid" xml:space="preserve"><value>每个来源必须采用 path|Format|selector 格式。</value></data>
+  <data name="ProjectVersionScheme" xml:space="preserve"><value>版本方案</value></data>
+  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>语义化版本 (SemVer)</value></data>
+  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>数字组件</value></data>
+  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>日历版本</value></data>
+  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>数字组件数量（1–8）</value></data>
+  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>日历格式（.NET 不变区域性日期格式）</value></data>
+  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git 标签模板</value></data>
+  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>必须且只能包含一个 {version} 占位符，例如 v{version}。</value></data>
+  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>允许 SemVer 预发布版本</value></data>
+  <data name="ProjectOfficialVersion" xml:space="preserve"><value>项目正式版本（以 Beacon 为权威来源）</value></data>
+  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>初始正式版本</value></data>
+  <data name="ProjectVersionSources" xml:space="preserve"><value>版本文件投影</value></data>
+  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>每行一个来源：相对路径|Xml、Json、Toml 或 Regex|选择器。XML 使用 XPath，JSON 使用 JSON Pointer，TOML 使用点分隔键路径，Regex 使用名为 'version' 的组或第 1 个捕获组。文件必须位于项目 workspace 内。</value></data>
+  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>只有项目 Owner 和 Admin 可以修改版本策略。</value></data>
+  <data name="ProjectVersionSave" xml:space="preserve"><value>保存版本策略</value></data>
+  <data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
 </root>
