@@ -85,7 +85,7 @@ internal static class ReleasePrepareExecutor
             var targetBranch = Text(payload, "targetBranch");
             if (!ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch))
                 return Fail("The configured release target branch is not a safe Git branch name.");
-            var worktree = ResolveWorktreePath(repositoryRoot, projectId, releaseId);
+            var worktree = WorktreePath(repositoryRoot, projectId, releaseId);
             if (worktree.Error is not null)
                 return Fail(worktree.Error);
 
@@ -142,7 +142,8 @@ internal static class ReleasePrepareExecutor
             return GitFailure("Could not inspect the release worktree.", dirty.StdErr);
         if (!string.IsNullOrWhiteSpace(dirty.StdOut))
         {
-            var existing = await ReadExistingPreparationAsync(worktree, filters, releaseId, version, tagName, targetBranch, ct);
+            var existing = await ReadExistingPreparationAsync(worktree, filters, releaseId, candidateId, version, tagName, targetBranch,
+                versionPolicyRevision, releaseRevision, snapshotJson, ct);
             if (existing.Error is not null || existing.CommitSha is null)
                 return Fail("Release worktree contains uncommitted changes. " + (existing.Error ?? "No prepared commit can be resumed."));
             return await PublishBranchAsync(worktree, filters, originUrl, repository, metadata,
@@ -316,8 +317,11 @@ internal static class ReleasePrepareExecutor
             || !SameGuid(Text(manifestJson, "candidateId"), candidateId)
             || Text(manifestJson, "version") != version
             || Text(manifestJson, "tagName") != tagName
-            || Text(manifestJson, "targetBranch") != targetBranch)
-            return Fail("Remote release manifest does not describe this exact project/release/candidate.");
+            || Text(manifestJson, "targetBranch") != targetBranch
+            || PositiveInt(manifestJson, "versionPolicyRevision") != versionPolicyRevision
+            || PositiveInt(manifestJson, "releaseRevision") != releaseRevision
+            || Text(manifestJson, "snapshotJson") != snapshotJson)
+            return Fail("Remote release manifest does not describe this exact project/release/candidate snapshot.");
 
         foreach (var source in policy.Sources)
         {
@@ -511,7 +515,8 @@ internal static class ReleasePrepareExecutor
     }
 
     private static async Task<(string? CommitSha, string? ManifestSha, string? Error)> ReadExistingPreparationAsync(
-        string worktree, string[] filters, Guid releaseId, string version, string tagName, string targetBranch, CancellationToken ct)
+        string worktree, string[] filters, Guid releaseId, Guid candidateId, string version, string tagName,
+        string targetBranch, int versionPolicyRevision, int releaseRevision, string snapshotJson, CancellationToken ct)
     {
         var head = await GitValue(worktree, ct, filters, "rev-parse", "--verify", "HEAD");
         if (head.Error is not null) return (null, null, head.Error);
@@ -530,8 +535,12 @@ internal static class ReleasePrepareExecutor
             var json = JsonNode.Parse(manifest.StdOut) as JsonObject ?? throw new JsonException("Manifest is not an object.");
             if (Text(json, "version") != version || Text(json, "tagName") != tagName
                 || Text(json, "targetBranch") != targetBranch
-                || !SameGuid(Text(json, "releaseId"), releaseId))
-                return (null, null, "Existing release manifest differs from the requested version, tag or target.");
+                || !SameGuid(Text(json, "releaseId"), releaseId)
+                || !SameGuid(Text(json, "candidateId"), candidateId)
+                || PositiveInt(json, "versionPolicyRevision") != versionPolicyRevision
+                || PositiveInt(json, "releaseRevision") != releaseRevision
+                || Text(json, "snapshotJson") != snapshotJson)
+                return (null, null, "Existing release manifest differs from the requested Candidate snapshot, revisions, version, tag or target.");
         }
         catch (JsonException exception)
         {
