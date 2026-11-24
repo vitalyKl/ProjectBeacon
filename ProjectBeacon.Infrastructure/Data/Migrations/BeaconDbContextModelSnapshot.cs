@@ -2034,6 +2034,8 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("ProjectId", "Id");
+
                     b.HasIndex("ProjectId", "Status", "Order");
 
                     b.ToTable("Releases");
@@ -3141,8 +3143,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", "Release")
                         .WithMany("Milestones")
-                        .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("ProjectId", "ReleaseId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Project");
 
