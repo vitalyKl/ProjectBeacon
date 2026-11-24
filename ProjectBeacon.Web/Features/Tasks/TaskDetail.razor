@@ -666,6 +666,7 @@ else
                                 _gitSyncProjectId = null;
                                 _gitSyncTargetDeviceId = null;
                                 _gitSyncCommandPending = false;
+                                _gitSyncCommandCancellable = false;
                                 if (current.Kind == ErrorKind.Forbidden)
                                     _canManageRepositorySync = false;
                             }
