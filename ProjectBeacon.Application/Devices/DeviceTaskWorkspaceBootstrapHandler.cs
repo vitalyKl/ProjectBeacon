@@ -73,6 +73,23 @@ public sealed class GetDeviceTaskWorkspaceBootstrapHandler
             return Result.Failure<DeviceTaskWorkspaceBootstrapDto>(
                 "Hotfix no longer matches its immutable production deployment proof.", ErrorKind.Conflict);
 
+        var currentDeployedReleaseId = await db.Releases.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.ProjectId == task.ProjectId
+                && item.Status == Domain.Enums.ReleaseStatus.Published
+                && item.PublicationStatus == Domain.Enums.ReleasePublicationStatus.Published
+                && item.PublicationTagPushed
+                && item.DeployedAtUtc != null
+                && item.DeploymentWorkflowRunId != null)
+            .OrderByDescending(item => item.DeployedAtUtc)
+            .ThenByDescending(item => item.PublishedAt)
+            .ThenByDescending(item => item.Id)
+            .Select(item => item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (currentDeployedReleaseId != release.Id)
+            return Result.Failure<DeviceTaskWorkspaceBootstrapDto>(
+                "A newer production Release has been deployed since this Hotfix was created. Refresh its base from the current deployment before continuing.",
+                ErrorKind.Conflict);
+
         var candidate = await db.ReleaseCandidateSnapshots.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(item => item.ProjectId == task.ProjectId
                 && item.ReleaseId == release.Id
