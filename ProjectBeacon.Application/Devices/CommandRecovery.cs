@@ -115,6 +115,7 @@ public static class CommandRecovery
                     .Where(c => c.Id == row.Id)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(c => c.Status, WorkstationCommandStatus.Pending)
+                        .SetProperty(c => c.PendingSince, now)
                         .SetProperty(c => c.Attempts, e => e.Attempts + 1)
                         .SetProperty(c => c.StartedAt, (DateTime?)null)
                         .SetProperty(c => c.Error, (string?)null)
@@ -129,6 +130,7 @@ public static class CommandRecovery
                 .Where(c => c.Id == row.Id)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(c => c.Status, WorkstationCommandStatus.Failed)
+                    .SetProperty(c => c.PendingSince, (DateTime?)null)
                     .SetProperty(c => c.Error, error)
                     .SetProperty(c => c.CompletedAt, now)
                     .SetProperty(c => c.LeaseExpiresAt, (DateTime?)null), ct);
