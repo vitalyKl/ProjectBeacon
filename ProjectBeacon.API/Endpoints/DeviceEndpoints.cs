@@ -9,11 +9,11 @@ using Domain.Common;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
-/// <summary>Workstation enroll, heartbeat, command queue, and per-device project roots.</summary>
+/// <summary>Workstation enrollment, heartbeat, command queue, per-device project roots, and AutoSync targets.</summary>
 public static class DeviceEndpoints
 {
     /// <summary>
-    /// <c>RequireDevice</c> covers heartbeat, claim, complete, llama-swap config, and provider connections.
+    /// <c>RequireDevice</c> covers heartbeat, claim, complete, AutoSync target discovery, llama-swap config, and provider connections.
     /// Create, list, revoke, enqueue, and runtime attach are <c>RequireHuman</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapDeviceEndpoints(this IEndpointRouteBuilder app)
