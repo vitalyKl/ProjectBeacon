@@ -39,6 +39,23 @@ public class Release : Entity, IProjectScoped
     public string? PreparationError { get; private set; }
     public DateTime? PreparationUpdatedAtUtc { get; private set; }
 
+    /// <summary>Separate, human-authorized publication state; Candidate does not imply production deployment.</summary>
+    public int PublicationRevision { get; private set; } = 1;
+    public ReleasePublicationStatus PublicationStatus { get; private set; } = ReleasePublicationStatus.NotStarted;
+    public Guid? PublicationDeviceId { get; private set; }
+    public Guid? PublicationCommandId { get; private set; }
+    public string? PublicationPayloadJson { get; private set; }
+    public string? PublicationResultJson { get; private set; }
+    public string? PublicationError { get; private set; }
+    public bool PublicationTagPushed { get; private set; }
+    public DateTime? PublicationUpdatedAtUtc { get; private set; }
+    public string? PublishedTagName { get; private set; }
+    public long? DeploymentWorkflowRunId { get; private set; }
+    public string? DeploymentWorkflowRunUrl { get; private set; }
+    public string? DeployedVersion { get; private set; }
+    public string? DeployedCommitSha { get; private set; }
+    public DateTime? DeployedAtUtc { get; private set; }
+
     public Project Project { get; private set; } = null!;
     public ICollection<Milestone> Milestones { get; private set; } = [];
     public ReleaseCandidateSnapshot? CandidateSnapshot { get; private set; }
@@ -269,19 +286,121 @@ public class Release : Entity, IProjectScoped
         return error.Length <= 4000 ? error : error[..4000];
     }
 
-    /// <summary>Publication workflow transition after the immutable candidate and tag are verified.</summary>
-    public void MarkPublished(DateTime publishedAtUtc)
+    /// <summary>Queues the explicit Publish confirmation on the same pinned workstation as ReleasePrepare.</summary>
+    public void BeginPublication(Guid deviceId, Guid commandId, string payloadJson)
     {
-        if (Status != ReleaseStatus.Candidate)
-            throw new InvalidOperationException("Only a Candidate release can be published.");
-        if (publishedAtUtc.Kind != DateTimeKind.Utc)
-            throw new ArgumentException("Publication time must be UTC.", nameof(publishedAtUtc));
+        if (Status != ReleaseStatus.Candidate || CandidateSnapshot is null)
+            throw new InvalidOperationException("Only a verified Candidate can be published.");
+        if (deviceId == Guid.Empty || commandId == Guid.Empty)
+            throw new ArgumentException("Publication workstation and command ids are required.");
+        if (PreparationDeviceId is not { } pinnedDevice || pinnedDevice != deviceId)
+            throw new InvalidOperationException("Publication must run on the workstation pinned by ReleasePrepare.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(payloadJson);
+        if (payloadJson.Length > 1_000_000)
+            throw new ArgumentException("Publication payload exceeds the size limit.", nameof(payloadJson));
+        if (PublicationStatus == ReleasePublicationStatus.Published)
+            throw new InvalidOperationException("This Release has already been published.");
+        if (PublicationStatus == ReleasePublicationStatus.Queued)
+            throw new InvalidOperationException("A publication command is already queued.");
+        if (PublicationPayloadJson is not null
+            && !string.Equals(PublicationPayloadJson, payloadJson, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "A publication retry must use the original immutable Candidate, tag and deployment endpoint. Create a new Release to change them.");
 
-        Status = ReleaseStatus.Published;
-        PublishedAt = publishedAtUtc;
-        Revision++;
-        UpdatedAt = publishedAtUtc;
+        PublicationDeviceId = deviceId;
+        PublicationCommandId = commandId;
+        PublicationPayloadJson = payloadJson;
+        PublicationResultJson = null;
+        PublicationError = null;
+        PublicationStatus = ReleasePublicationStatus.Queued;
+        PublicationRevision++;
+        PublicationUpdatedAtUtc = DateTime.UtcNow;
+        UpdatedAt = PublicationUpdatedAtUtc;
     }
+
+    public void RecordPublicationFailure(
+        Guid commandId, string error, bool tagPushed, long? workflowRunId = null, string? workflowRunUrl = null)
+    {
+        RequirePublicationCommand(commandId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(error);
+        PublicationError = ClipPreparationError(error);
+        PublicationTagPushed |= tagPushed;
+        if (workflowRunId is > 0)
+            DeploymentWorkflowRunId = workflowRunId;
+        if (workflowRunUrl is not null)
+            DeploymentWorkflowRunUrl = ClipPublicationUrl(workflowRunUrl);
+        PublicationStatus = PublicationTagPushed
+            ? ReleasePublicationStatus.FailedAfterTag
+            : ReleasePublicationStatus.FailedBeforeTag;
+        PublicationRevision++;
+        PublicationUpdatedAtUtc = DateTime.UtcNow;
+        UpdatedAt = PublicationUpdatedAtUtc;
+    }
+
+    /// <summary>
+    /// Stores proof only when the exact candidate commit/version/tag is the one that the
+    /// successful release workflow reports as deployed and /v1/version independently confirms.
+    /// </summary>
+    public void CompletePublication(
+        Guid commandId,
+        string tagName,
+        long workflowRunId,
+        string workflowRunUrl,
+        string deployedVersion,
+        string deployedCommitSha,
+        DateTime deployedAtUtc,
+        string resultJson)
+    {
+        RequirePublicationCommand(commandId);
+        if (PublicationStatus != ReleasePublicationStatus.Queued)
+            throw new InvalidOperationException("Only a queued publication can complete.");
+        if (CandidateSnapshot is null
+            || !string.Equals(tagName, CandidateSnapshot.TagName, StringComparison.Ordinal)
+            || !string.Equals(deployedVersion, CandidateSnapshot.Version, StringComparison.Ordinal)
+            || !string.Equals(deployedCommitSha, CandidateSnapshot.CandidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Deployment proof does not match the immutable Candidate version, tag and SHA.");
+        if (workflowRunId <= 0 || !IsGitHubActionsRunUrl(workflowRunUrl))
+            throw new ArgumentException("A valid GitHub Actions workflow run id and URL are required.");
+        if (deployedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Deployment verification time must be UTC.", nameof(deployedAtUtc));
+        ArgumentException.ThrowIfNullOrWhiteSpace(resultJson);
+        if (resultJson.Length > 1_000_000)
+            throw new ArgumentException("Publication result exceeds the size limit.", nameof(resultJson));
+
+        PublicationTagPushed = true;
+        PublishedTagName = tagName;
+        DeploymentWorkflowRunId = workflowRunId;
+        DeploymentWorkflowRunUrl = ClipPublicationUrl(workflowRunUrl);
+        DeployedVersion = deployedVersion;
+        DeployedCommitSha = deployedCommitSha.ToLowerInvariant();
+        DeployedAtUtc = deployedAtUtc;
+        PublicationResultJson = resultJson;
+        PublicationError = null;
+        PublicationStatus = ReleasePublicationStatus.Published;
+        PublicationRevision++;
+        PublicationUpdatedAtUtc = deployedAtUtc;
+        Status = ReleaseStatus.Published;
+        PublishedAt = deployedAtUtc;
+        Revision++;
+        UpdatedAt = deployedAtUtc;
+    }
+
+    private void RequirePublicationCommand(Guid commandId)
+    {
+        if (commandId == Guid.Empty || PublicationStatus != ReleasePublicationStatus.Queued
+            || PublicationCommandId != commandId || PublicationDeviceId != PreparationDeviceId)
+            throw new InvalidOperationException("Publication completion does not match the current command and pinned workstation.");
+    }
+
+    private static bool IsGitHubActionsRunUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+        && System.Text.RegularExpressions.Regex.IsMatch(
+            uri.AbsolutePath, @"/actions/runs/[1-9][0-9]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static string ClipPublicationUrl(string value) =>
+        value.Length <= 512 ? value : value[..512];
 
     public void MarkContentDeleted()
     {
