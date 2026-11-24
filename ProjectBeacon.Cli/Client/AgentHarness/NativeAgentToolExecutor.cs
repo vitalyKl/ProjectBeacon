@@ -402,8 +402,10 @@ internal sealed class NativeAgentToolExecutor(
                 else if (AgentTaskGitOperations.IsGitTool(call.Name))
                 {
                     if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true, GitWorkspace: not null } gitAuthorization
-                        || !PipelineToolPolicy.GitToolsForRole(gitAuthorization.PipelineRole)
-                            .Contains(call.Name!, StringComparer.Ordinal))
+                        || !PipelineToolPolicy.IsGitToolAllowed(
+                            gitAuthorization.PipelineRole,
+                            call.Name,
+                            gitAuthorization.AllowAgentGitPublish))
                     {
                         isError = true;
                         toolResult = "Tool error: this structured Git operation is not authorized for the current role or workspace.";

@@ -12,9 +12,10 @@ public static class PipelineToolPolicy
     {
         GitInfo, GitIntegrate, GitPullRequest
     });
+    /// <summary>Default Actor Git tools. Publishing is excluded unless a trusted authorization explicitly opts in.</summary>
     public static IReadOnlyList<string> ActorGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitCommit, GitIntegrate, GitPublish, GitPullRequest
+        GitInfo, GitCommit, GitIntegrate, GitPullRequest
     });
     public static IReadOnlyList<string> ReviewerGitTools { get; } = Array.AsReadOnly(new[]
     {
@@ -34,6 +35,29 @@ public static class PipelineToolPolicy
         role is not null && GitToolsByRole.TryGetValue(role, out var tools)
             ? tools
             : Array.Empty<string>();
+
+    /// <summary>
+    /// Adds task-branch publishing only when a trusted server-issued authorization explicitly
+    /// grants it. The default is false and the normal Actor role ceiling excludes publishing.
+    /// </summary>
+    public static IReadOnlyList<string> GitToolsForAuthorization(
+        string? role,
+        bool allowAgentGitPublish = false)
+    {
+        var roleTools = GitToolsForRole(role);
+        if (!allowAgentGitPublish
+            || !string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+            return roleTools;
+        return Array.AsReadOnly(roleTools.Append(GitPublish).ToArray());
+    }
+
+    public static bool IsGitToolAllowed(
+        string? role,
+        string? toolName,
+        bool allowAgentGitPublish = false) =>
+        toolName is not null
+        && GitToolsForAuthorization(role, allowAgentGitPublish)
+            .Contains(toolName, StringComparer.Ordinal);
     public static IReadOnlyList<string> ReadOnlyWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
         McpToolNames.ReadFile, McpToolNames.GetTree, McpToolNames.SearchCode, McpToolNames.GetChangedScope,

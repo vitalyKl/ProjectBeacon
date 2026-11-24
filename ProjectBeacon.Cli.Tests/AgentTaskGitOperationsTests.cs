@@ -565,6 +565,38 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     [Fact]
+    public async Task GitPublish_IsDeniedWithoutExplicitServerAuthorization()
+    {
+        var missingRoot = Path.Combine(Path.GetTempPath(), "beacon-no-publish-" + Guid.NewGuid().ToString("N"));
+        var authorization = new AgentHarnessAuthorization(
+            "https://beacon.invalid",
+            "test-only-token",
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            1,
+            missingRoot,
+            DateTime.UtcNow.AddMinutes(10),
+            PipelineRole: "Actor",
+            IsolatedWorkspace: true,
+            GitWorkspace: new AgentGitWorkspaceAuthorization(
+                missingRoot,
+                missingRoot,
+                "beacon/task/test",
+                "main",
+                new string('a', 40)));
+
+        var result = await ExecuteAsync(
+            authorization,
+            PipelineToolPolicy.GitPublish,
+            """{"action":"publish","title":"Publish task branch","body":"Must not push"}""");
+
+        Assert.True(result.IsError);
+        Assert.Contains("not authorized", result.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(missingRoot));
+    }
+
+    [Fact]
     public void ToolDefinitions_DoNotAcceptRemoteOrBranchIdentity()
     {
         foreach (var toolName in new[]
@@ -585,7 +617,10 @@ public sealed partial class AgentTaskGitOperationsTests
     }
 
     private static AgentHarnessAuthorization CreateAuthorization(
-        AgentTaskWorktree worktree, Guid projectId, Guid taskId) =>
+        AgentTaskWorktree worktree,
+        Guid projectId,
+        Guid taskId,
+        bool allowAgentGitPublish = false) =>
         new(
             "https://beacon.invalid",
             "test-only-token",
@@ -604,7 +639,8 @@ public sealed partial class AgentTaskGitOperationsTests
                 worktree.RecoveryPath,
                 worktree.BranchName,
                 worktree.BaseBranch,
-                worktree.BaseSha));
+                worktree.BaseSha),
+            AllowAgentGitPublish: allowAgentGitPublish);
 
     private static async Task<McpToolResult> ExecuteAsync(
         AgentHarnessAuthorization authorization, string tool, string arguments)

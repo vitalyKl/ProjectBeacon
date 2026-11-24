@@ -27,7 +27,9 @@ internal sealed class NativeAgentToolCatalog(Func<WorkstationSettings> loadSetti
 
         if (controls?.HarnessAuthorization is { IsolatedWorkspace: true, GitWorkspace: not null } gitAuthorization)
         {
-            foreach (var toolName in PipelineToolPolicy.GitToolsForRole(gitAuthorization.PipelineRole))
+            foreach (var toolName in PipelineToolPolicy.GitToolsForAuthorization(
+                gitAuthorization.PipelineRole,
+                gitAuthorization.AllowAgentGitPublish))
                 tools.Add(AgentTaskGitOperations.ToolDefinition(toolName));
         }
 
