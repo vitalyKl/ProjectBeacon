@@ -26,6 +26,7 @@ public class Release : Entity, IProjectScoped
 
     public Project Project { get; private set; } = null!;
     public ICollection<Milestone> Milestones { get; private set; } = [];
+    public ReleaseCandidateSnapshot? CandidateSnapshot { get; private set; }
 
     public static Release Create(
         string name,
@@ -122,6 +123,22 @@ public class Release : Entity, IProjectScoped
             throw new InvalidOperationException("Only the authorized publication workflow can publish a release.");
 
         Status = target;
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Associates the immutable evidence and only then transitions the Release to Candidate.</summary>
+    public void MarkCandidate(ReleaseCandidateSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (Status != ReleaseStatus.InProgress)
+            throw new InvalidOperationException("Only an InProgress release can become a Candidate.");
+        if (snapshot.ProjectId != ProjectId || snapshot.ReleaseId != Id)
+            throw new InvalidOperationException("Candidate snapshot must belong to this exact Release.");
+        if (CandidateSnapshot is not null)
+            throw new InvalidOperationException("This Release already has an immutable Candidate snapshot.");
+        CandidateSnapshot = snapshot;
+        Status = ReleaseStatus.Candidate;
         Revision++;
         UpdatedAt = DateTime.UtcNow;
     }
