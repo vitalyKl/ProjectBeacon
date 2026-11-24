@@ -2002,6 +2002,40 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("PreparationUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreparationError")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid?>("PreparationCommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PreparationDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreparationPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PreparationRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("PreparationResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PreparationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NotStarted");
+
+                    b.Property<Guid?>("VerificationCommandId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2043,6 +2077,12 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreparedByDeviceId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("BaseSha")
