@@ -337,6 +337,22 @@ public sealed class TaskItemTests
     }
 
     [Fact]
+    public void UpdatingTaskScope_InvalidatesPreviousVersionImpactReview()
+    {
+        var task = TaskItem.Create("Original scope", Guid.NewGuid(), description: "Add an optional field.");
+        task.SetVersionImpact("minor", "Adds an optional public API field.");
+        task.ReviewVersionImpact("Confirmed", "Backward compatible.", Guid.NewGuid());
+
+        task.Update(description: "Remove the existing public field.");
+
+        Assert.Null(task.VersionImpact);
+        Assert.Null(task.VersionImpactReviewStatus);
+        Assert.Null(task.VersionImpactReviewNote);
+        Assert.Null(task.VersionImpactReviewedBySessionId);
+        Assert.Equal(4, task.VersionImpactRevision);
+    }
+
+    [Fact]
     public void ClearVersionImpact_ClearsDeclarationAndReviewerDecision()
     {
         var task = TaskItem.Create("Versioned change", Guid.NewGuid());
