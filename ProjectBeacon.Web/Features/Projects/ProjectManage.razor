@@ -143,6 +143,14 @@ else
         else
         {
             <MudStack Spacing="2">
+                <MudCheckBox T="bool" @bind-Value="_gitAutoSyncEnabled"
+                             Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy || (!_gitAutoSyncEnabled && !HasAutoSyncWorkstation))"
+                             Label="@L["ProjectAutoSyncLabel"]" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ProjectAutoSyncHelp"]</MudText>
+                @if (!HasAutoSyncWorkstation)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["ProjectAutoSyncUnavailable"]</MudText>
+                }
                 <MudSelect T="int" Value="_gitPolicyAutonomy" ValueChanged="OnGitPolicyAutonomyChanged"
                            Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)" Label="@L["GitAutonomyLevel"]"
                            Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -363,6 +371,7 @@ else
     private int _gitMaxChangedLines = 20_000;
     private string _gitAutoRevertMode = "Off";
     private string _gitProtectedPathsText = string.Empty;
+    private bool _gitAutoSyncEnabled;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
@@ -381,6 +390,9 @@ else
 
     private bool HasGitSyncWorkstation =>
         _runtimes.Any(runtime => runtime.DeviceOnline && runtime.GitSyncSupported);
+
+    private bool HasAutoSyncWorkstation =>
+        _runtimes.Any(runtime => runtime.DeviceOnline && runtime.AutoSyncSupported);
 
     private Severity GitSyncSeverity => _gitSyncResult switch
     {
@@ -518,6 +530,7 @@ else
         _gitMaxChangedFiles = policy.MaxChangedFiles;
         _gitMaxChangedLines = policy.MaxChangedLines;
         _gitProtectedPathsText = string.Join(Environment.NewLine, policy.ProtectedPaths);
+        _gitAutoSyncEnabled = policy.AutoSyncEnabled;
     }
 
     private void OnGitPolicyAutonomyChanged(int value)
@@ -551,7 +564,7 @@ else
         {
             var saved = await SetGitPolicy.HandleAsync(new SetProjectGitPolicyCommand(
                 projectId, _gitPolicyAutonomy, _gitDirtyCheckoutBehavior, paths, _gitMaxChangedFiles,
-                _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
+                _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor, _gitAutoSyncEnabled));
             if (!saved.Success || saved.Value is null)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
