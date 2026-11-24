@@ -125,7 +125,11 @@ public sealed class ProjectVersionPolicyHandlerTests : IDisposable
 
         Assert.False(changed.Success);
         Assert.Equal(ErrorKind.Conflict, changed.Kind);
-        var project = await _db.Projects.SingleAsync(
+        // The handler writes through a separate unit-of-work context. Query with a fresh
+        // context so this assertion verifies persisted state rather than the constructor's
+        // still-tracked Project instance.
+        await using var verifyDb = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var project = await verifyDb.Projects.SingleAsync(
             item => item.Id == _projectId, TestContext.Current.CancellationToken);
         Assert.Equal("0.7.5.8", project.OfficialVersion);
     }
