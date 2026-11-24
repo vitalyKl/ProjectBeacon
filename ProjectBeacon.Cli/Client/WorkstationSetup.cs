@@ -21,8 +21,6 @@ public static class WorkstationSetup
             return Result.Failure<string>(resolved.Error ?? "path is not inside root.");
 
         var full = resolved.Value!;
-        Directory.CreateDirectory(full);
-
         var gitMetadataPath = Path.Combine(full, ".git");
         var hasGitMetadata = Directory.Exists(gitMetadataPath) || File.Exists(gitMetadataPath);
         var createGit = payloadRoot.TryGetProperty("createGit", out var gitEl)
@@ -41,6 +39,7 @@ public static class WorkstationSetup
                     ? GitCheckoutGate.Acquire(full)
                     : null;
 
+        Directory.CreateDirectory(full);
         if (createGit)
             Run("git", "init", full);
 
@@ -140,10 +139,20 @@ public static class WorkstationSetup
 
     private static string ResolveCheckoutRoot(string directory)
     {
+        var requestedPath = Path.GetFullPath(directory);
+        var existingDirectory = requestedPath;
+        while (!Directory.Exists(existingDirectory))
+        {
+            var parent = Directory.GetParent(existingDirectory);
+            if (parent is null)
+                return requestedPath;
+            existingDirectory = parent.FullName;
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = "git",
-            WorkingDirectory = directory,
+            WorkingDirectory = existingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -155,7 +164,7 @@ public static class WorkstationSetup
             .GetAwaiter().GetResult();
         return code == 0 && !timedOut && !string.IsNullOrWhiteSpace(stdout)
             ? Path.GetFullPath(stdout.Trim())
-            : Path.GetFullPath(directory);
+            : requestedPath;
     }
 
     private static void Run(string file, string args, string cwd)

@@ -20,6 +20,27 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task InitProject_WaitsForCheckoutLockBeforeCreatingTargetDirectory()
+    {
+        var target = Path.Combine(_dir, "new-project");
+        var payload = JsonSerializer.Serialize(new { path = "new-project", createGit = false });
+
+        using var checkoutLease = GitCheckoutGate.Acquire(target);
+        var initialization = Task.Run(() => WorkstationSetup.InitProject(_dir, payload));
+
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+        Assert.False(initialization.IsCompleted);
+        Assert.False(Directory.Exists(target));
+
+        checkoutLease.Dispose();
+        var result = await initialization.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(Directory.Exists(target));
+        Assert.True(File.Exists(Path.Combine(target, ".gitignore")));
+    }
+
+    [Fact]
     public void InitProject_WritesGitignoreAndKeepsAgentDataOutsideProject()
     {
         var full = Path.Combine(_dir, "app");
