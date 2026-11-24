@@ -102,6 +102,81 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task RunCycle_RecordsSanitizedFetchFailureAndSchedulesRetryBeforeInterval()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-backoff-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var remote = Path.Combine(parent, "origin.git");
+        Directory.CreateDirectory(parent);
+
+        try
+        {
+            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "remote", "add", "origin", remote);
+            await Git(root, "push", "-u", "origin", "main");
+            await Git(root, "remote", "set-url", "origin", Path.Combine(parent, "missing-remote.git"));
+
+            var projectId = Guid.NewGuid();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var requests = 0;
+            using var http = new HttpClient(new RecordingHandler((request, _) =>
+            {
+                requests++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                });
+            }))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming { GitAutoSyncStartupDelay = TimeSpan.Zero };
+            var delays = new List<TimeSpan>();
+            using var cancellation = new CancellationTokenSource();
+            timing.DelayAsync = (delay, _) =>
+            {
+                delays.Add(delay);
+                if (delays.Count == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies, new GitSyncService(), snapshot, timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(1, requests);
+            Assert.Equal(TimeSpan.Zero, Assert.Single(delays.Take(1)));
+            Assert.Equal(TimeSpan.FromMinutes(1), delays[1]);
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal("FetchFailed", status.LastError?.Code);
+            Assert.NotNull(status.LastError?.At);
+            Assert.DoesNotContain(root, JsonSerializer.Serialize(snapshot.ToProbeValue()), StringComparison.Ordinal);
+            Assert.DoesNotContain("fatal:", JsonSerializer.Serialize(snapshot.ToProbeValue()), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void CalculateNextDelay_WakesForRetryBeforeTheConfiguredInterval()
     {
         var now = DateTimeOffset.Parse("2026-11-24T12:00:00Z");
