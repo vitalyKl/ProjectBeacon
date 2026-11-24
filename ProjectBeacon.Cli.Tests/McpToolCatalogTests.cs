@@ -72,6 +72,34 @@ public sealed class McpToolCatalogTests
     }
 
     [Fact]
+    public void VersionTools_AreScopedToProjectTaskCapabilitiesAndReviewPipeline()
+    {
+        foreach (var name in new[]
+        {
+            McpToolNames.VersionCheck,
+            McpToolNames.ReleaseContext,
+            McpToolNames.GetTaskVersionImpact
+        })
+        {
+            var descriptor = McpToolCatalog.Get(name);
+            Assert.Equal(McpToolScope.Read, descriptor.Scope);
+            Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskRead, descriptor.Capability);
+            Assert.Equal(McpToolHandler.Api, descriptor.Handler);
+        }
+
+        var impact = McpToolCatalog.Get(McpToolNames.VersionImpact);
+        Assert.Equal(McpToolScope.Write, impact.Scope);
+        Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskWrite, impact.Capability);
+        Assert.Equal(McpToolHandler.Api, impact.Handler);
+
+        var review = McpToolCatalog.Get(McpToolNames.ReviewVersionImpact);
+        Assert.Equal(McpToolScope.Write, review.Scope);
+        Assert.Equal(ProjectBeacon.Domain.Enums.ApiTokenCapability.TaskWrite, review.Capability);
+        Assert.Equal(McpToolHandler.Api, review.Handler);
+        Assert.True((review.Surface & McpToolSurface.Pipeline) != 0);
+    }
+
+    [Fact]
     public void RegistryAliases_ResolveToTheirCanonicalDescriptor()
     {
         foreach (var descriptor in McpToolCatalog.All)
