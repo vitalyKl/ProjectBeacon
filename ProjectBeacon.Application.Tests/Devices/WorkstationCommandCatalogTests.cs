@@ -31,7 +31,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.GitSync,
             WorkstationCommandKind.ApplyProposalPatch,
             WorkstationCommandKind.GitLand,
-            WorkstationCommandKind.ReleasePrepare
+            WorkstationCommandKind.ReleasePrepare,
+            WorkstationCommandKind.PublishRelease
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
