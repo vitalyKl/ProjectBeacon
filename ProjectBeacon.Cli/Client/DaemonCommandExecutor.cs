@@ -238,7 +238,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
                 if (kind == WorkstationCommandKind.InitProject)
                 {
-                    using var checkoutLease = await GitCheckoutGate.AcquireAsync(command.LocalRoot, ct);
+                    // WorkstationSetup owns the checkout lock so direct callers and command
+                    // dispatch share the same protection without recursively acquiring it.
                     var initialized = WorkstationSetup.InitProject(command.LocalRoot, payload);
                     return initialized.Success
                         ? (true, initialized.Value, null)
