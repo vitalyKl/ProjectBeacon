@@ -755,19 +755,6 @@ else
         }
     }
 
-    private void ApplyVersionPolicy(ProjectVersionPolicyDto policy)
-    {
-        _versionPolicy = policy;
-        _versionScheme = policy.Scheme;
-        _versionComponentCount = policy.ComponentCount;
-        _versionCalendarFormat = policy.CalendarFormat;
-        _versionTagPattern = policy.TagPattern;
-        _versionAllowPrerelease = policy.AllowPrerelease;
-        _versionSourcesText = string.Join(Environment.NewLine,
-            policy.Sources.Select(source => $"{source.Path}|{source.Format}|{source.Selector}"));
-        _initialOfficialVersion = policy.OfficialVersion ?? string.Empty;
-    }
-
     private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
         $"{policy.TargetKind}:{policy.Operation}";
 
