@@ -3084,4 +3084,19 @@
   <data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>Уже выполняется GitSync — проверка отложена</value>
   </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>Не удалось пройти аутентификацию на удалённом репозитории. Проверьте учётные данные.</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>Не удалось получить изменения с удалённого репозитория. Проверьте сеть, URL и учётные данные.</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Истекло время ожидания Git. Автоматическая синхронизация повторит попытку.</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>Не удалось обновить список проектов этой рабочей станции.</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>Каталог проекта недоступен на этой рабочей станции.</value>
+  </data>
 </root>

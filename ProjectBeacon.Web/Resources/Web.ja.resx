@@ -3102,4 +3102,19 @@ orthstar</value>
   <data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>GitSyncを実行中 — チェックを延期</value>
   </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>リモートリポジトリの認証に失敗しました。認証情報を確認してください。</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>リモートから取得できませんでした。ネットワーク、リモートURL、認証情報を確認してください。</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Git操作がタイムアウトしました。自動同期は再試行します。</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>このワークステーションのプロジェクト一覧を更新できませんでした。</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>このワークステーションでプロジェクトフォルダーを利用できません。</value>
+  </data>
 </root>

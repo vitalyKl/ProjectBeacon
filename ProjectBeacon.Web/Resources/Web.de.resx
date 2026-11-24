@@ -3094,4 +3094,19 @@ orthstar</value>
   <data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>GitSync läuft bereits — Prüfung verschoben</value>
   </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>Die Anmeldung am Remote-Repository ist fehlgeschlagen. Repository-Zugangsdaten prüfen.</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>Abruf vom Remote fehlgeschlagen. Netzwerk, Remote-URL und Zugangsdaten prüfen.</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Zeitüberschreitung bei Git. Die automatische Synchronisierung versucht es erneut.</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>Die Projektliste dieser Workstation konnte nicht aktualisiert werden.</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>Der Projektordner ist auf dieser Workstation nicht verfügbar.</value>
+  </data>
 </root>

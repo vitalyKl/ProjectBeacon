@@ -3293,4 +3293,19 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>A GitSync operation is already running — check deferred</value>
   </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>Remote authentication failed. Check repository credentials.</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>Could not fetch from the remote. Check network access, remote URL and credentials.</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>The Git operation timed out. Automatic synchronization will retry.</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>Could not refresh the project list from this workstation.</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>The project folder is unavailable on this workstation.</value>
+  </data>
 </root>

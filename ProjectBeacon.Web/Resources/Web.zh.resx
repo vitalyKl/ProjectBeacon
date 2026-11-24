@@ -3102,4 +3102,19 @@ orthstar</value>
   <data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>GitSync 正在运行 — 延后检查</value>
   </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>远程仓库身份验证失败。请检查仓库凭据。</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>无法从远程仓库获取更新。请检查网络、远程 URL 和凭据。</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Git 操作超时。自动同步将重试。</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>无法刷新此工作站的项目列表。</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>此工作站上的项目文件夹不可用。</value>
+  </data>
 </root>
