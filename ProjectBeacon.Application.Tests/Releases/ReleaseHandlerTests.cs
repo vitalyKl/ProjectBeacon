@@ -9,8 +9,8 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Enums;
-using Infrastructure.Audit;
-using Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Audit;
+using ProjectBeacon.Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
