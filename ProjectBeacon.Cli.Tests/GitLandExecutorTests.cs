@@ -1112,9 +1112,10 @@ public sealed partial class AgentTaskGitOperationsTests
             await File.WriteAllTextAsync(
                 Path.Combine(taskWorktree.WorkingDirectory, "policy-file-one.txt"),
                 "one\n");
+            Directory.CreateDirectory(Path.Combine(taskWorktree.WorkingDirectory, ".beacon"));
             await File.WriteAllTextAsync(
-                Path.Combine(taskWorktree.WorkingDirectory, "policy-file-two.txt"),
-                "two\n");
+                Path.Combine(taskWorktree.WorkingDirectory, ".beacon", "release.json"),
+                "{}\n");
             var commit = await taskWorktree.CommitChangesAsync(
                 "ProjectBeacon: create files for policy-bound landing", CancellationToken.None);
             Assert.True(commit.Success, commit.Error);
@@ -1153,6 +1154,16 @@ public sealed partial class AgentTaskGitOperationsTests
             using var protectedResult = JsonDocument.Parse(protectedPath.Result!);
             Assert.Equal("failed", protectedResult.RootElement.GetProperty("status").GetString());
             Assert.Equal("ProtectedPathChanged", protectedResult.RootElement.GetProperty("errorCode").GetString());
+
+            var releaseManifest = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, Guid.NewGuid(), "Preview", sourceSha, reviewTreeSha,
+                    commandHash, checkCommand, maxChangedFiles: 10),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(releaseManifest.Ok, releaseManifest.Error ?? releaseManifest.Result);
+            using var releaseManifestResult = JsonDocument.Parse(releaseManifest.Result!);
+            Assert.Equal("failed", releaseManifestResult.RootElement.GetProperty("status").GetString());
+            Assert.Equal("ProtectedPathChanged", releaseManifestResult.RootElement.GetProperty("errorCode").GetString());
 
             Assert.Equal(
                 string.Empty,
