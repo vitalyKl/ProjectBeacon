@@ -3065,4 +3065,6 @@ orthstar</value>
   <data name="ProjectVersionSave" xml:space="preserve"><value>Versionsrichtlinie speichern</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>Versionsrichtlinie gespeichert</value></data>
   <data name="NotConfigured" xml:space="preserve"><value>Nicht konfiguriert</value></data>
+  <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Release Management für dieses Projekt aktivieren</value></data>
+  <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>Nach der Aktivierung sind Releases in der Roadmap verfügbar und Meilensteine können einem Release zugeordnet werden. Bestehende Meilensteine bleiben eigenständig. Standardmäßig deaktiviert.</value></data>
 </root>
