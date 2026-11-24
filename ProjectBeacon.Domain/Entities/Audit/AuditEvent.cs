@@ -20,7 +20,8 @@ public sealed class AuditEvent : Entity
         "reviewCommandHash", "targetHeadSha", "candidateTreeSha",
         "candidateCheckOutputHash", "postMergeCheckOutputHash",
         "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId",
-        "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId"
+        "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId",
+        "deployedSha", "hotfixRequestId"
     };
 
     private static readonly Regex DetailCodePattern =
