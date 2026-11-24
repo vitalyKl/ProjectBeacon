@@ -40,17 +40,26 @@ public sealed class ReleaseEntityTests
     }
 
     [Fact]
-    public void CandidateTransition_RequiresImmutableSnapshotForExactRelease()
+    public void CandidateTransition_RequiresPinnedPrepareAndVerifyEvidenceForExactRelease()
     {
         var projectId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+        var prepareCommandId = Guid.NewGuid();
+        var verifyCommandId = Guid.NewGuid();
         var release = Release.Create("1.0", null, projectId, "1.0.0", "main", 1);
         release.TransitionTo(ReleaseStatus.InProgress);
+        release.BeginPreparation(deviceId, candidateId, prepareCommandId, """{"action":"Prepare"}""");
 
         Assert.Throws<ArgumentNullException>(() => release.MarkCandidate(null!));
+        Assert.Throws<InvalidOperationException>(() => release.BeginVerification(Guid.NewGuid(), verifyCommandId));
         Assert.Equal(ReleaseStatus.InProgress, release.Status);
 
+        release.RecordPrepareSuccess(prepareCommandId, """{"preparedCommitSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}""");
+        release.BeginVerification(deviceId, verifyCommandId);
+
         var otherProjectSnapshot = ReleaseCandidateSnapshot.Create(
-            Guid.NewGuid(), release.Id, "1.0.0", "v1.0.0", "main",
+            Guid.NewGuid(), release.Id, candidateId, deviceId, "1.0.0", "v1.0.0", "main",
             Sha('a'), Sha('b'), Sha('c'), Sha('d'),
             1, release.Revision, new string('e', 64),
             """{"schemaVersion":1}""", DateTime.UtcNow);
@@ -58,7 +67,7 @@ public sealed class ReleaseEntityTests
         Assert.Equal(ReleaseStatus.InProgress, release.Status);
 
         var snapshot = ReleaseCandidateSnapshot.Create(
-            projectId, release.Id, "1.0.0", "v1.0.0", "main",
+            projectId, release.Id, candidateId, deviceId, "1.0.0", "v1.0.0", "main",
             Sha('a'), Sha('b'), Sha('c'), Sha('d'),
             2, release.Revision, new string('e', 64),
             """{"schemaVersion":1}""", DateTime.UtcNow);
@@ -67,6 +76,8 @@ public sealed class ReleaseEntityTests
         release.MarkCandidate(snapshot);
 
         Assert.Equal(ReleaseStatus.Candidate, release.Status);
+        Assert.Equal(ReleasePreparationStatus.Candidate, release.PreparationStatus);
+        Assert.Equal(deviceId, release.PreparationDeviceId);
         Assert.Same(snapshot, release.CandidateSnapshot);
         Assert.Equal(previousRevision + 1, release.Revision);
         Assert.Throws<InvalidOperationException>(() => release.MarkCandidate(snapshot));
@@ -74,28 +85,74 @@ public sealed class ReleaseEntityTests
     }
 
     [Fact]
+    public void ReleasePrepare_RetryMustKeepWorkstationCandidateAndPayloadPinned()
+    {
+        var release = Release.Create("1.0", null, Guid.NewGuid(), "1.0.0", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        var deviceId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+        var payload = """{"action":"Prepare","candidateId":"candidate"}""";
+        release.BeginPreparation(deviceId, candidateId, Guid.NewGuid(), payload);
+        release.RecordPrepareFailure(release.PreparationCommandId!.Value, "workstation failure");
+
+        Assert.Throws<InvalidOperationException>(
+            () => release.BeginPreparation(Guid.NewGuid(), candidateId, Guid.NewGuid(), payload));
+        Assert.Throws<InvalidOperationException>(
+            () => release.BeginPreparation(deviceId, Guid.NewGuid(), Guid.NewGuid(), payload));
+        Assert.Throws<InvalidOperationException>(
+            () => release.BeginPreparation(deviceId, candidateId, Guid.NewGuid(), """{"action":"Prepare","candidateId":"other"}"""));
+
+        release.BeginPreparation(deviceId, candidateId, Guid.NewGuid(), payload);
+        Assert.Equal(ReleasePreparationStatus.PrepareQueued, release.PreparationStatus);
+        Assert.Equal(deviceId, release.PreparationDeviceId);
+        Assert.Equal(candidateId, release.CandidateId);
+        Assert.Equal(payload, release.PreparationPayloadJson);
+    }
+
+    [Fact]
+    public void ReleaseVerifyFailureCanRetryOnlyOnThePinnedWorkstation()
+    {
+        var release = Release.Create("1.0", null, Guid.NewGuid(), "1.0.0", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        var deviceId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+        var prepareCommand = Guid.NewGuid();
+        release.BeginPreparation(deviceId, candidateId, prepareCommand, """{"action":"Prepare"}""");
+        release.RecordPrepareSuccess(prepareCommand, """{"preparedCommitSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}""");
+        var verifyCommand = Guid.NewGuid();
+        release.BeginVerification(deviceId, verifyCommand);
+        release.RecordVerificationFailure(verifyCommand, "target branch has not landed the prepared commit");
+
+        Assert.Throws<InvalidOperationException>(() => release.BeginVerification(Guid.NewGuid(), Guid.NewGuid()));
+        release.BeginVerification(deviceId, Guid.NewGuid());
+        Assert.Equal(ReleasePreparationStatus.VerifyQueued, release.PreparationStatus);
+    }
+
+    [Fact]
     public void CandidateSnapshot_RejectsInvalidShaHashRevisionAndJson()
     {
         var projectId = Guid.NewGuid();
         var releaseId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
         var sha = new string('a', 40);
         var hash = new string('b', 64);
         var timestamp = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
-            projectId, releaseId, "1.0.0", "v1.0.0", "main", "bad", sha, sha, sha,
+            projectId, releaseId, candidateId, deviceId, "1.0.0", "v1.0.0", "main", "bad", sha, sha, sha,
             1, 1, hash, """{"schemaVersion":1}""", timestamp));
         Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
-            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            projectId, releaseId, candidateId, deviceId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
             0, 1, hash, """{"schemaVersion":1}""", timestamp));
         Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
-            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            projectId, releaseId, candidateId, deviceId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
             1, 1, "bad", """{"schemaVersion":1}""", timestamp));
         Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
-            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            projectId, releaseId, candidateId, deviceId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
             1, 1, hash, """[]""", timestamp));
         Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
-            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            projectId, releaseId, candidateId, deviceId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
             1, 1, hash, """{"schemaVersion":1}""", DateTime.Now));
     }
 
