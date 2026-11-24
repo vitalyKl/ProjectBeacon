@@ -1965,6 +1965,65 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DeployedCommitSha")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("DeployedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeployedVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long?>("DeploymentWorkflowRunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DeploymentWorkflowRunUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("PublicationError")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid?>("PublicationCommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PublicationDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicationPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PublicationRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("PublicationResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PublicationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NotStarted");
+
+                    b.Property<bool>("PublicationTagPushed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("PublicationUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedTagName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
