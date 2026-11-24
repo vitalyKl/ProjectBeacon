@@ -236,6 +236,10 @@ else
                                  Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
                                  Label="@L["ProjectVersionAllowPrerelease"]" />
                 }
+                <MudCheckBox T="bool" @bind-Value="_releaseManagementEnabled"
+                             Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                             Label="@L["ProjectReleaseManagementEnabled"]" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ProjectReleaseManagementHelp"]</MudText>
                 <MudTextField T="string" Value="@(_versionPolicy.OfficialVersion ?? L["NotConfigured"].Value)"
                               ReadOnly="true" Label="@L["ProjectOfficialVersion"]"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -454,6 +458,7 @@ else
     private string _versionCalendarFormat = string.Empty;
     private string _versionTagPattern = "v{version}";
     private bool _versionAllowPrerelease;
+    private bool _releaseManagementEnabled;
     private string _versionInitialOfficialVersion = string.Empty;
     private string _versionSourcesText = string.Empty;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
@@ -632,6 +637,7 @@ else
         _versionCalendarFormat = policy.CalendarFormat ?? string.Empty;
         _versionTagPattern = policy.TagPattern;
         _versionAllowPrerelease = policy.AllowPrerelease;
+        _releaseManagementEnabled = policy.ReleaseManagementEnabled;
         _versionInitialOfficialVersion = policy.OfficialVersion ?? string.Empty;
         _versionSourcesText = string.Join(Environment.NewLine,
             policy.Sources.Select(source => $"{source.Path}|{source.Format}|{source.Selector}"));
@@ -682,7 +688,8 @@ else
             string.IsNullOrWhiteSpace(_versionCalendarFormat) ? null : _versionCalendarFormat.Trim(),
             _versionTagPattern.Trim(),
             _versionScheme == "SemVer" && _versionAllowPrerelease,
-            sources);
+            sources,
+            _releaseManagementEnabled);
         _versionPolicyBusy = true;
         try
         {
