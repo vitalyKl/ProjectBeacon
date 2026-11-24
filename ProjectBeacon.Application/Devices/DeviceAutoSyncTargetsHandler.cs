@@ -54,15 +54,77 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 || !policy.AutoSyncEnabled)
                 continue;
 
+            var remoteLandings = await ListRemoteLandingTargetsAsync(
+                db, runtime.ProjectId, deviceId, ct);
             targets.Add(new DeviceAutoSyncTargetDto(
-                runtime.ProjectId, runtime.LocalRoot, policy.Revision));
+                runtime.ProjectId, runtime.LocalRoot, policy.Revision, remoteLandings));
         }
 
         return Result.Ok((IReadOnlyList<DeviceAutoSyncTargetDto>)targets);
+    }
+    private static async Task<IReadOnlyList<DeviceRemoteLandingTargetDto>> ListRemoteLandingTargetsAsync(
+        IBeaconDb db, Guid projectId, Guid deviceId, CancellationToken ct)
+    {
+        var taskIds = await db.Tasks.IgnoreQueryFilters().AsNoTracking()
+            .Where(task => task.ProjectId == projectId
+                && task.PipelineDeviceId == deviceId
+                && task.Status == Domain.Enums.TaskItemStatus.InProgress
+                && task.PipelineStage == Domain.Enums.TaskPipelineStage.Approved)
+            .Select(task => task.Id)
+            .ToArrayAsync(ct);
+
+        var targets = new List<DeviceRemoteLandingTargetDto>();
+        foreach (var taskId in taskIds)
+        {
+            var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(session => session.ProjectId == projectId
+                    && session.TaskId == taskId
+                    && session.Status is Domain.Enums.SessionStatus.Ready
+                        or Domain.Enums.SessionStatus.Active
+                        or Domain.Enums.SessionStatus.WaitingForUser, ct);
+            if (activeSession)
+                continue;
+
+            var review = await db.ReviewRuns.IgnoreQueryFilters().AsNoTracking()
+                .Where(run => run.ProjectId == projectId && run.TaskId == taskId)
+                .OrderByDescending(run => run.StartedAt)
+                .ThenByDescending(run => run.Id)
+                .FirstOrDefaultAsync(ct);
+            if (review is null || !review.IsLandingProof()
+                || review.CheckedDeviceId != deviceId
+                || string.IsNullOrWhiteSpace(review.CheckedBaseBranch)
+                || string.IsNullOrWhiteSpace(review.CheckedSourceSha))
+                continue;
+
+            var verdict = await db.ReviewVerdicts.IgnoreQueryFilters().AsNoTracking()
+                .Where(item => item.ProjectId == projectId && item.TaskId == taskId)
+                .OrderByDescending(item => item.CreatedAt)
+                .ThenByDescending(item => item.Id)
+                .FirstOrDefaultAsync(ct);
+            if (verdict is null || verdict.Kind != Domain.Enums.ReviewVerdictKind.Approve)
+                continue;
+
+            targets.Add(new DeviceRemoteLandingTargetDto(
+                taskId,
+                review.Id,
+                $"beacon/task/{taskId:N}",
+                review.CheckedBaseBranch,
+                review.CheckedSourceSha));
+        }
+
+        return targets;
     }
 }
 
 public sealed record DeviceAutoSyncTargetDto(
     Guid ProjectId,
     string LocalRoot,
-    int PolicyRevision);
+    int PolicyRevision,
+    IReadOnlyList<DeviceRemoteLandingTargetDto>? RemoteLandings = null);
+
+public sealed record DeviceRemoteLandingTargetDto(
+    Guid TaskId,
+    Guid ReviewRunId,
+    string SourceBranch,
+    string TargetBranch,
+    string SourceSha);
