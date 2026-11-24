@@ -24,6 +24,18 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         entity.Property(release => release.CreatedAt).IsRequired();
         entity.Property(release => release.UpdatedAt);
         entity.Property(release => release.PublishedAt);
+        entity.Property(release => release.PreparationRevision)
+            .HasDefaultValue(1).IsRequired().IsConcurrencyToken();
+        entity.Property(release => release.PreparationStatus)
+            .HasConversion<string>().HasDefaultValue(ReleasePreparationStatus.NotStarted).IsRequired();
+        entity.Property(release => release.PreparationDeviceId);
+        entity.Property(release => release.CandidateId);
+        entity.Property(release => release.PreparationCommandId);
+        entity.Property(release => release.VerificationCommandId);
+        entity.Property(release => release.PreparationPayloadJson).HasColumnType("jsonb");
+        entity.Property(release => release.PreparationResultJson).HasColumnType("jsonb");
+        entity.Property(release => release.PreparationError).HasMaxLength(4000);
+        entity.Property(release => release.PreparationUpdatedAtUtc);
 
         entity.HasOne(release => release.Project)
             .WithMany(project => project.Releases)
