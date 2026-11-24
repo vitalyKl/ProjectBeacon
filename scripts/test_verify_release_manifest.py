@@ -36,6 +36,7 @@ class ReleaseTagPatternTests(unittest.TestCase):
     def test_rejects_unsafe_git_ref_names(self) -> None:
         for tag in (
             "",
+            "-release-2.4.1",
             "/release-2.4.1",
             "release-2.4.1/",
             "release/../2.4.1",
