@@ -3280,4 +3280,10 @@ orthstar</value>
   <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
     <value>Die Workstation wurde neu gestartet und hat Version {0} gemeldet.</value>
   </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>Der Workstation-Befehl konnte aufgrund eines unerwarteten Fehlers nicht abgeschlossen werden.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>Die Workstation hat den Vorgang abgebrochen: {0}.</value>
+  </data>
 </root>

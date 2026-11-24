@@ -3479,4 +3479,10 @@ No Beacon-hosted coding agent.</value>
   <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
     <value>The workstation restarted and reported version {0}.</value>
   </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>The workstation command could not be completed because an unexpected error occurred.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>The workstation cancelled the operation: {0}.</value>
+  </data>
 </root>

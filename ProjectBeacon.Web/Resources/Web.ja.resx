@@ -3288,4 +3288,10 @@ orthstar</value>
   <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
     <value>ワークステーションが再起動し、バージョン {0} を報告しました。</value>
   </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>予期しないエラーが発生したため、ワークステーションのコマンドを完了できませんでした。</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>ワークステーションが操作をキャンセルしました: {0}。</value>
+  </data>
 </root>

@@ -536,13 +536,17 @@
             var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Save"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Save"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
+                NotifyCommandFailure(finished, L["Save"].Value, deviceId, queued.Value.Id);
                 return;
             }
             Notifications.Add(L["WorkstationSaved"].Value, Severity.Success);
             // The next heartbeat reports the workstation's new settings. Refresh diagnostics
             // now, but do not overwrite the just-saved form with the previous heartbeat snapshot.
             await ReloadDevices(loadWorkstationSettings: false);
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(exception, "WorkstationCommandFailed", "save workstation settings", new { DeviceId = deviceId });
         }
         finally
         {
@@ -574,10 +578,14 @@
             var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Install"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Install"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
+                NotifyCommandFailure(finished, L["Install"].Value, deviceId, queued.Value.Id);
                 return;
             }
             Notifications.Add(L["CommandSucceeded"].Value, Severity.Success);
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(exception, "WorkstationCommandFailed", $"install {id}", new { DeviceId = deviceId, PackageId = id });
         }
         finally
         {
@@ -601,7 +609,7 @@
             var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Check"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Check"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
+                NotifyCommandFailure(finished, L["Check"].Value, deviceId, queued.Value.Id);
                 return;
             }
             using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
@@ -647,7 +655,7 @@
             var finished = await WaitAsync(queued.Value!.Id, 660, L["Update"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Update"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
+                NotifyCommandFailure(finished, L["Update"].Value, deviceId, queued.Value.Id);
                 return;
             }
             _clientUpdateAvailable = null;
@@ -780,6 +788,29 @@
         _lifecycleDetail = null;
         _clientUpdateActive = false;
         return null;
+    }
+
+    private void NotifyCommandFailure(WorkstationCommandDto? command, string operationLabel, Guid deviceId, Guid commandId)
+    {
+        if (command?.Status == WorkstationCommandStatus.Cancelled)
+        {
+            Notifications.Warning(L["WorkstationCommandCancelled", operationLabel].Value);
+            return;
+        }
+
+        if (command is null && !string.IsNullOrWhiteSpace(_lifecycleDetail))
+        {
+            Notifications.Error(_lifecycleDetail);
+            return;
+        }
+
+        var errorCode = _lifecycleState == "TimedOut" ? ErrorCodes.Unavailable : ErrorCodes.InternalError;
+        Notifications.Failure(
+            command?.Error ?? _lifecycle,
+            L["Workstations"].Value,
+            errorCode,
+            operationLabel,
+            new { DeviceId = deviceId, CommandId = commandId });
     }
 
     private void ApplyClientUpdateProgress(WorkstationCommandDto command)

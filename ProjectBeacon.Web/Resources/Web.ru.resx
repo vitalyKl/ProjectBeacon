@@ -3270,4 +3270,10 @@
   <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
     <value>Рабочая станция перезапустилась и сообщила версию {0}.</value>
   </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>Не удалось выполнить команду на рабочей станции из-за непредвиденной ошибки.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>Рабочая станция отменила операцию: {0}.</value>
+  </data>
 </root>
