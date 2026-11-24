@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -54,6 +55,10 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             if (!milestoneExists)
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, command.Request.ProjectId, [command.Request.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
 
         var task = Domain.Entities.Tasks.TaskItem.Create(
             command.Request.Title,
@@ -142,6 +147,10 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
             if (!milestoneExists)
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId, command.Request.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
 
         var contentChanged = command.Request.Description is not null
             && !string.Equals(task.Description, command.Request.Description, StringComparison.Ordinal);
@@ -229,6 +238,10 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure("Task not found.");
+            var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (milestoneBlock is not null)
+                return Result.Failure(milestoneBlock, ErrorKind.Conflict);
 
             var sessions = await db.PipelineSessions.IgnoreQueryFilters()
                 .Where(session => session.ProjectId == task.ProjectId && session.TaskId == task.Id)
@@ -285,6 +298,10 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
 
         // Unguarded by design: this writer never touches StateRevision, so it cannot
         // create a second finish-work winner. Under a race with finish_work it may leave
@@ -347,6 +364,10 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
 
         var contentChanged = !string.Equals(task.ReviewNotes, command.Request.ReviewNotes, StringComparison.Ordinal);
         if (contentChanged && command.Request.ExpectedContentRevision != task.ContentRevision)
