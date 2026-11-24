@@ -296,7 +296,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         await db.Entry(attempt).ReloadAsync(ct);
 
         var auditProject = project
-            ?? await db.Projects.FirstOrDefaultAsync(candidate => candidate.Id == attempt.ProjectId, ct);
+            ?? await db.Projects.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(candidate => candidate.Id == attempt.ProjectId, ct);
         if (auditProject is not null)
         {
             db.AuditEvents.Add(AuditEventFactory.ForActor(
@@ -435,7 +436,8 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             return Result.Failure<LandingAttemptDto>("The task must remain Approved until Execute is queued.", ErrorKind.Conflict);
         }
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         var checkCommand = project?.ReviewCheckCommand?.Trim();
         if (string.IsNullOrWhiteSpace(checkCommand))
         {
@@ -630,7 +632,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             return Result.Failure<LandingAttemptDto>(
                 "Revert requires a landed attempt or a retryable/uncertain Revert with a recorded merge commit.", ErrorKind.Conflict);
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         if (project is null)
             return Result.Failure<LandingAttemptDto>("Project not found.", ErrorKind.NotFound);
         var device = await RequestLandingHandler.FindLandingDeviceAsync(
