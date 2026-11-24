@@ -328,11 +328,13 @@
                 : localized.Value;
         }
 
-        return Pipeline?.Preflight?.HasNativeWorkstation != true
-            ? L["PipelinePreflightNoNativeWorkstation"].Value
-            : Pipeline.Preflight.HasOnlineNativeWorkstation != true
-                ? L["PipelineNativeWorkstationOffline"].Value
-                : L["PipelinePreflightNoRoleModel"].Value;
+        return Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason
+            ? L[workstationReason].Value
+            : Pipeline?.Preflight?.HasNativeWorkstation != true
+                ? L["PipelinePreflightNoNativeWorkstation"].Value
+                : Pipeline.Preflight.HasOnlineNativeWorkstation != true
+                    ? L["PipelineNativeWorkstationOffline"].Value
+                    : L["PipelinePreflightNoRoleModel"].Value;
     }
 
     private string StageLabel(TaskPipelineStage stage) => stage switch

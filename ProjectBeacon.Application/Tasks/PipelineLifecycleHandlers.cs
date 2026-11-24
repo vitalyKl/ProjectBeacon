@@ -74,13 +74,22 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
                 return Result.Failure<PipelineSessionDto>(message, ErrorKind.Conflict);
             }
 
-            var pipelineDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
-                db, task.ProjectId, DateTime.UtcNow, ct);
+            var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+                db, task, DateTime.UtcNow, ct);
+            if (workstation.BlockedReason is not null || workstation.Device is null)
+                return Result.Failure<PipelineSessionDto>(
+                    ProjectGitSyncPreflight.WorkstationBlockedMessage(workstation.BlockedReason),
+                    ErrorKind.Conflict);
+            var pipelineDevice = workstation.Device;
             var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
                 db, task.ProjectId, pipelineDevice, ct);
             if (repositorySync.InProgress)
                 return Result.Failure<PipelineSessionDto>(
-                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before starting the pipeline.",
+                    "GitSync is still pending or running on the workstation pinned to this task. Wait for it to finish before starting the pipeline.",
+                    ErrorKind.Conflict);
+            if (!await ProjectGitSyncPreflight.TryPinTaskWorkstationAsync(db, task.Id, pipelineDevice.Id, ct))
+                return Result.Failure<PipelineSessionDto>(
+                    "The task was pinned to a different workstation concurrently. Reload the task before starting the pipeline.",
                     ErrorKind.Conflict);
 
             var expectedStatus = task.Status;
@@ -206,16 +215,22 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
             }
 
-            var selectedDevice = await ProjectGitSyncPreflight.SelectLatestOnlineDeviceAsync(
-                db, session.ProjectId, DateTime.UtcNow, ct);
-            if (selectedDevice is null)
-                return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
-
+            var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+                db, task, DateTime.UtcNow, ct);
+            if (workstation.BlockedReason is not null || workstation.Device is null)
+                return Result.Failure<PipelineSessionDto>(
+                    ProjectGitSyncPreflight.WorkstationBlockedMessage(workstation.BlockedReason),
+                    ErrorKind.Conflict);
+            var selectedDevice = workstation.Device;
             var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
                 db, session.ProjectId, selectedDevice, ct);
             if (repositorySync.InProgress)
                 return Result.Failure<PipelineSessionDto>(
-                    "GitSync is still pending or running on the selected pipeline workstation. Wait for it to finish before launching the pipeline session.",
+                    "GitSync is still pending or running on the workstation pinned to this task. Wait for it to finish before launching the pipeline session.",
+                    ErrorKind.Conflict);
+            if (!await ProjectGitSyncPreflight.TryPinTaskWorkstationAsync(db, task.Id, selectedDevice.Id, ct))
+                return Result.Failure<PipelineSessionDto>(
+                    "The task was pinned to a different workstation concurrently. Reload the task before launching the pipeline session.",
                     ErrorKind.Conflict);
 
             if (session.ModelBackendId is not { } backendId)

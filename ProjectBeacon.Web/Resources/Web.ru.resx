@@ -2324,7 +2324,7 @@
     <value>К проекту не привязана рабочая станция с native runtime.</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>Рабочая станция проекта с native runtime не в сети.</value>
+    <value>Рабочая станция, закреплённая за этой задачей, не в сети.</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Для роли Planner не настроена модель.</value>
@@ -3305,5 +3305,14 @@
   </data>
   <data name="InviteEmailMismatch" xml:space="preserve">
     <value>Не удалось выполнить действие «{1}» в разделе «{0}»: приглашение отправлено на другой адрес электронной почты. Войдите с приглашённым адресом или попросите отправителя обновить приглашение.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>Задача уже выполнялась на нескольких рабочих станциях. Нельзя безопасно определить расположение её локальной рабочей копии; явно согласуйте или перенесите её перед продолжением.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>Рабочая станция, закреплённая за задачей, больше не привязана к проекту. Повторно привяжите её или явно перенесите рабочую копию; автоматическое переключение запрещено.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>Закреплённая за задачей станция больше не сообщает о native runtime. Восстановите native runtime или явно перенесите рабочую копию.</value>
   </data>
 </root>

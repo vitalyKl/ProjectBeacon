@@ -2517,7 +2517,7 @@ No Beacon-hosted coding agent.</value>
     <value>No native workstation is assigned to this project.</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>The project's native workstation is offline.</value>
+    <value>The native workstation pinned to this task is offline.</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>No model is configured for the Planner role.</value>
@@ -3514,5 +3514,14 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="InviteEmailMismatch" xml:space="preserve">
     <value>Could not {1} in {0}: this invitation was sent to a different email address. Sign in with the invited address or ask the inviter to update the invitation.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>This task has pipeline runs on multiple workstations. Its local task worktree cannot be selected safely; reconcile or migrate the worktree explicitly before continuing.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>The workstation pinned to this task is no longer attached to the project. Reattach it or explicitly migrate the task worktree; automatic rerouting is disabled.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>The workstation pinned to this task no longer advertises the native runtime. Restore its native runtime or explicitly migrate the task worktree.</value>
   </data>
 </root>
