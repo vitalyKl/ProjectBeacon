@@ -95,15 +95,36 @@
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
-    private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
-        ? L[reason].Value
-        : PreflightMessage(session.Role);
+    private string PreflightMessage(PipelineSessionDto session)
+    {
+        if (session.LaunchBlockedReason is { } reason)
+        {
+            var localized = L[reason];
+            return localized.ResourceNotFound
+                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read subtask launch preflight", new { TaskId, SubtaskId = Subtask.Id })
+                : localized.Value;
+        }
 
-    private string PreflightMessage(PipelineRole role) => Preflight?.HasNativeWorkstation != true
-        ? L["PipelinePreflightNoNativeWorkstation"].Value
-        : Preflight.HasOnlineNativeWorkstation != true
-            ? L["PipelineNativeWorkstationOffline"].Value
-            : L["PipelinePreflightNoRoleModel"].Value;
+        return PreflightMessage(session.Role);
+    }
+
+    private string PreflightMessage(PipelineRole role)
+    {
+        if (!string.IsNullOrWhiteSpace(Preflight?.PipelineWorkstationBlockedReason))
+        {
+            var reason = Preflight.PipelineWorkstationBlockedReason!;
+            var localized = L[reason];
+            return localized.ResourceNotFound
+                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read subtask workstation preflight", new { TaskId, SubtaskId = Subtask.Id })
+                : localized.Value;
+        }
+
+        return Preflight?.HasNativeWorkstation != true
+            ? L["PipelinePreflightNoNativeWorkstation"].Value
+            : Preflight.HasOnlineNativeWorkstation != true
+                ? L["PipelineNativeWorkstationOffline"].Value
+                : L["PipelinePreflightNoRoleModel"].Value;
+    }
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }

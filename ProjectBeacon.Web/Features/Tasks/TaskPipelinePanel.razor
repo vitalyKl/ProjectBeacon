@@ -324,13 +324,19 @@
         {
             var localized = L[reason];
             return localized.ResourceNotFound
-                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read pipeline launch preflight")
+                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read pipeline launch preflight", new { TaskId })
                 : localized.Value;
         }
 
-        return Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason
-            ? L[workstationReason].Value
-            : Pipeline?.Preflight?.HasNativeWorkstation != true
+        if (Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason)
+        {
+            var localized = L[workstationReason];
+            return localized.ResourceNotFound
+                ? Notifications.FormatUnknownReasonCode(workstationReason, "PipelinePreflightReasonUnknown", "read task workstation preflight", new { TaskId })
+                : localized.Value;
+        }
+
+        return Pipeline?.Preflight?.HasNativeWorkstation != true
                 ? L["PipelinePreflightNoNativeWorkstation"].Value
                 : Pipeline.Preflight.HasOnlineNativeWorkstation != true
                     ? L["PipelineNativeWorkstationOffline"].Value
