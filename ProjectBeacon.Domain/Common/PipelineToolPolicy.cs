@@ -124,7 +124,7 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> ActorForbiddenTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict,
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict, McpToolNames.ReviewVersionImpact,
         McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
         McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
         McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,
