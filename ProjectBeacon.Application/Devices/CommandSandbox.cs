@@ -21,6 +21,12 @@ public static class CommandSandbox
 
     private static bool IsGitSha(string value) => (value.Length is 40 or 64) && value.All(Uri.IsHexDigit);
     private static bool IsSha256(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);
+    private static Guid ReadGuid(JsonObject value, string name) =>
+        Guid.TryParse(ReadText(value, name), out var id) ? id : Guid.Empty;
+    private static string ReadText(JsonObject value, string name) =>
+        value[name] is JsonValue item && item.TryGetValue<string>(out var text) ? text ?? string.Empty : string.Empty;
+    private static int ReadInt(JsonObject value, string name) =>
+        value[name] is JsonValue item && item.TryGetValue<int>(out var number) ? number : 0;
 
     public static Result<string> SanitizeProjectPayload(string? payloadJson, WorkstationCommandKind? kind = null)
     {
@@ -192,6 +198,41 @@ public static class CommandSandbox
             if (obj.Any(pair => !allowed.Contains(pair.Key)))
                 return Result.Failure<string>("ReleasePrepare payload contains unsupported properties.");
 
+            return Result.Ok(obj.ToJsonString());
+        }
+
+        if (kind == WorkstationCommandKind.PublishRelease)
+        {
+            var projectId = ReadGuid(obj, "projectId");
+            var releaseId = ReadGuid(obj, "releaseId");
+            var candidateId = ReadGuid(obj, "candidateId");
+            var version = ReadText(obj, "version");
+            var targetBranch = ReadText(obj, "targetBranch");
+            var tagName = ReadText(obj, "tagName");
+            var candidateSha = ReadText(obj, "candidateSha");
+            var candidateTreeSha = ReadText(obj, "candidateTreeSha");
+            var endpoint = ReadText(obj, "deploymentVersionEndpoint");
+            var publicationRevision = ReadInt(obj, "publicationRevision");
+            var releaseRevision = ReadInt(obj, "releaseRevision");
+
+            if (projectId == Guid.Empty || releaseId == Guid.Empty || candidateId == Guid.Empty
+                || string.IsNullOrWhiteSpace(version) || version.Length > 100 || version.Any(char.IsWhiteSpace)
+                || !ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch)
+                || !ProjectVersionPolicyCatalog.IsSafeGitTagName(tagName)
+                || !IsGitSha(candidateSha) || !IsGitSha(candidateTreeSha)
+                || publicationRevision < 1 || releaseRevision < 1
+                || !ProjectVersionPolicyCatalog.TryValidateDeploymentVersionEndpoint(endpoint, out var endpointError)
+                || string.IsNullOrWhiteSpace(endpoint))
+                return Result.Failure<string>(endpointError ?? "PublishRelease payload is invalid.");
+
+            var allowed = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "projectId", "releaseId", "candidateId", "version", "targetBranch", "tagName",
+                "candidateSha", "candidateTreeSha", "deploymentVersionEndpoint",
+                "publicationRevision", "releaseRevision"
+            };
+            if (obj.Count != allowed.Count || obj.Any(pair => !allowed.Contains(pair.Key)))
+                return Result.Failure<string>("PublishRelease payload contains unsupported or missing properties.");
             return Result.Ok(obj.ToJsonString());
         }
 
