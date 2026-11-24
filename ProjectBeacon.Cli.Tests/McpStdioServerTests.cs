@@ -386,15 +386,25 @@ public sealed class McpStdioServerTests
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
             Assert.Single(frames);
-            var toolsJson = frames[0]["result"]!["tools"]!.ToJsonString();
-            Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("task_pipeline_status", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("task_review_verdict", toolsJson, StringComparison.Ordinal);
-            Assert.Contains("pipeline_approve", toolsJson, StringComparison.Ordinal);
-            Assert.DoesNotContain("get_task", toolsJson, StringComparison.Ordinal);
-            Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
-            Assert.DoesNotContain("task_create_subtask", toolsJson, StringComparison.Ordinal);
-            Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
+            var tools = (JsonArray)frames[0]["result"]!["tools"]!;
+            var toolNames = tools
+                .Select(tool => tool?["name"]?.GetValue<string>())
+                .Where(name => name is not null)
+                .Select(name => name!)
+                .ToArray();
+            Assert.Contains("read_file", toolNames);
+            Assert.Contains("task_pipeline_status", toolNames);
+            Assert.Contains("task_review_verdict", toolNames);
+            Assert.Contains("pipeline_approve", toolNames);
+            Assert.Contains("get_task_version_impact", toolNames);
+            Assert.Contains("version_check", toolNames);
+            Assert.Contains("release_context", toolNames);
+            Assert.Contains("review_version_impact", toolNames);
+            Assert.DoesNotContain("get_task", toolNames);
+            Assert.DoesNotContain("version_impact", toolNames);
+            Assert.DoesNotContain("write_file", toolNames);
+            Assert.DoesNotContain("task_create_subtask", toolNames);
+            Assert.DoesNotContain("pipeline_start_actor", toolNames);
         }
         finally
         {
