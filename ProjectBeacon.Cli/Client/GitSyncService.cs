@@ -255,6 +255,84 @@ internal sealed class GitSyncService
         }
     }
 
+    /// <summary>
+    /// Fetches tags from the remote tracked by the current branch without rewriting or pruning
+    /// existing local tags. A moved remote tag fails the fetch because the destination refspec
+    /// deliberately has no force marker.
+    /// </summary>
+    public async Task<(bool Success, int NewTags, string? Error, bool Skipped)> SyncTagsAsync(
+        string root,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return (false, 0, "The configured project directory does not exist.", false);
+
+        var rootResult = await RunBareGitAsync(root, "rev-parse", "--show-toplevel", ct);
+        if (rootResult.ExitCode != 0 || rootResult.TimedOut || string.IsNullOrWhiteSpace(rootResult.StdOut))
+            return (false, 0, "The configured project directory is not a Git repository.", false);
+
+        var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+        using var operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+        if (GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
+            return (true, 0, null, true);
+
+        var hooksDirectory = CreateHooksDirectory();
+        try
+        {
+            var filters = await ReadFilterDriversAsync(repositoryRoot, hooksDirectory, ct);
+            if (filters.Error is not null)
+                return (false, 0, filters.Error, false);
+
+            var state = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
+            if (state.Error is not null)
+                return (false, 0, state.Error, false);
+            if (state.Remote is null || state.MergeRef is null
+                || string.Equals(state.Remote, ".", StringComparison.Ordinal))
+                return (true, 0, null, true);
+            if (!RemoteNamePattern.IsMatch(state.Remote) || !BranchRefPattern.IsMatch(state.MergeRef))
+                return (false, 0, "The configured upstream is not a supported remote branch.", false);
+
+            var remoteUrl = await ResolveRemoteFetchUrlAsync(
+                repositoryRoot, hooksDirectory, filters.Drivers, state.Remote, ct);
+            if (remoteUrl.Error is not null)
+                return (false, 0, remoteUrl.Error, false);
+
+            var before = await RunGitAsync(
+                repositoryRoot, hooksDirectory, filters.Drivers, ct,
+                "for-each-ref", "--format=%(refname)", "refs/tags");
+            if (before.TimedOut || before.ExitCode != 0)
+                return (false, 0, SanitizeStderr(before.StdErr) ?? "Could not inspect local tags.", false);
+
+            // The explicit tag refspec works with --no-tags (which disables implicit tag
+            // following) and intentionally lacks '+' so an existing tag cannot be moved.
+            // There is no --prune: tags absent from upstream are never deleted locally.
+            var fetch = await RunGitAsync(
+                repositoryRoot, hooksDirectory, filters.Drivers, ct,
+                "fetch", "--no-tags", "--no-recurse-submodules", "--upload-pack=git-upload-pack",
+                "--", remoteUrl.Url!, "refs/tags/*:refs/tags/*");
+            if (fetch.TimedOut)
+                return (false, 0, "Git tag fetch timed out.", false);
+            if (fetch.ExitCode != 0)
+                return (false, 0, SanitizeStderr(fetch.StdErr) ?? "Git refused to update remote tags.", false);
+
+            var after = await RunGitAsync(
+                repositoryRoot, hooksDirectory, filters.Drivers, ct,
+                "for-each-ref", "--format=%(refname)", "refs/tags");
+            if (after.TimedOut || after.ExitCode != 0)
+                return (false, 0, SanitizeStderr(after.StdErr) ?? "Could not verify fetched tags.", false);
+
+            var previousTags = before.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.Ordinal);
+            var newTags = after.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Count(tag => !previousTags.Contains(tag));
+            return (true, newTags, null, false);
+        }
+        finally
+        {
+            try { Directory.Delete(hooksDirectory, recursive: true); } catch { }
+        }
+    }
+
     public static System.Text.Json.Nodes.JsonObject RepoStatusToolDefinition() => new()
     {
         ["type"] = "function",
