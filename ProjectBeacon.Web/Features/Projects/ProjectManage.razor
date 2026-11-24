@@ -901,8 +901,12 @@ else
 
                         if (current.Value.Status == WorkstationCommandStatus.Failed)
                         {
-                            Notifications.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
-                                + string.Format(L["WorkstationCommandId"].Value, commandId), Severity.Error);
+                            Notifications.Failure(
+                                current.Value.Error,
+                                L["ProjectSettings"].Value,
+                                ErrorCodes.InternalError,
+                                L["SynchronizeRepository"].Value,
+                                new { ProjectId = projectId, CommandId = commandId });
                         }
                         else if (current.Value.Status == WorkstationCommandStatus.Cancelled)
                         {

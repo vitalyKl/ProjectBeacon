@@ -168,9 +168,14 @@
             var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
             if (!result.Success)
             {
-                var message = result.Error ?? L["Error"].Value;
+                var message = Notifications.FormatFailure(
+                    result.Error,
+                    L["McpServers"].Value,
+                    result.ErrorCode,
+                    L["Load"].Value,
+                    new { ProjectId = ProjectId });
                 _loadError = message;
-                Notifications.Add(message, Severity.Error);
+                Notifications.Error(message);
                 return;
             }
 
