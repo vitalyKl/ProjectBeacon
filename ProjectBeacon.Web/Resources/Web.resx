@@ -3610,4 +3610,5 @@ No Beacon-hosted coding agent.</value>
   <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Candidate</value></data>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>Published</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Cancelled</value></data>
+
 </root>
