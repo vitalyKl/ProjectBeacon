@@ -3033,4 +3033,7 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>ランディングの取り消しをキューに登録しました。</value>
   </data>
+  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>リモートリポジトリを自動同期</value></data>
+  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon は定期的にこのプロジェクトの upstream を取得し、変更のないアイドル状態のチェックアウトに限って fast-forward します。ローカル変更、履歴の分岐、Detached HEAD、実行中のエージェントセッションは保持されます。既存のローカルタグを強制更新または削除することはありません。</value></data>
+  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>この設定を有効にするには、AutoSync 対応の Beacon クライアントを実行するワークステーションを接続してください。</value></data>
 </root>
