@@ -66,8 +66,10 @@ public sealed class TenantFilterTests : IDisposable
                 scoped.Add(clr.Name);
         }
 
-        // Frozen baseline: 28 IProjectScoped (including ContentVersion and Proposal) + 3 IOrgScoped + the special audit scope.
+        // The project-scoped baseline now includes Release and ReleaseCandidateSnapshot.
         Assert.Contains(nameof(Domain.Entities.Content.ContentVersion), scoped);
-        Assert.Equal(33, scoped.Count);
+        Assert.Contains(nameof(Domain.Entities.Roadmap.Release), scoped);
+        Assert.Contains(nameof(Domain.Entities.Roadmap.ReleaseCandidateSnapshot), scoped);
+        Assert.Equal(35, scoped.Count);
     }
 }
