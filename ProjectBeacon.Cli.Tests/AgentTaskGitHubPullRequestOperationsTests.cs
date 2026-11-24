@@ -326,7 +326,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
 
         Assert.Null(result.Error);
         Assert.Equal(3, result.Items!.Count);
-        Assert.Equal(1200, result.Items[0]!["body"]!.GetValue<string>().Length + "\n[comment truncated]".Length);
+        Assert.Equal(800 + "\n[comment truncated]".Length, result.Items[0]!["body"]!.GetValue<string>().Length);
         Assert.Contains("[comment truncated]", result.Items[0]!["body"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
