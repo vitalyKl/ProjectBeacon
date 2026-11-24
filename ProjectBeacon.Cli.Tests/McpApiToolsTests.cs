@@ -682,6 +682,41 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
+    public async Task ReleaseContext_IncludesMilestoneReleaseLinksAndActiveReleases()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Planner"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.ReleaseContext,
+            new JsonObject
+            {
+                ["projectId"] = projectId.ToString("D"),
+                ["taskId"] = taskId.ToString("D")
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var json = JsonNode.Parse(result.Text)!;
+        Assert.True(json["releaseManagementEnabled"]!.GetValue<bool>());
+        Assert.Equal("Prepare API release", json["milestones"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal("cccccccc-cccc-cccc-cccc-cccccccccccc",
+            json["milestones"]![0]!["releaseId"]!.GetValue<string>());
+        Assert.Equal("0.7.5.9", json["releases"]![0]!["targetVersion"]!.GetValue<string>());
+        Assert.Equal("InProgress", json["releases"]![0]!["status"]!.GetValue<string>());
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/projects/{projectId:D}/milestones");
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/projects/{projectId:D}/releases");
+    }
+
+    [Fact]
     public async Task VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision()
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -822,8 +857,9 @@ public sealed class McpApiToolsTests
                 "/v1/models" => """{"projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","backends":[],"bindings":[]}""",
                 "/v1/models/proxy/status" => """{"available":false}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/context/compile" => """{"success":true,"value":{"briefMarkdown":"# Project\n\n## Goals\n\nDone."}}""",
-                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.8","revision":2}""",
-                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => "[]",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":true,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.9","revision":2}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"Prepare API release","releaseId":"cccccccc-cccc-cccc-cccc-cccccccccccc"}]""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","status":"InProgress"}]""",
                 _ => """{"ok":true}"""
             };
             return new HttpResponseMessage(HttpStatusCode.OK)
