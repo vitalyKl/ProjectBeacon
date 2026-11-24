@@ -33,6 +33,7 @@ internal static partial class McpApiTools
         ..ModelTools(),
         ..ProposalTools(),
         ..VersionTools(),
+        ..VersionTools(),
     ];
 
     static McpApiTools()
