@@ -10,8 +10,7 @@ using System.Xml.XPath;
 /// <summary>Known-safe default. No version source is guessed for a new customer project.</summary>
 public static class ProjectVersionPolicyDefaults
 {
-    public const string Json =
-        "{\\"scheme\\":\\"SemVer\\",\\"componentCount\\":3,\\"calendarFormat\\":null,\\"tagPattern\\":\\"v{version}\\",\\"allowPrerelease\\":false,\\"sources\\":[]}";
+    public const string Json = """{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[]}""";
 }
 
 /// <summary>File projection source configured by a project Owner/Admin.</summary>
@@ -32,7 +31,7 @@ public static class ProjectVersionPolicyCatalog
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Regex NumericPattern = new(@"^[0-9]+(?:\.[0-9]+)*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex SemVerPattern = new(
-        @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$",
+        @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     public static bool TryRead(string? json, out ProjectVersionPolicy policy, out string? error)
