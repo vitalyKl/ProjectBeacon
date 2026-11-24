@@ -3421,4 +3421,6 @@ orthstar</value>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>キャンセル済み</value></data>
 
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate は ReleasePrepare によって、ポリシー、影響、landing、検証の各チェックに合格した後に作成されます。</value></data>
+  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>本番バージョンエンドポイント</value></data>
+  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>末尾が /v1/version の HTTPS URL。リリースワークフロー成功後、Beacon はこのエンドポイントを確認し、version と gitSha が Candidate と一致することを要求します。</value></data>
 </root>
