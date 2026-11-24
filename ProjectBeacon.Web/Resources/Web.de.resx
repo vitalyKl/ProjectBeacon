@@ -3331,4 +3331,10 @@ orthstar</value>
   <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
     <value>Der Aktivitätsstatus der Pipeline konnte nicht gelesen werden. Die neuesten Aktivitätsdaten sind möglicherweise unvollständig.</value>
   </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Diese Repository-Synchronisierung abbrechen? Ein Abbruch ist nur möglich, solange noch keine Workstation den Auftrag übernommen hat.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung wurde abgebrochen, bevor eine Workstation ihn gestartet hat.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung ist abgelaufen, weil ihn innerhalb von 10 Minuten keine Workstation übernommen hat.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Es konnte nicht bestätigt werden, dass die Repository-Synchronisierungsanforderung abgebrochen wurde. Aktualisieren Sie die Aufgabe und prüfen Sie den Status, bevor Sie es erneut versuchen.</value>
+  </data>
 </root>

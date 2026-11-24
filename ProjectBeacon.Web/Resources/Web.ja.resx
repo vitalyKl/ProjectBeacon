@@ -3339,4 +3339,10 @@ orthstar</value>
   <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
     <value>パイプラインのアクティビティスナップショットを読み取れませんでした。最新のアクティビティ情報が不完全な可能性があります。</value>
   </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>このリポジトリ同期リクエストをキャンセルしますか？ワークステーションがコマンドを取得する前に限りキャンセルできます。</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>ワークステーションで開始される前に、リポジトリ同期リクエストがキャンセルされました。</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>10 分以内にワークステーションが取得しなかったため、リポジトリ同期リクエストの有効期限が切れました。</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>リポジトリ同期リクエストのキャンセルを確認できませんでした。再試行する前にタスクを更新して状態を確認してください。</value>
+  </data>
 </root>

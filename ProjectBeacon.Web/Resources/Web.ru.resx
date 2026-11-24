@@ -3321,4 +3321,10 @@
   <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
     <value>Не удалось прочитать снимок активности pipeline. Последние сведения о работе могут быть неполными.</value>
   </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Отменить запрос синхронизации репозитория? Отмена доступна только до того, как рабочая станция захватит команду.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Запрос синхронизации репозитория отменён до начала выполнения на рабочей станции.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>Срок ожидания запроса синхронизации истёк: ни одна рабочая станция не захватила его за 10 минут.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Не удалось подтвердить отмену запроса синхронизации репозитория. Обновите задачу и проверьте её состояние, прежде чем повторять попытку.</value>
+  </data>
 </root>

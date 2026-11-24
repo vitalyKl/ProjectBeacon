@@ -3530,4 +3530,10 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
     <value>The pipeline activity snapshot could not be read. The latest activity may be incomplete.</value>
   </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Cancel this repository synchronization request? Cancellation is available only until a workstation claims it.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>The repository synchronization request was cancelled before a workstation started it.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>The repository synchronization request expired because no workstation claimed it within 10 minutes.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Could not confirm that the repository synchronization request was cancelled. Refresh the task and check its status before retrying.</value>
+  </data>
 </root>

@@ -3339,4 +3339,10 @@ orthstar</value>
   <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
     <value>无法读取流水线活动快照。最新的活动信息可能不完整。</value>
   </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>要取消此仓库同步请求吗？只有在工作站领取命令之前才能取消。</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>仓库同步请求已在工作站开始执行之前取消。</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>由于 10 分钟内没有工作站领取，仓库同步请求已过期。</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>无法确认仓库同步请求已取消。请刷新任务并检查其状态，然后再决定是否重试。</value>
+  </data>
 </root>

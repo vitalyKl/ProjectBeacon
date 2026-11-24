@@ -1154,6 +1154,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("PendingSince")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("DeviceId")
                         .HasColumnType("uuid");
 
@@ -1196,6 +1199,8 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceId", "Status", "CreatedAt");
+
+                    b.HasIndex("Kind", "Status", "PendingSince");
 
                     b.ToTable("WorkstationCommands");
                 });
