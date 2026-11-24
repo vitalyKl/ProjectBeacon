@@ -17,6 +17,7 @@ public sealed record ProjectVersionPolicyDto(
     string TagPattern,
     bool AllowPrerelease,
     IReadOnlyList<ProjectVersionSourcePolicy> Sources,
+    bool ReleaseManagementEnabled,
     string? OfficialVersion,
     int Revision);
 
@@ -84,7 +85,7 @@ public sealed class GetProjectVersionPolicyHandler
     internal static ProjectVersionPolicyDto Map(
         ProjectVersionPolicy policy, string? officialVersion, int revision) =>
         new(policy.Scheme, policy.ComponentCount, policy.CalendarFormat, policy.TagPattern,
-            policy.AllowPrerelease, policy.Sources, officialVersion, revision);
+            policy.AllowPrerelease, policy.Sources, policy.ReleaseManagementEnabled, officialVersion, revision);
 }
 
 public sealed class SetProjectVersionPolicyHandler
