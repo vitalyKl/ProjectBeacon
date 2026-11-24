@@ -63,7 +63,8 @@ internal sealed class RepoPatchApplyService
                 return (false, null, "RepoPatchConflict: GitPathMappingMismatch");
         }
 
-        IDisposable operationLock;
+        IDisposable? operationLock = null;
+        IDisposable? checkoutLease = null;
         while (true)
         {
             var idle = GitRepositoryOperationGate.WaitForNoSessionsAsync(repositoryRoot, ct);
@@ -82,17 +83,22 @@ internal sealed class RepoPatchApplyService
             }
             await idle;
 
+            checkoutLease = await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
             operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
             if (!GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
                 break;
 
             // A new session can register between the idle signal and acquiring the operation
-            // gate. Release and wait again; never hold the gate while waiting for session leases,
-            // because a worktree needs the same gate to dispose and release its lease.
+            // gate. Release both gates before waiting again; a worktree needs the repository gate
+            // to dispose and release its session lease.
             operationLock.Dispose();
+            operationLock = null;
+            checkoutLease.Dispose();
+            checkoutLease = null;
         }
 
-        using (operationLock)
+        using (checkoutLease!)
+        using (operationLock!)
         {
             var snapshots = new List<FileSnapshot>(request.Files.Count);
             var filesToApply = new List<RepoPatchFile>(request.Files.Count);

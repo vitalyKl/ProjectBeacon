@@ -343,7 +343,8 @@ public sealed record DeviceProjectRuntimeDto(
     Guid ProjectId,
     string LocalRoot,
     bool ManualGitSyncActive,
-    bool GitLandActive);
+    bool GitLandActive,
+    bool CheckoutMutationActive = false);
 
 /// <summary>Returns only runtimes owned by the authenticated device; paths never enter heartbeat probe data.</summary>
 public sealed class ListDeviceProjectRuntimesHandler
@@ -392,9 +393,15 @@ public sealed class ListDeviceProjectRuntimesHandler
                 && command.Kind == WorkstationCommandKind.GitSync),
             active.Any(command => command.ProjectId == runtime.ProjectId
                 && command.Kind == WorkstationCommandKind.GitLand
-                && IsMutatingGitLand(command.PayloadJson))))
+                && IsMutatingGitLand(command.PayloadJson)),
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && IsOtherCheckoutMutation(command.Kind))))
             .ToArray();
     }
+
+    private static bool IsOtherCheckoutMutation(WorkstationCommandKind kind) =>
+        kind == WorkstationCommandKind.ApplyProposalPatch
+        || kind == WorkstationCommandKind.InitProject;
 
     private static bool IsMutatingGitLand(string payloadJson)
     {

@@ -396,7 +396,6 @@ else
     private Guid? _gitSyncCommandId;
     private readonly CancellationTokenSource _gitSyncPoll = new();
     private readonly CancellationTokenSource _autoSyncRefresh = new();
-    private Task? _autoSyncRefreshTask;
     private List<RepoSyncViewRow> _repoSyncRows = [];
     private sealed record RepoSyncViewRow(string DeviceName, RepositoryAutoSyncStatusDto Status);
 
@@ -478,7 +477,7 @@ else
         _projectDescription = current.Value.Description ?? string.Empty;
         _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
-        _autoSyncRefreshTask = RefreshAutoSyncAsync(_autoSyncRefresh.Token);
+        _ = RefreshAutoSyncAsync(_autoSyncRefresh.Token);
         await ReloadProposalPolicies();
         await ReloadGitPolicy();
 
