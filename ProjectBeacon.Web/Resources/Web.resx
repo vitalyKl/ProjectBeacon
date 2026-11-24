@@ -2794,6 +2794,9 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronize</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Waiting for the workstation to complete the Git operation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>The Git operation is still running. This page will keep checking its status automatically.</value></data>
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Cancel this repository synchronization request? Cancellation is available only until a workstation claims it.</value></data>
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>The repository synchronization request was cancelled before a workstation started it.</value></data>
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>The repository synchronization request expired because no workstation claimed it within 10 minutes.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>No online workstation with GitSync support is attached to this project.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
