@@ -3415,4 +3415,14 @@ orthstar</value>
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Ein Candidate wird von ReleasePrepare erstellt, nachdem Richtlinien-, Impact-, Landing- und Validierungsprüfungen bestanden wurden.</value></data>
   <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Produktions-Version-Endpunkt</value></data>
   <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS-URL mit /v1/version am Ende. Beacon prüft diesen Endpunkt nach erfolgreichem Release-Workflow und verlangt übereinstimmende Werte für Version und gitSha.</value></data>
+  <data name="CreateHotfixTask" xml:space="preserve"><value>Hotfix-Aufgabe erstellen</value></data>
+  <data name="HotfixTaskTitle" xml:space="preserve"><value>Titel der Hotfix-Aufgabe</value></data>
+  <data name="HotfixTaskDescription" xml:space="preserve"><value>Produktionsproblem und erforderliche Korrektur beschreiben</value></data>
+  <data name="HotfixTaskCreated" xml:space="preserve"><value>Hotfix-Aufgabe aus dem bereitgestellten Release erstellt</value></data>
+  <data name="HotfixSourceRelease" xml:space="preserve"><value>Quell-Release</value></data>
+  <data name="HotfixDeployedVersion" xml:space="preserve"><value>Bereitgestellte Version</value></data>
+  <data name="HotfixDeployedSha" xml:space="preserve"><value>In Produktion bereitgestellter Commit</value></data>
+  <data name="HotfixDeploymentRun" xml:space="preserve"><value>Deployment-Workflow öffnen</value></data>
+  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Forward-Port des Hotfix</value></data>
+  <data name="HotfixTasks" xml:space="preserve"><value>Hotfix- und Forward-Port-Aufgaben</value></data>
 </root>
