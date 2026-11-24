@@ -3381,4 +3381,24 @@
 <data name="NotConfigured" xml:space="preserve"><value>Не задано</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Включить управление релизами для проекта</value></data>
 <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>После включения Releases появятся в Roadmap, а milestones можно будет связывать с релизом. Существующие milestones останутся самостоятельными. По умолчанию функция отключена.</value></data>
+  <data name="ProjectReleases" xml:space="preserve"><value>Релизы проекта</value></data>
+  <data name="Releases" xml:space="preserve"><value>релизов</value></data>
+  <data name="NewRelease" xml:space="preserve"><value>Новый релиз</value></data>
+  <data name="ReleaseName" xml:space="preserve"><value>Название релиза</value></data>
+  <data name="ReleaseTargetVersion" xml:space="preserve"><value>Целевая версия</value></data>
+  <data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>Необязательно. Должна соответствовать схеме версионирования в настройках проекта.</value></data>
+  <data name="ReleaseTargetBranch" xml:space="preserve"><value>Целевая ветка</value></data>
+  <data name="ReleaseStart" xml:space="preserve"><value>Начать</value></data>
+  <data name="ReleaseMarkCandidate" xml:space="preserve"><value>Отметить кандидатом</value></data>
+  <data name="CancelRelease" xml:space="preserve"><value>Отменить релиз</value></data>
+  <data name="ReleaseCreated" xml:space="preserve"><value>Релиз создан</value></data>
+  <data name="ReleaseDeleted" xml:space="preserve"><value>Релиз удалён</value></data>
+  <data name="MilestoneRelease" xml:space="preserve"><value>Релиз</value></data>
+  <data name="NoRelease" xml:space="preserve"><value>Не привязан к релизу</value></data>
+  <data name="NoReleases" xml:space="preserve"><value>Для этого проекта ещё не создано ни одного релиза.</value></data>
+  <data name="ReleaseStatusPlanned" xml:space="preserve"><value>Запланирован</value></data>
+  <data name="ReleaseStatusInProgress" xml:space="preserve"><value>В работе</value></data>
+  <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Кандидат</value></data>
+  <data name="ReleaseStatusPublished" xml:space="preserve"><value>Опубликован</value></data>
+  <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Отменён</value></data>
 </root>
