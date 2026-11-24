@@ -3025,4 +3025,7 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing-Revert wurde eingeplant.</value>
   </data>
+  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Upstream automatisch synchronisieren</value></data>
+  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon ruft regelmäßig das Upstream-Repository dieses Projekts ab und führt einen Fast-Forward nur bei einem sauberen, inaktiven Checkout aus. Lokale Änderungen, abweichende Historien, Detached HEAD und aktive Agentensitzungen bleiben erhalten. Vorhandene lokale Tags werden niemals erzwungen verschoben oder gelöscht.</value></data>
+  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Verbinde eine Workstation mit einem AutoSync-fähigen Beacon-Client, um diese Einstellung zu aktivieren.</value></data>
 </root>
