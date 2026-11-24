@@ -1534,6 +1534,123 @@ public sealed class McpStdioServerTests
         }
     }
 
+    [Fact]
+    public async Task WriteFile_CannotModifyBeaconReleaseManifestEvenWithoutProjectApi()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-release-manifest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, ".beacon"));
+        var manifest = Path.Combine(root, ".beacon", "release.json");
+        await File.WriteAllTextAsync(manifest, """{"releaseId":"server-owned"}""");
+        var env = McpEnvironment.Of(("BEACON_WORKSPACE_ROOT", root));
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"write_file","arguments":{"path":".beacon/release.json","content":"{}"}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, null, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Contains("Beacon-managed release manifest", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Equal("""{"releaseId":"server-owned"}""", await File.ReadAllTextAsync(manifest));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WriteFile_FailsClosedWhenProjectVersionPolicyCannotBeRead()
+    {
+        var projectId = Guid.NewGuid();
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-version-policy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "Directory.Build.props");
+        await File.WriteAllTextAsync(file, "<Project />");
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_WORKSPACE_ROOT", root));
+        using var http = new HttpClient(new StubApiHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
+        http.BaseAddress = new Uri("https://beacon.test/");
+        var api = new BeaconApiClient(http, env);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"write_file","arguments":{"path":"Directory.Build.props","content":"<Project><PropertyGroup><Version>9.9.9</Version></PropertyGroup></Project>"}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Contains("could not be verified", frames[0].ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("<Project />", await File.ReadAllTextAsync(file));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WriteFile_CannotModifyConfiguredVersionSource()
+    {
+        var projectId = Guid.NewGuid();
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-version-source-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "Directory.Build.props");
+        await File.WriteAllTextAsync(file, "<Project />");
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_WORKSPACE_ROOT", root));
+        using var http = new HttpClient(new StubApiHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal($"/v1/projects/{projectId:D}/version-policy", request.RequestUri!.AbsolutePath);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"//Version"}]}""",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"write_file","arguments":{"path":"Directory.Build.props","content":"<Project><PropertyGroup><Version>9.9.9</Version></PropertyGroup></Project>"}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Contains("configured as a protected version source", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Equal("<Project />", await File.ReadAllTextAsync(file));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private sealed class ConcurrentApiHandler : HttpMessageHandler
     {
         private readonly TaskCompletionSource<bool> _bothStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
