@@ -124,7 +124,7 @@ public sealed class UiNotificationServiceTests
             var notifications = context.Services.GetRequiredService<IUiNotificationService>();
             var message = notifications.FormatUnknownReasonCode(
                 "FutureLandingFailureCode", "LandingReasonUnknown", "display Git landing reason");
-            Assert.Contains("Причина сбоя слияния не распознана", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("не распознаёт", message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
             Assert.DoesNotContain("FutureLandingFailureCode", message, StringComparison.Ordinal);
         }
