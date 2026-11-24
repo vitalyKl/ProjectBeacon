@@ -28,6 +28,10 @@ public class TaskItem : Entity, IProjectScoped
     public string? VersionImpact { get; private set; }
     public string? VersionImpactRationale { get; private set; }
     public DateTime? VersionImpactAt { get; private set; }
+    public string? VersionImpactReviewStatus { get; private set; }
+    public string? VersionImpactReviewNote { get; private set; }
+    public DateTime? VersionImpactReviewedAt { get; private set; }
+    public Guid? VersionImpactReviewedBySessionId { get; private set; }
     public int VersionImpactRevision { get; private set; } = 1;
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
@@ -111,6 +115,30 @@ public class TaskItem : Entity, IProjectScoped
         VersionImpact = impact;
         VersionImpactRationale = rationale.Trim();
         VersionImpactAt = DateTime.UtcNow;
+        VersionImpactReviewStatus = null;
+        VersionImpactReviewNote = null;
+        VersionImpactReviewedAt = null;
+        VersionImpactReviewedBySessionId = null;
+        VersionImpactRevision++;
+    }
+
+    /// <summary>Records a Reviewer decision for the current impact revision.</summary>
+    public void ReviewVersionImpact(string decision, string note, Guid reviewSessionId)
+    {
+        if (VersionImpact is null)
+            throw new InvalidOperationException("A task must declare version impact before it can be reviewed.");
+        if (decision is not ("Confirmed" or "Challenged"))
+            throw new ArgumentException("Version impact review decision must be Confirmed or Challenged.", nameof(decision));
+        ArgumentException.ThrowIfNullOrWhiteSpace(note);
+        if (note.Trim().Length > 1000)
+            throw new ArgumentException("Version impact review note cannot exceed 1000 characters.", nameof(note));
+        if (reviewSessionId == Guid.Empty)
+            throw new ArgumentException("Reviewer session id is required.", nameof(reviewSessionId));
+
+        VersionImpactReviewStatus = decision;
+        VersionImpactReviewNote = note.Trim();
+        VersionImpactReviewedAt = DateTime.UtcNow;
+        VersionImpactReviewedBySessionId = reviewSessionId;
         VersionImpactRevision++;
     }
 
@@ -120,6 +148,10 @@ public class TaskItem : Entity, IProjectScoped
         VersionImpact = null;
         VersionImpactRationale = null;
         VersionImpactAt = null;
+        VersionImpactReviewStatus = null;
+        VersionImpactReviewNote = null;
+        VersionImpactReviewedAt = null;
+        VersionImpactReviewedBySessionId = null;
         VersionImpactRevision++;
     }
 
