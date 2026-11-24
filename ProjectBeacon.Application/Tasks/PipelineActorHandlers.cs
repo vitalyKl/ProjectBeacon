@@ -131,7 +131,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         }
         catch (InvalidOperationException ex)
         {
-            return Result.Failure<SubtaskDto>(ex.Message);
+            return Result.Failure<SubtaskDto>(ex.Message, ErrorKind.Conflict);
         }
 
         await db.SaveChangesAsync(ct);
@@ -200,7 +200,7 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Result.Failure<PipelineSessionDto>(ex.Message);
+                    return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
                 }
             }
 
@@ -240,7 +240,7 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             }
             catch (Exception ex)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
             }
 
             var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Actor, ct);
@@ -303,7 +303,7 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
             {
                 try { task.EnterExecuting(); }
-                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
+                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict); }
                 var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
                 if (entered == 0)
                     return Result.Failure<PipelineStateDto>("Pipeline state changed while reporting; retry.");
@@ -313,7 +313,7 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             if (subtask.Status == SubtaskStatus.Pending)
                 subtask.Start();
             try { subtask.ReportResult(diffRef, summary); }
-            catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
+            catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict); }
 
             var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
             var actorSession = actorSessions.FirstOrDefault(session => session.SubtaskId == subtask.Id);
@@ -390,7 +390,7 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
             {
                 try { task.EnterExecuting(); }
-                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message); }
+                catch (InvalidOperationException ex) { return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict); }
                 var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
                 if (entered == 0)
                     return Result.Failure<PipelineStateDto>("Pipeline state changed while failing; retry.");

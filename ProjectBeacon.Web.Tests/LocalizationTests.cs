@@ -109,4 +109,26 @@ public sealed class LocalizationTests
     {
         Assert.Equal("Proposed", _rm.GetString("Proposed", new System.Globalization.CultureInfo("en")));
     }
+    [Theory]
+    [InlineData("en")]
+    [InlineData("ru")]
+    [InlineData("de")]
+    [InlineData("ja")]
+    [InlineData("zh")]
+    public void UiNotificationResources_AreAvailableInEverySupportedCulture(string cultureName)
+    {
+        var culture = new System.Globalization.CultureInfo(cultureName);
+        foreach (var key in new[]
+        {
+            "UiEmptyNotification", "UiGenericFailure", "UiGenericOperation", "UiOperationFailed",
+            "UiOperationFailedWithDetail", "UiOperationAuthenticationRequired", "UiOperationUnavailable", "UiOperationNotAllowed", "UiOperationTargetNotFound",
+            "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
+            "AuthRequestFailed", "InviteEmailMismatch", "InviteInvalidOrExpired", "InviteTokenMissing", "ResetTokenMissing", "AuthBootstrapOperation", "AuthForgotOperation",
+            "AuthInviteOperation", "AuthRecoverOperation", "AuthRegisterOperation", "AuthResetOperation",
+            "ChatAnswerUnexpectedFailed", "LandingReasonWorkspaceUnavailable", "LandingReasonTaskWorktreeChanged", "LandingReasonReviewEvidenceChanged", "LandingReasonTargetBranchChanged", "LandingReasonGitConfigurationInvalid", "LandingReasonCandidateBuildFailed", "LandingReasonProtectedChangesDetected", "LandingReasonLandingRecoveryFailed", "LandingReasonRevertFailed", "LandingReasonCommandQueueFailed", "LandingReasonManualActionRequired", "LandingReasonTaskApprovalRequired", "LandingReasonPostMergeVerificationFailed", "LandingReasonUnknown", "GitSyncTechnicalDetails", "GitSyncReasonUnknown", "PipelinePreflightReasonUnknown", "WorkstationUpdatePending", "WorkstationUpdateProgress", "WorkstationCommandsLoadFailed", "WorkstationSettingsInvalid", "WorkstationProbeInvalid", "WorkstationUpdateReportedVersion", "WorkstationCommandFailed", "WorkstationCommandCancelled", "PipelinePatchConflict", "PipelineActivitySnapshotInvalid", "GitSyncStatusRefreshFailed", "GitSyncCancelPendingConfirm", "GitSyncCancelledBeforeStart", "GitSyncPendingExpired", "GitSyncCancelFailed", "UiGitSyncAlreadyClaimed", "FolderBrowseFailed", "ProjectSwitcherLoadFailed", "SubtaskFailedOpenActivity", "SynchronizeRepository", "FolderListingInvalid", "TimeZoneSaveFailed", "Load", "Reset", "Refresh", "Reload", "Unload", "Check", "Open", "Run", "Rename", "Upload", "Download", "Disconnect", "Move", "Initialize", "Enable", "Verify", "Disable", "Change", "Request", "Fail", "Close", "Reopen", "Activate", "Add", "ChangeStatus", "Preview", "Revert", "Export", "Accept", "Deprecate", "Replace", "Read", "Install", "Browse", "Execute", "Save", "Delete", "Create", "Update", "Restore", "Start", "Restart", "Send", "Cancel", "Attach", "Compile"
+        })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(_rm.GetString(key, culture)), $"{key} is missing for {cultureName}.");
+        }
+    }
 }

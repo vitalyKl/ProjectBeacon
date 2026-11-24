@@ -184,6 +184,57 @@ public sealed class InviteAndPasswordTests : IDisposable
     }
 
     [Fact]
+    public async Task AcceptInvite_EmailMismatch_ReturnsStableErrorCode()
+    {
+        var admin = await SeedAdminAsync();
+        var bob = User.Create("bob", "bob-other@test.com", "hash");
+        _db.Users.Add(bob);
+        var org = Org.Create("Acme");
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(invited.Success, invited.Error);
+
+        var accepted = await new AcceptInviteHandler(Factory()).HandleAsync(
+            new AcceptInviteRequest(invited.Value!.Token, Human(bob.Id, false)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(accepted.Success);
+        Assert.Equal(ErrorCodes.InviteEmailMismatch, accepted.ErrorCode);
+        Assert.Equal(ErrorKind.Forbidden, accepted.Kind);
+    }
+
+    [Fact]
+    public async Task AcceptInvite_AlreadyAccepted_ReturnsStableExpiredCode()
+    {
+        var admin = await SeedAdminAsync();
+        var bob = User.Create("bob", "bob@test.com", "hash");
+        _db.Users.Add(bob);
+        var org = Org.Create("Acme");
+        _db.Orgs.Add(org);
+        _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)),
+            TestContext.Current.CancellationToken);
+        Assert.True(invited.Success, invited.Error);
+
+        var handler = new AcceptInviteHandler(Factory());
+        var request = new AcceptInviteRequest(invited.Value!.Token, Human(bob.Id, false));
+        var first = await handler.HandleAsync(request, TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+
+        var second = await handler.HandleAsync(request, TestContext.Current.CancellationToken);
+        Assert.False(second.Success);
+        Assert.Equal(ErrorCodes.InviteInvalidOrExpired, second.ErrorCode);
+    }
+
+    [Fact]
     public async Task DuplicatePendingInvite_Fails()
     {
         var admin = await SeedAdminAsync();

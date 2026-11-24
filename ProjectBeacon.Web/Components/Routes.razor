@@ -12,10 +12,14 @@
             <LoggingErrorBoundary @key="Navigation.Uri">
                 <ErrorContent Context="exception">
                     <MudAlert Severity="Severity.Error">
-                        @L["AnErrorOccurred"]
+                        <MudText Typo="Typo.body1">@L["PageRenderFailed"]</MudText>
+                        @if (exception.Data["ProjectBeaconErrorLocation"] is string location)
+                        {
+                            <MudText Typo="Typo.body2">@string.Format(L["PageRenderLocation"].Value, location)</MudText>
+                        }
                         @if (exception.Data["ProjectBeaconDiagnosticId"] is string diagnosticId)
                         {
-                            <MudText Typo="Typo.caption">ID: @diagnosticId</MudText>
+                            <MudText Typo="Typo.caption">@string.Format(L["DiagnosticId"].Value, diagnosticId)</MudText>
                         }
                     </MudAlert>
                     <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true))">

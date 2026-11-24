@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Common;
 using Application.Devices;
 using Application.Tasks;
+using Application.Persistence;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
@@ -15,6 +17,26 @@ using Microsoft.Data.Sqlite;
 
 public sealed partial class PipelineHandlerTests
 {
+    [Fact]
+    public async Task StartPipeline_SpawnerException_IsClassifiedAsInternalError()
+    {
+        var (projectId, task) = await SeedTaskAsync("Start with a failing spawner");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+
+        var result = await new StartPipelineHandler(factory, new ThrowingSpawner())
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCodes.InternalError, result.ErrorCode);
+        Assert.Equal("simulated spawner failure", result.Error);
+    }
+
+    private sealed class ThrowingSpawner : ISessionSpawner
+    {
+        public Task<SpawnedSession> SpawnAsync(
+            IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct) =>
+            Task.FromException<SpawnedSession>(new InvalidOperationException("simulated spawner failure"));
+    }
     [Fact]
     public async Task SelfReportedPass_DoesNotProve()
     {

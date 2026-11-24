@@ -25,7 +25,6 @@
 @inject GetProxyStatusHandler GetStatus
 @inject ChatEventSignal Events
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Logging.ILogger<Chat> Logger
 
 <PageTitle>@L["Chat"]</PageTitle>
@@ -236,7 +235,7 @@ else
                     _ => null
                 };
                 if (_block is null)
-                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    Notifications.Failure(created, L["Chat"].Value, L["Create"].Value);
                 return;
             }
             _block = null;
@@ -267,7 +266,7 @@ else
         var result = await ArchiveSession.HandleAsync(new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(session.Id, _userId)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Chat"].Value, L["Delete"].Value);
             return;
         }
         _sessions.RemoveAll(s => s.Id == session.Id);
@@ -290,7 +289,7 @@ else
             if (!sent.Success)
             {
                 _failed = true;
-                Snackbar.Add(sent.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(sent, L["Chat"].Value, L["Send"].Value);
                 return;
             }
             _draft = string.Empty;

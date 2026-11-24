@@ -99,7 +99,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             }
             catch (InvalidOperationException exception)
             {
-                return Result.Failure<PipelineSessionDto>(exception.Message);
+                return Result.Failure<PipelineSessionDto>(exception.Message, ErrorCodes.InternalError);
             }
 
             // Retain the guarded update as a defense against task-state changes by writers
@@ -130,7 +130,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             {
                 if (exception is OperationCanceledException && ct.IsCancellationRequested)
                     throw;
-                return Result.Failure<PipelineSessionDto>(exception.Message);
+                return Result.Failure<PipelineSessionDto>(exception.Message, ErrorCodes.InternalError);
             }
 
             var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
@@ -289,7 +289,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
             }
 
             var launched = await db.PipelineSessions
@@ -371,7 +371,7 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineStateDto>(ex.Message);
+                return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
             }
 
             foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
@@ -459,7 +459,7 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineStateDto>(ex.Message);
+                return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
             }
 
             foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
@@ -589,7 +589,7 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             }
             catch (Exception ex)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
             }
 
             if (spawned.ModelBackendId is null)

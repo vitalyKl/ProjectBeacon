@@ -64,22 +64,22 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Bootstrap already completed.</value>
   </data>
-<data name="Cancel" xml:space="preserve">
+  <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Close</value>
   </data>
 <data name="Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>Create</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
 <data name="Edit" xml:space="preserve">
@@ -124,7 +124,7 @@
 <data name="Projects" xml:space="preserve">
     <value>Projects</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -346,7 +346,7 @@
 <data name="Phase_check" xml:space="preserve">
     <value>Check the result</value>
   </data>
-<data name="Submit" xml:space="preserve">
+  <data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>
 <data name="Clear" xml:space="preserve">
@@ -946,7 +946,7 @@
 <data name="Reload" xml:space="preserve">
     <value>Reload</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>Unload</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -1003,13 +1003,13 @@
 <data name="Constraints" xml:space="preserve">
     <value>Constraints</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Activate</value>
   </data>
 <data name="Reject" xml:space="preserve">
     <value>Reject</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>Accept</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1450,7 +1450,7 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>Export AGENTS.md</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
+  <data name="Deprecate" xml:space="preserve">
     <value>Deprecate</value>
   </data>
 <data name="Supersede" xml:space="preserve">
@@ -1787,7 +1787,7 @@ No Beacon-hosted coding agent.</value>
 <data name="Message" xml:space="preserve">
     <value>Message</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>Send</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -2519,15 +2519,6 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
     <value>The native workstation pinned to this task is offline.</value>
   </data>
-  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
-    <value>This task has pipeline runs on multiple workstations. Its local task worktree cannot be selected safely; reconcile or migrate the worktree explicitly before continuing.</value>
-  </data>
-  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
-    <value>The workstation pinned to this task is no longer attached to the project. Reattach it or explicitly migrate the task worktree; automatic rerouting is disabled.</value>
-  </data>
-  <data name="PipelineWorkstationNotNative" xml:space="preserve">
-    <value>The workstation pinned to this task no longer advertises the native runtime. Restore its native runtime or explicitly migrate the task worktree.</value>
-  </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>No model is configured for the Planner role.</value>
   </data>
@@ -2638,7 +2629,7 @@ No Beacon-hosted coding agent.</value>
     <value>No attachments yet.</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>Could not load attachments: {0}</value>
+    <value>Could not load task attachments.</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}: file exceeds the 10 MB limit.</value>
@@ -2647,7 +2638,7 @@ No Beacon-hosted coding agent.</value>
     <value>Attachments uploaded.</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>Upload failed: {0}</value>
+    <value>Could not upload task attachments.</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>Role profile instructions</value>
@@ -2803,9 +2794,6 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronize</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Waiting for the workstation to complete the Git operation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>The Git operation is still running. This page will keep checking its status automatically.</value></data>
-  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Cancel this repository synchronization request? Cancellation is available only until a workstation claims it.</value></data>
-  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>The repository synchronization request was cancelled before a workstation started it.</value></data>
-  <data name="GitSyncPendingExpired" xml:space="preserve"><value>The repository synchronization request expired because no workstation claimed it within 10 minutes.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>No online workstation with GitSync support is attached to this project.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
@@ -3224,46 +3212,382 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing revert queued.</value>
   </data>
-  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Automatically sync upstream</value></data>
-  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon periodically fetches this project's upstream and fast-forwards only a clean, idle checkout. Local edits, divergence, detached HEAD, and active agent sessions are preserved. Existing local tags are never force-updated or deleted.</value></data>
-  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Connect a workstation running an AutoSync-capable Beacon client to enable this setting.</value></data>
-  <data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Project version policy</value></data>
-  <data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon stores the authoritative project version and checks configured repository manifests against it. Repository files are projections; agents cannot publish or change the official version during ordinary task work.</value></data>
-  <data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>The version policy could not be loaded.</value></data>
-  <data name="OfficialProjectVersion" xml:space="preserve"><value>Official version</value></data>
-  <data name="VersionNotInitialized" xml:space="preserve"><value>Not initialized</value></data>
-  <data name="VersionScheme" xml:space="preserve"><value>Version scheme</value></data>
-  <data name="VersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
-  <data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
-  <data name="VersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
-  <data name="VersionComponentCount" xml:space="preserve"><value>Number of numeric components</value></data>
-  <data name="VersionCalendarFormat" xml:space="preserve"><value>Calendar format</value></data>
-  <data name="VersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
-  <data name="VersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
-  <data name="VersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
-  <data name="VersionManifestSources" xml:space="preserve"><value>Version manifest sources</value></data>
-  <data name="VersionManifestSourcesHelp" xml:space="preserve"><value>One source per line: path|Format|selector. Examples: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; regex files use a named (?&lt;version>...) or first capture group.</value></data>
-  <data name="InitialOfficialVersion" xml:space="preserve"><value>Initialize official version</value></data>
-  <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>This value can be initialized once. Further official version changes require the ReleasePrepare workflow.</value></data>
-  <data name="SaveVersionPolicy" xml:space="preserve"><value>Save version policy</value></data>
-  <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Each version source must use path|Format|selector.</value></data>
-  <data name="ProjectVersionScheme" xml:space="preserve"><value>Version scheme</value></data>
-  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
-  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
-  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
-  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>Number of numeric components (1–8)</value></data>
-  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Calendar format (invariant .NET date format)</value></data>
-  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
-  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
-  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
-  <data name="ProjectOfficialVersion" xml:space="preserve"><value>Official project version (Beacon authoritative)</value></data>
-  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Initial official version</value></data>
-  <data name="ProjectVersionSources" xml:space="preserve"><value>Version file projections</value></data>
-  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>One source per line: relative/path|Xml, Json, Toml or Regex|selector. XML uses XPath; JSON uses JSON Pointer; TOML uses a dotted key; Regex uses a named 'version' group or capture group 1. Files must stay inside the project workspace.</value></data>
-  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Only project Owners and Admins can change version policy.</value></data>
-  <data name="ProjectVersionSave" xml:space="preserve"><value>Save version policy</value></data>
-  <data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
-  <data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
-  <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Enable Release Management for this project</value></data>
-  <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, releases become available in the Roadmap and milestones can be grouped into a release. Existing milestones remain independent. Disabled by default.</value></data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>Diagnostic ID: {0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>We couldn't display this page because an unexpected error occurred. Reload the page. If it happens again, share the diagnostic ID with support.</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>Page: {0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>Could not confirm that repository synchronization was queued. Check the repository status before retrying; the command may already have been accepted.</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>Could not read repository synchronization status. The operation may still be running; reload this page to resume monitoring before starting another operation.</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>Could not start or confirm repository synchronization. The workstation may already have received the command. Refresh the task before retrying.</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>The workstation completed the Git operation but returned no readable result. Check the workstation log before retrying.</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>The workstation could not execute the repository synchronization command. Check the workstation log for details.</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>Workstation command ID: {0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>Could not check whether a workstation update is available. Check that the workstation is online, then try again.</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>Could not confirm that the workstation update completed. The update may already have been handed off. Check the workstation status before retrying.</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>Could not load the project's MCP server configuration. Refresh this section and try again.</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>Could not open or download this attachment.</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>Could not queue repository synchronization: {0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>Could not read repository synchronization status: {0}</value>
+  </data>
+    <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>The update was handed off, but the new workstation version has not reported yet. Check the workstation status or its log before retrying.</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>Load</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>Upload</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>Attach</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>Check</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Disconnect</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>Execute</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>Compile</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>Change status</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>The operation did not complete successfully.</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>This operation could not be completed. Check the page for more information and try again.</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>this operation</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>Could not complete {1} in {0}.</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>Could not complete {1} in {0}. Details: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>You don't have permission to {1} in {0}.</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>Could not {1} in {0} because the required item was not found.</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>Could not {1} in {0} because the data changed or conflicts with another operation. Refresh and try again.</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>Could not complete {1} in {0} because an unexpected error occurred. Diagnostic ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>An unexpected error occurred while processing your request. Please try again. Diagnostic ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>The request could not be completed. Check the information and try again.</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>initial account setup</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>password recovery</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>invitation acceptance</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>administrator account recovery</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>account registration</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>password reset</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>Could not submit the chat form. Check the requested fields and try again.</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>Read</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>The update was handed off. Waiting for the workstation to restart and report its new version.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Fail</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Reopen</value>
+  </data>
+  <data name="Request" xml:space="preserve">
+    <value>Request</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Could not save the time-zone preference. Try again. If the problem persists, share the diagnostic ID with support.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Change</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Initialize</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>The workstation returned a directory listing that could not be read. Check the workstation log and try again.</value>
+  </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Synchronize repository</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>This subtask failed while an agent session was running. Expand the session activity above for the failure details and diagnostic ID.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>The agent's changes could not be applied because project files changed or contain conflicting edits. The isolated worktree was preserved; inspect the command result and resolve the conflict before retrying.</value>
+  </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>You must sign in again to {1} in {0}.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>Could not complete {1} in {0} because the service is temporarily unavailable. Try again later. Diagnostic ID: {2}</value>
+  </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>The workstation or task worktree required for this landing is unavailable. Reconnect the workstation and retry the operation.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>The task branch no longer matches the revision checked by the latest Review. Update the task branch, run Review again, and request a new Preview.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>The approval, review result, or pinned review command changed after Preview. Run a fresh Review and request a new Preview before executing.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>The target branch or its checkout changed after Preview, or could not be inspected safely. Refresh the target branch state and request a new Preview.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>The Git configuration or workstation environment does not meet the landing requirements. Check the project Git policy, remote, filters, and installed Git version.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>The merge candidate could not be built or verified. Check the merge result and the configured ReviewCheckCommand, then run Preview again.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>The proposed changes include protected or out-of-project paths, exceed configured limits, or contain a disallowed symlink or submodule. Review the change scope and project Git policy.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>The landing operation could not be safely reconciled. The target branch may already have changed. Inspect the target branch and attempt details before retrying.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>The landing could not be safely reverted or the revert commit could not be verified. Inspect the target branch before retrying.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>The workstation did not accept the landing command. Check that it is online and GitLand-capable, then refresh the landing status before retrying.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Project policy requires a person to execute or retry this landing operation manually.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>The task must remain Approved until Execute is queued. Review and approve the task again before requesting a new landing.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>The merge may already be on the target branch, but post-merge verification failed or could not be confirmed. Inspect the target before requesting a revert.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>The landing attempt reported a reason the UI does not recognize. Check the workstation log and share the diagnostic ID below with support.</value>
+  </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>The workstation restarted and reported version {0}.</value>
+  </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>The workstation command could not be completed because an unexpected error occurred.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>The workstation cancelled the operation: {0}.</value>
+  </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>The workstation returned a launch-preflight reason the interface does not recognize. Refresh the task and check the workstation log if the problem persists.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>The workstation reported a repository synchronization reason the interface does not recognize. Check the workstation command details and share the diagnostic ID below with support.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Technical details from Git</value>
+  </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Could not load workstation command history. Refresh this section and try again.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>The workstation returned settings in an unreadable format. Refresh the workstation data and check its log if the problem persists.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>The workstation returned diagnostics in an unreadable format. Refresh the diagnostics and check the workstation log if the problem persists.</value>
+  </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>This invitation link does not contain an invitation token. Open the complete link from the invitation email.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>This invitation is invalid, has expired, or has already been used. Ask the inviter to send a new invitation.</value>
+  </data>
+  <data name="ResetTokenMissing" xml:space="preserve">
+    <value>The password reset link is missing its token. Request a new password reset link and open it again.</value>
+  </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>Could not {1} in {0}: this invitation was sent to a different email address. Sign in with the invited address or ask the inviter to update the invitation.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>This task has pipeline runs on multiple workstations. Its local task worktree cannot be selected safely; reconcile or migrate the worktree explicitly before continuing.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>The workstation pinned to this task is no longer attached to the project. Reattach it or explicitly migrate the task worktree; automatic rerouting is disabled.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>The workstation pinned to this task no longer advertises the native runtime. Restore its native runtime or explicitly migrate the task worktree.</value>
+  </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Repository synchronization may still be running, but its status could not be refreshed. The workstation may still be processing the command; check command history before retrying.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>The pipeline activity snapshot could not be read. The latest activity may be incomplete.</value>
+  </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Cancel this repository synchronization request? Cancellation is available only until a workstation claims it.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>The repository synchronization request was cancelled before a workstation started it.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>The repository synchronization request expired because no workstation claimed it within 10 minutes.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Could not confirm that the repository synchronization request was cancelled. Refresh the task and check its status before retrying.</value>
+  </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>Cannot cancel repository synchronization in {0}: the workstation has already claimed the command. A running Git operation cannot be stopped from the server. Let it finish and review the result.</value>
+  </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Could not browse the workstation directory. Check that the workstation is online and that the selected root is available.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Could not load the available projects. Refresh the page and try again.</value>
+  </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Recover</value>
+  </data>
+<data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Automatically sync upstream</value></data>
+<data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon periodically fetches this project's upstream and fast-forwards only a clean, idle checkout. Local edits, divergence, detached HEAD, and active agent sessions are preserved. Existing local tags are never force-updated or deleted.</value></data>
+<data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Connect a workstation running an AutoSync-capable Beacon client to enable this setting.</value></data>
+<data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Project version policy</value></data>
+<data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon stores the authoritative project version and checks configured repository manifests against it. Repository files are projections; agents cannot publish or change the official version during ordinary task work.</value></data>
+<data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>The version policy could not be loaded.</value></data>
+<data name="OfficialProjectVersion" xml:space="preserve"><value>Official version</value></data>
+<data name="VersionNotInitialized" xml:space="preserve"><value>Not initialized</value></data>
+<data name="VersionScheme" xml:space="preserve"><value>Version scheme</value></data>
+<data name="VersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
+<data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="VersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
+<data name="VersionComponentCount" xml:space="preserve"><value>Number of numeric components</value></data>
+<data name="VersionCalendarFormat" xml:space="preserve"><value>Calendar format</value></data>
+<data name="VersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
+<data name="VersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
+<data name="VersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
+<data name="VersionManifestSources" xml:space="preserve"><value>Version manifest sources</value></data>
+<data name="VersionManifestSourcesHelp" xml:space="preserve"><value>One source per line: path|Format|selector. Examples: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; regex files use a named (?&lt;version>...) or first capture group.</value></data>
+<data name="InitialOfficialVersion" xml:space="preserve"><value>Initialize official version</value></data>
+<data name="InitialOfficialVersionHelp" xml:space="preserve"><value>This value can be initialized once. Further official version changes require the ReleasePrepare workflow.</value></data>
+<data name="SaveVersionPolicy" xml:space="preserve"><value>Save version policy</value></data>
+<data name="VersionSourceLineInvalid" xml:space="preserve"><value>Each version source must use path|Format|selector.</value></data>
+<data name="ProjectVersionScheme" xml:space="preserve"><value>Version scheme</value></data>
+<data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
+<data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
+<data name="ProjectVersionComponentCount" xml:space="preserve"><value>Number of numeric components (1–8)</value></data>
+<data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Calendar format (invariant .NET date format)</value></data>
+<data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
+<data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
+<data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
+<data name="ProjectOfficialVersion" xml:space="preserve"><value>Official project version (Beacon authoritative)</value></data>
+<data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Initial official version</value></data>
+<data name="ProjectVersionSources" xml:space="preserve"><value>Version file projections</value></data>
+<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>One source per line: relative/path|Xml, Json, Toml or Regex|selector. XML uses XPath; JSON uses JSON Pointer; TOML uses a dotted key; Regex uses a named 'version' group or capture group 1. Files must stay inside the project workspace.</value></data>
+<data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Only project Owners and Admins can change version policy.</value></data>
+<data name="ProjectVersionSave" xml:space="preserve"><value>Save version policy</value></data>
+<data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
+<data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
+<data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Enable Release Management for this project</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, releases become available in the Roadmap and milestones can be grouped into a release. Existing milestones remain independent. Disabled by default.</value></data>
 </root>

@@ -5,6 +5,7 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
@@ -14,7 +15,6 @@
 @inject CreateProjectHandler CreateProject
 @inject AuthenticationStateProvider Auth
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject ListDevicesHandler ListDevices
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
@@ -144,7 +144,7 @@
             var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
             if (!org.Success)
             {
-                _error = org.Error;
+                _error = Notifications.FormatFailure(org, L["Projects"].Value, L["Create"].Value);
                 return;
             }
 
@@ -152,7 +152,7 @@
                 _projectName, _description, org.Value!.Id), actor));
             if (!project.Success)
             {
-                _error = project.Error;
+                _error = Notifications.FormatFailure(project, L["Projects"].Value, L["Create"].Value);
                 return;
             }
 
@@ -162,7 +162,7 @@
                     new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
                 if (!attached.Success)
                 {
-                    _error = attached.Error;
+                    _error = Notifications.FormatFailure(attached, L["Projects"].Value, L["Attach"].Value);
                     return;
                 }
                 if (_initOnDevice)
@@ -186,19 +186,19 @@
                         new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.InitProject, payload, project.Value.Id)));
                     if (!queued.Success)
                     {
-                        _error = queued.Error;
+                        _error = Notifications.FormatFailure(queued, L["Workstations"].Value, L["Initialize"].Value);
                         return;
                     }
                     var finished = await WaitAsync(queued.Value!.Id);
                     if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
                     {
-                        _error = finished?.Error ?? L["Error"].Value;
+                        _error = Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.InternalError, L["Initialize"].Value, new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value!.Id });
                         return;
                     }
                 }
             }
 
-            Snackbar.Add(L["ProjectCreated"].Value, Severity.Success);
+            Notifications.Add(L["ProjectCreated"].Value, Severity.Success);
             Navigation.NavigateTo($"/project/switch?projectId={project.Value!.Id}&returnUrl={Uri.EscapeDataString("/board")}", forceLoad: true);
         }
         finally

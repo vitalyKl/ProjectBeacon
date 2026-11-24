@@ -15,9 +15,13 @@
         }
         <StatusChip Color="Color.Info" Label="@AgentModeLabel(Subtask.AgentMode)" />
     </MudStack>
-    @if (!string.IsNullOrWhiteSpace(Subtask.Summary))
+    @if (!string.IsNullOrWhiteSpace(Subtask.Summary) && !HasSessionFailure)
     {
         <MarkdownView Text="@Subtask.Summary" MaxHeight="220" Class="mt-1" />
+    }
+    else if (HasSessionFailure)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-1">@L["SubtaskFailedOpenActivity"]</MudText>
     }
     @if (!string.IsNullOrWhiteSpace(Subtask.DiffRef))
     {
@@ -85,18 +89,59 @@
     [Parameter] public PipelinePreflightDto? Preflight { get; set; }
     [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
 
+    private bool HasSessionFailure => Subtask.Status == SubtaskStatus.Failed
+        && Sessions.Any(session => !string.IsNullOrWhiteSpace(session.FailureReason));
+
+    private readonly Dictionary<string, string> _unknownReasonMessages = new(StringComparer.Ordinal);
+
+    private string UnknownReasonMessage(string code, object? context)
+    {
+        const string resourceKey = "PipelinePreflightReasonUnknown";
+        const string operation = "read subtask pipeline preflight";
+        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{code}:{Subtask.Id}";
+        if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
+            return message;
+
+        message = Notifications.FormatUnknownReasonCode(code, resourceKey, operation, context);
+        if (_unknownReasonMessages.Count >= 16)
+            _unknownReasonMessages.Clear();
+        _unknownReasonMessages[cacheKey] = message;
+        return message;
+    }
+
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
-    private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
-        ? L[reason].Value
-        : PreflightMessage(session.Role);
+    private string PreflightMessage(PipelineSessionDto session)
+    {
+        if (session.LaunchBlockedReason is { } reason)
+        {
+            var localized = L[reason];
+            return localized.ResourceNotFound
+                ? UnknownReasonMessage(reason, new { TaskId, SubtaskId = Subtask.Id })
+                : localized.Value;
+        }
 
-    private string PreflightMessage(PipelineRole role) => Preflight?.HasNativeWorkstation != true
-        ? L["PipelinePreflightNoNativeWorkstation"].Value
-        : Preflight.HasOnlineNativeWorkstation != true
-            ? L["PipelineNativeWorkstationOffline"].Value
-            : L["PipelinePreflightNoRoleModel"].Value;
+        return PreflightMessage(session.Role);
+    }
+
+    private string PreflightMessage(PipelineRole role)
+    {
+        if (!string.IsNullOrWhiteSpace(Preflight?.PipelineWorkstationBlockedReason))
+        {
+            var reason = Preflight.PipelineWorkstationBlockedReason!;
+            var localized = L[reason];
+            return localized.ResourceNotFound
+                ? UnknownReasonMessage(reason, new { TaskId, SubtaskId = Subtask.Id })
+                : localized.Value;
+        }
+
+        return Preflight?.HasNativeWorkstation != true
+            ? L["PipelinePreflightNoNativeWorkstation"].Value
+            : Preflight.HasOnlineNativeWorkstation != true
+                ? L["PipelineNativeWorkstationOffline"].Value
+                : L["PipelinePreflightNoRoleModel"].Value;
+    }
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }

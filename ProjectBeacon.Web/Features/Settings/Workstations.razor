@@ -3,8 +3,10 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @using System.Text.Json
+@using Microsoft.Extensions.Logging
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Shared
@@ -19,7 +21,6 @@
 @inject ListCommandsHandler ListCommands
 @inject GetTotpStatusHandler GetTotp
 @inject IDialogService Dialogs
-@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Workstations"]</PageTitle>
@@ -209,7 +210,7 @@
                 <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
                 <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
                 <MudTd DataLabel="@L["Error"]">
-                    <span class="beacon-diagnostic-output" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
+                    <span class="beacon-diagnostic-output" title="@CommandErrorMessage(context)">@CommandErrorMessage(context)</span>
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
@@ -244,7 +245,10 @@
     private string? _probeAgentRuntime;
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
+    private string? _probeAgentRuntimeErrorCacheKey;
+    private string? _probeAgentRuntimeErrorCacheValue;
     private List<WorkstationCommandDto> _commands = [];
+    private readonly Dictionary<Guid, (string Error, string Culture, string Message)> _commandErrorMessages = [];
     private string _clientCurrentVersion = "-";
     private string _clientLatestVersion = "-";
     private bool? _clientUpdateAvailable;
@@ -287,7 +291,9 @@
         if (_userId != Guid.Empty)
         {
             var totp = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
-            _totpEnabled = totp.Success && totp.Value!.Enabled;
+            if (!totp.Success)
+                Notifications.Failure(totp, L["Workstations"].Value, L["Check"].Value);
+            _totpEnabled = totp.Success && totp.Value?.Enabled == true;
         }
         await ReloadDevices();
     }
@@ -298,17 +304,29 @@
     {
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
-        _devices = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _devices = [];
+            _wsDeviceId = null;
+            Notifications.Failure(listed, L["Workstations"].Value, L["Load"].Value);
+            return;
+        }
+        _devices = listed.Value?.ToList() ?? [];
         if (_wsDeviceId is not { } selectedId || _devices.All(d => d.Id != selectedId))
             _wsDeviceId = _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
         if (_wsDeviceId is { } id)
         {
             LoadWorkstation(id, loadWorkstationSettings);
-            LoadCommands(id);
+            await LoadCommands(id);
+        }
+        else
+        {
+            _commands = [];
+            _commandErrorMessages.Clear();
         }
     }
 
-    private Task OnWorkstationDeviceChanged(Guid? id)
+    private async Task OnWorkstationDeviceChanged(Guid? id)
     {
         _wsDeviceId = id;
         _clientCurrentVersion = _clientLatestVersion = "-";
@@ -316,18 +334,60 @@
         _clientUpdateActive = false;
         _clientUpdatePercent = null;
         _clientUpdateMessage = null;
+        _commands = [];
+        _commandErrorMessages.Clear();
         if (id is { } deviceId)
         {
             LoadWorkstation(deviceId);
-            LoadCommands(deviceId);
+            await LoadCommands(deviceId);
         }
-        return Task.CompletedTask;
     }
 
-    private async void LoadCommands(Guid deviceId)
+    private async Task LoadCommands(Guid deviceId)
     {
-        var res = await ListCommands.HandleAsync(new ListCommandsCommand(new ListCommandsRequest(deviceId, _userId)), CancellationToken.None);
-        _commands = res.Success ? res.Value!.ToList() : [];
+        try
+        {
+            var result = await ListCommands.HandleAsync(
+                new ListCommandsCommand(new ListCommandsRequest(deviceId, _userId)), CancellationToken.None);
+            if (!result.Success)
+            {
+                _commands = [];
+                _commandErrorMessages.Clear();
+                Notifications.Failure(result, L["Workstations"].Value, L["Load"].Value);
+                return;
+            }
+
+            _commands = result.Value?.ToList() ?? [];
+            _commandErrorMessages.Clear();
+        }
+        catch (Exception exception)
+        {
+            _commands = [];
+            _commandErrorMessages.Clear();
+            Notifications.ReportException(
+                exception, "WorkstationCommandsLoadFailed", "load workstation command history", new { DeviceId = deviceId });
+        }
+    }
+
+    private string CommandErrorMessage(WorkstationCommandDto command)
+    {
+        if (string.IsNullOrWhiteSpace(command.Error))
+            return "-";
+
+        var culture = System.Globalization.CultureInfo.CurrentUICulture.Name;
+        if (_commandErrorMessages.TryGetValue(command.Id, out var cached)
+            && string.Equals(cached.Error, command.Error, StringComparison.Ordinal)
+            && string.Equals(cached.Culture, culture, StringComparison.Ordinal))
+            return cached.Message;
+
+        var message = Notifications.FormatFailure(
+            command.Error,
+            L["Workstations"].Value,
+            ErrorCodes.InternalError,
+            ChromeLabels.CommandKind(L, command.Kind),
+            new { DeviceId = _wsDeviceId, CommandId = command.Id, CommandKind = command.Kind });
+        _commandErrorMessages[command.Id] = (command.Error, culture, message);
+        return message;
     }
 
     private void LoadWorkstation(Guid deviceId, bool loadSettings = true)
@@ -335,7 +395,7 @@
         var device = _devices.FirstOrDefault(d => d.Id == deviceId);
         if (device is null) return;
         _wsRevision = device.DesiredRevision;
-        FillProbe(device.ProbeJson);
+        FillProbe(device.ProbeJson, device.Id);
         if (!loadSettings) return;
         try
         {
@@ -359,15 +419,16 @@
             _contextResponseReserveTokens = root.TryGetProperty("contextResponseReserveTokens", out var reserve)
                 && reserve.TryGetInt32(out var reserveTokens) ? Math.Clamp(reserveTokens, 0, 1_000_000) : 0;
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(exception, "WorkstationSettingsInvalid", "read workstation settings", new { DeviceId = deviceId });
         }
     }
 
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
 
-    private void FillProbe(string probeJson)
+    private void FillProbe(string probeJson, Guid deviceId)
     {
         _probeGit = _probeNode = _probeDocker = _probeLlamaSwap = null;
         _probeAgentRuntime = null;
@@ -391,12 +452,25 @@
                     if (runtimeStatus.TryGetProperty("healthy", out var healthy)
                         && healthy.ValueKind is JsonValueKind.True or JsonValueKind.False)
                         _probeAgentRuntimeHealthy = healthy.GetBoolean();
-                    _probeAgentRuntimeError = Str(runtimeStatus, "error");
+                    var rawRuntimeError = Str(runtimeStatus, "error");
+                    if (!string.IsNullOrWhiteSpace(rawRuntimeError))
+                    {
+                        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{deviceId:N}:{rawRuntimeError}";
+                        if (!string.Equals(cacheKey, _probeAgentRuntimeErrorCacheKey, StringComparison.Ordinal))
+                        {
+                            _probeAgentRuntimeErrorCacheKey = cacheKey;
+                            _probeAgentRuntimeErrorCacheValue = Notifications.FormatFailure(
+                                rawRuntimeError, L["Workstations"].Value, ErrorCodes.InternalError,
+                                L["Check"].Value, new { DeviceId = deviceId });
+                        }
+                        _probeAgentRuntimeError = _probeAgentRuntimeErrorCacheValue;
+                    }
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(exception, "WorkstationProbeInvalid", "read workstation diagnostics", new { DeviceId = _wsDeviceId });
         }
     }
 
@@ -419,12 +493,12 @@
                 new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Workstations"].Value, L["Create"].Value);
                 return;
             }
             _deviceToken = result.Value!.Token;
             _deviceName = string.Empty;
-            Snackbar.Add(L["DeviceCreated"].Value, Severity.Success);
+            Notifications.Add(L["DeviceCreated"].Value, Severity.Success);
             await ReloadDevices();
         }
         finally
@@ -442,10 +516,10 @@
         var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Workstations"].Value, L["Delete"].Value);
             return;
         }
-        Snackbar.Add(L["DeviceRevoked"].Value, Severity.Success);
+        Notifications.Add(L["DeviceRevoked"].Value, Severity.Success);
         await ReloadDevices();
     }
 
@@ -472,19 +546,23 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.SaveWorkstation, payload, null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Save"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Save"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                NotifyCommandFailure(finished, L["Save"].Value, deviceId, queued.Value.Id);
                 return;
             }
-            Snackbar.Add(L["WorkstationSaved"].Value, Severity.Success);
+            Notifications.Add(L["WorkstationSaved"].Value, Severity.Success);
             // The next heartbeat reports the workstation's new settings. Refresh diagnostics
             // now, but do not overwrite the just-saved form with the previous heartbeat snapshot.
             await ReloadDevices(loadWorkstationSettings: false);
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(exception, "WorkstationCommandFailed", "save workstation settings", new { DeviceId = deviceId });
         }
         finally
         {
@@ -510,16 +588,20 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.Install, JsonSerializer.Serialize(new { id }), null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Install"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Install"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                NotifyCommandFailure(finished, L["Install"].Value, deviceId, queued.Value.Id);
                 return;
             }
-            Snackbar.Add(L["CommandSucceeded"].Value, Severity.Success);
+            Notifications.Add(L["CommandSucceeded"].Value, Severity.Success);
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(exception, "WorkstationCommandFailed", $"install {id}", new { DeviceId = deviceId, PackageId = id });
         }
         finally
         {
@@ -537,13 +619,13 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.CheckClientUpdate, "{}", null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Check"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Check"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                NotifyCommandFailure(finished, L["Check"].Value, deviceId, queued.Value.Id);
                 return;
             }
             using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
@@ -551,12 +633,12 @@
             _clientCurrentVersion = JsonValue(root, "CurrentVersion", "currentVersion");
             _clientLatestVersion = JsonValue(root, "LatestVersion", "latestVersion");
             _clientUpdateAvailable = JsonBoolean(root, "UpdateAvailable", "updateAvailable");
-            Snackbar.Add(_clientUpdateAvailable == true ? L["DaemonUpdateAvailable"].Value : L["DaemonUpToDate"].Value,
+            Notifications.Add(_clientUpdateAvailable == true ? L["DaemonUpdateAvailable"].Value : L["DaemonUpToDate"].Value,
                 _clientUpdateAvailable == true ? Severity.Info : Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            Notifications.ReportException(ex, "WorkstationCheckUpdateFailed", "check workstation update availability", new { DeviceId = deviceId });
         }
         finally
         {
@@ -583,28 +665,28 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.UpdateClient, "{}", null)));
             if (!queued.Success)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Update"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id, 660);
+            var finished = await WaitAsync(queued.Value!.Id, 660, L["Update"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                NotifyCommandFailure(finished, L["Update"].Value, deviceId, queued.Value.Id);
                 return;
             }
             _clientUpdateAvailable = null;
             _clientUpdateActive = true;
             _clientUpdatePercent = null;
-            _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
+            _clientUpdateMessage = L["WorkstationUpdateProgress"].Value;
             var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
             if (restarted)
-                Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+                Notifications.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
             else
-                Snackbar.Add("The update was handed off, but the new daemon version has not reported yet. Check the workstation log.", Severity.Warning);
+                Notifications.Add(L["WorkstationUpdatePending"].Value, Severity.Warning);
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            Notifications.ReportException(ex, "WorkstationUpdateFailed", "update workstation daemon", new { DeviceId = deviceId });
         }
         finally
         {
@@ -615,11 +697,15 @@
 
     private async Task<bool> WaitForUpdatedClientAsync(Guid deviceId, DateTime? previousHeartbeat, string expectedVersion)
     {
+        string? lastReadError = null;
+        string? lastReadErrorCode = null;
         for (var attempt = 0; attempt < 60; attempt++)
         {
             var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
             if (listed.Success)
             {
+                lastReadError = null;
+                lastReadErrorCode = null;
                 _devices = listed.Value!.ToList();
                 var device = _devices.FirstOrDefault(d => d.Id == deviceId);
                 var reportedVersion = device is null ? null : ReadClientVersion(device.ProbeJson);
@@ -629,36 +715,38 @@
                     && IsClientVersionAtLeast(reportedVersion, expectedVersion))
                 {
                     _clientCurrentVersion = reportedVersion;
-                    _clientUpdateMessage = $"Daemon restarted and reported version {reportedVersion}.";
+                    _clientUpdateMessage = string.Format(L["WorkstationUpdateReportedVersion"].Value, reportedVersion);
                     await InvokeAsync(StateHasChanged);
                     return true;
                 }
             }
 
-            await InvokeAsync(StateHasChanged);
+           else
+            {
+                lastReadError = listed.Error;
+                lastReadErrorCode = listed.ErrorCode;
+            }
+
+ await InvokeAsync(StateHasChanged);
             await Task.Delay(1000);
         }
 
         _clientUpdateActive = false;
-        _clientUpdateMessage = "Update handoff completed, but the restarted daemon has not reported the new version yet. Check the workstation log.";
+        _clientUpdateMessage = string.IsNullOrWhiteSpace(lastReadError)
+            ? L["WorkstationUpdatePending"].Value
+            : Notifications.FormatFailure(lastReadError, L["Workstations"].Value,
+                lastReadErrorCode, L["Read"].Value, new { DeviceId = deviceId });
         await InvokeAsync(StateHasChanged);
         return false;
     }
 
     private static string? ReadClientVersion(string? probeJson)
     {
-        try
-        {
-            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
-            return document.RootElement.TryGetProperty("clientVersion", out var version)
-                && version.ValueKind == JsonValueKind.String
-                    ? version.GetString()
-                    : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+        return document.RootElement.TryGetProperty("clientVersion", out var version)
+            && version.ValueKind == JsonValueKind.String
+                ? version.GetString()
+                : null;
     }
 
     private static bool IsClientVersionAtLeast(string installedVersion, string expectedVersion)
@@ -690,7 +778,7 @@
                 ? value.GetBoolean()
                 : null;
 
-    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId, int maxAttempts = 80)
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId, int maxAttempts = 80, string? operationLabel = null)
     {
         SetLifecycle(WorkstationCommandStatus.Pending, null);
         for (var i = 0; i < maxAttempts; i++)
@@ -698,10 +786,13 @@
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
             if (!got.Success)
             {
-                SetLifecycle(WorkstationCommandStatus.Failed, got.Error);
+                SetLifecycle(
+                    WorkstationCommandStatus.Failed,
+                    Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value),
+                    detailAlreadyFormatted: true);
                 return null;
             }
-            SetLifecycle(got.Value!.Status, got.Value.Error);
+            SetLifecycle(got.Value!.Status, got.Value.Error, operationLabel, new { DeviceId = _wsDeviceId, CommandId = commandId });
             ApplyClientUpdateProgress(got.Value);
             await InvokeAsync(StateHasChanged);
             if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
@@ -713,6 +804,29 @@
         _lifecycleDetail = null;
         _clientUpdateActive = false;
         return null;
+    }
+
+    private void NotifyCommandFailure(WorkstationCommandDto? command, string operationLabel, Guid deviceId, Guid commandId)
+    {
+        if (command?.Status == WorkstationCommandStatus.Cancelled)
+        {
+            Notifications.Warning(L["WorkstationCommandCancelled", operationLabel].Value);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_lifecycleDetail))
+        {
+            Notifications.Error(_lifecycleDetail);
+            return;
+        }
+
+        var errorCode = _lifecycleState == "TimedOut" ? ErrorCodes.Unavailable : ErrorCodes.InternalError;
+        Notifications.Failure(
+            command?.Error ?? _lifecycle,
+            L["Workstations"].Value,
+            errorCode,
+            operationLabel,
+            new { DeviceId = deviceId, CommandId = commandId });
     }
 
     private void ApplyClientUpdateProgress(WorkstationCommandDto command)
@@ -744,7 +858,7 @@
         }
     }
 
-    private void SetLifecycle(WorkstationCommandStatus status, string? detail)
+    private void SetLifecycle(WorkstationCommandStatus status, string? detail, string? operationLabel = null, object? context = null, bool detailAlreadyFormatted = false)
     {
         _lifecycleState = status switch
         {
@@ -756,6 +870,11 @@
             _ => status.ToString()
         };
         _lifecycle = StatusLabel(status);
-        _lifecycleDetail = detail;
+        _lifecycleDetail = status == WorkstationCommandStatus.Failed
+            && !string.IsNullOrWhiteSpace(detail)
+            && !detailAlreadyFormatted
+                ? Notifications.FormatFailure(detail, L["Workstations"].Value, ErrorCodes.InternalError,
+                    operationLabel ?? L["Execute"].Value, context)
+                : detail;
     }
 }

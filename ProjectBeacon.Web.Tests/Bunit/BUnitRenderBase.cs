@@ -11,6 +11,7 @@ using ProjectBeacon.Application.Audit;
 using ProjectBeacon.Infrastructure.Attachments;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Web;
+using ProjectBeacon.Web.Shared;
 using Bunit;
 using Bunit.TestDoubles;
 using TestContext = Bunit.TestContext;
@@ -69,6 +70,7 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddScoped<IAttachmentService, FakeAttachmentService>();
         _bunit.Services.AddApplicationHandlers();
         _bunit.Services.AddMudServices();
+        _bunit.Services.AddUiNotifications();
         _bunit.Services.AddLocalization();
         _bunit.Services.AddLogging();
         _bunit.Services.AddHttpContextAccessor();

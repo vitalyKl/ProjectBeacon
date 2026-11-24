@@ -7,7 +7,6 @@
 @inject IJSRuntime Js
 @inject AuthenticationStateProvider Auth
 @inject SwitchChatAgentHandler SwitchAgent
-@inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
 @if (ShowSessionHead && Session is not null)
@@ -355,11 +354,11 @@
             if (result.Success)
             {
                 _agent = value;
-                Snackbar.Add(L["ChatAgentSwitching"].Value, Severity.Info);
+                Notifications.Add(L["ChatAgentSwitching"].Value, Severity.Info);
             }
             else
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Chat"].Value, L["Update"].Value);
             }
         }
         finally
