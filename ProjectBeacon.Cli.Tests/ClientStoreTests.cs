@@ -125,6 +125,46 @@ public sealed class ClientStoreTests : IDisposable
         Assert.Equal("off", WorkstationSettings.Load(file).CommandPolicy);
     }
 
+
+    [Fact]
+    public void WorkstationSettings_AutoSyncDefaultsAndMigratesExistingFiles()
+    {
+        var missing = WorkstationSettings.Load(Path.Combine(_dir, "new-workstation.json"));
+        Assert.Equal("WhenSafe", missing.AutoPullMode);
+        Assert.Equal(10, missing.AutoSyncIntervalMinutes);
+
+        var legacyFile = Path.Combine(_dir, "legacy-workstation.json");
+        File.WriteAllText(legacyFile, """{"modelsRoot":"C:/models","projectsRoot":"C:/projects","commandPolicy":"auto"}""");
+        var migrated = WorkstationSettings.Load(legacyFile);
+        Assert.Equal("WhenSafe", migrated.AutoPullMode);
+        Assert.Equal(10, migrated.AutoSyncIntervalMinutes);
+        Assert.Equal("C:/models", migrated.ModelsRoot);
+        Assert.Equal("C:/projects", migrated.ProjectsRoot);
+        Assert.Equal("auto", migrated.CommandPolicy);
+    }
+
+    [Fact]
+    public void WorkstationSettings_AutoSyncValuesAreNormalizedAndClamped()
+    {
+        var file = Path.Combine(_dir, "autosync-settings.json");
+        File.WriteAllText(file, """{"autoPullMode":"invalid","autoSyncIntervalMinutes":500,"projectsRoot":"C:/projects","llamaSwapPort":9090}""");
+
+        var loaded = WorkstationSettings.Load(file);
+
+        Assert.Equal("WhenSafe", loaded.AutoPullMode);
+        Assert.Equal(120, loaded.AutoSyncIntervalMinutes);
+        Assert.Equal("C:/projects", loaded.ProjectsRoot);
+        Assert.Equal(9090, loaded.LlamaSwapPort);
+
+        WorkstationSetup.SaveWorkstation(
+            """{"autoPullMode":"Off","autoSyncIntervalMinutes":1}""", file);
+        var saved = WorkstationSettings.Load(file);
+        Assert.Equal("Off", saved.AutoPullMode);
+        Assert.Equal(2, saved.AutoSyncIntervalMinutes);
+        Assert.Equal("C:/projects", saved.ProjectsRoot);
+        Assert.Equal(9090, saved.LlamaSwapPort);
+    }
+
     [Fact]
     public void WorkstationSettings_TryRead_InvalidHtml_ReturnsDefaultsAndError()
     {

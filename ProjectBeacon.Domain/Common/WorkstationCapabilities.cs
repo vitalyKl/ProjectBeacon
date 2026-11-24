@@ -9,6 +9,7 @@ using System.Text.Json;
 public static class WorkstationCapabilities
 {
     public const string GitSyncV1 = "git-sync-v1";
+    public const string GitAutoSyncV1 = "git-autosync-v1";
     public const string GitLandV1 = "git-land-v1";
     public const string GitLandIntegrationV1 = "git-land-integration-v1";
 

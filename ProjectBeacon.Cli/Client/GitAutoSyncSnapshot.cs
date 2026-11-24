@@ -29,9 +29,17 @@ internal sealed class GitAutoSyncSnapshot
     {
         lock (_sync)
         {
-            if (_projects.TryGetValue(value.ProjectId, out var current)
-                && JsonSerializer.Serialize(current) == JsonSerializer.Serialize(value))
-                return false;
+            if (_projects.TryGetValue(value.ProjectId, out var current))
+            {
+                // Refresh checkedAt/error timestamps in the heartbeat without logging a
+                // false "state change" on every successful interval or repeated outage.
+                var comparable = current with { CheckedAt = value.CheckedAt, LastError = value.LastError };
+                if (JsonSerializer.Serialize(comparable) == JsonSerializer.Serialize(value))
+                {
+                    _projects[value.ProjectId] = value;
+                    return false;
+                }
+            }
             _projects[value.ProjectId] = value;
             return true;
         }
