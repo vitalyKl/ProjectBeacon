@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,7 +77,29 @@ public sealed class SettingsRenderTests : BUnitRenderBase
         var user = DbContext.Users.Single();
         var project = DbContext.Projects.Single();
         var device = DbContext.Set<ProjectBeacon.Domain.Entities.Devices.DaemonDevice>().Single();
-        var probe = $"""{"capabilities":["git-sync-v1","git-autosync-v1"],"repoSync":[{"projectId":"{{project.Id:D}}","branch":"main","upstream":"origin/main","ahead":0,"behind":3,"clean":true,"detached":false,"hasUpstream":true,"diverged":false,"checkedAt":"2026-11-24T10:00:00Z","lastAutoPull":null,"lastError":null,"autoPullBlockedReason":null}]}""";
+        var probe = JsonSerializer.Serialize(new
+        {
+            capabilities = new[] { "git-sync-v1", "git-autosync-v1" },
+            repoSync = new[]
+            {
+                new
+                {
+                    projectId = project.Id,
+                    branch = "main",
+                    upstream = "origin/main",
+                    ahead = 0,
+                    behind = 3,
+                    clean = true,
+                    detached = false,
+                    hasUpstream = true,
+                    diverged = false,
+                    checkedAt = DateTimeOffset.Parse("2026-11-24T10:00:00Z"),
+                    lastAutoPull = (object?)null,
+                    lastError = (object?)null,
+                    autoPullBlockedReason = (string?)null
+                }
+            }
+        });
         device.Heartbeat(probeJson: probe);
         DbContext.ProjectRuntimes.Add(ProjectBeacon.Domain.Entities.Devices.ProjectRuntime.Create(
             project.Id, device.Id, "/workspace/project"));
