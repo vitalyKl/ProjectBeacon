@@ -466,7 +466,9 @@ internal static class ProjectGitSyncPreflight
                     item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                         ? value.GetString() : null;
                 int ReadInt(string name) =>
-                    item.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) && number >= 0
+                    item.TryGetProperty(name, out var value)
+                    && value.ValueKind == JsonValueKind.Number
+                    && value.TryGetInt32(out var number) && number >= 0
                         ? number : 0;
                 bool ReadBool(string name) =>
                     item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
@@ -489,6 +491,7 @@ internal static class ProjectGitSyncPreflight
                     && pull.TryGetProperty("toSha", out var to)
                     && to.ValueKind == JsonValueKind.String
                     && pull.TryGetProperty("commits", out var commits)
+                    && commits.ValueKind == JsonValueKind.Number
                     && commits.TryGetInt32(out var commitCount)
                     && commitCount >= 0)
                     lastPull = new GitAutoPullEventDto(at, from.GetString()!, to.GetString()!, commitCount);
