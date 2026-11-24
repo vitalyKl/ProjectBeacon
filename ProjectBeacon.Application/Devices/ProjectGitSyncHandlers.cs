@@ -65,6 +65,10 @@ public sealed class EnqueueProjectGitSyncHandler
             if (projectLocked == 0)
                 return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
 
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+                db, now, ct, projectId);
+
             var activeCommands = await db.WorkstationCommands.IgnoreQueryFilters()
                 .Where(candidate => candidate.ProjectId == projectId
                     && candidate.Kind == WorkstationCommandKind.GitSync
@@ -83,7 +87,6 @@ public sealed class EnqueueProjectGitSyncHandler
                 : await db.DaemonDevices.IgnoreQueryFilters()
                     .Where(device => deviceIds.Contains(device.Id) && device.RevokedAt == null)
                     .ToListAsync(ct);
-            var now = _timeProvider.GetUtcNow().UtcDateTime;
             var compatible = runtimes
                 .Join(devices, runtime => runtime.DeviceId, device => device.Id,
                     (runtime, device) => new { Runtime = runtime, Device = device })
@@ -241,6 +244,7 @@ public sealed class EnqueueProjectGitSyncHandler
                     && candidate.Status == WorkstationCommandStatus.Pending)
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(candidate => candidate.Status, WorkstationCommandStatus.Cancelled)
+                    .SetProperty(candidate => candidate.PendingSince, (DateTime?)null)
                     .SetProperty(candidate => candidate.StartedAt, (DateTime?)null)
                     .SetProperty(candidate => candidate.CompletedAt, cancelledAt)
                     .SetProperty(candidate => candidate.LeaseExpiresAt, (DateTime?)null)
@@ -298,6 +302,9 @@ public sealed class GetProjectGitSyncCommandHandler
             db, actor, _authorization, projectId, ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto?>(permission);
+
+        await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+            db, _timeProvider.GetUtcNow().UtcDateTime, ct, projectId, targetDeviceId);
 
         var active = await db.WorkstationCommands.IgnoreQueryFilters()
             .Where(candidate => candidate.ProjectId == projectId
@@ -377,6 +384,98 @@ public sealed class GetProjectGitSyncCommandHandler
         // Only project/org administrators can inspect this operation. The workstation's local
         // filesystem path is never disclosed through a human-facing endpoint.
         return Result.Ok(EnqueueCommandHandler.MapCommand(command));
+    }
+}
+
+
+/// <summary>
+/// Cancels a GitSync command only while it is still queued and unclaimed.
+/// Running Git operations require a cooperative workstation-side stop protocol.
+/// </summary>
+public sealed class CancelPendingProjectGitSyncCommandHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
+    private readonly TimeProvider _timeProvider;
+
+    public CancelPendingProjectGitSyncCommandHandler(
+        IBeaconDbFactory dbFactory,
+        IAuthorizationService authorization,
+        TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public async Task<Result<WorkstationCommandDto>> HandleAsync(
+        Guid projectId,
+        Guid commandId,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        if (!actor.IsHuman || actor.UserId is null)
+            return Result.Forbidden<WorkstationCommandDto>();
+
+        await using var db = _dbFactory.CreateDbContext();
+        var permission = await ProjectGitSyncAuthorization.CanAdministerAsync(
+            db, actor, _authorization, projectId, ct);
+        if (!permission.Success)
+            return Result.Failure<WorkstationCommandDto>(
+                permission.Error ?? "Project Owner/Admin permission is required.",
+                ErrorKind.Forbidden);
+
+        var command = await db.WorkstationCommands.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == commandId
+                && candidate.ProjectId == projectId
+                && candidate.Kind == WorkstationCommandKind.GitSync, ct);
+        if (command is null)
+            return Result.Failure<WorkstationCommandDto>("GitSync command not found.", ErrorKind.NotFound);
+
+        if (command.Status == WorkstationCommandStatus.Running)
+            return Result.Failure<WorkstationCommandDto>(
+                "GitSync has already been claimed by the workstation. The server cannot safely stop a running Git process; workstation-side cancellation is not implemented.",
+                ErrorKind.Conflict);
+        if (command.Status != WorkstationCommandStatus.Pending || command.StartedAt is not null)
+            return Result.Failure<WorkstationCommandDto>(
+                "Only an unclaimed Pending GitSync command can be cancelled.",
+                ErrorKind.Conflict);
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var cancelled = await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(candidate => candidate.Id == commandId
+                && candidate.ProjectId == projectId
+                && candidate.Kind == WorkstationCommandKind.GitSync
+                && candidate.Status == WorkstationCommandStatus.Pending
+                && candidate.StartedAt == null)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(candidate => candidate.Status, WorkstationCommandStatus.Cancelled)
+                .SetProperty(candidate => candidate.PendingSince, (DateTime?)null)
+                .SetProperty(candidate => candidate.Error, "GitSyncCancelledByUser")
+                .SetProperty(candidate => candidate.CompletedAt, now)
+                .SetProperty(candidate => candidate.LeaseExpiresAt, (DateTime?)null)
+                .SetProperty(candidate => candidate.ClaimInstanceId, (string?)null), ct);
+
+        if (cancelled != 1)
+        {
+            var latest = await db.WorkstationCommands.IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(candidate => candidate.Id == commandId
+                    && candidate.ProjectId == projectId, ct);
+            if (latest?.Status == WorkstationCommandStatus.Running)
+                return Result.Failure<WorkstationCommandDto>(
+                    "GitSync was claimed by the workstation before cancellation completed. The running Git operation was not stopped.",
+                    ErrorKind.Conflict);
+            return Result.Failure<WorkstationCommandDto>(
+                "GitSync changed state before cancellation completed. Refresh the task and try again if it is still Pending.",
+                ErrorKind.Conflict);
+        }
+
+        var cancelledCommand = await db.WorkstationCommands.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(candidate => candidate.Id == commandId, ct);
+        return Result.Ok(EnqueueCommandHandler.MapCommand(cancelledCommand));
     }
 }
 
