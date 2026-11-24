@@ -877,7 +877,13 @@ public sealed class GitSyncAuthorizationTests
             {
                 var staleCreatedAt = DateTime.UtcNow - ProjectGitSyncPreflight.PendingCommandLifetime - TimeSpan.FromMinutes(1);
                 await db.WorkstationCommands.IgnoreQueryFilters()
-                    .Where(command => command.Id == pending.Id || command.Id == requeued.Id)
+                    .Where(command => command.Id == pending.Id)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(command => command.CreatedAt, staleCreatedAt)
+                        .SetProperty(command => command.PendingSince, staleCreatedAt),
+                        TestContext.Current.CancellationToken);
+                await db.WorkstationCommands.IgnoreQueryFilters()
+                    .Where(command => command.Id == requeued.Id)
                     .ExecuteUpdateAsync(update => update.SetProperty(command => command.CreatedAt, staleCreatedAt),
                         TestContext.Current.CancellationToken);
             }
@@ -909,6 +915,31 @@ public sealed class GitSyncAuthorizationTests
                 Assert.Equal(WorkstationCommandStatus.Pending, recoveredPending.Status);
                 Assert.Equal(1, recoveredPending.Attempts);
                 Assert.Equal("recovered-daemon-instance", recoveredPending.ClaimInstanceId);
+                Assert.True(recoveredPending.PendingSince > DateTime.UtcNow.AddMinutes(-10));
+            }
+
+            // Requeued commands get a new ten-minute queue window rather than inheriting
+            // the age of their original CreatedAt timestamp.
+            using (TenantScope.EnterUnscoped())
+            {
+                var expiredPendingSince = DateTime.UtcNow
+                    - ProjectGitSyncPreflight.PendingCommandLifetime
+                    - TimeSpan.FromSeconds(1);
+                await db.WorkstationCommands.IgnoreQueryFilters()
+                    .Where(command => command.Id == requeued.Id)
+                    .ExecuteUpdateAsync(update => update.SetProperty(command => command.PendingSince, expiredPendingSince),
+                        TestContext.Current.CancellationToken);
+            }
+            await using (var expireDb = factory.CreateDbContext())
+                await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+                    expireDb, DateTime.UtcNow, TestContext.Current.CancellationToken, project.Id, device.Id);
+            using (TenantScope.EnterUnscoped())
+            {
+                var expiredRetry = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == requeued.Id, TestContext.Current.CancellationToken);
+                Assert.Equal(WorkstationCommandStatus.Cancelled, expiredRetry.Status);
+                Assert.Equal("GitSyncPendingExpired", expiredRetry.Error);
+                Assert.Null(expiredRetry.PendingSince);
             }
 
             await using var preflightDb = factory.CreateDbContext();
