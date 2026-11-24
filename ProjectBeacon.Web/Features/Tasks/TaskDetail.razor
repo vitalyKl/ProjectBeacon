@@ -556,7 +556,8 @@ else
     private TaskVersionImpactDto? _versionImpact;
     private bool _releaseManagementEnabled;
     private string? _taskLoadErrorMessage;
-    private readonly UiBackgroundFailureTracker _taskLoadFailures = new();    private TaskItemStatus _status = TaskItemStatus.Todo;
+    private readonly UiBackgroundFailureTracker _taskLoadFailures = new();
+    private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
     private CancellationTokenSource? _pipelinePoll;
     private PipelineStateDto? _pipeline;
