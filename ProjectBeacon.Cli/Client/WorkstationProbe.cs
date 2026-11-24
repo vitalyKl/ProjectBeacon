@@ -67,7 +67,10 @@ public static class WorkstationProbe
                     capabilities.Add(WorkstationCapabilities.GitLandV1);
                     capabilities.Add(WorkstationCapabilities.GitLandIntegrationV1);
                     if (Which("gh") is not null)
+                    {
                         capabilities.Add(WorkstationCapabilities.ReleasePrepareV1);
+                        capabilities.Add(WorkstationCapabilities.ReleasePublishV1);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
