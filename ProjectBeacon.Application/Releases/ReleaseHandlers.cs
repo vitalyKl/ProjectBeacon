@@ -274,7 +274,7 @@ public sealed class UpdateReleaseHandler
             version = normalized;
         }
 
-        var previous = new { release.Name, release.TargetVersion, release.TargetBranch, status = release.Status };
+        var previousStatus = release.Status;
         try
         {
             release.Update(name, description, version, branch, request.Order);
@@ -284,7 +284,7 @@ public sealed class UpdateReleaseHandler
                 orgId, request.ProjectId,
                 detailsJson: JsonSerializer.Serialize(new
                 {
-                    previousState = ((ReleaseStatus)previous.status).ToString(),
+                    previousState = previousStatus.ToString(),
                     newState = "Release.FieldsUpdated",
                     targetVersion = release.TargetVersion ?? "Unspecified",
                     targetBranch = release.TargetBranch,
