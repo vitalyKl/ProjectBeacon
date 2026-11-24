@@ -797,6 +797,7 @@ internal static class AgentTaskGitHubPullRequestOperations
             ["inlineReviewComments"] = inlineReviewComments,
             ["workflowRuns"] = workflowRuns,
             ["perCollectionLimit"] = limit,
+            ["collectedAtUtc"] = DateTime.UtcNow,
             ["readOnly"] = true
         };
         return AgentTaskGitOperations.Success(result);
@@ -877,6 +878,7 @@ internal static class AgentTaskGitHubPullRequestOperations
             return null;
         return new JsonObject
         {
+            ["id"] = NumberLongOrNull(item, "id"),
             ["author"] = author,
             ["state"] = state,
             ["submittedAt"] = submitted,
@@ -895,6 +897,7 @@ internal static class AgentTaskGitHubPullRequestOperations
             return null;
         var result = new JsonObject
         {
+            ["id"] = NumberLongOrNull(item, "id"),
             ["author"] = author,
             ["url"] = url,
             ["createdAt"] = created,
@@ -960,6 +963,11 @@ internal static class AgentTaskGitHubPullRequestOperations
 
     private static int? NumberOrNull(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.TryGetInt32(out var number)
+            ? number
+            : null;
+
+    private static long? NumberLongOrNull(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetInt64(out var number)
             ? number
             : null;
 
