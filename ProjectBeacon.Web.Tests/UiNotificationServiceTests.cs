@@ -170,7 +170,7 @@ public sealed class UiNotificationServiceTests
 
     [Theory]
     [InlineData(HttpStatusCode.ServiceUnavailable, "временно недоступен")]
-    [InlineData(HttpStatusCode.InternalServerError, "внутренней ошибке")]
+    [InlineData(HttpStatusCode.InternalServerError, "внутренней ошибки")]
     public void FormatHttpFailure_ServerStatus_HidesResponseDetailsAndAddsDiagnosticId(HttpStatusCode statusCode, string expected)
     {
         var previousCulture = CultureInfo.CurrentUICulture;
