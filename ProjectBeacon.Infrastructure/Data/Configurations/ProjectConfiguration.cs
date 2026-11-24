@@ -37,7 +37,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.Property(e => e.VersionPolicyJson)
             .IsRequired()
             .HasColumnType("jsonb")
-            .HasDefaultValue(ProjectVersionPolicyCatalogDefaults.Json);
+            .HasDefaultValue(ProjectVersionPolicyDefaults.Json);
         entity.Property(e => e.VersionPolicyRevision)
             .IsRequired()
             .IsConcurrencyToken()
