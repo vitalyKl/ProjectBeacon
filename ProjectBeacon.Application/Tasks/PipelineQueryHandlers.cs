@@ -78,8 +78,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
             db, task.ProjectId, selectedPipelineDevice, ct);
 
-        var phases = await db.TaskPhases.Where(p => p.TaskId == taskId).ToListAsync(ct);
-        var roleBindings = await db.RoleBindings.Where(b => b.ProjectId == projectId).ToListAsync(ct);
+        var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).ToListAsync(ct);
+        var roleBindings = await db.RoleBindings.Where(b => b.ProjectId == task.ProjectId).ToListAsync(ct);
         var backendIds = (phases.Count > 0
                 ? phases.Where(p => p.ModelBackendId.HasValue).Select(p => p.ModelBackendId!.Value)
                 : roleBindings.Select(b => b.ModelBackendId))
