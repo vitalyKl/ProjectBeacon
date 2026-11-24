@@ -133,10 +133,9 @@ public sealed class SetTaskVersionImpactHandler
             task.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                previousImpact,
-                impact = task.VersionImpact,
-                rationale = task.VersionImpactRationale,
-                revision = task.VersionImpactRevision
+                previousState = previousImpact ?? "Unspecified",
+                newState = task.VersionImpact ?? "Unknown",
+                count = task.VersionImpactRevision
             })));
         try
         {
@@ -224,12 +223,10 @@ public sealed class ReviewTaskVersionImpactHandler
             task.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                impact = task.VersionImpact,
-                rationale = task.VersionImpactRationale,
-                decision = command.Decision,
-                note = task.VersionImpactReviewNote,
-                reviewSessionId,
-                revision = task.VersionImpactRevision
+                previousState = task.VersionImpact ?? "Unknown",
+                newState = command.Decision,
+                reviewSessionId = reviewSessionId.ToString("D"),
+                count = task.VersionImpactRevision
             })));
         try
         {
