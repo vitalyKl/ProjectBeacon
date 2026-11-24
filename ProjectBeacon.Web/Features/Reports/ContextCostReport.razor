@@ -1,49 +1,54 @@
+
 <MudText Typo="Typo.h6" Class="mt-4">@L["ContextCostReport"]</MudText>
-@if (!string.IsNullOrWhiteSpace(_errorMessage))
+
+@if (HasError)
 {
     <MudAlert Severity="Severity.Error" Class="mt-3">@_errorMessage</MudAlert>
 }
 
-@if (_tasks.Count == 0 && string.IsNullOrWhiteSpace(_errorMessage))
+@if (!HasTasks && !HasError)
 {
     <MudText Typo="Typo.body2">@L["ContextCostNoTasks"]</MudText>
 }
-else if (_tasks.Count > 0)
+
+@if (HasTasks)
 {
-    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask" Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="beacon-report-task-select mb-4">
+    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask"
+               Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+               Class="beacon-report-task-select mb-4">
         @foreach (var task in _tasks)
         {
             <MudSelectItem Value="@((Guid?)task.Id)">@task.Title</MudSelectItem>
         }
     </MudSelect>
+}
 
-    @if (string.IsNullOrWhiteSpace(_errorMessage))
+@if (HasTasks && !HasError)
+{
+    @if (!HasReport)
     {
-        @if (_report is null || _report.PairCount == 0)
-        {
-            <MudText Typo="Typo.body2">@L["ContextCostNoPairs"]</MudText>
-        }
-        else
-        {
-            <MudTable Items="_report.Pairs" Hover="true" Dense="true">
-                <HeaderContent>
-                    <MudTh>@L["Pair"]</MudTh>
-                    <MudTh>@L["ContextCostWithBrief"]</MudTh>
-                    <MudTh>@L["ContextCostWithoutBrief"]</MudTh>
-                    <MudTh>@L["ContextCostPromptDelta"]</MudTh>
-                    <MudTh>@L["ContextCostCompletionDelta"]</MudTh>
-                    <MudTh>@L["ContextCostTurnDelta"]</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="@L["Pair"]">@context.PairId</MudTd>
-                    <MudTd DataLabel="@L["ContextCostWithBrief"]">@FormatRun(context.WithBrief)</MudTd>
-                    <MudTd DataLabel="@L["ContextCostWithoutBrief"]">@FormatRun(context.WithoutBrief)</MudTd>
-                    <MudTd DataLabel="@L["ContextCostPromptDelta"]">@FormatDelta(context.PromptTokensDelta)</MudTd>
-                    <MudTd DataLabel="@L["ContextCostCompletionDelta"]">@FormatDelta(context.CompletionTokensDelta)</MudTd>
-                    <MudTd DataLabel="@L["ContextCostTurnDelta"]">@FormatDelta(context.TurnCountDelta)</MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
+        <MudText Typo="Typo.body2">@L["ContextCostNoPairs"]</MudText>
+    }
+    else
+    {
+        <MudTable Items="@_report!.Pairs" Hover="true" Dense="true">
+            <HeaderContent>
+                <MudTh>@L["Pair"]</MudTh>
+                <MudTh>@L["ContextCostWithBrief"]</MudTh>
+                <MudTh>@L["ContextCostWithoutBrief"]</MudTh>
+                <MudTh>@L["ContextCostPromptDelta"]</MudTh>
+                <MudTh>@L["ContextCostCompletionDelta"]</MudTh>
+                <MudTh>@L["ContextCostTurnDelta"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@L["Pair"]">@context.PairId</MudTd>
+                <MudTd DataLabel="@L["ContextCostWithBrief"]">@FormatRun(context.WithBrief)</MudTd>
+                <MudTd DataLabel="@L["ContextCostWithoutBrief"]">@FormatRun(context.WithoutBrief)</MudTd>
+                <MudTd DataLabel="@L["ContextCostPromptDelta"]">@FormatDelta(context.PromptTokensDelta)</MudTd>
+                <MudTd DataLabel="@L["ContextCostCompletionDelta"]">@FormatDelta(context.CompletionTokensDelta)</MudTd>
+                <MudTd DataLabel="@L["ContextCostTurnDelta"]">@FormatDelta(context.TurnCountDelta)</MudTd>
+            </RowTemplate>
+        </MudTable>
     }
 }
 
@@ -54,6 +59,10 @@ else if (_tasks.Count > 0)
     private Guid? _selectedTaskId;
     private ContextCostReportDto? _report;
     private string? _errorMessage;
+
+    private bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
+    private bool HasTasks => _tasks.Count > 0;
+    private bool HasReport => _report is { PairCount: > 0 };
 
     protected override async Task OnInitializedAsync()
     {
