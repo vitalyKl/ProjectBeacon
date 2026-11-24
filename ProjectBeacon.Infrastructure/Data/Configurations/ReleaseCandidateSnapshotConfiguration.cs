@@ -12,6 +12,8 @@ public sealed class ReleaseCandidateSnapshotConfiguration : IEntityTypeConfigura
         entity.HasKey(snapshot => snapshot.Id);
         entity.HasAlternateKey(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId });
 
+        entity.Property(snapshot => snapshot.CandidateId).IsRequired();
+        entity.Property(snapshot => snapshot.PreparedByDeviceId).IsRequired();
         entity.Property(snapshot => snapshot.Version).IsRequired().HasMaxLength(100);
         entity.Property(snapshot => snapshot.TagName).IsRequired().HasMaxLength(200);
         entity.Property(snapshot => snapshot.TargetBranch).IsRequired().HasMaxLength(200);
