@@ -240,12 +240,31 @@ else
     private int _editOrder;
     private int _newOrder;
     private int? _editRevision;
+    private List<ReleaseDto> _releases = [];
+    private bool _releaseManagementEnabled;
+    private bool _canManageReleases;
+    private bool _showCreateReleaseForm;
+    private bool _releaseBusy;
+    private string _releaseName = string.Empty;
+    private string? _releaseDescription;
+    private string? _releaseTargetVersion;
+    private string _releaseTargetBranch = "main";
+    private int _releaseOrder = 1;
 
     protected override async Task OnInitializedAsync()
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
         _project = current.Value;
+        if (_project is not null)
+        {
+            var policy = await GetVersionPolicy.HandleAsync(_project.Id, _actor);
+            _releaseManagementEnabled = policy.Success && policy.Value?.ReleaseManagementEnabled == true;
+            await using var db = DbFactory.CreateDbContext();
+            var permission = await Authorization.CanAsync(
+                db, _actor, ResourceType.Project, AuthAction.Administer, projectId: _project.Id);
+            _canManageReleases = permission.Success;
+        }
         await Reload();
         _loading = false;
     }
@@ -274,6 +293,17 @@ else
         if (!tasks.Success)
             Notifications.Failure(tasks, L["Roadmap"].Value, L["Load"].Value);
         _tasks = tasks.Success ? tasks.Value!.ToList() : [];
+
+        if (_releaseManagementEnabled)
+        {
+            var releases = await ListProjectReleases.HandleAsync(new ListProjectReleasesCommand(
+                new ListProjectReleasesRequest(_project.Id), _actor));
+            _releases = releases.Success ? releases.Value!.ToList() : [];
+            if (!releases.Success)
+                Notifications.Failure(releases, L["Roadmap"].Value, L["Load"].Value);
+        }
+        else
+            _releases = [];
     }
 
     private void ShowCreateForm()
