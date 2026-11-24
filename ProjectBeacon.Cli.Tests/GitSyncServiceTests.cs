@@ -20,7 +20,7 @@ public sealed class GitSyncServiceTests
         var after = await Git(repo.Root, "rev-parse", "HEAD");
 
         Assert.Equal(GitSyncOutcome.FastForwarded, result.Outcome);
-            Assert.Equal(1, result.FastForwardCommits);
+        Assert.Equal(1, result.FastForwardCommits);
         Assert.NotEqual(before, after);
         Assert.Equal(before, result.HeadBefore);
         Assert.Equal(after, result.HeadAfter);
