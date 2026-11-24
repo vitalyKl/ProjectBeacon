@@ -3072,4 +3072,5 @@ orthstar</value>
   <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>バージョンポリシーを変更できるのはプロジェクトの Owner と Admin のみです。</value></data>
   <data name="ProjectVersionSave" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>バージョンポリシーを保存しました</value></data>
+  <data name="NotConfigured" xml:space="preserve"><value>未設定</value></data>
 </root>
