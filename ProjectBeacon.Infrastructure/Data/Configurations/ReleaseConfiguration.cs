@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Data.Configurations;
 
 using Domain.Entities.Roadmap;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
