@@ -11,6 +11,7 @@ using Application.Devices;
 using Application.Persistence;
 using Application.Projects;
 using Domain.Entities.Tasks;
+using Domain.Entities.Projects;
 using Domain.Common;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
