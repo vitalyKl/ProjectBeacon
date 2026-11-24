@@ -3398,7 +3398,7 @@ orthstar</value>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
 <data name="NotConfigured" xml:space="preserve"><value>未配置</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>为此项目启用发布管理</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>启用后，Roadmap 中将提供 Release 管理，并可将 Milestone 关联到 Release。现有 Milestone 仍保持独立。默认关闭。</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>启用后，Roadmap 会显示 Release，并允许将多个 Milestone 归入一个 Release。任务通过所属 Milestone 继承 Release 上下文。请先在上方配置版本方案和清单文件投影。此功能默认关闭；启用不会自动发布或部署。</value></data>>
   <data name="ProjectReleases" xml:space="preserve"><value>项目发布</value></data>
   <data name="Releases" xml:space="preserve"><value>个发布</value></data>
   <data name="NewRelease" xml:space="preserve"><value>新建发布</value></data>
@@ -3435,4 +3435,5 @@ orthstar</value>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix 与向前移植任务</value></data>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>此任务基于实际部署到生产环境的确切提交。Beacon 会保护其来源分支和基础提交。</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>此普通任务是在来源 Hotfix 确认成功落地后创建的。请通过标准 Planner、Actor、Reviewer 和 landing 流程完成。</value></data>
+  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release 流程：先在项目设置中配置权威版本和清单文件，然后在此创建 Release，并将 Milestone 关联到该 Release。关联 Milestone 的任务会在 Planner 上下文中获得目标版本和目标分支。Release 准备阶段会创建不可变 Candidate；生产发布是单独且需要明确确认的操作。</value></data>
 </root>
