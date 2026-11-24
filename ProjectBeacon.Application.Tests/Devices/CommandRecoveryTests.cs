@@ -142,6 +142,11 @@ public sealed class CommandRecoveryTests : IDisposable
         Assert.Equal(1, row.Attempts);
         Assert.Null(row.LeaseExpiresAt);
         Assert.Null(row.StartedAt);
+        Assert.NotNull(row.PendingSince);
+        Assert.InRange(
+            (row.PendingSince!.Value - t0.AddSeconds(46)).Duration(),
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
