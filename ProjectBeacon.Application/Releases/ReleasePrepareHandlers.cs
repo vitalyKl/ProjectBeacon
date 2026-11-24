@@ -172,10 +172,7 @@ internal static class ReleasePreparePayload
         value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     public static WorkstationCommandDto ToCommandDto(WorkstationCommand command, string localRoot) =>
-        new(command.Id, command.DeviceId, command.ProjectId, command.RequestedByUserId,
-            command.Kind, command.Status, command.PayloadJson, command.ResultJson, command.Error,
-            command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot,
-            command.Version, command.Attempts + 1);
+        EnqueueCommandHandler.MapCommand(command, localRoot);
 }
 
 public sealed class PrepareReleaseHandler
