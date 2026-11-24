@@ -317,9 +317,9 @@ public sealed class SetReleaseStatusHandler
         SetReleaseStatusCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
-        if (!Enum.IsDefined(request.Status) || request.Status == ReleaseStatus.Published)
+        if (!Enum.IsDefined(request.Status) || request.Status is ReleaseStatus.Candidate or ReleaseStatus.Published)
             return Result.Failure<ReleaseDto>(
-                "Published is reserved for the authorized publication workflow.", ErrorKind.Validation);
+                "Candidate and Published are reserved for the authorized ReleasePrepare/publication workflow.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
         var permission = await ReleaseAuthorization.RequireAdminAsync(
@@ -455,11 +455,24 @@ public sealed class SetMilestoneReleaseHandler
         if (request.ExpectedRevision < 1 || request.ExpectedRevision != milestone.Revision)
             return Result.Failure("Milestone changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
 
+        if (milestone.ReleaseId is { } currentReleaseId)
+        {
+            var currentStatus = await db.Releases
+                .Where(release => release.Id == currentReleaseId && release.ProjectId == request.ProjectId)
+                .Select(release => (ReleaseStatus?)release.Status)
+                .FirstOrDefaultAsync(ct);
+            if (currentStatus is ReleaseStatus.Candidate or ReleaseStatus.Published)
+                return Result.Failure(
+                    "Milestones in an immutable Candidate or Published release cannot be detached or moved.",
+                    ErrorKind.Conflict);
+        }
+
         if (request.ReleaseId is { } releaseId)
         {
             var exists = await db.Releases.AnyAsync(
                 release => release.Id == releaseId
                     && release.ProjectId == request.ProjectId
+                    && release.Status != ReleaseStatus.Candidate
                     && release.Status != ReleaseStatus.Published
                     && release.Status != ReleaseStatus.Cancelled, ct);
             if (!exists)
