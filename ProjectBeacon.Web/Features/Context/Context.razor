@@ -24,7 +24,6 @@
 @inject ListConstraintsHandler ListConstraints
 @inject ActivateConstraintHandler ActivateConstraintHandler
 @inject RejectConstraintHandler RejectConstraintHandler
-@inject ISnackbar Snackbar
 
 <PageTitle>@L["Context"]</PageTitle>
 <PageHeader Title="@L["Context"]">
@@ -279,13 +278,13 @@ else
         var nodes = await ListNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
         _nodes = nodes.Success ? nodes.Value!.ToList() : [];
         if (!nodes.Success)
-            _error = nodes.Error;
+            _error = Notifications.FormatFailure(nodes, L["Context"].Value, L["Load"].Value);
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
         _deletedSections = deleted.Success
             ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList()
             : [];
         if (!deleted.Success)
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(deleted, L["Context"].Value, L["Load"].Value), Severity.Warning);
         var selectedConstraintId = _selectedConstraint?.Id;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
@@ -325,11 +324,11 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Save"].Value);
             return;
         }
         _sectionRevision = result.Value!.Revision;
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
         var savedNode = _nodes.FirstOrDefault(node => node.Id == result.Value.Id);
         if (savedNode is not null)
@@ -353,7 +352,7 @@ else
             _project.Id, ContentTargetKind.ContextSection, node.Id, _actor, 50);
         _sectionHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreDeletedSection(DeletedContentTargetDto deleted)
@@ -373,7 +372,7 @@ else
                 deleted.TargetId));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored, L["Context"].Value, L["Restore"].Value);
                 return;
             }
 
@@ -381,7 +380,7 @@ else
             var restoredNode = _nodes.FirstOrDefault(node => node.Id == deleted.TargetId);
             if (restoredNode is not null)
                 await LoadSection(restoredNode);
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -402,7 +401,7 @@ else
                 ContentTargetKind.ContextSection, _selectedNode.Id));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored, L["Context"].Value, L["Restore"].Value);
                 return;
             }
 
@@ -410,7 +409,7 @@ else
             var selected = _nodes.FirstOrDefault(node => node.Id == _selectedNode.Id);
             if (selected is not null)
                 await LoadSection(selected);
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -448,7 +447,7 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Compile"].Value);
             return;
         }
         _preview = result.Value!.BriefMarkdown;
@@ -471,11 +470,11 @@ else
         var result = await ExportAgents.HandleAsync(new ExportAgentsMdCommand(new ExportAgentsMdRequest(_project.Id, null, null)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Export"].Value);
             return;
         }
         _preview = result.Value;
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
     }
 
     private async Task LoadConstraintHistory(ConstraintDto constraint)
@@ -488,7 +487,7 @@ else
             _project.Id, ContentTargetKind.Constraint, constraint.Id, _actor, 50);
         _constraintHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreConstraintVersion(ContentVersionDto version)
@@ -509,12 +508,12 @@ else
                 constraintId));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored, L["Context"].Value, L["Restore"].Value);
                 return;
             }
 
             await Reload();
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -550,11 +549,11 @@ else
         var result = await CreateConstraint.HandleAsync(new CreateConstraintRequest(_project.Id, _constraintBody.Trim(), _constraintKind, _actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Create"].Value);
             return;
         }
         _constraintBody = string.Empty;
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -563,10 +562,10 @@ else
         var result = await ActivateConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Apply"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -575,10 +574,10 @@ else
         var result = await RejectConstraintHandler.HandleAsync(constraint.Id, _actor);
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Context"].Value, L["Reject"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 }

@@ -203,13 +203,94 @@
     [Parameter] public EventCallback<LandingAttemptDto> OnExecuteLanding { get; set; }
     [Parameter] public EventCallback<LandingAttemptDto> OnRevertLanding { get; set; }
     private string _landingRationale = "Approved task branch ready for landing.";
+    private readonly Dictionary<string, string> _unknownReasonMessages = new(StringComparer.Ordinal);
+
+    private string UnknownReasonMessage(string code, string resourceKey, string operation, object? context = null)
+    {
+        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{Pipeline?.TaskId}:{resourceKey}:{operation}:{code}";
+        if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
+            return message;
+
+        message = Notifications.FormatUnknownReasonCode(code, resourceKey, operation, context);
+        if (_unknownReasonMessages.Count >= 32)
+            _unknownReasonMessages.Clear();
+        _unknownReasonMessages[cacheKey] = message;
+        return message;
+    }
 
     private bool CanRequestPreview(LandingAttemptDto? attempt) => attempt is null
         || attempt.Status is LandingAttemptStatus.Failed or LandingAttemptStatus.Conflicted or LandingAttemptStatus.Reverted;
 
     private string LandingStatusLabel(LandingAttemptStatus status) => L["LandingStatus" + status].Value;
 
-    private string LandingReasonLabel(string code) => L["LandingReason" + code].Value;
+    private string LandingReasonLabel(string code)
+    {
+        var resourceKey = code switch
+        {
+            "ManualExecuteRetryRequired" => "LandingReasonManualExecuteRetryRequired",
+            "ManualExecutionRequired" => "LandingReasonManualExecutionRequired",
+            "RevertDispatchUnavailable" => "LandingReasonRevertDispatchUnavailable",
+            "IntegrationBranchNotAvailable" => "LandingReasonIntegrationBranchNotAvailable",
+            "InvalidGitPolicySnapshot" => "LandingReasonInvalidGitPolicySnapshot",
+            "ProjectUnavailable" => "LandingReasonProjectUnavailable",
+            "PostMergeCheckFailed" => "LandingReasonPostMergeCheckFailed",
+            "GitPolicyChangedSincePreview" => "LandingReasonGitPolicyChangedSincePreview",
+            "TaskNotApprovedForExecute" => "LandingReasonTaskApprovalRequired",
+            "AutomaticLandingNotAllowed" => "LandingReasonManualActionRequired",
+            _ => ResolveLandingReasonCategory(code)
+        };
+
+        if (resourceKey is null)
+            return UnknownReasonMessage(code, "LandingReasonUnknown", "display Git landing reason");
+
+        var localized = L[resourceKey];
+        return localized.ResourceNotFound
+            ? UnknownReasonMessage(code, "LandingReasonUnknown", "display Git landing reason")
+            : localized.Value;
+    }
+
+    private static string? ResolveLandingReasonCategory(string code)
+    {
+        if (code is "ProjectRuntimeUnavailable" or "TaskWorkspaceUnavailable" or "LandingWorkstationUnavailable" or "WorkspaceModeRequiresTaskBranches")
+            return "LandingReasonWorkspaceUnavailable";
+        if (code is "ProjectIdentityMismatch" or "InvalidTargetBranch")
+            return "LandingReasonGitConfigurationInvalid";
+        if (code.StartsWith("Task", StringComparison.Ordinal))
+            return "LandingReasonTaskWorktreeChanged";
+        if (code.StartsWith("Review", StringComparison.Ordinal) || code is "ExecutePreviewEvidenceMissing" or "CandidateNoLongerValid")
+            return "LandingReasonReviewEvidenceChanged";
+        if (code.Contains("Protected", StringComparison.Ordinal) || code.Contains("OutsideProject", StringComparison.Ordinal)
+            || code.Contains("Symlink", StringComparison.Ordinal) || code.Contains("Submodule", StringComparison.Ordinal)
+            || code.Contains("TooLarge", StringComparison.Ordinal) || code.Contains("ModifiedFiles", StringComparison.Ordinal))
+            return "LandingReasonProtectedChangesDetected";
+        if (code.StartsWith("PostMerge", StringComparison.Ordinal) || code is "PostMergeEvidenceInvalid" or "PostMergeVerificationFailed" or "TargetWorktreeUpdateFailed")
+            return "LandingReasonPostMergeVerificationFailed";
+        if (code.StartsWith("Revert", StringComparison.Ordinal) || code.StartsWith("GitRevert", StringComparison.Ordinal)
+            || code is "TargetAdvancedBeyondLanding" or "TargetChangedBeforeRevertUpdate" or "TargetBranchUnavailableForRevertRecovery" or "TargetCheckoutChangedBeforeRevert")
+            return "LandingReasonRevertFailed";
+        if (code.StartsWith("Candidate", StringComparison.Ordinal) || code.StartsWith("MergeTree", StringComparison.Ordinal)
+            || code.StartsWith("LandingCommit", StringComparison.Ordinal) || code is "UnexpectedMergeTreeOutput")
+            return "LandingReasonCandidateBuildFailed";
+        if (code.Contains("Marker", StringComparison.Ordinal) || code.Contains("Recovery", StringComparison.Ordinal)
+            || code.Contains("CompletionUnknown", StringComparison.Ordinal) || code.StartsWith("Invalid", StringComparison.Ordinal)
+            || code.StartsWith("Unexpected", StringComparison.Ordinal)
+            || code is "UnknownGitLandResult" or "GitLandCommandFailed" or "GitLandOperationFailed")
+            return "LandingReasonLandingRecoveryFailed";
+        if (code.Contains("Enqueue", StringComparison.Ordinal) || code.Contains("Workstation", StringComparison.Ordinal))
+            return "LandingReasonCommandQueueFailed";
+        if (code is "LandingCommitNotOnTargetBranch" or "TargetBranchChangedSincePreview")
+            return "LandingReasonTargetBranchChanged";
+        if (code.StartsWith("Target", StringComparison.Ordinal) || code.StartsWith("LocalTarget", StringComparison.Ordinal))
+            return "LandingReasonTargetBranchChanged";
+        if (code.Contains("Workspace", StringComparison.Ordinal) || code.Contains("Worktree", StringComparison.Ordinal))
+            return "LandingReasonWorkspaceUnavailable";
+        if (code.Contains("Git", StringComparison.Ordinal) || code.Contains("Remote", StringComparison.Ordinal)
+            || code.Contains("Branch", StringComparison.Ordinal) || code.Contains("MergeDriver", StringComparison.Ordinal))
+            return "LandingReasonGitConfigurationInvalid";
+        if (code.Contains("Manual", StringComparison.Ordinal))
+            return "LandingReasonManualActionRequired";
+        return null;
+    }
 
     private Color LandingStatusColor(LandingAttemptStatus status) => status switch
     {
@@ -251,15 +332,30 @@
         };
     }
 
-    private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
-        ? L[reason].Value
-        : Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason
-            ? L[workstationReason].Value
-            : Pipeline?.Preflight?.HasNativeWorkstation != true
+    private string PreflightMessage(PipelineSessionDto session)
+    {
+        if (session.LaunchBlockedReason is { } reason)
+        {
+            var localized = L[reason];
+            return localized.ResourceNotFound
+                ? UnknownReasonMessage(reason, "PipelinePreflightReasonUnknown", "read pipeline launch preflight", new { TaskId = Pipeline?.TaskId })
+                : localized.Value;
+        }
+
+        if (Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason)
+        {
+            var localized = L[workstationReason];
+            return localized.ResourceNotFound
+                ? UnknownReasonMessage(workstationReason, "PipelinePreflightReasonUnknown", "read task workstation preflight", new { TaskId = Pipeline?.TaskId })
+                : localized.Value;
+        }
+
+        return Pipeline?.Preflight?.HasNativeWorkstation != true
                 ? L["PipelinePreflightNoNativeWorkstation"].Value
                 : Pipeline.Preflight.HasOnlineNativeWorkstation != true
                     ? L["PipelineNativeWorkstationOffline"].Value
                     : L["PipelinePreflightNoRoleModel"].Value;
+    }
 
     private string StageLabel(TaskPipelineStage stage) => stage switch
     {

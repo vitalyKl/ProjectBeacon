@@ -16,7 +16,6 @@
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
 @inject ChangeTaskStatusHandler ChangeStatus
-@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService Dialogs
 
@@ -31,7 +30,7 @@
 }
 else if (_error)
     {
-        <MudAlert Severity="Severity.Error" Class="mt-4">@L["AnErrorOccurred"]</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
     }
     else if (_project is null)
     {
@@ -102,6 +101,7 @@ else if (_error)
     private MudDropContainer<TaskItemDto>? _container;
     private bool _loading = true;
     private bool _error;
+    private string? _errorMessage;
     private int _todoCount => _allTasks.Count(t => t.Status == "Todo");
     private int _inProgressCount => _allTasks.Count(t => t.Status == "InProgress");
     private int _doneCount => _allTasks.Count(t => t.Status == "Done");
@@ -143,13 +143,13 @@ else if (_error)
             new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier))));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result, L["Board"].Value, L["ChangeStatus"].Value), Severity.Warning);
             await ReloadTasks();
             return;
         }
 
         await ReloadTasks();
-        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
+        Notifications.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
     }
 
     private async Task MoveTask(TaskItemDto task, TaskItemStatus status)
@@ -167,13 +167,13 @@ else if (_error)
             new ChangeTaskStatusRequest(task.Id, status)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(result, L["Board"].Value, L["ChangeStatus"].Value), Severity.Warning);
             await ReloadTasks();
             return;
         }
 
         await ReloadTasks();
-        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
+        Notifications.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
     }
 
     private async Task ReloadTasks()
@@ -189,6 +189,7 @@ else if (_error)
         if (!listed.Success)
         {
             _error = true;
+            _errorMessage = Notifications.FormatFailure(listed, L["Board"].Value, L["Load"].Value);
             _allTasks = [];
             _container?.Refresh();
             return;
@@ -207,7 +208,7 @@ else if (_error)
     {
         if (_project is null)
         {
-            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Failure(L["NoProjectAvailable"].Value, L["Board"].Value, ErrorCodes.ValidationFailed, L["Create"].Value);
             return;
         }
 

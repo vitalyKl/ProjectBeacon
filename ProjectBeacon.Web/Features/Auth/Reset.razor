@@ -49,7 +49,7 @@
         if (query.TryGetValue("token", out var token))
             _token = token.ToString();
         if (string.IsNullOrEmpty(_token))
-            _error = L["Error"].Value;
+            _error = Notifications.FormatFailure(L["ResetTokenMissing"].Value, L["AuthResetOperation"].Value);
     }
 
     private async Task Submit()
@@ -62,14 +62,15 @@
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _error = string.IsNullOrWhiteSpace(body) ? L["Error"].Value : body;
+                _error = Notifications.FormatHttpFailure(response.StatusCode, null, L["AuthResetOperation"].Value, L["Reset"].Value);
                 return;
             }
             _success = true;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "reset account password");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

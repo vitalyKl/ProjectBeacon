@@ -51,7 +51,6 @@
 @inject ChangeTaskStatusHandler ChangeStatus
 @inject IDialogService Dialogs
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
 @inject ILogger<TaskDetail> Logger
 @inject NavigationManager Navigation
 
@@ -196,7 +195,7 @@ else
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
                   data-testid="repository-sync-reason">
-            @L["GitSyncReason" + repositoryReason]
+            @GitSyncReasonText(repositoryReason)
             <a href="/project/settings">@L["GitSyncTitle"]</a>
         </MudAlert>
     }
@@ -773,7 +772,7 @@ else
                 limit: 50);
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+                Notifications.Add(Notifications.FormatFailure(result, L["Tasks"].Value, L["Load"].Value), Severity.Warning);
                 _taskContentHistory = [];
                 return;
             }
@@ -804,13 +803,13 @@ else
                 _task.Id));
             if (!restored.Success)
             {
-                Snackbar.Add(restored.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(restored, L["Tasks"].Value, L["Restore"].Value);
                 return;
             }
 
             await Reload();
             await LoadTaskContentHistory();
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -853,11 +852,11 @@ else
             if (!result.Success)
             {
                 _status = previous;
-                Snackbar.Add(result.Error ?? L["StatusChangeFailed"].Value, Severity.Error);
+                Notifications.Failure(result.Error ?? L["StatusChangeFailed"].Value, L["Tasks"].Value, result.ErrorCode, L["ChangeStatus"].Value);
                 return;
             }
             await Reload();
-            Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
+            Notifications.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
         }
         finally
         {
@@ -880,7 +879,7 @@ else
         var result = await reference.Result;
         if (result?.Data is TaskItemDto)
         {
-            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            Notifications.Add(L["Saved"].Value, Severity.Success);
             await Reload();
         }
     }
@@ -973,7 +972,7 @@ else
             new WorkspaceReadRequest(TaskId, key, Offset: 0, Limit: 8000)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Tasks"].Value, L["Load"].Value);
             return;
         }
         _selectedWorkspace = result.Value;
@@ -985,7 +984,7 @@ else
             return;
         if (_actorContext.UserId is null || !_actorContext.IsHuman)
         {
-            Snackbar.Add(L["WorkspaceHumanIdentityRequired"].Value, Severity.Error);
+            Notifications.Failure(L["WorkspaceHumanIdentityRequired"].Value, L["Tasks"].Value, ErrorCodes.ValidationFailed, L["Add"].Value);
             return;
         }
 
@@ -997,7 +996,7 @@ else
                     _workspaceAbstract, _workspaceContent, "create"), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Create"].Value);
                 return;
             }
             _workspaceTitle = string.Empty;
@@ -1006,7 +1005,7 @@ else
             await ReloadWorkspace();
             SetNextHumanWorkspaceKey();
             await OnReadWorkspaceSection(result.Value!.Key);
-            Snackbar.Add(L["WorkspaceNoteCreated"].Value, Severity.Success);
+            Notifications.Add(L["WorkspaceNoteCreated"].Value, Severity.Success);
         }
         finally
         {
@@ -1035,7 +1034,7 @@ else
             var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Add"].Value);
                 return;
             }
             _stepTitle = string.Empty;
@@ -1052,7 +1051,7 @@ else
         var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Tasks"].Value, L["Update"].Value);
             return;
         }
         await ReloadSteps();
@@ -1063,7 +1062,7 @@ else
         var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id)));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Tasks"].Value, L["Delete"].Value);
             return;
         }
         await ReloadSteps();
@@ -1097,10 +1096,10 @@ else
                 new CancelPipelineCommand(new CancelPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
-            Snackbar.Add(L["PipelineCancelled"].Value, Severity.Info);
+            Notifications.Add(L["PipelineCancelled"].Value, Severity.Info);
             await Reload();
             await ReloadPipeline();
             await ReloadSteps();
@@ -1124,10 +1123,10 @@ else
                 new RestartPipelineCommand(new RestartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Restart"].Value);
                 return;
             }
-            Snackbar.Add(L["PipelineRestarted"].Value, Severity.Success);
+            Notifications.Add(L["PipelineRestarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
             await ReloadSteps();
@@ -1151,10 +1150,10 @@ else
                 new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(TaskId, session.Id)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
-            Snackbar.Add(L["WorkCancelled"].Value, Severity.Info);
+            Notifications.Add(L["WorkCancelled"].Value, Severity.Info);
             await ReloadPipeline();
         }
         finally
@@ -1176,10 +1175,10 @@ else
                 new CancelSubtaskCommand(new CancelSubtaskRequest(TaskId, subtask.Id)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
-            Snackbar.Add(L["WorkCancelled"].Value, Severity.Info);
+            Notifications.Add(L["WorkCancelled"].Value, Severity.Info);
             await ReloadPipeline();
         }
         finally
@@ -1201,7 +1200,7 @@ else
                 new DeleteTaskCommand(new DeleteTaskRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Delete"].Value);
                 return;
             }
             Navigation.NavigateTo("/");
@@ -1220,22 +1219,22 @@ else
         {
             if (!CanStartPlanner)
             {
-                Snackbar.Add(PlannerPreflightMessage, Severity.Warning);
+                Notifications.Add(PlannerPreflightMessage, Severity.Warning);
                 return;
             }
             var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 await ReloadPipeline();
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
-                Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
+                Notifications.Add(L["PipelineStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }
@@ -1263,7 +1262,12 @@ else
                 targetDeviceId: deviceId);
             if (!queued.Success || queued.Value is null)
             {
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(
+                    queued.Error,
+                    L["Tasks"].Value,
+                    queued.Success ? ErrorCodes.Unclassified : queued.ErrorCode,
+                    L["SynchronizeRepository"].Value,
+                    new { TaskId, ProjectId = _task.ProjectId, DeviceId = deviceId });
                 await ReloadPipeline(ct);
                 return;
             }
@@ -1281,7 +1285,12 @@ else
                     _task.ProjectId, queued.Value.Id, _actorContext, ct);
                 if (!current.Success || current.Value is null)
                 {
-                    Snackbar.Add(current.Error ?? L["Error"].Value, Severity.Error);
+                    Notifications.Failure(
+                        current.Error,
+                        L["Tasks"].Value,
+                        current.ErrorCode,
+                        L["Read"].Value,
+                        new { TaskId, ProjectId = _task.ProjectId, CommandId = queued.Value.Id });
                     await ReloadPipeline(ct);
                     return;
                 }
@@ -1293,13 +1302,14 @@ else
                     _gitSyncCommandId = null;
                     _gitSyncProjectId = null;
                     _gitSyncCommandPending = false;
+                    _gitSyncCommandCancellable = false;
                     await HandleGitSyncTerminalCommandAsync(current.Value, ct);
                     return;
                 }
             }
 
             _gitSyncCommandPending = true;
-            Snackbar.Add(L["GitSyncStillRunning"].Value, Severity.Info);
+            Notifications.Add(L["GitSyncStillRunning"].Value, Severity.Info);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1307,10 +1317,7 @@ else
         }
         catch (Exception exception)
         {
-            var diagnosticId = Guid.NewGuid().ToString("N")[..8];
-            Logger.LogError(exception,
-                "Project repository synchronization failed. DiagnosticId={DiagnosticId}, TaskId={TaskId}, ProjectId={ProjectId}, DeviceId={DeviceId}",
-                diagnosticId, TaskId, _task?.ProjectId, deviceId);
+            var operationContext = new { TaskId, ProjectId = _task?.ProjectId, DeviceId = deviceId };
 
             _gitSyncCommandPending = _gitSyncCommandId is not null;
             try
@@ -1327,7 +1334,7 @@ else
                     "Could not refresh repository preflight after sync exception. TaskId={TaskId}", TaskId);
             }
 
-            Snackbar.Add($"{L["Error"].Value} (ID: {diagnosticId})", Severity.Error);
+            Notifications.ReportException(exception, "GitSyncStartFailed", "start repository synchronization", operationContext);
         }
         finally
         {
@@ -1346,14 +1353,14 @@ else
             return;
 
         _gitSyncBusy = true;
+        var ct = _pipelinePoll?.Token ?? CancellationToken.None;
         try
         {
-            var result = await CancelGitSync.HandleAsync(
-                projectId, commandId, _actorContext, _pipelinePoll?.Token ?? CancellationToken.None);
+            var result = await CancelGitSync.HandleAsync(projectId, commandId, _actorContext, ct);
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-                await ReloadPipeline();
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
+                await ReloadPipeline(ct);
                 return;
             }
 
@@ -1362,8 +1369,20 @@ else
             _gitSyncTargetDeviceId = null;
             _gitSyncCommandPending = false;
             _gitSyncCommandCancellable = false;
-            Snackbar.Add(L["GitSyncCancelledBeforeStart"].Value, Severity.Info);
-            await ReloadPipeline();
+            Notifications.Info(L["GitSyncCancelledBeforeStart"].Value);
+            await ReloadPipeline(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page is being disposed; the server-side cancellation request may already have completed.
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(
+                exception,
+                "GitSyncCancelFailed",
+                "cancel queued repository synchronization",
+                new { TaskId, ProjectId = projectId, CommandId = commandId });
         }
         finally
         {
@@ -1388,27 +1407,38 @@ else
                 "GitSync command {CommandId} completed on workstation {CommandDeviceId}; queued target {QueuedTargetDeviceId}, current pipeline target {CurrentTargetDeviceId}, task {TaskId}",
                 command.Id, command.DeviceId, _gitSyncTargetDeviceId, currentTargetDeviceId, TaskId);
             _gitSyncTargetDeviceId = null;
-            Snackbar.Add(L["GitSyncOtherWorkstationFinished"].Value, Severity.Info);
+            Notifications.Add(L["GitSyncOtherWorkstationFinished"].Value, Severity.Info);
             return;
         }
 
         if (command.Status == WorkstationCommandStatus.Failed)
         {
-            Snackbar.Add(command.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(
+                command.Error,
+                L["Tasks"].Value,
+                ErrorCodes.InternalError,
+                L["SynchronizeRepository"].Value,
+                new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
         }
         else if (command.Status == WorkstationCommandStatus.Cancelled)
         {
-            var cancelledMessage = command.Error switch
+            switch (command.Error)
             {
-                "GitSyncPendingExpired" => L["GitSyncPendingExpired"].Value,
-                "GitSyncCancelledByUser" => L["GitSyncCancelledBeforeStart"].Value,
-                _ => L["CommandCancelled"].Value
-            };
-            Snackbar.Add(cancelledMessage, Severity.Warning);
+                case "GitSyncPendingExpired":
+                    Notifications.Warning(L["GitSyncPendingExpired"].Value);
+                    break;
+                case "GitSyncCancelledByUser":
+                    Notifications.Info(L["GitSyncCancelledBeforeStart"].Value);
+                    break;
+                default:
+                    Notifications.Warning(L["CommandCancelled"].Value);
+                    break;
+            }
         }
         else if (command.Status == WorkstationCommandStatus.Succeeded)
         {
             GitSyncResultDto? result = null;
+            string? resultDiagnosticId = null;
             if (!string.IsNullOrWhiteSpace(command.ResultJson))
             {
                 var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -1419,41 +1449,62 @@ else
                 }
                 catch (JsonException exception)
                 {
-                    Logger.LogWarning(exception,
-                        "GitSync command {CommandId} returned malformed result JSON for task {TaskId}",
-                        command.Id, TaskId);
+                    resultDiagnosticId = Notifications.LogException(
+                        exception,
+                        "parse repository synchronization result",
+                        new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
                 }
             }
 
             if (result is null)
             {
-                Snackbar.Add(L["Error"].Value, Severity.Error);
+                var message = resultDiagnosticId is not null
+                    ? Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", resultDiagnosticId)
+                    : Notifications.FormatUnknownReasonCode(
+                        "MissingResultPayload",
+                        "GitSyncResultUnavailable",
+                        "read repository synchronization result",
+                        new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
+                Notifications.Error(message);
             }
             else if (IsVerifiedFastForward(result))
             {
-                Snackbar.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
+                Notifications.Add(L["GitSyncOutcomeFastForwarded"].Value, Severity.Success);
             }
             else if (IsVerifiedUpToDate(result))
             {
-                Snackbar.Add(L["GitSyncOutcomeUpToDate"].Value, Severity.Success);
+                Notifications.Add(L["GitSyncOutcomeUpToDate"].Value, Severity.Success);
             }
             else if (result.ReasonCode is { } reason)
             {
-                var message = L["GitSyncReason" + reason].Value;
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                    message += Environment.NewLine + result.Stderr;
-                Snackbar.Add(message, Severity.Warning);
+                Notifications.Warning(GitSyncReasonText(reason, result.Stderr, command.Id));
             }
             else
             {
-                var message = L["GitSyncOutcomeFailed"].Value;
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                    message += Environment.NewLine + result.Stderr;
-                Snackbar.Add(message, Severity.Warning);
+                Notifications.Warning(Notifications.FormatUnknownReasonCode(
+                    "MissingReasonCode",
+                    "GitSyncReasonUnknown",
+                    "report repository synchronization result",
+                    new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id, result.Stderr }));
             }
         }
 
         _gitSyncTargetDeviceId = null;
+    }
+
+    private string GitSyncReasonText(GitSyncRefusalCode reason, string? stderr = null, Guid? commandId = null)
+    {
+        var localized = L["GitSyncReason" + reason];
+        if (localized.ResourceNotFound)
+        {
+            return Notifications.FormatUnknownReasonCode(
+                reason.ToString(),
+                "GitSyncReasonUnknown",
+                "read repository synchronization status",
+                new { TaskId, ProjectId = _task?.ProjectId, CommandId = commandId, Stderr = stderr });
+        }
+
+        return localized.Value;
     }
 
     private static bool IsVerifiedFastForward(GitSyncResultDto result) =>
@@ -1495,10 +1546,10 @@ else
                 new RequestLandingRequest(TaskId, rationale), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Request"].Value);
                 return;
             }
-            Snackbar.Add(L["LandingPreviewQueued"].Value, Severity.Success);
+            Notifications.Add(L["LandingPreviewQueued"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1518,10 +1569,10 @@ else
                 new ExecuteLandingRequest(TaskId, attempt.Id), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Execute"].Value);
                 return;
             }
-            Snackbar.Add(L["LandingExecuteQueued"].Value, Severity.Success);
+            Notifications.Add(L["LandingExecuteQueued"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1549,10 +1600,10 @@ else
                 new RevertLandingRequest(TaskId, attempt.Id), _actorContext));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Revert"].Value);
                 return;
             }
-            Snackbar.Add(L["LandingRevertQueued"].Value, Severity.Success);
+            Notifications.Add(L["LandingRevertQueued"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1570,15 +1621,15 @@ else
             var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
-                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+                Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1596,10 +1647,10 @@ else
             var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
-            Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+            Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1618,16 +1669,16 @@ else
                 new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Restart"].Value);
                 return;
             }
 
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
-                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+                Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -1644,21 +1695,21 @@ else
         {
             if (_pipeline?.Preflight is not { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true })
             {
-                Snackbar.Add(ReviewPreflightMessage, Severity.Warning);
+                Notifications.Add(ReviewPreflightMessage, Severity.Warning);
                 return;
             }
             var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
-                Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
+                Notifications.Add(L["ReviewStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }

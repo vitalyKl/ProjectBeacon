@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @using System.Text.Json.Nodes
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
@@ -24,7 +25,6 @@
 @inject ListRuntimesHandler ListRuntimes
 @inject GetRuntimeDiagnosticsHandler GetDiagnostics
 @inject ApplyAgentConfigHandler ApplyAgentConfig
-@inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Agents"]</PageTitle>
@@ -224,6 +224,9 @@ else
     private Guid? _runtimeDeviceId;
     private List<RuntimeSummary> _runtimes = [];
     private string? _runtimePhase;
+    private string? _runtimeErrorRaw;
+    private string? _runtimeErrorMessage;
+    private string _runtimeErrorCulture = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -232,6 +235,8 @@ else
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
         var current = await CurrentProject.HandleAsync(_caller);
+        if (!current.Success)
+            Notifications.Failure(current, L["Agents"].Value, L["Load"].Value);
         _project = current.Value;
         await ReloadAsync();
     }
@@ -251,6 +256,10 @@ else
                 _runtimes = runtimes.Value!.ToList();
                 _runtimeDeviceId ??= _runtimes.FirstOrDefault(r => r.DeviceOnline)?.DeviceId ?? _runtimes.FirstOrDefault()?.DeviceId;
             }
+            else
+            {
+                Notifications.Failure(runtimes, L["Agents"].Value, L["Load"].Value);
+            }
         }
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
@@ -264,11 +273,11 @@ else
         }
         else
         {
-            Snackbar.Add(registry.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(registry, L["Agents"].Value, L["Load"].Value);
         }
         var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
         if (status.Success)
-            _status = status.Value;
+            SetRuntimeStatus(status.Value);
     }
 
     private async Task AddModel()
@@ -284,7 +293,7 @@ else
         var result = (await reference.Result)!;
         if (result.Data is LocalModelBackendDto)
         {
-            Snackbar.Add(L["ModelSaved"].Value, Severity.Success);
+            Notifications.Add(L["ModelSaved"].Value, Severity.Success);
             await ReloadAsync();
         }
     }
@@ -303,7 +312,7 @@ else
         var result = (await reference.Result)!;
         if (result.Data is LocalModelBackendDto)
         {
-            Snackbar.Add(L["ModelSaved"].Value, Severity.Success);
+            Notifications.Add(L["ModelSaved"].Value, Severity.Success);
             await ReloadAsync();
         }
     }
@@ -317,10 +326,10 @@ else
         var deleted = await DeleteBackend.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, _userId)));
         if (!deleted.Success)
         {
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(deleted, L["Agents"].Value, L["Delete"].Value);
             return;
         }
-        Snackbar.Add(L["ModelDeleted"].Value, Severity.Success);
+        Notifications.Add(L["ModelDeleted"].Value, Severity.Success);
         await ReloadAsync();
     }
 
@@ -358,26 +367,29 @@ else
         {
             bool ok;
             string? error = null;
+            string? errorCode = null;
             if (backendId is { } id)
             {
                 var set = await SetBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, id), _caller));
                 ok = set.Success;
                 error = set.Error;
+                errorCode = set.ErrorCode;
             }
             else
             {
                 var removed = await RemoveBinding.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(role), _caller));
                 ok = removed.Success;
                 error = removed.Error;
+                errorCode = removed.ErrorCode;
             }
             if (!ok)
             {
-                Snackbar.Add(error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(error, L["Agents"].Value, errorCode, backendId is null ? L["Delete"].Value : L["Save"].Value);
                 SetBindingLocal(role, previous);
                 StateHasChanged();
                 return;
             }
-            Snackbar.Add(backendId is null ? L["BindingRemoved"].Value : L["BindingSaved"].Value, Severity.Success);
+            Notifications.Add(backendId is null ? L["BindingRemoved"].Value : L["BindingSaved"].Value, Severity.Success);
         }
         finally
         {
@@ -445,11 +457,11 @@ else
                 _plannerInstructions, _actorInstructions, _reviewInstructions)));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved, L["Agents"].Value, L["Save"].Value);
                 return;
             }
             _templateId = saved.Value!.Id;
-            Snackbar.Add(L["TemplateSaved"].Value, Severity.Success);
+            Notifications.Add(L["TemplateSaved"].Value, Severity.Success);
             await ReloadAsync();
         }
         finally
@@ -468,12 +480,12 @@ else
         var deleted = await DeleteTemplate.HandleAsync(new DeleteAgentTemplateCommand(new DeleteAgentTemplateRequest(id, _userId)));
         if (!deleted.Success)
         {
-            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(deleted, L["Agents"].Value, L["Delete"].Value);
             return;
         }
         _templateId = null;
         _templateName = string.Empty;
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await ReloadAsync();
     }
 
@@ -493,13 +505,30 @@ else
     private string RuntimeExplanation => RuntimeState switch
     {
         "Ready" => L["RuntimeReadyHint"].Value,
-        "Failed" => _status?.Error ?? L["RuntimeFailedHint"].Value,
-        "Degraded" => _status?.Error ?? L["RuntimeDegradedHint"].Value,
+        "Failed" => _runtimeErrorMessage ?? L["RuntimeFailedHint"].Value,
+        "Degraded" => _runtimeErrorMessage ?? L["RuntimeDegradedHint"].Value,
         "Busy" => L["RuntimeBusyHint"].Value,
         "Starting" => L["RuntimeStartingHint"].Value,
         "Stopping" => L["RuntimeStoppingHint"].Value,
         _ => L["RuntimeOfflineHint"].Value
     };
+
+    private void SetRuntimeStatus(LlamaSwapStatusDto? status)
+    {
+        _status = status;
+        var rawError = status is { Available: true } ? status.Error : null;
+        var culture = System.Globalization.CultureInfo.CurrentUICulture.Name;
+        if (string.Equals(rawError, _runtimeErrorRaw, StringComparison.Ordinal)
+            && string.Equals(culture, _runtimeErrorCulture, StringComparison.Ordinal))
+            return;
+
+        _runtimeErrorRaw = rawError;
+        _runtimeErrorCulture = culture;
+        _runtimeErrorMessage = string.IsNullOrWhiteSpace(rawError)
+            ? null
+            : Notifications.FormatFailure(rawError, L["Agents"].Value, ErrorCodes.InternalError,
+                L["Load"].Value, new { DeviceName = status?.DeviceName });
+    }
 
     private bool CanRefresh => RuntimeState is not "Starting" and not "Stopping" and not "Busy";
     private bool CanReload => RuntimeState is "Ready" or "Failed" or "Degraded";
@@ -510,7 +539,9 @@ else
     {
         var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
         if (status.Success)
-            _status = status.Value;
+            SetRuntimeStatus(status.Value);
+        else
+            Notifications.Failure(status, L["Agents"].Value, L["Refresh"].Value);
     }
 
     private async Task Reload()
@@ -522,13 +553,13 @@ else
             var result = await ReloadProxy.HandleAsync(new ReloadProxyCommand());
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Agents"].Value, L["Reload"].Value);
                 if (result.Value is not null)
-                    _status = result.Value;
+                    SetRuntimeStatus(result.Value);
                 return;
             }
-            _status = result.Value;
-            Snackbar.Add(L["ProxyReloaded"].Value, Severity.Success);
+            SetRuntimeStatus(result.Value);
+            Notifications.Add(L["ProxyReloaded"].Value, Severity.Success);
         }
         finally
         {
@@ -546,13 +577,13 @@ else
             var result = await UnloadProxy.HandleAsync(new UnloadProxyCommand());
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Agents"].Value, L["Unload"].Value);
                 if (result.Value is not null)
-                    _status = result.Value;
+                    SetRuntimeStatus(result.Value);
                 return;
             }
-            _status = result.Value;
-            Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
+            SetRuntimeStatus(result.Value);
+            Notifications.Add(L["ProxyUnloaded"].Value, Severity.Success);
         }
         finally
         {
@@ -572,11 +603,11 @@ else
                 _plannerInstructions, _actorInstructions, _reviewInstructions), _caller));
             if (!applied.Success)
             {
-                Snackbar.Add(applied.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(applied, L["Agents"].Value, L["Apply"].Value);
                 return;
             }
 
-            Snackbar.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
+            Notifications.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
             await ReloadAsync();
         }
         finally

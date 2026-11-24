@@ -5,28 +5,40 @@
 @inject ListProjectTasksHandler ListTasks
 @inject ContextCostReportHandler ContextCostHandler
 
+
 <MudText Typo="Typo.h6" Class="mt-4">@L["ContextCostReport"]</MudText>
 
-@if (_tasks.Count == 0)
+@if (HasError)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-3">@_errorMessage</MudAlert>
+}
+
+@if (!HasTasks && !HasError)
 {
     <MudText Typo="Typo.body2">@L["ContextCostNoTasks"]</MudText>
 }
-else
+
+@if (HasTasks)
 {
-    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask" Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="beacon-report-task-select mb-4">
+    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask"
+               Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+               Class="beacon-report-task-select mb-4">
         @foreach (var task in _tasks)
         {
             <MudSelectItem Value="@((Guid?)task.Id)">@task.Title</MudSelectItem>
         }
     </MudSelect>
+}
 
-    @if (_report is null || _report.PairCount == 0)
+@if (HasTasks && !HasError)
+{
+    @if (!HasReport)
     {
         <MudText Typo="Typo.body2">@L["ContextCostNoPairs"]</MudText>
     }
     else
     {
-        <MudTable Items="_report.Pairs" Hover="true" Dense="true">
+        <MudTable Items="@_report!.Pairs" Hover="true" Dense="true">
             <HeaderContent>
                 <MudTh>@L["Pair"]</MudTh>
                 <MudTh>@L["ContextCostWithBrief"]</MudTh>
@@ -53,6 +65,11 @@ else
     private IList<TaskItemDto> _tasks = [];
     private Guid? _selectedTaskId;
     private ContextCostReportDto? _report;
+    private string? _errorMessage;
+
+    private bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
+    private bool HasTasks => _tasks.Count > 0;
+    private bool HasReport => _report is { PairCount: > 0 };
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,7 +79,13 @@ else
             _tasks = listed.Value!.ToList();
             _selectedTaskId = _tasks.FirstOrDefault()?.Id;
         }
-        await LoadReportAsync();
+        else
+        {
+            _errorMessage = Notifications.FormatFailure(listed, L["ContextCostReport"].Value, L["Load"].Value);
+        }
+
+        if (_selectedTaskId is not null)
+            await LoadReportAsync();
     }
 
     private async Task OnSelectedTask(Guid? taskId)
@@ -71,6 +94,7 @@ else
             return;
 
         _selectedTaskId = taskId;
+        _errorMessage = null;
         await LoadReportAsync();
     }
 
@@ -83,7 +107,16 @@ else
         }
 
         var result = await ContextCostHandler.HandleAsync(new GetContextCostReportRequest(_selectedTaskId.Value, ProjectId));
-        _report = result.Success ? result.Value : null;
+        if (result.Success)
+        {
+            _report = result.Value;
+            _errorMessage = null;
+        }
+        else
+        {
+            _report = null;
+            _errorMessage = Notifications.FormatFailure(result, L["ContextCostReport"].Value, L["Load"].Value);
+        }
     }
 
     private string FormatRun(EvalRunDto? run)

@@ -1,12 +1,13 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Infrastructure.Attachments
+@using ProjectBeacon.Web.Shared
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject IAttachmentService Attachments
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
 @inject IJSRuntime JS
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -68,7 +69,7 @@
             _items.AddRange(metadata.Select(item => new AttachmentView(item)));
             _loadedTaskId = Task.Id;
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentsLoadFailed", "load"); }
         finally { _busy = false; }
     }
 
@@ -99,7 +100,7 @@
                     Convert.ToBase64String(bytes));
             }
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsLoadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentOpenFailed", "open or download"); }
         finally { _busy = false; }
     }
 
@@ -114,17 +115,22 @@
             {
                 if (file.Size is <= 0 or > DatabaseAttachmentService.MaxFileLength)
                 {
-                    Snackbar.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
+                    Notifications.Add(string.Format(L["TaskAttachmentsFileTooLarge"].Value, file.Name), Severity.Warning);
                     continue;
                 }
                 await using var stream = file.OpenReadStream(DatabaseAttachmentService.MaxFileLength);
                 await Attachments.UploadTaskAsync(Task.ProjectId, Task.Id, actor, stream, file.Name, file.ContentType, file.Size);
             }
-            Snackbar.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
+            Notifications.Add(L["TaskAttachmentsUploaded"].Value, Severity.Success);
         }
-        catch (Exception ex) { Snackbar.Add(string.Format(L["TaskAttachmentsUploadFailed"].Value, ex.Message), Severity.Error); }
+        catch (Exception ex) { ReportFailure(ex, "TaskAttachmentsUploadFailed", "upload"); }
         finally { _busy = false; }
         await Reload();
+    }
+
+    private void ReportFailure(Exception exception, string resourceKey, string operation)
+    {
+        Notifications.ReportException(exception, resourceKey, $"task attachment {operation}", new { TaskId = Task?.Id, ProjectId = Task?.ProjectId });
     }
 
     private static bool IsPreviewableImage(string contentType) =>

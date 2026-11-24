@@ -80,14 +80,15 @@
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _error = ErrorText(body, response.StatusCode.ToString());
+                _error = Notifications.FormatHttpFailure(response.StatusCode, ErrorText(body, L["AuthRequestFailed"].Value), L["AuthRegisterOperation"].Value, L["Register"].Value);
                 return;
             }
             _success = true;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "register account");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {
@@ -101,11 +102,11 @@
         {
             var json = System.Text.Json.JsonSerializer.Deserialize<ErrorResult>(body,
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return string.IsNullOrEmpty(json?.Error) ? (string.IsNullOrWhiteSpace(body) ? fallback : body) : json!.Error;
+            return string.IsNullOrEmpty(json?.Error) ? fallback : json!.Error;
         }
         catch
         {
-            return string.IsNullOrWhiteSpace(body) ? fallback : body;
+            return fallback;
         }
     }
 

@@ -21,10 +21,10 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Инициализация уже выполнена.</value>
   </data>
-<data name="Cancel" xml:space="preserve">
-    <value>Отмена</value>
+  <data name="Cancel" xml:space="preserve">
+    <value>Отменить</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Закрыть</value>
   </data>
 <data name="Clear" xml:space="preserve">
@@ -33,13 +33,13 @@
 <data name="Confirm" xml:space="preserve">
     <value>Подтвердить</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>Создать</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>Панель управления</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>Удалить</value>
   </data>
 <data name="DeleteTask" xml:space="preserve">
@@ -102,7 +102,7 @@
 <data name="GoToBoard" xml:space="preserve">
     <value>К доске</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>Сохранить</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -303,7 +303,7 @@
 <data name="Phase_check" xml:space="preserve">
     <value>Проверить</value>
   </data>
-<data name="Submit" xml:space="preserve">
+  <data name="Submit" xml:space="preserve">
     <value>Отправить</value>
   </data>
 <data name="WelcomeBack" xml:space="preserve">
@@ -885,7 +885,7 @@
 <data name="Reload" xml:space="preserve">
     <value>Перезагрузить</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>Выгрузить</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -939,13 +939,13 @@
 <data name="Constraints" xml:space="preserve">
     <value>Ограничения</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Активировать</value>
   </data>
 <data name="Reject" xml:space="preserve">
     <value>Отклонить</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>Принять</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1356,8 +1356,8 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>Экспорт AGENTS.md</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
-    <value>Устарело</value>
+  <data name="Deprecate" xml:space="preserve">
+    <value>Вывести из действия</value>
   </data>
 <data name="Supersede" xml:space="preserve">
     <value>Заменить</value>
@@ -1693,7 +1693,7 @@
 <data name="Message" xml:space="preserve">
     <value>Сообщение</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>Отправить</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -2326,15 +2326,6 @@
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
     <value>Рабочая станция, закреплённая за этой задачей, не в сети.</value>
   </data>
-  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
-    <value>Задача уже выполнялась на нескольких рабочих станциях. Нельзя безопасно определить расположение её локальной рабочей копии; явно согласуйте или перенесите её перед продолжением.</value>
-  </data>
-  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
-    <value>Рабочая станция, закреплённая за задачей, больше не привязана к проекту. Повторно привяжите её или явно перенесите рабочую копию; автоматическое переключение запрещено.</value>
-  </data>
-  <data name="PipelineWorkstationNotNative" xml:space="preserve">
-    <value>Закреплённая за задачей станция больше не сообщает о native runtime. Восстановите native runtime или явно перенесите рабочую копию.</value>
-  </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Для роли Planner не настроена модель.</value>
   </data>
@@ -2429,7 +2420,7 @@
     <value>Пока нет вложений.</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>Не удалось загрузить вложения: {0}</value>
+    <value>Не удалось загрузить вложения задачи.</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}: размер файла превышает 10 МБ.</value>
@@ -2438,7 +2429,7 @@
     <value>Вложения загружены.</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>Не удалось загрузить вложения: {0}</value>
+    <value>Не удалось загрузить вложения в задачу.</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>Инструкции профилей ролей</value>
@@ -2594,9 +2585,6 @@
   <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Страница продолжит автоматически отслеживать её состояние.</value></data>
-  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Отменить запрос синхронизации репозитория? Отмена доступна только до того, как рабочая станция захватит команду.</value></data>
-  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Запрос синхронизации репозитория отменён до начала выполнения на рабочей станции.</value></data>
-  <data name="GitSyncPendingExpired" xml:space="preserve"><value>Срок ожидания запроса синхронизации истёк: ни одна рабочая станция не захватила его за 10 минут.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
@@ -3014,5 +3002,341 @@
   </data>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Откат посадки поставлен в очередь.</value>
+  </data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>Диагностический ID: {0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>Не удалось отобразить эту страницу из-за непредвиденной ошибки. Перезагрузите страницу. Если ошибка повторится, передайте диагностический ID в службу поддержки.</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>Страница: {0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>Не удалось подтвердить, что синхронизация репозитория поставлена в очередь. Проверьте состояние репозитория, прежде чем повторять операцию: команда уже могла быть принята.</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>Не удалось получить состояние синхронизации репозитория. Операция может продолжаться. Перезагрузите страницу, чтобы возобновить отслеживание, прежде чем запускать её повторно.</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>Не удалось запустить синхронизацию репозитория или подтвердить её запуск. Команда уже могла поступить на рабочую станцию. Обновите страницу задачи, прежде чем повторять операцию.</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>Рабочая станция завершила Git-операцию, но не вернула результат, который удалось прочитать. Проверьте журнал рабочей станции, прежде чем повторять операцию.</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>Рабочая станция не смогла выполнить команду синхронизации репозитория. Подробности смотрите в журнале рабочей станции.</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>ID команды рабочей станции: {0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>Не удалось проверить наличие обновления рабочей станции. Убедитесь, что она подключена к сети, и повторите попытку.</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>Не удалось подтвердить завершение обновления рабочей станции. Обновление уже могло быть передано на выполнение. Проверьте состояние станции, прежде чем повторять попытку.</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить настройки MCP-серверов проекта. Обновите этот раздел и повторите попытку.</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>Не удалось открыть или скачать это вложение.</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>Не удалось поставить синхронизацию репозитория в очередь: {0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>Не удалось получить состояние синхронизации репозитория: {0}</value>
+  </data>
+    <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>Обновление передано рабочей станции, но новая версия ещё не вышла на связь. Проверьте состояние станции или её журнал, прежде чем повторять обновление.</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>Сбросить</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Применить</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>Загрузить</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Обновить</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Восстановить</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>Запустить</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>Перезапустить</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Переименовать</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>Загрузить файл</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>Скачать</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>Выполнить</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>Привязать</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>Проверить</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Отключить</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>Выполнить</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>Скомпилировать</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>Переместить</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Предпросмотр</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>Откатить</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Экспортировать</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>Заменить</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>Изменить статус</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>Не удалось выполнить операцию.</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>Не удалось выполнить операцию. Проверьте сообщение на странице и повторите попытку.</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>эту операцию</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}».</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}». Подробности: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>Недостаточно прав для выполнения действия «{1}» в разделе «{0}».</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}»: необходимый объект не найден.</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}»: данные изменились или конфликтуют с другой операцией. Обновите страницу и повторите попытку.</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}» из-за внутренней ошибки. Диагностический ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>При обработке запроса произошла непредвиденная ошибка. Повторите попытку. Диагностический ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>Не удалось выполнить запрос. Проверьте введённые данные и повторите попытку.</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>первичная настройка учётной записи</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>восстановление пароля</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>принятие приглашения</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>восстановление учётной записи администратора</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>регистрация учётной записи</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>сброс пароля</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>Не удалось отправить форму чата. Проверьте заполнение полей и повторите попытку.</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Добавить</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>Читать</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>Обновление передано рабочей станции. Ожидаем перезапуска и сообщения о новой версии.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Отметить ошибку</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Открыть заново</value>
+  </data>
+  <data name="Request" xml:space="preserve">
+    <value>Запросить</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Не удалось сохранить часовой пояс. Повторите попытку. Если проблема повторится, передайте диагностический ID в службу поддержки.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Включить</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Подтвердить</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Отключить</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Изменить</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Инициализировать</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула список каталогов, который не удалось прочитать. Проверьте журнал станции и повторите попытку.</value>
+  </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Синхронизировать репозиторий</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>Подзадача завершилась с ошибкой во время работы агента. Разверните панель активности выше, чтобы увидеть причину и диагностический ID.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>Не удалось применить изменения агента: файлы проекта изменились или содержат конфликтующие правки. Изолированная рабочая копия сохранена. Проверьте результат команды и разрешите конфликт перед повторной попыткой.</value>
+  </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>Чтобы выполнить действие «{1}» в разделе «{0}», войдите в систему ещё раз.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}»: сервис временно недоступен. Повторите попытку позже. Диагностический ID: {2}</value>
+  </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>Рабочая станция или рабочая копия задачи, необходимые для слияния, недоступны. Подключите станцию и повторите операцию.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>Ветка задачи больше не соответствует ревизии, проверенной последним Review. Обновите ветку задачи, повторите Review и запросите новый Preview.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>После Preview изменились подтверждение согласования, результат Review или закреплённая команда проверки. Повторите Review и запросите новый Preview перед слиянием.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>Целевая ветка или её рабочая копия изменились после Preview либо не могут быть безопасно проверены. Обновите состояние целевой ветки и запросите новый Preview.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>Настройки Git или окружение рабочей станции не соответствуют требованиям слияния. Проверьте Git-политику проекта, remote, фильтры и установленную версию Git.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>Не удалось построить или проверить кандидата на слияние. Проверьте результат объединения и команду ReviewCheckCommand, затем повторите Preview.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>Изменения затрагивают защищённые пути или файлы вне проекта, превышают заданные ограничения либо содержат запрещённую символическую ссылку или submodule. Проверьте состав изменений и Git-политику проекта.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>Не удалось безопасно восстановить состояние операции слияния. Целевая ветка уже могла измениться. Перед повтором проверьте целевую ветку и детали попытки.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>Не удалось безопасно отменить слияние или проверить revert-коммит. Перед повторной попыткой проверьте целевую ветку.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>Рабочая станция не приняла команду слияния. Убедитесь, что станция подключена и поддерживает GitLand, затем обновите состояние попытки перед повтором.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Политика проекта требует, чтобы человек вручную выполнил эту операцию слияния или повторил её.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>До постановки Execute задача должна оставаться в статусе Approved. Повторите Review и подтвердите задачу перед новым запросом на слияние.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>Слияние могло уже попасть в целевую ветку, но проверка после слияния завершилась ошибкой или её результат не удалось подтвердить. Проверьте целевую ветку, прежде чем запрашивать откат.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
+  </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>Рабочая станция перезапустилась и сообщила версию {0}.</value>
+  </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>Не удалось выполнить команду на рабочей станции из-за непредвиденной ошибки.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>Рабочая станция отменила операцию: {0}.</value>
+  </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>Рабочая станция вернула причину блокировки запуска, которую интерфейс не распознаёт. Обновите задачу и проверьте журнал рабочей станции, если проблема повторится.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>Рабочая станция вернула причину сбоя синхронизации репозитория, которую интерфейс не распознаёт. Проверьте подробности команды и передайте службе поддержки диагностический ID ниже.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Технические подробности Git</value>
+  </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить историю команд рабочей станции. Обновите этот раздел и повторите попытку.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула настройки в нечитаемом формате. Обновите данные станции и проверьте её журнал, если проблема повторится.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>Рабочая станция вернула диагностику в нечитаемом формате. Обновите диагностику и проверьте журнал станции, если проблема повторится.</value>
+  </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>В ссылке приглашения отсутствует токен. Откройте полную ссылку из письма с приглашением.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>Приглашение недействительно, истекло или уже использовано. Попросите отправителя прислать новое приглашение.</value>
+  </data>
+  <data name="ResetTokenMissing" xml:space="preserve">
+    <value>В ссылке для сброса пароля отсутствует токен. Запросите новую ссылку для сброса пароля и откройте её.</value>
+  </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}»: приглашение отправлено на другой адрес электронной почты. Войдите с приглашённым адресом или попросите отправителя обновить приглашение.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>Задача уже выполнялась на нескольких рабочих станциях. Нельзя безопасно определить расположение её локальной рабочей копии; явно согласуйте или перенесите её перед продолжением.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>Рабочая станция, закреплённая за задачей, больше не привязана к проекту. Повторно привяжите её или явно перенесите рабочую копию; автоматическое переключение запрещено.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>Закреплённая за задачей станция больше не сообщает о native runtime. Восстановите native runtime или явно перенесите рабочую копию.</value>
+  </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Синхронизация репозитория может продолжаться, но не удалось обновить её состояние. Рабочая станция всё ещё может выполнять команду; проверьте историю команд, прежде чем повторять операцию.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>Не удалось прочитать снимок активности pipeline. Последние сведения о работе могут быть неполными.</value>
+  </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Отменить запрос синхронизации репозитория? Отмена доступна только до того, как рабочая станция захватит команду.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Запрос синхронизации репозитория отменён до начала выполнения на рабочей станции.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>Срок ожидания запроса синхронизации истёк: ни одна рабочая станция не захватила его за 10 минут.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Не удалось подтвердить отмену запроса синхронизации репозитория. Обновите задачу и проверьте её состояние, прежде чем повторять попытку.</value>
+  </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>Нельзя отменить синхронизацию репозитория в разделе «{0}»: рабочая станция уже забрала команду. Сервер не может остановить выполняющуюся Git-операцию. Дождитесь её завершения и проверьте результат.</value>
+  </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Не удалось открыть каталог на рабочей станции. Проверьте, что станция подключена и выбранный корневой каталог доступен.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Не удалось загрузить список доступных проектов. Обновите страницу и повторите попытку.</value>
+  </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Восстановить</value>
   </data>
 </root>

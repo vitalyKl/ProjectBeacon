@@ -4,7 +4,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject RenameChatSessionHandler Rename
-@inject ISnackbar Snackbar
 
 <div class="beacon-rename-chat-dialog">
     <MudTextField @bind-Value="_title" Label="@L["ChatRename"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -38,7 +37,7 @@
         }
         var result = await Rename.HandleAsync(new RenameChatSessionCommand(new RenameChatSessionRequest(session.Id, actor.UserId.Value, _title ?? string.Empty)));
         if (!result.Success)
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Chat"].Value, L["Rename"].Value);
         else
             Instance?.Close();
     }

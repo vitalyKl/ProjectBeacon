@@ -16,7 +16,6 @@
 @inject BeginTotpHandler BeginTotp
 @inject ConfirmTotpHandler ConfirmTotp
 @inject DisableTotpHandler DisableTotp
-@inject ISnackbar Snackbar
 @inject BeaconThemeState Theme
 @inject IJSRuntime Js
 
@@ -132,9 +131,10 @@
             _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference") ?? string.Empty;
             await InvokeAsync(StateHasChanged);
         }
-        catch (JSException)
+        catch (JSException exception)
         {
-            Snackbar.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);
+            var diagnosticId = Notifications.LogException(exception, "load time-zone preferences");
+            Notifications.Warning(Notifications.FormatDiagnosticMessage("TimeZoneLoadFailed", diagnosticId));
         }
     }
 
@@ -144,11 +144,11 @@
         {
             await Js.InvokeAsync<string>("beaconTimeZone.setPreference", value);
             _timeZone = value;
-            Snackbar.Add(L["TimeZoneSaved"].Value, Severity.Success);
+            Notifications.Add(L["TimeZoneSaved"].Value, Severity.Success);
         }
-        catch (JSException)
+        catch (JSException exception)
         {
-            Snackbar.Add(L["TimeZoneInvalid"].Value, Severity.Error);
+            Notifications.ReportException(exception, "TimeZoneSaveFailed", "save time-zone preference", new { TimeZone = value });
         }
     }
 
@@ -157,7 +157,12 @@
         if (_userId == Guid.Empty)
             return;
         var status = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
-        _totpEnabled = status.Success && status.Value!.Enabled;
+        if (!status.Success)
+        {
+            Notifications.Failure(status, L["Settings"].Value, L["Load"].Value);
+            return;
+        }
+        _totpEnabled = status.Value!.Enabled;
         if (status.Success && status.Value!.Pending && !string.IsNullOrEmpty(status.Value.OtpAuthUri))
             ShowSetup(status.Value.OtpAuthUri, status.Value.Secret ?? string.Empty);
         else if (_totpEnabled)
@@ -185,7 +190,7 @@
         var begun = await BeginTotp.HandleAsync(new BeginTotpCommand(_userId));
         if (!begun.Success)
         {
-            Snackbar.Add(begun.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(begun, L["Settings"].Value, L["Enable"].Value);
             return;
         }
         await ReloadTotp();
@@ -196,7 +201,7 @@
         var confirmed = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(_userId, _totpCode)));
         if (!confirmed.Success)
         {
-            Snackbar.Add(confirmed.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(confirmed, L["Settings"].Value, L["Verify"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -209,7 +214,7 @@
         var disabled = await DisableTotp.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(_userId, _totpCode)));
         if (!disabled.Success)
         {
-            Snackbar.Add(disabled.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(disabled, L["Settings"].Value, L["Disable"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -221,8 +226,12 @@
         if (_userId == Guid.Empty)
             return;
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
+        if (!registry.Success)
+            Notifications.Failure(registry, L["Settings"].Value, L["Load"].Value);
         _chatModels = registry.Success ? registry.Value!.Backends.ToList() : [];
         var current = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
+        if (!current.Success)
+            Notifications.Failure(current, L["Settings"].Value, L["Load"].Value);
         _chatModelId = current.Success ? current.Value : null;
     }
 
@@ -236,10 +245,10 @@
             var saved = await SetChatModel.HandleAsync(new SetChatModelCommand(new SetChatModelRequest(_userId, _chatModelId)));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved, L["Settings"].Value, L["Save"].Value);
                 return;
             }
-            Snackbar.Add(L["ChatModelSaved"].Value, Severity.Success);
+            Notifications.Add(L["ChatModelSaved"].Value, Severity.Success);
             await NudgeModels.HandleAsync(new NudgeModelsCommand(_userId));
         }
         finally
@@ -259,12 +268,12 @@
             var result = await ChangePassword.HandleAsync(new ChangePasswordRequest(_userId, _currentPassword, _newPassword));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Settings"].Value, L["Change"].Value);
                 return;
             }
             _currentPassword = string.Empty;
             _newPassword = string.Empty;
-            Snackbar.Add(L["PasswordChanged"].Value, Severity.Success);
+            Notifications.Add(L["PasswordChanged"].Value, Severity.Success);
         }
         finally
         {

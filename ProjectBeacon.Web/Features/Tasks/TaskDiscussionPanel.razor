@@ -4,7 +4,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AddCommentHandler AddComment
 @inject AuthenticationStateProvider Auth
-@inject ISnackbar Snackbar
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
     <MudText Typo="Typo.h6">@L["Comments"]</MudText>
@@ -40,11 +39,11 @@
         var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(Task.Id, _draft.Trim()), actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Tasks"].Value, L["Save"].Value);
             return;
         }
         _draft = string.Empty;
         await OnSaved.InvokeAsync();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
     }
 }

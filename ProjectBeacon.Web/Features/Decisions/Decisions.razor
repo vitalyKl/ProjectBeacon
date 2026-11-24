@@ -19,7 +19,6 @@
 @inject SupersedeDecisionHandler SupersedeDecision
 @inject ListContentVersionsHandler ContentVersions
 @inject RestoreContentVersionHandler RestoreContentVersion
-@inject ISnackbar Snackbar
 
 <PageTitle>@L["Decisions"]</PageTitle>
 <PageHeader Title="@L["Decisions"]" />
@@ -213,11 +212,11 @@ else
             _project.Id, _title, _context, _body, _consequences, _actor));
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Decisions"].Value, L["Create"].Value);
             return;
         }
         _title = _context = _body = _consequences = string.Empty;
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -226,10 +225,10 @@ else
         var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Decisions"].Value, L["Accept"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -238,10 +237,10 @@ else
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Decisions"].Value, L["Deprecate"].Value);
             return;
         }
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 
@@ -264,7 +263,7 @@ else
             _project.Id, ContentTargetKind.Decision, _selected.Id, _actor, 50);
         _selectedHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Snackbar.Add(history.Error ?? L["Error"].Value, Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history, L["Decisions"].Value, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreSelectedVersion(ContentVersionDto version)
@@ -281,14 +280,14 @@ else
                 ContentTargetKind.Decision, decisionId));
             if (!result.Success)
             {
-                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(result, L["Decisions"].Value, L["Restore"].Value);
                 return;
             }
 
             await Reload();
             _selected = _decisions.FirstOrDefault(item => item.Id == decisionId);
             await LoadSelectedHistory();
-            Snackbar.Add(L["RestoredRevision"].Value, Severity.Success);
+            Notifications.Add(L["RestoredRevision"].Value, Severity.Success);
         }
         finally
         {
@@ -335,11 +334,11 @@ else
         var result = await SupersedeDecision.HandleAsync(_superseding.Id, _replacementId.Value, _actor);
         if (!result.Success)
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            Notifications.Failure(result, L["Decisions"].Value, L["Replace"].Value);
             return;
         }
         CancelSupersede();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        Notifications.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
 }

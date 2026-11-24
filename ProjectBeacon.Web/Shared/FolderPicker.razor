@@ -1,6 +1,7 @@
 @using System.Text.Json
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Application.Common
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
@@ -106,21 +107,39 @@ else
                 new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ListDir, payload, null)));
             if (!queued.Success)
             {
-                _error = queued.Error;
+                _error = Notifications.FormatFailure(queued, Label ?? L["Projects"].Value, L["Browse"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null)
             {
-                _error = L["CommandTimedOut"].Value;
+                _error ??= Notifications.FormatFailure(L["CommandTimedOut"].Value, Label ?? L["Projects"].Value, ErrorCodes.Unavailable, L["Browse"].Value);
                 return;
             }
             if (finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
             {
-                _error = finished.Error ?? L["CommandFailed"].Value;
+                _error = Notifications.FormatFailure(finished.Error ?? L["CommandFailed"].Value, Label ?? L["Projects"].Value, ErrorCodes.InternalError, L["Browse"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id, Path = path, RootKind });
                 return;
             }
-            _listing = JsonSerializer.Deserialize<DirListing>(finished.ResultJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            try
+            {
+                _listing = JsonSerializer.Deserialize<DirListing>(finished.ResultJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (_listing is null)
+                    _error = Notifications.FormatFailure(L["FolderListingInvalid"].Value, Label ?? L["Projects"].Value, ErrorCodes.Unclassified, L["Browse"].Value);
+            }
+            catch (JsonException exception)
+            {
+                var diagnosticId = Notifications.LogException(exception, "parse workstation directory listing", new { DeviceId = deviceId, Path = path, RootKind });
+                _error = Notifications.FormatDiagnosticMessage("FolderListingInvalid", diagnosticId);
+            }
+        }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception,
+                "browse workstation directory",
+                new { DeviceId = deviceId, Path = path, RootKind });
+            _error = Notifications.FormatDiagnosticMessage("FolderBrowseFailed", diagnosticId);
         }
         finally
         {
@@ -135,7 +154,10 @@ else
         {
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, UserId)));
             if (!got.Success)
+            {
+                _error = Notifications.FormatFailure(got, Label ?? L["Projects"].Value, L["Read"].Value);
                 return null;
+            }
             _phase = got.Value!.Status == WorkstationCommandStatus.Pending
                 ? L["CommandQueued"].Value
                 : L["CommandRunning"].Value;

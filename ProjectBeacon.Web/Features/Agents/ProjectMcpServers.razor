@@ -1,14 +1,12 @@
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Runtime
+@using ProjectBeacon.Web.Shared
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.Extensions.Logging
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ListProjectMcpServersHandler ListServers
 @inject SaveProjectMcpServersHandler SaveServers
-@inject ISnackbar Snackbar
-@inject ILogger<ProjectMcpServers> Logger
 @inject IDialogService Dialogs
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -170,9 +168,13 @@
             var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
             if (!result.Success)
             {
-                var message = result.Error ?? L["Error"].Value;
+                var message = Notifications.FormatFailure(
+                    result.Error,
+                    L["McpServers"].Value,
+                    result.ErrorCode,
+                    L["Load"].Value,
+                    new { ProjectId = ProjectId });
                 _loadError = message;
-                Snackbar.Add(message, Severity.Error);
                 return;
             }
 
@@ -180,10 +182,9 @@
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Failed to load MCP servers for project {ProjectId}.", ProjectId);
-            var message = L["Error"].Value;
+            var diagnosticId = Notifications.LogException(exception, "load project MCP server settings", new { ProjectId });
+            var message = Notifications.FormatDiagnosticMessage("ProjectMcpServersLoadFailed", diagnosticId);
             _loadError = message;
-            Snackbar.Add(message, Severity.Error);
         }
         finally
         {
@@ -213,7 +214,7 @@
         var name = _name.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            Snackbar.Add(L["McpServerName"].Value, Severity.Warning);
+            Notifications.Add(L["McpServerName"].Value, Severity.Warning);
             return;
         }
 
@@ -286,11 +287,11 @@
             var saved = await SaveServers.HandleAsync(new SaveProjectMcpServersCommand(ProjectId, entries, _actor));
             if (!saved.Success)
             {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                Notifications.Failure(saved.Error, L["McpServers"].Value, saved.ErrorCode, successMessage == L["McpDeleted"].Value ? L["Delete"].Value : L["Save"].Value);
                 return false;
             }
             _servers = saved.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();
-            Snackbar.Add(successMessage, Severity.Success);
+            Notifications.Add(successMessage, Severity.Success);
             return true;
         }
         finally
@@ -310,14 +311,14 @@
             var separator = line.IndexOf('=');
             if (separator <= 0)
             {
-                Snackbar.Add(L["McpInvalidPairs"].Value, Severity.Warning);
+                Notifications.Add(L["McpInvalidPairs"].Value, Severity.Warning);
                 return false;
             }
             var key = line[..separator].Trim();
             var value = line[(separator + 1)..];
             if (string.IsNullOrWhiteSpace(key) || result.ContainsKey(key))
             {
-                Snackbar.Add(L["McpInvalidPairs"].Value, Severity.Warning);
+                Notifications.Add(L["McpInvalidPairs"].Value, Severity.Warning);
                 return false;
             }
             result[key] = value;

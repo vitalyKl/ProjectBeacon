@@ -259,7 +259,7 @@ public class AcceptInviteHandler
             var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.Id == orgInviteSnapshot.Id, ct);
             if (invite is null || !invite.TryAccept(now))
-                return Result.Failure("Invite is no longer valid.");
+                return Result.Failure("Invite is no longer valid.", ErrorCodes.InviteInvalidOrExpired, ErrorKind.Validation);
 
             if (!await writeDb.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
@@ -295,7 +295,7 @@ public class AcceptInviteHandler
         var projectInvite = await projectWriteDb.ProjectInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.Id == projectInviteSnapshot.Id, ct);
         if (projectInvite is null || !projectInvite.TryAccept(now))
-            return Result.Failure("Invite is no longer valid.");
+            return Result.Failure("Invite is no longer valid.", ErrorCodes.InviteInvalidOrExpired, ErrorKind.Validation);
 
         var project = await projectWriteDb.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);

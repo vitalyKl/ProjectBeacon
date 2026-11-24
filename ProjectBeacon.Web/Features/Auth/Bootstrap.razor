@@ -82,7 +82,7 @@
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = string.IsNullOrWhiteSpace(body) ? response.StatusCode.ToString() : body;
+                _error = Notifications.FormatHttpFailure(response.StatusCode, null, L["AuthBootstrapOperation"].Value, L["Initialize"].Value);
                 return;
             }
 
@@ -90,7 +90,7 @@
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (result is null || string.IsNullOrEmpty(result.Password))
             {
-                _error = L["Error"].Value;
+                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthBootstrapOperation"].Value);
                 return;
             }
 
@@ -99,7 +99,8 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "bootstrap initial account");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

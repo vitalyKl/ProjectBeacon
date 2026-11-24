@@ -82,9 +82,11 @@
             {
                 var json = System.Text.Json.JsonSerializer.Deserialize<ErrorResult>(body,
                     new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                _error = string.IsNullOrEmpty(json?.Error)
-                    ? (string.IsNullOrWhiteSpace(body) ? response.StatusCode.ToString() : body)
-                    : json!.Error;
+                _error = Notifications.FormatHttpFailure(
+                    response.StatusCode,
+                    string.IsNullOrWhiteSpace(json?.Error) ? null : json!.Error,
+                    L["AuthRecoverOperation"].Value,
+                    L["Recover"].Value);
                 return;
             }
 
@@ -92,7 +94,7 @@
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (result is null || string.IsNullOrEmpty(result.Password))
             {
-                _error = L["Error"].Value;
+                _error = Notifications.FormatFailure(L["AuthRequestFailed"].Value, L["AuthRecoverOperation"].Value);
                 return;
             }
 
@@ -101,7 +103,8 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            var diagnosticId = Notifications.LogException(ex, "recover administrator account");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
         }
         finally
         {

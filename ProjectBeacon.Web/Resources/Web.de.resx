@@ -21,22 +21,22 @@
 <data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Bootstrap bereits abgeschlossen.</value>
   </data>
-<data name="Cancel" xml:space="preserve">
+  <data name="Cancel" xml:space="preserve">
     <value>Abbrechen</value>
   </data>
-<data name="Close" xml:space="preserve">
+  <data name="Close" xml:space="preserve">
     <value>Schließen</value>
   </data>
 <data name="Confirm" xml:space="preserve">
     <value>Bestätigen</value>
   </data>
-<data name="Create" xml:space="preserve">
+  <data name="Create" xml:space="preserve">
     <value>Erstellen</value>
   </data>
 <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-<data name="Delete" xml:space="preserve">
+  <data name="Delete" xml:space="preserve">
     <value>Löschen</value>
   </data>
 <data name="Edit" xml:space="preserve">
@@ -81,7 +81,7 @@
 <data name="Projects" xml:space="preserve">
     <value>Projekte</value>
   </data>
-<data name="Save" xml:space="preserve">
+  <data name="Save" xml:space="preserve">
     <value>Speichern</value>
   </data>
 <data name="Search" xml:space="preserve">
@@ -282,8 +282,8 @@
 <data name="Phase_check" xml:space="preserve">
     <value>Ergebnis prüfen</value>
   </data>
-<data name="Submit" xml:space="preserve">
-    <value>Senden</value>
+  <data name="Submit" xml:space="preserve">
+    <value>Absenden</value>
   </data>
 <data name="Clear" xml:space="preserve">
     <value>Leeren</value>
@@ -858,7 +858,7 @@
 <data name="Reload" xml:space="preserve">
     <value>Neu laden</value>
   </data>
-<data name="Unload" xml:space="preserve">
+  <data name="Unload" xml:space="preserve">
     <value>Entladen</value>
   </data>
 <data name="Refresh" xml:space="preserve">
@@ -918,13 +918,13 @@
 <data name="Constraints" xml:space="preserve">
     <value>Einschränkungen</value>
   </data>
-<data name="Activate" xml:space="preserve">
+  <data name="Activate" xml:space="preserve">
     <value>Aktivieren</value>
   </data>
 <data name="Reject" xml:space="preserve">
     <value>Ablehnen</value>
   </data>
-<data name="Accept" xml:space="preserve">
+  <data name="Accept" xml:space="preserve">
     <value>Annehmen</value>
   </data>
 <data name="Kind" xml:space="preserve">
@@ -1359,8 +1359,8 @@
 <data name="ExportAgentsMd" xml:space="preserve">
     <value>AGENTS.md exportieren</value>
   </data>
-<data name="Deprecate" xml:space="preserve">
-    <value>Veralten</value>
+  <data name="Deprecate" xml:space="preserve">
+    <value>Außer Betrieb nehmen</value>
   </data>
 <data name="Supersede" xml:space="preserve">
     <value>Ersetzen</value>
@@ -1696,7 +1696,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
 <data name="Message" xml:space="preserve">
     <value>Nachricht</value>
   </data>
-<data name="Send" xml:space="preserve">
+  <data name="Send" xml:space="preserve">
     <value>Senden</value>
   </data>
 <data name="Abort" xml:space="preserve">
@@ -2330,15 +2330,6 @@ orthstar</value>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
     <value>Die für diese Aufgabe festgelegte native Workstation ist offline.</value>
   </data>
-  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
-    <value>Diese Aufgabe wurde auf mehreren Workstations ausgeführt. Der Speicherort des lokalen Task-Worktrees lässt sich nicht sicher bestimmen; gleichen Sie den Worktree ab oder migrieren Sie ihn ausdrücklich, bevor Sie fortfahren.</value>
-  </data>
-  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
-    <value>Die für diese Aufgabe festgelegte Workstation ist dem Projekt nicht mehr zugeordnet. Ordnen Sie sie erneut zu oder migrieren Sie den Task-Worktree ausdrücklich; eine automatische Umleitung ist deaktiviert.</value>
-  </data>
-  <data name="PipelineWorkstationNotNative" xml:space="preserve">
-    <value>Die für diese Aufgabe festgelegte Workstation meldet keine native Runtime mehr. Stellen Sie die native Runtime wieder her oder migrieren Sie den Task-Worktree ausdrücklich.</value>
-  </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Für die Planner-Rolle ist kein Modell konfiguriert.</value>
   </data>
@@ -2439,7 +2430,7 @@ orthstar</value>
     <value>Noch keine Anhänge vorhanden.</value>
   </data>
   <data name="TaskAttachmentsLoadFailed" xml:space="preserve">
-    <value>Anhänge konnten nicht geladen werden: {0}</value>
+    <value>Die Aufgabenanhänge konnten nicht geladen werden.</value>
   </data>
   <data name="TaskAttachmentsFileTooLarge" xml:space="preserve">
     <value>{0}: Die Datei überschreitet das Limit von 10 MB.</value>
@@ -2448,7 +2439,7 @@ orthstar</value>
     <value>Anhänge wurden hochgeladen.</value>
   </data>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
-    <value>Upload fehlgeschlagen: {0}</value>
+    <value>Die Aufgabenanhänge konnten nicht hochgeladen werden.</value>
   </data>
   <data name="RoleProfileInstructions" xml:space="preserve">
     <value>Rollenspezifische Anweisungen</value>
@@ -2604,9 +2595,6 @@ orthstar</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Diese Seite überwacht seinen Status automatisch weiter.</value></data>
-  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Diese Repository-Synchronisierung abbrechen? Ein Abbruch ist nur möglich, solange noch keine Workstation den Auftrag übernommen hat.</value></data>
-  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung wurde abgebrochen, bevor eine Workstation ihn gestartet hat.</value></data>
-  <data name="GitSyncPendingExpired" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung ist abgelaufen, weil ihn innerhalb von 10 Minuten keine Workstation übernommen hat.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
@@ -3024,5 +3012,341 @@ orthstar</value>
   </data>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing-Revert wurde eingeplant.</value>
+  </data>
+  <data name="DiagnosticId" xml:space="preserve">
+    <value>Diagnose-ID: {0}</value>
+  </data>
+  <data name="PageRenderFailed" xml:space="preserve">
+    <value>Diese Seite konnte aufgrund eines unerwarteten Fehlers nicht angezeigt werden. Laden Sie die Seite neu. Falls der Fehler erneut auftritt, teilen Sie dem Support die Diagnose-ID mit.</value>
+  </data>
+  <data name="PageRenderLocation" xml:space="preserve">
+    <value>Seite: {0}</value>
+  </data>
+  <data name="GitSyncQueueFailed" xml:space="preserve">
+    <value>Es konnte nicht bestätigt werden, dass die Repository-Synchronisierung eingereiht wurde. Prüfen Sie vor einem erneuten Versuch den Repository-Status; der Befehl wurde möglicherweise bereits angenommen.</value>
+  </data>
+  <data name="GitSyncStatusFailed" xml:space="preserve">
+    <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden. Der Vorgang läuft möglicherweise noch. Laden Sie diese Seite neu, um die Überwachung fortzusetzen, bevor Sie einen weiteren Vorgang starten.</value>
+  </data>
+  <data name="GitSyncStartFailed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung konnte nicht gestartet oder bestätigt werden. Die Workstation hat den Befehl möglicherweise bereits erhalten. Aktualisieren Sie die Aufgabe, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="GitSyncResultUnavailable" xml:space="preserve">
+    <value>Die Workstation hat den Git-Vorgang abgeschlossen, aber kein lesbares Ergebnis zurückgegeben. Prüfen Sie vor einem erneuten Versuch das Workstation-Protokoll.</value>
+  </data>
+  <data name="GitSyncWorkstationCommandFailed" xml:space="preserve">
+    <value>Die Workstation konnte den Repository-Synchronisierungsbefehl nicht ausführen. Weitere Informationen finden Sie im Workstation-Protokoll.</value>
+  </data>
+  <data name="WorkstationCommandId" xml:space="preserve">
+    <value>Workstation-Befehls-ID: {0}</value>
+  </data>
+  <data name="WorkstationCheckUpdateFailed" xml:space="preserve">
+    <value>Es konnte nicht geprüft werden, ob ein Update für die Workstation verfügbar ist. Prüfen Sie, ob die Workstation online ist, und versuchen Sie es erneut.</value>
+  </data>
+  <data name="WorkstationUpdateFailed" xml:space="preserve">
+    <value>Der Abschluss des Workstation-Updates konnte nicht bestätigt werden. Das Update wurde möglicherweise bereits übergeben. Prüfen Sie den Workstation-Status, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="ProjectMcpServersLoadFailed" xml:space="preserve">
+    <value>Die MCP-Serverkonfiguration des Projekts konnte nicht geladen werden. Aktualisieren Sie diesen Bereich und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TaskAttachmentOpenFailed" xml:space="preserve">
+    <value>Dieser Anhang konnte nicht geöffnet oder heruntergeladen werden.</value>
+  </data>
+  <data name="GitSyncQueueRejected" xml:space="preserve">
+    <value>Die Repository-Synchronisierung konnte nicht eingereiht werden: {0}</value>
+  </data>
+  <data name="GitSyncStatusReadFailed" xml:space="preserve">
+    <value>Der Status der Repository-Synchronisierung konnte nicht gelesen werden: {0}</value>
+  </data>
+    <data name="WorkstationUpdatePending" xml:space="preserve">
+    <value>Das Update wurde übergeben, aber die neue Workstation-Version hat sich noch nicht gemeldet. Prüfen Sie den Workstation-Status oder das Protokoll, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>Zurücksetzen</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Anwenden</value>
+  </data>
+  <data name="Load" xml:space="preserve">
+    <value>Laden</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Aktualisieren</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Wiederherstellen</value>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>Starten</value>
+  </data>
+  <data name="Restart" xml:space="preserve">
+    <value>Neu starten</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Umbenennen</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>Hochladen</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>Herunterladen</value>
+  </data>
+  <data name="Run" xml:space="preserve">
+    <value>Ausführen</value>
+  </data>
+  <data name="Attach" xml:space="preserve">
+    <value>Zuordnen</value>
+  </data>
+  <data name="Check" xml:space="preserve">
+    <value>Prüfen</value>
+  </data>
+  <data name="Disconnect" xml:space="preserve">
+    <value>Trennen</value>
+  </data>
+  <data name="Execute" xml:space="preserve">
+    <value>Ausführen</value>
+  </data>
+  <data name="Compile" xml:space="preserve">
+    <value>Kompilieren</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>Verschieben</value>
+  </data>
+  <data name="Preview" xml:space="preserve">
+    <value>Vorschau</value>
+  </data>
+  <data name="Revert" xml:space="preserve">
+    <value>Zurücksetzen</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Exportieren</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>Ersetzen</value>
+  </data>
+  <data name="ChangeStatus" xml:space="preserve">
+    <value>Status ändern</value>
+  </data>
+  <data name="UiEmptyNotification" xml:space="preserve">
+    <value>Der Vorgang konnte nicht erfolgreich abgeschlossen werden.</value>
+  </data>
+  <data name="UiGenericFailure" xml:space="preserve">
+    <value>Der Vorgang konnte nicht abgeschlossen werden. Prüfen Sie die Meldung auf der Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="UiGenericOperation" xml:space="preserve">
+    <value>diesen Vorgang</value>
+  </data>
+  <data name="UiOperationFailed" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden.</value>
+  </data>
+  <data name="UiOperationFailedWithDetail" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden. Details: {2}</value>
+  </data>
+  <data name="UiOperationNotAllowed" xml:space="preserve">
+    <value>Sie haben keine Berechtigung, „{1}“ im Bereich „{0}“ auszuführen.</value>
+  </data>
+  <data name="UiOperationTargetNotFound" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Das benötigte Element wurde nicht gefunden.</value>
+  </data>
+  <data name="UiOperationConflict" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Die Daten wurden geändert oder stehen im Konflikt mit einem anderen Vorgang. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="UiOperationUnexpectedFailed" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte aufgrund eines internen Fehlers nicht abgeschlossen werden. Diagnose-ID: {2}</value>
+  </data>
+  <data name="AuthUnexpectedError" xml:space="preserve">
+    <value>Bei der Bearbeitung Ihrer Anfrage ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es erneut. Diagnose-ID: {0}</value>
+  </data>
+  <data name="AuthRequestFailed" xml:space="preserve">
+    <value>Die Anfrage konnte nicht abgeschlossen werden. Prüfen Sie die Angaben und versuchen Sie es erneut.</value>
+  </data>
+  <data name="AuthBootstrapOperation" xml:space="preserve">
+    <value>erste Kontoeinrichtung</value>
+  </data>
+  <data name="AuthForgotOperation" xml:space="preserve">
+    <value>Passwortwiederherstellung</value>
+  </data>
+  <data name="AuthInviteOperation" xml:space="preserve">
+    <value>Annahme der Einladung</value>
+  </data>
+  <data name="AuthRecoverOperation" xml:space="preserve">
+    <value>Wiederherstellung des Administratorkontos</value>
+  </data>
+  <data name="AuthRegisterOperation" xml:space="preserve">
+    <value>Kontoregistrierung</value>
+  </data>
+  <data name="AuthResetOperation" xml:space="preserve">
+    <value>Zurücksetzen des Passworts</value>
+  </data>
+  <data name="ChatAnswerUnexpectedFailed" xml:space="preserve">
+    <value>Das Chat-Formular konnte nicht gesendet werden. Prüfen Sie die erforderlichen Felder und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Hinzufügen</value>
+  </data>
+  <data name="Read" xml:space="preserve">
+    <value>Lesen</value>
+  </data>
+  <data name="WorkstationUpdateProgress" xml:space="preserve">
+    <value>Das Update wurde übergeben. Warten auf den Neustart der Workstation und die Meldung der neuen Version.</value>
+  </data>
+  <data name="Fail" xml:space="preserve">
+    <value>Als fehlgeschlagen markieren</value>
+  </data>
+  <data name="Reopen" xml:space="preserve">
+    <value>Wieder öffnen</value>
+  </data>
+  <data name="Request" xml:space="preserve">
+    <value>Anfordern</value>
+  </data>
+  <data name="TimeZoneSaveFailed" xml:space="preserve">
+    <value>Die Zeitzoneneinstellung konnte nicht gespeichert werden. Versuchen Sie es erneut. Falls das Problem weiterhin besteht, teilen Sie dem Support die Diagnose-ID mit.</value>
+  </data>
+  <data name="Enable" xml:space="preserve">
+    <value>Aktivieren</value>
+  </data>
+  <data name="Verify" xml:space="preserve">
+    <value>Bestätigen</value>
+  </data>
+  <data name="Disable" xml:space="preserve">
+    <value>Deaktivieren</value>
+  </data>
+  <data name="Change" xml:space="preserve">
+    <value>Ändern</value>
+  </data>
+  <data name="Initialize" xml:space="preserve">
+    <value>Initialisieren</value>
+  </data>
+  <data name="FolderListingInvalid" xml:space="preserve">
+    <value>Die Workstation hat eine nicht lesbare Verzeichnisliste zurückgegeben. Prüfen Sie das Workstation-Protokoll und versuchen Sie es erneut.</value>
+  </data>
+  <data name="SynchronizeRepository" xml:space="preserve">
+    <value>Repository synchronisieren</value>
+  </data>
+  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
+    <value>Diese Unteraufgabe ist während einer Agentensitzung fehlgeschlagen. Öffnen Sie oben die Sitzungsaktivität, um Fehlerdetails und Diagnose-ID zu sehen.</value>
+  </data>
+  <data name="PipelinePatchConflict" xml:space="preserve">
+    <value>Die Änderungen des Agenten konnten nicht angewendet werden, da sich Projektdateien geändert haben oder widersprüchliche Änderungen enthalten. Der isolierte Worktree wurde beibehalten. Prüfen Sie das Befehlsergebnis und lösen Sie den Konflikt vor einem erneuten Versuch.</value>
+  </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>Sie müssen sich erneut anmelden, um „{1}“ im Bereich „{0}“ auszuführen.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden, da der Dienst vorübergehend nicht verfügbar ist. Versuchen Sie es später erneut. Diagnose-ID: {2}</value>
+  </data>
+  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
+    <value>Die für diesen Merge erforderliche Workstation oder Task-Worktree ist nicht verfügbar. Verbinden Sie die Workstation erneut und versuchen Sie es noch einmal.</value>
+  </data>
+  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
+    <value>Der Task-Branch entspricht nicht mehr der vom letzten Review geprüften Revision. Aktualisieren Sie den Task-Branch, führen Sie Review erneut aus und fordern Sie eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
+    <value>Die Freigabe, das Review-Ergebnis oder der festgelegte Prüf-Befehl wurde nach der Vorschau geändert. Führen Sie ein neues Review aus und fordern Sie vor dem Merge eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
+    <value>Der Ziel-Branch oder sein Checkout wurde nach der Vorschau geändert oder konnte nicht sicher geprüft werden. Aktualisieren Sie den Zustand des Ziel-Branches und fordern Sie eine neue Vorschau an.</value>
+  </data>
+  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
+    <value>Die Git-Konfiguration oder die Workstation-Umgebung erfüllt die Landing-Anforderungen nicht. Prüfen Sie Git-Richtlinie, Remote, Filter und installierte Git-Version.</value>
+  </data>
+  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
+    <value>Der Merge-Kandidat konnte nicht erstellt oder geprüft werden. Prüfen Sie das Merge-Ergebnis und den konfigurierten ReviewCheckCommand und führen Sie die Vorschau erneut aus.</value>
+  </data>
+  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
+    <value>Die Änderungen enthalten geschützte oder projektfremde Pfade, überschreiten konfigurierte Grenzen oder enthalten einen nicht erlaubten Symlink bzw. ein Submodul. Prüfen Sie Umfang und Git-Richtlinie des Projekts.</value>
+  </data>
+  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
+    <value>Der Landing-Vorgang konnte nicht sicher abgeglichen werden. Der Ziel-Branch wurde möglicherweise bereits geändert. Prüfen Sie Ziel-Branch und Versuchsdaten, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="LandingReasonRevertFailed" xml:space="preserve">
+    <value>Der Merge konnte nicht sicher zurückgesetzt oder der Revert-Commit nicht verifiziert werden. Prüfen Sie den Ziel-Branch, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
+    <value>Die Workstation hat den Landing-Befehl nicht angenommen. Prüfen Sie, ob sie online und GitLand-fähig ist, und aktualisieren Sie den Landing-Status vor einem erneuten Versuch.</value>
+  </data>
+  <data name="LandingReasonManualActionRequired" xml:space="preserve">
+    <value>Die Projekt-Richtlinie verlangt, dass eine Person diesen Landing-Vorgang manuell ausführt oder erneut versucht.</value>
+  </data>
+  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
+    <value>Der Task muss bis zum Einreihen von Execute den Status Approved behalten. Führen Sie Review erneut aus und bestätigen Sie den Task vor einem neuen Landing-Auftrag.</value>
+  </data>
+  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
+    <value>Der Merge befindet sich möglicherweise bereits im Ziel-Branch, aber die Prüfung nach dem Merge ist fehlgeschlagen oder konnte nicht bestätigt werden. Prüfen Sie den Ziel-Branch, bevor Sie einen Revert anfordern.</value>
+  </data>
+  <data name="LandingReasonUnknown" xml:space="preserve">
+    <value>Der Landing-Versuch hat einen Grund gemeldet, den die Oberfläche nicht kennt. Prüfen Sie das Workstation-Protokoll und geben Sie dem Support die Diagnose-ID unten.</value>
+  </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>Die Workstation wurde neu gestartet und hat Version {0} gemeldet.</value>
+  </data>
+  <data name="WorkstationCommandFailed" xml:space="preserve">
+    <value>Der Workstation-Befehl konnte aufgrund eines unerwarteten Fehlers nicht abgeschlossen werden.</value>
+  </data>
+  <data name="WorkstationCommandCancelled" xml:space="preserve">
+    <value>Die Workstation hat den Vorgang abgebrochen: {0}.</value>
+  </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>Die Workstation hat einen Startprüfungsgrund gemeldet, den die Oberfläche nicht kennt. Aktualisieren Sie die Aufgabe und prüfen Sie bei erneutem Auftreten das Workstation-Protokoll.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>Die Workstation hat einen Grund für die fehlgeschlagene Repository-Synchronisierung gemeldet, den die Oberfläche nicht kennt. Prüfen Sie die Befehlsdetails und teilen Sie dem Support die Diagnose-ID unten mit.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Technische Git-Details</value>
+  </data>
+  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
+    <value>Der Befehlsverlauf der Workstation konnte nicht geladen werden. Aktualisieren Sie diesen Bereich und versuchen Sie es erneut.</value>
+  </data>
+  <data name="WorkstationSettingsInvalid" xml:space="preserve">
+    <value>Die Workstation hat Einstellungen in einem nicht lesbaren Format zurückgegeben. Aktualisieren Sie die Workstation-Daten und prüfen Sie bei erneutem Auftreten das Protokoll.</value>
+  </data>
+  <data name="WorkstationProbeInvalid" xml:space="preserve">
+    <value>Die Workstation hat Diagnosedaten in einem nicht lesbaren Format zurückgegeben. Aktualisieren Sie die Diagnose und prüfen Sie bei erneutem Auftreten das Workstation-Protokoll.</value>
+  </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>Der Einladungslink enthält kein Einladungstoken. Öffnen Sie den vollständigen Link aus der Einladungs-E-Mail.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet. Bitten Sie den Einladenden um eine neue Einladung.</value>
+  </data>
+  <data name="ResetTokenMissing" xml:space="preserve">
+    <value>Dem Link zum Zurücksetzen des Passworts fehlt das Token. Fordern Sie einen neuen Link an und öffnen Sie ihn erneut.</value>
+  </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Diese Einladung wurde an eine andere E-Mail-Adresse gesendet. Melden Sie sich mit der eingeladenen Adresse an oder bitten Sie den Einladenden, die Einladung zu aktualisieren.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>Diese Aufgabe wurde auf mehreren Workstations ausgeführt. Der Speicherort des lokalen Task-Worktrees lässt sich nicht sicher bestimmen; gleichen Sie den Worktree ab oder migrieren Sie ihn ausdrücklich, bevor Sie fortfahren.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>Die für diese Aufgabe festgelegte Workstation ist dem Projekt nicht mehr zugeordnet. Ordnen Sie sie erneut zu oder migrieren Sie den Task-Worktree ausdrücklich; eine automatische Umleitung ist deaktiviert.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>Die für diese Aufgabe festgelegte Workstation meldet keine native Runtime mehr. Stellen Sie die native Runtime wieder her oder migrieren Sie den Task-Worktree ausdrücklich.</value>
+  </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung läuft möglicherweise weiter, aber ihr Status konnte nicht aktualisiert werden. Die Workstation verarbeitet den Befehl eventuell noch. Prüfen Sie den Befehlsverlauf, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>Der Aktivitätsstatus der Pipeline konnte nicht gelesen werden. Die neuesten Aktivitätsdaten sind möglicherweise unvollständig.</value>
+  </data>
+<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Diese Repository-Synchronisierung abbrechen? Ein Abbruch ist nur möglich, solange noch keine Workstation den Auftrag übernommen hat.</value></data>
+<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung wurde abgebrochen, bevor eine Workstation ihn gestartet hat.</value></data>
+<data name="GitSyncPendingExpired" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung ist abgelaufen, weil ihn innerhalb von 10 Minuten keine Workstation übernommen hat.</value></data>
+  <data name="GitSyncCancelFailed" xml:space="preserve">
+    <value>Es konnte nicht bestätigt werden, dass die Repository-Synchronisierungsanforderung abgebrochen wurde. Aktualisieren Sie die Aufgabe und prüfen Sie den Status, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung im Bereich „{0}“ kann nicht abgebrochen werden: Die Workstation hat den Befehl bereits übernommen. Ein laufender Git-Vorgang kann nicht vom Server gestoppt werden. Warten Sie den Abschluss ab und prüfen Sie das Ergebnis.</value>
+  </data>
+  <data name="FolderBrowseFailed" xml:space="preserve">
+    <value>Das Verzeichnis auf der Workstation konnte nicht geöffnet werden. Prüfen Sie, ob die Workstation online und das ausgewählte Stammverzeichnis verfügbar ist.</value>
+  </data>
+  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
+    <value>Die verfügbaren Projekte konnten nicht geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Recover" xml:space="preserve">
+    <value>Wiederherstellen</value>
   </data>
 </root>
