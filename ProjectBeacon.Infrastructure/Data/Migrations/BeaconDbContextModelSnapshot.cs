@@ -2492,6 +2492,12 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("VersionImpactAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("VersionImpactRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("LabelId");
