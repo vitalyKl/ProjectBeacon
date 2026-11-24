@@ -3429,4 +3429,16 @@
   <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Опубликовать релиз «{0}» как версию {1}, создав тег «{2}» из ветки «{3}»? Будет создан неизменяемый Git-тег и запущен настроенный GitHub release workflow, который может выполнить deploy в production. Отправленный тег никогда не перемещается и не удаляется; повторная попытка использует тот же Candidate и тег.</value></data>
   <data name="ReleasePublicationQueued" xml:space="preserve"><value>Публикация поставлена в очередь закреплённой рабочей станции. Beacon проверит GitHub workflow и фактически развёрнутые версию/SHA.</value></data>
   <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>Неизменяемый release-тег уже отправлен. Повторная попытка не переместит его.</value></data>
+  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>Влияние на версию</value></data>
+  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor ещё не указал влияние этой задачи на версию.</value></data>
+  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>Заявленное влияние</value></data>
+  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Обоснование Actor</value></data>
+  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Решение Reviewer</value></data>
+  <data name="TaskVersionImpactNone" xml:space="preserve"><value>Версия не меняется</value></data>
+  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Подтверждено</value></data>
+  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Оспорено</value></data>
+  <data name="TaskVersionImpactPending" xml:space="preserve"><value>Ожидает Reviewer</value></data>
 </root>
