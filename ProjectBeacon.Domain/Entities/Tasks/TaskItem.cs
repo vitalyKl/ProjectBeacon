@@ -23,6 +23,14 @@ public class TaskItem : Entity, IProjectScoped
     public Guid ProjectId { get; private set; }
     public Guid? LabelId { get; private set; }
     public Guid? MilestoneId { get; private set; }
+    /// <summary>Published Release from whose verified deployed commit this Hotfix was created.</summary>
+    public Guid? HotfixSourceReleaseId { get; private set; }
+    public string? HotfixDeployedSha { get; private set; }
+    public string? HotfixTargetBranch { get; private set; }
+    /// <summary>Idempotency key supplied by the human who creates the Hotfix task.</summary>
+    public Guid? HotfixRequestId { get; private set; }
+    /// <summary>Set on the ordinary follow-up task automatically created after the Hotfix lands.</summary>
+    public Guid? ForwardPortOfTaskId { get; private set; }
     public string? ReviewNotes { get; private set; }
     /// <summary>Agent-declared version impact for this task, confirmed or challenged by Reviewer.</summary>
     public string? VersionImpact { get; private set; }
@@ -111,6 +119,36 @@ public class TaskItem : Entity, IProjectScoped
         if (PipelineDeviceId is { } existing && existing != deviceId)
             throw new InvalidOperationException("The task is already pinned to another workstation. Migrate its task workspace explicitly before changing the pin.");
         PipelineDeviceId = deviceId;
+    }
+
+    /// <summary>Marks this task as a Hotfix based on an exact verified production deployment.</summary>
+    public void SetHotfixOrigin(Guid releaseId, string deployedSha, string targetBranch, Guid requestId)
+    {
+        if (releaseId == Guid.Empty || requestId == Guid.Empty)
+            throw new ArgumentException("Published Release and Hotfix request ids are required.");
+        if (deployedSha is not { Length: 40 or 64 } || !deployedSha.All(Uri.IsHexDigit))
+            throw new ArgumentException("Hotfix deployed commit must be a full Git SHA.", nameof(deployedSha));
+        if (!ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch))
+            throw new ArgumentException("Hotfix target branch is not a safe Git branch name.", nameof(targetBranch));
+        if (HotfixSourceReleaseId is not null || HotfixRequestId is not null)
+            throw new InvalidOperationException("Hotfix origin is immutable once assigned.");
+
+        HotfixSourceReleaseId = releaseId;
+        HotfixDeployedSha = deployedSha.ToLowerInvariant();
+        HotfixTargetBranch = targetBranch;
+        HotfixRequestId = requestId;
+    }
+
+    /// <summary>Links the ordinary post-landing forward-port task to its source Hotfix once.</summary>
+    public void SetForwardPortOfTask(Guid hotfixTaskId)
+    {
+        if (hotfixTaskId == Guid.Empty || hotfixTaskId == Id)
+            throw new ArgumentException("A different source Hotfix task is required.", nameof(hotfixTaskId));
+        if (HotfixSourceReleaseId is not null)
+            throw new InvalidOperationException("A Hotfix cannot itself be a forward-port task.");
+        if (ForwardPortOfTaskId is not null && ForwardPortOfTaskId != hotfixTaskId)
+            throw new InvalidOperationException("The source Hotfix of a forward-port task is immutable.");
+        ForwardPortOfTaskId = hotfixTaskId;
     }
 
     /// <summary>Stores the agent's proposed version impact; publication gates remain server-owned.</summary>
