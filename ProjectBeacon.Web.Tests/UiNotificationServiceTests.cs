@@ -235,6 +235,30 @@ public sealed class UiNotificationServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("Error")]
+    [InlineData("")]
+    public void FormatFailure_GenericDetailWithoutErrorCode_ProducesDiagnosticId(string? detail)
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(detail, "сохранение шаблона");
+
+            Assert.Contains("сохранение шаблона", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("AnErrorOccurred", message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
     [Fact]
     public void FormatFailure_SuccessfulResult_ReturnsNoErrorMessage()
     {

@@ -166,6 +166,9 @@ internal sealed class UiNotificationService : IUiNotificationService
 
     private bool IsGenericError(string? value) =>
         string.IsNullOrWhiteSpace(value)
+        || string.Equals(value.Trim(), "Error", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value.Trim(), "An error occurred", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value.Trim(), "Ошибка", StringComparison.OrdinalIgnoreCase)
         || string.Equals(value.Trim(), _localizer["Error"].Value, StringComparison.OrdinalIgnoreCase)
         || string.Equals(value.Trim(), _localizer["AnErrorOccurred"].Value, StringComparison.OrdinalIgnoreCase);
 
