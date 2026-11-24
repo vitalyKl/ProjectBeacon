@@ -239,8 +239,11 @@ public class Release : Entity, IProjectScoped
             throw new InvalidOperationException("Only an InProgress release with a queued VerifyLanding command can become a Candidate.");
         if (snapshot.ProjectId != ProjectId || snapshot.ReleaseId != Id
             || snapshot.CandidateId != CandidateId
-            || snapshot.PreparedByDeviceId != PreparationDeviceId)
-            throw new InvalidOperationException("Candidate snapshot must match this Release, Candidate id and pinned workstation.");
+            || snapshot.PreparedByDeviceId != PreparationDeviceId
+            || snapshot.ReleaseRevision != Revision
+            || !string.Equals(TargetVersion?.Trim(), snapshot.Version, StringComparison.Ordinal)
+            || !string.Equals(TargetBranch, snapshot.TargetBranch, StringComparison.Ordinal))
+            throw new InvalidOperationException("Candidate snapshot must match this Release revision, target version/branch, Candidate id and pinned workstation.");
         if (CandidateSnapshot is not null)
             throw new InvalidOperationException("This Release already has an immutable Candidate snapshot.");
         CandidateSnapshot = snapshot;
