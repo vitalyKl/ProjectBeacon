@@ -228,6 +228,14 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         ? (true, releaseResult.Result, null)
                         : (false, releaseResult.Result, releaseResult.Error);
                 }
+                if (kind == WorkstationCommandKind.PublishRelease)
+                {
+                    var publication = await ReleasePublishExecutor.ExecuteAsync(
+                        command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
+                    return publication.Ok
+                        ? (true, publication.Result, null)
+                        : (false, publication.Result, publication.Error);
+                }
                 if (kind == WorkstationCommandKind.GitLand)
                 {
                     var landingSettings = _loadSettings();
