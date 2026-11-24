@@ -1211,6 +1211,8 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(committed.Success, committed.Error);
             var sourceSha = committed.CommitSha!;
             var treeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            await worktree.DisposeAsync();
+            worktree = null;
             var command = "echo review-ok";
             var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(command))).ToLowerInvariant();
             var settings = new WorkstationSettings
