@@ -79,6 +79,18 @@ public sealed class ProjectVersionPolicyCatalogTests
     }
 
     [Fact]
+    public void ProjectOfficialVersion_CanOnlyBeInitializedOnceOutsideReleaseFlow()
+    {
+        var project = Project.Create("Versioned project", null, Guid.NewGuid());
+
+        project.InitializeOfficialVersion("0.7.5.8");
+
+        Assert.Equal("0.7.5.8", project.OfficialVersion);
+        Assert.Throws<InvalidOperationException>(
+            () => project.InitializeOfficialVersion("0.7.5.9"));
+    }
+
+    [Fact]
     public void TryRead_RejectsUnknownPolicyProperties()
     {
         const string json = """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[],"pushMode":"Auto"}""";
