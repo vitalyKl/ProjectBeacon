@@ -30,6 +30,12 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
             .HasForeignKey(release => release.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        entity.HasOne(release => release.CandidateSnapshot)
+            .WithOne(snapshot => snapshot.Release)
+            .HasForeignKey<ReleaseCandidateSnapshot>(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId })
+            .HasPrincipalKey<Release>(release => new { release.ProjectId, release.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
         entity.HasIndex(release => new { release.ProjectId, release.Status, release.Order });
     }
 }
