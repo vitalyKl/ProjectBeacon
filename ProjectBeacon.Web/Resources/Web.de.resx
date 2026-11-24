@@ -2328,7 +2328,16 @@ orthstar</value>
     <value>Diesem Projekt ist keine Workstation mit nativem Runtime zugeordnet.</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>Die native Workstation des Projekts ist offline.</value>
+    <value>Die für diese Aufgabe festgelegte native Workstation ist offline.</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>Diese Aufgabe wurde auf mehreren Workstations ausgeführt. Der Speicherort des lokalen Task-Worktrees lässt sich nicht sicher bestimmen; gleichen Sie den Worktree ab oder migrieren Sie ihn ausdrücklich, bevor Sie fortfahren.</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>Die für diese Aufgabe festgelegte Workstation ist dem Projekt nicht mehr zugeordnet. Ordnen Sie sie erneut zu oder migrieren Sie den Task-Worktree ausdrücklich; eine automatische Umleitung ist deaktiviert.</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>Die für diese Aufgabe festgelegte Workstation meldet keine native Runtime mehr. Stellen Sie die native Runtime wieder her oder migrieren Sie den Task-Worktree ausdrücklich.</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Für die Planner-Rolle ist kein Modell konfiguriert.</value>

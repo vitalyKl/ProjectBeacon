@@ -317,6 +317,24 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (reviewRun is null)
             return Result.Failure<PipelineStateDto>("No open review run to check.");
 
+        // A ReviewCheck reads the same local task branch workspace as the Actor/Review
+        // sessions. Never accept a caller-selected workstation that is not the task owner.
+        var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+            db, task, DateTime.UtcNow, ct);
+        if (workstation.BlockedReason is not null || workstation.Device is null)
+            return Result.Failure<PipelineStateDto>(
+                ProjectGitSyncPreflight.WorkstationBlockedMessage(workstation.BlockedReason),
+                ErrorKind.Conflict);
+        if (command.Request.DeviceId != workstation.Device.Id)
+            return Result.Failure<PipelineStateDto>(
+                "The review check must run on the workstation pinned to this task. Select the task's pinned workstation and retry.",
+                ErrorKind.Conflict);
+        if (!await ProjectGitSyncPreflight.TryPinTaskWorkstationAsync(
+                db, task.Id, workstation.Device.Id, ct))
+            return Result.Failure<PipelineStateDto>(
+                "The task was pinned to a different workstation concurrently. Reload the task before running the review check.",
+                ErrorKind.Conflict);
+
         var actorId = command.Request.ActorId.ToString();
         // Claim the run before enqueuing: a second concurrent check loses here and never enqueues.
         var claimed = await db.ReviewRuns

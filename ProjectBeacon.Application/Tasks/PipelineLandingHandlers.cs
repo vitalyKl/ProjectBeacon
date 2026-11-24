@@ -43,7 +43,11 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         if (task.PipelineStage != TaskPipelineStage.Approved)
             return Result.Failure<LandingAttemptDto>("The task pipeline must be Approved before requesting a landing.", ErrorKind.Conflict);
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        // Project is org-scoped while this handler runs in a project-scoped tenant
+        // context. The task above was resolved by that scope; this exact ProjectId lookup
+        // is required to read the pinned ReviewCheckCommand and does not broaden access.
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
         if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
             return Result.Failure<LandingAttemptDto>("A pinned project ReviewCheckCommand is required before landing.", ErrorKind.Conflict);
         var checkCommand = project.ReviewCheckCommand.Trim();
@@ -73,6 +77,24 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             || string.IsNullOrWhiteSpace(reviewRun.CheckedBaseBranch))
             return Result.Failure<LandingAttemptDto>(
                 "The latest review run must have a successful check for the current approval, pinned command, task branch revision, and base branch.", ErrorKind.Conflict);
+
+        // Landing proof must originate from the same workstation that owns the task's
+        // persistent branch. A valid SHA/tree from another checkout is not sufficient.
+        var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+            db, task, DateTime.UtcNow, ct);
+        if (workstation.BlockedReason is not null || workstation.Device is null)
+            return Result.Failure<LandingAttemptDto>(
+                ProjectGitSyncPreflight.WorkstationBlockedMessage(workstation.BlockedReason),
+                ErrorKind.Conflict);
+        if (reviewRun.CheckedDeviceId != workstation.Device.Id)
+            return Result.Failure<LandingAttemptDto>(
+                "The review proof was produced on a workstation other than the one pinned to this task. Rerun the Review Check on the task's pinned workstation.",
+                ErrorKind.Conflict);
+        if (!await ProjectGitSyncPreflight.TryPinTaskWorkstationAsync(
+                db, task.Id, workstation.Device.Id, ct))
+            return Result.Failure<LandingAttemptDto>(
+                "The task was pinned to a different workstation concurrently. Reload the task and retry landing.",
+                ErrorKind.Conflict);
 
         var reviewBaseBranch = reviewRun.CheckedBaseBranch!;
         var policySnapshot = ProjectGitPolicyCatalog.SerializeAttemptSnapshot(gitPolicy, reviewBaseBranch);
@@ -274,7 +296,8 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         await db.Entry(attempt).ReloadAsync(ct);
 
         var auditProject = project
-            ?? await db.Projects.FirstOrDefaultAsync(candidate => candidate.Id == attempt.ProjectId, ct);
+            ?? await db.Projects.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(candidate => candidate.Id == attempt.ProjectId, ct);
         if (auditProject is not null)
         {
             db.AuditEvents.Add(AuditEventFactory.ForActor(
@@ -413,7 +436,8 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             return Result.Failure<LandingAttemptDto>("The task must remain Approved until Execute is queued.", ErrorKind.Conflict);
         }
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         var checkCommand = project?.ReviewCheckCommand?.Trim();
         if (string.IsNullOrWhiteSpace(checkCommand))
         {
@@ -608,7 +632,8 @@ public sealed class RevertLandingHandler : ICommandHandler<RevertLandingCommand,
             return Result.Failure<LandingAttemptDto>(
                 "Revert requires a landed attempt or a retryable/uncertain Revert with a recorded merge commit.", ErrorKind.Conflict);
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == attempt.ProjectId, ct);
         if (project is null)
             return Result.Failure<LandingAttemptDto>("Project not found.", ErrorKind.NotFound);
         var device = await RequestLandingHandler.FindLandingDeviceAsync(

@@ -2336,7 +2336,16 @@ orthstar</value>
     <value>このプロジェクトにネイティブ実行環境のワークステーションが割り当てられていません。</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>プロジェクトのネイティブワークステーションはオフラインです。</value>
+    <value>このタスクに固定されたネイティブワークステーションはオフラインです。</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>このタスクは複数のワークステーションで実行されています。ローカルのタスク作業ツリーの場所を安全に特定できません。続行する前に作業ツリーを確認するか、明示的に移行してください。</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>このタスクに固定されたワークステーションはプロジェクトに接続されていません。再接続するか、タスク作業ツリーを明示的に移行してください。自動的な切り替えは行いません。</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>このタスクに固定されたワークステーションが native runtime を報告しなくなりました。native runtime を復元するか、タスク作業ツリーを明示的に移行してください。</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Planner ロールのモデルが設定されていません。</value>

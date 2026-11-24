@@ -2336,7 +2336,16 @@ orthstar</value>
     <value>此项目未分配 native 工作站。</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>项目的 native 工作站当前离线。</value>
+    <value>固定到此任务的 native 工作站当前离线。</value>
+  </data>
+  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
+    <value>此任务曾在多台工作站上运行，无法安全确定本地任务工作树的位置。继续之前，请先核对或明确迁移该工作树。</value>
+  </data>
+  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
+    <value>固定到此任务的工作站已不再关联此项目。请重新关联该工作站，或明确迁移任务工作树；系统不会自动切换工作站。</value>
+  </data>
+  <data name="PipelineWorkstationNotNative" xml:space="preserve">
+    <value>固定到此任务的工作站已不再报告 native runtime。请恢复 native runtime，或明确迁移任务工作树。</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>尚未为 Planner 角色配置模型。</value>
