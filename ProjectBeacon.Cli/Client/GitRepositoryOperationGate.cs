@@ -113,6 +113,12 @@ internal static class GitRepositoryOperationGate
         foreach (var segment in segments)
         {
             current = Path.Combine(current, segment);
+            // ResolveLinkTarget requires an existing filesystem entry. AutoSync and
+            // InitProject also lock paths that may not have been created yet, so retain
+            // the lexical suffix until an existing component is reached.
+            if (!Directory.Exists(current) && !File.Exists(current))
+                continue;
+
             FileSystemInfo info = Directory.Exists(current)
                 ? new DirectoryInfo(current)
                 : new FileInfo(current);
