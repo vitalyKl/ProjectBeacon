@@ -3357,4 +3357,7 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>復旧</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>サインインは一時的に利用できません。もう一度お試しください。</value>
+  </data>
 </root>

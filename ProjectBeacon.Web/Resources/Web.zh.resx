@@ -3357,4 +3357,7 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>恢复</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>登录服务暂时不可用。请重试。</value>
+  </data>
 </root>

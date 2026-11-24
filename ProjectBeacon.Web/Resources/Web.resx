@@ -3548,4 +3548,7 @@ No Beacon-hosted coding agent.</value>
   <data name="Recover" xml:space="preserve">
     <value>Recover</value>
   </data>
+  <data name="LoginUnavailable" xml:space="preserve">
+    <value>Sign-in is temporarily unavailable. Please try again.</value>
+  </data>
 </root>
