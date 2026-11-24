@@ -296,7 +296,8 @@ internal static class ProjectRuntimeMutationGate
         WorkstationCommandKind.RunPipelineSession,
         WorkstationCommandKind.GitSync,
         WorkstationCommandKind.ApplyProposalPatch,
-        WorkstationCommandKind.GitLand
+        WorkstationCommandKind.GitLand,
+        WorkstationCommandKind.ReleasePrepare
     ];
 
     public static async Task<bool> TryLockProjectAsync(
