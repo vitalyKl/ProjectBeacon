@@ -27,17 +27,13 @@ public sealed class ReleaseTests
     }
 
     [Fact]
-    public void Lifecycle_AllowsOnlyPlannedInProgressCandidateAndCancelledTransitions()
+    public void Lifecycle_CandidateCanOnlyBeCreatedByReleasePrepare()
     {
         var release = CreateRelease();
 
         release.TransitionTo(ReleaseStatus.InProgress);
         Assert.Equal(ReleaseStatus.InProgress, release.Status);
-
-        release.TransitionTo(ReleaseStatus.Candidate);
-        Assert.Equal(ReleaseStatus.Candidate, release.Status);
-
-        release.TransitionTo(ReleaseStatus.InProgress);
+        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.Candidate));
         Assert.Equal(ReleaseStatus.InProgress, release.Status);
 
         release.TransitionTo(ReleaseStatus.Cancelled);
@@ -47,7 +43,7 @@ public sealed class ReleaseTests
     }
 
     [Fact]
-    public void Published_CanOnlyBeReachedThroughAuthorizedPublicationTransition()
+    public void Published_CannotBeReachedThroughGenericTransitionOrBeforeCandidatePreparation()
     {
         var release = CreateRelease();
 
@@ -55,27 +51,9 @@ public sealed class ReleaseTests
         Assert.Throws<InvalidOperationException>(() => release.MarkPublished(DateTime.UtcNow));
 
         release.TransitionTo(ReleaseStatus.InProgress);
-        release.TransitionTo(ReleaseStatus.Candidate);
-        var publishedAt = DateTime.UtcNow;
-        release.MarkPublished(publishedAt);
-
-        Assert.Equal(ReleaseStatus.Published, release.Status);
-        Assert.Equal(publishedAt, release.PublishedAt);
-        Assert.Equal(publishedAt, release.UpdatedAt);
-        Assert.Throws<InvalidOperationException>(() => release.TransitionTo(ReleaseStatus.InProgress));
-        Assert.Throws<InvalidOperationException>(() => release.Update(name: "Changed"));
-    }
-
-    [Fact]
-    public void MarkPublished_RequiresUtcTimestamp()
-    {
-        var release = CreateRelease();
-        release.TransitionTo(ReleaseStatus.InProgress);
-        release.TransitionTo(ReleaseStatus.Candidate);
-
-        var nonUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-        Assert.Throws<ArgumentException>(() => release.MarkPublished(nonUtc));
-        Assert.Equal(ReleaseStatus.Candidate, release.Status);
+        Assert.Throws<InvalidOperationException>(() => release.MarkPublished(DateTime.UtcNow));
+        Assert.Equal(ReleaseStatus.InProgress, release.Status);
+        Assert.Null(release.PublishedAt);
     }
 
     [Fact]
