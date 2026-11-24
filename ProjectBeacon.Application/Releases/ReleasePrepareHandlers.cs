@@ -142,6 +142,20 @@ internal static class ReleasePreparePayload
         return (json, milestones.Count, null);
     }
 
+    /// <summary>
+    /// Compares a stored immutable release scope with a fresh database snapshot.
+    /// CapturedAtUtc is the only intentionally non-deterministic field.
+    /// </summary>
+    public static bool MatchesSnapshot(string? expectedJson, string? currentJson)
+    {
+        if (!TryReadObject(expectedJson, out var expected)
+            || !TryReadObject(currentJson, out var current))
+            return false;
+        expected.Remove("capturedAtUtc");
+        current.Remove("capturedAtUtc");
+        return JsonNode.DeepEquals(expected, current);
+    }
+
     public static bool TryReadObject(string? json, out JsonObject value)
     {
         value = new JsonObject();
