@@ -19,7 +19,8 @@ public sealed record ProjectGitPolicyDto(
     string AutoRevertMode,
     int Revision,
     bool IntegrationBranchAvailable,
-    string? IntegrationBranchUnavailableReason);
+    string? IntegrationBranchUnavailableReason,
+    bool AutoSyncEnabled = false);
 
 public sealed record SetProjectGitPolicyCommand(
     Guid ProjectId,
@@ -30,7 +31,8 @@ public sealed record SetProjectGitPolicyCommand(
     int MaxChangedLines,
     string AutoRevertMode,
     int ExpectedRevision,
-    ActorContext Actor);
+    ActorContext Actor,
+    bool? AutoSyncEnabled = null);
 
 public static class ProjectGitPolicyCatalog
 {
@@ -41,10 +43,10 @@ public static class ProjectGitPolicyCatalog
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public const string DefaultJson =
-        "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
+        "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\",\"autoSyncEnabled\":false}";
 
     public static ProjectGitPolicyDto Defaults(int revision = 1) =>
-        new(0, "Escalate", [], 200, 20_000, "Off", revision, true, null);
+        new(0, "Escalate", [], 200, 20_000, "Off", revision, true, null, false);
 
     public static bool TryRead(string? json, int revision, out ProjectGitPolicyDto policy)
     {
@@ -60,6 +62,14 @@ public static class ProjectGitPolicyCatalog
             var propertyNames = root.EnumerateObject().Select(property => property.Name).ToArray();
             if (propertyNames.Distinct(StringComparer.Ordinal).Count() != propertyNames.Length)
                 return false;
+            var autoSyncEnabled = false;
+            if (root.TryGetProperty("autoSyncEnabled", out var autoSyncElement))
+            {
+                if (autoSyncElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    return false;
+                autoSyncEnabled = autoSyncElement.GetBoolean();
+            }
+
             if (!TryInt(root, "autonomyLevel", out var autonomy)
                 || autonomy is < 0 or > 2
                 || !TryString(root, "dirtyCheckoutBehavior", out var dirty)
@@ -91,7 +101,7 @@ public static class ProjectGitPolicyCatalog
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
                 "autonomyLevel", "dirtyCheckoutBehavior", "protectedPaths",
-                "maxChangedFiles", "maxChangedLines", "autoRevertMode", "reviewBaseBranch"
+                "maxChangedFiles", "maxChangedLines", "autoRevertMode", "reviewBaseBranch", "autoSyncEnabled"
             };
             if (root.EnumerateObject().Any(property => !allowed.Contains(property.Name)))
                 return false;
@@ -101,7 +111,7 @@ public static class ProjectGitPolicyCatalog
 
             policy = new ProjectGitPolicyDto(
                 autonomy, dirty, paths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                files, lines, revert, Math.Max(1, revision), true, null);
+                files, lines, revert, Math.Max(1, revision), true, null, autoSyncEnabled);
             return true;
         }
         catch (JsonException)
@@ -129,7 +139,8 @@ public static class ProjectGitPolicyCatalog
         int maxChangedFiles,
         int maxChangedLines,
         string autoRevertMode,
-        string dirtyCheckoutBehavior = "Escalate") =>
+        string dirtyCheckoutBehavior = "Escalate",
+        bool autoSyncEnabled = false) =>
         JsonSerializer.Serialize(new
         {
             autonomyLevel,
@@ -137,7 +148,8 @@ public static class ProjectGitPolicyCatalog
             protectedPaths = protectedPaths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             maxChangedFiles,
             maxChangedLines,
-            autoRevertMode
+            autoRevertMode,
+            autoSyncEnabled
         }, JsonOptions);
 
     public static string SerializeAttemptSnapshot(ProjectGitPolicyDto policy, string reviewBaseBranch)
@@ -308,17 +320,19 @@ public sealed class SetProjectGitPolicyHandler
             return Result.Failure<ProjectGitPolicyDto>(
                 "Stored Git policy is invalid. It must be repaired before it can be changed.", ErrorKind.Conflict);
 
+        var autoSyncEnabled = command.AutoSyncEnabled ?? current.AutoSyncEnabled;
         if (current.AutonomyLevel == command.AutonomyLevel
             && current.DirtyCheckoutBehavior == command.DirtyCheckoutBehavior
             && current.AutoRevertMode == command.AutoRevertMode
             && current.MaxChangedFiles == command.MaxChangedFiles
             && current.MaxChangedLines == command.MaxChangedLines
+            && current.AutoSyncEnabled == autoSyncEnabled
             && current.ProtectedPaths.SequenceEqual(paths.OrderBy(value => value, StringComparer.Ordinal), StringComparer.Ordinal))
             return Result.Ok(current);
 
         project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
             command.AutonomyLevel, paths, command.MaxChangedFiles, command.MaxChangedLines,
-            command.AutoRevertMode, command.DirtyCheckoutBehavior));
+            command.AutoRevertMode, command.DirtyCheckoutBehavior, autoSyncEnabled));
         _auditWriter.Stage(db, AuditEventFactory.ForActor(
             command.Actor,
             "project.git_policy.updated",
@@ -331,7 +345,8 @@ public sealed class SetProjectGitPolicyHandler
                 previousState = $"Level{current.AutonomyLevel}",
                 newState = $"Level{command.AutonomyLevel}",
                 policyCode = command.AutoRevertMode == "OnPostCheckFail" ? "AutoRevert.OnPostCheckFail" : "AutoRevert.Off",
-                dirtyCheckoutBehavior = command.DirtyCheckoutBehavior
+                dirtyCheckoutBehavior = command.DirtyCheckoutBehavior,
+                autoSyncEnabled
             })));
         try
         {
@@ -347,6 +362,6 @@ public sealed class SetProjectGitPolicyHandler
             command.AutonomyLevel, command.DirtyCheckoutBehavior,
             paths.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             command.MaxChangedFiles, command.MaxChangedLines, command.AutoRevertMode,
-            project.GitPolicyRevision, true, null));
+            project.GitPolicyRevision, true, null, autoSyncEnabled));
     }
 }
