@@ -3224,4 +3224,7 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing revert queued.</value>
   </data>
+  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Automatically sync upstream</value></data>
+  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon periodically fetches this project's upstream and fast-forwards only a clean, idle checkout. Local edits, divergence, detached HEAD, and active agent sessions are preserved. Existing local tags are never force-updated or deleted.</value></data>
+  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Connect a workstation running an AutoSync-capable Beacon client to enable this setting.</value></data>
 </root>
