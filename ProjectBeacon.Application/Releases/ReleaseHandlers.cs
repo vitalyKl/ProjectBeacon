@@ -79,7 +79,9 @@ internal static class ReleaseMapping
             release.Id, release.ProjectId, release.Name, release.Description,
             release.TargetVersion, release.TargetBranch, release.Status, release.Order,
             release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
-            milestoneCount);
+            milestoneCount, release.PreparationStatus, release.PreparationRevision,
+            release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
+            release.VerificationCommandId, release.PreparationResultJson, release.PreparationError);
 }
 
 public sealed class ListProjectReleasesHandler
@@ -110,7 +112,9 @@ public sealed class ListProjectReleasesHandler
                 release.Id, release.ProjectId, release.Name, release.Description,
                 release.TargetVersion, release.TargetBranch, release.Status, release.Order,
                 release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
-                release.Milestones.Count))
+                release.Milestones.Count, release.PreparationStatus, release.PreparationRevision,
+                release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
+                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError))
             .ToArrayAsync(ct);
         return Result.Ok<IReadOnlyList<ReleaseDto>>(releases);
     }
@@ -142,7 +146,9 @@ public sealed class GetReleaseHandler
                 release.Id, release.ProjectId, release.Name, release.Description,
                 release.TargetVersion, release.TargetBranch, release.Status, release.Order,
                 release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
-                release.Milestones.Count))
+                release.Milestones.Count, release.PreparationStatus, release.PreparationRevision,
+                release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
+                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError))
             .FirstOrDefaultAsync(ct);
         return dto is null
             ? Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound)
@@ -403,8 +409,9 @@ public sealed class DeleteReleaseHandler
             item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, ct);
         if (release is null)
             return Result.Failure("Release not found.", ErrorKind.NotFound);
-        if (release.Status is ReleaseStatus.Candidate or ReleaseStatus.Published)
-            return Result.Failure("Candidate or Published releases cannot be deleted.", ErrorKind.Conflict);
+        if (release.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
+            || release.PreparationStatus != ReleasePreparationStatus.NotStarted)
+            return Result.Failure("A Release with a prepared or in-flight Candidate cannot be deleted.", ErrorKind.Conflict);
 
         var linked = await db.Milestones
             .Where(milestone => milestone.ProjectId == request.ProjectId && milestone.ReleaseId == release.Id)
@@ -474,13 +481,15 @@ public sealed class SetMilestoneReleaseHandler
 
         if (milestone.ReleaseId is { } currentReleaseId)
         {
-            var currentStatus = await db.Releases
+            var currentState = await db.Releases
                 .Where(release => release.Id == currentReleaseId && release.ProjectId == request.ProjectId)
-                .Select(release => (ReleaseStatus?)release.Status)
+                .Select(release => new { release.Status, release.PreparationStatus })
                 .FirstOrDefaultAsync(ct);
-            if (currentStatus is ReleaseStatus.Candidate or ReleaseStatus.Published)
+            if (currentState is not null
+                && (currentState.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
+                    || currentState.PreparationStatus != ReleasePreparationStatus.NotStarted))
                 return Result.Failure(
-                    "Milestones in an immutable Candidate or Published release cannot be detached or moved.",
+                    "Milestones cannot be detached or moved after ReleasePrepare has started.",
                     ErrorKind.Conflict);
         }
 
@@ -491,7 +500,8 @@ public sealed class SetMilestoneReleaseHandler
                     && release.ProjectId == request.ProjectId
                     && release.Status != ReleaseStatus.Candidate
                     && release.Status != ReleaseStatus.Published
-                    && release.Status != ReleaseStatus.Cancelled, ct);
+                    && release.Status != ReleaseStatus.Cancelled
+                    && release.PreparationStatus == ReleasePreparationStatus.NotStarted, ct);
             if (!exists)
                 return Result.Failure("Release not found or no longer accepts milestones.", ErrorKind.NotFound);
         }
