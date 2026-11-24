@@ -27,6 +27,8 @@ public static class ReleaseEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/release", SetMilestoneRelease)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/releases/{releaseId:guid}/hotfix-tasks", CreateHotfixTask)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/releases/{releaseId:guid}/prepare", PrepareRelease)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/releases/{releaseId:guid}/verify-landing", VerifyReleaseLanding)
@@ -106,6 +108,19 @@ public static class ReleaseEndpoints
         return result.Success ? Results.NoContent() : result.FromResult();
     }
 
+    private static async Task<IResult> CreateHotfixTask(
+        Guid projectId, Guid releaseId, [FromBody] CreateHotfixTaskBody body,
+        HttpContext context, CreateHotfixTaskHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new CreateHotfixTaskCommand(
+            projectId, releaseId,
+            new CreateHotfixTaskRequest(body.Title, body.Description, body.RequestId),
+            context.GetActor()), ct);
+        return result.Success
+            ? Results.Created($"/v1/tasks/{result.Value!.Id}", result.Value)
+            : result.FromResult();
+    }
+
     private static async Task<IResult> PrepareRelease(
         Guid projectId, Guid releaseId, [FromBody] PrepareReleaseBody body,
         HttpContext context, PrepareReleaseHandler handler, CancellationToken ct)
@@ -126,6 +141,7 @@ public static class ReleaseEndpoints
             $"/v1/projects/{projectId}/releases/{releaseId}", result.Value) : result.FromResult();
     }
 
+    public sealed record CreateHotfixTaskBody(string Title, string? Description, Guid RequestId);
     public sealed record PrepareReleaseBody(int ExpectedReleaseRevision);
     public sealed record VerifyReleaseLandingBody(int ExpectedPreparationRevision);
 
