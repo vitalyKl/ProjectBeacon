@@ -2612,6 +2612,9 @@ orthstar</value>
   <data name="GitSyncNow" xml:space="preserve"><value>同步</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>正在等待工作站完成 Git 操作…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作仍在运行。此页面将继续自动检查其状态。</value></data>
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>要取消此仓库同步请求吗？只有在工作站领取命令之前才能取消。</value></data>
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>仓库同步请求已在工作站开始执行之前取消。</value></data>
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>由于 10 分钟内没有工作站领取，仓库同步请求已过期。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>此项目没有连接支持 GitSync 的在线工作站。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>分支</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>上游</value></data>
