@@ -34,6 +34,9 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         if (!AgentTaskGitOperations.Succeeded(rootResult) || string.IsNullOrWhiteSpace(rootResult.StdOut))
             return new VerificationResult(null, "Remote landing skipped: project checkout is not available as a Git repository.");
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+        using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+        if (GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
+            return new VerificationResult(null, null);
 
         var branchFormat = await AgentTaskGitOperations.Git(
             repositoryRoot, Array.Empty<string>(), ct, "check-ref-format", "--branch", target.SourceBranch);
