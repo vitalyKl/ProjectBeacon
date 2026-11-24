@@ -7,19 +7,20 @@ public static class PipelineToolPolicy
     public const string GitIntegrate = "git_integrate";
     public const string GitPublish = "git_publish";
     public const string GitPullRequest = "git_pr";
+    public const string ForgeRead = "forge_read";
 
     public static IReadOnlyList<string> PlannerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitIntegrate, GitPullRequest
+        GitInfo, GitIntegrate, GitPullRequest, ForgeRead
     });
     /// <summary>Default Actor Git tools. Publishing is excluded unless a trusted authorization explicitly opts in.</summary>
     public static IReadOnlyList<string> ActorGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitCommit, GitIntegrate, GitPullRequest
+        GitInfo, GitCommit, GitIntegrate, GitPullRequest, ForgeRead
     });
     public static IReadOnlyList<string> ReviewerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitPullRequest
+        GitInfo, GitPullRequest, ForgeRead
     });
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GitToolsByRole =
@@ -168,7 +169,7 @@ public static class PipelineToolPolicy
         McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
         McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "repo_status", "suggest_command_prefixes",
-        GitInfo, "run_log", "service_status", "service_logs"
+        GitInfo, ForgeRead, "run_log", "service_status", "service_logs"
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {
