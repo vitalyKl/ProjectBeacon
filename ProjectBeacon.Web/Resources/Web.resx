@@ -3263,4 +3263,5 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Only project Owners and Admins can change version policy.</value></data>
   <data name="ProjectVersionSave" xml:space="preserve"><value>Save version policy</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
+  <data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
 </root>
