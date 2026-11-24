@@ -272,7 +272,11 @@ internal sealed class GitSyncService
                 repositoryBaseSynced?.Invoke(syncedHead);
             }
 
-            return Complete(ToResult(after, GitSyncOutcome.FastForwarded, null, null, after.Head) with { HeadBefore = state.Head });
+            return Complete(ToResult(after, GitSyncOutcome.FastForwarded, null, null, after.Head) with
+            {
+                HeadBefore = state.Head,
+                FastForwardCommits = state.Behind
+            });
         }
         finally
         {

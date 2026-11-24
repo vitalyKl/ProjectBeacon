@@ -291,4 +291,5 @@ public sealed record GitSyncResultDto(
     GitSyncOutcome Outcome,
     GitSyncRefusalCode? ReasonCode,
     string? Stderr,
-    string? UpstreamRemote = null);
+    string? UpstreamRemote = null,
+    int? FastForwardCommits = null);

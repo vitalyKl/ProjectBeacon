@@ -219,6 +219,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 }
 
                 var pull = await ExecuteGitSyncAsync(project, GitSyncMode.PullFastForward, automatic: true, ct);
+                if (pull.Error == "GitSyncBusy")
+                {
+                    RecordSkipped(project, "GitSyncBusy", _timing.TimeProvider.GetUtcNow(), result);
+                    continue;
+                }
                 if (pull.Result is { } pullResult)
                 {
                     current = pullResult;
@@ -229,7 +234,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                             _timing.TimeProvider.GetUtcNow(),
                             pullResult.HeadBefore!,
                             pullResult.HeadAfter!,
-                            result.Behind);
+                            pullResult.FastForwardCommits ?? result.Behind);
                     }
                     else if (pullResult.Outcome == GitSyncOutcome.Refused)
                     {
@@ -317,6 +322,8 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             _backoff.Remove(project.ProjectId);
 
         var previous = _snapshot.Get(project.ProjectId);
+        var clearsLastError = reason is "NotGitRepository" or "RuntimeChanged"
+            or "ManualGitSyncActive" or "GitLandActive" or "CheckoutMutationActive" or "GitSyncBusy";
         var state = latestStatus is not null
             ? ToState(project.ProjectId, latestStatus, now, previous?.LastAutoPull, null, reason)
             : new GitAutoSyncProjectState(
@@ -331,7 +338,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 previous?.Diverged ?? false,
                 now,
                 previous?.LastAutoPull,
-                reason is "NotGitRepository" or "RuntimeChanged" ? null : previous?.LastError,
+                clearsLastError ? null : previous?.LastError,
                 reason);
         if (_snapshot.Set(state))
             _runtimeState.Log($"repository auto-sync skipped for project {project.ProjectId}: {reason}");
