@@ -8,6 +8,8 @@
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Application.Releases
+@using ProjectBeacon.Application.Persistence
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
@@ -21,10 +23,22 @@
 @inject DeleteMilestoneHandler DeleteMilestoneHandler
 @inject CloseMilestoneHandler CloseMilestoneHandler
 @inject ReopenMilestoneHandler ReopenMilestoneHandler
+@inject GetProjectVersionPolicyHandler GetVersionPolicy
+@inject ListProjectReleasesHandler ListProjectReleases
+@inject CreateReleaseHandler CreateReleaseHandler
+@inject SetReleaseStatusHandler SetReleaseStatus
+@inject DeleteReleaseHandler DeleteReleaseHandler
+@inject SetMilestoneReleaseHandler SetMilestoneRelease
+@inject IAuthorizationService Authorization
+@inject IBeaconDbFactory DbFactory
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Roadmap"]</PageTitle>
 <PageHeader Title="@L["Roadmap"]">
+    @if (_releaseManagementEnabled && _canManageReleases)
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@ShowCreateReleaseForm">@L["NewRelease"]</MudButton>
+    }
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ShowCreateForm">@L["NewMilestone"]</MudButton>
 </PageHeader>
 
@@ -36,7 +50,8 @@ else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-    else if (_milestones.Count == 0 && _deletedMilestones.Count == 0 && !_showCreateForm)
+    else if (_milestones.Count == 0 && _deletedMilestones.Count == 0 && !_showCreateForm
+        && (!_releaseManagementEnabled || _releases.Count == 0) && !_showCreateReleaseForm)
 {
     <EmptyState>@L["NoMilestones"]</EmptyState>
 }
