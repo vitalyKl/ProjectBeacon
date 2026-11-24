@@ -24,7 +24,7 @@ public sealed partial class AddProjectVersionPolicyAndTaskImpact : Migration
             table: "Projects",
             type: "jsonb",
             nullable: false,
-            defaultValueSql: """'{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"sources":[]}'::jsonb""");
+            defaultValueSql: """'{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"deploymentVersionEndpoint":null,"sources":[]}'::jsonb""");
 
         migrationBuilder.AddColumn<int>(
             name: "VersionPolicyRevision",
