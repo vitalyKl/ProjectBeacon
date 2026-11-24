@@ -3391,4 +3391,24 @@ orthstar</value>
 <data name="NotConfigured" xml:space="preserve"><value>Nicht konfiguriert</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Release Management für dieses Projekt aktivieren</value></data>
 <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>Nach der Aktivierung sind Releases in der Roadmap verfügbar und Meilensteine können einem Release zugeordnet werden. Bestehende Meilensteine bleiben eigenständig. Standardmäßig deaktiviert.</value></data>
+  <data name="ProjectReleases" xml:space="preserve"><value>Projekt-Releases</value></data>
+  <data name="Releases" xml:space="preserve"><value>Releases</value></data>
+  <data name="NewRelease" xml:space="preserve"><value>Neues Release</value></data>
+  <data name="ReleaseName" xml:space="preserve"><value>Release-Name</value></data>
+  <data name="ReleaseTargetVersion" xml:space="preserve"><value>Zielversion</value></data>
+  <data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>Optional. Muss dem Versionsschema in den Projekteinstellungen entsprechen.</value></data>
+  <data name="ReleaseTargetBranch" xml:space="preserve"><value>Zielbranch</value></data>
+  <data name="ReleaseStart" xml:space="preserve"><value>Starten</value></data>
+  <data name="ReleaseMarkCandidate" xml:space="preserve"><value>Als Candidate markieren</value></data>
+  <data name="CancelRelease" xml:space="preserve"><value>Release abbrechen</value></data>
+  <data name="ReleaseCreated" xml:space="preserve"><value>Release erstellt</value></data>
+  <data name="ReleaseDeleted" xml:space="preserve"><value>Release gelöscht</value></data>
+  <data name="MilestoneRelease" xml:space="preserve"><value>Release</value></data>
+  <data name="NoRelease" xml:space="preserve"><value>Keinem Release zugeordnet</value></data>
+  <data name="NoReleases" xml:space="preserve"><value>Für dieses Projekt wurden noch keine Releases erstellt.</value></data>
+  <data name="ReleaseStatusPlanned" xml:space="preserve"><value>Geplant</value></data>
+  <data name="ReleaseStatusInProgress" xml:space="preserve"><value>In Bearbeitung</value></data>
+  <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Candidate</value></data>
+  <data name="ReleaseStatusPublished" xml:space="preserve"><value>Veröffentlicht</value></data>
+  <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Abgebrochen</value></data>
 </root>
