@@ -451,6 +451,37 @@ No release tag or production deployment was created. No SaaS Control Plane or bi
 - Python helper rules were exercised against safe/unsafe tag cases, but the complete Python unit test file and workflow have not yet been run by GitHub Actions on this head.
 - The current environment cannot resolve `github.com`; no local checkout or local .NET/Python workflow execution is available. Exact-head GitHub Actions remains the required validation.
 
+## 2026-11-24 — Release workflow UI and task version-impact visibility
+
+**Implementation head before this journal update:** `9b8fa3917649126acc0af9c0e88e8619c37f4877`.
+
+### Product workflow
+- Added human-only `POST /v1/projects/{projectId}/releases/{releaseId}/publish`, backed by `PublishReleaseHandler`. Endpoint requires a human principal; handler additionally checks project/organization Owner/Admin and immutable Candidate/publication revisions.
+- Roadmap now exposes Prepare Candidate for InProgress releases, Verify Landing after preparation, and a separate explicit Publish confirmation for Candidate. Queued states and preparation/publication failures are shown without offering unsafe duplicate operations.
+- Publication confirmation displays release, version, configured tag and target branch. UI never creates a tag itself; it queues the server-authorized PublishRelease command on the workstation pinned by Prepare.
+- Preparation PR links are rendered only after checking HTTPS GitHub host/path.
+- Candidate cancellation now matches the UI: permitted before publication or after failure-before-tag; blocked while publication is queued or after immutable tag push. Added domain tests for all cases.
+- Task Detail displays the configured project's task version impact, Actor rationale and Reviewer decision while Release Management is enabled. It uses the dedicated impact read handler without expanding the shared TaskItemDto contract.
+- Added English, German, Russian, Japanese and Chinese strings for the ReleasePrepare/VerifyLanding/Publish flow and Task Detail's impact/review panel.
+
+### Regression coverage
+- API test verifies a project-scoped API token with TaskRead + TaskWrite is still Forbidden on the human-only PublishRelease endpoint.
+- Domain tests cover Candidate cancellation before publication, while queued, after failure-before-tag, and after tag-pushed failure.
+- BUnit test verifies Task Detail renders impact, rationale and Reviewer decision when Release Management is enabled.
+- Checked all new localization keys in en/de/ru/ja/zh; no missing keys were found.
+
+### Validation
+- These latest UI/API/domain changes have not yet been verified by CI.
+- Last inspected PR CI run #45454932005 was on stale head `48f3fce5fc737ce8492cbe3b893025d7f0590599`; Build failed on all three platforms. The run's logs endpoint returned 404, so the cause was not confirmed from logs. Do not treat it as validation of subsequent changes.
+- At this checkpoint the feature branch used merge-base `1290eae570d48c79f8523222b3293c5b536de99f`; main has advanced by commit #233 and the branch is one commit behind. No automatic merge/rebase was performed because the commit touches Web files also edited by this feature.
+- No release tag has been created and no production deployment has been attempted.
+
+### Next actions
+1. Trigger CI on the exact current branch head and repair every compile/test/model/format/localization failure.
+2. Reconcile the branch with main commit #233 without overwriting either side's Web changes.
+3. Add further Roadmap/API tests if CI identifies gaps.
+4. Verify GitHub tag rulesets and production Environment reviewers before enabling real publication.
+
 ## Update format
 
 For every subsequent work session append:
