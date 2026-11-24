@@ -82,6 +82,45 @@ public sealed class DeviceActorBoundaryHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task DeviceToken_AutoSyncTargetsDeviceOnlyEndpoint_ReturnsSuccess()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var created = await client.PostAsJsonAsync(
+            "/v1/devices", new { name = "autosync-device", fingerprint = "fp-autosync-device" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        created.EnsureSuccessStatusCode();
+        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        var token = device.GetProperty("token").GetString();
+
+        var deviceClient = factory.CreateClient();
+        deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await deviceClient.GetAsync(
+            "/v1/devices/me/auto-sync-targets", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var targets = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(JsonValueKind.Array, targets.ValueKind);
+    }
+
+    [Fact]
+    public async Task HumanToken_AutoSyncTargetsDeviceOnlyEndpoint_Returns401()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var response = await client.GetAsync(
+            "/v1/devices/me/auto-sync-targets", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
