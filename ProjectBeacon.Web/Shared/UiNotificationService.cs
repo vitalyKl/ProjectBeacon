@@ -144,6 +144,7 @@ internal sealed class UiNotificationService : IUiNotificationService
                     : _localizer["UiOperationFailedWithDetail", section, operationLabel, detail].Value;
             default:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
+        }
     }
 
     private string? UnexpectedFailureDiagnosticId(string? detail, string section, string? operationLabel, string? errorCode, object? context)
