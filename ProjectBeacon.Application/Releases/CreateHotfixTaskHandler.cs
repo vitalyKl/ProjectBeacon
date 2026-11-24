@@ -89,6 +89,23 @@ public sealed class CreateHotfixTaskHandler
                 "Hotfix can only start from a Release whose production publication was independently verified.",
                 ErrorKind.Conflict);
 
+        var currentDeployedReleaseId = await db.Releases.AsNoTracking()
+            .Where(item => item.ProjectId == request.ProjectId
+                && item.Status == ReleaseStatus.Published
+                && item.PublicationStatus == ReleasePublicationStatus.Published
+                && item.PublicationTagPushed
+                && item.DeployedAtUtc != null
+                && item.DeploymentWorkflowRunId != null)
+            .OrderByDescending(item => item.DeployedAtUtc)
+            .ThenByDescending(item => item.PublishedAt)
+            .ThenByDescending(item => item.Id)
+            .Select(item => item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (currentDeployedReleaseId != release.Id)
+            return Result.Failure<TaskItemDto>(
+                "This Release is no longer the current production deployment. Create the Hotfix from the most recently verified deployed Release.",
+                ErrorKind.Conflict);
+
         if (release.PreparationDeviceId is not { } pinnedDeviceId
             || release.CandidateId is not { } candidateId)
             return Result.Failure<TaskItemDto>(
