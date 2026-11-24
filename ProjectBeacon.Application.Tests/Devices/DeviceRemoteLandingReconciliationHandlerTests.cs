@@ -110,7 +110,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var result = await handler.HandleAsync(setup.DeviceId, request, TestContext.Current.CancellationToken);
 
             Assert.False(result.Success);
-            Assert.Equal(ErrorKind.Conflict, result.ErrorKind);
+            Assert.Equal(ErrorKind.Conflict, result.Kind);
             await using var verify = Factory().CreateDbContext();
             var task = await verify.Tasks.AsNoTracking()
                 .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
@@ -139,7 +139,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var wrongDevice = await handler.HandleAsync(
                 otherDeviceId, Request(setup), TestContext.Current.CancellationToken);
             Assert.False(wrongDevice.Success);
-            Assert.Equal(ErrorKind.Forbidden, wrongDevice.ErrorKind);
+            Assert.Equal(ErrorKind.Forbidden, wrongDevice.Kind);
         }
 
         var disabled = await CreateApprovedTaskAsync(autoSyncEnabled: false);
@@ -149,7 +149,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var result = await handler.HandleAsync(
                 disabled.DeviceId, Request(disabled), TestContext.Current.CancellationToken);
             Assert.False(result.Success);
-            Assert.Equal(ErrorKind.Forbidden, result.ErrorKind);
+            Assert.Equal(ErrorKind.Forbidden, result.Kind);
         }
     }
 
@@ -164,7 +164,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
                 setup.DeviceId, Request(setup), TestContext.Current.CancellationToken);
 
             Assert.False(result.Success);
-            Assert.Equal(ErrorKind.Conflict, result.ErrorKind);
+            Assert.Equal(ErrorKind.Conflict, result.Kind);
             await using var verify = Factory().CreateDbContext();
             var task = await verify.Tasks.AsNoTracking()
                 .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
@@ -203,7 +203,6 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             device.Heartbeat(
                 """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""", "{}");
             _db.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, deviceId, "/workspace/project"));
-            
             var task = TaskItem.Create("Merged via PR", project.Id, description: "Change under review.");
             task.PinPipelineDevice(deviceId);
             task.StartPipeline();
