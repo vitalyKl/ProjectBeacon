@@ -24,6 +24,10 @@ public class TaskItem : Entity, IProjectScoped
     public Guid? LabelId { get; private set; }
     public Guid? MilestoneId { get; private set; }
     public string? ReviewNotes { get; private set; }
+    /// <summary>Agent-declared version impact for this task, confirmed or challenged by Reviewer.</summary>
+    public string? VersionImpact { get; private set; }
+    public string? VersionImpactRationale { get; private set; }
+    public DateTime? VersionImpactAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public TaskPipelineStage? PipelineStage { get; private set; }
@@ -93,6 +97,27 @@ public class TaskItem : Entity, IProjectScoped
         if (PipelineDeviceId is { } existing && existing != deviceId)
             throw new InvalidOperationException("The task is already pinned to another workstation. Migrate its task workspace explicitly before changing the pin.");
         PipelineDeviceId = deviceId;
+    }
+
+    /// <summary>Stores the agent's proposed version impact; publication gates remain server-owned.</summary>
+    public void SetVersionImpact(string impact, string rationale)
+    {
+        if (impact is not ("none" or "patch" or "minor" or "major"))
+            throw new ArgumentException("Version impact must be none, patch, minor, or major.", nameof(impact));
+        ArgumentException.ThrowIfNullOrWhiteSpace(rationale);
+        if (rationale.Length > 1000)
+            throw new ArgumentException("Version impact rationale cannot exceed 1000 characters.", nameof(rationale));
+        VersionImpact = impact;
+        VersionImpactRationale = rationale.Trim();
+        VersionImpactAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Clears a declaration when a task is reopened for a materially different change.</summary>
+    public void ClearVersionImpact()
+    {
+        VersionImpact = null;
+        VersionImpactRationale = null;
+        VersionImpactAt = null;
     }
 
     public void AssignLabel(Guid? labelId)
