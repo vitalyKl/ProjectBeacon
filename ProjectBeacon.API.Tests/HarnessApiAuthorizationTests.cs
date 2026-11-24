@@ -216,6 +216,11 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Get, $"/v1/projects/{_projectId:D}/milestones", _taskId, _subtaskId,
             [McpToolNames.ReleaseContext]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId,
             [McpToolNames.ReleaseContext]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
@@ -236,6 +241,8 @@ public sealed class HarnessApiAuthorizationTests
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
@@ -272,6 +279,8 @@ public sealed class HarnessApiAuthorizationTests
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
