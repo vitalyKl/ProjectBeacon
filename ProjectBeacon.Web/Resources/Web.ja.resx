@@ -3357,4 +3357,13 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>復旧</value>
   </data>
+  <data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>チャットのライブ更新は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
+  </data>
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>複数回試行してもタスクとリポジトリの状態を更新できませんでした。表示中の状態は古い可能性があります。更新は自動的に再開されます。</value>
+  </data>
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>保留中のリポジトリ同期コマンドとの接続を復元できませんでした。同期を再実行する前に、タスクとワークステーションの状態を確認してください。</value>
+  </data>
 </root>

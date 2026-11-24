@@ -3339,4 +3339,13 @@
   <data name="Recover" xml:space="preserve">
     <value>Восстановить</value>
   </data>
+  <data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>Обновление чата временно недоступно. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
+  </data>
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>Не удалось обновить состояние задачи и репозитория после нескольких попыток. Отображаемые данные могут устареть; обновление продолжится автоматически.</value>
+  </data>
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>Не удалось восстановить связь с ожидающей командой синхронизации репозитория. Проверьте состояние задачи и рабочей станции, прежде чем запускать синхронизацию повторно.</value>
+  </data>
 </root>

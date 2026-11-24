@@ -43,6 +43,10 @@
                         aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
+            @if (_waitingTasksErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_waitingTasksErrorMessage</MudAlert>
+            }
             @if (_waitingTasks.Count > 0)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">
@@ -54,6 +58,14 @@
                         }
                     </MudStack>
                 </MudAlert>
+            }
+            @if (_sessionLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionLoadErrorMessage</MudAlert>
+            }
+            @if (_pollErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_pollErrorMessage</MudAlert>
             }
             @if (_block == "folder")
             {
@@ -128,6 +140,8 @@
     private ChatSessionDto? _session;
     private List<ChatSessionDto> _sessions = [];
     private List<WaitingPipelineTaskDto> _waitingTasks = [];
+    private string? _waitingTasksErrorMessage;
+    private readonly UiBackgroundFailureTracker _waitingTasksFailures = new();
     private Guid? _contextTaskId;
     private string? _contextTaskTitle;
     private string _contextPageLabel = string.Empty;
@@ -141,6 +155,9 @@
     private bool _busy;
     private bool _aborting;
     private bool _failed;
+    private string? _sessionLoadErrorMessage;
+    private string? _pollErrorMessage;
+    private readonly UiBackgroundFailureTracker _pollFailures = new();
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -196,7 +213,15 @@
         if (_userId == Guid.Empty)
             return;
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        _sessions = listed.Success ? listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList() : [];
+        if (!listed.Success)
+        {
+            _sessions = [];
+            _sessionLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            return;
+        }
+
+        _sessionLoadErrorMessage = null;
+        _sessions = listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList();
         if (_session is not null)
             _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
     }
@@ -207,7 +232,16 @@
             return;
         var result = await ListWaitingTasks.HandleAsync(
             new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
-        _waitingTasks = result.Success ? result.Value!.ToList() : [];
+        if (!result.Success)
+        {
+            if (_waitingTasksFailures.RecordFailure())
+                _waitingTasksErrorMessage = Notifications.FormatFailure(result, L["Chat"].Value, L["Load"].Value);
+            return;
+        }
+
+        if (_waitingTasksFailures.RecordSuccess())
+            _waitingTasksErrorMessage = null;
+        _waitingTasks = result.Value!.ToList();
     }
 
     private async Task ReloadRouteContext()
@@ -348,15 +382,27 @@
         }
     }
 
-    private async Task ReloadParts()
+    private async Task<(bool Success, string? Error, string? ErrorCode)> ReloadParts(bool isBackground = false)
     {
         if (_session is null)
-            return;
+            return (true, null, null);
+
         var sessionId = _session.Id;
         var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
         if (_session?.Id != sessionId)
-            return;
-        _parts = parts.Success ? parts.Value!.ToList() : [];
+            return (true, null, null);
+
+        if (!parts.Success)
+        {
+            _parts = [];
+            if (!isBackground)
+                _sessionLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = sessionId });
+            return (false, parts.Error, parts.ErrorCode);
+        }
+
+        _sessionLoadErrorMessage = null;
+        _parts = parts.Value!.ToList();
+        return (true, null, null);
     }
 
     // Two-stage live update, same as Chat.razor: the in-process ChatEventSignal wakes this loop the
@@ -387,12 +433,38 @@
                     if (!_open || _session?.Id != sessionId)
                         continue;
                     var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
+                    var pollFailed = !session.Success;
+                    string? pollError = session.Error;
+                    string? pollErrorCode = session.ErrorCode;
                     if (session.Success && _session?.Id == sessionId)
                         _session = session.Value;
                     if (_session?.Id != sessionId)
                         continue;
+
                     await LoadProxyStatus();
-                    await ReloadParts();
+                    var parts = await ReloadParts(isBackground: true);
+                    if (!parts.Success)
+                    {
+                        pollFailed = true;
+                        pollError ??= parts.Error;
+                        pollErrorCode ??= parts.ErrorCode;
+                    }
+
+                    if (pollFailed)
+                    {
+                        if (_pollFailures.RecordFailure())
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                    }
+                    else if (_pollFailures.RecordSuccess())
+                    {
+                        _pollErrorMessage = null;
+                    }
+
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
@@ -401,7 +473,15 @@
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogWarning(ex, "Chat dock poll iteration failed; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
+                    if (_pollFailures.RecordFailure())
+                    {
+                        var diagnosticId = Notifications.LogException(
+                            ex,
+                            "refresh chat dock session and message parts",
+                            new { SessionId = _session?.Id });
+                        _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
+                        await InvokeAsync(StateHasChanged);
+                    }
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);

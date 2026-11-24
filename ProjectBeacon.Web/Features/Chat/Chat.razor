@@ -101,6 +101,14 @@ else
             }
         </div>
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
+            @if (_sessionLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionLoadErrorMessage</MudAlert>
+            }
+            @if (_pollErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_pollErrorMessage</MudAlert>
+            }
             @if (_block == "folder")
             {
                 <MudAlert Severity="Severity.Info">@L["ChatNeedsFolder"]</MudAlert>
@@ -159,6 +167,9 @@ else
     private string _draft = string.Empty;
     private bool _busy;
     private bool _failed;
+    private string? _sessionLoadErrorMessage;
+    private string? _pollErrorMessage;
+    private readonly UiBackgroundFailureTracker _pollFailures = new();
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -192,7 +203,15 @@ else
     private async Task ReloadSessions()
     {
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        _sessions = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _sessions = [];
+            _sessionLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            return;
+        }
+
+        _sessionLoadErrorMessage = null;
+        _sessions = listed.Value!.ToList();
     }
 
     private async Task Select(ChatSessionDto session)
@@ -202,7 +221,15 @@ else
         // The user may have switched sessions while the fetch was in flight; never apply stale parts.
         if (_selected?.Id != session.Id)
             return;
-        _parts = parts.Success ? parts.Value!.ToList() : [];
+        if (!parts.Success)
+        {
+            _parts = [];
+            _sessionLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = session.Id });
+            return;
+        }
+
+        _sessionLoadErrorMessage = null;
+        _parts = parts.Value!.ToList();
     }
 
     private Task OnSessionKeyDown(KeyboardEventArgs args, ChatSessionDto session)
@@ -343,11 +370,37 @@ else
                     if (_selected?.Id != sessionId)
                         continue;
                     var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
+                    var pollFailed = !session.Success;
+                    string? pollError = session.Error;
+                    string? pollErrorCode = session.ErrorCode;
                     if (session.Success && session.Value!.Id == sessionId && _selected?.Id == sessionId)
                         _selected = session.Value;
+
                     var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
                     if (parts.Success && _selected?.Id == sessionId)
                         _parts = parts.Value!.ToList();
+                    else if (!parts.Success)
+                    {
+                        pollFailed = true;
+                        pollError ??= parts.Error;
+                        pollErrorCode ??= parts.ErrorCode;
+                    }
+
+                    if (pollFailed)
+                    {
+                        if (_pollFailures.RecordFailure())
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                    }
+                    else if (_pollFailures.RecordSuccess())
+                    {
+                        _pollErrorMessage = null;
+                    }
+
                     await LoadProxyStatus();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -357,9 +410,17 @@ else
                 }
                 catch (Exception ex)
                 {
-                    // Transient failures (a DB timeout surfaces as a TaskCanceledException) must not
-                    // kill the loop: back off and retry.
-                    Logger.LogWarning(ex, "Chat poll iteration failed; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
+                    // Keep transient failures out of the notification stream. After three consecutive
+                    // failures, show one diagnostic banner; a successful poll clears it.
+                    if (_pollFailures.RecordFailure())
+                    {
+                        var diagnosticId = Notifications.LogException(
+                            ex,
+                            "refresh chat session and message parts",
+                            new { SessionId = _selected?.Id });
+                        _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
+                        await InvokeAsync(StateHasChanged);
+                    }
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
