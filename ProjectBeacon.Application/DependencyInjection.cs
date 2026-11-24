@@ -184,6 +184,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListProjectReleasesHandler>();
         services.AddTransient<GetReleaseHandler>();
         services.AddTransient<CreateReleaseHandler>();
+        services.AddTransient<CreateHotfixTaskHandler>();
         services.AddTransient<UpdateReleaseHandler>();
         services.AddTransient<SetReleaseStatusHandler>();
         services.AddTransient<DeleteReleaseHandler>();
