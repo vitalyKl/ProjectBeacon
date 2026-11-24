@@ -743,6 +743,7 @@ public sealed class McpApiToolsTests
     }
 
 
+    [Fact]
     public async Task VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision()
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
