@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +50,10 @@ public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<Tas
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskStepDto>("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskStepDto>(milestoneBlock, ErrorKind.Conflict);
 
         var next = await db.TaskSteps.Where(s => s.TaskId == task.Id).MaxAsync(s => (int?)s.SortOrder, ct) ?? -1;
         var step = TaskStep.Create(task.Id, task.ProjectId, title, next + 1);
@@ -72,6 +77,14 @@ public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Resu
         var step = await db.TaskSteps.FirstOrDefaultAsync(s => s.Id == command.Request.StepId, ct);
         if (step is null)
             return Result.Failure<TaskStepDto>("Step not found.");
+        var task = await db.Tasks.FirstOrDefaultAsync(
+            item => item.Id == step.TaskId && item.ProjectId == step.ProjectId, ct);
+        if (task is null)
+            return Result.Failure<TaskStepDto>("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskStepDto>(milestoneBlock, ErrorKind.Conflict);
         step.SetDone(command.Request.Done);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ListTaskStepsHandler.Map(step));
@@ -92,6 +105,14 @@ public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Resu
         var step = await db.TaskSteps.FirstOrDefaultAsync(s => s.Id == command.Request.StepId, ct);
         if (step is null)
             return Result.Failure("Step not found.");
+        var task = await db.Tasks.FirstOrDefaultAsync(
+            item => item.Id == step.TaskId && item.ProjectId == step.ProjectId, ct);
+        if (task is null)
+            return Result.Failure("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure(milestoneBlock, ErrorKind.Conflict);
         db.TaskSteps.Remove(step);
         await db.SaveChangesAsync(ct);
         return Result.Ok();
