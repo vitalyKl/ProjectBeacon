@@ -527,6 +527,35 @@ public sealed class OrgProjectTaskHttpTests
         Assert.Equal(3, disabledBody.GetProperty("revision").GetInt32());
     }
 
+    [Fact]
+    public async Task PublishReleaseEndpoint_RejectsApiTokenEvenWithTaskWrite()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Release auth org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Release auth project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "release-publisher-api-token",
+            capabilities = 3 // TaskRead | TaskWrite; release publication remains human-only.
+        });
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString());
+        var response = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/releases/{Guid.NewGuid():D}/publish",
+            new { expectedReleaseRevision = 1, expectedPublicationRevision = 1 },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
