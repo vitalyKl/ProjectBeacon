@@ -505,6 +505,12 @@
                 && pipelineIdle.TryGetInt32(out var idleMinutes) ? Math.Clamp(idleMinutes, 1, 30) : 15;
             _contextResponseReserveTokens = root.TryGetProperty("contextResponseReserveTokens", out var reserve)
                 && reserve.TryGetInt32(out var reserveTokens) ? Math.Clamp(reserveTokens, 0, 1_000_000) : 0;
+            _autoPullMode = root.TryGetProperty("autoPullMode", out var autoPull)
+                && autoPull.ValueKind == JsonValueKind.String
+                && string.Equals(autoPull.GetString()?.Trim(), "Off", StringComparison.OrdinalIgnoreCase)
+                    ? "Off" : "WhenSafe";
+            _autoSyncIntervalMinutes = root.TryGetProperty("autoSyncIntervalMinutes", out var autoInterval)
+                && autoInterval.TryGetInt32(out var interval) ? Math.Clamp(interval, 2, 120) : 10;
         }
         catch (JsonException exception)
         {
