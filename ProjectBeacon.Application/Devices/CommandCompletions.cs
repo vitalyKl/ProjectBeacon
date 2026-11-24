@@ -874,6 +874,8 @@ internal sealed class GitLandCompletion : ICommandCompletion
             .Where(project => project.Id == projectId)
             .Select(project => (Guid?)project.OrgId)
             .FirstOrDefaultAsync(ct);
+        if (attempt.Status == LandingAttemptStatus.Landed && orgId is { } forwardPortOrgId)
+            await EnsureForwardPortTaskAsync(db, attempt, projectId, forwardPortOrgId, ct);
         if (orgId is { } resolvedOrgId)
         {
             var actor = new ActorContext(
@@ -923,6 +925,70 @@ internal sealed class GitLandCompletion : ICommandCompletion
                 outcome,
                 JsonSerializer.Serialize(details)));
         }
+    }
+
+    private static async Task EnsureForwardPortTaskAsync(
+        IBeaconDb db,
+        LandingAttempt attempt,
+        Guid projectId,
+        Guid orgId,
+        CancellationToken ct)
+    {
+        var hotfixTask = await db.Tasks.FirstOrDefaultAsync(
+            task => task.Id == attempt.TaskId
+                && task.ProjectId == projectId
+                && task.HotfixSourceReleaseId != null,
+            ct);
+        if (hotfixTask is null)
+            return;
+
+        var alreadyCreated = await db.Tasks.AnyAsync(
+            task => task.ProjectId == projectId
+                && task.ForwardPortOfTaskId == hotfixTask.Id,
+            ct);
+        if (alreadyCreated)
+            return;
+
+        var title = "Forward-port Hotfix: " + hotfixTask.Title;
+        if (title.Length > 500)
+            title = title[..500];
+        var description =
+            $"Automatically created after Hotfix task {hotfixTask.Id:D} was successfully landed.\n\n" +
+            $"Source Release: {hotfixTask.HotfixSourceReleaseId:D}\n" +
+            $"Production deployed SHA: {hotfixTask.HotfixDeployedSha}\n" +
+            $"Hotfix target branch: {hotfixTask.HotfixTargetBranch}\n" +
+            $"Hotfix landing merge commit: {attempt.MergeCommitSha}\n\n" +
+            "Forward-port the fix into the project's normal development/review base branch. " +
+            "This is an ordinary Beacon task: use the standard Planner, Actor, Review and landing workflow. " +
+            "Do not create a release tag or change the official project version.";
+        var forwardPort = TaskItem.Create(
+            title, projectId, TaskPriority.High, TaskType.Task, description);
+        forwardPort.SetForwardPortOfTask(hotfixTask.Id);
+        if (hotfixTask.PipelineDeviceId is { } pinnedDeviceId)
+            forwardPort.PinPipelineDevice(pinnedDeviceId);
+
+        db.Tasks.Add(forwardPort);
+        new ContentWriter().AddVersion(
+            db, forwardPort, "System", "ProjectBeacon.GitLandCompletion");
+        var actor = new ActorContext(
+            ActorType.Worker, null, false, null, null,
+            projectId, orgId, ApiTokenCapability.None);
+        db.AuditEvents.Add(AuditEventFactory.ForActor(
+            actor,
+            "task.forward_port.created",
+            "Task",
+            forwardPort.Id.ToString("D"),
+            orgId,
+            projectId,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                releaseId = hotfixTask.HotfixSourceReleaseId!.Value.ToString("D"),
+                sourceSha = hotfixTask.HotfixDeployedSha!,
+                targetBranch = attempt.TargetBranch,
+                mergeCommitSha = attempt.MergeCommitSha!,
+                deployedSha = hotfixTask.HotfixDeployedSha!,
+                hotfixRequestId = hotfixTask.HotfixRequestId!.Value.ToString("D")
+            })));
     }
 
     private static bool IsAllowedPreviewTarget(
