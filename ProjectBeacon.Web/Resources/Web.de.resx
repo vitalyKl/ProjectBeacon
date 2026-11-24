@@ -3412,4 +3412,5 @@ orthstar</value>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>Veröffentlicht</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Abgebrochen</value></data>
 
+  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Ein Candidate wird von ReleasePrepare erstellt, nachdem Richtlinien-, Impact-, Landing- und Validierungsprüfungen bestanden wurden.</value></data>
 </root>
