@@ -2015,6 +2015,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("PreparationDeviceId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CandidateId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PreparationPayloadJson")
                         .HasColumnType("jsonb");
 
