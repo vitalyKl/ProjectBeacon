@@ -182,6 +182,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<EnqueueProjectGitSyncHandler>();
         services.AddTransient<GetProjectGitSyncCommandHandler>();
+        services.AddTransient<CancelPendingProjectGitSyncCommandHandler>();
         // Pipeline landing endpoints bind these concrete handlers directly; register them
         // explicitly so Minimal API can infer their parameters as services at startup.
         services.AddTransient<RequestLandingHandler>();
