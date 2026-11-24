@@ -3425,4 +3425,6 @@ orthstar</value>
   <data name="HotfixDeploymentRun" xml:space="preserve"><value>Deployment-Workflow öffnen</value></data>
   <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Forward-Port des Hotfix</value></data>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix- und Forward-Port-Aufgaben</value></data>
+  <data name="HotfixOriginNotice" xml:space="preserve"><value>Diese Aufgabe basiert exakt auf dem in Produktion bereitgestellten Commit. Branch und Basis-Commit werden von Beacon geschützt.</value></data>
+  <data name="ForwardPortNotice" xml:space="preserve"><value>Diese reguläre Aufgabe wurde erstellt, nachdem der ursprüngliche Hotfix nachweislich gelandet ist. Verwende den normalen Planner-, Actor-, Reviewer- und Landing-Workflow.</value></data>
 </root>
