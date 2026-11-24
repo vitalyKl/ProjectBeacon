@@ -361,6 +361,46 @@ Confirmed failures:
 
 No SaaS Control Plane or billing changes. Main remains unchanged by this implementation branch.
 
+
+
+## 2026-11-24 — S6 release-aware Planner and onboarding checkpoint
+
+**Branch head before this journal update:** `331ea5ef754f421beebfbf032726c43798c109ad`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), open, unmerged.
+
+### Release-aware Planner
+- Extended read-only `release_context` to fetch the exact active task, verify it belongs to the requested project, and resolve its release only through the persisted `Task.MilestoneId -> Milestone.ReleaseId -> Release.Id` association.
+- Context now includes `activeTask`, `activeTaskRelease`, `activeTaskReleaseAssignment` and `activeTaskReleaseMode`, plus the existing policy, release/milestone collection and task version impact.
+- Actor authorization allows the exact active task detail read only when `release_context` is granted. Planner and Reviewer continue using their pinned task read-only policy; arbitrary task ids and ungranted Actor reads remain denied.
+- Planner and PlannerWake prompts now explicitly enter release-aware planning only when the task is linked to a Release through a Milestone. They preserve `targetVersion`, `targetBranch` and milestone scope; Planned/InProgress may accept work. Candidate/Published/Cancelled are immutable and must not receive Actors that change the release scope. Unassigned tasks remain ordinary work; Planner does not invent associations.
+- Native agent system prompt repeats the same release-assignment and immutable-state boundaries.
+- Added MCP integration coverage for resolving an active task's Milestone and Release, plus authorization tests for Actor task-detail scope.
+- Added prompt tests covering release-aware rules in both primary Planner and PlannerWake prompts.
+
+### Product onboarding
+- Confirmed the Release Management feature toggle already exists in project Version Policy settings and is Owner/Admin controlled.
+- Expanded the toggle help in English, German, Russian, Japanese and Chinese to explain the settings prerequisite and non-publishing effect.
+- Added a localized Roadmap introduction describing Project Settings -> Release -> Milestone association -> task context, immutable Candidate preparation and separate explicit production publication.
+
+### Independent second version scheme
+- Added an independent package.json consumer fixture at `ProjectBeacon.Domain.Tests/Fixtures/NpmReleaseProject/package.json`.
+- Domain tests load this fixture from test output and verify SemVer `2.4.1`, JSON Pointer `/version`, and the customer-defined `release-{version}` tag pattern.
+- This complements the ProjectBeacon four-component numeric-version path and proves the version policy is not coupled to .NET manifests or a `v`-prefixed tag.
+
+### CI #45448270661 — additional compiler finding on older head
+- Run [#45448270661](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45448270661) tested head `6d820990b66daf2c7a44c09fb1da8724b3227631`.
+- It exposed invalid doubled escape literals in `ReleasePublishExecutor` (`'\\\\r'`, `'\\\\n'`, `'\\\\t'`) and a duplicate `ReadOriginAsync` declaration.
+- Fixed the C# character literals, corrected annotated-tag message parsing to use real newline delimiters, and removed the duplicate method. The exact head `803f305f` then had a PR run pending, but that run was cancelled by the subsequent concurrency event before it could verify the fix.
+- The new S6 and task-release-context changes are later than that run. Current exact head `331ea5ef` still needs its own successful CI run.
+
+### Remaining
+- [ ] Obtain a fresh CI run on the exact current head and repair every failing build/test/model check.
+- [ ] Confirm the release-aware context endpoint and package.json fixture compile and pass on Linux/Windows/macOS.
+- [ ] Verify tag rulesets and production Environment reviewers through a connection with sufficient permissions; publication remains disabled operationally until verified.
+- [ ] Perform final code review of the whole PR and merge only after green required checks and the release/GitLand authority boundary is confirmed.
+
+No release tag or production deployment was created. No SaaS Control Plane or billing changes.
+
 ## Update format
 
 For every subsequent work session append:
