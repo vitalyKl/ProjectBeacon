@@ -40,6 +40,7 @@ internal static class DaemonServices
         services.AddSingleton<IDaemonChatSession, DaemonChatSession>();
         services.AddSingleton<IDaemonCommandExecutor, DaemonCommandExecutor>();
         services.AddSingleton<IDaemonLoop, DaemonHeartbeatLoop>();
+        services.AddSingleton<IDaemonLoop, DaemonAutoSyncLoop>();
         services.AddSingleton<IDaemonLoop, DaemonCommandLoop>();
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
