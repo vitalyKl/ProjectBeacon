@@ -43,11 +43,10 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
             .HasForeignKey(release => release.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        entity.HasOne(release => release.CandidateSnapshot)
-            .WithOne(snapshot => snapshot.Release)
-            .HasForeignKey<ReleaseCandidateSnapshot>(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId })
-            .HasPrincipalKey<Release>(release => new { release.ProjectId, release.Id })
-            .OnDelete(DeleteBehavior.Restrict);
+        // The snapshot is navigable from its dependent row. The aggregate keeps an
+        // in-memory CandidateSnapshot reference during the transition, but it is not
+        // an EF navigation: migration snapshots model Release as a shared dictionary type.
+        entity.Ignore(release => release.CandidateSnapshot);
 
         entity.HasIndex(release => new { release.ProjectId, release.Status, release.Order });
     }
