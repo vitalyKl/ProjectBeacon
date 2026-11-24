@@ -159,6 +159,11 @@ public static class SessionPrompts
             sb.AppendLine(builtInProfile.Instruction);
         }
         sb.AppendLine();
+        if (subtask.AllowedMcpTools.Contains(McpToolNames.VersionCheck, StringComparer.Ordinal)
+            && subtask.AllowedMcpTools.Contains(McpToolNames.VersionImpact, StringComparer.Ordinal))
+        {
+            sb.AppendLine("Version impact declaration is part of task completion. Before editing a configured version source, call version_check to read the Beacon policy and current manifest projections. Before reporting success, call get_task_version_impact, then version_impact with one of none, patch, minor, or major and a concise evidence-based rationale, passing the current revision. This declaration is not a version bump and does not authorize editing version files.");
+        }
         sb.AppendLine("Instructions:");
         sb.AppendLine(subtask.Instructions);
         var tools = subtask.AllowedMcpTools;
@@ -226,6 +231,7 @@ public static class SessionPrompts
         var sb = new StringBuilder();
         sb.AppendLine("Role: reviewer. Review the artifacts below; you do not see the planning or actor transcripts.");
         sb.AppendLine("Write review notes as concise Markdown, without HTML. Use headings no deeper than ##.");
+        sb.AppendLine("Version-impact review is a required part of the review when the task has a declaration. Call release_context and version_check to inspect the Beacon policy, official version, and configured source projections. Call get_task_version_impact to read the Actor's declaration and revision. Then call review_version_impact with decision Confirmed or Challenged, an evidence-based note, and that exact revision. Do not edit version files, change the official version, or treat this review as permission to publish. The server validates the active Review session and records the decision separately from the official version.");
         AppendProfileInstructions(sb, "Review", profileInstructions);
         sb.AppendLine($"Task: {task.Title}");
         if (!string.IsNullOrWhiteSpace(task.Description))
