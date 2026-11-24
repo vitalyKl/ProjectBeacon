@@ -3073,4 +3073,6 @@ orthstar</value>
   <data name="ProjectVersionSave" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>バージョンポリシーを保存しました</value></data>
   <data name="NotConfigured" xml:space="preserve"><value>未設定</value></data>
+  <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>このプロジェクトでリリース管理を有効にする</value></data>
+  <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>有効にすると Roadmap で Release を管理でき、Milestone を Release に関連付けられます。既存の Milestone は独立したままです。既定では無効です。</value></data>
 </root>
