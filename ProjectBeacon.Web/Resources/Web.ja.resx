@@ -3447,4 +3447,7 @@ orthstar</value>
   <data name="RepoSyncNoRemote" xml:space="preserve">
     <value>Upstreamはリモートではなくローカルブランチを指しています</value>
   </data>
+  <data name="RepoSyncPullDetails" xml:space="preserve">
+    <value>自動更新 {0}: {1} → {2}</value>
+  </data>
 </root>

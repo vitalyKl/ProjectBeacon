@@ -3638,4 +3638,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncNoRemote" xml:space="preserve">
     <value>The upstream is a local branch, not a remote</value>
   </data>
+  <data name="RepoSyncPullDetails" xml:space="preserve">
+    <value>Auto-updated {0}: {1} → {2}</value>
+  </data>
 </root>

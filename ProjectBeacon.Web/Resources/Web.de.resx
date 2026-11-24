@@ -3439,4 +3439,7 @@ orthstar</value>
   <data name="RepoSyncNoRemote" xml:space="preserve">
     <value>Der Upstream verweist auf einen lokalen Branch, nicht auf ein Remote</value>
   </data>
+  <data name="RepoSyncPullDetails" xml:space="preserve">
+    <value>Automatisch aktualisiert {0}: {1} → {2}</value>
+  </data>
 </root>

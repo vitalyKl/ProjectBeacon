@@ -3447,4 +3447,7 @@ orthstar</value>
   <data name="RepoSyncNoRemote" xml:space="preserve">
     <value>Upstream 指向本地分支，而不是远程仓库</value>
   </data>
+  <data name="RepoSyncPullDetails" xml:space="preserve">
+    <value>自动更新于 {0}：{1} → {2}</value>
+  </data>
 </root>

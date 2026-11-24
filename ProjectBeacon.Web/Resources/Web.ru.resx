@@ -3429,4 +3429,7 @@
   <data name="RepoSyncNoRemote" xml:space="preserve">
     <value>Upstream указывает на локальную ветку, а не на remote</value>
   </data>
+  <data name="RepoSyncPullDetails" xml:space="preserve">
+    <value>Автоматически обновлено {0}: {1} → {2}</value>
+  </data>
 </root>

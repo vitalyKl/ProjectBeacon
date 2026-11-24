@@ -180,7 +180,10 @@ else
     {
         <MudAlert Severity="@(AutoSyncHasWarning(autoSyncStatus) ? Severity.Warning : Severity.Info)"
                   Dense="true" Class="mb-3" data-testid="repository-autosync-status">
-            @AutoSyncStatusMessage(autoSyncStatus)
+            <MudTooltip Text="@AutoPullTooltip(autoSyncStatus)"
+                        Disabled="@(autoSyncStatus.LastAutoPull is not { Commits: > 0 })">
+                @AutoSyncStatusMessage(autoSyncStatus)
+            </MudTooltip>
             @if (autoSyncStatus.CheckedAt is { } checkedAt)
             {
                 <span class="mud-text-secondary"> · @AutoSyncUpdatedLabel(checkedAt)</span>
@@ -567,6 +570,17 @@ else
             return string.Format(L["RepoSyncBehind"].Value, status.Behind);
         return L["RepoSyncUpToDate"].Value;
     }
+
+    private string AutoPullTooltip(RepositoryAutoSyncStatusDto status)
+    {
+        if (status.LastAutoPull is not { Commits: > 0 } pull)
+            return string.Empty;
+        return string.Format(L["RepoSyncPullDetails"].Value,
+            AutoSyncUpdatedLabel(pull.At), ShortCommitId(pull.FromSha), ShortCommitId(pull.ToSha));
+    }
+
+    private static string ShortCommitId(string value) =>
+        value.Length > 8 ? value[..8] : value;
 
     private string RepoSyncErrorMessage(string code) => code switch
     {

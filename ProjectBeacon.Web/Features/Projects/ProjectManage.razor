@@ -285,7 +285,10 @@ else
                 {
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                         <MudText Typo="Typo.caption">@row.DeviceName · @(row.Status.Branch ?? "—")</MudText>
-                        <StatusChip Color="@RepoSyncColor(row.Status)" Label="@RepoSyncLabel(row.Status)" />
+                        <MudTooltip Text="@RepoSyncPullTooltip(row.Status)"
+                                    Disabled="@(row.Status.LastAutoPull is not { Commits: > 0 })">
+                            <StatusChip Color="@RepoSyncColor(row.Status)" Label="@RepoSyncLabel(row.Status)" />
+                        </MudTooltip>
                         <MudSpacer />
                         @if (row.Status.CheckedAt is { } checkedAt)
                         {
@@ -1226,6 +1229,17 @@ else
             ? string.Format(L["RepoSyncBehind"].Value, status.Behind)
             : L["RepoSyncUpToDate"].Value;
     }
+
+    private string RepoSyncPullTooltip(RepositoryAutoSyncStatusDto status)
+    {
+        if (status.LastAutoPull is not { Commits: > 0 } pull)
+            return string.Empty;
+        return string.Format(L["RepoSyncPullDetails"].Value,
+            RepoSyncAge(pull.At), ShortCommitId(pull.FromSha), ShortCommitId(pull.ToSha));
+    }
+
+    private static string ShortCommitId(string value) =>
+        value.Length > 8 ? value[..8] : value;
 
     private string RepoSyncErrorMessage(string code) => code switch
     {

@@ -167,8 +167,14 @@
                     <MudTd DataLabel="@L["Project"]"><span title="@context.ProjectId">@context.ProjectId.ToString("N")[..8]</span></MudTd>
                     <MudTd DataLabel="@L["Branch"]">@(context.Branch ?? "-")</MudTd>
                     <MudTd DataLabel="@L["Status"]">
-                        <StatusChip Color="@(context.LastErrorCode is not null || context.Diverged ? Color.Error : context.Behind > 0 || context.BlockedReason is not null || !context.Clean || context.Detached || !context.HasUpstream ? Color.Warning : Color.Success)"
-                                    Label="@RepoSyncStatusLabel(context)" />
+                        <MudTooltip Text="@RepoSyncPullTooltip(context)"
+                                    Disabled="@(context.LastAutoPullCommits is not > 0
+                                        || context.LastAutoPullAt is null
+                                        || string.IsNullOrWhiteSpace(context.LastAutoPullFromSha)
+                                        || string.IsNullOrWhiteSpace(context.LastAutoPullToSha))">
+                            <StatusChip Color="@(context.LastErrorCode is not null || context.Diverged ? Color.Error : context.Behind > 0 || context.BlockedReason is not null || !context.Clean || context.Detached || !context.HasUpstream ? Color.Warning : Color.Success)"
+                                        Label="@RepoSyncStatusLabel(context)" />
+                        </MudTooltip>
                     </MudTd>
                     <MudTd DataLabel="@L["Updated"]">
                         @if (context.CheckedAt is { } checkedAt)
@@ -281,7 +287,11 @@
     private List<RepoSyncUiRow> _repoSyncRows = [];
     private CancellationTokenSource? _refreshCts;
     private Task? _refreshTask;
-    private sealed record RepoSyncUiRow(Guid ProjectId, string? Branch, int Ahead, int Behind, bool Clean, bool Detached, bool HasUpstream, bool Diverged, DateTimeOffset? CheckedAt, int? LastAutoPullCommits, string? BlockedReason, string? LastErrorCode);
+    private sealed record RepoSyncUiRow(
+        Guid ProjectId, string? Branch, int Ahead, int Behind, bool Clean, bool Detached,
+        bool HasUpstream, bool Diverged, DateTimeOffset? CheckedAt, int? LastAutoPullCommits,
+        DateTimeOffset? LastAutoPullAt, string? LastAutoPullFromSha, string? LastAutoPullToSha,
+        string? BlockedReason, string? LastErrorCode);
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
     private int _contextResponseReserveTokens;
@@ -554,11 +564,28 @@
                             out var parsedAt)
                                 ? parsedAt : null;
                     int? lastPullCommits = null;
+                    DateTimeOffset? lastPullAt = null;
+                    string? lastPullFromSha = null;
+                    string? lastPullToSha = null;
                     if (item.TryGetProperty("lastAutoPull", out var lastPull)
-                        && lastPull.ValueKind == JsonValueKind.Object
-                        && lastPull.TryGetProperty("commits", out var commits)
-                        && commits.TryGetInt32(out var parsedCommits))
-                        lastPullCommits = parsedCommits;
+                        && lastPull.ValueKind == JsonValueKind.Object)
+                    {
+                        if (lastPull.TryGetProperty("commits", out var commits)
+                            && commits.TryGetInt32(out var parsedCommits))
+                            lastPullCommits = parsedCommits;
+                        if (lastPull.TryGetProperty("at", out var pullAtElement)
+                            && pullAtElement.ValueKind == JsonValueKind.String
+                            && DateTimeOffset.TryParse(pullAtElement.GetString(),
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.AssumeUniversal
+                                    | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                                out var parsedPullAt))
+                            lastPullAt = parsedPullAt;
+                        lastPullFromSha = lastPull.TryGetProperty("fromSha", out var fromSha)
+                            && fromSha.ValueKind == JsonValueKind.String ? fromSha.GetString() : null;
+                        lastPullToSha = lastPull.TryGetProperty("toSha", out var toSha)
+                            && toSha.ValueKind == JsonValueKind.String ? toSha.GetString() : null;
+                    }
                     var branch = item.TryGetProperty("branch", out var branchElement)
                         && branchElement.ValueKind == JsonValueKind.String ? branchElement.GetString() : null;
                     var ahead = item.TryGetProperty("ahead", out var aheadElement) && aheadElement.TryGetInt32(out var aheadValue) ? aheadValue : 0;
@@ -574,7 +601,8 @@
                         && lastError.TryGetProperty("code", out var codeElement)
                         && codeElement.ValueKind == JsonValueKind.String ? codeElement.GetString() : null;
                     _repoSyncRows.Add(new RepoSyncUiRow(projectId, branch, ahead, behind, clean, detached,
-                        hasUpstream, diverged, checkedAt, lastPullCommits, blocked, errorCode));
+                        hasUpstream, diverged, checkedAt, lastPullCommits, lastPullAt,
+                        lastPullFromSha, lastPullToSha, blocked, errorCode));
                 }
             }
             if (root.TryGetProperty("agentRuntime", out var runtimeStatus))
@@ -653,6 +681,20 @@
             ? string.Format(L["RepoSyncBehind"].Value, row.Behind)
             : L["RepoSyncUpToDate"].Value;
     }
+
+    private string RepoSyncPullTooltip(RepoSyncUiRow row)
+    {
+        if (row.LastAutoPullCommits is not > 0
+            || row.LastAutoPullAt is not { } at
+            || string.IsNullOrWhiteSpace(row.LastAutoPullFromSha)
+            || string.IsNullOrWhiteSpace(row.LastAutoPullToSha))
+            return string.Empty;
+        return string.Format(L["RepoSyncPullDetails"].Value,
+            RepoSyncUpdatedLabel(at), ShortCommitId(row.LastAutoPullFromSha), ShortCommitId(row.LastAutoPullToSha));
+    }
+
+    private static string ShortCommitId(string value) =>
+        value.Length > 8 ? value[..8] : value;
 
     private string RepoSyncErrorMessage(string code) => code switch
     {
