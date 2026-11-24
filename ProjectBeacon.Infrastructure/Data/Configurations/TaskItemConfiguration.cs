@@ -87,9 +87,9 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.HasIndex(e => new { e.ProjectId, e.Status });
         entity.HasIndex(e => new { e.ProjectId, e.HotfixRequestId })
             .IsUnique()
-            .HasFilter("\\"HotfixRequestId\\" IS NOT NULL");
+            .HasFilter("\"HotfixRequestId\" IS NOT NULL");
         entity.HasIndex(e => new { e.ProjectId, e.ForwardPortOfTaskId })
             .IsUnique()
-            .HasFilter("\\"ForwardPortOfTaskId\\" IS NOT NULL");
+            .HasFilter("\"ForwardPortOfTaskId\" IS NOT NULL");
     }
 }
