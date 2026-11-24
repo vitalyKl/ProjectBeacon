@@ -343,6 +343,70 @@ internal static partial class McpApiTools
 
         if (TryPipelineTask(env, args, out var taskId, out _))
         {
+            var taskResponse = await api.SendAsync(
+                HttpMethod.Get, $"v1/tasks/{taskId:D}", null, ct);
+            if (!taskResponse.Ok)
+            {
+                result["activeTaskContextError"] = $"HTTP {taskResponse.Status}";
+            }
+            else
+            {
+                try
+                {
+                    var task = JsonNode.Parse(taskResponse.Body) as JsonObject
+                        ?? throw new JsonException("Task response is not an object.");
+                    if (!Guid.TryParse(task["projectId"]?.ToString(), out var taskProjectId)
+                        || taskProjectId != projectId)
+                        return new McpToolText(true,
+                            "The active task does not belong to the requested project; release context was not combined across projects.");
+
+                    var taskMilestoneId = Guid.TryParse(task["milestoneId"]?.ToString(), out var parsedMilestoneId)
+                        ? parsedMilestoneId
+                        : (Guid?)null;
+                    JsonObject? milestone = taskMilestoneId is { } milestoneId
+                        ? milestones.OfType<JsonObject>().FirstOrDefault(item =>
+                            Guid.TryParse(item["id"]?.ToString(), out var id) && id == milestoneId)
+                        : null;
+                    var taskReleaseId = milestone is not null
+                        && Guid.TryParse(milestone["releaseId"]?.ToString(), out var parsedReleaseId)
+                            ? parsedReleaseId
+                            : (Guid?)null;
+                    JsonObject? taskRelease = releaseManagementEnabled && taskReleaseId is { } releaseId
+                        ? releases.OfType<JsonObject>().FirstOrDefault(item =>
+                            Guid.TryParse(item["id"]?.ToString(), out var id) && id == releaseId)
+                        : null;
+
+                    result["activeTask"] = new JsonObject
+                    {
+                        ["id"] = taskId.ToString("D"),
+                        ["title"] = task["title"]?.DeepClone(),
+                        ["status"] = task["status"]?.DeepClone(),
+                        ["milestoneId"] = taskMilestoneId?.ToString("D"),
+                        ["milestoneName"] = milestone?["name"]?.DeepClone(),
+                        ["releaseId"] = taskReleaseId?.ToString("D")
+                    };
+                    result["activeTaskRelease"] = taskRelease?.DeepClone();
+                    result["activeTaskReleaseMode"] = taskRelease is not null
+                        && (string.Equals(taskRelease["status"]?.ToString(), "Planned", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(taskRelease["status"]?.ToString(), "InProgress", StringComparison.OrdinalIgnoreCase));
+                    result["activeTaskReleaseAssignment"] = !releaseManagementEnabled
+                        ? "release_management_disabled"
+                        : taskMilestoneId is null
+                            ? "task_not_assigned_to_milestone"
+                            : taskMilestoneId is not null && milestone is null
+                                ? "milestone_not_found_in_project"
+                                : taskReleaseId is null
+                                    ? "milestone_not_assigned_to_release"
+                                    : taskRelease is null
+                                        ? "release_not_available"
+                                        : "assigned";
+                }
+                catch (JsonException exception)
+                {
+                    return new McpToolText(true, "Could not parse active task release context: " + exception.Message);
+                }
+            }
+
             var impact = await api.SendAsync(
                 HttpMethod.Get, $"v1/tasks/{taskId:D}/version-impact", null, ct);
             if (impact.Ok)
