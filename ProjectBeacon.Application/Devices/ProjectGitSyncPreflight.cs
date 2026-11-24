@@ -57,7 +57,11 @@ internal static class ProjectGitSyncPreflight
             var launchedCommands = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
                 .Where(command => command.ProjectId == task.ProjectId
                     && command.Kind == WorkstationCommandKind.RunPipelineSession
-                    && command.StartedAt != null)
+                    // Requeue clears StartedAt, but Attempts and ClaimInstanceId retain
+                    // evidence that this workstation previously claimed the task session.
+                    && (command.StartedAt != null
+                        || command.Attempts > 0
+                        || command.ClaimInstanceId != null))
                 .Select(command => new { command.DeviceId, command.PayloadJson })
                 .ToListAsync(ct);
             var historicalDeviceIds = launchedCommands
