@@ -3274,7 +3274,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
-                    b.Navigation("CandidateSnapshot");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", b =>
@@ -3286,7 +3285,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", "Release")
-                        .WithOne("CandidateSnapshot")
+                        .WithOne()
                         .HasForeignKey("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", "ProjectId", "ReleaseId")
                         .HasPrincipalKey("ProjectBeacon.Domain.Entities.Roadmap.Release", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -3506,7 +3505,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Release", b =>
                 {
                     b.Navigation("Milestones");
-                    b.Navigation("CandidateSnapshot");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskItem", b =>
