@@ -244,6 +244,7 @@ public sealed class EnqueueProjectGitSyncHandler
                     && candidate.Status == WorkstationCommandStatus.Pending)
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(candidate => candidate.Status, WorkstationCommandStatus.Cancelled)
+                    .SetProperty(candidate => candidate.PendingSince, (DateTime?)null)
                     .SetProperty(candidate => candidate.StartedAt, (DateTime?)null)
                     .SetProperty(candidate => candidate.CompletedAt, cancelledAt)
                     .SetProperty(candidate => candidate.LeaseExpiresAt, (DateTime?)null)
