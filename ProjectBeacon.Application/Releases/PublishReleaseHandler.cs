@@ -8,6 +8,8 @@ using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Domain.Common;
+using Domain.Entities.Devices;
+using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
