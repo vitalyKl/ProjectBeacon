@@ -21,6 +21,8 @@ public class WorkstationCommand : Entity
     public string? ResultJson { get; private set; }
     public string? Error { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    /// <summary>Start of the current unclaimed queue period; reset when an expired lease is requeued.</summary>
+    public DateTime? PendingSince { get; private set; }
     public DateTime? StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
 
@@ -54,6 +56,7 @@ public class WorkstationCommand : Entity
         command.ProjectId = projectId;
         command.RequestedByUserId = requestedByUserId;
         command.CreatedAt = DateTime.UtcNow;
+        command.PendingSince = command.CreatedAt;
         return command;
     }
 
@@ -70,6 +73,7 @@ public class WorkstationCommand : Entity
         if (Status != WorkstationCommandStatus.Pending)
             throw new InvalidOperationException("Command is not pending.");
         Status = WorkstationCommandStatus.Running;
+        PendingSince = null;
         StartedAt = DateTime.UtcNow;
         LeaseExpiresAt = StartedAt + lease;
         ClaimInstanceId = string.IsNullOrWhiteSpace(instanceId) ? null : instanceId.Trim();
@@ -96,6 +100,7 @@ public class WorkstationCommand : Entity
             throw new InvalidOperationException("Command is not running.");
         Status = WorkstationCommandStatus.Pending;
         Attempts++;
+        PendingSince = DateTime.UtcNow;
         StartedAt = null;
         Error = null;
         LeaseExpiresAt = null;
@@ -110,6 +115,7 @@ public class WorkstationCommand : Entity
         if (Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
             throw new InvalidOperationException("Command already finished.");
         Status = WorkstationCommandStatus.Succeeded;
+        PendingSince = null;
         ResultJson = resultJson;
         Error = null;
         CompletedAt = DateTime.UtcNow;
@@ -128,6 +134,7 @@ public class WorkstationCommand : Entity
         if (Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
             throw new InvalidOperationException("Command already finished.");
         Status = WorkstationCommandStatus.Failed;
+        PendingSince = null;
         Error = error;
         CompletedAt = DateTime.UtcNow;
         StartedAt ??= CompletedAt;
@@ -143,6 +150,7 @@ public class WorkstationCommand : Entity
         if (Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
             throw new InvalidOperationException("Command already finished.");
         Status = WorkstationCommandStatus.Cancelled;
+        PendingSince = null;
         CompletedAt = DateTime.UtcNow;
         LeaseExpiresAt = null;
     }
