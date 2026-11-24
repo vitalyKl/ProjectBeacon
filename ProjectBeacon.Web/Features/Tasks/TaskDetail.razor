@@ -539,6 +539,8 @@ else
             return RepoSyncErrorMessage(error.Code);
         if (status.AutoPullBlockedReason == "RuntimeChanged")
             return L["RepoSyncRuntimeChanged"].Value;
+        if (status.AutoPullBlockedReason == "NoRemote")
+            return L["RepoSyncNoRemote"].Value;
         if (status.AutoPullBlockedReason == "NotGitRepository")
             return L["RepoSyncNotGit"].Value;
         if (status.Diverged || status.AutoPullBlockedReason == "Diverged")

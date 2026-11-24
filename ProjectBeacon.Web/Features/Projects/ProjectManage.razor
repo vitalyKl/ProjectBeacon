@@ -1194,6 +1194,8 @@ else
     {
         if (status.AutoPullBlockedReason == "RuntimeChanged")
             return L["RepoSyncRuntimeChanged"].Value;
+        if (status.AutoPullBlockedReason == "NoRemote")
+            return L["RepoSyncNoRemote"].Value;
         if (status.AutoPullBlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
             return L["RepoSyncGitSyncBusy"].Value;
         if (status.LastError is { } error)
