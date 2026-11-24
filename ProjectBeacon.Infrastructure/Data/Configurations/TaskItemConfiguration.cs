@@ -20,6 +20,9 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.Property(e => e.Type).HasConversion<string>().IsRequired();
         entity.Property(e => e.SubStage).HasConversion<string>();
         entity.Property(e => e.ReviewNotes).HasMaxLength(2000);
+        entity.Property(e => e.VersionImpact).HasMaxLength(16);
+        entity.Property(e => e.VersionImpactRationale).HasMaxLength(1000);
+        entity.Property(e => e.VersionImpactAt);
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.CompletedAt);
         entity.Property(e => e.PipelineStage).HasConversion<string>();
