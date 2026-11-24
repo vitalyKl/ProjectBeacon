@@ -38,8 +38,6 @@ public sealed class ReleaseCandidateSnapshotConfiguration : IEntityTypeConfigura
             .HasPrincipalKey<Release>(release => new { release.ProjectId, release.Id })
             .OnDelete(DeleteBehavior.Restrict);
 
-        entity.HasIndex(snapshot => new { snapshot.ProjectId, snapshot.ReleaseId })
-            .IsUnique();
         entity.HasIndex(snapshot => new { snapshot.ProjectId, snapshot.CandidateSha });
     }
 }
