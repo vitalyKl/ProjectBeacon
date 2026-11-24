@@ -208,10 +208,10 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     continue;
                 }
             }
-            else if (!result.HasUpstream)
-                blockedReason = "NoUpstream";
             else if (result.Detached)
                 blockedReason = "Detached";
+            else if (!result.HasUpstream)
+                blockedReason = "NoUpstream";
             else if (result.Diverged)
                 blockedReason = "Diverged";
             else if (!result.Clean)

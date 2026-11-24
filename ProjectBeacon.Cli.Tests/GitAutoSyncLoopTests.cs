@@ -101,6 +101,69 @@ public sealed class GitAutoSyncLoopTests
         }
     }
 
+    [Fact]
+    public async Task RunCycle_ReportsDetachedHeadInsteadOfMissingUpstream()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-detached-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "checkout", "--detach", "HEAD");
+
+            var projectId = Guid.NewGuid();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var http = new HttpClient(new RecordingHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                })))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies, new GitSyncService(), snapshot, timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+
+            await loop.RunAsync(cancellation.Token);
+
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.True(status.Detached);
+            Assert.False(status.HasUpstream);
+            Assert.Equal("Detached", status.AutoPullBlockedReason);
+            Assert.Null(status.LastError);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
     private static async Task ConfigureIdentity(string directory)
     {
         await Git(directory, "config", "user.name", "ProjectBeacon Tests");

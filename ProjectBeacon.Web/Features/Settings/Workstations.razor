@@ -544,7 +544,7 @@
         if (row.BlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
             return L["RepoSyncGitSyncBusy"].Value;
         if (!string.IsNullOrWhiteSpace(row.LastErrorCode))
-            return string.Format(L["RepoSyncError"].Value, row.LastErrorCode);
+            return RepoSyncErrorMessage(row.LastErrorCode);
         if (row.Diverged || row.BlockedReason == "Diverged")
             return L["RepoSyncDiverged"].Value;
         if (row.Detached)
@@ -569,6 +569,16 @@
             ? string.Format(L["RepoSyncBehind"].Value, row.Behind)
             : L["RepoSyncUpToDate"].Value;
     }
+
+    private string RepoSyncErrorMessage(string code) => code switch
+    {
+        "AuthenticationFailed" => L["RepoSyncAuthenticationFailed"].Value,
+        "FetchFailed" => L["RepoSyncFetchFailed"].Value,
+        "Timeout" => L["RepoSyncTimeout"].Value,
+        "RuntimeDiscoveryUnavailable" => L["RepoSyncDiscoveryFailed"].Value,
+        "ProjectDirectoryUnavailable" => L["RepoSyncDirectoryUnavailable"].Value,
+        _ => string.Format(L["RepoSyncError"].Value, code)
+    };
 
     private string RepoSyncUpdatedLabel(DateTimeOffset checkedAt)
     {
