@@ -255,7 +255,7 @@ public sealed partial class AgentTaskGitOperationsTests
                 projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
             Assert.NotNull(opened.Worktree);
             worktree = opened.Worktree!;
-            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var authorization = CreateAuthorization(worktree, projectId, taskId, allowAgentGitPublish: true);
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
                 "publish must reject a redirected push URL\\n");
@@ -303,7 +303,7 @@ public sealed partial class AgentTaskGitOperationsTests
                 projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
             Assert.NotNull(opened.Worktree);
             worktree = opened.Worktree!;
-            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var authorization = CreateAuthorization(worktree, projectId, taskId, allowAgentGitPublish: true);
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
                 "publish must reject mirror origin\\n");
@@ -351,7 +351,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.NotNull(opened.Worktree);
             Assert.Null(opened.Error);
             worktree = opened.Worktree!;
-            var authorization = CreateAuthorization(worktree, projectId, taskId);
+            var authorization = CreateAuthorization(worktree, projectId, taskId, allowAgentGitPublish: true);
 
             await File.WriteAllTextAsync(
                 Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
