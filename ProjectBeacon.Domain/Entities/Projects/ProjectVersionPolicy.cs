@@ -10,7 +10,7 @@ using System.Xml.XPath;
 /// <summary>Known-safe default. No version source is guessed for a new customer project.</summary>
 public static class ProjectVersionPolicyDefaults
 {
-    public const string Json = """{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[]}""";
+    public const string Json = """{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"sources":[]}""";
 }
 
 /// <summary>File projection source configured by a project Owner/Admin.</summary>
