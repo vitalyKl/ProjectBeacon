@@ -3075,4 +3075,7 @@
   <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
     <value>Проверено {0} мин назад</value>
   </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>Каталог не является Git-репозиторием</value>
+  </data>
 </root>

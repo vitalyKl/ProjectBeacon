@@ -104,6 +104,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 continue;
 
             var status = await ExecuteGitSyncAsync(project, GitSyncMode.Status, automatic: true, ct);
+            if (status.Error == "NotGitRepository")
+            {
+                RecordSkipped(project, "NotGitRepository", now);
+                continue;
+            }
             if (status.Error is not null || status.Result is null)
             {
                 RecordFailure(project, status.Error ?? "GitSyncResultUnavailable", now);
@@ -203,6 +208,27 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         {
             return (null, "GitSyncResultMalformed");
         }
+    }
+
+    private void RecordSkipped(DeviceProjectRuntimeDto project, string reason, DateTimeOffset now)
+    {
+        var previous = _snapshot.Get(project.ProjectId);
+        var state = new GitAutoSyncProjectState(
+            project.ProjectId,
+            previous?.Branch,
+            previous?.Upstream,
+            previous?.Ahead ?? 0,
+            previous?.Behind ?? 0,
+            previous?.Clean ?? false,
+            previous?.Detached ?? false,
+            previous?.HasUpstream ?? false,
+            previous?.Diverged ?? false,
+            now,
+            previous?.LastAutoPull,
+            previous?.LastError,
+            reason);
+        if (_snapshot.Set(state))
+            _runtimeState.Log($"repository auto-sync skipped for project {project.ProjectId}: {reason}");
     }
 
     private void RecordFailure(

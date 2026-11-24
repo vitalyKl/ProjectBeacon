@@ -475,6 +475,7 @@
                 {
                     if (item.ValueKind != JsonValueKind.Object
                         || !item.TryGetProperty("projectId", out var projectIdElement)
+                        || projectIdElement.ValueKind != JsonValueKind.String
                         || !Guid.TryParse(projectIdElement.GetString(), out var projectId))
                         continue;
                     DateTime? checkedAt = item.TryGetProperty("checkedAt", out var checkedAtElement)
@@ -534,6 +535,8 @@
 
     private string RepoSyncStatusLabel(RepoSyncUiRow row)
     {
+        if (row.BlockedReason == "NotGitRepository")
+            return L["RepoSyncNotGit"].Value;
         if (!string.IsNullOrWhiteSpace(row.LastErrorCode))
             return string.Format(L["RepoSyncError"].Value, row.LastErrorCode);
         if (row.Diverged || row.BlockedReason == "Diverged")
@@ -550,7 +553,7 @@
             return L["RepoSyncGitLandActive"].Value;
         if (row.BlockedReason == "CheckoutBusy")
             return L["RepoSyncCheckoutBusy"].Value;
-        if (row.LastAutoPullCommits is { } commits && commits > 0)
+        if (row.LastAutoPullCommits is { } commits && commits > 0 && row.Behind == 0)
             return string.Format(L["RepoSyncPulled"].Value, commits);
         return row.Behind > 0
             ? string.Format(L["RepoSyncBehind"].Value, row.Behind)

@@ -3284,4 +3284,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
     <value>Updated {0} min ago</value>
   </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>Not a Git repository</value>
+  </data>
 </root>

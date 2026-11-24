@@ -3085,4 +3085,7 @@ orthstar</value>
   <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
     <value>Vor {0} Min. geprüft</value>
   </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>Kein Git-Repository</value>
+  </data>
 </root>

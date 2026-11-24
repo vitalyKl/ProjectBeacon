@@ -3093,4 +3093,7 @@ orthstar</value>
   <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
     <value>{0}分前に確認</value>
   </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>Gitリポジトリではありません</value>
+  </data>
 </root>
