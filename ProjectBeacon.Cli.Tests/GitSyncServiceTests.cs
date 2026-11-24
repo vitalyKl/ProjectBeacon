@@ -480,6 +480,41 @@ public sealed class GitSyncServiceTests
         Assert.Equal(await Git(repo.Root, "rev-parse", "HEAD"), result.HeadAfter);
     }
 
+
+    [Fact]
+    public async Task Status_DoesNotWaitForRepositoryOperationGateDuringRemoteFetch()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        using var repositoryLease = await GitRepositoryOperationGate.AcquireAsync(repo.Root, CancellationToken.None);
+
+        var statusTask = ExecuteAsync(repo, GitSyncMode.Status);
+        var completed = await Task.WhenAny(statusTask, Task.Delay(TimeSpan.FromSeconds(5)));
+
+        Assert.Same(statusTask, completed);
+        Assert.Equal(GitSyncOutcome.UpToDate, (await statusTask).Outcome);
+    }
+
+    [Fact]
+    public async Task AutomaticPull_SkipsWhenRealCheckoutGateIsBusy()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+        using var checkoutLease = await GitCheckoutGate.AcquireAsync(repo.Root, CancellationToken.None);
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+        var payload = JsonSerializer.Serialize(new { projectId = repo.ProjectId, mode = GitSyncMode.PullFastForward.ToString() });
+
+        var execution = await _service.ExecuteAsync(
+            repo.Root, repo.ProjectId, payload, CancellationToken.None, automatic: true);
+        Assert.True(execution.Ok, execution.Error);
+        var result = JsonSerializer.Deserialize<GitSyncResultDto>(
+            execution.Result!, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.CheckoutBusy, result.ReasonCode);
+        Assert.Equal(headBefore, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+    }
+
     private async Task<GitSyncResultDto> ExecuteAsync(
         RepositoryFixture repo,
         GitSyncMode mode,

@@ -84,7 +84,8 @@ public record PipelinePreflightDto(
     bool RepositorySyncInProgress = false,
     bool RepositorySyncBlocked = false,
     GitSyncRefusalCode? LastKnownRepositoryReasonCode = null,
-    string? PipelineWorkstationBlockedReason = null);
+    string? PipelineWorkstationBlockedReason = null,
+    RepositoryAutoSyncStatusDto? RepositoryAutoSync = null);
 
 /// <summary>Finds the most recently active pipeline for the current project.</summary>
 public record GetLivePipelineTaskRequest(Guid ProjectId);

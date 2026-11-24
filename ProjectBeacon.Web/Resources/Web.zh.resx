@@ -3357,4 +3357,88 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>恢复</value>
   </data>
+  <data name="AutoPullMode" xml:space="preserve">
+    <value>自动更新 Checkout</value>
+  </data>
+  <data name="AutoPullModeOff" xml:space="preserve">
+    <value>关闭 — 仅检查状态</value>
+  </data>
+  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+    <value>安全时 — 对干净的 Checkout 执行 Fast-Forward</value>
+  </data>
+  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+    <value>仓库检查间隔（分钟）</value>
+  </data>
+  <data name="AutoSyncHelp" xml:space="preserve">
+    <value>后台检查项目仓库。自动更新仅使用 Fast-Forward，不会覆盖本地更改。间隔：2–120 分钟。</value>
+  </data>
+  <data name="RepositorySync" xml:space="preserve">
+    <value>项目仓库状态</value>
+  </data>
+  <data name="RepositorySyncNotReported" xml:space="preserve">
+    <value>此工作站尚未报告仓库状态。</value>
+  </data>
+  <data name="RepoSyncError" xml:space="preserve">
+    <value>同步错误：{0}</value>
+  </data>
+  <data name="RepoSyncDiverged" xml:space="preserve">
+    <value>分支历史已分歧</value>
+  </data>
+  <data name="RepoSyncDetached" xml:space="preserve">
+    <value>Detached HEAD</value>
+  </data>
+  <data name="RepoSyncNoUpstream" xml:space="preserve">
+    <value>未配置 Upstream</value>
+  </data>
+  <data name="RepoSyncDirty" xml:space="preserve">
+    <value>存在本地更改 — 已跳过更新</value>
+  </data>
+  <data name="RepoSyncActiveSessions" xml:space="preserve">
+    <value>Snapshot 会话正在运行 — 延后更新</value>
+  </data>
+  <data name="RepoSyncGitLandActive" xml:space="preserve">
+    <value>Git Landing 正在运行 — 延后更新</value>
+  </data>
+  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+    <value>Checkout 正忙 — 延后更新</value>
+  </data>
+  <data name="RepoSyncPulled" xml:space="preserve">
+    <value>已自动更新 {0} 个提交</value>
+  </data>
+  <data name="RepoSyncBehind" xml:space="preserve">
+    <value>落后远程分支 {0} 个提交</value>
+  </data>
+  <data name="RepoSyncUpToDate" xml:space="preserve">
+    <value>已是最新</value>
+  </data>
+  <data name="RepoSyncJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+    <value>{0} 分钟前检查</value>
+  </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>不是 Git 仓库</value>
+  </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>正在执行其他 Checkout 操作 — 延后更新</value>
+  </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>GitSync 正在运行 — 延后检查</value>
+  </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>远程仓库身份验证失败。请检查仓库凭据。</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>无法从远程仓库获取更新。请检查网络、远程 URL 和凭据。</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Git 操作超时。自动同步将重试。</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>无法刷新此工作站的项目列表。</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>此工作站上的项目文件夹不可用。</value>
+  </data>
 </root>

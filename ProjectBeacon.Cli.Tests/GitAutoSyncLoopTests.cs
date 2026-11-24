@@ -1,0 +1,219 @@
+namespace ProjectBeacon.Cli.Tests;
+
+using System.Diagnostics;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using ProjectBeacon.Application.Devices;
+using ProjectBeacon.Cli.Client;
+
+public sealed class GitAutoSyncLoopTests
+{
+    [Fact]
+    public async Task RunCycle_FetchesAndFastForwardsCleanCheckoutWithoutQueuingCommands()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-loop-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var remote = Path.Combine(parent, "origin.git");
+        var seed = Path.Combine(parent, "seed");
+        Directory.CreateDirectory(parent);
+
+        try
+        {
+            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "remote", "add", "origin", remote);
+            await Git(root, "push", "-u", "origin", "main");
+
+            await Git(parent, "clone", remote, seed);
+            await ConfigureIdentity(seed);
+            await File.WriteAllTextAsync(Path.Combine(seed, "remote.txt"), "from remote");
+            await Git(seed, "add", "remote.txt");
+            await Git(seed, "commit", "-m", "advance remote");
+            await Git(seed, "push", "origin", "main");
+
+            var projectId = Guid.NewGuid();
+            var requests = new List<string>();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var http = new HttpClient(new RecordingHandler((request, _) =>
+            {
+                requests.Add(request.Method + " " + request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                });
+            }))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "WhenSafe", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var state = new DaemonRuntimeState("https://beacon.test", null);
+            var loop = new GitAutoSyncLoop(dependencies, new GitSyncService(), snapshot, timing, state);
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(new[]
+            {
+                "GET /v1/devices/me/project-runtimes",
+                "GET /v1/devices/me/project-runtimes"
+            }, requests);
+            Assert.Equal("from remote", await File.ReadAllTextAsync(Path.Combine(root, "remote.txt")));
+            var currentHead = await Git(root, "rev-parse", "HEAD");
+            var remoteHead = await Git(root, "rev-parse", "refs/remotes/origin/main");
+            Assert.Equal(remoteHead, currentHead);
+
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal("main", status.Branch);
+            Assert.Equal("origin/main", status.Upstream);
+            Assert.Equal(0, status.Behind);
+            Assert.True(status.Clean);
+            Assert.NotNull(status.LastAutoPull);
+            Assert.Equal(1, status.LastAutoPull.Commits);
+            Assert.Equal(remoteHead, status.LastAutoPull.ToSha);
+            Assert.Equal(40, status.LastAutoPull.FromSha.Length);
+            Assert.Null(status.LastError);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task RunCycle_ReportsDetachedHeadInsteadOfMissingUpstream()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-detached-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "checkout", "--detach", "HEAD");
+
+            var projectId = Guid.NewGuid();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var http = new HttpClient(new RecordingHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                })))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies, new GitSyncService(), snapshot, timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+
+            await loop.RunAsync(cancellation.Token);
+
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.True(status.Detached);
+            Assert.False(status.HasUpstream);
+            Assert.Equal("Detached", status.AutoPullBlockedReason);
+            Assert.Null(status.LastError);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    private static async Task ConfigureIdentity(string directory)
+    {
+        await Git(directory, "config", "user.name", "ProjectBeacon Tests");
+        await Git(directory, "config", "user.email", "tests@projectbeacon.local");
+        await Git(directory, "config", "commit.gpgsign", "false");
+    }
+
+    private static async Task<string> Git(string directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start Git in the AutoSync loop test.");
+        process.StandardInput.Close();
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            throw new TimeoutException($"git {string.Join(' ', arguments)} exceeded 30 seconds.");
+        }
+
+        var output = await stdout;
+        var error = await stderr;
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
+        return output.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
+    }
+
+    private sealed class RecordingHandler(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) =>
+            handler(request, cancellationToken);
+    }
+}

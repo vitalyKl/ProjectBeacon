@@ -336,3 +336,89 @@ internal static class ProjectRuntimeMutationGate
                 && session.Status == ChatSessionStatus.Streaming, ct);
     }
 }
+
+
+/// <summary>Project roots attached to the authenticated workstation device.</summary>
+public sealed record DeviceProjectRuntimeDto(
+    Guid ProjectId,
+    string LocalRoot,
+    bool ManualGitSyncActive,
+    bool GitLandActive,
+    bool CheckoutMutationActive = false);
+
+/// <summary>Returns only runtimes owned by the authenticated device; paths never enter heartbeat probe data.</summary>
+public sealed class ListDeviceProjectRuntimesHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ListDeviceProjectRuntimesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<IReadOnlyList<DeviceProjectRuntimeDto>> HandleAsync(
+        Guid deviceId,
+        CancellationToken ct = default)
+    {
+        if (deviceId == Guid.Empty)
+            return [];
+
+        await using var db = _dbFactory.CreateDbContext();
+        var device = await db.DaemonDevices.AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == deviceId && candidate.RevokedAt == null, ct);
+        if (device is null
+            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitAutoSyncV1))
+            return [];
+
+        var runtimes = await db.ProjectRuntimes.AsNoTracking()
+            .Where(runtime => runtime.DeviceId == deviceId)
+            .OrderBy(runtime => runtime.ProjectId)
+            .Select(runtime => new { runtime.ProjectId, runtime.LocalRoot })
+            .ToListAsync(ct);
+        if (runtimes.Count == 0)
+            return [];
+
+        var projectIds = runtimes.Select(runtime => runtime.ProjectId).ToArray();
+        var active = await db.WorkstationCommands.AsNoTracking()
+            .Where(command => command.DeviceId == deviceId
+                && command.ProjectId != null
+                && projectIds.Contains(command.ProjectId.Value)
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running)
+                && (command.Kind == WorkstationCommandKind.GitSync
+                    || command.Kind == WorkstationCommandKind.GitLand
+                    || command.Kind == WorkstationCommandKind.ApplyProposalPatch
+                    || command.Kind == WorkstationCommandKind.InitProject))
+            .Select(command => new { command.ProjectId, command.Kind, command.PayloadJson })
+            .ToListAsync(ct);
+
+        return runtimes.Select(runtime => new DeviceProjectRuntimeDto(
+            runtime.ProjectId,
+            runtime.LocalRoot,
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && command.Kind == WorkstationCommandKind.GitSync),
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && command.Kind == WorkstationCommandKind.GitLand
+                && IsMutatingGitLand(command.PayloadJson)),
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && IsOtherCheckoutMutation(command.Kind))))
+            .ToArray();
+    }
+
+    private static bool IsOtherCheckoutMutation(WorkstationCommandKind kind) =>
+        kind == WorkstationCommandKind.ApplyProposalPatch
+        || kind == WorkstationCommandKind.InitProject;
+
+    private static bool IsMutatingGitLand(string payloadJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("action", out var action)
+                && action.ValueKind == JsonValueKind.String
+                && action.GetString() is "Execute" or "Revert";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+}

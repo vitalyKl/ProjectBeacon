@@ -130,13 +130,32 @@ internal static class GitLandExecutor
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
             return BusinessFailure("CustomMergeDriversConfigured");
 
-        var outcome = request.Action switch
+        IDisposable? checkoutLease = null;
+        if (request.Action is "Execute" or "Revert")
         {
-            "Preview" => await PreviewAsync(taskWorkspace, request, disabledFilters, ct),
-            "Execute" => await ExecuteLandingAsync(taskWorkspace, request, disabledFilters, ct),
-            "Revert" => await RevertAsync(taskWorkspace, request, disabledFilters, ct),
-            _ => (false, null, "GitLand action must be Preview, Execute, or Revert.")
-        };
+            var targetCheckout = await FindTargetCheckoutAsync(repositoryRoot, request.TargetBranch, disabledFilters, ct);
+            if (targetCheckout.Error is not null)
+                return BusinessFailure("TargetCheckoutUnavailable");
+            if (targetCheckout.Checkout is { CheckedOut: true } checkout
+                && SamePath(checkout.Path, repositoryRoot))
+                checkoutLease = await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
+        }
+
+        (bool Ok, string? Result, string? Error) outcome;
+        try
+        {
+            outcome = request.Action switch
+            {
+                "Preview" => await PreviewAsync(taskWorkspace, request, disabledFilters, ct),
+                "Execute" => await ExecuteLandingAsync(taskWorkspace, request, disabledFilters, ct),
+                "Revert" => await RevertAsync(taskWorkspace, request, disabledFilters, ct),
+                _ => (false, null, "GitLand action must be Preview, Execute, or Revert.")
+            };
+        }
+        finally
+        {
+            checkoutLease?.Dispose();
+        }
 
         // Retention starts only after the executor itself confirms a landed result. A
         // post-merge failure (landed_unverified), a retryable/unknown outcome, or a revert

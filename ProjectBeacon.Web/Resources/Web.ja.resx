@@ -3357,4 +3357,88 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>復旧</value>
   </data>
+  <data name="AutoPullMode" xml:space="preserve">
+    <value>チェックアウトの自動更新</value>
+  </data>
+  <data name="AutoPullModeOff" xml:space="preserve">
+    <value>オフ — 状態のみ確認</value>
+  </data>
+  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+    <value>安全な場合 — クリーンなチェックアウトをFast-Forward</value>
+  </data>
+  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+    <value>リポジトリ確認間隔（分）</value>
+  </data>
+  <data name="AutoSyncHelp" xml:space="preserve">
+    <value>プロジェクトのリポジトリをバックグラウンドで確認します。自動更新はFast-Forwardのみを使用し、ローカル変更を上書きしません。間隔: 2～120分。</value>
+  </data>
+  <data name="RepositorySync" xml:space="preserve">
+    <value>プロジェクトリポジトリの状態</value>
+  </data>
+  <data name="RepositorySyncNotReported" xml:space="preserve">
+    <value>このワークステーションからリポジトリ状態はまだ報告されていません。</value>
+  </data>
+  <data name="RepoSyncError" xml:space="preserve">
+    <value>同期エラー: {0}</value>
+  </data>
+  <data name="RepoSyncDiverged" xml:space="preserve">
+    <value>ブランチの履歴が分岐しています</value>
+  </data>
+  <data name="RepoSyncDetached" xml:space="preserve">
+    <value>Detached HEAD</value>
+  </data>
+  <data name="RepoSyncNoUpstream" xml:space="preserve">
+    <value>Upstreamが設定されていません</value>
+  </data>
+  <data name="RepoSyncDirty" xml:space="preserve">
+    <value>ローカル変更あり — 更新をスキップ</value>
+  </data>
+  <data name="RepoSyncActiveSessions" xml:space="preserve">
+    <value>Snapshotセッション実行中 — 更新を延期</value>
+  </data>
+  <data name="RepoSyncGitLandActive" xml:space="preserve">
+    <value>Git landing実行中 — 更新を延期</value>
+  </data>
+  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+    <value>Checkoutが使用中 — 更新を延期</value>
+  </data>
+  <data name="RepoSyncPulled" xml:space="preserve">
+    <value>自動更新: {0}コミット</value>
+  </data>
+  <data name="RepoSyncBehind" xml:space="preserve">
+    <value>リモートより{0}コミット遅れています</value>
+  </data>
+  <data name="RepoSyncUpToDate" xml:space="preserve">
+    <value>最新</value>
+  </data>
+  <data name="RepoSyncJustNow" xml:space="preserve">
+    <value>たった今</value>
+  </data>
+  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+    <value>{0}分前に確認</value>
+  </data>
+  <data name="RepoSyncNotGit" xml:space="preserve">
+    <value>Gitリポジトリではありません</value>
+  </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>別のチェックアウト操作を実行中 — 更新を延期</value>
+  </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>GitSyncを実行中 — チェックを延期</value>
+  </data>
+  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+    <value>リモートリポジトリの認証に失敗しました。認証情報を確認してください。</value>
+  </data>
+  <data name="RepoSyncFetchFailed" xml:space="preserve">
+    <value>リモートから取得できませんでした。ネットワーク、リモートURL、認証情報を確認してください。</value>
+  </data>
+  <data name="RepoSyncTimeout" xml:space="preserve">
+    <value>Git操作がタイムアウトしました。自動同期は再試行します。</value>
+  </data>
+  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+    <value>このワークステーションのプロジェクト一覧を更新できませんでした。</value>
+  </data>
+  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+    <value>このワークステーションでプロジェクトフォルダーを利用できません。</value>
+  </data>
 </root>

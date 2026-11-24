@@ -176,7 +176,19 @@ else
             }
         </div>
     </header>
-    @if (_pipeline?.Preflight is { LastKnownRepositoryBehind: > 0 } repositoryStatus)
+    @if (_pipeline?.Preflight?.RepositoryAutoSync is { } autoSyncStatus)
+    {
+        <MudAlert Severity="@(AutoSyncHasWarning(autoSyncStatus) ? Severity.Warning : Severity.Info)"
+                  Dense="true" Class="mb-3" data-testid="repository-autosync-status">
+            @AutoSyncStatusMessage(autoSyncStatus)
+            @if (autoSyncStatus.CheckedAt is { } checkedAt)
+            {
+                <span class="mud-text-secondary"> · @AutoSyncUpdatedLabel(checkedAt)</span>
+            }
+        </MudAlert>
+    }
+    @if (_pipeline?.Preflight is { LastKnownRepositoryBehind: > 0 } repositoryStatus
+        && _pipeline.Preflight.RepositoryAutoSync is null)
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
                   data-testid="repository-behind-warning">
@@ -510,6 +522,66 @@ else
     private string _workspaceContent = string.Empty;
     private bool CanStartPlanner => _pipeline?.CanStart == true
         && _pipeline.Preflight?.RepositorySyncInProgress != true;
+    private static bool AutoSyncHasWarning(RepositoryAutoSyncStatusDto status) =>
+        status.LastError is not null
+        || status.AutoPullBlockedReason is not null
+        || status.Diverged
+        || status.Detached
+        || !status.HasUpstream
+        || !status.Clean
+        || status.Behind > 0;
+
+    private string AutoSyncStatusMessage(RepositoryAutoSyncStatusDto status)
+    {
+        if (status.AutoPullBlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
+        if (status.LastError is { } error)
+            return RepoSyncErrorMessage(error.Code);
+        if (status.AutoPullBlockedReason == "NotGitRepository")
+            return L["RepoSyncNotGit"].Value;
+        if (status.Diverged || status.AutoPullBlockedReason == "Diverged")
+            return L["RepoSyncDiverged"].Value;
+        if (status.Detached || status.AutoPullBlockedReason == "Detached")
+            return L["RepoSyncDetached"].Value;
+        if (!status.HasUpstream || status.AutoPullBlockedReason == "NoUpstream")
+            return L["RepoSyncNoUpstream"].Value;
+        if (!status.Clean || status.AutoPullBlockedReason == "DirtyWorkingTree")
+            return L["RepoSyncDirty"].Value;
+        if (status.AutoPullBlockedReason == "ActiveSessions")
+            return L["RepoSyncActiveSessions"].Value;
+        if (status.AutoPullBlockedReason == "GitLandActive")
+            return L["RepoSyncGitLandActive"].Value;
+        if (status.AutoPullBlockedReason == "CheckoutBusy")
+            return L["RepoSyncCheckoutBusy"].Value;
+        if (status.AutoPullBlockedReason == "CheckoutMutationActive")
+            return L["RepoSyncCheckoutMutationActive"].Value;
+        if (status.AutoPullBlockedReason == "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
+        if (status.LastAutoPull is { Commits: > 0 } pull && status.Behind == 0)
+            return string.Format(L["RepoSyncPulled"].Value, pull.Commits);
+        if (status.Behind > 0)
+            return string.Format(L["RepoSyncBehind"].Value, status.Behind);
+        return L["RepoSyncUpToDate"].Value;
+    }
+
+    private string RepoSyncErrorMessage(string code) => code switch
+    {
+        "AuthenticationFailed" => L["RepoSyncAuthenticationFailed"].Value,
+        "FetchFailed" => L["RepoSyncFetchFailed"].Value,
+        "Timeout" => L["RepoSyncTimeout"].Value,
+        "RuntimeDiscoveryUnavailable" => L["RepoSyncDiscoveryFailed"].Value,
+        "ProjectDirectoryUnavailable" => L["RepoSyncDirectoryUnavailable"].Value,
+        _ => string.Format(L["RepoSyncError"].Value, code)
+    };
+
+    private string AutoSyncUpdatedLabel(DateTimeOffset checkedAt)
+    {
+        var minutes = Math.Max(0, (DateTimeOffset.UtcNow - checkedAt.ToUniversalTime()).TotalMinutes);
+        return minutes < 1
+            ? L["RepoSyncJustNow"].Value
+            : string.Format(L["RepoSyncUpdatedMinutes"].Value, (int)Math.Floor(minutes));
+    }
+
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
     private string ReviewPreflightMessage =>
         !string.IsNullOrWhiteSpace(_pipeline?.Preflight?.PipelineWorkstationBlockedReason)

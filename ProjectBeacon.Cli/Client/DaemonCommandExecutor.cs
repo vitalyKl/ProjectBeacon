@@ -236,13 +236,15 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 if (kind == WorkstationCommandKind.RunPipelineSession)
                     return await RunPipelineSessionAsync(command, payload, ct);
 
-                var projectAction = kind switch
+                if (kind == WorkstationCommandKind.InitProject)
                 {
-                    WorkstationCommandKind.InitProject => WorkstationSetup.InitProject(command.LocalRoot, payload),
-                    _ => null
-                };
-                if (projectAction is not null)
-                    return projectAction.Success ? (true, projectAction.Value, null) : (false, null, projectAction.Error);
+                    using var checkoutLease = await GitCheckoutGate.AcquireAsync(command.LocalRoot, ct);
+                    var initialized = WorkstationSetup.InitProject(command.LocalRoot, payload);
+                    return initialized.Success
+                        ? (true, initialized.Value, null)
+                        : (false, null, initialized.Error);
+                }
+
             }
             if (kind == WorkstationCommandKind.ChatAbort)
                 return await _chat.AbortAsync(payload, ct);

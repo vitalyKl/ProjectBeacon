@@ -121,7 +121,8 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             repositorySync.InProgress,
             repositorySync.Blocked,
             repositorySync.ReasonCode,
-            workstation.BlockedReason);
+            workstation.BlockedReason,
+            repositorySync.AutoSync);
     }
 
 

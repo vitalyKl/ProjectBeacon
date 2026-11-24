@@ -71,6 +71,38 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void ProjectManage_ShowsAutomaticRepositoryStatusFromDeviceHeartbeat()
+    {
+        var user = DbContext.Users.Single();
+        var project = DbContext.Projects.Single();
+        var device = DbContext.Set<ProjectBeacon.Domain.Entities.Devices.DaemonDevice>().Single();
+        var probe = $"""{"capabilities":["git-sync-v1","git-autosync-v1"],"repoSync":[{"projectId":"{{project.Id:D}}","branch":"main","upstream":"origin/main","ahead":0,"behind":3,"clean":true,"detached":false,"hasUpstream":true,"diverged":false,"checkedAt":"2026-11-24T10:00:00Z","lastAutoPull":null,"lastError":null,"autoPullBlockedReason":null}]}""";
+        device.Heartbeat(probeJson: probe);
+        DbContext.ProjectRuntimes.Add(ProjectBeacon.Domain.Entities.Devices.ProjectRuntime.Create(
+            project.Id, device.Id, "/workspace/project"));
+        DbContext.SaveChanges();
+
+        var authProvider = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        authProvider.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new System.Security.Claims.Claim("isAdmin", "false"),
+                new System.Security.Claims.Claim("project_id", project.Id.ToString("D")),
+                new System.Security.Claims.Claim("org_id", project.OrgId.ToString("D"))
+            },
+            "TestAuth");
+
+        var cut = Bunit.RenderComponent<Features.Projects.ProjectManage>();
+
+        Assert.Contains("project-repository-autosync", cut.Markup);
+        Assert.Contains("Behind remote by 3 commits", cut.Markup);
+        Assert.Contains("Updated", cut.Markup);
+    }
+
+    [Fact]
     public void ProjectManage_ShowsGitSyncActionsToProjectOwner()
     {
         var user = DbContext.Users.Single();

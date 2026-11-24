@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using System.Text.Json;
 using Application.Common;
 using Application.Devices;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -59,6 +60,53 @@ public sealed partial class DeviceHandlerTests
         var listedAfter = await new ListCommandsHandler(Factory()).HandleAsync(
             new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
         Assert.Equal(1, listedAfter.Value!.Count(c => c.Kind == WorkstationCommandKind.ReconcileDesired));
+    }
+
+    [Fact]
+    public async Task DeviceProjectRuntimeDiscovery_IsDeviceScopedAndOnlyTreatsGitLandMutationsAsBusy()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        using (TenantScope.EnterUnscoped())
+        {
+            var firstDevice = await _db.DaemonDevices.IgnoreQueryFilters()
+                .SingleAsync(candidate => candidate.Id == deviceId, TestContext.Current.CancellationToken);
+            firstDevice.Heartbeat("""{"capabilities":["git-sync-v1","git-autosync-v1"]}""", "{}");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var secondDevice = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("second", "fp-second-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(secondDevice.Success, secondDevice.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.ProjectRuntimes.AddRange(
+                ProjectRuntime.Create(project.Id, deviceId, "/workspace/first"),
+                ProjectRuntime.Create(project.Id, secondDevice.Value!.Id, "/workspace/second"));
+            _db.WorkstationCommands.AddRange(
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitSync,
+                    """{"projectId":"project","mode":"Status"}""", project.Id),
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitLand,
+                    """{"action":"Preview"}""", project.Id),
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitLand,
+                    """{"action":"Execute"}""", project.Id),
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.ApplyProposalPatch,
+                    "{}", project.Id));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        IReadOnlyList<DeviceProjectRuntimeDto> runtimes;
+        using (TenantScope.EnterUnscoped())
+            runtimes = await new ListDeviceProjectRuntimesHandler(Factory())
+                .HandleAsync(deviceId, TestContext.Current.CancellationToken);
+
+        var runtime = Assert.Single(runtimes);
+        Assert.Equal(project.Id, runtime.ProjectId);
+        Assert.Equal("/workspace/first", runtime.LocalRoot);
+        Assert.True(runtime.ManualGitSyncActive);
+        Assert.True(runtime.GitLandActive);
+        Assert.True(runtime.CheckoutMutationActive);
     }
 
     [Fact]

@@ -22,6 +22,7 @@ public static class DeviceEndpoints
         app.MapGet("/v1/devices", ListDevices).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/devices/{id:guid}", RevokeDevice).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost(ApiRoutes.DeviceHeartbeatRoute, Heartbeat).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet("/v1/devices/me/project-runtimes", ListDeviceProjectRuntimes).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet(ApiRoutes.DeviceCommandsRoute, ClaimCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.CommandCompleteRoute, CompleteCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.CommandProgressRoute, ReportCommandProgress).RequireAuthorization().DisableAntiforgery().RequireDevice();
@@ -85,6 +86,13 @@ public static class DeviceEndpoints
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
+    }
+
+    private static async Task<IResult> ListDeviceProjectRuntimes(
+        [FromServices] ListDeviceProjectRuntimesHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        return Results.Ok(await handler.HandleAsync(actor.DeviceId!.Value, ct));
     }
 
     private static async Task<IResult> Heartbeat(

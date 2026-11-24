@@ -278,6 +278,23 @@ else
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["GitSyncTitle"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["GitSyncHelp"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_repoSyncRows.Count > 0)
+        {
+            <MudStack Spacing="2" Class="mb-3" data-testid="project-repository-autosync">
+                @foreach (var row in _repoSyncRows)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.caption">@row.DeviceName · @(row.Status.Branch ?? "—")</MudText>
+                        <StatusChip Color="@RepoSyncColor(row.Status)" Label="@RepoSyncLabel(row.Status)" />
+                        <MudSpacer />
+                        @if (row.Status.CheckedAt is { } checkedAt)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@RepoSyncAge(checkedAt)</MudText>
+                        }
+                    </MudStack>
+                }
+            </MudStack>
+        }
         @if (_canManageRepositorySync)
         {
             <div class="beacon-field-row">
@@ -381,6 +398,9 @@ else
     private bool _gitSyncCommandPending;
     private Guid? _gitSyncCommandId;
     private readonly CancellationTokenSource _gitSyncPoll = new();
+    private readonly CancellationTokenSource _autoSyncRefresh = new();
+    private List<RepoSyncViewRow> _repoSyncRows = [];
+    private sealed record RepoSyncViewRow(string DeviceName, RepositoryAutoSyncStatusDto Status);
 
     private bool HasGitSyncWorkstation =>
         _runtimes.Any(runtime => runtime.DeviceOnline && runtime.GitSyncSupported);
@@ -475,6 +495,7 @@ else
         _projectDescription = current.Value.Description ?? string.Empty;
         _projectRevision = current.Value.Revision;
         await ReloadRuntimes();
+        _ = RefreshAutoSyncAsync(_autoSyncRefresh.Token);
         await ReloadProposalPolicies();
         await ReloadGitPolicy();
 
@@ -1095,6 +1116,129 @@ else
             }
         }
         _folderDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
+        ReadAutoSyncStatuses();
+    }
+
+    private async Task RefreshAutoSyncAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), ct);
+                var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)), ct);
+                if (!listed.Success)
+                    continue;
+
+                _devices = listed.Value!.ToList();
+                ReadAutoSyncStatuses();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void ReadAutoSyncStatuses()
+    {
+        _repoSyncRows = [];
+        if (_projectId is not { } projectId)
+            return;
+
+        foreach (var runtime in _runtimes)
+        {
+            var device = _devices.FirstOrDefault(candidate => candidate.Id == runtime.DeviceId);
+            if (device is null || string.IsNullOrWhiteSpace(device.ProbeJson))
+                continue;
+
+            try
+            {
+                using var document = JsonDocument.Parse(device.ProbeJson);
+                if (!document.RootElement.TryGetProperty("repoSync", out var statuses)
+                    || statuses.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var item in statuses.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object
+                        || !item.TryGetProperty("projectId", out var idElement)
+                        || idElement.ValueKind != JsonValueKind.String
+                        || !Guid.TryParse(idElement.GetString(), out var reportedProjectId)
+                        || reportedProjectId != projectId)
+                        continue;
+
+                    var status = JsonSerializer.Deserialize<RepositoryAutoSyncStatusDto>(
+                        item.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                    if (status is not null)
+                        _repoSyncRows.Add(new RepoSyncViewRow(device.Name, status));
+                    break;
+                }
+            }
+            catch (JsonException)
+            {
+                // Older workstation versions or malformed probes retain the manual GitSync UI.
+            }
+        }
+    }
+
+    private Color RepoSyncColor(RepositoryAutoSyncStatusDto status) =>
+        status.LastError is not null || status.Diverged
+            ? Color.Error
+            : status.Behind > 0 || !status.Clean || status.Detached || !status.HasUpstream
+                || status.AutoPullBlockedReason is not null
+                    ? Color.Warning
+                    : Color.Success;
+
+    private string RepoSyncLabel(RepositoryAutoSyncStatusDto status)
+    {
+        if (status.AutoPullBlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
+        if (status.LastError is { } error)
+            return RepoSyncErrorMessage(error.Code);
+        if (status.AutoPullBlockedReason == "NotGitRepository")
+            return L["RepoSyncNotGit"].Value;
+        if (status.Diverged || status.AutoPullBlockedReason == "Diverged")
+            return L["RepoSyncDiverged"].Value;
+        if (status.Detached || status.AutoPullBlockedReason == "Detached")
+            return L["RepoSyncDetached"].Value;
+        if (!status.HasUpstream || status.AutoPullBlockedReason == "NoUpstream")
+            return L["RepoSyncNoUpstream"].Value;
+        if (!status.Clean || status.AutoPullBlockedReason == "DirtyWorkingTree")
+            return L["RepoSyncDirty"].Value;
+        if (status.AutoPullBlockedReason == "ActiveSessions")
+            return L["RepoSyncActiveSessions"].Value;
+        if (status.AutoPullBlockedReason == "GitLandActive")
+            return L["RepoSyncGitLandActive"].Value;
+        if (status.AutoPullBlockedReason == "CheckoutBusy")
+            return L["RepoSyncCheckoutBusy"].Value;
+        if (status.AutoPullBlockedReason == "CheckoutMutationActive")
+            return L["RepoSyncCheckoutMutationActive"].Value;
+        if (status.AutoPullBlockedReason == "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
+        if (status.LastAutoPull is { Commits: > 0 } pull && status.Behind == 0)
+            return string.Format(L["RepoSyncPulled"].Value, pull.Commits);
+        return status.Behind > 0
+            ? string.Format(L["RepoSyncBehind"].Value, status.Behind)
+            : L["RepoSyncUpToDate"].Value;
+    }
+
+    private string RepoSyncErrorMessage(string code) => code switch
+    {
+        "AuthenticationFailed" => L["RepoSyncAuthenticationFailed"].Value,
+        "FetchFailed" => L["RepoSyncFetchFailed"].Value,
+        "Timeout" => L["RepoSyncTimeout"].Value,
+        "RuntimeDiscoveryUnavailable" => L["RepoSyncDiscoveryFailed"].Value,
+        "ProjectDirectoryUnavailable" => L["RepoSyncDirectoryUnavailable"].Value,
+        _ => string.Format(L["RepoSyncError"].Value, code)
+    };
+
+    private string RepoSyncAge(DateTimeOffset checkedAt)
+    {
+        var minutes = Math.Max(0, (DateTimeOffset.UtcNow - checkedAt.ToUniversalTime()).TotalMinutes);
+        return minutes < 1
+            ? L["RepoSyncJustNow"].Value
+            : string.Format(L["RepoSyncUpdatedMinutes"].Value, (int)Math.Floor(minutes));
     }
 
     private async Task SaveProjectFolder()
@@ -1123,6 +1267,8 @@ else
     {
         _gitSyncPoll.Cancel();
         _gitSyncPoll.Dispose();
+        _autoSyncRefresh.Cancel();
+        _autoSyncRefresh.Dispose();
     }
 
 }

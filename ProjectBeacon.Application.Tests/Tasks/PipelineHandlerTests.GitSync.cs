@@ -35,6 +35,54 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task GetPipeline_IncludesAutoSyncHeartbeatAsInformationalPreflightOnly()
+    {
+        var (projectId, task) = await SeedTaskAsync("AutoSync informational preflight", seedPipelinePrerequisites: false);
+        var device = await SeedGitSyncRuntimeAsync(projectId);
+        var checkedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
+        var probe = JsonSerializer.Serialize(new
+        {
+            capabilities = new[] { "git-sync-v1", "git-autosync-v1" },
+            repoSync = new[]
+            {
+                new
+                {
+                    projectId,
+                    branch = "main",
+                    upstream = "origin/main",
+                    ahead = 0,
+                    behind = 3,
+                    clean = false,
+                    detached = false,
+                    hasUpstream = true,
+                    diverged = false,
+                    checkedAt,
+                    lastAutoPull = (object?)null,
+                    lastError = (object?)null,
+                    autoPullBlockedReason = "DirtyWorkingTree"
+                }
+            }
+        });
+        device.Heartbeat(probe, """{"agentRuntime":"native"}""");
+        using (TenantScope.EnterUnscoped())
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new GetPipelineHandler(HandlerSqlite.Factory(_connection, Scope(projectId)))
+            .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        var preflight = result.Value!.Preflight!;
+        Assert.Equal("main", preflight.RepositoryAutoSync!.Branch);
+        Assert.Equal("origin/main", preflight.RepositoryAutoSync.Upstream);
+        Assert.Equal(3, preflight.RepositoryAutoSync.Behind);
+        Assert.False(preflight.RepositoryAutoSync.Clean);
+        Assert.Equal("DirtyWorkingTree", preflight.RepositoryAutoSync.AutoPullBlockedReason);
+        Assert.False(preflight.RepositorySyncInProgress);
+        Assert.False(preflight.RepositorySyncBlocked);
+        Assert.NotEqual("PipelineRepositorySyncInProgress", result.Value.StartBlockedReason);
+    }
+
+    [Fact]
     public async Task GetPipeline_RetainsLastSuccessfulResultAfterNewerFailedAndCancelledAttempts()
     {
         var (projectId, task) = await SeedTaskAsync("Retain previous GitSync result");

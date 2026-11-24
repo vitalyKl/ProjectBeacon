@@ -37,9 +37,11 @@ internal static class DaemonServices
             deps.RuntimeFactory(sp.GetRequiredService<IDaemonLlamaSync>()));
         services.AddSingleton<IDaemonAgentRuntimeGate, DaemonAgentRuntimeGate>();
         services.AddSingleton<GitSyncService>();
+        services.AddSingleton<GitAutoSyncSnapshot>();
         services.AddSingleton<IDaemonChatSession, DaemonChatSession>();
         services.AddSingleton<IDaemonCommandExecutor, DaemonCommandExecutor>();
         services.AddSingleton<IDaemonLoop, DaemonHeartbeatLoop>();
+        services.AddSingleton<IDaemonLoop, GitAutoSyncLoop>();
         services.AddSingleton<IDaemonLoop, DaemonCommandLoop>();
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
