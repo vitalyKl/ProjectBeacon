@@ -220,6 +220,15 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         return (false, null, snapshotReview.Error);
                     return (true, snapshotReview.Value, null);
                 }
+                if (kind == WorkstationCommandKind.ReleasePrepare)
+                {
+                    var releaseSettings = _loadSettings();
+                    var releaseResult = await ReleasePrepareExecutor.ExecuteAsync(
+                        command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, releaseSettings, ct);
+                    return releaseResult.Ok
+                        ? (true, releaseResult.Result, null)
+                        : (false, releaseResult.Result, releaseResult.Error);
+                }
                 if (kind == WorkstationCommandKind.GitLand)
                 {
                     var landingSettings = _loadSettings();
