@@ -2604,6 +2604,9 @@ orthstar</value>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Diese Seite überwacht seinen Status automatisch weiter.</value></data>
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Diese Repository-Synchronisierung abbrechen? Ein Abbruch ist nur möglich, solange noch keine Workstation den Auftrag übernommen hat.</value></data>
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung wurde abgebrochen, bevor eine Workstation ihn gestartet hat.</value></data>
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>Der Auftrag zur Repository-Synchronisierung ist abgelaufen, weil ihn innerhalb von 10 Minuten keine Workstation übernommen hat.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>

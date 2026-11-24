@@ -2594,6 +2594,9 @@
   <data name="GitSyncNow" xml:space="preserve"><value>Синхронизировать</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>Ожидание завершения Git-операции на рабочей станции…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Git-операция ещё выполняется. Страница продолжит автоматически отслеживать её состояние.</value></data>
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Отменить запрос синхронизации репозитория? Отмена доступна только до того, как рабочая станция захватит команду.</value></data>
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Запрос синхронизации репозитория отменён до начала выполнения на рабочей станции.</value></data>
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>Срок ожидания запроса синхронизации истёк: ни одна рабочая станция не захватила его за 10 минут.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>К проекту не подключена работающая станция с поддержкой GitSync.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Ветка</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
