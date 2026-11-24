@@ -3433,4 +3433,6 @@ orthstar</value>
   <data name="HotfixDeploymentRun" xml:space="preserve"><value>デプロイワークフローを開く</value></data>
   <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix のフォワードポート</value></data>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix とフォワードポートのタスク</value></data>
+  <data name="HotfixOriginNotice" xml:space="preserve"><value>このタスクは本番環境にデプロイされた正確なコミットを基点にしています。ブランチとベースコミットは Beacon によって保護されます。</value></data>
+  <data name="ForwardPortNotice" xml:space="preserve"><value>この通常タスクは、元の Hotfix の landing が確認された後に作成されました。通常の Planner、Actor、Reviewer、landing ワークフローで完了してください。</value></data>
 </root>
