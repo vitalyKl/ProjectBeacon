@@ -3421,4 +3421,6 @@ orthstar</value>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>已取消</value></data>
 
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>只有在版本策略、影响声明、landing 和验证检查全部通过后，ReleasePrepare 才会创建 Candidate。</value></data>
+  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>生产版本端点</value></data>
+  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>以 /v1/version 结尾的 HTTPS URL。发布工作流成功后，Beacon 会检查此端点，并要求 version 和 gitSha 与 Candidate 完全一致。</value></data>
 </root>
