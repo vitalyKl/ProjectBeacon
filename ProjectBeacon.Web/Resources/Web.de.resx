@@ -3390,7 +3390,7 @@ orthstar</value>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>Versionsrichtlinie gespeichert</value></data>
 <data name="NotConfigured" xml:space="preserve"><value>Nicht konfiguriert</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Release Management für dieses Projekt aktivieren</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>Nach der Aktivierung sind Releases in der Roadmap verfügbar und Meilensteine können einem Release zugeordnet werden. Bestehende Meilensteine bleiben eigenständig. Standardmäßig deaktiviert.</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>Wenn aktiviert, zeigt die Roadmap Releases an und ermöglicht das Gruppieren von Meilensteinen in einem Release. Aufgaben übernehmen den Release-Kontext über ihren Meilenstein. Konfiguriere zuerst oben das Versionsschema und die Manifest-Projektionen. Standardmäßig deaktiviert; die Aktivierung veröffentlicht oder deployed nichts.</value></data>>
   <data name="ProjectReleases" xml:space="preserve"><value>Projekt-Releases</value></data>
   <data name="Releases" xml:space="preserve"><value>Releases</value></data>
   <data name="NewRelease" xml:space="preserve"><value>Neues Release</value></data>
@@ -3427,4 +3427,5 @@ orthstar</value>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix- und Forward-Port-Aufgaben</value></data>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>Diese Aufgabe basiert exakt auf dem in Produktion bereitgestellten Commit. Branch und Basis-Commit werden von Beacon geschützt.</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>Diese reguläre Aufgabe wurde erstellt, nachdem der ursprüngliche Hotfix nachweislich gelandet ist. Verwende den normalen Planner-, Actor-, Reviewer- und Landing-Workflow.</value></data>
+  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release-Ablauf: Konfiguriere die maßgebliche Version und die Manifestdateien in den Projekteinstellungen, erstelle hier einen Release und ordne ihm anschließend Meilensteine zu. Aufgaben dieser Meilensteine erhalten Zielversion und Ziel-Branch im Planner-Kontext. Die Release-Vorbereitung erstellt einen unveränderlichen Candidate; die Veröffentlichung in Produktion erfordert eine separate ausdrückliche Bestätigung.</value></data>
 </root>
