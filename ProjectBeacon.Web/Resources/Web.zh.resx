@@ -3033,4 +3033,7 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>合并回滚已排队。</value>
   </data>
+  <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>自动同步远程仓库</value></data>
+  <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon 会定期获取此项目的上游更新，并且仅在工作区干净且空闲时执行 fast-forward。现有本地修改、历史分叉、Detached HEAD 和正在运行的代理会话均会保留。不会强制覆盖或删除现有本地标签。</value></data>
+  <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>请连接运行支持 AutoSync 的 Beacon 客户端的工作站以启用此设置。</value></data>
 </root>
