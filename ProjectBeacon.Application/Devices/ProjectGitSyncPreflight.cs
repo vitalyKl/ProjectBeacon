@@ -15,8 +15,9 @@ internal static class ProjectGitSyncPreflight
     public static readonly TimeSpan PendingCommandLifetime = TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// Atomically expires old, unclaimed GitSync commands. Only Pending rows with no claim
-    /// timestamp are eligible; Running commands are never modified by this timeout.
+    /// Atomically expires GitSync commands that have remained Pending for the full queue
+    /// lifetime. Every requeue starts a new PendingSince interval; Running commands are
+    /// never modified by this timeout.
     /// </summary>
     public static async Task<int> ExpireStalePendingCommandsAsync(
         IBeaconDb db,
