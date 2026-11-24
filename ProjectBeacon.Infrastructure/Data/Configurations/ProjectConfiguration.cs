@@ -34,6 +34,17 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .IsConcurrencyToken()
             .HasDefaultValue(1);
 
+        entity.Property(e => e.VersionPolicyJson)
+            .IsRequired()
+            .HasColumnType("jsonb")
+            .HasDefaultValue(ProjectVersionPolicyCatalogDefaults.Json);
+        entity.Property(e => e.VersionPolicyRevision)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .HasDefaultValue(1);
+        entity.Property(e => e.OfficialVersion)
+            .HasMaxLength(100);
+
         entity.HasOne(e => e.Org)
             .WithMany(e => e.Projects)
             .HasForeignKey(e => e.OrgId)
