@@ -21,5 +21,12 @@ public class MilestoneConfiguration : IEntityTypeConfiguration<Milestone>
             .WithMany(e => e.Milestones)
             .HasForeignKey(e => e.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(e => e.Release)
+            .WithMany(e => e.Milestones)
+            .HasForeignKey(e => e.ReleaseId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        entity.HasIndex(e => new { e.ProjectId, e.ReleaseId, e.Order });
     }
 }
