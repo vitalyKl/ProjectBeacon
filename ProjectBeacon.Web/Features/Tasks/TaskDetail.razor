@@ -500,11 +500,14 @@ else
     private bool CanStartPlanner => _pipeline?.CanStart == true
         && _pipeline.Preflight?.RepositorySyncInProgress != true;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
-    private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
-        ? L["PipelinePreflightNoNativeWorkstation"].Value
-        : _pipeline.Preflight.HasOnlineNativeWorkstation != true
-            ? L["PipelineNativeWorkstationOffline"].Value
-            : L["PipelinePreflightNoRoleModel"].Value;
+    private string ReviewPreflightMessage =>
+        !string.IsNullOrWhiteSpace(_pipeline?.Preflight?.PipelineWorkstationBlockedReason)
+            ? L[_pipeline!.Preflight!.PipelineWorkstationBlockedReason!].Value
+            : _pipeline?.Preflight?.HasNativeWorkstation != true
+                ? L["PipelinePreflightNoNativeWorkstation"].Value
+                : _pipeline.Preflight.HasOnlineNativeWorkstation != true
+                    ? L["PipelineNativeWorkstationOffline"].Value
+                    : L["PipelinePreflightNoRoleModel"].Value;
     private string PlannerPreflightMessage =>
         !string.IsNullOrWhiteSpace(_pipeline?.Preflight?.PipelineWorkstationBlockedReason)
             ? L[_pipeline!.Preflight!.PipelineWorkstationBlockedReason!].Value
