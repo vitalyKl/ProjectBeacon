@@ -30,6 +30,8 @@ internal static class ProjectGitSyncPreflight
             .Where(command => command.Kind == WorkstationCommandKind.GitSync
                 && command.Status == WorkstationCommandStatus.Pending
                 && command.StartedAt == null
+                && command.Attempts == 0
+                && command.ClaimInstanceId == null
                 && command.CreatedAt <= cutoff);
         if (projectId is { } scopedProjectId)
             query = query.Where(command => command.ProjectId == scopedProjectId);
