@@ -553,6 +553,8 @@
             return L["RepoSyncGitLandActive"].Value;
         if (row.BlockedReason == "CheckoutBusy")
             return L["RepoSyncCheckoutBusy"].Value;
+        if (row.BlockedReason == "CheckoutMutationActive")
+            return L["RepoSyncCheckoutMutationActive"].Value;
         if (row.LastAutoPullCommits is { } commits && commits > 0 && row.Behind == 0)
             return string.Format(L["RepoSyncPulled"].Value, commits);
         return row.Behind > 0
