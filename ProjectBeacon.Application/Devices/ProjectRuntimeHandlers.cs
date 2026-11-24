@@ -382,7 +382,7 @@ public sealed class ListDeviceProjectRuntimesHandler
                     || command.Status == WorkstationCommandStatus.Running)
                 && (command.Kind == WorkstationCommandKind.GitSync
                     || command.Kind == WorkstationCommandKind.GitLand))
-            .Select(command => new { command.ProjectId, command.Kind })
+            .Select(command => new { command.ProjectId, command.Kind, command.PayloadJson })
             .ToListAsync(ct);
 
         return runtimes.Select(runtime => new DeviceProjectRuntimeDto(
@@ -391,7 +391,24 @@ public sealed class ListDeviceProjectRuntimesHandler
             active.Any(command => command.ProjectId == runtime.ProjectId
                 && command.Kind == WorkstationCommandKind.GitSync),
             active.Any(command => command.ProjectId == runtime.ProjectId
-                && command.Kind == WorkstationCommandKind.GitLand)))
+                && command.Kind == WorkstationCommandKind.GitLand
+                && IsMutatingGitLand(command.PayloadJson))))
             .ToArray();
+    }
+
+    private static bool IsMutatingGitLand(string payloadJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("action", out var action)
+                && action.ValueKind == JsonValueKind.String
+                && action.GetString() is "Execute" or "Revert";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

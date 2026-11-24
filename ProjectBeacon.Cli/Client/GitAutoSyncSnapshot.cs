@@ -33,7 +33,10 @@ internal sealed class GitAutoSyncSnapshot
             {
                 // Refresh checkedAt/error timestamps in the heartbeat without logging a
                 // false "state change" on every successful interval or repeated outage.
-                var comparable = current with { CheckedAt = value.CheckedAt, LastError = value.LastError };
+                var comparableError = current.LastError is null
+                    ? null
+                    : current.LastError with { At = value.LastError?.At ?? current.LastError.At };
+                var comparable = current with { CheckedAt = value.CheckedAt, LastError = comparableError };
                 if (JsonSerializer.Serialize(comparable) == JsonSerializer.Serialize(value))
                 {
                     _projects[value.ProjectId] = value;
