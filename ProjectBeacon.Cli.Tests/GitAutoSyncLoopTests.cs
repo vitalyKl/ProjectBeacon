@@ -203,6 +203,93 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task RunCycle_DoesNotPullOldDirectoryWhenRuntimeRootChangesAfterStatusFetch()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-runtime-change-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var movedRoot = Path.Combine(parent, "moved-project");
+        var remote = Path.Combine(parent, "origin.git");
+        var seed = Path.Combine(parent, "seed");
+        Directory.CreateDirectory(parent);
+        Directory.CreateDirectory(movedRoot);
+
+        try
+        {
+            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "remote", "add", "origin", remote);
+            await Git(root, "push", "-u", "origin", "main");
+
+            await Git(parent, "clone", remote, seed);
+            await ConfigureIdentity(seed);
+            await File.WriteAllTextAsync(Path.Combine(seed, "remote.txt"), "new remote");
+            await Git(seed, "add", "remote.txt");
+            await Git(seed, "commit", "-m", "advance remote");
+            await Git(seed, "push", "origin", "main");
+
+            var projectId = Guid.NewGuid();
+            var firstRuntimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var changedRuntimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, movedRoot, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var requests = 0;
+            using var http = new HttpClient(new RecordingHandler((_, _) =>
+            {
+                var json = Interlocked.Increment(ref requests) == 1 ? firstRuntimeJson : changedRuntimeJson;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                });
+            }))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "WhenSafe", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies, new GitSyncService(), snapshot, timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+            var headBefore = await Git(root, "rev-parse", "HEAD");
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(2, requests);
+            Assert.Equal(headBefore, await Git(root, "rev-parse", "HEAD"));
+            Assert.False(File.Exists(Path.Combine(root, "remote.txt")));
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal(1, status.Behind);
+            Assert.Equal("RuntimeChanged", status.AutoPullBlockedReason);
+            Assert.Null(status.LastAutoPull);
+            Assert.Null(status.LastError);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task RunCycle_ReportsDetachedHeadInsteadOfMissingUpstream()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-detached-" + Guid.NewGuid().ToString("N"));
