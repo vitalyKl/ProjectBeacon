@@ -140,9 +140,22 @@ public class Release : Entity, IProjectScoped
 
         if (target == ReleaseStatus.Candidate)
             throw new InvalidOperationException("Only the authorized ReleasePrepare workflow can create an immutable Candidate.");
-        if (target == ReleaseStatus.Cancelled
-            && PreparationStatus is not (ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed))
-            throw new InvalidOperationException("A release cannot be cancelled while preparation or verification evidence is active.");
+        if (target == ReleaseStatus.Cancelled)
+        {
+            var canCancel = Status switch
+            {
+                ReleaseStatus.Planned or ReleaseStatus.InProgress =>
+                    PreparationStatus is ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed,
+                ReleaseStatus.Candidate =>
+                    PreparationStatus == ReleasePreparationStatus.Candidate
+                    && !PublicationTagPushed
+                    && PublicationStatus is ReleasePublicationStatus.NotStarted or ReleasePublicationStatus.FailedBeforeTag,
+                _ => false
+            };
+            if (!canCancel)
+                throw new InvalidOperationException(
+                    "A Release cannot be cancelled while preparation/verification is active, publication is queued, or an immutable tag has been pushed.");
+        }
 
         var allowed = Status switch
         {
