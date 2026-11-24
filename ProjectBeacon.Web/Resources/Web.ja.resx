@@ -3459,4 +3459,28 @@ orthstar</value>
   <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>確認済み</value></data>
   <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>異議あり</value></data>
   <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer 待ち</value></data>
+<data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>チャットのライブ更新は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
+  </data>
+<data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>複数回試行してもタスクとリポジトリの状態を更新できませんでした。表示中の状態は古い可能性があります。更新は自動的に再開されます。</value>
+  </data>
+<data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>保留中のリポジトリ同期コマンドとの接続を復元できませんでした。同期を再実行する前に、タスクとワークステーションの状態を確認してください。</value>
+  </data>
+<data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>チャットモデルの実行状態を一時的に取得できません。チャットは引き続き使用できますが、モデルの準備状態が古い可能性があります。</value>
+  </data>
+<data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>このチャットのタスクコンテキストを読み込めませんでした。コンテキストなしで会話を続けることができます。</value>
+  </data>
+<data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>タスクを読み込めませんでした。タスク詳細サービスを利用できません。このページを開いている間、自動的に再試行します。診断 ID: {0}</value>
+  </data>
+<data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>ワークステーションのメトリクスを読み込めませんでした。接続を確認して、もう一度お試しください。診断 ID: {0}</value>
+  </data>
+<data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>入力待ちのタスク一覧は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
+  </data>
 </root>
