@@ -180,6 +180,14 @@ public static class ServiceCollectionExtensions
         services.AddTransient<CloseMilestoneHandler>();
         services.AddTransient<ReopenMilestoneHandler>();
 
+        services.AddTransient<ListProjectReleasesHandler>();
+        services.AddTransient<GetReleaseHandler>();
+        services.AddTransient<CreateReleaseHandler>();
+        services.AddTransient<UpdateReleaseHandler>();
+        services.AddTransient<SetReleaseStatusHandler>();
+        services.AddTransient<DeleteReleaseHandler>();
+        services.AddTransient<SetMilestoneReleaseHandler>();
+
         services.AddTransient<CreateDeviceHandler>();
         services.AddTransient<ListDevicesHandler>();
         services.AddTransient<RevokeDeviceHandler>();
