@@ -27,6 +27,10 @@ public static class ReleaseEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/release", SetMilestoneRelease)
             .RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/releases/{releaseId:guid}/prepare", PrepareRelease)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/releases/{releaseId:guid}/verify-landing", VerifyReleaseLanding)
+            .RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 
@@ -101,6 +105,29 @@ public static class ReleaseEndpoints
             context.GetActor()), ct);
         return result.Success ? Results.NoContent() : result.FromResult();
     }
+
+    private static async Task<IResult> PrepareRelease(
+        Guid projectId, Guid releaseId, [FromBody] PrepareReleaseBody body,
+        HttpContext context, PrepareReleaseHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new PrepareReleaseCommand(
+            projectId, releaseId, body.ExpectedReleaseRevision, context.GetActor()), ct);
+        return result.Success ? Results.Accepted(
+            $"/v1/projects/{projectId}/releases/{releaseId}", result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> VerifyReleaseLanding(
+        Guid projectId, Guid releaseId, [FromBody] VerifyReleaseLandingBody body,
+        HttpContext context, VerifyReleaseLandingHandler handler, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new VerifyReleaseLandingCommand(
+            projectId, releaseId, body.ExpectedPreparationRevision, context.GetActor()), ct);
+        return result.Success ? Results.Accepted(
+            $"/v1/projects/{projectId}/releases/{releaseId}", result.Value) : result.FromResult();
+    }
+
+    public sealed record PrepareReleaseBody(int ExpectedReleaseRevision);
+    public sealed record VerifyReleaseLandingBody(int ExpectedPreparationRevision);
 
     public sealed record UpdateReleaseBody(
         Guid ReleaseId, Guid ProjectId, string? Name, string? Description,
