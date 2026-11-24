@@ -75,6 +75,35 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task DeviceToken_ProjectRuntimeDiscoveryUsesUnscopedRlsAndEfScope()
+    {
+        var org = Org.Create("Device runtime discovery", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var first = Project.Create("First", null, org.Id);
+        var second = Project.Create("Second", null, org.Id);
+        _db.Projects.AddRange(first, second);
+        var owner = User.Create("device-runtime-owner", "device-runtime-owner@example.com", "hash");
+        _db.Users.Add(owner);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _db.ProjectMembers.AddRange(
+            ProjectMember.Create(first.Id, owner.Id, MemberRole.Owner),
+            ProjectMember.Create(second.Id, owner.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var middleware = new TenantIsolationMiddleware(async _ =>
+        {
+            Assert.True(TenantScope.IsUnscoped);
+            Assert.Equal(2, await _db.Projects.CountAsync(TestContext.Current.CancellationToken));
+        });
+        var http = new DefaultHttpContext { User = DevicePrincipal(Guid.NewGuid(), owner.Id) };
+        http.Request.Method = HttpMethods.Get;
+        http.Request.Path = "/v1/devices/me/project-runtimes";
+
+        await middleware.InvokeAsync(http, _db);
+    }
+
+    [Fact]
     public async Task DeviceToken_WithoutProjectHeader_ScopesToOldestMembership()
     {
         var org = Org.Create("Org", null);

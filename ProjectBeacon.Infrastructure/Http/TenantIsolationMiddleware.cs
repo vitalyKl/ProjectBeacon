@@ -21,6 +21,23 @@ public sealed class TenantIsolationMiddleware
 
     public async Task InvokeAsync(HttpContext ctx, BeaconDbContext db)
     {
+        // This multi-project discovery endpoint is authenticated by a device token and
+        // its handler scopes every returned row to the token's DeviceId. The ordinary
+        // owner-to-single-project resolution below would hide runtimes attached to other
+        // projects, so use an unscoped EF/RLS context for this endpoint only.
+        if (ctx.User.Identity?.AuthenticationType == ActorContextFactory.DeviceTokenAuthType
+            && HttpMethods.IsGet(ctx.Request.Method)
+            && string.Equals(ctx.Request.Path.Value, "/v1/devices/me/project-runtimes", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.RequestServices.GetService<ITenantContext>()?.Assign(null, null, unscoped: true);
+            using (TenantScope.EnterUnscoped())
+            {
+                await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
+                await _next(ctx);
+            }
+            return;
+        }
+
         Guid? projectId;
         Guid? orgId;
 
