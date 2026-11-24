@@ -1,3 +1,4 @@
+@using System.Text.Json
 @page "/roadmap"
 @layout MainLayout
 @attribute [Authorize]
@@ -212,7 +213,7 @@ else
                                             else
                                             {
                                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                                    @L[$"ReleasePreparationStatus{release.PreparationStatus}"]
+                                                    @L["ReleasePreparationInProgress"]
                                                 </MudText>
                                             }
                                             @if (!string.IsNullOrWhiteSpace(release.PreparationError))
