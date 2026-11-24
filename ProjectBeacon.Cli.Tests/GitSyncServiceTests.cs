@@ -10,6 +10,50 @@ public sealed class GitSyncServiceTests
     private readonly GitSyncService _service = new();
 
     [Fact]
+    public async Task SyncTags_FetchesNewTagsWithoutTouchingDirtyWorkingTree()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await Git(repo.Seed, "tag", "v1.0.0");
+        await Git(repo.Seed, "push", "origin", "refs/tags/v1.0.0");
+        await Git(repo.Root, "tag", "-d", "v1.0.0");
+        await File.WriteAllTextAsync(Path.Combine(repo.Root, "local-edit.txt"), "keep this edit");
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+
+        var result = await _service.SyncTagsAsync(repo.Root, TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.False(result.Skipped);
+        Assert.Equal(1, result.NewTags);
+        Assert.Equal(headBefore, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.Equal(
+            await Git(repo.Seed, "rev-parse", "refs/tags/v1.0.0"),
+            await Git(repo.Root, "rev-parse", "refs/tags/v1.0.0"));
+        Assert.Equal("keep this edit", await File.ReadAllTextAsync(Path.Combine(repo.Root, "local-edit.txt")));
+    }
+
+    [Fact]
+    public async Task SyncTags_RefusesToMoveAnExistingLocalTag()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await Git(repo.Seed, "tag", "v1.0.0");
+        await Git(repo.Seed, "push", "origin", "refs/tags/v1.0.0");
+
+        var initial = await _service.SyncTagsAsync(repo.Root, TestContext.Current.CancellationToken);
+        Assert.True(initial.Success, initial.Error);
+        var localTagBefore = await Git(repo.Root, "rev-parse", "refs/tags/v1.0.0");
+
+        await repo.PushRemoteCommitAsync("tag-move.txt", "new remote target");
+        await Git(repo.Seed, "tag", "--force", "v1.0.0");
+        await Git(repo.Seed, "push", "--force", "origin", "refs/tags/v1.0.0");
+
+        var moved = await _service.SyncTagsAsync(repo.Root, TestContext.Current.CancellationToken);
+
+        Assert.False(moved.Success);
+        Assert.NotNull(moved.Error);
+        Assert.Equal(localTagBefore, await Git(repo.Root, "rev-parse", "refs/tags/v1.0.0"));
+    }
+
+    [Fact]
     public async Task PullFastForward_UpdatesOnlyTrackedBranch_AndRepeatedDeliveryIsIdempotent()
     {
         await using var repo = await RepositoryFixture.CreateAsync();
