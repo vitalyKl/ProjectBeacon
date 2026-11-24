@@ -10,6 +10,7 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
     public void Configure(EntityTypeBuilder<Release> entity)
     {
         entity.HasKey(release => release.Id);
+        entity.HasAlternateKey(release => new { release.ProjectId, release.Id });
         entity.Property(release => release.Name).IsRequired().HasMaxLength(200);
         entity.Property(release => release.Description).HasMaxLength(5000);
         entity.Property(release => release.TargetVersion).HasMaxLength(100);
