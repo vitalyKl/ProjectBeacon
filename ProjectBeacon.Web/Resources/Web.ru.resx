@@ -3415,4 +3415,6 @@
   <data name="HotfixDeploymentRun" xml:space="preserve"><value>Открыть workflow развёртывания</value></data>
   <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Перенос исправления Hotfix в основную ветку</value></data>
   <data name="HotfixTasks" xml:space="preserve"><value>Задачи Hotfix и переноса исправлений</value></data>
+  <data name="HotfixOriginNotice" xml:space="preserve"><value>Эта задача создана от точного commit, развёрнутого в production. Beacon защищает исходные ветку и commit.</value></data>
+  <data name="ForwardPortNotice" xml:space="preserve"><value>Эта обычная задача создана после подтверждённой посадки исходного Hotfix. Выполните её через стандартный цикл Planner, Actor, Reviewer и landing.</value></data>
 </root>
