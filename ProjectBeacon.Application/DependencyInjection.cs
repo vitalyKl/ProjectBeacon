@@ -159,6 +159,10 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetProposalPolicyHandler>();
         services.AddTransient<GetProjectGitPolicyHandler>();
         services.AddTransient<SetProjectGitPolicyHandler>();
+        services.AddTransient<GetProjectVersionPolicyHandler>();
+        services.AddTransient<SetProjectVersionPolicyHandler>();
+        services.AddTransient<GetTaskVersionImpactHandler>();
+        services.AddTransient<SetTaskVersionImpactHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
