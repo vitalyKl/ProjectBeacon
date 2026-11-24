@@ -3036,4 +3036,24 @@ orthstar</value>
   <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>自动同步远程仓库</value></data>
   <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon 会定期获取此项目的上游更新，并且仅在工作区干净且空闲时执行 fast-forward。现有本地修改、历史分叉、Detached HEAD 和正在运行的代理会话均会保留。不会强制覆盖或删除现有本地标签。</value></data>
   <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>请连接运行支持 AutoSync 的 Beacon 客户端的工作站以启用此设置。</value></data>
+  <data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>项目版本策略</value></data>
+  <data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon 保存项目的权威版本，并将其与配置的仓库清单文件进行核对。仓库文件只是投影；普通任务中的代理不能发布或更改正式版本。</value></data>
+  <data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>无法加载版本策略。</value></data>
+  <data name="OfficialProjectVersion" xml:space="preserve"><value>正式版本</value></data>
+  <data name="VersionNotInitialized" xml:space="preserve"><value>尚未初始化</value></data>
+  <data name="VersionScheme" xml:space="preserve"><value>版本方案</value></data>
+  <data name="VersionSchemeNumeric" xml:space="preserve"><value>数字组件</value></data>
+  <data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="VersionSchemeCalendar" xml:space="preserve"><value>日历版本</value></data>
+  <data name="VersionComponentCount" xml:space="preserve"><value>数字组件数量</value></data>
+  <data name="VersionCalendarFormat" xml:space="preserve"><value>日历格式</value></data>
+  <data name="VersionTagPattern" xml:space="preserve"><value>Git 标签模式</value></data>
+  <data name="VersionTagPatternHelp" xml:space="preserve"><value>必须且只能包含一个 {version} 占位符，例如 v{version}。</value></data>
+  <data name="VersionAllowPrerelease" xml:space="preserve"><value>允许 SemVer 预发布版本</value></data>
+  <data name="VersionManifestSources" xml:space="preserve"><value>版本清单来源</value></data>
+  <data name="VersionManifestSourcesHelp" xml:space="preserve"><value>每行一个来源：path|Format|selector。例如：Directory.Build.props|Xml|//Version；package.json|Json|/version；pyproject.toml|Toml|project.version。Regex 使用命名组 (?&lt;version>...) 或第一个捕获组。</value></data>
+  <data name="InitialOfficialVersion" xml:space="preserve"><value>初始化正式版本</value></data>
+  <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>此值只能初始化一次。之后更改正式版本必须通过 ReleasePrepare 工作流。</value></data>
+  <data name="SaveVersionPolicy" xml:space="preserve"><value>保存版本策略</value></data>
+  <data name="VersionSourceLineInvalid" xml:space="preserve"><value>每个来源必须采用 path|Format|selector 格式。</value></data>
 </root>
