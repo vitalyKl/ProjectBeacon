@@ -717,7 +717,6 @@ public sealed class McpApiToolsTests
     }
 
     [Fact]
-    [Fact]
     public async Task ReleaseContext_IncludesEnabledProjectReleaseRecords()
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
