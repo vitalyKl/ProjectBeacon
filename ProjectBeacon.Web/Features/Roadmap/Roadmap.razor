@@ -57,6 +57,86 @@ else if (_project is null)
 }
 else
 {
+    @if (_releaseManagementEnabled)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.h6">@L["ProjectReleases"]</MudText>
+                <MudText Typo="Typo.caption">@_releases.Count @L["Releases"]</MudText>
+            </MudStack>
+            @if (_showCreateReleaseForm && _canManageReleases)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle1">@L["NewRelease"]</MudText>
+                <MudTextField @bind-Value="_releaseName" Label="@L["ReleaseName"]" Required="true"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MarkdownEditor @bind-Value="_releaseDescription" Label="@L["Description"]" Lines="2" />
+                <MudTextField @bind-Value="_releaseTargetVersion" Label="@L["ReleaseTargetVersion"]"
+                              HelperText="@L["ReleaseTargetVersionHelp"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_releaseTargetBranch" Label="@L["ReleaseTargetBranch"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="int" @bind-Value="_releaseOrder" Label="@L["Order"]"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_releaseBusy" OnClick="CreateRelease">@L["Create"]</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="HideCreateReleaseForm">@L["Cancel"]</MudButton>
+                </MudStack>
+            }
+            @if (_releases.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mt-3">@L["NoReleases"]</MudText>
+            }
+            else
+            {
+                <MudGrid Class="mt-2">
+                    @foreach (var release in _releases.OrderBy(item => item.Order))
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 h-100">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.subtitle1">@release.Name</MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(release.Status == ReleaseStatus.Published ? Color.Success : Color.Default)">
+                                        @L[$"ReleaseStatus{release.Status}"]
+                                    </MudChip>
+                                </MudStack>
+                                @if (!string.IsNullOrWhiteSpace(release.Description))
+                                {
+                                    <MarkdownView Text="@release.Description" MaxHeight="90" Class="mt-1" />
+                                }
+                                <MudText Typo="Typo.caption" Class="mt-2">@L["ReleaseTargetVersion"]: @(release.TargetVersion ?? "—")</MudText>
+                                <MudText Typo="Typo.caption">@L["ReleaseTargetBranch"]: @release.TargetBranch</MudText>
+                                <MudText Typo="Typo.caption">@L["Milestones"]: @release.MilestoneCount</MudText>
+                                @if (_canManageReleases)
+                                {
+                                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+                                        @if (release.Status == ReleaseStatus.Planned)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@_releaseBusy"
+                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.InProgress)">@L["ReleaseStart"]</MudButton>
+                                        }
+                                        @if (release.Status == ReleaseStatus.InProgress)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@_releaseBusy"
+                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Candidate)">@L["ReleaseMarkCandidate"]</MudButton>
+                                        }
+                                        @if (release.Status is ReleaseStatus.Planned or ReleaseStatus.InProgress)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Cancelled)">@L["CancelRelease"]</MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                       OnClick="() => DeleteRelease(release)">@L["Delete"]</MudButton>
+                                        }
+                                    </MudStack>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudPaper>
+    }
+
     @if (_showCreateForm)
     {
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -93,6 +173,23 @@ else
             <MudItem xs="12" sm="6" md="4">
                 <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
                     <MudText Typo="Typo.h6">@milestone.Name</MudText>
+                    @if (_releaseManagementEnabled && _canManageReleases)
+                    {
+                        <MudSelect T="Guid?" Value="@milestone.ReleaseId"
+                                   ValueChanged="@(releaseId => SetMilestoneReleaseAsync(milestone, releaseId))"
+                                   Label="@L["MilestoneRelease"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Dense="true" Disabled="@_releaseBusy" Class="mt-2">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">@L["NoRelease"]</MudSelectItem>
+                            @foreach (var release in _releases.Where(item => item.Status is not (ReleaseStatus.Published or ReleaseStatus.Cancelled)))
+                            {
+                                <MudSelectItem T="Guid?" Value="@((Guid?)release.Id)">@release.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else if (_releaseManagementEnabled && milestone.ReleaseId is not null)
+                    {
+                        <MudText Typo="Typo.caption">@L["MilestoneRelease"]: @(_releases.FirstOrDefault(item => item.Id == milestone.ReleaseId)?.Name ?? "—")</MudText>
+                    }
                     @if (!string.IsNullOrEmpty(milestone.Description))
                     {
                         <MarkdownView Text="@milestone.Description" MaxHeight="120" Class="mt-2" />
