@@ -905,6 +905,47 @@ public sealed class GitAutoSyncLoopTests
         }
     }
 
+    [Fact]
+    public async Task RunAsync_DoesNotStartASecondCycleWhileTheFirstIsRunning()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requests = 0;
+        using var http = new HttpClient(new RecordingHandler(async (_, ct) =>
+        {
+            Interlocked.Increment(ref requests);
+            started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var dependencies = new DaemonDependencies(
+            http,
+            null!,
+            () => new WorkstationSettings { AutoPullMode = "WhenSafe", AutoSyncIntervalMinutes = 10 },
+            _ => null!);
+        var timing = new DaemonTiming { GitAutoSyncStartupDelay = TimeSpan.Zero };
+        var loop = new GitAutoSyncLoop(
+            dependencies,
+            new GitSyncService(),
+            new GitAutoSyncSnapshot(),
+            timing,
+            new DaemonRuntimeState("https://beacon.test", null));
+        using var cancellation = new CancellationTokenSource();
+
+        var firstRun = loop.RunAsync(cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // A second host invocation must return without entering the project discovery/fetch path.
+        await loop.RunAsync(cancellation.Token);
+
+        Assert.Equal(1, Volatile.Read(ref requests));
+        cancellation.Cancel();
+        await firstRun;
+        Assert.Equal(1, Volatile.Read(ref requests));
+    }
+
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {
         private DateTimeOffset _now = now;
