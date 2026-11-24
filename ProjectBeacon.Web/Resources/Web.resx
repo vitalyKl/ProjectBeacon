@@ -3264,4 +3264,6 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectVersionSave" xml:space="preserve"><value>Save version policy</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
   <data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
+  <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Enable Release Management for this project</value></data>
+  <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, releases become available in the Roadmap and milestones can be grouped into a release. Existing milestones remain independent. Disabled by default.</value></data>
 </root>
