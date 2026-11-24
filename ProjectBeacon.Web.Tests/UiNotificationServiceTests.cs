@@ -157,6 +157,85 @@ public sealed class UiNotificationServiceTests
     }
 
     [Fact]
+    public void FormatFailure_InviteEmailMismatch_ShowsSafeSpecificExplanation()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(
+                "Email does not match invite.",
+                "приглашения",
+                ErrorCodes.InviteEmailMismatch,
+                "Принять");
+
+            Assert.Contains("другой адрес электронной почты", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Принять", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Email does not match invite.", message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
+    [Fact]
+    public void FormatFailure_InviteInvalidOrExpired_UsesLocalizedRecoveryInstruction()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(
+                "Invite is no longer valid.",
+                "приглашения",
+                ErrorCodes.InviteInvalidOrExpired,
+                "Принять");
+
+            Assert.Contains("недействительно", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("попросите отправителя прислать новое приглашение", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Invite is no longer valid.", message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
+    [Fact]
+    public void FormatFailure_UnknownMachineCode_DoesNotExposeBackendDetail()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(
+                "SQLSTATE 08006 at private-db.internal",
+                "загрузка приглашения",
+                "future_error_code",
+                "Загрузить");
+
+            Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("SQLSTATE", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("private-db.internal", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("future_error_code", message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
+    [Fact]
     public void FormatFailure_SuccessfulResult_ReturnsNoErrorMessage()
     {
         using var context = CreateContext();

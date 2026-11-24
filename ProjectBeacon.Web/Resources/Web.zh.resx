@@ -3321,4 +3321,7 @@ orthstar</value>
   <data name="ResetTokenMissing" xml:space="preserve">
     <value>密码重置链接缺少令牌。请重新申请密码重置链接并再次打开。</value>
   </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>无法在“{0}”中执行“{1}”：此邀请发送到了另一个电子邮件地址。请使用受邀邮箱登录，或联系邀请人更新邀请。</value>
+  </data>
 </root>

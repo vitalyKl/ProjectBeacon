@@ -3321,4 +3321,7 @@ orthstar</value>
   <data name="ResetTokenMissing" xml:space="preserve">
     <value>パスワードリセットリンクにトークンがありません。新しいリセットリンクをリクエストして、もう一度開いてください。</value>
   </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>{0} で「{1}」を実行できませんでした。この招待は別のメールアドレス宛てに送信されています。招待されたアドレスでサインインするか、招待者に招待内容の更新を依頼してください。</value>
+  </data>
 </root>

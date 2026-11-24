@@ -3313,4 +3313,7 @@ orthstar</value>
   <data name="ResetTokenMissing" xml:space="preserve">
     <value>Dem Link zum Zurücksetzen des Passworts fehlt das Token. Fordern Sie einen neuen Link an und öffnen Sie ihn erneut.</value>
   </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ nicht möglich: Diese Einladung wurde an eine andere E-Mail-Adresse gesendet. Melden Sie sich mit der eingeladenen Adresse an oder bitten Sie den Einladenden, die Einladung zu aktualisieren.</value>
+  </data>
 </root>

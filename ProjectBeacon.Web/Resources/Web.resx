@@ -3512,4 +3512,7 @@ No Beacon-hosted coding agent.</value>
   <data name="ResetTokenMissing" xml:space="preserve">
     <value>The password reset link is missing its token. Request a new password reset link and open it again.</value>
   </data>
+  <data name="InviteEmailMismatch" xml:space="preserve">
+    <value>Could not accept this invitation in {0}: it was sent to a different email address. Sign in with the invited address or ask the inviter to update the invitation.</value>
+  </data>
 </root>

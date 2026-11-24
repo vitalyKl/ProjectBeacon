@@ -128,21 +128,28 @@ internal sealed class UiNotificationService : IUiNotificationService
                 return _localizer["UiOperationTargetNotFound", section, operationLabel].Value;
             case ErrorCodes.Conflict:
                 return _localizer["UiOperationConflict", section, operationLabel].Value;
+            case ErrorCodes.InviteEmailMismatch:
+                return _localizer["InviteEmailMismatch", section, operationLabel].Value;
+            case ErrorCodes.InviteInvalidOrExpired:
+                return _localizer["InviteInvalidOrExpired"].Value;
             case ErrorCodes.Unavailable:
-                return _localizer["UiOperationUnavailable", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
             case ErrorCodes.InternalError:
             case ErrorCodes.Unclassified:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
-        }
-
-        return string.IsNullOrWhiteSpace(detail)
-            ? _localizer["UiOperationFailed", section, operationLabel].Value
-            : _localizer["UiOperationFailedWithDetail", section, operationLabel, detail].Value;
+            case null:
+            case ErrorCodes.ValidationFailed:
+                return string.IsNullOrWhiteSpace(detail)
+                    ? _localizer["UiOperationFailed", section, operationLabel].Value
+                    : _localizer["UiOperationFailedWithDetail", section, operationLabel, detail].Value;
+            default:
+                return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
     }
 
     private string? UnexpectedFailureDiagnosticId(string? detail, string section, string? operationLabel, string? errorCode, object? context)
     {
-        if (errorCode is not (ErrorCodes.Unavailable or ErrorCodes.InternalError or ErrorCodes.Unclassified))
+        if (errorCode is null or ErrorCodes.ValidationFailed
+            or ErrorCodes.Unauthorized or ErrorCodes.Forbidden or ErrorCodes.NotFound or ErrorCodes.Conflict
+            or ErrorCodes.InviteEmailMismatch or ErrorCodes.InviteInvalidOrExpired)
             return null;
 
         var diagnosticId = CreateDiagnosticId();
