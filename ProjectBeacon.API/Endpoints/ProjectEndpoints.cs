@@ -111,7 +111,7 @@ public static class ProjectEndpoints
             projectId,
             new ProjectVersionPolicy(
                 body.Scheme, body.ComponentCount, body.CalendarFormat, body.TagPattern,
-                body.AllowPrerelease, body.Sources ?? []),
+                body.AllowPrerelease, body.Sources ?? [], body.ReleaseManagementEnabled),
             body.InitialOfficialVersion,
             body.ExpectedRevision,
             ctx.GetActor()), ct);
@@ -126,7 +126,8 @@ public static class ProjectEndpoints
         bool AllowPrerelease,
         IReadOnlyList<ProjectVersionSourcePolicy>? Sources,
         string? InitialOfficialVersion,
-        int ExpectedRevision);
+        int ExpectedRevision,
+        bool ReleaseManagementEnabled = false);
 
     private static async Task<IResult> DeleteProject(Guid projectId, DeleteProjectHandler handler, HttpContext ctx)
     {
