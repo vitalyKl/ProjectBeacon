@@ -89,6 +89,11 @@ public sealed class AgentTaskWorktreeTests
             Assert.NotNull(first.Worktree);
             await first.Worktree!.DisposeAsync();
 
+            // Reopening the persisted task must inspect metadata.BaseBranch, not only the
+            // currently checked out branch's remote-tracking ref.
+            await GitAsync(repository, "branch", "other-base");
+            await GitAsync(repository, "switch", "other-base");
+
             await File.WriteAllTextAsync(Path.Combine(seed, "remote-update.txt"), "new base commit\n");
             await GitAsync(seed, "add", "remote-update.txt");
             await GitAsync(seed, "commit", "-m", "advance base branch");
@@ -99,6 +104,7 @@ public sealed class AgentTaskWorktreeTests
                 repository, projectId, taskId, worktrees, CancellationToken.None);
             Assert.NotNull(reopened.Worktree);
             await using var workspace = reopened.Worktree!;
+            Assert.Equal("other-base", await GitAsync(repository, "symbolic-ref", "--short", "HEAD"));
             Assert.Equal(1, workspace.BaseBehindCommits);
             Assert.Contains("advanced by 1 commits", workspace.BuildEnvironmentContract(), StringComparison.Ordinal);
             Assert.Contains("git_integrate", workspace.BuildEnvironmentContract(), StringComparison.Ordinal);

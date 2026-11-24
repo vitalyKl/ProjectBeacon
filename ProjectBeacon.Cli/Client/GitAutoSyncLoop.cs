@@ -164,7 +164,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             var result = status.Result;
             if (result.Outcome == GitSyncOutcome.Failed)
             {
-                RecordFailure(project, ClassifyFailure(result), now, result);
+                RecordFailure(project, ClassifyFailure(result), now);
                 continue;
             }
 
@@ -243,7 +243,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     else if (pullResult.Outcome == GitSyncOutcome.Failed)
                     {
                         var code = ClassifyFailure(pullResult);
-                        RecordFailure(project, code, _timing.TimeProvider.GetUtcNow(), pullResult);
+                        RecordFailure(project, code, _timing.TimeProvider.GetUtcNow(), result);
                         continue;
                     }
                 }
@@ -336,7 +336,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 previous?.Detached ?? false,
                 previous?.HasUpstream ?? false,
                 previous?.Diverged ?? false,
-                now,
+                previous?.CheckedAt,
                 previous?.LastAutoPull,
                 clearsLastError ? null : previous?.LastError,
                 reason);
@@ -356,7 +356,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             ? new GitAutoSyncProjectState(project.ProjectId, previous?.Branch, previous?.Upstream,
                 previous?.Ahead ?? 0, previous?.Behind ?? 0, previous?.Clean ?? false,
                 previous?.Detached ?? false, previous?.HasUpstream ?? false, previous?.Diverged ?? false,
-                now, previous?.LastAutoPull, new GitAutoSyncError(code, now), previous?.AutoPullBlockedReason)
+                previous?.CheckedAt, previous?.LastAutoPull, new GitAutoSyncError(code, now), previous?.AutoPullBlockedReason)
             : ToState(project.ProjectId, result, now, previous?.LastAutoPull,
                 new GitAutoSyncError(code, now), code);
         if (_snapshot.Set(state))

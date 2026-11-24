@@ -14,7 +14,7 @@ internal sealed record GitAutoSyncProjectState(
     bool Detached,
     bool HasUpstream,
     bool Diverged,
-    DateTimeOffset CheckedAt,
+    DateTimeOffset? CheckedAt,
     GitAutoPullEvent? LastAutoPull,
     GitAutoSyncError? LastError,
     string? AutoPullBlockedReason);

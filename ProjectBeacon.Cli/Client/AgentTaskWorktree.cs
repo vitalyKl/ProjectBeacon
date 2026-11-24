@@ -172,6 +172,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 : null;
             if (branchResult.ExitCode is not (0 or 1) || branchResult.TimedOut)
                 return Fail("Could not identify the current base branch safely.");
+            string? originFetchUrl = null;
 
             if (!string.IsNullOrWhiteSpace(baseBranch))
             {
@@ -186,6 +187,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     }
                     else
                     {
+                        originFetchUrl = remoteUrl;
                         var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
                             repositoryRoot,
                             disabledFilters,
@@ -283,8 +285,9 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 return Fail("This task's branch worktree is already in use by another pipeline command.");
             }
 
+            var existingMetadata = File.Exists(metadataPath);
             TaskWorktreeMetadata metadata;
-            if (File.Exists(metadataPath))
+            if (existingMetadata)
             {
                 var json = await File.ReadAllTextAsync(metadataPath, ct);
                 metadata = JsonSerializer.Deserialize<TaskWorktreeMetadata>(json, JsonOptions)
@@ -323,26 +326,67 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
             }
 
             var baseBehindCommits = 0;
-            if (!string.IsNullOrWhiteSpace(baseBranch) && IsGitSha(baseSha))
+            if (existingMetadata && !string.IsNullOrWhiteSpace(baseBranch) && IsGitSha(baseSha))
             {
-                // Use the remote-tracking ref refreshed above. This is advisory only:
-                // never update the persistent task branch or merge the new base here.
-                var remoteBase = await AgentSessionWorktree.RunGitAsync(
-                    repositoryRoot, ct, disabledFilters, "rev-parse", "--verify",
-                    $"refs/remotes/origin/{baseBranch}");
-                if (remoteBase.ExitCode == 0 && !remoteBase.TimedOut
-                    && IsGitSha(remoteBase.StdOut.Trim()))
+                // Existing task worktrees keep their original base branch even when the
+                // user's real checkout has switched branches. Refresh that exact branch
+                // before comparing SHAs; never count from an old remote-tracking ref.
+                if (originFetchUrl is null)
                 {
-                    var remoteHead = remoteBase.StdOut.Trim();
-                    var baseIsAncestor = await AgentSessionWorktree.RunGitAsync(
-                        repositoryRoot, ct, disabledFilters, "merge-base", "--is-ancestor", baseSha, remoteHead);
-                    if (baseIsAncestor.ExitCode == 0 && !baseIsAncestor.TimedOut)
+                    var remote = await AgentSessionWorktree.RunGitAsync(
+                        repositoryRoot, ct, disabledFilters, "remote", "get-url", "origin");
+                    if (remote.ExitCode == 0 && !string.IsNullOrWhiteSpace(remote.StdOut)
+                        && IsSupportedFetchRemote(remote.StdOut.Trim()))
+                        originFetchUrl = remote.StdOut.Trim();
+                }
+
+                var baseRef = "refs/heads/" + baseBranch;
+                var refCheck = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters, "check-ref-format", baseRef);
+                var baseRemoteRefreshed = false;
+                if (originFetchUrl is not null && refCheck.ExitCode == 0 && !refCheck.TimedOut)
+                {
+                    var refresh = await AgentTaskGitOperations.RunRemoteGitAsync(
+                        repositoryRoot,
+                        disabledFilters,
+                        ct,
+                        originFetchUrl,
+                        "fetch", "--no-tags", "--no-recurse-submodules",
+                        "--upload-pack=git-upload-pack", "--", originFetchUrl,
+                        $"+{baseRef}:refs/remotes/origin/{baseBranch}");
+                    if (refresh.ExitCode == 0 && !refresh.TimedOut)
+                        baseRemoteRefreshed = true;
+                    else
+                        warning = "Could not refresh origin/" + baseBranch + "; task base freshness could not be verified.";
+                }
+                else
+                {
+                    warning = "Could not validate or resolve origin/" + baseBranch + "; task base freshness could not be verified.";
+                }
+
+                if (baseRemoteRefreshed)
+                {
+                    var remoteBase = await AgentSessionWorktree.RunGitAsync(
+                        repositoryRoot, ct, disabledFilters, "rev-parse", "--verify",
+                        $"refs/remotes/origin/{baseBranch}");
+                    if (remoteBase.ExitCode == 0 && !remoteBase.TimedOut
+                        && IsGitSha(remoteBase.StdOut.Trim()))
                     {
-                        var count = await AgentSessionWorktree.RunGitAsync(
-                            repositoryRoot, ct, disabledFilters, "rev-list", "--count", baseSha + ".." + remoteHead);
-                        if (count.ExitCode == 0 && !count.TimedOut
-                            && int.TryParse(count.StdOut.Trim(), out var parsedCount) && parsedCount > 0)
-                            baseBehindCommits = parsedCount;
+                        var remoteHead = remoteBase.StdOut.Trim();
+                        var baseIsAncestor = await AgentSessionWorktree.RunGitAsync(
+                            repositoryRoot, ct, disabledFilters, "merge-base", "--is-ancestor", baseSha, remoteHead);
+                        if (baseIsAncestor.ExitCode == 0 && !baseIsAncestor.TimedOut)
+                        {
+                            var count = await AgentSessionWorktree.RunGitAsync(
+                                repositoryRoot, ct, disabledFilters, "rev-list", "--count", baseSha + ".." + remoteHead);
+                            if (count.ExitCode == 0 && !count.TimedOut
+                                && int.TryParse(count.StdOut.Trim(), out var parsedCount) && parsedCount > 0)
+                                baseBehindCommits = parsedCount;
+                        }
+                    }
+                    else
+                    {
+                        warning = "Could not resolve refreshed origin/" + baseBranch + "; task base freshness could not be verified.";
                     }
                 }
             }

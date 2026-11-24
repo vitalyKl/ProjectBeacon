@@ -102,6 +102,91 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task RunCycle_OffModeFetchesStatusButDoesNotFastForwardOrQueueCommands()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-off-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var remote = Path.Combine(parent, "origin.git");
+        var seed = Path.Combine(parent, "seed");
+        Directory.CreateDirectory(parent);
+
+        try
+        {
+            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "remote", "add", "origin", remote);
+            await Git(root, "push", "-u", "origin", "main");
+
+            await Git(parent, "clone", remote, seed);
+            await ConfigureIdentity(seed);
+            await File.WriteAllTextAsync(Path.Combine(seed, "remote.txt"), "from remote");
+            await Git(seed, "add", "remote.txt");
+            await Git(seed, "commit", "-m", "advance remote");
+            await Git(seed, "push", "origin", "main");
+
+            var projectId = Guid.NewGuid();
+            var requests = new List<string>();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var http = new HttpClient(new RecordingHandler((request, _) =>
+            {
+                requests.Add(request.Method + " " + request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                });
+            }))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming();
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var state = new DaemonRuntimeState("https://beacon.test", null);
+            var loop = new GitAutoSyncLoop(dependencies, new GitSyncService(), snapshot, timing, state);
+            var headBefore = await Git(root, "rev-parse", "HEAD");
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(new[] { "GET /v1/devices/me/project-runtimes" }, requests);
+            Assert.Equal(headBefore, await Git(root, "rev-parse", "HEAD"));
+            Assert.False(File.Exists(Path.Combine(root, "remote.txt")));
+            var remoteHead = await Git(root, "rev-parse", "refs/remotes/origin/main");
+            Assert.NotEqual(headBefore, remoteHead);
+
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal(1, status.Behind);
+            Assert.True(status.Clean);
+            Assert.Null(status.LastAutoPull);
+            Assert.Null(status.LastError);
+            Assert.NotNull(status.CheckedAt);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task RunCycle_RecordsSanitizedFetchFailureAndSchedulesRetryBeforeInterval()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-backoff-" + Guid.NewGuid().ToString("N"));
@@ -568,6 +653,7 @@ public sealed class GitAutoSyncLoopTests
         var status = snapshot.Get(projectId);
         Assert.NotNull(status);
         Assert.Equal(expectedReason, status.AutoPullBlockedReason);
+        Assert.Null(status.CheckedAt);
         Assert.Null(status.LastError);
     }
 
