@@ -3589,7 +3589,7 @@ No Beacon-hosted coding agent.</value>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
 <data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Enable Release Management for this project</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, releases become available in the Roadmap and milestones can be grouped into a release. Existing milestones remain independent. Disabled by default.</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, the Roadmap shows Releases and lets you group milestones into a Release. Tasks inherit release context through their milestone. Configure the version scheme and manifest projections above first. Disabled by default; enabling does not publish or deploy anything.</value></data>>
   <data name="ProjectReleases" xml:space="preserve"><value>Project releases</value></data>
   <data name="Releases" xml:space="preserve"><value>releases</value></data>
   <data name="NewRelease" xml:space="preserve"><value>New release</value></data>
@@ -3626,4 +3626,5 @@ No Beacon-hosted coding agent.</value>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix and forward-port tasks</value></data>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>This task is based on the exact commit deployed to production. Its branch and base commit are protected by Beacon.</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>This ordinary task was created after the source Hotfix was verified as landed. Complete it through the normal Planner, Actor, Reviewer and landing workflow.</value></data>
+  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release workflow: configure the authoritative version and manifest files in Project Settings, create a Release here, then associate its milestones with that Release. Tasks linked to those milestones receive the Release target version and branch in Planner context. Release preparation creates an immutable Candidate; production publication is a separate, explicitly confirmed action.</value></data>
 </root>
