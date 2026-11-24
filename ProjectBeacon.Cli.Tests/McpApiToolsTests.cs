@@ -710,6 +710,13 @@ public sealed class McpApiToolsTests
             json["milestones"]![0]!["releaseId"]!.GetValue<string>());
         Assert.Equal("0.7.5.9", json["releases"]![0]!["targetVersion"]!.GetValue<string>());
         Assert.Equal("InProgress", json["releases"]![0]!["status"]!.GetValue<string>());
+        Assert.Equal("dddddddd-dddd-dddd-dddd-dddddddddddd",
+            json["activeTask"]!["milestoneId"]!.GetValue<string>());
+        Assert.True(json["activeTaskReleaseMode"]!.GetValue<bool>());
+        Assert.Equal("cccccccc-cccc-cccc-cccc-cccccccccccc",
+            json["activeTaskRelease"]!["id"]!.GetValue<string>());
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/tasks/{taskId:D}");
         Assert.Contains(handler.Calls, call => call.Method == "GET"
             && call.Path == $"/v1/projects/{projectId:D}/milestones");
         Assert.Contains(handler.Calls, call => call.Method == "GET"
@@ -945,6 +952,7 @@ public sealed class McpApiToolsTests
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":true,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.9","revision":2}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"Prepare API release","releaseId":"cccccccc-cccc-cccc-cccc-cccccccccccc"}]""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","targetBranch":"main","status":"InProgress","order":1,"milestoneCount":2}]""",
+                "/v1/tasks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" => """{"id":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Prepare API release","status":"InProgress","milestoneId":"dddddddd-dddd-dddd-dddd-dddddddddddd"}""",
                 _ => """{"ok":true}"""
             };
             return new HttpResponseMessage(HttpStatusCode.OK)
