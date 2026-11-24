@@ -3099,4 +3099,7 @@ orthstar</value>
   <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
     <value>正在执行其他 Checkout 操作 — 延后更新</value>
   </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>GitSync 正在运行 — 延后检查</value>
+  </data>
 </root>

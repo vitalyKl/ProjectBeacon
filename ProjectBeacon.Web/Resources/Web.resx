@@ -3290,4 +3290,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
     <value>Another checkout operation is in progress — update deferred</value>
   </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>A GitSync operation is already running — check deferred</value>
+  </data>
 </root>

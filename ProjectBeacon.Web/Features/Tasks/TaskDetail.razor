@@ -554,6 +554,8 @@ else
             return L["RepoSyncCheckoutBusy"].Value;
         if (status.AutoPullBlockedReason == "CheckoutMutationActive")
             return L["RepoSyncCheckoutMutationActive"].Value;
+        if (status.AutoPullBlockedReason == "GitSyncBusy")
+            return L["RepoSyncGitSyncBusy"].Value;
         if (status.LastAutoPull is { Commits: > 0 } pull && status.Behind == 0)
             return string.Format(L["RepoSyncPulled"].Value, pull.Commits);
         if (status.Behind > 0)

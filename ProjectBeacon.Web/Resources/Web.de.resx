@@ -3091,4 +3091,7 @@ orthstar</value>
   <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
     <value>Andere Checkout-Operation läuft — Update verschoben</value>
   </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>GitSync läuft bereits — Prüfung verschoben</value>
+  </data>
 </root>

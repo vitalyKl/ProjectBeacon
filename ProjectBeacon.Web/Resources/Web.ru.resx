@@ -3081,4 +3081,7 @@
   <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
     <value>Выполняется другая операция с checkout — обновление отложено</value>
   </data>
+  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+    <value>Уже выполняется GitSync — проверка отложена</value>
+  </data>
 </root>
