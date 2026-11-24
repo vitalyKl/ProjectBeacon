@@ -2,7 +2,8 @@
 
 **Implementation branch:** `feat/release-management`  
 **Plan branch:** `docs/release-management-plan`  
-**Base:** `main` at `22a1a9e559a97124f939b6da2de2e4f9612f4d94`  
+**Initial base:** `main` at `22a1a9e559a97124f939b6da2de2e4f9612f4d94`  
+**Current PR base (24 Nov 2026):** `main` at `1290eae570d48c79f8523222b3293c5b536de99f` (`0.7.5.9`)  
 **Started:** 2026-11-24  
 **Scope:** universal ProjectBeacon product feature for customer projects; no SaaS Control Plane, billing, or platform-operator work.
 
@@ -11,9 +12,11 @@ This log is maintained in the repository and updated in the same branch as imple
 ## Status
 
 - Overall: **In progress**
-- Current slice: **S1 — Version Policy and task impact**
-- S0 implementation is present; **S0 is not accepted as complete until the post-fix CI run is green**
-- S1 implementation is present but **not yet build/test verified**
+- Current slice: **S3 — ReleasePrepare and immutable Candidate evidence**
+- S0 AutoSync implementation is present; **not accepted until green CI on the current head**
+- S1 Version Policy / task impact implementation is present; **not yet fully CI verified**
+- S2 Release entity, Milestone association, feature gate, API and Roadmap UI are implemented; **not yet fully CI verified**
+- S3 ReleasePrepare / VerifyLanding client-server path and immutable Candidate snapshot are implemented; **not yet fully CI verified**
 
 ## Initial repository findings
 
@@ -24,8 +27,8 @@ This log is maintained in the repository and updated in the same branch as imple
 | GitSync queue lifecycle | PR #228 is already in main. Pending GitSync commands have lifecycle/expiry/cancellation handling. | AutoSync must avoid queue flooding and preserve the existing cancellation contract. |
 | AutoSync | Existing `feat/git-autosync` branch is identical to main. Current main tree has no dedicated periodic AutoSync loop or the referenced `claude/prompt-git-autosync.md` file. | Implement as an actual safe, bounded background behavior; do not treat a prompt or branch name as completion. |
 | Git tags | GitSync fetch uses `--no-tags`. | Define and implement tag sync separately from working-tree fast-forward. |
-| Version policy | No `VersionPolicy` or `Release` model exists in current main. | S1 starts with policy/state model and existing project scoping/RLS conventions. |
-| Version workflow | `Directory.Build.props` has `0.7.5.8`; production release validation currently accepts only three-component numeric versions. | Correct the workflow contract to support configured version schemes before S3 publication. |
+| Version policy | The implementation branch now has project-scoped VersionPolicy and Release entities; current main base is `0.7.5.9`. | Keep all changes isolated in this feature branch; confirm CI and migrations before merge. |
+| Version workflow | Release workflow and configured version schemes are being reconciled as part of S3/S4; current repository version is `0.7.5.9`. | Do not allow tag/deploy publication until the workflow validates the configured scheme and source projections. |
 | Landing authority | PR #194 says GitLand remains the landing executor and does not merge remote PRs. | Preserve current behavior until an explicit, tested remote-authority design is implemented; this remains an architecture decision. |
 | GitHub protection | Tag rulesets and production environment reviewers have not yet been verified. | Do not assume dangerous publication is externally protected. Verify before S3. |
 
@@ -45,11 +48,11 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Trigger CI on the current branch head and fix every compile, migration, test, localization or platform failure.
-2. Complete S1 productization and add any missing API/handler authorization and UI tests.
-3. Start S2: add the separate Release entity, milestone association, task/release context and project Roadmap UI.
-4. Resolve the GitHub-versus-GitLand landing authority before wiring release publication.
-5. Continue S3–S6 on this branch, keeping this log current after each verified checkpoint.
+1. Trigger CI on the exact current branch head and fix compile, migration, domain, authorization, UI, localization and platform failures.
+2. Complete S3 verification: inspect immutable candidate snapshot, remote target SHA and ReleasePrepare/VerifyLanding reconciliation paths.
+3. Resolve the GitHub-versus-GitLand authority boundary before release publication; do not add a second merge executor.
+4. Complete gated tag creation and GitHub Actions workflow observation only after tag protection and production reviewers are verified.
+5. Continue S4–S6 on this branch, keeping this log current after every verified checkpoint.
 
 ## Blockers and decisions
 
@@ -196,6 +199,59 @@ This log is maintained in the repository and updated in the same branch as imple
 - [ ] Reconcile release workflow's current three-component version validator with configured schemes and the repository's four-component version `0.7.5.9`.
 
 No changes to SaaS Control Plane or billing. PR #230 remains open and unmerged.
+
+
+
+## 2026-11-24 — S3 ReleasePrepare implementation and CI repair checkpoint
+
+**Branch head before this journal update:** 532861b90a436cd5d0709b5b08cd4c2602ac9cc4  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), open, ready for review, unmerged.  
+**Current base:** main at 1290eae570d48c79f8523222b3293c5b536de99f.
+
+### S2 and S3 implementation now present on the branch
+
+- S2 adds project-scoped Release records distinct from Milestone, optional Milestone.ReleaseId association with a composite same-project FK, Release RLS, feature-gated API access, Owner/Admin UI and Roadmap integration.
+- Candidate is no longer a generic/manual status transition. Candidate is created only after ReleasePrepare and VerifyLanding validation.
+- S3 adds an immutable ReleaseCandidateSnapshot row carrying candidate/version/target branch, base/prepared/candidate/tree SHAs, policy and release revisions, manifest SHA-256 and bounded snapshot JSON.
+- Added a server-side Prepare handler that resolves project policy, verifies the project/release/branch/version/manifest, requires a pinned ReleasePrepare-capable workstation, refuses to start alongside other repository work, stores an immutable request payload and queues a typed ReleasePrepare workstation command.
+- Added a VerifyLanding handler bound to the same pinned workstation and stored Prepare evidence; it checks revision/candidate/manifest/commit evidence before Candidate transition.
+- Added client-side ReleasePrepare executor and command completion handling for Prepare/VerifyLanding.
+- Version-policy settings are now blocked while a ReleasePrepare workflow is active, preventing version projection rules from changing between Prepare and VerifyLanding.
+- ReleasePreparePayload.ToCommandDto now reuses EnqueueCommandHandler.MapCommand, avoiding a second hand-maintained WorkstationCommandDto mapper.
+
+### CI findings from the last completed pre-fix run
+
+Run [#45409649488](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45409649488) tested an earlier head (5ed5a18678923819fddfe632844fd4c07d3e82cd), not the current branch head. It failed due to:
+1. CS8510 unreachable duplicate /releases switch arm in the MCP test RecordingHandler.
+2. EF model snapshot failure on Release.CandidateSnapshot navigation because the snapshot model represents Release as a shared dictionary entity.
+3. Stale test assumptions after adding ReleasePrepare: TenantFilter expected 33 scoped entities instead of 35; command delivery expected 25 kinds instead of 26; WorkstationCommandCatalog did not list ReleasePrepare among project-runtime commands.
+4. PolicyCannotChangeOfficialVersionAfterInitialization read the Project through the test fixture's already-tracked context, therefore it saw stale null state after a separate handler unit-of-work persisted the official version.
+
+### Fixes now committed on the branch
+
+- Removed the duplicate /releases switch arm and consolidated the fixture response to a single InProgress Release payload.
+- Made ReleaseCandidateSnapshot.Release the EF dependent-side navigation; Release.CandidateSnapshot remains an in-memory aggregate reference but is explicitly ignored by EF. The model snapshot no longer configures a principal navigation on the shared Release entity. The unique (ProjectId, ReleaseId) relationship and FK remain.
+- Added ReleasePrepare to the expected project-runtime command scope.
+- Updated tenant-filter baseline to 35, explicitly asserting both Release and ReleaseCandidateSnapshot are project-scoped.
+- Updated command delivery baseline to 26 command kinds / 18 idempotent, and explicitly classified ReleasePrepare as idempotent and not reconcile-backed.
+- Changed the official-version persistence test to read through a fresh context, verifying database state rather than a stale tracked entity.
+
+### Validation state
+
+- The fixes above are committed but **not yet validated by CI**.
+- Run #45409649488 remains a failed historical run on an older SHA; it must not be reported as the current result.
+- There is no green CI run on the exact current branch head yet.
+- Local .NET SDK remains unavailable in this execution environment.
+- GitHub tag protection/rulesets and required reviewers on the production Environment remain unverified. No tag or production deployment is being triggered.
+
+### Remaining blockers
+
+- [ ] Green Linux/Windows/macOS CI on the exact branch head.
+- [ ] Review ReleasePrepareExecutor Git operations and confirm its remote landing authority is consistent with PR #194 and the owner's decision; do not merge through both GitLand and GitHub.
+- [ ] Validate migration snapshot and RLS tests after the one-sided CandidateSnapshot relationship change.
+- [ ] Finish publication path only after repository rulesets and production environment reviewers are verified.
+- [ ] Verify the release workflow handles NumericComponents (including four-part versions) and other configured schemes without hard-coded SemVer assumptions.
+
 
 ## Update format
 
