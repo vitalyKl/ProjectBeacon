@@ -3036,4 +3036,24 @@ orthstar</value>
   <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>リモートリポジトリを自動同期</value></data>
   <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon は定期的にこのプロジェクトの upstream を取得し、変更のないアイドル状態のチェックアウトに限って fast-forward します。ローカル変更、履歴の分岐、Detached HEAD、実行中のエージェントセッションは保持されます。既存のローカルタグを強制更新または削除することはありません。</value></data>
   <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>この設定を有効にするには、AutoSync 対応の Beacon クライアントを実行するワークステーションを接続してください。</value></data>
+  <data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>プロジェクトのバージョンポリシー</value></data>
+  <data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon は正式なプロジェクトバージョンを保持し、設定されたリポジトリのマニフェストと照合します。リポジトリのファイルは投影であり、通常のタスク作業中にエージェントが正式バージョンを変更・公開することはできません。</value></data>
+  <data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>バージョンポリシーを読み込めませんでした。</value></data>
+  <data name="OfficialProjectVersion" xml:space="preserve"><value>正式バージョン</value></data>
+  <data name="VersionNotInitialized" xml:space="preserve"><value>未設定</value></data>
+  <data name="VersionScheme" xml:space="preserve"><value>バージョン方式</value></data>
+  <data name="VersionSchemeNumeric" xml:space="preserve"><value>数値コンポーネント</value></data>
+  <data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="VersionSchemeCalendar" xml:space="preserve"><value>カレンダーバージョン</value></data>
+  <data name="VersionComponentCount" xml:space="preserve"><value>数値コンポーネント数</value></data>
+  <data name="VersionCalendarFormat" xml:space="preserve"><value>日付形式</value></data>
+  <data name="VersionTagPattern" xml:space="preserve"><value>Git タグパターン</value></data>
+  <data name="VersionTagPatternHelp" xml:space="preserve"><value>{version} プレースホルダーを1つだけ使用します（例: v{version}）。</value></data>
+  <data name="VersionAllowPrerelease" xml:space="preserve"><value>SemVer のプレリリースを許可</value></data>
+  <data name="VersionManifestSources" xml:space="preserve"><value>マニフェストのバージョンソース</value></data>
+  <data name="VersionManifestSourcesHelp" xml:space="preserve"><value>1行につき1ソース: path|Format|selector。例: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; Regex は名前付き (?&lt;version>...) または最初のキャプチャグループを使用します。</value></data>
+  <data name="InitialOfficialVersion" xml:space="preserve"><value>正式バージョンを初期化</value></data>
+  <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>この値は一度だけ初期化できます。以後の変更には ReleasePrepare ワークフローが必要です。</value></data>
+  <data name="SaveVersionPolicy" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
+  <data name="VersionSourceLineInvalid" xml:space="preserve"><value>各ソースは path|Format|selector 形式で指定してください。</value></data>
 </root>
