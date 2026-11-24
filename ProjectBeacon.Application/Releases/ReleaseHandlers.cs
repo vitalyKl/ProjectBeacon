@@ -427,11 +427,14 @@ public sealed class SetMilestoneReleaseHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IAuthorizationService _authorization;
+    private readonly IAuditWriter _auditWriter;
 
-    public SetMilestoneReleaseHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    public SetMilestoneReleaseHandler(
+        IBeaconDbFactory dbFactory, IAuthorizationService authorization, IAuditWriter auditWriter)
     {
         _dbFactory = dbFactory;
         _authorization = authorization;
+        _auditWriter = auditWriter;
     }
 
     public async Task<Result> HandleAsync(SetMilestoneReleaseCommand command, CancellationToken ct = default)
@@ -479,7 +482,22 @@ public sealed class SetMilestoneReleaseHandler
                 return Result.Failure("Release not found or no longer accepts milestones.", ErrorKind.NotFound);
         }
 
+        var previousReleaseId = milestone.ReleaseId;
         milestone.AssignRelease(request.ReleaseId);
+        var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
+        _auditWriter.Stage(db, AuditEventFactory.ForActor(
+            command.Actor,
+            "project.release.milestone_assigned",
+            "Milestone",
+            milestone.Id.ToString("D"),
+            orgId,
+            request.ProjectId,
+            detailsJson: JsonSerializer.Serialize(new
+            {
+                previousReleaseId,
+                releaseId = milestone.ReleaseId,
+                milestoneRevision = milestone.Revision
+            })));
         try
         {
             await db.SaveChangesAsync(ct);
