@@ -112,9 +112,9 @@ public sealed class GitAutoSyncLoopTests
             10, 0, [now.AddMinutes(4), now.AddMinutes(2)], now));
         Assert.Equal(TimeSpan.FromMinutes(10), GitAutoSyncLoop.CalculateNextDelay(
             10, 0, [], now));
-        Assert.Equal(TimeSpan.FromMinutes(2), GitAutoSyncLoop.CalculateNextDelay(
+        Assert.Equal(TimeSpan.FromMinutes(60), GitAutoSyncLoop.CalculateNextDelay(
             120, 0.2, [now.AddHours(1)], now));
-        Assert.Equal(TimeSpan.FromMinutes(10), GitAutoSyncLoop.CalculateNextDelay(
+        Assert.Equal(TimeSpan.FromMinutes(12), GitAutoSyncLoop.CalculateNextDelay(
             10, 0.2, [], now));
     }
 
