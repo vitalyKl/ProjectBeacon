@@ -40,7 +40,11 @@ public static class WorkstationProbe
     {
         if (gitPath is null)
             return Array.Empty<string>();
-        var capabilities = new List<string> { WorkstationCapabilities.GitSyncV1 };
+        var capabilities = new List<string>
+        {
+            WorkstationCapabilities.GitSyncV1,
+            WorkstationCapabilities.AutoSyncV1
+        };
         var (settings, error) = WorkstationSettings.TryRead();
         if (error is null && WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
         {
