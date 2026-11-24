@@ -222,9 +222,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 }
                 if (kind == WorkstationCommandKind.ReleasePrepare)
                 {
-                    var releaseSettings = _loadSettings();
                     var releaseResult = await ReleasePrepareExecutor.ExecuteAsync(
-                        command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, releaseSettings, ct);
+                        command.LocalRoot, command.ProjectId ?? Guid.Empty, payload, ct);
                     return releaseResult.Ok
                         ? (true, releaseResult.Result, null)
                         : (false, releaseResult.Result, releaseResult.Error);
