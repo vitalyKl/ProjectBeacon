@@ -96,6 +96,26 @@ public static class ProjectVersionPolicyCatalog
         return true;
     }
 
+    public static bool IsSafeGitTagName(string? value)
+    {
+        if (value is not { Length: > 0 and <= 200 }
+            || value.StartsWith("-", StringComparison.Ordinal)
+            || value.StartsWith("/", StringComparison.Ordinal)
+            || value.EndsWith("/", StringComparison.Ordinal)
+            || value.Contains("//", StringComparison.Ordinal)
+            || value.Contains("..", StringComparison.Ordinal)
+            || value.Contains("@{", StringComparison.Ordinal)
+            || !value.All(character => char.IsAsciiLetterOrDigit(character)
+                || character is '.' or '_' or '-' or '/'))
+            return false;
+
+        return value.Split('/').All(segment =>
+            segment.Length > 0
+            && !segment.StartsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".lock", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static bool IsSafeBranchName(string? value)
     {
         if (value is not { Length: > 0 and <= 200 }
