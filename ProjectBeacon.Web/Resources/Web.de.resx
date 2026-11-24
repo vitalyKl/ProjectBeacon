@@ -3439,4 +3439,16 @@ orthstar</value>
   <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Release „{0}“ als Version {1} mit Tag „{2}“ aus Branch „{3}“ veröffentlichen? Dadurch wird ein unveränderlicher Git-Tag erstellt und der konfigurierte GitHub-Release-Workflow gestartet, der möglicherweise in Produktion deployed. Ein gepushter Tag wird niemals verschoben oder gelöscht; Wiederholungen verwenden denselben Candidate und Tag.</value></data>
   <data name="ReleasePublicationQueued" xml:space="preserve"><value>Die Veröffentlichung wurde auf der fest zugeordneten Workstation eingereiht. Beacon prüft den GitHub-Workflow sowie die bereitgestellte Version und SHA.</value></data>
   <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>Der unveränderliche Release-Tag wurde bereits gepusht. Ein erneuter Versuch verschiebt ihn nicht.</value></data>
+  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>Versionsauswirkung</value></data>
+  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Der Actor hat für diese Aufgabe noch keine Versionsauswirkung angegeben.</value></data>
+  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>Angegebene Auswirkung</value></data>
+  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Begründung des Actors</value></data>
+  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Entscheidung des Reviewers</value></data>
+  <data name="TaskVersionImpactNone" xml:space="preserve"><value>Keine Versionsänderung</value></data>
+  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Bestätigt</value></data>
+  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Angefochten</value></data>
+  <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer ausstehend</value></data>
 </root>
