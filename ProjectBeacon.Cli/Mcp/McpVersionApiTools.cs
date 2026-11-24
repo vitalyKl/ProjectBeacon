@@ -68,7 +68,9 @@ internal static partial class McpApiTools
             policyDto["calendarFormat"]?.GetValue<string>(),
             policyDto["tagPattern"]?.GetValue<string>() ?? string.Empty,
             policyDto["allowPrerelease"]?.GetValue<bool>() ?? false,
-            sourcePolicies);
+            sourcePolicies,
+            policyDto["releaseManagementEnabled"]?.GetValue<bool>() ?? false,
+            policyDto["deploymentVersionEndpoint"]?.GetValue<string>());
         if (!ProjectVersionPolicyCatalog.Validate(policy, out var validationError))
             return new McpToolText(true,
                 "Stored version policy is invalid; no version-file comparison was performed: " + validationError);
@@ -139,6 +141,12 @@ internal static partial class McpApiTools
             });
         }
 
+        var deployment = await CheckDeploymentEndpointAsync(
+            policy.DeploymentVersionEndpoint, officialVersion, ct);
+        var deploymentDrift = deployment["status"]?.GetValue<string>() == "drift";
+        var deploymentUnavailable = deployment["status"]?.GetValue<string>() == "unreachable";
+        drift |= deploymentDrift;
+
         var result = new JsonObject
         {
             ["projectId"] = projectId.ToString("D"),
@@ -150,14 +158,114 @@ internal static partial class McpApiTools
             ["sourceCount"] = policy.Sources.Count,
             ["hasProjectionDrift"] = drift,
             ["sources"] = checks,
-            ["tagAndDeploymentVerification"] = "not_checked_by_version_check"
+            ["deployment"] = deployment,
+            ["tagVerification"] = "not_checked_by_version_check"
         };
         if (officialVersion is null)
             result["status"] = "official_version_not_initialized";
+        else if (deploymentUnavailable)
+            result["status"] = "deployment_unreachable";
         else
             result["status"] = drift ? "drift" : "in_sync";
 
         return new McpToolText(false, result.ToJsonString(Pretty));
+    }
+
+    internal static async Task<JsonObject> CheckDeploymentEndpointAsync(
+        string? endpoint,
+        string? officialVersion,
+        CancellationToken ct,
+        HttpClient? httpClient = null)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return new JsonObject { ["status"] = "not_configured" };
+        if (!ProjectVersionPolicyCatalog.TryValidateDeploymentVersionEndpoint(endpoint, out var validationError))
+            return new JsonObject
+            {
+                ["status"] = "invalid_configuration",
+                ["error"] = validationError
+            };
+
+        var ownsClient = httpClient is null;
+        using var handler = ownsClient
+            ? new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                ConnectTimeout = TimeSpan.FromSeconds(5)
+            }
+            : null;
+        var client = httpClient ?? new HttpClient(handler!, disposeHandler: false)
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if ((int)response.StatusCode is >= 300 and < 400)
+                return new JsonObject { ["status"] = "unreachable", ["error"] = "Deployment version endpoint redirected; redirects are not followed." };
+            if (!response.IsSuccessStatusCode)
+                return new JsonObject
+                {
+                    ["status"] = "unreachable",
+                    ["httpStatus"] = (int)response.StatusCode,
+                    ["error"] = "Deployment version endpoint returned a non-success status."
+                };
+            if (response.Content.Headers.ContentLength is > 65536)
+                return new JsonObject { ["status"] = "unreachable", ["error"] = "Deployment version response exceeds 64 KB." };
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[8192];
+            while (true)
+            {
+                var read = await stream.ReadAsync(chunk, ct);
+                if (read == 0)
+                    break;
+                if (buffer.Length + read > 65536)
+                    return new JsonObject { ["status"] = "unreachable", ["error"] = "Deployment version response exceeds 64 KB." };
+                buffer.Write(chunk, 0, read);
+            }
+
+            JsonObject data;
+            try
+            {
+                data = JsonNode.Parse(buffer.ToArray()) as JsonObject
+                    ?? throw new JsonException("Response must be a JSON object.");
+            }
+            catch (JsonException exception)
+            {
+                return new JsonObject { ["status"] = "unreachable", ["error"] = "Deployment version response is not valid JSON: " + exception.Message };
+            }
+
+            var version = data["version"]?.GetValue<string>();
+            var sha = data["gitSha"]?.GetValue<string>();
+            var validSha = sha is { Length: 40 or 64 } && sha.All(Uri.IsHexDigit);
+            var matches = officialVersion is not null
+                && string.Equals(version, officialVersion, StringComparison.Ordinal)
+                && validSha;
+            return new JsonObject
+            {
+                ["status"] = matches ? "in_sync" : "drift",
+                ["deployedVersion"] = version,
+                ["deployedCommitSha"] = validSha ? sha : null,
+                ["officialVersion"] = officialVersion,
+                ["versionMatches"] = officialVersion is not null
+                    && string.Equals(version, officialVersion, StringComparison.Ordinal),
+                ["gitShaValid"] = validSha,
+                ["endpointHost"] = new Uri(endpoint).Host
+            };
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
+        {
+            return new JsonObject { ["status"] = "unreachable", ["error"] = exception.Message };
+        }
+        finally
+        {
+            if (ownsClient)
+                client.Dispose();
+        }
     }
 
     private static async Task<McpToolText> ReleaseContext(
