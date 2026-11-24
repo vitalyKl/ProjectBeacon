@@ -1708,6 +1708,9 @@ internal static class AgentTaskGitOperations
             : null;
     }
 
+    internal static bool HasGitHubOrigin(IEnumerable<string> originUrls) =>
+        originUrls.Any(url => TryParseGitHubRemote(url.Trim(), out _));
+
     internal static bool TryParseGitHubRemote(string remoteUrl, out string repository)
     {
         repository = string.Empty;
