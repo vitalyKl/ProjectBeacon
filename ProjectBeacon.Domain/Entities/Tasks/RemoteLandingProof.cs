@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Entities.Tasks;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 
 /// <summary>
 /// Immutable workstation-reported evidence that a task's exact reviewed GitHub PR was merged
