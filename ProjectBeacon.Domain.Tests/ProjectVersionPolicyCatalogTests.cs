@@ -68,6 +68,17 @@ public sealed class ProjectVersionPolicyCatalogTests
     }
 
     [Fact]
+    public void ExtractJsonPointer_SupportsArrayIndexes()
+    {
+        var policy = new ProjectVersionPolicy("NumericComponents", 4, null, "v{version}", false, []);
+        var source = new ProjectVersionSourcePolicy("package.json", "Json", "/versions/0");
+
+        Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, """{"versions":["0.7.5.8"]}""", out var version, out var error), error);
+        Assert.Equal("0.7.5.8", version);
+    }
+
+    [Fact]
     public void TryRead_RejectsUnknownPolicyProperties()
     {
         const string json = """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[],"pushMode":"Auto"}""";
@@ -98,6 +109,10 @@ public sealed class ProjectVersionPolicyCatalogTests
     [InlineData("/v{version}", false)]
     [InlineData("v{version}-{version}", false)]
     [InlineData("../v{version}", false)]
+    [InlineData("release/{version}/", false)]
+    [InlineData(".release-{version}", false)]
+    [InlineData("v{version}.lock", false)]
+    [InlineData("release//v{version}", false)]
     public void Validate_RequiresSafeTagPattern(string pattern, bool expected)
     {
         var policy = new ProjectVersionPolicy("SemVer", 3, null, pattern, false, []);
