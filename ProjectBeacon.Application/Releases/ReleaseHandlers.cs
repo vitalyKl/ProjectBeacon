@@ -239,7 +239,7 @@ public sealed class UpdateReleaseHandler
         var name = request.Name?.Trim();
         var description = request.Description?.Trim();
         var branch = request.TargetBranch?.Trim();
-        var version = string.IsNullOrWhiteSpace(request.TargetVersion) ? null : request.TargetVersion.Trim();
+        var version = request.TargetVersion?.Trim();
 
         if (name is { Length: < 1 or > 200 } || description?.Length > 5000
             || (branch is not null && !ProjectVersionPolicyCatalog.IsSafeBranchName(branch)))
@@ -262,7 +262,7 @@ public sealed class UpdateReleaseHandler
         if (request.ExpectedRevision < 1 || request.ExpectedRevision != release.Revision)
             return Result.Failure<ReleaseDto>("Release changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
 
-        if (version is not null)
+        if (!string.IsNullOrWhiteSpace(version))
         {
             if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
                 enabled.Value!, version, out var normalized, out var versionError))
