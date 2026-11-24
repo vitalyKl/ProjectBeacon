@@ -237,6 +237,22 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void ActorReleaseContext_CanReadOnlyItsOwnTask()
+    {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId,
+            [McpToolNames.VersionCheck]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId));
+    }
+
+    [Fact]
     public void ReviewerVersionImpactConfirmation_IsAvailableOnlyToReviewerRole()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
