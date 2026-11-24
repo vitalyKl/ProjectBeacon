@@ -172,6 +172,55 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void Workstations_ShowsAutomaticRepositoryStatusFromDeviceHeartbeat()
+    {
+        var user = DbContext.Users.Single();
+        var project = DbContext.Projects.Single();
+        var device = DbContext.Set<ProjectBeacon.Domain.Entities.Devices.DaemonDevice>().Single();
+        var probe = JsonSerializer.Serialize(new
+        {
+            capabilities = new[] { "git-sync-v1", "git-autosync-v1" },
+            repoSync = new[]
+            {
+                new
+                {
+                    projectId = project.Id,
+                    branch = "main",
+                    upstream = "origin/main",
+                    ahead = 0,
+                    behind = 2,
+                    clean = false,
+                    detached = false,
+                    hasUpstream = true,
+                    diverged = false,
+                    checkedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+                    lastAutoPull = (object?)null,
+                    lastError = (object?)null,
+                    autoPullBlockedReason = "DirtyWorkingTree"
+                }
+            }
+        });
+        device.Heartbeat(probeJson: probe);
+        DbContext.SaveChanges();
+
+        var authProvider = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        authProvider.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString("D"))
+            },
+            "TestAuth");
+
+        var cut = Bunit.RenderComponent<Features.Settings.Workstations>();
+
+        Assert.Contains("Repository repository status", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Local changes", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Updated", cut.Markup);
+    }
+
+    [Fact]
     public void Settings_RendersAccountNotProject()
     {
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();

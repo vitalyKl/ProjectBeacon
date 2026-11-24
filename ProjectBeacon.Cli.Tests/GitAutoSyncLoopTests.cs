@@ -783,6 +783,125 @@ public sealed class GitAutoSyncLoopTests
         }
     }
 
+    [Theory]
+    [InlineData("dirty", "DirtyWorkingTree")]
+    [InlineData("diverged", "Diverged")]
+    [InlineData("no-upstream", "NoUpstream")]
+    public async Task RunCycle_DoesNotPullUnsafeRepositoryStates(string scenario, string expectedReason)
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-unsafe-" + scenario + "-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(parent, "project");
+        var remote = Path.Combine(parent, "origin.git");
+        var seed = Path.Combine(parent, "seed");
+        Directory.CreateDirectory(parent);
+
+        try
+        {
+            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
+            await Git(parent, "init", "-b", "main", root);
+            await ConfigureIdentity(root);
+            await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base");
+            await Git(root, "add", "README.md");
+            await Git(root, "commit", "-m", "initial");
+            await Git(root, "remote", "add", "origin", remote);
+            await Git(root, "push", "-u", "origin", "main");
+
+            await Git(parent, "clone", remote, seed);
+            await ConfigureIdentity(seed);
+            await File.WriteAllTextAsync(Path.Combine(seed, "remote.txt"), "remote commit");
+            await Git(seed, "add", "remote.txt");
+            await Git(seed, "commit", "-m", "advance origin");
+            await Git(seed, "push", "origin", "main");
+
+            if (scenario == "dirty")
+            {
+                await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "local uncommitted change");
+            }
+            else if (scenario == "diverged")
+            {
+                await File.WriteAllTextAsync(Path.Combine(root, "local.txt"), "local branch commit");
+                await Git(root, "add", "local.txt");
+                await Git(root, "commit", "-m", "advance local branch");
+            }
+            else if (scenario == "no-upstream")
+            {
+                await Git(root, "branch", "--unset-upstream");
+            }
+
+            var projectId = Guid.NewGuid();
+            var runtimeJson = JsonSerializer.Serialize(
+                new[] { new DeviceProjectRuntimeDto(projectId, root, false, false) },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var requests = new List<string>();
+            using var http = new HttpClient(new RecordingHandler((request, _) =>
+            {
+                requests.Add(request.Method + " " + request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(runtimeJson, Encoding.UTF8, "application/json")
+                });
+            }))
+            {
+                BaseAddress = new Uri("https://beacon.test/")
+            };
+
+            var dependencies = new DaemonDependencies(
+                http,
+                null!,
+                () => new WorkstationSettings { AutoPullMode = "WhenSafe", AutoSyncIntervalMinutes = 10 },
+                _ => null!);
+            var timing = new DaemonTiming { GitAutoSyncStartupDelay = TimeSpan.Zero };
+            using var cancellation = new CancellationTokenSource();
+            var delays = 0;
+            timing.DelayAsync = (_, _) =>
+            {
+                if (Interlocked.Increment(ref delays) == 2)
+                    cancellation.Cancel();
+                return Task.CompletedTask;
+            };
+            var snapshot = new GitAutoSyncSnapshot();
+            var loop = new GitAutoSyncLoop(
+                dependencies,
+                new GitSyncService(),
+                snapshot,
+                timing,
+                new DaemonRuntimeState("https://beacon.test", null));
+            var headBefore = await Git(root, "rev-parse", "HEAD");
+            var dirtyFileBefore = scenario == "dirty"
+                ? await File.ReadAllTextAsync(Path.Combine(root, "README.md"))
+                : null;
+
+            await loop.RunAsync(cancellation.Token);
+
+            Assert.Equal(new[] { "GET /v1/devices/me/project-runtimes" }, requests);
+            Assert.Equal(headBefore, await Git(root, "rev-parse", "HEAD"));
+            Assert.False(File.Exists(Path.Combine(root, "remote.txt")));
+            if (dirtyFileBefore is not null)
+                Assert.Equal(dirtyFileBefore, await File.ReadAllTextAsync(Path.Combine(root, "README.md")));
+
+            var status = snapshot.Get(projectId);
+            Assert.NotNull(status);
+            Assert.Equal(expectedReason, status.AutoPullBlockedReason);
+            Assert.Null(status.LastAutoPull);
+            Assert.Null(status.LastError);
+            if (scenario is "dirty" or "diverged")
+                Assert.Equal(1, status.Behind);
+            if (scenario == "dirty")
+                Assert.False(status.Clean);
+            if (scenario == "diverged")
+            {
+                Assert.True(status.Diverged);
+                Assert.Equal(1, status.Ahead);
+            }
+            if (scenario == "no-upstream")
+                Assert.False(status.HasUpstream);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {
         private DateTimeOffset _now = now;
