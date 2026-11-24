@@ -345,8 +345,8 @@ public sealed class SetProjectGitPolicyHandler
                 previousState = $"Level{current.AutonomyLevel}",
                 newState = $"Level{command.AutonomyLevel}",
                 policyCode = command.AutoRevertMode == "OnPostCheckFail" ? "AutoRevert.OnPostCheckFail" : "AutoRevert.Off",
-                dirtyCheckoutBehavior = command.DirtyCheckoutBehavior,
-                autoSyncEnabled
+                reasonCode = command.DirtyCheckoutBehavior,
+                resultCode = autoSyncEnabled ? "AutoSync.Enabled" : "AutoSync.Disabled"
             })));
         try
         {
