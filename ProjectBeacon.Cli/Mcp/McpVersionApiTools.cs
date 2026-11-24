@@ -22,7 +22,11 @@ internal static partial class McpApiTools
         new(McpToolNames.VersionImpact,
             "Declare the active task's version impact as none, patch, minor, or major, with a concise rationale. Read get_task_version_impact first and pass its revision. This declaration does not change the official project version.",
             () => Props(("taskId", "string", false), ("impact", "string", true),
-                ("rationale", "string", true), ("expectedRevision", "integer", true)), SetTaskVersionImpact)
+                ("rationale", "string", true), ("expectedRevision", "integer", true)), SetTaskVersionImpact),
+        new(McpToolNames.ReviewVersionImpact,
+            "As the active Reviewer, confirm or challenge the task's declared version impact. Read get_task_version_impact first and pass its revision plus a review note.",
+            () => Props(("taskId", "string", false), ("decision", "string", true),
+                ("note", "string", true), ("expectedRevision", "integer", true)), ReviewTaskVersionImpact)
     ];
 
     private static async Task<McpToolText> VersionCheck(
@@ -200,6 +204,33 @@ internal static partial class McpApiTools
         if (!TryPipelineTask(env, args, out var taskId, out var taskError))
             return new McpToolText(true, taskError);
         return await SendAsync(api, HttpMethod.Get, $"v1/tasks/{taskId:D}/version-impact", null, ct);
+    }
+
+    private static async Task<McpToolText> ReviewTaskVersionImpact(
+        JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
+    {
+        if (!TryPipelineTask(env, args, out var taskId, out var taskError))
+            return new McpToolText(true, taskError);
+        if (!string.Equals(env.Get("BEACON_PIPELINE_ROLE"), "Review", StringComparison.OrdinalIgnoreCase))
+            return new McpToolText(true, "Only the active Reviewer pipeline session may review version impact.");
+        var decision = Text(args, "decision");
+        if (decision is not ("Confirmed" or "Challenged"))
+            return new McpToolText(true, "decision must be Confirmed or Challenged.");
+        var note = Text(args, "note");
+        if (string.IsNullOrWhiteSpace(note) || note.Trim().Length > 1000)
+            return new McpToolText(true, "note must contain 1-1000 characters.");
+        var expectedRevision = IntArg(args, "expectedRevision");
+        if (expectedRevision is null or < 1)
+            return new McpToolText(true, "Read get_task_version_impact first and pass its positive revision.");
+
+        return await SendAsync(api, HttpMethod.Post,
+            $"v1/tasks/{taskId:D}/version-impact/review",
+            new JsonObject
+            {
+                ["decision"] = decision,
+                ["note"] = note.Trim(),
+                ["expectedRevision"] = expectedRevision.Value
+            }, ct);
     }
 
     private static async Task<McpToolText> SetTaskVersionImpact(
