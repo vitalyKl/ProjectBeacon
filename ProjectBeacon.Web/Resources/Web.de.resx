@@ -3229,4 +3229,10 @@ orthstar</value>
   <data name="PipelinePatchConflict" xml:space="preserve">
     <value>Die Änderungen des Agenten konnten nicht angewendet werden, da sich Projektdateien geändert haben oder widersprüchliche Änderungen enthalten. Der isolierte Worktree wurde beibehalten. Prüfen Sie das Befehlsergebnis und lösen Sie den Konflikt vor einem erneuten Versuch.</value>
   </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>Sie müssen sich erneut anmelden, um „{1}“ im Bereich „{0}“ auszuführen.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>„{1}“ im Bereich „{0}“ konnte nicht abgeschlossen werden, da der Dienst vorübergehend nicht verfügbar ist. Versuchen Sie es später erneut. Diagnose-ID: {2}</value>
+  </data>
 </root>

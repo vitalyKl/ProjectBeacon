@@ -3219,4 +3219,10 @@
   <data name="PipelinePatchConflict" xml:space="preserve">
     <value>Не удалось применить изменения агента: файлы проекта изменились или содержат конфликтующие правки. Изолированная рабочая копия сохранена. Проверьте результат команды и разрешите конфликт перед повторной попыткой.</value>
   </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>Чтобы выполнить действие «{1}» в разделе «{0}», войдите в систему ещё раз.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>Не удалось выполнить действие «{1}» в разделе «{0}»: сервис временно недоступен. Повторите попытку позже. Диагностический ID: {2}</value>
+  </data>
 </root>

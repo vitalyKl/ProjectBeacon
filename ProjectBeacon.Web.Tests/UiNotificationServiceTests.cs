@@ -57,7 +57,7 @@ public sealed class UiNotificationServiceTests
     }
 
     [Theory]
-    [InlineData(ErrorCodes.Unauthorized, "Недостаточно прав")]
+    [InlineData(ErrorCodes.Unauthorized, "войдите")]
     [InlineData(ErrorCodes.Forbidden, "Недостаточно прав")]
     [InlineData(ErrorCodes.NotFound, "не найден")]
     [InlineData(ErrorCodes.Conflict, "конфликт")]
@@ -79,6 +79,33 @@ public sealed class UiNotificationServiceTests
             Assert.Contains("сохранение шаблона", message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Сохранить", message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(expectedText, message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
+    [Fact]
+    public void FormatFailure_Unavailable_ExplainsTemporaryOutageAndIncludesDiagnosticId()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+
+            var message = notifications.FormatFailure(
+                "Gateway timeout at internal-service:8080",
+                "загрузка рабочих станций",
+                ErrorCodes.Unavailable,
+                "Загрузить");
+
+            Assert.Contains("временно недоступен", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Загрузить", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Диагностический ID:", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("internal-service", message, StringComparison.Ordinal);
         }
         finally
         {

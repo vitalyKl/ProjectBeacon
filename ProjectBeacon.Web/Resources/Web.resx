@@ -3428,4 +3428,10 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelinePatchConflict" xml:space="preserve">
     <value>The agent's changes could not be applied because project files changed or contain conflicting edits. The isolated worktree was preserved; inspect the command result and resolve the conflict before retrying.</value>
   </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>You must sign in again to {1} in {0}.</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>Could not complete {1} in {0} because the service is temporarily unavailable. Try again later. Diagnostic ID: {2}</value>
+  </data>
 </root>

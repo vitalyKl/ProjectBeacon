@@ -80,6 +80,7 @@ internal sealed class UiNotificationService : IUiNotificationService
         switch (errorCode)
         {
             case ErrorCodes.Unauthorized:
+                return _localizer["UiOperationAuthenticationRequired", section, operationLabel].Value;
             case ErrorCodes.Forbidden:
                 return _localizer["UiOperationNotAllowed", section, operationLabel].Value;
             case ErrorCodes.NotFound:
@@ -87,6 +88,7 @@ internal sealed class UiNotificationService : IUiNotificationService
             case ErrorCodes.Conflict:
                 return _localizer["UiOperationConflict", section, operationLabel].Value;
             case ErrorCodes.Unavailable:
+                return _localizer["UiOperationUnavailable", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
             case ErrorCodes.InternalError:
             case ErrorCodes.Unclassified:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;

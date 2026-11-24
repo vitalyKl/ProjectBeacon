@@ -3237,4 +3237,10 @@ orthstar</value>
   <data name="PipelinePatchConflict" xml:space="preserve">
     <value>由于项目文件已更改或包含冲突修改，无法应用代理的更改。隔离工作树已保留。请检查命令结果并解决冲突后再重试。</value>
   </data>
+  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
+    <value>请重新登录，以便在“{0}”中执行“{1}”。</value>
+  </data>
+  <data name="UiOperationUnavailable" xml:space="preserve">
+    <value>由于服务暂时不可用，无法在“{0}”中完成“{1}”。请稍后重试。诊断 ID：{2}</value>
+  </data>
 </root>

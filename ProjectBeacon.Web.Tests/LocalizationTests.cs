@@ -121,7 +121,7 @@ public sealed class LocalizationTests
         foreach (var key in new[]
         {
             "UiEmptyNotification", "UiGenericFailure", "UiGenericOperation", "UiOperationFailed",
-            "UiOperationFailedWithDetail", "UiOperationNotAllowed", "UiOperationTargetNotFound",
+            "UiOperationFailedWithDetail", "UiOperationAuthenticationRequired", "UiOperationUnavailable", "UiOperationNotAllowed", "UiOperationTargetNotFound",
             "UiOperationConflict", "UiOperationUnexpectedFailed", "AuthUnexpectedError",
             "AuthRequestFailed", "AuthBootstrapOperation", "AuthForgotOperation",
             "AuthInviteOperation", "AuthRecoverOperation", "AuthRegisterOperation", "AuthResetOperation",
