@@ -237,6 +237,11 @@ else
 
     private async Task Select(ChatSessionDto session)
     {
+        if (_selected?.Id != session.Id)
+        {
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
+        }
         _selected = session;
         var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(session.Id, _userId)));
         // The user may have switched sessions while the fetch was in flight; never apply stale parts.

@@ -305,6 +305,11 @@
         var selected = _sessions.FirstOrDefault(x => x.Id == sessionId);
         if (selected is null)
             return;
+        if (_session?.Id != selected.Id)
+        {
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
+        }
         _session = selected;
         _failed = false;
         await ReloadParts();
@@ -331,6 +336,8 @@
             return;
         }
         _block = null;
+        _pollFailures.RecordSuccess();
+        _pollErrorMessage = null;
         _session = created.Value;
         _open = true;
         _draft = string.Empty;

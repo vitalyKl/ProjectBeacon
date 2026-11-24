@@ -745,6 +745,8 @@ else
                             "TaskPipelineRefreshUnavailable", diagnosticId);
                         await InvokeAsync(StateHasChanged);
                     }
+                    else
+                        Logger.LogWarning(exception, "Transient task pipeline refresh failure; will retry. TaskId={TaskId}", TaskId);
                 }
             }
         }
@@ -1027,6 +1029,8 @@ else
                 _gitSyncRestoreErrorMessage = Notifications.FormatDiagnosticMessage(
                     "GitSyncCommandRestoreFailed", diagnosticId);
             }
+            else
+                Logger.LogWarning(exception, "Transient pending GitSync command restore failure. TaskId={TaskId}, ProjectId={ProjectId}", TaskId, task.ProjectId);
         }
     }
 
