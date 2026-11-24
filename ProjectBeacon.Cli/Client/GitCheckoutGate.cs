@@ -10,6 +10,13 @@ internal static class GitCheckoutGate
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
+    public static IDisposable Acquire(string repositoryRoot)
+    {
+        var gate = GetGate(repositoryRoot);
+        gate.Wait();
+        return new Lease(gate);
+    }
+
     public static async ValueTask<IDisposable> AcquireAsync(string repositoryRoot, CancellationToken ct)
     {
         var gate = GetGate(repositoryRoot);

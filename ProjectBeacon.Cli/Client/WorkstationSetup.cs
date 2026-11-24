@@ -23,6 +23,10 @@ public static class WorkstationSetup
         var full = resolved.Value!;
         Directory.CreateDirectory(full);
 
+        // InitProject writes into the real checkout (.gitignore and, optionally, .git).
+        // Resolve the repository root so this lease uses the same key as GitSync/GitLand.
+        using var checkoutLease = GitCheckoutGate.Acquire(ResolveCheckoutRoot(full));
+
         if (payloadRoot.TryGetProperty("createGit", out var gitEl) && gitEl.ValueKind == JsonValueKind.True
             && !Directory.Exists(Path.Combine(full, ".git")))
         {
@@ -121,6 +125,26 @@ public static class WorkstationSetup
                 existing.Add(line);
         }
         File.WriteAllLines(path, existing);
+    }
+
+    private static string ResolveCheckoutRoot(string directory)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = directory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        psi.ArgumentList.Add("rev-parse");
+        psi.ArgumentList.Add("--show-toplevel");
+        var (code, stdout, _, timedOut) = ProcessRunner.RunAsync(psi, TimeSpan.FromSeconds(5))
+            .GetAwaiter().GetResult();
+        return code == 0 && !timedOut && !string.IsNullOrWhiteSpace(stdout)
+            ? Path.GetFullPath(stdout.Trim())
+            : Path.GetFullPath(directory);
     }
 
     private static void Run(string file, string args, string cwd)

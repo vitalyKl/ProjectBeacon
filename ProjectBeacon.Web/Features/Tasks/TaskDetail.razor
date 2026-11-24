@@ -203,7 +203,7 @@ else
             }
         </MudAlert>
     }
-    @if (_pipeline?.Preflight?.LastKnownRepositoryReasonCode is { } repositoryReason)
+    @if (_pipeline?.Preflight is { RepositoryAutoSync: null, LastKnownRepositoryReasonCode: { } repositoryReason })
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
                   data-testid="repository-sync-reason">
