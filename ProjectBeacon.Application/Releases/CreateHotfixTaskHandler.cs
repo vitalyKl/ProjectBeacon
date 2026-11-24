@@ -6,6 +6,8 @@ using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
 using Application.Tasks;
+using Domain.Common;
+using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -40,7 +42,7 @@ public sealed class CreateHotfixTaskHandler
         var title = request.Title?.Trim() ?? string.Empty;
         var description = request.Description?.Trim();
 
-        if (request.ProjectId == Guid.Empty || request.ReleaseId == Guid.Empty
+        if (command.ProjectId == Guid.Empty || command.ReleaseId == Guid.Empty
             || request.RequestId == Guid.Empty || title.Length is < 1 or > 500)
             return Result.Failure<TaskItemDto>(
                 "Project, published Release, idempotency key, and a task title of 1-500 characters are required.",
@@ -54,28 +56,28 @@ public sealed class CreateHotfixTaskHandler
 
         await using var db = _dbFactory.CreateDbContext();
         var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, request.ProjectId, command.Actor, ct);
+            db, _authorization, command.ProjectId, command.Actor, ct);
         if (!permission.Success)
             return Result.Forbidden<TaskItemDto>(
                 "Only a project or organization Owner/Admin can create a Hotfix task.");
 
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
+        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, command.ProjectId, ct);
         if (!enabled.Success)
             return Result.Failure<TaskItemDto>(
                 enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
 
         var existing = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(
-            task => task.ProjectId == request.ProjectId && task.HotfixRequestId == request.RequestId, ct);
+            task => task.ProjectId == command.ProjectId && task.HotfixRequestId == request.RequestId, ct);
         if (existing is not null)
         {
-            if (existing.HotfixSourceReleaseId != request.ReleaseId)
+            if (existing.HotfixSourceReleaseId != command.ReleaseId)
                 return Result.Failure<TaskItemDto>(
                     "This Hotfix request id was already used for another Release.", ErrorKind.Conflict);
             return Result.Ok(ToDto(existing));
         }
 
         var release = await db.Releases.FirstOrDefaultAsync(
-            item => item.ProjectId == request.ProjectId && item.Id == request.ReleaseId, ct);
+            item => item.ProjectId == command.ProjectId && item.Id == command.ReleaseId, ct);
         if (release is null)
             return Result.Failure<TaskItemDto>("Release not found.", ErrorKind.NotFound);
 
@@ -90,7 +92,7 @@ public sealed class CreateHotfixTaskHandler
                 ErrorKind.Conflict);
 
         var currentDeployedReleaseId = await db.Releases.AsNoTracking()
-            .Where(item => item.ProjectId == request.ProjectId
+            .Where(item => item.ProjectId == command.ProjectId
                 && item.Status == ReleaseStatus.Published
                 && item.PublicationStatus == ReleasePublicationStatus.Published
                 && item.PublicationTagPushed
@@ -112,7 +114,7 @@ public sealed class CreateHotfixTaskHandler
                 "The published Release has no immutable Candidate or preparation workstation.", ErrorKind.Conflict);
 
         var candidate = await db.ReleaseCandidateSnapshots.AsNoTracking().FirstOrDefaultAsync(
-            item => item.ProjectId == request.ProjectId
+            item => item.ProjectId == command.ProjectId
                 && item.ReleaseId == release.Id
                 && item.CandidateId == candidateId
                 && item.PreparedByDeviceId == pinnedDeviceId, ct);
@@ -129,7 +131,7 @@ public sealed class CreateHotfixTaskHandler
                 ErrorKind.Conflict);
 
         var runtime = await db.ProjectRuntimes.AsNoTracking().FirstOrDefaultAsync(
-            item => item.ProjectId == request.ProjectId && item.DeviceId == pinnedDeviceId, ct);
+            item => item.ProjectId == command.ProjectId && item.DeviceId == pinnedDeviceId, ct);
         var device = await db.DaemonDevices.AsNoTracking().FirstOrDefaultAsync(
             item => item.Id == pinnedDeviceId && item.UserId == command.Actor.UserId, ct);
         if (runtime is null || string.IsNullOrWhiteSpace(runtime.LocalRoot)
@@ -140,7 +142,7 @@ public sealed class CreateHotfixTaskHandler
                 ErrorKind.Conflict);
 
         var task = TaskItem.Create(
-            title, request.ProjectId, TaskPriority.High, TaskType.Bug, description);
+            title, command.ProjectId, TaskPriority.High, TaskType.Bug, description);
         task.SetHotfixOrigin(
             release.Id, release.DeployedCommitSha, candidate.TargetBranch, request.RequestId);
         task.PinPipelineDevice(pinnedDeviceId);
@@ -155,8 +157,8 @@ public sealed class CreateHotfixTaskHandler
             "project.release.hotfix_task_created",
             "Task",
             task.Id.ToString("D"),
-            await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct),
-            request.ProjectId,
+            await ReleaseAuthorization.GetOrgIdAsync(db, command.ProjectId, ct),
+            command.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
                 releaseId = release.Id.ToString("D"),
@@ -181,8 +183,8 @@ public sealed class CreateHotfixTaskHandler
             // submissions arriving concurrently. Re-read the winner in a fresh context.
             await using var fresh = _dbFactory.CreateDbContext();
             var winner = await fresh.Tasks.AsNoTracking().FirstOrDefaultAsync(
-                item => item.ProjectId == request.ProjectId && item.HotfixRequestId == request.RequestId, ct);
-            if (winner is not null && winner.HotfixSourceReleaseId == request.ReleaseId)
+                item => item.ProjectId == command.ProjectId && item.HotfixRequestId == request.RequestId, ct);
+            if (winner is not null && winner.HotfixSourceReleaseId == command.ReleaseId)
                 return Result.Ok(ToDto(winner));
             throw;
         }
