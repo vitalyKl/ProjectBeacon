@@ -89,7 +89,7 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new SetProjectGitPolicyCommand(
             projectId, body.AutonomyLevel, body.DirtyCheckoutBehavior, body.ProtectedPaths,
             body.MaxChangedFiles, body.MaxChangedLines, body.AutoRevertMode,
-            body.ExpectedRevision, actor), ct);
+            body.ExpectedRevision, actor, body.AutoSyncEnabled), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
@@ -249,7 +249,8 @@ public static class ProjectEndpoints
         int MaxChangedFiles,
         int MaxChangedLines,
         string AutoRevertMode,
-        int ExpectedRevision);
+        int ExpectedRevision,
+        bool? AutoSyncEnabled = null);
 
     /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/invites</c>.</summary>
     public record CreateInviteBody(string Email, MemberRole Role);
