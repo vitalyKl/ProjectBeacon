@@ -88,24 +88,25 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
         {
             RecordState(target.ProjectId, "branch-error:" + branch.Error,
                 $"AutoSync project {target.ProjectId}: fetch/fast-forward failed: {branch.Error}");
-            return;
-        }
-
-        var (outcome, reason, behind) = ReadBranchOutcome(branch.Result);
-        var branchState = $"branch:{outcome}:{reason}:{behind}";
-        if (string.Equals(outcome, "FastForwarded", StringComparison.Ordinal))
-        {
-            RecordState(target.ProjectId, branchState,
-                $"AutoSync project {target.ProjectId}: upstream fast-forward completed.");
-        }
-        else if (!string.Equals(outcome, "UpToDate", StringComparison.Ordinal))
-        {
-            RecordState(target.ProjectId, branchState,
-                $"AutoSync project {target.ProjectId}: repository was not advanced ({outcome}, {reason ?? "no reason"}).");
         }
         else
         {
-            _lastStates[target.ProjectId] = branchState;
+            var (outcome, reason, behind) = ReadBranchOutcome(branch.Result);
+            var branchState = $"branch:{outcome}:{reason}:{behind}";
+            if (string.Equals(outcome, "FastForwarded", StringComparison.Ordinal))
+            {
+                RecordState(target.ProjectId, branchState,
+                    $"AutoSync project {target.ProjectId}: upstream fast-forward completed.");
+            }
+            else if (!string.Equals(outcome, "UpToDate", StringComparison.Ordinal))
+            {
+                RecordState(target.ProjectId, branchState,
+                    $"AutoSync project {target.ProjectId}: repository was not advanced ({outcome}, {reason ?? "no reason"}).");
+            }
+            else
+            {
+                _lastStates[target.ProjectId] = branchState;
+            }
         }
 
         // Tags are a ref-only operation. It may run even when the working tree is dirty,
