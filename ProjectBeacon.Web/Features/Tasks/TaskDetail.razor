@@ -819,7 +819,7 @@ else
         "patch" => L["TaskVersionImpactPatch"].Value,
         "minor" => L["TaskVersionImpactMinor"].Value,
         "major" => L["TaskVersionImpactMajor"].Value,
-        _ => L["Unknown"].Value
+        _ => impact
     };
 
     private static Color VersionImpactColor(string impact) => impact switch
