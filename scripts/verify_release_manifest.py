@@ -185,7 +185,7 @@ def extract_source(source: dict[str, Any]) -> str:
 def is_safe_git_tag_name(value: Any) -> bool:
     if not isinstance(value, str) or not value or len(value) > 200:
         return False
-    if value.startswith("/") or value.endswith("/") or ".." in value or "@{" in value:
+    if value.startswith("-") or value.startswith("/") or value.endswith("/") or ".." in value or "@{" in value:
         return False
     if not all(ch.isascii() and (ch.isalnum() or ch in "._-/") for ch in value):
         return False
