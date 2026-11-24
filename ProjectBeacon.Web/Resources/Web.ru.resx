@@ -3012,4 +3012,10 @@
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Откат посадки поставлен в очередь.</value>
   </data>
+
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>Отменить запрос синхронизации репозитория? Отмена доступна только до того, как рабочая станция захватит команду.</value></data>
+
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>Запрос синхронизации репозитория отменён до начала выполнения на рабочей станции.</value></data>
+
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>Срок ожидания запроса синхронизации истёк: ни одна рабочая станция не захватила его за 10 минут.</value></data>
 </root>
