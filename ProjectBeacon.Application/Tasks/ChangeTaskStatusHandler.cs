@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
@@ -23,6 +24,10 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
         var task = await query.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
+        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, task.ProjectId, [task.MilestoneId], ct);
+        if (milestoneBlock is not null)
+            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
 
         if (command.Request.Status == TaskItemStatus.Done)
         {
