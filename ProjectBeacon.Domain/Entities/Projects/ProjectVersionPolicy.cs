@@ -276,10 +276,20 @@ public static class ProjectVersionPolicyCatalog
             || pattern.IndexOf("{version}", StringComparison.Ordinal) != pattern.LastIndexOf("{version}", StringComparison.Ordinal))
             return false;
         var sample = pattern.Replace("{version}", "1.2.3", StringComparison.Ordinal);
-        return sample.Length <= 200
-            && !sample.StartsWith("/", StringComparison.Ordinal)
-            && !sample.Contains("..", StringComparison.Ordinal)
-            && sample.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/');
+        if (sample.Length is 0 or > 200
+            || sample.StartsWith("/", StringComparison.Ordinal)
+            || sample.EndsWith("/", StringComparison.Ordinal)
+            || sample.Contains("..", StringComparison.Ordinal)
+            || !sample.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/'))
+            return false;
+
+        // Git ref components cannot begin with '.', end with '.', or end with '.lock'.
+        // Empty components are also invalid (for example, a doubled or trailing slash).
+        return sample.Split('/').All(segment =>
+            segment.Length > 0
+            && !segment.StartsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".", StringComparison.Ordinal)
+            && !segment.EndsWith(".lock", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsSafeRelativePath(string? path)
@@ -314,8 +324,20 @@ public static class ProjectVersionPolicyCatalog
         foreach (var part in selector.Split('/').Skip(1))
         {
             var key = part.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal);
-            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(key, out current))
-                return null;
+            if (current.ValueKind == JsonValueKind.Object)
+            {
+                if (!current.TryGetProperty(key, out current))
+                    return null;
+                continue;
+            }
+            if (current.ValueKind == JsonValueKind.Array
+                && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                && index >= 0 && index < current.GetArrayLength())
+            {
+                current = current[index];
+                continue;
+            }
+            return null;
         }
         return current.ValueKind == JsonValueKind.String ? current.GetString()?.Trim() : current.ToString();
     }
