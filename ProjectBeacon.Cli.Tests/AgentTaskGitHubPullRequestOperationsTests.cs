@@ -255,6 +255,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
 
         Assert.Null(result.Error);
         var review = Assert.Single(result.Items!);
+        Assert.Equal(7L, review["id"]!.GetValue<long>());
         Assert.Equal("reviewer", review["author"]!.GetValue<string>());
         Assert.Equal("CHANGES_REQUESTED", review["state"]!.GetValue<string>());
         Assert.Equal(commitSha, review["commitSha"]!.GetValue<string>());
@@ -299,9 +300,12 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
             inlineJson, "inline", 5);
 
         Assert.Null(conversation.Error);
-        Assert.Equal("maintainer", Assert.Single(conversation.Items!)["author"]!.GetValue<string>());
+        var conversationComment = Assert.Single(conversation.Items!);
+        Assert.Equal(11L, conversationComment["id"]!.GetValue<long>());
+        Assert.Equal("maintainer", conversationComment["author"]!.GetValue<string>());
         Assert.Null(inline.Error);
         var comment = Assert.Single(inline.Items!);
+        Assert.Equal(12L, comment["id"]!.GetValue<long>());
         Assert.Equal("src/Version.cs", comment["path"]!.GetValue<string>());
         Assert.Equal(42, comment["line"]!.GetValue<int>());
         Assert.False(comment.ContainsKey("diff_hunk"));
