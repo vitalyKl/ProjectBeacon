@@ -14,6 +14,8 @@ public sealed class ReleaseCandidateSnapshot : Entity, IProjectScoped
 
     public Guid ProjectId { get; private set; }
     public Guid ReleaseId { get; private set; }
+    public Guid CandidateId { get; private set; }
+    public Guid PreparedByDeviceId { get; private set; }
     public string Version { get; private set; } = string.Empty;
     public string TagName { get; private set; } = string.Empty;
     public string TargetBranch { get; private set; } = string.Empty;
@@ -33,6 +35,8 @@ public sealed class ReleaseCandidateSnapshot : Entity, IProjectScoped
     public static ReleaseCandidateSnapshot Create(
         Guid projectId,
         Guid releaseId,
+        Guid candidateId,
+        Guid preparedByDeviceId,
         string version,
         string tagName,
         string targetBranch,
@@ -46,8 +50,9 @@ public sealed class ReleaseCandidateSnapshot : Entity, IProjectScoped
         string snapshotJson,
         DateTime preparedAtUtc)
     {
-        if (projectId == Guid.Empty || releaseId == Guid.Empty)
-            throw new ArgumentException("Project and Release ids are required.");
+        if (projectId == Guid.Empty || releaseId == Guid.Empty
+            || candidateId == Guid.Empty || preparedByDeviceId == Guid.Empty)
+            throw new ArgumentException("Project, Release, Candidate and preparation workstation ids are required.");
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(tagName);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetBranch);
@@ -74,6 +79,8 @@ public sealed class ReleaseCandidateSnapshot : Entity, IProjectScoped
         var snapshot = Entity.New<ReleaseCandidateSnapshot>();
         snapshot.ProjectId = projectId;
         snapshot.ReleaseId = releaseId;
+        snapshot.CandidateId = candidateId;
+        snapshot.PreparedByDeviceId = preparedByDeviceId;
         snapshot.Version = version.Trim();
         snapshot.TagName = tagName.Trim();
         snapshot.TargetBranch = targetBranch.Trim();
