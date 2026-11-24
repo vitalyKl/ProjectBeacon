@@ -19,7 +19,8 @@ public sealed class AuditEvent : Entity
         "sourceBranch", "targetBranch", "sourceSha", "reviewTreeSha",
         "reviewCommandHash", "targetHeadSha", "candidateTreeSha",
         "candidateCheckOutputHash", "postMergeCheckOutputHash",
-        "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId"
+        "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId",
+        "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId"
     };
 
     private static readonly Regex DetailCodePattern =
@@ -135,7 +136,9 @@ public sealed class AuditEvent : Entity
                     var code = value.GetString();
                     var pattern = property.Name is "sourceBranch" or "targetBranch"
                         ? BranchNamePattern
-                        : DetailCodePattern;
+                        : property.Name == "targetVersion"
+                            ? new Regex("^[A-Za-z0-9._+:-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
+                            : DetailCodePattern;
                     if (code is null || !pattern.IsMatch(code))
                         throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
                 }
