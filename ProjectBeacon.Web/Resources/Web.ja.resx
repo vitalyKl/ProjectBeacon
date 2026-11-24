@@ -3030,4 +3030,10 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>ランディングの取り消しをキューに登録しました。</value>
   </data>
+
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>このリポジトリ同期リクエストをキャンセルしますか？ワークステーションがコマンドを取得する前に限りキャンセルできます。</value></data>
+
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>ワークステーションで開始される前に、リポジトリ同期リクエストがキャンセルされました。</value></data>
+
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>10 分以内にワークステーションが取得しなかったため、リポジトリ同期リクエストの有効期限が切れました。</value></data>
 </root>
