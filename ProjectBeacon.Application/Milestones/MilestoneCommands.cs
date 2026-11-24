@@ -54,4 +54,5 @@ public record MilestoneDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     DateTime? ClosedAt,
-    int Revision = 1);
+    int Revision = 1,
+    Guid? ReleaseId = null);
