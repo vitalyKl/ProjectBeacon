@@ -3033,4 +3033,64 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>合并回滚已排队。</value>
   </data>
+  <data name="AutoPullMode" xml:space="preserve">
+    <value>自动更新 Checkout</value>
+  </data>
+  <data name="AutoPullModeOff" xml:space="preserve">
+    <value>关闭 — 仅检查状态</value>
+  </data>
+  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+    <value>安全时 — 对干净的 Checkout 执行 Fast-Forward</value>
+  </data>
+  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+    <value>仓库检查间隔（分钟）</value>
+  </data>
+  <data name="AutoSyncHelp" xml:space="preserve">
+    <value>后台检查项目仓库。自动更新仅使用 Fast-Forward，不会覆盖本地更改。间隔：2–120 分钟。</value>
+  </data>
+  <data name="RepositorySync" xml:space="preserve">
+    <value>项目仓库状态</value>
+  </data>
+  <data name="RepositorySyncNotReported" xml:space="preserve">
+    <value>此工作站尚未报告仓库状态。</value>
+  </data>
+  <data name="RepoSyncError" xml:space="preserve">
+    <value>同步错误：{0}</value>
+  </data>
+  <data name="RepoSyncDiverged" xml:space="preserve">
+    <value>分支历史已分歧</value>
+  </data>
+  <data name="RepoSyncDetached" xml:space="preserve">
+    <value>Detached HEAD</value>
+  </data>
+  <data name="RepoSyncNoUpstream" xml:space="preserve">
+    <value>未配置 Upstream</value>
+  </data>
+  <data name="RepoSyncDirty" xml:space="preserve">
+    <value>存在本地更改 — 已跳过更新</value>
+  </data>
+  <data name="RepoSyncActiveSessions" xml:space="preserve">
+    <value>Snapshot 会话正在运行 — 延后更新</value>
+  </data>
+  <data name="RepoSyncGitLandActive" xml:space="preserve">
+    <value>Git Landing 正在运行 — 延后更新</value>
+  </data>
+  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+    <value>Checkout 正忙 — 延后更新</value>
+  </data>
+  <data name="RepoSyncPulled" xml:space="preserve">
+    <value>已自动更新 {0} 个提交</value>
+  </data>
+  <data name="RepoSyncBehind" xml:space="preserve">
+    <value>落后远程分支 {0} 个提交</value>
+  </data>
+  <data name="RepoSyncUpToDate" xml:space="preserve">
+    <value>已是最新</value>
+  </data>
+  <data name="RepoSyncJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+    <value>{0} 分钟前检查</value>
+  </data>
 </root>

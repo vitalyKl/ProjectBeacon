@@ -3224,4 +3224,64 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Landing revert queued.</value>
   </data>
+  <data name="AutoPullMode" xml:space="preserve">
+    <value>Automatic checkout update</value>
+  </data>
+  <data name="AutoPullModeOff" xml:space="preserve">
+    <value>Off — check status only</value>
+  </data>
+  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+    <value>When safe — fast-forward clean checkout</value>
+  </data>
+  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+    <value>Repository check interval (minutes)</value>
+  </data>
+  <data name="AutoSyncHelp" xml:space="preserve">
+    <value>Project repositories are checked in the background. Automatic updates use fast-forward only and never overwrite local changes. The interval is 2–120 minutes.</value>
+  </data>
+  <data name="RepositorySync" xml:space="preserve">
+    <value>Project repository status</value>
+  </data>
+  <data name="RepositorySyncNotReported" xml:space="preserve">
+    <value>No repository status has been reported by this workstation yet.</value>
+  </data>
+  <data name="RepoSyncError" xml:space="preserve">
+    <value>Sync error: {0}</value>
+  </data>
+  <data name="RepoSyncDiverged" xml:space="preserve">
+    <value>Branches have diverged</value>
+  </data>
+  <data name="RepoSyncDetached" xml:space="preserve">
+    <value>Detached HEAD</value>
+  </data>
+  <data name="RepoSyncNoUpstream" xml:space="preserve">
+    <value>No upstream configured</value>
+  </data>
+  <data name="RepoSyncDirty" xml:space="preserve">
+    <value>Local changes — not updated</value>
+  </data>
+  <data name="RepoSyncActiveSessions" xml:space="preserve">
+    <value>Snapshot session active — update deferred</value>
+  </data>
+  <data name="RepoSyncGitLandActive" xml:space="preserve">
+    <value>Git landing in progress — update deferred</value>
+  </data>
+  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+    <value>Checkout operation busy — update deferred</value>
+  </data>
+  <data name="RepoSyncPulled" xml:space="preserve">
+    <value>Automatically updated: {0} commits</value>
+  </data>
+  <data name="RepoSyncBehind" xml:space="preserve">
+    <value>Behind remote by {0} commits</value>
+  </data>
+  <data name="RepoSyncUpToDate" xml:space="preserve">
+    <value>Up to date</value>
+  </data>
+  <data name="RepoSyncJustNow" xml:space="preserve">
+    <value>Just now</value>
+  </data>
+  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+    <value>Updated {0} min ago</value>
+  </data>
 </root>

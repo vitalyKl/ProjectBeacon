@@ -3015,4 +3015,64 @@
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>Откат посадки поставлен в очередь.</value>
   </data>
+  <data name="AutoPullMode" xml:space="preserve">
+    <value>Автоматическое обновление checkout</value>
+  </data>
+  <data name="AutoPullModeOff" xml:space="preserve">
+    <value>Выключено — только проверка состояния</value>
+  </data>
+  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+    <value>При безопасных условиях — fast-forward чистого checkout</value>
+  </data>
+  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+    <value>Интервал проверки репозитория (минуты)</value>
+  </data>
+  <data name="AutoSyncHelp" xml:space="preserve">
+    <value>Репозитории проектов проверяются в фоне. Автоматическое обновление выполняется только fast-forward и не перезаписывает локальные изменения. Интервал: 2–120 минут.</value>
+  </data>
+  <data name="RepositorySync" xml:space="preserve">
+    <value>Состояние репозиториев проектов</value>
+  </data>
+  <data name="RepositorySyncNotReported" xml:space="preserve">
+    <value>Эта рабочая станция ещё не передавала состояние репозиториев.</value>
+  </data>
+  <data name="RepoSyncError" xml:space="preserve">
+    <value>Ошибка синхронизации: {0}</value>
+  </data>
+  <data name="RepoSyncDiverged" xml:space="preserve">
+    <value>Истории веток разошлись</value>
+  </data>
+  <data name="RepoSyncDetached" xml:space="preserve">
+    <value>Detached HEAD</value>
+  </data>
+  <data name="RepoSyncNoUpstream" xml:space="preserve">
+    <value>Не настроена upstream-ветка</value>
+  </data>
+  <data name="RepoSyncDirty" xml:space="preserve">
+    <value>Есть локальные изменения — обновление пропущено</value>
+  </data>
+  <data name="RepoSyncActiveSessions" xml:space="preserve">
+    <value>Активна Snapshot-сессия — обновление отложено</value>
+  </data>
+  <data name="RepoSyncGitLandActive" xml:space="preserve">
+    <value>Выполняется Git landing — обновление отложено</value>
+  </data>
+  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+    <value>Checkout занят — обновление отложено</value>
+  </data>
+  <data name="RepoSyncPulled" xml:space="preserve">
+    <value>Автоматически получено коммитов: {0}</value>
+  </data>
+  <data name="RepoSyncBehind" xml:space="preserve">
+    <value>Отставание от удалённой ветки: {0} коммитов</value>
+  </data>
+  <data name="RepoSyncUpToDate" xml:space="preserve">
+    <value>Актуально</value>
+  </data>
+  <data name="RepoSyncJustNow" xml:space="preserve">
+    <value>Только что</value>
+  </data>
+  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+    <value>Проверено {0} мин назад</value>
+  </data>
 </root>

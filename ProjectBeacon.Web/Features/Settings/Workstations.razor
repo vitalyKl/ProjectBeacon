@@ -1,4 +1,5 @@
 @page "/settings/workstations"
+@implements IAsyncDisposable
 @layout MainLayout
 @attribute [Authorize]
 @using System.Security.Claims
@@ -106,6 +107,15 @@
                 <MudSelectItem T="string" Value="@("auto")">@L["CommandPolicyAuto"]</MudSelectItem>
             </MudSelect>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["CommandPolicyHelp"]</MudText>
+            <MudSelect T="string" @bind-Value="_autoPullMode" Label="@L["AutoPullMode"]" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled="_busy">
+                <MudSelectItem T="string" Value="@("Off")">@L["AutoPullModeOff"]</MudSelectItem>
+                <MudSelectItem T="string" Value="@("WhenSafe")">@L["AutoPullModeWhenSafe"]</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="int" @bind-Value="_autoSyncIntervalMinutes"
+                             Label="@L["AutoSyncIntervalMinutes"]" Min="2" Max="120" Step="1"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AutoSyncHelp"]</MudText>
             <MudNumericField T="int" @bind-Value="_pipelineTurnTimeoutMinutes"
                              Label="@L["PipelineTurnTimeout"]" Min="15" Max="60" Step="5"
                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
@@ -138,6 +148,40 @@
         <MudText Typo="Typo.body2">@L["ProbeNode"]: @(_probeNode ?? "-")</MudText>
         <MudText Typo="Typo.body2">@L["ProbeDocker"]: @(_probeDocker ?? "-")</MudText>
         <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @(_probeLlamaSwap ?? "-")</MudText>
+        <MudText Typo="Typo.subtitle2" Class="mt-4">@L["RepositorySync"]</MudText>
+        @if (_repoSyncRows.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["RepositorySyncNotReported"]</MudText>
+        }
+        else
+        {
+            <MudTable Items="_repoSyncRows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>@L["Project"]</MudTh>
+                    <MudTh>@L["Branch"]</MudTh>
+                    <MudTh>@L["Status"]</MudTh>
+                    <MudTh>@L["Updated"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="@L["Project"]"><span title="@context.ProjectId">@context.ProjectId.ToString("N")[..8]</span></MudTd>
+                    <MudTd DataLabel="@L["Branch"]">@(context.Branch ?? "-")</MudTd>
+                    <MudTd DataLabel="@L["Status"]">
+                        <StatusChip Color="@(context.LastErrorCode is not null || context.Diverged ? Color.Error : context.Behind > 0 ? Color.Warning : Color.Success)"
+                                    Label="@RepoSyncStatusLabel(context)" />
+                    </MudTd>
+                    <MudTd DataLabel="@L["Updated"]">
+                        @if (context.CheckedAt is { } checkedAt)
+                        {
+                            @RepoSyncUpdatedLabel(checkedAt)
+                        }
+                        else
+                        {
+                            @("-")
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
         <MudStack Row="true" Spacing="2" Class="mt-2">
             @if (string.IsNullOrWhiteSpace(_probeGit))
             {
@@ -231,6 +275,12 @@
     private string _agentDataDir = string.Empty;
     private string _projectsRoot = string.Empty;
     private string _commandPolicy = "ask";
+    private string _autoPullMode = "WhenSafe";
+    private int _autoSyncIntervalMinutes = 10;
+    private List<RepoSyncUiRow> _repoSyncRows = [];
+    private CancellationTokenSource? _refreshCts;
+    private Task? _refreshTask;
+    private sealed record RepoSyncUiRow(Guid ProjectId, string? Branch, int Ahead, int Behind, bool Clean, bool Detached, bool HasUpstream, bool Diverged, DateTime? CheckedAt, int? LastAutoPullCommits, string? BlockedReason, string? LastErrorCode);
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
     private int _contextResponseReserveTokens;
@@ -290,6 +340,43 @@
             _totpEnabled = totp.Success && totp.Value!.Enabled;
         }
         await ReloadDevices();
+        _refreshCts = new CancellationTokenSource();
+        _refreshTask = RefreshHeartbeatLoopAsync(_refreshCts.Token);
+    }
+
+    private async Task RefreshHeartbeatLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), ct);
+                var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)), ct);
+                if (listed.Success)
+                {
+                    _devices = listed.Value!.ToList();
+                    if (_wsDeviceId is { } selected && _devices.Any(device => device.Id == selected))
+                        LoadWorkstation(selected, loadSettings: false);
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_refreshCts is null)
+            return;
+        await _refreshCts.CancelAsync();
+        if (_refreshTask is not null)
+        {
+            try { await _refreshTask; }
+            catch (OperationCanceledException) { }
+        }
+        _refreshCts.Dispose();
     }
 
     private Task ReloadDevices() => ReloadDevices(loadWorkstationSettings: true);
@@ -373,6 +460,7 @@
         _probeAgentRuntime = null;
         _probeAgentRuntimeHealthy = null;
         _probeAgentRuntimeError = null;
+        _repoSyncRows = [];
         try
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
@@ -381,6 +469,42 @@
             _probeDocker = Tool(doc.RootElement, "docker");
             _probeLlamaSwap = Tool(doc.RootElement, "llamaSwap");
             var root = doc.RootElement;
+            if (root.TryGetProperty("repoSync", out var repoSync) && repoSync.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in repoSync.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object
+                        || !item.TryGetProperty("projectId", out var projectIdElement)
+                        || !Guid.TryParse(projectIdElement.GetString(), out var projectId))
+                        continue;
+                    DateTime? checkedAt = item.TryGetProperty("checkedAt", out var checkedAtElement)
+                        && checkedAtElement.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(checkedAtElement.GetString(), out var parsedAt)
+                            ? DateTime.SpecifyKind(parsedAt, DateTimeKind.Utc) : null;
+                    int? lastPullCommits = null;
+                    if (item.TryGetProperty("lastAutoPull", out var lastPull)
+                        && lastPull.ValueKind == JsonValueKind.Object
+                        && lastPull.TryGetProperty("commits", out var commits)
+                        && commits.TryGetInt32(out var parsedCommits))
+                        lastPullCommits = parsedCommits;
+                    var branch = item.TryGetProperty("branch", out var branchElement)
+                        && branchElement.ValueKind == JsonValueKind.String ? branchElement.GetString() : null;
+                    var ahead = item.TryGetProperty("ahead", out var aheadElement) && aheadElement.TryGetInt32(out var aheadValue) ? aheadValue : 0;
+                    var behind = item.TryGetProperty("behind", out var behindElement) && behindElement.TryGetInt32(out var behindValue) ? behindValue : 0;
+                    var clean = item.TryGetProperty("clean", out var cleanElement) && cleanElement.ValueKind == JsonValueKind.True;
+                    var detached = item.TryGetProperty("detached", out var detachedElement) && detachedElement.ValueKind == JsonValueKind.True;
+                    var hasUpstream = item.TryGetProperty("hasUpstream", out var upstreamElement) && upstreamElement.ValueKind == JsonValueKind.True;
+                    var diverged = item.TryGetProperty("diverged", out var divergedElement) && divergedElement.ValueKind == JsonValueKind.True;
+                    var blocked = item.TryGetProperty("autoPullBlockedReason", out var blockedElement)
+                        && blockedElement.ValueKind == JsonValueKind.String ? blockedElement.GetString() : null;
+                    var errorCode = item.TryGetProperty("lastError", out var lastError)
+                        && lastError.ValueKind == JsonValueKind.Object
+                        && lastError.TryGetProperty("code", out var codeElement)
+                        && codeElement.ValueKind == JsonValueKind.String ? codeElement.GetString() : null;
+                    _repoSyncRows.Add(new RepoSyncUiRow(projectId, branch, ahead, behind, clean, detached,
+                        hasUpstream, diverged, checkedAt, lastPullCommits, blocked, errorCode));
+                }
+            }
             if (root.TryGetProperty("agentRuntime", out var runtimeStatus))
             {
                 if (runtimeStatus.ValueKind == JsonValueKind.Object)
@@ -406,6 +530,39 @@
             return null;
         var value = p.GetString();
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private string RepoSyncStatusLabel(RepoSyncUiRow row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.LastErrorCode))
+            return string.Format(L["RepoSyncError"].Value, row.LastErrorCode);
+        if (row.Diverged || row.BlockedReason == "Diverged")
+            return L["RepoSyncDiverged"].Value;
+        if (row.Detached)
+            return L["RepoSyncDetached"].Value;
+        if (!row.HasUpstream)
+            return L["RepoSyncNoUpstream"].Value;
+        if (!row.Clean || row.BlockedReason == "DirtyWorkingTree")
+            return L["RepoSyncDirty"].Value;
+        if (row.BlockedReason == "ActiveSessions")
+            return L["RepoSyncActiveSessions"].Value;
+        if (row.BlockedReason == "GitLandActive")
+            return L["RepoSyncGitLandActive"].Value;
+        if (row.BlockedReason == "CheckoutBusy")
+            return L["RepoSyncCheckoutBusy"].Value;
+        if (row.LastAutoPullCommits is { } commits && commits > 0)
+            return string.Format(L["RepoSyncPulled"].Value, commits);
+        return row.Behind > 0
+            ? string.Format(L["RepoSyncBehind"].Value, row.Behind)
+            : L["RepoSyncUpToDate"].Value;
+    }
+
+    private string RepoSyncUpdatedLabel(DateTime checkedAt)
+    {
+        var minutes = Math.Max(0, (DateTime.UtcNow - DateTime.SpecifyKind(checkedAt, DateTimeKind.Utc)).TotalMinutes);
+        return minutes < 1
+            ? L["RepoSyncJustNow"].Value
+            : string.Format(L["RepoSyncUpdatedMinutes"].Value, (int)Math.Floor(minutes));
     }
 
     private async Task AddDevice()
@@ -465,6 +622,8 @@
                 pipelineTurnTimeoutMinutes = _pipelineTurnTimeoutMinutes,
                 pipelineIdleTimeoutMinutes = _pipelineIdleTimeoutMinutes,
                 contextResponseReserveTokens = _contextResponseReserveTokens,
+                autoPullMode = _autoPullMode,
+                autoSyncIntervalMinutes = Math.Clamp(_autoSyncIntervalMinutes, 2, 120),
                 llamaSwapBin = _llamaSwapBin,
                 llamaCppBin = _llamaCppBin
             });
