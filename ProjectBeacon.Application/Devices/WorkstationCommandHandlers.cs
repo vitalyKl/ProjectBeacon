@@ -267,6 +267,9 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
         {
             ct.ThrowIfCancellationRequested();
             await using var db = _dbFactory.CreateDbContext();
+            await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+                db, _timeProvider.GetUtcNow().UtcDateTime, ct, deviceId: command.Request.DeviceId);
+
             var pending = db.WorkstationCommands.AsNoTracking()
                 .Where(c => c.DeviceId == command.Request.DeviceId && c.Status == WorkstationCommandStatus.Pending);
             if (command.Request.ControlOnly)
@@ -306,6 +309,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                         .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(c => c.Status, WorkstationCommandStatus.Failed)
+                            .SetProperty(c => c.PendingSince, (DateTime?)null)
                             .SetProperty(c => c.Error, CommandSandbox.RuntimeRequired)
                             .SetProperty(c => c.CompletedAt, now)
                             .SetProperty(c => c.StartedAt, now), ct);
@@ -324,6 +328,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(c => c.Status, WorkstationCommandStatus.Running)
+                    .SetProperty(c => c.PendingSince, (DateTime?)null)
                     .SetProperty(c => c.StartedAt, startedAt)
                     .SetProperty(c => c.LeaseExpiresAt, startedAt + lease)
                     .SetProperty(c => c.ClaimInstanceId, instanceId), ct);
@@ -404,6 +409,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
                 .Where(c => c.Id == row.Id && c.Status == expectedStatus)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(c => c.Status, row.Status)
+                    .SetProperty(c => c.PendingSince, row.PendingSince)
                     .SetProperty(c => c.ResultJson, row.ResultJson)
                     .SetProperty(c => c.Error, row.Error)
                     .SetProperty(c => c.StartedAt, row.StartedAt)
