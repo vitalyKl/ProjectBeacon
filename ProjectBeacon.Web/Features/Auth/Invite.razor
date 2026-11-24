@@ -88,16 +88,10 @@
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = Notifications.FormatFailure(
+                _error = Notifications.FormatHttpFailure(
+                    response.StatusCode,
                     L["AuthRequestFailed"].Value,
                     L["AuthInviteOperation"].Value,
-                    response.StatusCode == System.Net.HttpStatusCode.Unauthorized
-                        ? ErrorCodes.Unauthorized
-                        : response.StatusCode == System.Net.HttpStatusCode.Forbidden
-                            ? ErrorCodes.Forbidden
-                            : response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
-                                ? ErrorCodes.Unavailable
-                                : ErrorCodes.Unclassified,
                     L["Load"].Value);
                 return;
             }
