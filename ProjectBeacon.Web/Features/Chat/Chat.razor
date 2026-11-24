@@ -424,7 +424,7 @@ else
                         _pollErrorMessage = null;
                     }
 
-                    await LoadProxyStatus();
+                    await LoadProxyStatus(isBackground: true);
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
@@ -444,6 +444,8 @@ else
                         _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
                         await InvokeAsync(StateHasChanged);
                     }
+                    else
+                        Logger.LogWarning(ex, "Transient chat refresh failure; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
@@ -474,7 +476,7 @@ else
         _ => Color.Default
     };
 
-    private async Task LoadProxyStatus()
+    private async Task LoadProxyStatus(bool isBackground = false)
     {
         try
         {
@@ -482,23 +484,29 @@ else
             if (status.Success)
             {
                 _proxy = status.Value;
-                if (_proxyStatusFailures.RecordSuccess())
-                    _proxyStatusErrorMessage = null;
+                _proxyStatusFailures.RecordSuccess();
+                _proxyStatusErrorMessage = null;
             }
-            else if (_proxyStatusFailures.RecordFailure())
+            else if (!isBackground || _proxyStatusFailures.RecordFailure())
             {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordFailure();
                 _proxyStatusErrorMessage = Notifications.FormatFailure(
                     status, L["Chat"].Value, L["Read"].Value);
             }
         }
         catch (Exception exception)
         {
-            if (_proxyStatusFailures.RecordFailure())
+            if (!isBackground || _proxyStatusFailures.RecordFailure())
             {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordFailure();
                 var diagnosticId = Notifications.LogException(exception, "read chat model runtime status");
                 _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
                     "ProxyStatusUnavailable", diagnosticId);
             }
+            else
+                Logger.LogWarning(exception, "Transient proxy status read failed; retrying.");
         }
     }
 

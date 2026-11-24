@@ -459,7 +459,7 @@
                     if (_session?.Id != sessionId)
                         continue;
 
-                    await LoadProxyStatus();
+                    await LoadProxyStatus(isBackground: true);
                     var parts = await ReloadParts(isBackground: true);
                     if (!parts.Success)
                     {
@@ -500,6 +500,8 @@
                         _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
                         await InvokeAsync(StateHasChanged);
                     }
+                    else
+                        Logger.LogWarning(ex, "Transient chat dock refresh failure; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
@@ -522,7 +524,7 @@
 
     private string PhaseLabel => L[ChatPhase.LabelKey(Phase)].Value;
 
-    private async Task LoadProxyStatus()
+    private async Task LoadProxyStatus(bool isBackground = false)
     {
         try
         {
@@ -530,23 +532,29 @@
             if (status.Success)
             {
                 _proxy = status.Value;
-                if (_proxyStatusFailures.RecordSuccess())
-                    _proxyStatusErrorMessage = null;
+                _proxyStatusFailures.RecordSuccess();
+                _proxyStatusErrorMessage = null;
             }
-            else if (_proxyStatusFailures.RecordFailure())
+            else if (!isBackground || _proxyStatusFailures.RecordFailure())
             {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordFailure();
                 _proxyStatusErrorMessage = Notifications.FormatFailure(
                     status, L["Chat"].Value, L["Read"].Value);
             }
         }
         catch (Exception exception)
         {
-            if (_proxyStatusFailures.RecordFailure())
+            if (!isBackground || _proxyStatusFailures.RecordFailure())
             {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordFailure();
                 var diagnosticId = Notifications.LogException(exception, "read chat dock model runtime status");
                 _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
                     "ProxyStatusUnavailable", diagnosticId);
             }
+            else
+                Logger.LogWarning(exception, "Transient proxy status read failed; retrying.");
         }
     }
 
