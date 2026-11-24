@@ -212,15 +212,14 @@ else
                 </MudGrid>
             }
         </MudPaper>
-        @{
-            var hotfixTasks = _tasks.Where(task =>
-                task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null).ToList();
-        }
-        @if (hotfixTasks.Count > 0)
+        @if (_tasks.Any(task =>
+            task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null))
         {
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-3">
                 <MudText Typo="Typo.subtitle1">@L["HotfixTasks"]</MudText>
-                @foreach (var task in hotfixTasks.OrderByDescending(task => task.CreatedAt))
+                @foreach (var task in _tasks
+                    .Where(task => task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null)
+                    .OrderByDescending(task => task.CreatedAt))
                 {
                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="py-1">
                         <MudText Typo="Typo.body2">@task.Title</MudText>
