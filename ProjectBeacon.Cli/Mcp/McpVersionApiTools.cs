@@ -171,18 +171,46 @@ internal static partial class McpApiTools
         if (!policy.Ok)
             return Format(policy);
 
-        var milestones = await api.SendAsync(
-            HttpMethod.Get, $"v1/projects/{projectId:D}/milestones", null, ct);
-        if (!milestones.Ok)
-            return Format(milestones);
+        JsonObject policyJson;
+        try
+        {
+            policyJson = JsonNode.Parse(policy.Body) as JsonObject
+                ?? throw new JsonException("Version policy response is not an object.");
+        }
+        catch (JsonException exception)
+        {
+            return new McpToolText(true, "Could not parse version policy response: " + exception.Message);
+        }
+
+        var releaseManagementEnabled = policyJson["releaseManagementEnabled"]?.GetValue<bool>() == true;
+        JsonArray releases = [];
+        string? releasesError = null;
+        if (releaseManagementEnabled)
+        {
+            var releaseResponse = await api.SendAsync(
+                HttpMethod.Get, $"v1/projects/{projectId:D}/releases", null, ct);
+            if (releaseResponse.Ok)
+            {
+                try
+                {
+                    releases = JsonNode.Parse(releaseResponse.Body) as JsonArray ?? [];
+                }
+                catch (JsonException exception)
+                {
+                    return new McpToolText(true, "Could not parse project releases: " + exception.Message);
+                }
+            }
+            else
+                releasesError = $"HTTP {releaseResponse.Status}";
+        }
 
         var result = new JsonObject
         {
             ["projectId"] = projectId.ToString("D"),
-            ["versionPolicy"] = JsonNode.Parse(policy.Body),
-            ["milestones"] = JsonNode.Parse(milestones.Body),
-            ["releaseEntityAvailable"] = false,
-            ["releaseEntityNote"] = "Project Release records are introduced in the next roadmap slice; milestones remain separate."
+            ["versionPolicy"] = policyJson,
+            ["releaseManagementEnabled"] = releaseManagementEnabled,
+            ["releases"] = releases,
+            ["releasesError"] = releasesError
         };
 
         if (TryPipelineTask(env, args, out var taskId, out _))
