@@ -1449,21 +1449,23 @@ else
                 }
                 catch (JsonException exception)
                 {
-                    resultDiagnosticId = Guid.NewGuid().ToString("N")[..8];
-                    Logger.LogWarning(exception,
-                        "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
-                        command.Id, resultDiagnosticId, TaskId);
+                    resultDiagnosticId = Notifications.LogException(
+                        exception,
+                        "parse repository synchronization result",
+                        new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
                 }
             }
 
             if (result is null)
             {
-                var diagnosticId = resultDiagnosticId ?? Guid.NewGuid().ToString("N")[..8];
-                if (resultDiagnosticId is null)
-                    Logger.LogWarning(
-                        "GitSync command {CommandId} completed without a result payload. DiagnosticId={DiagnosticId}, TaskId={TaskId}",
-                        command.Id, diagnosticId, TaskId);
-                Notifications.Add(Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", diagnosticId), Severity.Error);
+                var message = resultDiagnosticId is not null
+                    ? Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", resultDiagnosticId)
+                    : Notifications.FormatUnknownReasonCode(
+                        "MissingResultPayload",
+                        "GitSyncResultUnavailable",
+                        "read repository synchronization result",
+                        new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
+                Notifications.Error(message);
             }
             else if (IsVerifiedFastForward(result))
             {

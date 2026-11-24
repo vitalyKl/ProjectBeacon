@@ -950,10 +950,10 @@ else
                         }
                         catch (JsonException exception)
                         {
-                            resultDiagnosticId = Guid.NewGuid().ToString("N")[..8];
-                            Logger.LogWarning(exception,
-                                "GitSync command {CommandId} returned malformed result JSON. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
-                                commandId, resultDiagnosticId, projectId);
+                            resultDiagnosticId = Notifications.LogException(
+                                exception,
+                                "parse repository synchronization result",
+                                new { ProjectId = projectId, CommandId = commandId });
                         }
                     }
 
@@ -982,12 +982,14 @@ else
                         }
                         else if (result is null)
                         {
-                            var diagnosticId = resultDiagnosticId ?? Guid.NewGuid().ToString("N")[..8];
-                            if (resultDiagnosticId is null)
-                                Logger.LogWarning(
-                                    "GitSync command {CommandId} completed without a result payload. DiagnosticId={DiagnosticId}, ProjectId={ProjectId}",
-                                    commandId, diagnosticId, projectId);
-                            Notifications.Add(Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", diagnosticId), Severity.Error);
+                            var message = resultDiagnosticId is not null
+                                ? Notifications.FormatDiagnosticMessage("GitSyncResultUnavailable", resultDiagnosticId)
+                                : Notifications.FormatUnknownReasonCode(
+                                    "MissingResultPayload",
+                                    "GitSyncResultUnavailable",
+                                    "read repository synchronization result",
+                                    new { ProjectId = projectId, CommandId = commandId });
+                            Notifications.Error(message);
                         }
                         else if (IsVerifiedFastForward(result))
                         {
