@@ -150,7 +150,7 @@ public static class ProjectVersionPolicyCatalog
                     }
                     break;
                 case "Json":
-                    if (!source.Selector.StartsWith('/', StringComparison.Ordinal))
+                    if (!source.Selector.StartsWith("/", StringComparison.Ordinal))
                     {
                         error = $"JSON selector for '{source.Path}' must be a JSON Pointer beginning with '/'.";
                         return false;
@@ -278,7 +278,7 @@ public static class ProjectVersionPolicyCatalog
             return false;
         var sample = pattern.Replace("{version}", "1.2.3", StringComparison.Ordinal);
         return sample.Length <= 200
-            && !sample.StartsWith('/', StringComparison.Ordinal)
+            && !sample.StartsWith("/", StringComparison.Ordinal)
             && !sample.Contains("..", StringComparison.Ordinal)
             && sample.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/');
     }
@@ -286,7 +286,7 @@ public static class ProjectVersionPolicyCatalog
     private static bool IsSafeRelativePath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Length > 500
-            || path.StartsWith('/', StringComparison.Ordinal)
+            || path.StartsWith("/", StringComparison.Ordinal)
             || path.Contains('\\') || path.Contains(':') || path.Any(char.IsControl))
             return false;
         var segments = path.Split('/');
@@ -329,7 +329,7 @@ public static class ProjectVersionPolicyCatalog
             var line = raw.Split('#', 2)[0].Trim();
             if (line.Length == 0)
                 continue;
-            if (line.StartsWith('[', StringComparison.Ordinal) && line.EndsWith(']'))
+            if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith(']'))
             {
                 section = line[1..^1].Trim();
                 continue;
