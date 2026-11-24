@@ -55,6 +55,21 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The project's Git policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it.",
                 ErrorKind.Conflict);
+        if (!ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var versionPolicy, out var versionPolicyError))
+            return Result.Failure<LandingAttemptDto>(
+                "The project's version policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it. " + versionPolicyError,
+                ErrorKind.Conflict);
+        // Configured version manifests are server-protected from ordinary Actor landings.
+        // The exact list is copied into the immutable landing attempt so policy edits cannot
+        // silently change the files protected by an already requested review/landing.
+        gitPolicy = gitPolicy with
+        {
+            ProtectedPaths = gitPolicy.ProtectedPaths
+                .Concat(versionPolicy.Sources.Select(source => source.Path))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
+        };
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
