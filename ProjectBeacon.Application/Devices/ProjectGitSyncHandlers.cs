@@ -450,6 +450,7 @@ public sealed class CancelPendingProjectGitSyncCommandHandler
                 && candidate.StartedAt == null)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(candidate => candidate.Status, WorkstationCommandStatus.Cancelled)
+                .SetProperty(candidate => candidate.PendingSince, (DateTime?)null)
                 .SetProperty(candidate => candidate.Error, "GitSyncCancelledByUser")
                 .SetProperty(candidate => candidate.CompletedAt, now)
                 .SetProperty(candidate => candidate.LeaseExpiresAt, (DateTime?)null)
