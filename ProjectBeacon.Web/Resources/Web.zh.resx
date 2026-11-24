@@ -3420,4 +3420,5 @@ orthstar</value>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>已发布</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>已取消</value></data>
 
+  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>只有在版本策略、影响声明、landing 和验证检查全部通过后，ReleasePrepare 才会创建 Candidate。</value></data>
 </root>
