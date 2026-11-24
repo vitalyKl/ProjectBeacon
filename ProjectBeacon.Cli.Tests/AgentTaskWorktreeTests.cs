@@ -64,6 +64,55 @@ public sealed class AgentTaskWorktreeTests
     }
 
     [Fact]
+    public async Task ReopenedTaskWorkspace_ReportsBaseBranchLagWithoutIntegratingAutomatically()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-task-base-lag-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var worktrees = Path.Combine(parent, "worktrees");
+        var remote = Path.Combine(parent, "origin.git");
+        var seed = Path.Combine(parent, "seed");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+            await GitAsync(parent, "init", "--bare", "--initial-branch=main", remote);
+            await GitAsync(repository, "remote", "add", "origin", remote);
+            await GitAsync(repository, "push", "-u", "origin", "main");
+            await GitAsync(parent, "clone", remote, seed);
+            await GitAsync(seed, "config", "user.name", "ProjectBeacon Tests");
+            await GitAsync(seed, "config", "user.email", "tests@projectbeacon.local");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var first = await AgentTaskWorktree.CreateAsync(
+                repository, projectId, taskId, worktrees, CancellationToken.None);
+            Assert.NotNull(first.Worktree);
+            await first.Worktree!.DisposeAsync();
+
+            await File.WriteAllTextAsync(Path.Combine(seed, "remote-update.txt"), "new base commit\n");
+            await GitAsync(seed, "add", "remote-update.txt");
+            await GitAsync(seed, "commit", "-m", "advance base branch");
+            await GitAsync(seed, "push", "origin", "main");
+            var originalTaskHead = await GitAsync(repository, "rev-parse", $"refs/heads/beacon/task/{taskId:N}");
+
+            var reopened = await AgentTaskWorktree.CreateAsync(
+                repository, projectId, taskId, worktrees, CancellationToken.None);
+            Assert.NotNull(reopened.Worktree);
+            await using var workspace = reopened.Worktree!;
+            Assert.Equal(1, workspace.BaseBehindCommits);
+            Assert.Contains("advanced by 1 commits", workspace.BuildEnvironmentContract(), StringComparison.Ordinal);
+            Assert.Contains("git_integrate", workspace.BuildEnvironmentContract(), StringComparison.Ordinal);
+            Assert.Equal(originalTaskHead,
+                await GitAsync(repository, "rev-parse", $"refs/heads/beacon/task/{taskId:N}"));
+            Assert.False(File.Exists(Path.Combine(workspace.WorkingDirectory, "remote-update.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task Dispose_CommitsOutstandingChangesAsWorkInProgress()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-task-worktree-wip-" + Guid.NewGuid().ToString("N"));

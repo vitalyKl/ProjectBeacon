@@ -35,6 +35,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         string branchName,
         string? baseBranch,
         string baseSha,
+        int baseBehindCommits,
         Guid taskId,
         IReadOnlyCollection<string> disabledFilterDrivers,
         FileStream worktreeLease,
@@ -48,6 +49,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         BranchName = branchName;
         BaseBranch = baseBranch;
         BaseSha = baseSha;
+        BaseBehindCommits = baseBehindCommits;
         _taskId = taskId;
         _disabledFilterDrivers = disabledFilterDrivers.ToArray();
         _worktreeLease = worktreeLease;
@@ -62,6 +64,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
     public string BranchName { get; }
     public string? BaseBranch { get; }
     public string BaseSha { get; }
+    public int BaseBehindCommits { get; }
 
     public string BuildEnvironmentContract()
     {
@@ -74,6 +77,10 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         builder.AppendLine("Task branch: " + BranchName);
         builder.AppendLine("Base branch: " + (BaseBranch ?? "(detached HEAD)"));
         builder.AppendLine("Base commit: " + BaseSha);
+        if (BaseBehindCommits > 0)
+        {
+            builder.AppendLine($"The recorded base branch has advanced by {BaseBehindCommits} commits since this task branch base. If needed, call git_integrate to update this task branch; no automatic merge has been performed.");
+        }
         builder.AppendLine("Repository-relative project root: " + (relativeProjectRoot == "." ? "." : relativeProjectRoot));
         builder.AppendLine("The worktree starts from a committed base. Uncommitted changes in the user's original checkout are not included.");
         builder.AppendLine("Use git_info to inspect this task branch, its commits, status, and diff against the recorded base.");
@@ -315,6 +322,31 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                 File.Move(tempMetadata, metadataPath);
             }
 
+            var baseBehindCommits = 0;
+            if (!string.IsNullOrWhiteSpace(baseBranch) && IsGitSha(baseSha))
+            {
+                // Use the remote-tracking ref refreshed above. This is advisory only:
+                // never update the persistent task branch or merge the new base here.
+                var remoteBase = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters, "rev-parse", "--verify",
+                    $"refs/remotes/origin/{baseBranch}");
+                if (remoteBase.ExitCode == 0 && !remoteBase.TimedOut
+                    && IsGitSha(remoteBase.StdOut.Trim()))
+                {
+                    var remoteHead = remoteBase.StdOut.Trim();
+                    var baseIsAncestor = await AgentSessionWorktree.RunGitAsync(
+                        repositoryRoot, ct, disabledFilters, "merge-base", "--is-ancestor", baseSha, remoteHead);
+                    if (baseIsAncestor.ExitCode == 0 && !baseIsAncestor.TimedOut)
+                    {
+                        var count = await AgentSessionWorktree.RunGitAsync(
+                            repositoryRoot, ct, disabledFilters, "rev-list", "--count", baseSha + ".." + remoteHead);
+                        if (count.ExitCode == 0 && !count.TimedOut
+                            && int.TryParse(count.StdOut.Trim(), out var parsedCount) && parsedCount > 0)
+                            baseBehindCommits = parsedCount;
+                    }
+                }
+            }
+
             if (Directory.Exists(worktreePath))
             {
                 if (HasReparsePointBetween(worktreeRoot, worktreePath))
@@ -383,7 +415,7 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
 
             var created = new AgentTaskWorktree(
                 repositoryRoot, projectRoot, worktreePath, workingDirectory,
-                branchName, baseBranch, baseSha, taskId, disabledFilters, lease, metadataPath, metadata);
+                branchName, baseBranch, baseSha, baseBehindCommits, taskId, disabledFilters, lease, metadataPath, metadata);
             lease = null;
             return (created, null, warning);
         }
