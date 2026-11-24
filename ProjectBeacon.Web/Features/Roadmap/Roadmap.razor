@@ -294,21 +294,22 @@ else
                     {
                         <MarkdownView Text="@milestone.Description" MaxHeight="120" Class="mt-2" />
                     }
-                    @{
-                        var milestoneTasks = _tasks.Where(t => t.MilestoneId == milestone.Id).ToList();
-                        var done = milestoneTasks.Count(t => t.Status == "Done");
-                    }
                     <MudText Typo="Typo.caption" Class="mt-2">
-                        @L["TaskCount"]: @milestoneTasks.Count · @done/@milestoneTasks.Count @L["Done"]
+                        @L["TaskCount"]: @_tasks.Count(task => task.MilestoneId == milestone.Id)
+                        · @_tasks.Count(task => task.MilestoneId == milestone.Id && task.Status == "Done")/@_tasks.Count(task => task.MilestoneId == milestone.Id) @L["Done"]
                     </MudText>
-                    <MudProgressLinear Value="@(milestoneTasks.Count == 0 ? 0 : done * 100d / milestoneTasks.Count)" Color="Color.Default" Class="mt-1 beacon-track" />
-                    @foreach (var task in milestoneTasks.Take(3))
+                    <MudProgressLinear Value="@(_tasks.Count(task => task.MilestoneId == milestone.Id) == 0 ? 0 :
+                        _tasks.Count(task => task.MilestoneId == milestone.Id && task.Status == "Done") * 100d /
+                        _tasks.Count(task => task.MilestoneId == milestone.Id))" Color="Color.Default" Class="mt-1 beacon-track" />
+                    @foreach (var task in _tasks.Where(task => task.MilestoneId == milestone.Id).Take(3))
                     {
                         <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis" title="@task.Title">@task.Title</MudText>
                     }
-                    @if (milestoneTasks.Count > 3)
+                    @if (_tasks.Count(task => task.MilestoneId == milestone.Id) > 3)
                     {
-                        <MudText Typo="Typo.caption">@string.Format(L["MoreTasks"].Value, milestoneTasks.Count - 3)</MudText>
+                        <MudText Typo="Typo.caption">
+                            @string.Format(L["MoreTasks"].Value, _tasks.Count(task => task.MilestoneId == milestone.Id) - 3)
+                        </MudText>
                     }
                     <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1"
                                data-testid="@($"open-milestone-{milestone.Id:D}")"
