@@ -278,7 +278,7 @@ else
         var nodes = await ListNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
         _nodes = nodes.Success ? nodes.Value!.ToList() : [];
         if (!nodes.Success)
-            _error = nodes.Error;
+            _error = Notifications.FormatFailure(nodes, L["Context"].Value, L["Load"].Value);
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
         _deletedSections = deleted.Success
             ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList()
