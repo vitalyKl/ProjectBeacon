@@ -74,6 +74,24 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The latest review run must have a successful check for the current approval, pinned command, task branch revision, and base branch.", ErrorKind.Conflict);
 
+        // Landing proof must originate from the same workstation that owns the task's
+        // persistent branch. A valid SHA/tree from another checkout is not sufficient.
+        var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+            db, task, DateTime.UtcNow, ct);
+        if (workstation.BlockedReason is not null || workstation.Device is null)
+            return Result.Failure<LandingAttemptDto>(
+                ProjectGitSyncPreflight.WorkstationBlockedMessage(workstation.BlockedReason),
+                ErrorKind.Conflict);
+        if (reviewRun.CheckedDeviceId != workstation.Device.Id)
+            return Result.Failure<LandingAttemptDto>(
+                "The review proof was produced on a workstation other than the one pinned to this task. Rerun the Review Check on the task's pinned workstation.",
+                ErrorKind.Conflict);
+        if (!await ProjectGitSyncPreflight.TryPinTaskWorkstationAsync(
+                db, task.Id, workstation.Device.Id, ct))
+            return Result.Failure<LandingAttemptDto>(
+                "The task was pinned to a different workstation concurrently. Reload the task and retry landing.",
+                ErrorKind.Conflict);
+
         var reviewBaseBranch = reviewRun.CheckedBaseBranch!;
         var policySnapshot = ProjectGitPolicyCatalog.SerializeAttemptSnapshot(gitPolicy, reviewBaseBranch);
         var landingTargetBranch = gitPolicy.AutonomyLevel == 1
