@@ -3333,4 +3333,10 @@ orthstar</value>
   <data name="PipelineWorkstationNotNative" xml:space="preserve">
     <value>固定到此任务的工作站已不再报告 native runtime。请恢复 native runtime，或明确迁移任务工作树。</value>
   </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>仓库同步可能仍在运行，但无法刷新其状态。工作站可能仍在处理该命令；重试前请检查命令历史记录。</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>无法读取流水线活动快照。最新的活动信息可能不完整。</value>
+  </data>
 </root>

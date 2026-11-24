@@ -38,11 +38,15 @@
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_failureMessage</MudAlert>
             }
+            @if (!string.IsNullOrWhiteSpace(_snapshotErrorMessage))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_snapshotErrorMessage</MudAlert>
+            }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {
                 <MudText Typo="Typo.body2" Class="beacon-pipeline-activity-current">@ActivityLabel</MudText>
             }
-            @if (Parts.Count == 0 && Forms.Count == 0)
+            @if (Parts.Count == 0 && Forms.Count == 0 && string.IsNullOrWhiteSpace(_snapshotErrorMessage))
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineActivityStarting"]</MudText>
             }
@@ -75,6 +79,9 @@
     private List<ChatPartDto> Parts { get; set; } = [];
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
+    private string _snapshotCulture = string.Empty;
+    private string? _snapshotErrorDiagnosticId;
+    private string? _snapshotErrorMessage;
     private string? _failureMessage;
     private string _failureSnapshotKey = string.Empty;
 
@@ -148,7 +155,7 @@
 
     protected override void OnParametersSet()
     {
-        var failureKey = $"{Session.Id:N}:{Session.FailureReason}";
+        var failureKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{Session.Id:N}:{Session.FailureReason}";
         if (!string.Equals(failureKey, _failureSnapshotKey, StringComparison.Ordinal))
         {
             _failureSnapshotKey = failureKey;
@@ -163,10 +170,19 @@
         }
 
         var body = Session.ActivityJson ?? "{}";
-        if (body == SnapshotKey)
+        var snapshotKey = $"{Session.Id:N}:{body}";
+        var culture = System.Globalization.CultureInfo.CurrentUICulture.Name;
+        if (snapshotKey == SnapshotKey && culture == _snapshotCulture)
             return;
-        SnapshotKey = body;
+
+        var snapshotChanged = snapshotKey != SnapshotKey;
+        SnapshotKey = snapshotKey;
+        _snapshotCulture = culture;
+        if (snapshotChanged)
+            _snapshotErrorDiagnosticId = null;
+
         Parts = [];
+        _snapshotErrorMessage = null;
         Forms = [];
         _state = string.Empty;
         _activity = string.Empty;
@@ -226,10 +242,17 @@
                     Complete: true));
             }
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
             _state = string.Empty;
             _activity = string.Empty;
+            _snapshotErrorDiagnosticId ??= Notifications.LogException(
+                exception,
+                "parse pipeline session activity",
+                new { TaskId, SessionId = Session.Id });
+            _snapshotErrorMessage = Notifications.FormatDiagnosticMessage(
+                "PipelineActivitySnapshotInvalid",
+                _snapshotErrorDiagnosticId);
         }
     }
 

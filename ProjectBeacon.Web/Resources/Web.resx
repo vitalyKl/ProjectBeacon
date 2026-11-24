@@ -3524,4 +3524,10 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineWorkstationNotNative" xml:space="preserve">
     <value>The workstation pinned to this task no longer advertises the native runtime. Restore its native runtime or explicitly migrate the task worktree.</value>
   </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Repository synchronization may still be running, but its status could not be refreshed. The workstation may still be processing the command; check command history before retrying.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>The pipeline activity snapshot could not be read. The latest activity may be incomplete.</value>
+  </data>
 </root>

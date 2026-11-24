@@ -98,7 +98,7 @@
     {
         const string resourceKey = "PipelinePreflightReasonUnknown";
         const string operation = "read subtask pipeline preflight";
-        var cacheKey = $"{code}:{Subtask.Id}";
+        var cacheKey = $"{System.Globalization.CultureInfo.CurrentUICulture.Name}:{code}:{Subtask.Id}";
         if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
             return message;
 

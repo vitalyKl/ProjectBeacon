@@ -3325,4 +3325,10 @@ orthstar</value>
   <data name="PipelineWorkstationNotNative" xml:space="preserve">
     <value>Die für diese Aufgabe festgelegte Workstation meldet keine native Runtime mehr. Stellen Sie die native Runtime wieder her oder migrieren Sie den Task-Worktree ausdrücklich.</value>
   </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung läuft möglicherweise weiter, aber ihr Status konnte nicht aktualisiert werden. Die Workstation verarbeitet den Befehl eventuell noch. Prüfen Sie den Befehlsverlauf, bevor Sie es erneut versuchen.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>Der Aktivitätsstatus der Pipeline konnte nicht gelesen werden. Die neuesten Aktivitätsdaten sind möglicherweise unvollständig.</value>
+  </data>
 </root>

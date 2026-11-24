@@ -829,6 +829,8 @@ else
     {
         var noticeAt = DateTime.UtcNow.AddSeconds(65);
         var stillRunningNoticeShown = false;
+        var consecutiveStatusReadFailures = 0;
+        var statusReadWarningShown = false;
         try
         {
             while (!ct.IsCancellationRequested)
@@ -846,15 +848,27 @@ else
                 }
                 catch (Exception exception)
                 {
+                    consecutiveStatusReadFailures++;
                     Logger.LogWarning(exception,
                         "Transient GitSync status read failed for command {CommandId}, project {ProjectId}; polling will continue",
                         commandId, projectId);
+                    if (consecutiveStatusReadFailures >= 3 && !statusReadWarningShown)
+                    {
+                        statusReadWarningShown = true;
+                        var diagnosticId = Notifications.LogException(
+                            exception,
+                            "refresh repository synchronization status",
+                            new { ProjectId = projectId, CommandId = commandId });
+                        var warning = Notifications.FormatDiagnosticMessage("GitSyncStatusRefreshFailed", diagnosticId);
+                        await InvokeAsync(() => Notifications.Warning(warning));
+                    }
                     await Task.Delay(TimeSpan.FromSeconds(2), ct);
                     continue;
                 }
 
                 if (!current.Success || current.Value is null)
                 {
+                    consecutiveStatusReadFailures++;
                     Logger.LogWarning(
                         "Could not refresh GitSync command {CommandId} for project {ProjectId}: {Error}",
                         commandId, projectId, current.Error);
@@ -869,13 +883,37 @@ else
                                 _gitSyncCommandPending = false;
                                 _canManageRepositorySync = current.Kind != ErrorKind.Forbidden;
                             }
-                            Notifications.Add(Notifications.FormatFailure(current.Error, L["ProjectSettings"].Value, current.ErrorCode, L["Load"].Value, new { ProjectId = projectId, CommandId = commandId }), Severity.Warning);
+                            Notifications.Warning(Notifications.FormatFailure(
+                                current,
+                                L["ProjectSettings"].Value,
+                                L["Read"].Value,
+                                new { ProjectId = projectId, CommandId = commandId }));
                             StateHasChanged();
                         });
                         return;
                     }
+
+                    if (consecutiveStatusReadFailures >= 3 && !statusReadWarningShown)
+                    {
+                        statusReadWarningShown = true;
+                        var warning = current.Success
+                            ? Notifications.FormatUnknownReasonCode(
+                                "MissingCommandPayload",
+                                "GitSyncStatusRefreshFailed",
+                                "refresh repository synchronization status",
+                                new { ProjectId = projectId, CommandId = commandId })
+                            : Notifications.FormatFailure(
+                                current,
+                                L["ProjectSettings"].Value,
+                                L["Read"].Value,
+                                new { ProjectId = projectId, CommandId = commandId });
+                        await InvokeAsync(() => Notifications.Warning(warning));
+                    }
                     continue;
                 }
+
+                consecutiveStatusReadFailures = 0;
+                statusReadWarningShown = false;
 
                 if (current.Value.Status is WorkstationCommandStatus.Succeeded
                     or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)

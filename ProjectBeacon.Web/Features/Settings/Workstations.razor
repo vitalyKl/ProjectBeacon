@@ -246,7 +246,7 @@
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
-    private readonly Dictionary<Guid, (string Error, string Message)> _commandErrorMessages = [];
+    private readonly Dictionary<Guid, (string Error, string Culture, string Message)> _commandErrorMessages = [];
     private string _clientCurrentVersion = "-";
     private string _clientLatestVersion = "-";
     private bool? _clientUpdateAvailable;
@@ -372,8 +372,10 @@
         if (string.IsNullOrWhiteSpace(command.Error))
             return "-";
 
+        var culture = System.Globalization.CultureInfo.CurrentUICulture.Name;
         if (_commandErrorMessages.TryGetValue(command.Id, out var cached)
-            && string.Equals(cached.Error, command.Error, StringComparison.Ordinal))
+            && string.Equals(cached.Error, command.Error, StringComparison.Ordinal)
+            && string.Equals(cached.Culture, culture, StringComparison.Ordinal))
             return cached.Message;
 
         var message = Notifications.FormatFailure(
@@ -382,7 +384,7 @@
             ErrorCodes.InternalError,
             ChromeLabels.CommandKind(L, command.Kind),
             new { DeviceId = _wsDeviceId, CommandId = command.Id, CommandKind = command.Kind });
-        _commandErrorMessages[command.Id] = (command.Error, message);
+        _commandErrorMessages[command.Id] = (command.Error, culture, message);
         return message;
     }
 

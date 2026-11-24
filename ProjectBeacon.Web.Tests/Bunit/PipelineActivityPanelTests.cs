@@ -80,6 +80,20 @@ public sealed class PipelineActivityPanelTests : BUnitRenderBase
     }
 
     [Fact]
+    public void MalformedActivitySnapshot_ShowsDiagnosticWarningInsteadOfSilentlyLookingIdle()
+    {
+        var session = CreateSession(SessionStatus.Active, DateTime.UtcNow, "{malformed-json");
+
+        var cut = Bunit.RenderComponent<Features.Tasks.PipelineActivityPanel>(parameters => parameters
+            .Add(component => component.TaskId, session.TaskId)
+            .Add(component => component.Session, session));
+
+        Assert.Contains("pipeline activity snapshot could not be read", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Diagnostic ID:", cut.Markup);
+        Assert.DoesNotContain("malformed-json", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ReadyPlannerSession_DisablesLaunchAndExplainsMissingNativeExecutor()
     {
         var taskId = Guid.NewGuid();

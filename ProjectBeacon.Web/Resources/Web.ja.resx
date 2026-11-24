@@ -3333,4 +3333,10 @@ orthstar</value>
   <data name="PipelineWorkstationNotNative" xml:space="preserve">
     <value>このタスクに固定されたワークステーションが native runtime を報告しなくなりました。native runtime を復元するか、タスク作業ツリーを明示的に移行してください。</value>
   </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>リポジトリの同期は継続している可能性がありますが、状態を更新できませんでした。ワークステーションでコマンドがまだ実行中の可能性があります。再試行する前にコマンド履歴を確認してください。</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>パイプラインのアクティビティスナップショットを読み取れませんでした。最新のアクティビティ情報が不完全な可能性があります。</value>
+  </data>
 </root>

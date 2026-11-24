@@ -3315,4 +3315,10 @@
   <data name="PipelineWorkstationNotNative" xml:space="preserve">
     <value>Закреплённая за задачей станция больше не сообщает о native runtime. Восстановите native runtime или явно перенесите рабочую копию.</value>
   </data>
+  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
+    <value>Синхронизация репозитория может продолжаться, но не удалось обновить её состояние. Рабочая станция всё ещё может выполнять команду; проверьте историю команд, прежде чем повторять операцию.</value>
+  </data>
+  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
+    <value>Не удалось прочитать снимок активности pipeline. Последние сведения о работе могут быть неполными.</value>
+  </data>
 </root>
