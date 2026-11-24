@@ -151,6 +151,52 @@ This log is maintained in the repository and updated in the same branch as imple
 - ProjectBeacon MCP and Context7 are not exposed in this execution environment. Source-level review and GitHub Actions are the available verification path.
 - The branch remains isolated; PR #230 is not merged and main is unchanged.
 
+
+
+## 2026-11-24 — S2 Release/Roadmap and Version Policy API correction
+
+**Current implementation branch at the time of this update:** `feat/release-management`.
+
+### S2 — Release and Roadmap product slice now present
+
+- Added a separate project-scoped `Release` entity and kept `Milestone` independent with optional `ReleaseId`.
+- Added composite FK `(Milestone.ProjectId, Milestone.ReleaseId) -> (Release.ProjectId, Release.Id)`, preventing cross-project milestone attachment.
+- Added Releases table with forced project RLS and raw-SQL RLS isolation tests.
+- Added Release API/handlers, project settings feature flag `ReleaseManagementEnabled` (default off), Owner/Admin write controls, project-member / scoped TaskRead read access, audit events and optimistic revision checks.
+- Added Roadmap UI for creating and managing Releases and linking Milestones, with localized Candidate guidance in en/de/ru/ja/zh.
+- Added tests for release CRUD/authorization, feature-flag default/enforcement, inability to disable the flag while active Releases exist, cross-project FK/RLS isolation, and role-scoped MCP `release_context`.
+
+### Candidate lifecycle hardening
+
+- Removed manual transition to `Candidate` from generic status API and Roadmap UI. Candidate creation is reserved for ReleasePrepare.
+- Candidate cannot return to editable `InProgress`; Candidate/Published releases are immutable; milestones in those releases cannot be detached or moved.
+- Updated domain and handler tests for the restricted transition graph.
+- **Still missing:** immutable Candidate snapshot entity and ReleasePrepare executor/proof. The Candidate lifecycle is reserved but no supported command can create a Candidate yet; that is S3 work.
+
+### Version Policy feature-flag HTTP defect fixed
+
+- Found that `ProjectManage.razor` sent `releaseManagementEnabled`, but `ProjectEndpoints.SetVersionPolicy` dropped it when mapping `SetVersionPolicyBody` to `ProjectVersionPolicy`.
+- Fixed the endpoint mapping and added an optional `ReleaseManagementEnabled = false` body field for backward compatibility.
+- Added `OrgProjectTaskHttpTests.VersionPolicyHttp_RoundTripsReleaseManagementFeatureFlag`: verifies default-off state, enabling the flag while initializing `0.7.5.9`, revision increments, then disabling it.
+- Version-policy audit payload now includes the `releaseManagementEnabled` value.
+
+### CI record after S2 additions
+
+- Run [#45390404987](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45390404987) was for an earlier head (`1e875c193007a03472368f2b0e1c2461e94117c4`) and was later cancelled while the PR branch continued changing. It is **not a pass** and is not a definitive failure for the current head.
+- The Linux log from that interrupted run contains cancellation and zero-test-run outcomes; it does not provide a reliable final test result for the branch.
+- A fresh CI run must be triggered and allowed to finish on the current head before S0–S2 can be accepted.
+
+### Current blockers / next work
+
+- [ ] Green Linux/Windows/macOS CI on the current branch head.
+- [ ] S3: immutable Release Candidate snapshot + deterministic ReleasePrepare validation and execution.
+- [ ] S3: write configured version projections and `.beacon/release.json` only through ReleasePrepare, add `Beacon-Release: <id>` commit trailer, verify remote candidate SHA, and create tags only through the gated publication path.
+- [ ] Resolve remote merge authority before connecting ReleasePrepare to GitHub publishing: PR #194 currently retains GitLand as landing executor, while the plan recommends GitHub remote authority. Do not create competing merge authorities.
+- [ ] Verify GitHub tag protection/rulesets and required reviewers on the `production` Environment before enabling tag/deploy publication.
+- [ ] Reconcile release workflow's current three-component version validator with configured schemes and the repository's four-component version `0.7.5.9`.
+
+No changes to SaaS Control Plane or billing. PR #230 remains open and unmerged.
+
 ## Update format
 
 For every subsequent work session append:
