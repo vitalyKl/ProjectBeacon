@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using Application.Common;
 using Application.Persistence;
 using Application.Projects;
+using Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -28,6 +29,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
         if (device is null || device.IsRevoked)
             return Result.Failure<IReadOnlyList<DeviceAutoSyncTargetDto>>(
                 "Device not found.", ErrorKind.NotFound);
+        if (!WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.AutoSyncV1))
+            return Result.Ok((IReadOnlyList<DeviceAutoSyncTargetDto>)Array.Empty<DeviceAutoSyncTargetDto>());
 
         var runtimes = await (
             from runtime in db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking()
