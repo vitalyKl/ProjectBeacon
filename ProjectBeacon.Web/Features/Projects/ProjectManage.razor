@@ -278,6 +278,10 @@ else
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["GitSyncTitle"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["GitSyncHelp"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_gitSyncRestoreErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_gitSyncRestoreErrorMessage</MudAlert>
+        }
         @if (_canManageRepositorySync)
         {
             <div class="beacon-field-row">
@@ -380,6 +384,9 @@ else
     private bool _canManageRepositorySync;
     private bool _gitSyncCommandPending;
     private Guid? _gitSyncCommandId;
+    private string? _gitSyncRestoreErrorMessage;
+    private readonly UiBackgroundFailureTracker _gitSyncRestoreFailures = new();
+    private bool _gitSyncRestorePolling;
     private readonly CancellationTokenSource _gitSyncPoll = new();
 
     private bool HasGitSyncWorkstation =>
@@ -479,32 +486,7 @@ else
         await ReloadGitPolicy();
 
         if (_canManageRepositorySync && _projectId is { } projectId)
-        {
-            try
-            {
-                var pending = await GetGitSyncCommand.GetPendingAsync(projectId, _actor, _gitSyncPoll.Token);
-                if (pending.Success && pending.Value is { } command)
-                    StartGitSyncPolling(projectId, command.Id);
-                else if (!pending.Success)
-                {
-                    Logger.LogWarning(
-                        "Could not restore pending GitSync command for project {ProjectId}: {Error}",
-                        projectId, pending.Error);
-                    Notifications.Warning(Notifications.FormatFailure(
-                        pending, L["ProjectSettings"].Value, L["Load"].Value,
-                        new { ProjectId = projectId }));
-                }
-            }
-            catch (OperationCanceledException) when (_gitSyncPoll.IsCancellationRequested)
-            {
-                // The settings page is being disposed.
-            }
-            catch (Exception exception)
-            {
-                Logger.LogWarning(exception,
-                    "Could not restore pending GitSync command for project {ProjectId}", projectId);
-            }
-        }
+            await RestorePendingGitSyncCommandAsync(projectId, isBackground: false);
     }
 
     private async Task ReloadProposalPolicies()
@@ -792,6 +774,137 @@ else
     {
         _folderPath = path;
         return Task.CompletedTask;
+    }
+
+    private async Task<bool> RestorePendingGitSyncCommandAsync(Guid projectId, bool isBackground)
+    {
+        if (!_canManageRepositorySync || _gitSyncCommandId is not null || _gitSyncCommandPending)
+            return false;
+
+        try
+        {
+            var pending = await GetGitSyncCommand.GetPendingAsync(projectId, _actor, _gitSyncPoll.Token);
+            if (!pending.Success)
+            {
+                var errorCode = pending.ErrorCode ?? ErrorCodes.For(pending.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _gitSyncRestoreFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _gitSyncRestoreFailures.RecordSuccess();
+                    _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                        pending,
+                        L["ProjectSettings"].Value,
+                        L["Read"].Value,
+                        new { ProjectId = projectId, Resource = "pending repository synchronization" });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient pending GitSync restore failed. ProjectId={ProjectId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        projectId, errorCode, pending.Error);
+
+                if (errorCode == ErrorCodes.Forbidden)
+                    _canManageRepositorySync = false;
+
+                if (!isBackground && !isPermanentFailure)
+                    StartGitSyncRestorePolling(projectId);
+
+                return !isPermanentFailure;
+            }
+
+            _gitSyncRestoreFailures.RecordSuccess();
+            _gitSyncRestoreErrorMessage = null;
+            if (pending.Value is { } command)
+                StartGitSyncPolling(projectId, command.Id);
+            return false;
+        }
+        catch (OperationCanceledException) when (_gitSyncPoll.IsCancellationRequested)
+        {
+            // The page is being disposed; the command remains durable for the next visit.
+            return false;
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _gitSyncRestoreFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _gitSyncRestoreFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "restore pending repository synchronization command",
+                    new { ProjectId = projectId });
+                _gitSyncRestoreErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "GitSyncCommandRestoreFailed",
+                    diagnosticId);
+            }
+            else
+                Logger.LogWarning(
+                    exception,
+                    "Transient pending GitSync restore exception. ProjectId={ProjectId}",
+                    projectId);
+
+            if (!isBackground)
+                StartGitSyncRestorePolling(projectId);
+
+            return true;
+        }
+    }
+
+    private void StartGitSyncRestorePolling(Guid projectId)
+    {
+        if (_gitSyncRestorePolling || _gitSyncPoll.IsCancellationRequested)
+            return;
+
+        _gitSyncRestorePolling = true;
+        _ = PollGitSyncRestoreAsync(projectId, _gitSyncPoll.Token);
+    }
+
+    private async Task PollGitSyncRestoreAsync(Guid projectId, CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested
+                && _gitSyncCommandId is null
+                && !_gitSyncCommandPending
+                && _canManageRepositorySync)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                var shouldRetry = await RestorePendingGitSyncCommandAsync(projectId, isBackground: true);
+                await InvokeAsync(StateHasChanged);
+
+                if (!shouldRetry || _gitSyncCommandId is not null || _gitSyncCommandPending)
+                    return;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (_gitSyncRestoreFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "poll pending repository synchronization restore",
+                    new { ProjectId = projectId });
+                await InvokeAsync(() =>
+                {
+                    _gitSyncRestoreErrorMessage = Notifications.FormatDiagnosticMessage(
+                        "GitSyncCommandRestoreFailed", diagnosticId);
+                    StateHasChanged();
+                });
+            }
+            else
+                Logger.LogWarning(
+                    exception,
+                    "Transient pending GitSync restore polling exception. ProjectId={ProjectId}",
+                    projectId);
+        }
+        finally
+        {
+            _gitSyncRestorePolling = false;
+        }
     }
 
     private async Task RunGitSync(GitSyncMode mode)

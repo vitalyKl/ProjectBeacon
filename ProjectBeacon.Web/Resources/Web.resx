@@ -3548,4 +3548,28 @@ No Beacon-hosted coding agent.</value>
   <data name="Recover" xml:space="preserve">
     <value>Recover</value>
   </data>
+  <data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>Live chat updates are temporarily unavailable. The chat remains usable while the page retries automatically.</value>
+  </data>
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>Task and repository status could not be refreshed after repeated attempts. The last displayed status may be out of date; updates will resume automatically.</value>
+  </data>
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>Could not reconnect to the pending repository synchronization command. Check the task and workstation status before starting another synchronization.</value>
+  </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>The chat model runtime status is temporarily unavailable. Chat can continue, but model readiness may be out of date.</value>
+  </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Could not load the task context for this chat. The conversation can continue without it.</value>
+  </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Could not load this task. The task details service is unavailable. Retry automatically while this page remains open. Diagnostic ID: {0}</value>
+  </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Could not load workstation metrics. Check the workstation connection and try again. Diagnostic ID: {0}</value>
+  </data>
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>The list of tasks waiting for your input is temporarily unavailable. The chat remains usable; the page will retry automatically.</value>
+  </data>
 </root>

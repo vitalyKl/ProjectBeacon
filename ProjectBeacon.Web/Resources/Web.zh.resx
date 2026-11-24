@@ -3357,4 +3357,28 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>恢复</value>
   </data>
+  <data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>聊天实时更新暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
+  </data>
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>多次尝试后仍无法刷新任务和仓库状态。当前显示的信息可能已过期，系统会自动继续刷新。</value>
+  </data>
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>无法恢复与待处理仓库同步命令的连接。再次启动同步前，请检查任务和工作站状态。</value>
+  </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>聊天模型的运行状态暂时不可用。聊天仍可继续使用，但模型就绪状态可能已过期。</value>
+  </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>无法加载此聊天的任务上下文。您仍可在不使用该上下文的情况下继续对话。</value>
+  </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>无法加载任务。任务详情服务当前不可用。此页面保持打开时将自动重试。诊断 ID：{0}</value>
+  </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>无法加载工作站指标。请检查工作站连接后重试。诊断 ID：{0}</value>
+  </data>
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>等待您处理的任务列表暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
+  </data>
 </root>
