@@ -385,6 +385,9 @@ public sealed class ApiTokenAuthMiddleware
             if (ActorReadToolForRequest(segments, projectId, scopedTaskId, method) is { } actorReadTool)
                 return IsMcpToolGranted(allowedMcpTools, actorReadTool);
 
+            if (ActorVersionImpactToolForRequest(segments, scopedTaskId, method) is { } versionImpactTool)
+                return IsMcpToolGranted(allowedMcpTools, versionImpactTool);
+
             if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
             {
                 // Legacy Proposed/NeedsReview writes belong to knowledge-curator only.
@@ -489,6 +492,14 @@ public sealed class ApiTokenAuthMiddleware
             if (IsReadOnlyProjectRequest(segments, projectId, taskId, method, includePipelineStatus: true))
                 return true;
 
+            if (method == HttpMethods.Post
+                && segments.Length == 5
+                && segments[1] == "tasks"
+                && GuidSegmentEquals(segments, 2, scopedTaskId)
+                && segments[3] == "version-impact"
+                && segments[4] == "review")
+                return true;
+
             return method == HttpMethods.Post
                 && segments.Length == 5
                 && segments[1] == "tasks"
@@ -535,6 +546,9 @@ public sealed class ApiTokenAuthMiddleware
         if (segments.Length == 5 && segments[3] == "tasks"
             && GuidSegmentEquals(segments, 4, taskId))
             return McpToolNames.GetTask;
+        if (segments.Length == 4 && segments[1] == "tasks"
+            && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
+            return McpToolNames.GetTaskVersionImpact;
         if (segments.Length == 4 && segments[3] == "constraints")
             return McpToolNames.ListConstraints;
         if (segments.Length == 4 && segments[3] == "decisions")
@@ -551,6 +565,17 @@ public sealed class ApiTokenAuthMiddleware
             && Guid.TryParse(segments[5], out _))
             return McpToolNames.GetContextNode;
         return null;
+    }
+
+    private static string? ActorVersionImpactToolForRequest(
+        string[] segments, Guid taskId, string method)
+    {
+        if (method != HttpMethods.Put || segments.Length != 4
+            || segments[0] != "v1" || segments[1] != "tasks"
+            || !GuidSegmentEquals(segments, 2, taskId)
+            || segments[3] != "version-impact")
+            return null;
+        return McpToolNames.VersionImpact;
     }
 
     private static string? ActorKnowledgeWriteToolForRequest(string[] segments, Guid projectId, string method)
@@ -618,7 +643,7 @@ public sealed class ApiTokenAuthMiddleware
         if (segments.Length == 3 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId))
             return true;
         if (segments.Length == 4 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
-            && segments[3] is "tasks" or "constraints" or "decisions" or "milestones" or "labels" or "reports")
+            && segments[3] is "tasks" or "constraints" or "decisions" or "milestones" or "labels" or "reports" or "version-policy")
             return true;
         if (segments.Length == 5 && segments[1] == "projects" && GuidSegmentEquals(segments, 2, projectId)
             && segments[3] == "tasks" && Guid.TryParse(segments[4], out _))
@@ -653,7 +678,7 @@ public sealed class ApiTokenAuthMiddleware
             return true;
         if (includePipelineStatus && taskId is { } pipelineTask && segments.Length == 4
             && segments[1] == "tasks" && GuidSegmentEquals(segments, 2, pipelineTask)
-            && segments[3] == "pipeline")
+            && segments[3] is "pipeline" or "version-impact")
             return true;
 
         // Milestone details are tenant-scoped by RLS and used by Eval's get_milestone tool.
