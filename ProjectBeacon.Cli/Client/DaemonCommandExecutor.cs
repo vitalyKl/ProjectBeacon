@@ -454,8 +454,26 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         IAgentSessionWorktree sessionWorktree;
         if (WorkstationWorkspaceMode.UsesTaskBranches(workstationSettings.WorkspaceMode))
         {
+            using var bootstrapResponse = await _http.GetAsync(
+                $"v1/devices/me/tasks/{taskId:D}/workspace-bootstrap", ct);
+            if (!bootstrapResponse.IsSuccessStatusCode)
+                return (false, null,
+                    $"Beacon refused to authorize the task workspace base (HTTP {(int)bootstrapResponse.StatusCode}).");
+            var bootstrap = await bootstrapResponse.Content.ReadFromJsonAsync<DeviceTaskWorkspaceBootstrapDto>(ct);
+            if (bootstrap is null || bootstrap.ProjectId != projectId || bootstrap.TaskId != taskId)
+                return (false, null, "Beacon returned an invalid task workspace bootstrap response.");
+            if (bootstrap.IsHotfix
+                && (bootstrap.SourceReleaseId is null
+                    || string.IsNullOrWhiteSpace(bootstrap.BaseBranch)
+                    || string.IsNullOrWhiteSpace(bootstrap.BaseSha)))
+                return (false, null, "Beacon returned incomplete Hotfix base evidence; refusing to use the local checkout.");
+            if (!bootstrap.IsHotfix
+                && (bootstrap.SourceReleaseId is not null || bootstrap.BaseBranch is not null || bootstrap.BaseSha is not null))
+                return (false, null, "Beacon returned unexpected base overrides for an ordinary task.");
+
             var createdTaskWorktree = await AgentTaskWorktree.CreateAsync(
-                originalProjectRoot, projectId, taskId, workstationSettings.WorktreeRoot, ct);
+                originalProjectRoot, projectId, taskId, workstationSettings.WorktreeRoot, ct,
+                bootstrap.BaseBranch, bootstrap.BaseSha);
             if (createdTaskWorktree.Worktree is null)
                 return (false, null, createdTaskWorktree.Error ?? "Could not create the persistent task worktree.");
             sessionWorktree = createdTaskWorktree.Worktree;
