@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Application.Persistence;
 using Domain.Common;
 using Domain.Entities.Devices;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,191 @@ internal static class ProjectGitSyncPreflight
         string? Branch,
         DateTime? CheckedAt,
         GitSyncRefusalCode? ReasonCode);
+
+    internal sealed record PipelineWorkstationResolution(
+        DaemonDevice? Device,
+        bool HasNativeWorkstation,
+        bool HasOnlineNativeWorkstation,
+        string? BlockedReason);
+
+    /// <summary>
+    /// Resolves the one workstation that owns a task's persistent branch workspace.
+    /// A saved pin always wins. Legacy tasks are inferred only when every claimed
+    /// pipeline command identifies the same workstation; ambiguous history fails closed.
+    /// </summary>
+    public static async Task<PipelineWorkstationResolution> ResolveTaskWorkstationAsync(
+        IBeaconDb db,
+        TaskItem task,
+        DateTime utcNow,
+        CancellationToken ct)
+    {
+        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
+            .Where(runtime => runtime.ProjectId == task.ProjectId)
+            .ToListAsync(ct);
+        var runtimeDeviceIds = runtimes.Select(runtime => runtime.DeviceId).Distinct().ToArray();
+        var devices = runtimeDeviceIds.Length == 0
+            ? new List<DaemonDevice>()
+            : await db.DaemonDevices.IgnoreQueryFilters()
+                .Where(device => runtimeDeviceIds.Contains(device.Id))
+                .ToListAsync(ct);
+        var nativeDevices = devices
+            .Where(device => IsNativeRuntime(device.WorkstationJson))
+            .ToList();
+
+        Guid? selectedDeviceId = task.PipelineDeviceId;
+        if (selectedDeviceId is null)
+        {
+            var launchedCommands = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                .Where(command => command.ProjectId == task.ProjectId
+                    && command.Kind == WorkstationCommandKind.RunPipelineSession
+                    && command.StartedAt != null)
+                .Select(command => new { command.DeviceId, command.PayloadJson })
+                .ToListAsync(ct);
+            var historicalDeviceIds = launchedCommands
+                .Where(command => IsPipelineCommandForTask(command.PayloadJson, task.Id))
+                .Select(command => command.DeviceId)
+                .Distinct()
+                .ToArray();
+
+            if (historicalDeviceIds.Length > 1)
+            {
+                return new PipelineWorkstationResolution(
+                    null,
+                    nativeDevices.Count > 0 || historicalDeviceIds.Length > 0,
+                    false,
+                    "PipelineWorkstationHistoryAmbiguous");
+            }
+
+            if (historicalDeviceIds.Length == 1)
+                selectedDeviceId = historicalDeviceIds[0];
+        }
+
+        if (selectedDeviceId is null)
+        {
+            var selected = nativeDevices
+                .Where(device => device.IsOnline(utcNow))
+                .OrderByDescending(device => device.LastHeartbeatAt)
+                .ThenBy(device => device.Id)
+                .FirstOrDefault();
+            if (selected is null)
+            {
+                return new PipelineWorkstationResolution(
+                    null,
+                    nativeDevices.Count > 0,
+                    false,
+                    nativeDevices.Count > 0
+                        ? "PipelineNativeWorkstationOffline"
+                        : "PipelineNoNativeWorkstation");
+            }
+
+            selectedDeviceId = selected.Id;
+        }
+
+        var selectedDevice = devices.FirstOrDefault(device => device.Id == selectedDeviceId.Value);
+        var isAttached = runtimeDeviceIds.Contains(selectedDeviceId.Value);
+        if (!isAttached)
+        {
+            return new PipelineWorkstationResolution(
+                selectedDevice,
+                true,
+                false,
+                "PipelineWorkstationNotAttached");
+        }
+
+        if (selectedDevice is null)
+        {
+            return new PipelineWorkstationResolution(
+                null,
+                true,
+                false,
+                "PipelineWorkstationNotAttached");
+        }
+
+        if (!IsNativeRuntime(selectedDevice.WorkstationJson))
+        {
+            return new PipelineWorkstationResolution(
+                selectedDevice,
+                false,
+                false,
+                "PipelineWorkstationNotNative");
+        }
+
+        if (!selectedDevice.IsOnline(utcNow))
+        {
+            return new PipelineWorkstationResolution(
+                selectedDevice,
+                true,
+                false,
+                "PipelineNativeWorkstationOffline");
+        }
+
+        return new PipelineWorkstationResolution(selectedDevice, true, true, null);
+    }
+
+    /// <summary>Compare-and-set the immutable task workstation pin inside the caller's transaction.</summary>
+    public static async Task<bool> TryPinTaskWorkstationAsync(
+        IBeaconDb db,
+        Guid taskId,
+        Guid deviceId,
+        CancellationToken ct)
+    {
+        if (deviceId == Guid.Empty)
+            return false;
+
+        var current = await db.Tasks.IgnoreQueryFilters()
+            .Where(task => task.Id == taskId)
+            .Select(task => task.PipelineDeviceId)
+            .FirstOrDefaultAsync(ct);
+        if (current == deviceId)
+            return true;
+        if (current is not null)
+            return false;
+
+        var updated = await db.Tasks.IgnoreQueryFilters()
+            .Where(task => task.Id == taskId && task.PipelineDeviceId == null)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(task => task.PipelineDeviceId, (Guid?)deviceId), ct);
+        if (updated == 1)
+            return true;
+
+        current = await db.Tasks.IgnoreQueryFilters()
+            .Where(task => task.Id == taskId)
+            .Select(task => task.PipelineDeviceId)
+            .FirstOrDefaultAsync(ct);
+        return current == deviceId;
+    }
+
+    private static bool IsPipelineCommandForTask(string payloadJson, Guid taskId)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("taskId", out var taskIdElement)
+                && taskIdElement.ValueKind == JsonValueKind.String
+                && Guid.TryParse(taskIdElement.GetString(), out var parsedTaskId)
+                && parsedTaskId == taskId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    public static string WorkstationBlockedMessage(string? reason) => reason switch
+    {
+        "PipelineWorkstationHistoryAmbiguous" =>
+            "This task has pipeline runs on multiple workstations. Its local task worktree cannot be selected safely; reconcile or migrate the worktree explicitly before continuing.",
+        "PipelineWorkstationNotAttached" =>
+            "The workstation pinned to this task is no longer attached to the project. Reattach it or explicitly migrate the task worktree; automatic rerouting is disabled.",
+        "PipelineWorkstationNotNative" =>
+            "The workstation pinned to this task no longer advertises the native runtime. Restore its native runtime or explicitly migrate the task worktree.",
+        "PipelineNativeWorkstationOffline" =>
+            "The native workstation pinned to this task is offline.",
+        "PipelineNoNativeWorkstation" =>
+            "No native workstation is attached to this project.",
+        _ => "The task's pinned pipeline workstation is unavailable."
+    };
 
     public static async Task<DaemonDevice?> SelectLatestOnlineDeviceAsync(
         IBeaconDb db,

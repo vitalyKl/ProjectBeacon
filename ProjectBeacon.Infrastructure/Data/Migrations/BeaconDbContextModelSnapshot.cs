@@ -2425,6 +2425,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("PipelineStage")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("PipelineDeviceId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text");
