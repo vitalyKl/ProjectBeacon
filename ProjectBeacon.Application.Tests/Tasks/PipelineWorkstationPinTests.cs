@@ -32,7 +32,7 @@ public sealed partial class PipelineHandlerTests
                 .Where(runtime => runtime.ProjectId == projectId)
                 .Select(runtime => runtime.DeviceId)
                 .SingleAsync(TestContext.Current.CancellationToken);
-            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Equal(originalDeviceId, persistedTask.PipelineDeviceId);
         }
@@ -48,7 +48,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(launched.Success, launched.Error);
         using (TenantScope.EnterUnscoped())
         {
-            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Equal(originalDeviceId, persistedTask.PipelineDeviceId);
             Assert.NotEqual(originalDeviceId, newerDevice.Id);
@@ -111,7 +111,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(launched.Success, launched.Error);
         using (TenantScope.EnterUnscoped())
         {
-            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Equal(historicalDeviceId, persistedTask.PipelineDeviceId);
             Assert.NotEqual(historicalDeviceId, newerDevice.Id);
@@ -174,7 +174,7 @@ public sealed partial class PipelineHandlerTests
         Assert.True(launched.Success, launched.Error);
         using (TenantScope.EnterUnscoped())
         {
-            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Equal(currentNativeDevice.Id, persistedTask.PipelineDeviceId);
             Assert.NotEqual(originalDeviceId, persistedTask.PipelineDeviceId);
@@ -251,7 +251,7 @@ public sealed partial class PipelineHandlerTests
             pipeline.Value.Preflight!.PipelineWorkstationBlockedReason);
         using (TenantScope.EnterUnscoped())
         {
-            var persistedTask = await _db.Tasks.IgnoreQueryFilters()
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
             Assert.Null(persistedTask.PipelineDeviceId);
             Assert.Equal(2, await _db.WorkstationCommands.IgnoreQueryFilters()
