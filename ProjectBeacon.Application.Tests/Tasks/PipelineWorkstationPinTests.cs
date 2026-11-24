@@ -2,11 +2,13 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Tasks;
+using Application.Devices;
 using Application.Security;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
 using Domain.Entities.Identity;
 using Domain.Enums;
+using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
