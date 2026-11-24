@@ -3403,4 +3403,6 @@
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Отменён</value></data>
 
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate создаётся только через ReleasePrepare после проверок политики версии, impact, landing и валидации.</value></data>
+  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Endpoint версии production</value></data>
+  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS URL, оканчивающийся на /v1/version. После успешного release workflow Beacon проверит его и потребует точного совпадения version и gitSha с Candidate.</value></data>
 </root>
