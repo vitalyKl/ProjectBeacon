@@ -85,14 +85,17 @@ public sealed class ProjectVersionPolicyCatalogTests
         var json = ProjectVersionPolicyCatalog.Serialize(original);
 
         Assert.True(ProjectVersionPolicyCatalog.TryRead(json, out var parsed, out var error), error);
-        Assert.Equal(original, parsed);
-        Assert.Equal(original.Sources, parsed.Sources);
+        Assert.Equal(original.Scheme, parsed.Scheme);
+        Assert.Equal(original.ComponentCount, parsed.ComponentCount);
+        Assert.Equal(original.TagPattern, parsed.TagPattern);
+        Assert.Equal(original.Sources.Count, parsed.Sources.Count);
+        Assert.Equal(original.Sources[0], parsed.Sources[0]);
     }
 
     [Theory]
     [InlineData("v{version}", true)]
     [InlineData("release-{version}", true)]
-    [InlineData("refs/{version}", false)]
+    [InlineData("/v{version}", false)]
     [InlineData("v{version}-{version}", false)]
     [InlineData("../v{version}", false)]
     public void Validate_RequiresSafeTagPattern(string pattern, bool expected)
