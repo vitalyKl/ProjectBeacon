@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Persistence;
+using Application.Security;
 using Domain.Common;
 using Domain.Entities.Devices;
 using Domain.Entities.Tasks;
@@ -60,9 +61,11 @@ internal static class ProjectGitSyncPreflight
                     && command.Kind == WorkstationCommandKind.RunPipelineSession
                     // Requeue clears StartedAt, but Attempts and ClaimInstanceId retain
                     // evidence that this workstation previously claimed the task session.
-                    && (command.StartedAt != null
-                        || command.Attempts > 0
-                        || command.ClaimInstanceId != null))
+                    && (command.Attempts > 0
+                        || command.ClaimInstanceId != null
+                        || (command.StartedAt != null
+                            && !(command.Status == WorkstationCommandStatus.Failed
+                                && command.Error == CommandSandbox.RuntimeRequired))))
                 .Select(command => new { command.DeviceId, command.PayloadJson })
                 .ToListAsync(ct);
             var historicalDeviceIds = launchedCommands
