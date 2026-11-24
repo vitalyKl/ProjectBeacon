@@ -183,9 +183,19 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     RecordFailure(project, permission.Error, _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
-                if (permission.Project is null || permission.Project.ManualGitSyncActive)
+                if (permission.Project is null)
+                {
+                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow());
+                    continue;
+                }
+                if (permission.Project.ManualGitSyncActive)
                 {
                     RecordSkipped(project, "ManualGitSyncActive", _timing.TimeProvider.GetUtcNow());
+                    continue;
+                }
+                if (!SameLocalRoot(project.LocalRoot, permission.Project.LocalRoot))
+                {
+                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow());
                     continue;
                 }
                 if (permission.Project.GitLandActive)
@@ -362,6 +372,24 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         if (error?.Contains("directory does not exist", StringComparison.OrdinalIgnoreCase) == true)
             return "ProjectDirectoryUnavailable";
         return "GitSyncFailed";
+    }
+
+    internal static bool SameLocalRoot(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+            return false;
+
+        try
+        {
+            var normalizedLeft = Path.TrimEndingDirectorySeparator(Path.GetFullPath(left));
+            var normalizedRight = Path.TrimEndingDirectorySeparator(Path.GetFullPath(right));
+            return string.Equals(normalizedLeft, normalizedRight,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static bool IsSha(string? value) =>

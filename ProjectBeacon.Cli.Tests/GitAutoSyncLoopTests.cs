@@ -176,6 +176,15 @@ public sealed class GitAutoSyncLoopTests
         }
     }
 
+    [Theory]
+    [InlineData("/workspace/project", "/workspace/project/", true)]
+    [InlineData("/workspace/project-a", "/workspace/project-b", false)]
+    [InlineData("", "/workspace/project", false)]
+    public void SameLocalRoot_RequiresTheRuntimePathToRemainTheSame(string oldRoot, string newRoot, bool expected)
+    {
+        Assert.Equal(expected, GitAutoSyncLoop.SameLocalRoot(oldRoot, newRoot));
+    }
+
     [Fact]
     public void CalculateNextDelay_WakesForRetryBeforeTheConfiguredInterval()
     {
