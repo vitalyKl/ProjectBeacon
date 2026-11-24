@@ -370,6 +370,41 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task DelayUntilNextCycle_ReturnsImmediatelyWhenTheWorkstationResumesFromSleep()
+    {
+        var timeProvider = new MutableTimeProvider(DateTimeOffset.Parse("2026-11-24T12:00:00Z"));
+        var timing = new DaemonTiming(timeProvider)
+        {
+            GitAutoSyncWakeCheckInterval = TimeSpan.FromSeconds(15),
+            GitAutoSyncWakeGracePeriod = TimeSpan.FromSeconds(5)
+        };
+        var delays = new List<TimeSpan>();
+        timing.DelayAsync = (delay, _) =>
+        {
+            delays.Add(delay);
+            timeProvider.Advance(delay + TimeSpan.FromMinutes(30));
+            return Task.CompletedTask;
+        };
+        using var http = new HttpClient(new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK))));
+        var dependencies = new DaemonDependencies(http, null!, () => new WorkstationSettings(), _ => null!);
+        var loop = new GitAutoSyncLoop(
+            dependencies,
+            new GitSyncService(),
+            new GitAutoSyncSnapshot(),
+            timing,
+            new DaemonRuntimeState("https://beacon.test", null));
+
+        await loop.DelayUntilNextCycleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromSeconds(15), Assert.Single(delays));
+        Assert.True(GitAutoSyncLoop.IsResumeGap(
+            TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(5)));
+        Assert.False(GitAutoSyncLoop.IsResumeGap(
+            TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(16), TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
     public async Task RunCycle_DoesNotPullOldDirectoryWhenRuntimeRootChangesAfterStatusFetch()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-runtime-change-" + Guid.NewGuid().ToString("N"));
@@ -737,6 +772,13 @@ public sealed class GitAutoSyncLoopTests
         {
             try { Directory.Delete(parent, recursive: true); } catch { }
         }
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset _now = now;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan elapsed) => _now += elapsed;
     }
 
     private static async Task ConfigureIdentity(string directory)

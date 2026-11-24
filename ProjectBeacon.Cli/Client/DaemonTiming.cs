@@ -16,6 +16,10 @@ internal sealed class DaemonTiming
 
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(5);
     public TimeSpan GitAutoSyncStartupDelay { get; set; } = TimeSpan.FromSeconds(5);
+    /// <summary>Short wait slices let the auto-sync loop notice that the workstation resumed from sleep.</summary>
+    public TimeSpan GitAutoSyncWakeCheckInterval { get; set; } = TimeSpan.FromSeconds(15);
+    /// <summary>Wall-clock gap above this tolerance is treated as a suspend/resume event.</summary>
+    public TimeSpan GitAutoSyncWakeGracePeriod { get; set; } = TimeSpan.FromSeconds(5);
     public Func<double> GitAutoSyncJitterFactor { get; set; } = static () => Random.Shared.NextDouble() * 0.4 - 0.2;
     public TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
     public TimeSpan ErrorBackoffInterval { get; set; } = TimeSpan.FromSeconds(3);

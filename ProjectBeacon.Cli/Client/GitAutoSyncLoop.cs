@@ -45,7 +45,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
 
         try
         {
-            await _timing.DelayAsync(_timing.GitAutoSyncStartupDelay, ct);
+            await DelayUntilNextCycleAsync(_timing.GitAutoSyncStartupDelay, ct);
             while (!ct.IsCancellationRequested)
             {
                 WorkstationSettings settings;
@@ -82,7 +82,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                     _timing.GitAutoSyncJitterFactor(),
                     _backoff.Values.Select(state => state.RetryAt),
                     _timing.TimeProvider.GetUtcNow());
-                try { await _timing.DelayAsync(delay, ct); }
+                try { await DelayUntilNextCycleAsync(delay, ct); }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             }
         }
@@ -91,6 +91,34 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             Volatile.Write(ref _running, 0);
         }
     }
+
+    internal async Task DelayUntilNextCycleAsync(TimeSpan requestedDelay, CancellationToken ct)
+    {
+        var remaining = requestedDelay < TimeSpan.Zero ? TimeSpan.Zero : requestedDelay;
+        var checkInterval = _timing.GitAutoSyncWakeCheckInterval > TimeSpan.Zero
+            ? _timing.GitAutoSyncWakeCheckInterval
+            : TimeSpan.FromSeconds(15);
+
+        while (remaining > TimeSpan.Zero)
+        {
+            var slice = remaining < checkInterval ? remaining : checkInterval;
+            var startedAt = _timing.TimeProvider.GetUtcNow();
+            await _timing.DelayAsync(slice, ct);
+            ct.ThrowIfCancellationRequested();
+
+            var elapsed = _timing.TimeProvider.GetUtcNow() - startedAt;
+            if (IsResumeGap(slice, elapsed, _timing.GitAutoSyncWakeGracePeriod))
+            {
+                _runtimeState.Log("repository auto-sync resumed after workstation sleep");
+                return;
+            }
+
+            remaining -= slice;
+        }
+    }
+
+    internal static bool IsResumeGap(TimeSpan requestedSlice, TimeSpan actualElapsed, TimeSpan gracePeriod) =>
+        actualElapsed > requestedSlice + (gracePeriod > TimeSpan.Zero ? gracePeriod : TimeSpan.Zero);
 
     internal static TimeSpan CalculateNextDelay(
         int intervalMinutes,
