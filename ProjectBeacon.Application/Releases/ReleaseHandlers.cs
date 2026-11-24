@@ -81,7 +81,10 @@ internal static class ReleaseMapping
             release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
             milestoneCount, release.PreparationStatus, release.PreparationRevision,
             release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
-            release.VerificationCommandId, release.PreparationResultJson, release.PreparationError);
+            release.VerificationCommandId, release.PreparationResultJson, release.PreparationError,
+            release.PublicationStatus, release.PublicationRevision, release.PublicationTagPushed,
+            release.PublicationError, release.PublishedTagName, release.DeploymentWorkflowRunId,
+            release.DeploymentWorkflowRunUrl, release.DeployedVersion, release.DeployedCommitSha, release.DeployedAtUtc);
 }
 
 public sealed class ListProjectReleasesHandler
@@ -114,7 +117,10 @@ public sealed class ListProjectReleasesHandler
                 release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
                 release.Milestones.Count, release.PreparationStatus, release.PreparationRevision,
                 release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
-                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError))
+                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError,
+                release.PublicationStatus, release.PublicationRevision, release.PublicationTagPushed,
+                release.PublicationError, release.PublishedTagName, release.DeploymentWorkflowRunId,
+                release.DeploymentWorkflowRunUrl, release.DeployedVersion, release.DeployedCommitSha, release.DeployedAtUtc))
             .ToArrayAsync(ct);
         return Result.Ok<IReadOnlyList<ReleaseDto>>(releases);
     }
@@ -148,7 +154,10 @@ public sealed class GetReleaseHandler
                 release.CreatedAt, release.UpdatedAt, release.PublishedAt, release.Revision,
                 release.Milestones.Count, release.PreparationStatus, release.PreparationRevision,
                 release.PreparationDeviceId, release.CandidateId, release.PreparationCommandId,
-                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError))
+                release.VerificationCommandId, release.PreparationResultJson, release.PreparationError,
+                release.PublicationStatus, release.PublicationRevision, release.PublicationTagPushed,
+                release.PublicationError, release.PublishedTagName, release.DeploymentWorkflowRunId,
+                release.DeploymentWorkflowRunUrl, release.DeployedVersion, release.DeployedCommitSha, release.DeployedAtUtc))
             .FirstOrDefaultAsync(ct);
         return dto is null
             ? Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound)
