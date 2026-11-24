@@ -72,6 +72,10 @@ public class TaskItem : Entity, IProjectScoped
 
     public void Update(string? title = null, string? description = null, TaskPriority? priority = null, TaskType? type = null)
     {
+        var scopeChanged =
+            (title is not null && !string.Equals(Title, title, StringComparison.Ordinal))
+            || (description is not null && !string.Equals(Description, description, StringComparison.Ordinal));
+
         if (title is not null) Title = title;
         if (description is not null && !string.Equals(Description, description, StringComparison.Ordinal))
         {
@@ -80,6 +84,8 @@ public class TaskItem : Entity, IProjectScoped
         }
         if (priority is not null) Priority = priority.Value;
         if (type is not null) Type = type.Value;
+        if (scopeChanged && VersionImpact is not null)
+            ClearVersionImpact();
     }
 
     /// <summary>Restores nullable description and review notes from a historical content snapshot.</summary>
@@ -89,9 +95,12 @@ public class TaskItem : Entity, IProjectScoped
             && string.Equals(ReviewNotes, reviewNotes, StringComparison.Ordinal))
             return;
 
+        var scopeChanged = !string.Equals(Description, description, StringComparison.Ordinal);
         Description = description;
         ReviewNotes = reviewNotes;
         ContentRevision++;
+        if (scopeChanged && VersionImpact is not null)
+            ClearVersionImpact();
     }
 
     /// <summary>Pins the task's local pipeline workspace to one workstation. The pin is permanent unless an explicit migration is performed.</summary>
