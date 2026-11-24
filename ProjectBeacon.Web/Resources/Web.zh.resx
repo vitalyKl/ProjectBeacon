@@ -3345,4 +3345,7 @@ orthstar</value>
   <data name="GitSyncCancelFailed" xml:space="preserve">
     <value>无法确认仓库同步请求已取消。请刷新任务并检查其状态，然后再决定是否重试。</value>
   </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>无法在“{0}”中取消仓库同步：工作站已领取该命令。服务器无法停止正在运行的 Git 操作。请等待其完成并检查结果。</value>
+  </data>
 </root>

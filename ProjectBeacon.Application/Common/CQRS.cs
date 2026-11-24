@@ -47,6 +47,7 @@ public static class ErrorCodes
     public const string Unclassified = "operation_failed";
     public const string InviteEmailMismatch = "invite_email_mismatch";
     public const string InviteInvalidOrExpired = "invite_invalid_or_expired";
+    public const string GitSyncAlreadyClaimed = "git_sync_already_claimed";
 
     public static string For(ErrorKind kind) => kind switch
     {

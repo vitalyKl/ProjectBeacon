@@ -128,6 +128,8 @@ internal sealed class UiNotificationService : IUiNotificationService
                 return _localizer["UiOperationTargetNotFound", section, operationLabel].Value;
             case ErrorCodes.Conflict:
                 return _localizer["UiOperationConflict", section, operationLabel].Value;
+            case ErrorCodes.GitSyncAlreadyClaimed:
+                return _localizer["UiGitSyncAlreadyClaimed", section].Value;
             case ErrorCodes.InviteEmailMismatch:
                 return _localizer["InviteEmailMismatch", section, operationLabel].Value;
             case ErrorCodes.InviteInvalidOrExpired:
@@ -151,6 +153,7 @@ internal sealed class UiNotificationService : IUiNotificationService
     {
         if (errorCode is null or ErrorCodes.ValidationFailed
             or ErrorCodes.Unauthorized or ErrorCodes.Forbidden or ErrorCodes.NotFound or ErrorCodes.Conflict
+            or ErrorCodes.GitSyncAlreadyClaimed
             or ErrorCodes.InviteEmailMismatch or ErrorCodes.InviteInvalidOrExpired)
             return null;
 

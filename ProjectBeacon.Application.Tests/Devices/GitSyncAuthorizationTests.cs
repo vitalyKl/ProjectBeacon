@@ -997,6 +997,7 @@ public sealed class GitSyncAuthorizationTests
             Assert.Equal("GitSyncCancelledByUser", cancelled.Value.Error);
             Assert.False(runningResult.Success);
             Assert.Equal(ErrorKind.Conflict, runningResult.Kind);
+            Assert.Equal(ErrorCodes.GitSyncAlreadyClaimed, runningResult.ErrorCode);
             Assert.Contains("already been claimed", runningResult.Error, StringComparison.OrdinalIgnoreCase);
 
             using (TenantScope.EnterUnscoped())

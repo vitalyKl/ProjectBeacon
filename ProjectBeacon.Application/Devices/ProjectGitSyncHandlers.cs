@@ -435,7 +435,8 @@ public sealed class CancelPendingProjectGitSyncCommandHandler
 
         if (command.Status == WorkstationCommandStatus.Running)
             return Result.Failure<WorkstationCommandDto>(
-                "GitSync has already been claimed by the workstation. The server cannot safely stop a running Git process; workstation-side cancellation is not implemented.",
+                "GitSync has already been claimed by the workstation. The server cannot safely stop a running Git process.",
+                ErrorCodes.GitSyncAlreadyClaimed,
                 ErrorKind.Conflict);
         if (command.Status != WorkstationCommandStatus.Pending || command.StartedAt is not null)
             return Result.Failure<WorkstationCommandDto>(
@@ -466,6 +467,7 @@ public sealed class CancelPendingProjectGitSyncCommandHandler
             if (latest?.Status == WorkstationCommandStatus.Running)
                 return Result.Failure<WorkstationCommandDto>(
                     "GitSync was claimed by the workstation before cancellation completed. The running Git operation was not stopped.",
+                    ErrorCodes.GitSyncAlreadyClaimed,
                     ErrorKind.Conflict);
             return Result.Failure<WorkstationCommandDto>(
                 "GitSync changed state before cancellation completed. Refresh the task and try again if it is still Pending.",

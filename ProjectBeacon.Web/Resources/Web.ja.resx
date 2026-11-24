@@ -3345,4 +3345,7 @@ orthstar</value>
   <data name="GitSyncCancelFailed" xml:space="preserve">
     <value>リポジトリ同期リクエストのキャンセルを確認できませんでした。再試行する前にタスクを更新して状態を確認してください。</value>
   </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>{0} でリポジトリ同期をキャンセルできません。ワークステーションがすでにコマンドを取得しています。実行中の Git 操作はサーバーから停止できません。完了を待って結果を確認してください。</value>
+  </data>
 </root>

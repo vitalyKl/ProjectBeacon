@@ -3337,4 +3337,7 @@ orthstar</value>
   <data name="GitSyncCancelFailed" xml:space="preserve">
     <value>Es konnte nicht bestätigt werden, dass die Repository-Synchronisierungsanforderung abgebrochen wurde. Aktualisieren Sie die Aufgabe und prüfen Sie den Status, bevor Sie es erneut versuchen.</value>
   </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>Die Repository-Synchronisierung im Bereich „{0}“ kann nicht abgebrochen werden: Die Workstation hat den Befehl bereits übernommen. Ein laufender Git-Vorgang kann nicht vom Server gestoppt werden. Warten Sie den Abschluss ab und prüfen Sie das Ergebnis.</value>
+  </data>
 </root>

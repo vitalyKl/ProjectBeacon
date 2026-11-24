@@ -3536,4 +3536,7 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncCancelFailed" xml:space="preserve">
     <value>Could not confirm that the repository synchronization request was cancelled. Refresh the task and check its status before retrying.</value>
   </data>
+  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
+    <value>Cannot cancel repository synchronization in {0}: the workstation has already claimed the command. A running Git operation cannot be stopped from the server. Let it finish and review the result.</value>
+  </data>
 </root>
