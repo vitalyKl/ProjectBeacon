@@ -823,6 +823,8 @@ internal static class AgentTaskGitHubPullRequestOperations
     {
         if (limit is < 1 or > 10)
             return (null, "forge_read collection limit must be between 1 and 10.");
+        if (collection is not ("reviews" or "comments" or "inline" or "workflows"))
+            return (null, $"Unsupported forge_read collection '{collection}'.");
         try
         {
             using var document = JsonDocument.Parse(json);
