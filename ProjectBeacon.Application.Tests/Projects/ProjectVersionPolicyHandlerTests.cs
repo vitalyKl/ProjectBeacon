@@ -60,9 +60,10 @@ public sealed class ProjectVersionPolicyHandlerTests : IDisposable
     private ActorContext MemberActor() =>
         new(ActorType.Human, _memberId, false, null, null, _projectId, null, ApiTokenCapability.None);
 
-    private static ProjectVersionPolicy FourPartPolicy() =>
+    private static ProjectVersionPolicy FourPartPolicy(bool releaseManagementEnabled = false) =>
         new("NumericComponents", 4, null, "v{version}", false,
-            [new ProjectVersionSourcePolicy("Directory.Build.props", "Xml", "//Version")]);
+            [new ProjectVersionSourcePolicy("Directory.Build.props", "Xml", "//Version")],
+            releaseManagementEnabled);
 
     [Fact]
     public async Task OwnerCanConfigureFourPartPolicyAndInitializeOfficialVersionOnce()
@@ -127,6 +128,34 @@ public sealed class ProjectVersionPolicyHandlerTests : IDisposable
         var project = await _db.Projects.SingleAsync(
             item => item.Id == _projectId, TestContext.Current.CancellationToken);
         Assert.Equal("0.7.5.8", project.OfficialVersion);
+    }
+
+    [Fact]
+    public async Task ReleaseManagementOptIn_IsProjectScopedAndDefaultsOff()
+    {
+        var factory = HandlerSqlite.Factory(_connection);
+        var setter = new SetProjectVersionPolicyHandler(factory, new AuthorizationService(), new EfAuditWriter());
+        var getter = new GetProjectVersionPolicyHandler(factory, new AuthorizationService());
+
+        var initial = await getter.HandleAsync(_projectId, OwnerActor(), TestContext.Current.CancellationToken);
+        Assert.True(initial.Success, initial.Error);
+        Assert.False(initial.Value!.ReleaseManagementEnabled);
+
+        var enabled = await setter.HandleAsync(new SetProjectVersionPolicyCommand(
+            _projectId, FourPartPolicy(releaseManagementEnabled: true), null,
+            initial.Value.Revision, OwnerActor()), TestContext.Current.CancellationToken);
+
+        Assert.True(enabled.Success, enabled.Error);
+        Assert.True(enabled.Value!.ReleaseManagementEnabled);
+
+        var readBack = await getter.HandleAsync(_projectId, MemberActor(), TestContext.Current.CancellationToken);
+        Assert.True(readBack.Success, readBack.Error);
+        Assert.True(readBack.Value!.ReleaseManagementEnabled);
+
+        var stored = await _db.Projects.Where(project => project.Id == _projectId)
+            .Select(project => project.VersionPolicyJson)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"releaseManagementEnabled\":true", stored, StringComparison.Ordinal);
     }
 
     [Fact]
