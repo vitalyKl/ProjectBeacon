@@ -70,6 +70,14 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             Assert.True(secondDevice.Success, secondDevice.Error);
             firstDeviceId = firstDevice.Value!.Id;
             secondDeviceId = secondDevice.Value!.Id;
+            await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+                new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(
+                    firstDeviceId, """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""", "{}")),
+                TestContext.Current.CancellationToken);
+            await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+                new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(
+                    secondDeviceId, """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""", "{}")),
+                TestContext.Current.CancellationToken);
 
             _db.ProjectRuntimes.AddRange(
                 ProjectRuntime.Create(enabledProject.Id, firstDeviceId, firstRoot),
@@ -81,7 +89,6 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             var handler = new GetDeviceAutoSyncTargetsHandler(Factory());
-            await using var db = Factory().CreateDbContext();
 
             var first = await handler.HandleAsync(firstDeviceId, TestContext.Current.CancellationToken);
             Assert.True(first.Success, first.Error);
