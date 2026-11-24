@@ -64,11 +64,17 @@ jobs:
       - name: Build
         run: dotnet build ProjectBeacon.sln --no-restore
       - name: No pending model changes
+        id: model_drift
         run: |
           # Release compiler/MSBuild server memory before starting EF design-time services.
           dotnet build-server shutdown
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      - name: Diagnose pending EF model diff
+        if: failure() && steps.model_drift.outcome == 'failure'
+        run: |
+          dotnet ef migrations add __PendingModelDiagnostic --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure --output-dir Data/Migrations/__Diagnostic
+          find ProjectBeacon.Infrastructure/Data/Migrations/__Diagnostic -maxdepth 1 -type f -name '*.cs' ! -name '*.Designer.cs' -print -exec cat {} \\;
       - name: Test — API
         if: always()
         timeout-minutes: 8
