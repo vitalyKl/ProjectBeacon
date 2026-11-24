@@ -402,7 +402,7 @@ public sealed class PrepareReleaseHandler
             .ThenBy(item => item.Device.Id)
             .FirstOrDefault();
         return selected.Device is null
-            ? (false, null, ErrorKind.Conflict, "No online workstation owned by the requesting user advertises ReleasePrepare support.")
+            ? (false, null, null, ErrorKind.Conflict, "No online workstation owned by the requesting user advertises ReleasePrepare support.")
             : (true, selected.Device, selected.Runtime, ErrorKind.Validation, null);
     }
 }
