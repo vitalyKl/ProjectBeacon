@@ -233,12 +233,14 @@ public sealed class GitAutoSyncLoopTests
                 null!,
                 () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
                 _ => null!);
-            var timing = new DaemonTiming { GitAutoSyncStartupDelay = TimeSpan.Zero };
+            var timeProvider = new MutableTimeProvider(DateTimeOffset.Parse("2026-11-24T12:00:00Z"));
+            var timing = new DaemonTiming(timeProvider) { GitAutoSyncStartupDelay = TimeSpan.Zero };
             var delays = new List<TimeSpan>();
             using var cancellation = new CancellationTokenSource();
             timing.DelayAsync = (delay, _) =>
             {
                 delays.Add(delay);
+                timeProvider.Advance(delay);
                 var scheduledRetryElapsed = delays.Skip(1)
                     .Aggregate(TimeSpan.Zero, (total, item) => total + item);
                 if (delays.Count > 1 && scheduledRetryElapsed >= TimeSpan.FromMinutes(1))
