@@ -3048,4 +3048,20 @@ orthstar</value>
   <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>Dieser Wert kann nur einmal initialisiert werden. Weitere Änderungen erfordern den ReleasePrepare-Workflow.</value></data>
   <data name="SaveVersionPolicy" xml:space="preserve"><value>Versionsrichtlinie speichern</value></data>
   <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Jede Quelle muss das Format path|Format|selector haben.</value></data>
+  <data name="ProjectVersionScheme" xml:space="preserve"><value>Versionschema</value></data>
+  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Numerische Komponenten</value></data>
+  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Kalenderversion</value></data>
+  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>Anzahl numerischer Komponenten (1–8)</value></data>
+  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Kalenderformat (invariantes .NET-Datumsformat)</value></data>
+  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git-Tag-Muster</value></data>
+  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Verwende genau einen Platzhalter {version}, zum Beispiel v{version}.</value></data>
+  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>SemVer-Prerelease-Versionen zulassen</value></data>
+  <data name="ProjectOfficialVersion" xml:space="preserve"><value>Offizielle Projektversion (maßgeblich in Beacon)</value></data>
+  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Erste offizielle Version</value></data>
+  <data name="ProjectVersionSources" xml:space="preserve"><value>Versionsdatei-Projektionen</value></data>
+  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Eine Quelle pro Zeile: relativer/Pfad|Xml, Json, Toml oder Regex|Selektor. XML verwendet XPath, JSON JSON Pointer, TOML einen Schlüsselpfad und Regex eine benannte Gruppe 'version' oder Gruppe 1. Dateien müssen innerhalb des Projekt-Workspace liegen.</value></data>
+  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Nur Projekt-Owner und Admins können die Versionsrichtlinie ändern.</value></data>
+  <data name="ProjectVersionSave" xml:space="preserve"><value>Versionsrichtlinie speichern</value></data>
+  <data name="ProjectVersionSaved" xml:space="preserve"><value>Versionsrichtlinie gespeichert</value></data>
 </root>
