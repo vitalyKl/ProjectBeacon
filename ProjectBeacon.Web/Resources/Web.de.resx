@@ -3451,4 +3451,28 @@ orthstar</value>
   <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Bestätigt</value></data>
   <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Angefochten</value></data>
   <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer ausstehend</value></data>
+<data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>Live-Aktualisierungen des Chats sind vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
+<data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>Der Aufgaben- und Repository-Status konnte nach mehreren Versuchen nicht aktualisiert werden. Die angezeigten Daten sind möglicherweise veraltet; die Aktualisierung wird automatisch fortgesetzt.</value>
+  </data>
+<data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>Die ausstehende Repository-Synchronisierung konnte nicht wiederhergestellt werden. Prüfen Sie den Aufgaben- und Workstation-Status, bevor Sie eine weitere Synchronisierung starten.</value>
+  </data>
+<data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>Der Laufzeitstatus des Chat-Modells ist vorübergehend nicht verfügbar. Der Chat kann weiter verwendet werden, aber die Modellbereitschaft ist möglicherweise nicht aktuell.</value>
+  </data>
+<data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Der Aufgabenkontext für diesen Chat konnte nicht geladen werden. Der Chat kann ohne diesen Kontext fortgesetzt werden.</value>
+  </data>
+<data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Die Aufgabe konnte nicht geladen werden. Der Dienst für Aufgabendetails ist nicht verfügbar. Solange diese Seite geöffnet bleibt, wird automatisch erneut versucht. Diagnose-ID: {0}</value>
+  </data>
+<data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Die Workstation-Metriken konnten nicht geladen werden. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut. Diagnose-ID: {0}</value>
+  </data>
+<data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
 </root>
