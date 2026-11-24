@@ -3054,4 +3054,5 @@
   <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Изменять политику версии могут только Owner и Admin проекта.</value></data>
   <data name="ProjectVersionSave" xml:space="preserve"><value>Сохранить политику версии</value></data>
   <data name="ProjectVersionSaved" xml:space="preserve"><value>Политика версии сохранена</value></data>
+  <data name="NotConfigured" xml:space="preserve"><value>Не задано</value></data>
 </root>
