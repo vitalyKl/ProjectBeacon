@@ -13,6 +13,41 @@ using Microsoft.EntityFrameworkCore;
 /// <summary>Read-only repository synchronization gate shared by pipeline preflight and launch handlers.</summary>
 internal static class ProjectGitSyncPreflight
 {
+    /// <summary>Unclaimed GitSync requests expire rather than blocking the task indefinitely.</summary>
+    public static readonly TimeSpan PendingCommandLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Atomically expires GitSync commands that have remained Pending for the full queue
+    /// lifetime. Every requeue starts a new PendingSince interval; Running commands are
+    /// never modified by this timeout.
+    /// </summary>
+    public static async Task<int> ExpireStalePendingCommandsAsync(
+        IBeaconDb db,
+        DateTime utcNow,
+        CancellationToken ct,
+        Guid? projectId = null,
+        Guid? deviceId = null)
+    {
+        var cutoff = utcNow - PendingCommandLifetime;
+        var query = db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(command => command.Kind == WorkstationCommandKind.GitSync
+                && command.Status == WorkstationCommandStatus.Pending
+                && command.PendingSince != null
+                && command.PendingSince <= cutoff);
+        if (projectId is { } scopedProjectId)
+            query = query.Where(command => command.ProjectId == scopedProjectId);
+        if (deviceId is { } scopedDeviceId)
+            query = query.Where(command => command.DeviceId == scopedDeviceId);
+
+        return await query.ExecuteUpdateAsync(update => update
+            .SetProperty(command => command.Status, WorkstationCommandStatus.Cancelled)
+            .SetProperty(command => command.PendingSince, (DateTime?)null)
+            .SetProperty(command => command.Error, "GitSyncPendingExpired")
+            .SetProperty(command => command.CompletedAt, utcNow)
+            .SetProperty(command => command.LeaseExpiresAt, (DateTime?)null)
+            .SetProperty(command => command.ClaimInstanceId, (string?)null), ct);
+    }
+
     internal sealed record State(
         bool Supported,
         bool InProgress,
@@ -271,6 +306,8 @@ internal static class ProjectGitSyncPreflight
     {
         if (device is null)
             return new State(false, false, false, null, null, null, null);
+
+        await ExpireStalePendingCommandsAsync(db, DateTime.UtcNow, ct, projectId, device.Id);
 
         // An already queued command may still mutate this checkout even if the latest
         // heartbeat no longer advertises GitSync. Check the active operation before
