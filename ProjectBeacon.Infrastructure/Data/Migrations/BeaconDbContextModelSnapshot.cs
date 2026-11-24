@@ -3618,6 +3618,92 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Navigation("Subtasks");
                 });
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.RemoteLandingProof", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GitHubRepository")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("MergedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MergeCommitSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PullRequestNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PullRequestUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReviewRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RemoteBaseSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SourceSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "GitHubRepository", "PullRequestNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RemoteLandingProofs_ProjectId_Repository_PullRequest");
+
+                    b.HasIndex("ProjectId", "MergeCommitSha");
+
+                    b.HasIndex("ProjectId", "TaskId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RemoteLandingProofs_ProjectId_TaskId");
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "TaskId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.ToTable("RemoteLandingProofs");
+                });
+
 #pragma warning restore 612, 618
         }
     }
