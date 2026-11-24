@@ -105,9 +105,13 @@ else
             }
         </div>
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
-            @if (_sessionLoadErrorMessage is not null)
+            @if (_sessionsLoadErrorMessage is not null)
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionLoadErrorMessage</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionsLoadErrorMessage</MudAlert>
+            }
+            @if (_partsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_partsLoadErrorMessage</MudAlert>
             }
             @if (_pollErrorMessage is not null)
             {
@@ -176,7 +180,8 @@ else
     private string _draft = string.Empty;
     private bool _busy;
     private bool _failed;
-    private string? _sessionLoadErrorMessage;
+    private string? _sessionsLoadErrorMessage;
+    private string? _partsLoadErrorMessage;
     private string? _pollErrorMessage;
     private string? _proxyStatusErrorMessage;
     private readonly UiBackgroundFailureTracker _pollFailures = new();
@@ -226,11 +231,11 @@ else
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
         if (!listed.Success)
         {
-            _sessionLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            _sessionsLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
             return;
         }
 
-        _sessionLoadErrorMessage = null;
+        _sessionsLoadErrorMessage = null;
         _sessions = listed.Value!.ToList();
     }
 
@@ -242,6 +247,7 @@ else
             _pollErrorMessage = null;
         }
         _selected = session;
+        _partsLoadErrorMessage = null;
         var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(session.Id, _userId)));
         // The user may have switched sessions while the fetch was in flight; never apply stale parts.
         if (_selected?.Id != session.Id)
@@ -249,11 +255,11 @@ else
         if (!parts.Success)
         {
             _parts = [];
-            _sessionLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = session.Id });
+            _partsLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = session.Id });
             return;
         }
 
-        _sessionLoadErrorMessage = null;
+        _partsLoadErrorMessage = null;
         _parts = parts.Value!.ToList();
     }
 
@@ -412,6 +418,8 @@ else
                         pollError ??= parts.Error;
                         pollErrorCode ??= parts.ErrorCode ?? ErrorCodes.For(parts.Kind);
                     }
+                    else
+                        _partsLoadErrorMessage = null;
 
                     if (pollFailed)
                     {

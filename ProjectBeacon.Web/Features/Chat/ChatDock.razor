@@ -59,9 +59,13 @@
                     </MudStack>
                 </MudAlert>
             }
-            @if (_sessionLoadErrorMessage is not null)
+            @if (_sessionsLoadErrorMessage is not null)
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionLoadErrorMessage</MudAlert>
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionsLoadErrorMessage</MudAlert>
+            }
+            @if (_partsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_partsLoadErrorMessage</MudAlert>
             }
             @if (_pollErrorMessage is not null)
             {
@@ -159,7 +163,8 @@
     private bool _busy;
     private bool _aborting;
     private bool _failed;
-    private string? _sessionLoadErrorMessage;
+    private string? _sessionsLoadErrorMessage;
+    private string? _partsLoadErrorMessage;
     private string? _pollErrorMessage;
     private string? _proxyStatusErrorMessage;
     private readonly UiBackgroundFailureTracker _pollFailures = new();
@@ -231,11 +236,11 @@
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
         if (!listed.Success)
         {
-            _sessionLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            _sessionsLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
             return;
         }
 
-        _sessionLoadErrorMessage = null;
+        _sessionsLoadErrorMessage = null;
         _sessions = listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList();
         if (_session is not null)
             _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
@@ -303,6 +308,9 @@
         {
             _session = null;
             _parts = [];
+            _partsLoadErrorMessage = null;
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
             return;
         }
         var selected = _sessions.FirstOrDefault(x => x.Id == sessionId);
@@ -312,6 +320,7 @@
         {
             _pollFailures.RecordSuccess();
             _pollErrorMessage = null;
+            _partsLoadErrorMessage = null;
         }
         _session = selected;
         _failed = false;
@@ -341,6 +350,8 @@
         _block = null;
         _pollFailures.RecordSuccess();
         _pollErrorMessage = null;
+        _sessionsLoadErrorMessage = null;
+        _partsLoadErrorMessage = null;
         _session = created.Value;
         _open = true;
         _draft = string.Empty;
@@ -423,12 +434,12 @@
             if (!isBackground)
             {
                 _parts = [];
-                _sessionLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = sessionId });
+                _partsLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = sessionId });
             }
             return (false, parts.Error, parts.ErrorCode ?? ErrorCodes.For(parts.Kind));
         }
 
-        _sessionLoadErrorMessage = null;
+        _partsLoadErrorMessage = null;
         _parts = parts.Value!.ToList();
         return (true, null, null);
     }

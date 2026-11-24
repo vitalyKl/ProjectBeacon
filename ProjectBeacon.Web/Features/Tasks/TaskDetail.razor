@@ -1063,8 +1063,8 @@ else
             }
 
             _pipeline = result.Value;
-            if (_pipelineRefreshFailures.RecordSuccess())
-                _pipelineRefreshErrorMessage = null;
+            _pipelineRefreshFailures.RecordSuccess();
+            _pipelineRefreshErrorMessage = null;
             return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
