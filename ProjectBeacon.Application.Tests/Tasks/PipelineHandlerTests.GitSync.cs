@@ -64,6 +64,8 @@ public sealed partial class PipelineHandlerTests
             }
         });
         device.Heartbeat(probe, """{"agentRuntime":"native"}""");
+        using (TenantScope.EnterUnscoped())
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await new GetPipelineHandler(HandlerSqlite.Factory(_connection, Scope(projectId)))
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);

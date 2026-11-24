@@ -62,6 +62,42 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
+    public async Task DeviceProjectRuntimeDiscovery_IsDeviceScopedAndOnlyTreatsGitLandMutationsAsBusy()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        var secondDevice = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("second", "fp-second-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.True(secondDevice.Success, secondDevice.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.ProjectRuntimes.AddRange(
+                ProjectRuntime.Create(project.Id, deviceId, "/workspace/first"),
+                ProjectRuntime.Create(project.Id, secondDevice.Value!.Id, "/workspace/second"));
+            _db.WorkstationCommands.AddRange(
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitSync,
+                    """{"projectId":"project","mode":"Status"}""", project.Id),
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitLand,
+                    """{"action":"Preview"}""", project.Id),
+                WorkstationCommand.Create(deviceId, WorkstationCommandKind.GitLand,
+                    """{"action":"Execute"}""", project.Id));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        IReadOnlyList<DeviceProjectRuntimeDto> runtimes;
+        using (TenantScope.EnterUnscoped())
+            runtimes = await new ListDeviceProjectRuntimesHandler(Factory())
+                .HandleAsync(deviceId, TestContext.Current.CancellationToken);
+
+        var runtime = Assert.Single(runtimes);
+        Assert.Equal(project.Id, runtime.ProjectId);
+        Assert.Equal("/workspace/first", runtime.LocalRoot);
+        Assert.True(runtime.ManualGitSyncActive);
+        Assert.True(runtime.GitLandActive);
+    }
+
+    [Fact]
     public async Task Heartbeat_DoesNotRequeueRetiredAgentConfig_WhenLegacyConfigRevisionAhead()
     {
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();

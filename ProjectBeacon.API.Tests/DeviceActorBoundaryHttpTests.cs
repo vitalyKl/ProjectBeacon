@@ -63,6 +63,35 @@ public sealed class DeviceActorBoundaryHttpTests
     }
 
     [Fact]
+    public async Task DeviceToken_ProjectRuntimeDiscovery_ReturnsEmptyArrayAndHumanCannotCallIt()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var created = await client.PostAsJsonAsync("/v1/devices",
+            new { name = "runtime-discovery", fingerprint = "fp-runtime-discovery" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        created.EnsureSuccessStatusCode();
+        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        var token = device.GetProperty("token").GetString();
+
+        var deviceClient = factory.CreateClient();
+        deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await deviceClient.GetAsync(
+            "/v1/devices/me/project-runtimes", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var runtimes = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.Equal(JsonValueKind.Array, runtimes.ValueKind);
+        Assert.Equal(0, runtimes.GetArrayLength());
+
+        var humanResponse = await client.GetAsync(
+            "/v1/devices/me/project-runtimes", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, humanResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task DeviceToken_AuthMe_Returns403()
     {
         await using var factory = new AuthApiFactory();
