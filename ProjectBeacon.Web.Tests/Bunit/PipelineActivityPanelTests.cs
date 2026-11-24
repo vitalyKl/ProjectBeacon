@@ -62,7 +62,7 @@ public sealed class PipelineActivityPanelTests : BUnitRenderBase
     }
 
     [Fact]
-    public void FailedSession_ShowsPersistedFailureReason()
+    public void FailedSession_ShowsContextualDiagnosticMessageWithoutRawFailureDetails()
     {
         var session = CreateSession(SessionStatus.Failed, DateTime.UtcNow, "{}") with
         {
@@ -73,7 +73,10 @@ public sealed class PipelineActivityPanelTests : BUnitRenderBase
             .Add(component => component.TaskId, session.TaskId)
             .Add(component => component.Session, session));
 
-        Assert.Contains("native agent crashed", cut.Markup);
+        Assert.Contains("Tasks", cut.Markup);
+        Assert.Contains("Execute", cut.Markup);
+        Assert.Contains("Diagnostic ID:", cut.Markup);
+        Assert.DoesNotContain("native agent crashed", cut.Markup, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
