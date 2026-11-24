@@ -9,6 +9,7 @@ using Domain.Entities.Audit;
 using Domain.Entities.Projects;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
+using Domain.Entities.Roadmap;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -282,6 +283,128 @@ public sealed class GitLandCompletionTests : IDisposable
             Assert.Equal(outputHash, attempt.PostMergeCheckOutputHash);
             Assert.Contains(await _db.AuditEvents.Select(e => e.Action).ToListAsync(
                 TestContext.Current.CancellationToken), action => action == "pipeline.landing.completed");
+        }
+    }
+
+    [Fact]
+    public async Task VerifiedHotfixLanding_CreatesOneOrdinaryForwardPortTask()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string deployedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string sourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string reviewTreeSha = "cccccccccccccccccccccccccccccccccccccccc";
+        const string commandHash = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        const string targetHeadSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string candidateTreeSha = "ffffffffffffffffffffffffffffffffffffffff";
+        const string outputHash = "1111111111111111111111111111111111111111111111111111111111111111";
+        const string mergeCommitSha = "2222222222222222222222222222222222222222";
+        var release = Release.Create("Production 1.2.3", null, project.Id, "1.2.3", "main", 1);
+        var hotfix = TaskItem.Create(
+            "Fix production regression", project.Id, TaskPriority.High, TaskType.Bug,
+            "Production fix for an observed regression.");
+        hotfix.SetHotfixOrigin(release.Id, deployedSha, "main", Guid.NewGuid());
+        hotfix.PinPipelineDevice(device.Id);
+        var attempt = LandingAttempt.Start(
+            project.Id, hotfix.Id, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Land verified production Hotfix.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        attempt.MarkExecutePending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.Releases.Add(release);
+            _db.Tasks.Add(hotfix);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, hotfix.Id, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                targetHeadSha, candidateTreeSha, null);
+            var result = LandedResult(
+                "main", sourceSha, targetHeadSha, candidateTreeSha, mergeCommitSha, outputHash);
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, result, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.Landed, attempt.Status);
+            var forwardPort = await _db.Tasks.SingleAsync(
+                task => task.ProjectId == project.Id && task.ForwardPortOfTaskId == hotfix.Id,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(TaskType.Task, forwardPort.Type);
+            Assert.Equal(TaskPriority.High, forwardPort.Priority);
+            Assert.Equal(device.Id, forwardPort.PipelineDeviceId);
+            Assert.Contains("Production deployed SHA: " + deployedSha, forwardPort.Description);
+            Assert.Contains("Hotfix landing merge commit: " + mergeCommitSha, forwardPort.Description);
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, result, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(1, await _db.Tasks.CountAsync(
+                task => task.ProjectId == project.Id && task.ForwardPortOfTaskId == hotfix.Id,
+                TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public async Task UnverifiedHotfixLanding_DoesNotCreateForwardPortTask()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string deployedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string sourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string reviewTreeSha = "cccccccccccccccccccccccccccccccccccccccc";
+        const string commandHash = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        const string targetHeadSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string candidateTreeSha = "ffffffffffffffffffffffffffffffffffffffff";
+        var release = Release.Create("Production 1.2.3", null, project.Id, "1.2.3", "main", 1);
+        var hotfix = TaskItem.Create("Unverified Hotfix", project.Id, TaskPriority.High, TaskType.Bug);
+        hotfix.SetHotfixOrigin(release.Id, deployedSha, "main", Guid.NewGuid());
+        hotfix.PinPipelineDevice(device.Id);
+        var attempt = LandingAttempt.Start(
+            project.Id, hotfix.Id, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Do not forward-port unverified work.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha,
+            new string('1', 64), 0, null);
+        attempt.MarkExecutePending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.Releases.Add(release);
+            _db.Tasks.Add(hotfix);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, hotfix.Id, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                targetHeadSha, candidateTreeSha, null);
+            var unverified = JsonSerializer.Serialize(new
+            {
+                status = "landed_unverified",
+                targetBranch = "main",
+                sourceSha,
+                targetHeadSha,
+                candidateTreeSha,
+                mergeCommitSha = "2222222222222222222222222222222222222222",
+                errorCode = "PostMergeVerificationFailed",
+                postMergeCheckExitCode = 1
+            });
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, unverified, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.LandedUnverified, attempt.Status);
+            Assert.Empty(await _db.Tasks.Where(
+                task => task.ProjectId == project.Id && task.ForwardPortOfTaskId == hotfix.Id)
+                .ToListAsync(TestContext.Current.CancellationToken));
         }
     }
 
