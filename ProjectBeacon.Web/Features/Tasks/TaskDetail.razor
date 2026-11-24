@@ -705,6 +705,10 @@ else
                                     L["Read"].Value,
                                     new { TaskId, ProjectId = projectId, CommandId = commandId });
                             }
+                            else
+                                Logger.LogWarning(
+                                    "Transient GitSync command status read failure. TaskId={TaskId}, ProjectId={ProjectId}, CommandId={CommandId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                                    TaskId, projectId, commandId, current.ErrorCode ?? ErrorCodes.For(current.Kind), current.Error);
                             if (current.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                             {
                                 _gitSyncCommandId = null;
@@ -1008,6 +1012,10 @@ else
                         L["Read"].Value,
                         new { TaskId, ProjectId = task.ProjectId });
                 }
+                else
+                    Logger.LogWarning(
+                        "Transient pending GitSync command restore result failure. TaskId={TaskId}, ProjectId={ProjectId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        TaskId, task.ProjectId, pending.ErrorCode ?? ErrorCodes.For(pending.Kind), pending.Error);
                 if (pending.Kind == ErrorKind.Forbidden)
                 {
                     _canManageRepositorySync = false;
@@ -1047,6 +1055,10 @@ else
                         L["Tasks"].Value,
                         L["Load"].Value,
                         new { TaskId });
+                else
+                    Logger.LogWarning(
+                        "Transient task pipeline read failure. TaskId={TaskId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        TaskId, result.ErrorCode ?? ErrorCodes.For(result.Kind), result.Error);
                 return false;
             }
 

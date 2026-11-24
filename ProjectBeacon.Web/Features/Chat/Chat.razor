@@ -226,7 +226,6 @@ else
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
         if (!listed.Success)
         {
-            _sessions = [];
             _sessionLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
             return;
         }
@@ -423,6 +422,10 @@ else
                                 pollErrorCode,
                                 L["Refresh"].Value,
                                 new { SessionId = sessionId });
+                        else
+                            Logger.LogWarning(
+                                "Transient chat poll result failure. SessionId={SessionId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                                sessionId, pollErrorCode, pollError);
                     }
                     else if (_pollFailures.RecordSuccess())
                     {
@@ -499,6 +502,10 @@ else
                 _proxyStatusErrorMessage = Notifications.FormatFailure(
                     status, L["Chat"].Value, L["Read"].Value);
             }
+            else
+                Logger.LogWarning(
+                    "Transient chat runtime status result failure. ErrorCode={ErrorCode}, Detail={Detail}",
+                    status.ErrorCode ?? ErrorCodes.For(status.Kind), status.Error);
         }
         catch (Exception exception)
         {
