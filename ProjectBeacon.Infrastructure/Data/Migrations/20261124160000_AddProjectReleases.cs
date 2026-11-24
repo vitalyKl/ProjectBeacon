@@ -32,6 +32,7 @@ public sealed partial class AddProjectReleases : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_Releases", x => x.Id);
+                table.UniqueConstraint("AK_Releases_ProjectId_Id", x => new { x.ProjectId, x.Id });
                 table.ForeignKey(
                     name: "FK_Releases_Projects_ProjectId",
                     column: x => x.ProjectId,
@@ -62,18 +63,29 @@ public sealed partial class AddProjectReleases : Migration
             column: "ReleaseId");
 
         migrationBuilder.AddForeignKey(
-            name: "FK_Milestones_Releases_ReleaseId",
+            name: "FK_Milestones_Releases_ProjectId_ReleaseId",
             table: "Milestones",
-            column: "ReleaseId",
+            columns: new[] { "ProjectId", "ReleaseId" },
             principalTable: "Releases",
-            principalColumn: "Id",
-            onDelete: ReferentialAction.SetNull);
+            principalColumns: new[] { "ProjectId", "Id" },
+            onDelete: ReferentialAction.Restrict);
+
+        // Releases are project-scoped just like every other customer-owned roadmap row.
+        migrationBuilder.Sql(@"ALTER TABLE ""Releases"" ENABLE ROW LEVEL SECURITY;");
+        migrationBuilder.Sql(@"ALTER TABLE ""Releases"" FORCE ROW LEVEL SECURITY;");
+        migrationBuilder.Sql(@"CREATE POLICY tenant_project_isolation ON ""Releases""
+            USING (current_setting('app.tenant_unscoped', true) = 'true'
+                   OR ""ProjectId""::text = current_setting('app.tenant_project_id', true));");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.Sql(@"DROP POLICY IF EXISTS tenant_project_isolation ON ""Releases"";");
+        migrationBuilder.Sql(@"ALTER TABLE ""Releases"" NO FORCE ROW LEVEL SECURITY;");
+        migrationBuilder.Sql(@"ALTER TABLE ""Releases"" DISABLE ROW LEVEL SECURITY;");
+
         migrationBuilder.DropForeignKey(
-            name: "FK_Milestones_Releases_ReleaseId",
+            name: "FK_Milestones_Releases_ProjectId_ReleaseId",
             table: "Milestones");
 
         migrationBuilder.DropIndex(
