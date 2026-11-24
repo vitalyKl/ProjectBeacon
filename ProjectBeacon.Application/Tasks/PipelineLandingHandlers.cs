@@ -43,7 +43,11 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
         if (task.PipelineStage != TaskPipelineStage.Approved)
             return Result.Failure<LandingAttemptDto>("The task pipeline must be Approved before requesting a landing.", ErrorKind.Conflict);
 
-        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+        // Project is org-scoped while this handler runs in a project-scoped tenant
+        // context. The task above was resolved by that scope; this exact ProjectId lookup
+        // is required to read the pinned ReviewCheckCommand and does not broaden access.
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
         if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
             return Result.Failure<LandingAttemptDto>("A pinned project ReviewCheckCommand is required before landing.", ErrorKind.Conflict);
         var checkCommand = project.ReviewCheckCommand.Trim();
