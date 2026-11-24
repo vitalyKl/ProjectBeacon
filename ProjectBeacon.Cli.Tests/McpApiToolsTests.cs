@@ -816,7 +816,7 @@ public sealed class McpApiToolsTests
     {
         const string sha = "0123456789abcdef0123456789abcdef01234567";
         using var http = new HttpClient(new ProblemResponseHandler(
-            HttpStatusCode.OK, $"""{"version":"0.7.5.9","gitSha":"{{sha}}"}"""));
+            HttpStatusCode.OK, new JsonObject { ["version"] = "0.7.5.9", ["gitSha"] = sha }.ToJsonString()));
 
         var result = await McpApiTools.CheckDeploymentEndpointAsync(
             "https://beacon.example/v1/version", "0.7.5.9",
