@@ -29,10 +29,17 @@ public static class WorkstationSetup
             && gitEl.ValueKind == JsonValueKind.True && !hasGitMetadata;
 
         // InitProject writes into the real checkout (.gitignore and, optionally, .git).
-        // A newly initialized nested repository gets its own checkout key; otherwise
-        // resolve the existing repository root shared with GitSync and GitLand.
-        var checkoutRoot = createGit ? Path.GetFullPath(full) : ResolveCheckoutRoot(full);
+        // When creating a nested repository, protect both the containing checkout and
+        // the new repository root. All callers acquire the containing root first.
+        var checkoutRoot = ResolveCheckoutRoot(full);
         using var checkoutLease = GitCheckoutGate.Acquire(checkoutRoot);
+        using var nestedCheckoutLease = createGit
+            && !string.Equals(
+                GitRepositoryOperationGate.NormalizeRoot(checkoutRoot),
+                GitRepositoryOperationGate.NormalizeRoot(full),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+                    ? GitCheckoutGate.Acquire(full)
+                    : null;
 
         if (createGit)
             Run("git", "init", full);
