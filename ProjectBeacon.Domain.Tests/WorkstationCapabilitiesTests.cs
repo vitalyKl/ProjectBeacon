@@ -16,6 +16,17 @@ public sealed class WorkstationCapabilitiesTests
     }
 
     [Fact]
+    public void SupportsAutoSync_RequiresExplicitCapabilityAdvertisement()
+    {
+        Assert.False(WorkstationCapabilities.Supports(
+            """{"capabilities":["git-sync-v1"]}""",
+            WorkstationCapabilities.AutoSyncV1));
+        Assert.True(WorkstationCapabilities.Supports(
+            """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""",
+            WorkstationCapabilities.AutoSyncV1));
+    }
+
+    [Fact]
     public void SupportsGitSync_RequiresExplicitCapabilityAdvertisement()
     {
         Assert.False(WorkstationCapabilities.Supports(null, WorkstationCapabilities.GitSyncV1));
