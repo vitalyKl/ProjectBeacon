@@ -182,6 +182,24 @@ internal static partial class McpApiTools
             return new McpToolText(true, "Could not parse version policy response: " + exception.Message);
         }
 
+        var milestonesResponse = await api.SendAsync(
+            HttpMethod.Get, $"v1/projects/{projectId:D}/milestones", null, ct);
+        JsonArray milestones = [];
+        string? milestonesError = null;
+        if (milestonesResponse.Ok)
+        {
+            try
+            {
+                milestones = JsonNode.Parse(milestonesResponse.Body) as JsonArray ?? [];
+            }
+            catch (JsonException exception)
+            {
+                return new McpToolText(true, "Could not parse project milestones: " + exception.Message);
+            }
+        }
+        else
+            milestonesError = $"HTTP {milestonesResponse.Status}";
+
         var releaseManagementEnabled = policyJson["releaseManagementEnabled"]?.GetValue<bool>() == true;
         JsonArray releases = [];
         string? releasesError = null;
@@ -209,6 +227,8 @@ internal static partial class McpApiTools
             ["projectId"] = projectId.ToString("D"),
             ["versionPolicy"] = policyJson,
             ["releaseManagementEnabled"] = releaseManagementEnabled,
+            ["milestones"] = milestones,
+            ["milestonesError"] = milestonesError,
             ["releases"] = releases,
             ["releasesError"] = releasesError
         };
