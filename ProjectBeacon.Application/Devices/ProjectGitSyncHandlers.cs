@@ -65,6 +65,9 @@ public sealed class EnqueueProjectGitSyncHandler
             if (projectLocked == 0)
                 return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
 
+            await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+                db, now, ct, projectId);
+
             var activeCommands = await db.WorkstationCommands.IgnoreQueryFilters()
                 .Where(candidate => candidate.ProjectId == projectId
                     && candidate.Kind == WorkstationCommandKind.GitSync
@@ -298,6 +301,9 @@ public sealed class GetProjectGitSyncCommandHandler
             db, actor, _authorization, projectId, ct);
         if (!permission.Success)
             return Result.Failure<WorkstationCommandDto?>(permission);
+
+        await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+            db, _timeProvider.GetUtcNow().UtcDateTime, ct, projectId, targetDeviceId);
 
         var active = await db.WorkstationCommands.IgnoreQueryFilters()
             .Where(candidate => candidate.ProjectId == projectId

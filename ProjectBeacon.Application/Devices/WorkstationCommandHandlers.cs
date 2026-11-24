@@ -267,6 +267,9 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
         {
             ct.ThrowIfCancellationRequested();
             await using var db = _dbFactory.CreateDbContext();
+            await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
+                db, _timeProvider.GetUtcNow().UtcDateTime, ct, deviceId: command.Request.DeviceId);
+
             var pending = db.WorkstationCommands.AsNoTracking()
                 .Where(c => c.DeviceId == command.Request.DeviceId && c.Status == WorkstationCommandStatus.Pending);
             if (command.Request.ControlOnly)
