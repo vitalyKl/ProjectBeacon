@@ -69,6 +69,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
 
     public DbSet<EvalRun> EvalRuns => Set<EvalRun>();
     public DbSet<ReviewRun> ReviewRuns => Set<ReviewRun>();
+    public DbSet<RemoteLandingProof> RemoteLandingProofs => Set<RemoteLandingProof>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
