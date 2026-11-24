@@ -217,7 +217,7 @@ public sealed class SettingsRenderTests : BUnitRenderBase
 
         // Repository status lives in the Probe tab, not the default Workstation settings tab.
         var probeTab = cut.FindAll("[role='tab']")
-            .Single(tab => string.Equals(tab.TextContent.Trim(), "Probe", StringComparison.OrdinalIgnoreCase));
+            .Single(tab => tab.TextContent.Contains("Installed tools", StringComparison.OrdinalIgnoreCase));
         probeTab.Click();
 
         cut.WaitForAssertion(() =>
