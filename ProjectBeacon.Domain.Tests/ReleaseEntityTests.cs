@@ -40,6 +40,68 @@ public sealed class ReleaseEntityTests
     }
 
     [Fact]
+    public void CandidateTransition_RequiresImmutableSnapshotForExactRelease()
+    {
+        var projectId = Guid.NewGuid();
+        var release = Release.Create("1.0", null, projectId, "1.0.0", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+
+        Assert.Throws<ArgumentNullException>(() => release.MarkCandidate(null!));
+        Assert.Equal(ReleaseStatus.InProgress, release.Status);
+
+        var otherProjectSnapshot = ReleaseCandidateSnapshot.Create(
+            Guid.NewGuid(), release.Id, "1.0.0", "v1.0.0", "main",
+            Sha('a'), Sha('b'), Sha('c'), Sha('d'),
+            1, release.Revision, new string('e', 64),
+            """{"schemaVersion":1}""", DateTime.UtcNow);
+        Assert.Throws<InvalidOperationException>(() => release.MarkCandidate(otherProjectSnapshot));
+        Assert.Equal(ReleaseStatus.InProgress, release.Status);
+
+        var snapshot = ReleaseCandidateSnapshot.Create(
+            projectId, release.Id, "1.0.0", "v1.0.0", "main",
+            Sha('a'), Sha('b'), Sha('c'), Sha('d'),
+            2, release.Revision, new string('e', 64),
+            """{"schemaVersion":1}""", DateTime.UtcNow);
+
+        var previousRevision = release.Revision;
+        release.MarkCandidate(snapshot);
+
+        Assert.Equal(ReleaseStatus.Candidate, release.Status);
+        Assert.Same(snapshot, release.CandidateSnapshot);
+        Assert.Equal(previousRevision + 1, release.Revision);
+        Assert.Throws<InvalidOperationException>(() => release.MarkCandidate(snapshot));
+        Assert.Throws<InvalidOperationException>(() => release.Update(description: "Cannot edit candidate"));
+    }
+
+    [Fact]
+    public void CandidateSnapshot_RejectsInvalidShaHashRevisionAndJson()
+    {
+        var projectId = Guid.NewGuid();
+        var releaseId = Guid.NewGuid();
+        var sha = new string('a', 40);
+        var hash = new string('b', 64);
+        var timestamp = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+
+        Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
+            projectId, releaseId, "1.0.0", "v1.0.0", "main", "bad", sha, sha, sha,
+            1, 1, hash, """{"schemaVersion":1}""", timestamp));
+        Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
+            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            0, 1, hash, """{"schemaVersion":1}""", timestamp));
+        Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
+            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            1, 1, "bad", """{"schemaVersion":1}""", timestamp));
+        Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
+            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            1, 1, hash, """[]""", timestamp));
+        Assert.Throws<ArgumentException>(() => ReleaseCandidateSnapshot.Create(
+            projectId, releaseId, "1.0.0", "v1.0.0", "main", sha, sha, sha, sha,
+            1, 1, hash, """{"schemaVersion":1}""", DateTime.Now));
+    }
+
+    private static string Sha(char value) => new(value, 40);
+
+    [Fact]
     public void Release_RevisionChangesOnlyWhenPlanningFieldsChange()
     {
         var release = Release.Create("1.0", null, Guid.NewGuid(), "1.0.0", "main", 1);
