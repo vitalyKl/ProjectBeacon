@@ -371,7 +371,7 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineStateDto>(ex.Message);
+                return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
             }
 
             foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
@@ -459,7 +459,7 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
             }
             catch (InvalidOperationException ex)
             {
-                return Result.Failure<PipelineStateDto>(ex.Message);
+                return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
             }
 
             foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
@@ -589,7 +589,7 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             }
             catch (Exception ex)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                return Result.Failure<PipelineSessionDto>(ex.Message, ErrorCodes.InternalError);
             }
 
             if (spawned.ModelBackendId is null)

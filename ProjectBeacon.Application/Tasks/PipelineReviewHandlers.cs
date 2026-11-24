@@ -93,7 +93,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         }
         catch (InvalidOperationException ex)
         {
-            return Result.Failure<PipelineSessionDto>(ex.Message);
+            return Result.Failure<PipelineSessionDto>(ex.Message, ErrorKind.Conflict);
         }
 
         // Guarded stage claim before the spawn. Conflict recovery advances
@@ -232,7 +232,7 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         }
         catch (InvalidOperationException ex)
         {
-            return Result.Failure<PipelineStateDto>(ex.Message);
+            return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
         }
 
         foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Review, ct))
@@ -369,7 +369,7 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(r => r.ReviewerActorId, (string?)null)
                     .SetProperty(r => r.CheckCommandHash, (string?)null), ct);
-            return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
+            return Result.Failure<PipelineStateDto>(queued);
         }
 
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
