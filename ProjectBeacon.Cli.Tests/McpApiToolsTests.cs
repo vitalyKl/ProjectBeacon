@@ -655,7 +655,7 @@ public sealed class McpApiToolsTests
         {
             await File.WriteAllTextAsync(
                 Path.Combine(root, "Directory.Build.props"),
-                "<Project><PropertyGroup><Version>0.7.5.8</Version></PropertyGroup></Project>");
+                "<Project><PropertyGroup><Version>0.7.5.9</Version></PropertyGroup></Project>");
             var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
             var env = McpEnvironment.Of(
                 ("BEACON_PROJECT_ID", projectId.ToString("D")),
@@ -669,7 +669,7 @@ public sealed class McpApiToolsTests
 
             Assert.False(result.IsError, result.Text);
             var json = JsonNode.Parse(result.Text)!;
-            Assert.Equal("0.7.5.8", json["officialVersion"]!.GetValue<string>());
+            Assert.Equal("0.7.5.9", json["officialVersion"]!.GetValue<string>());
             Assert.Equal("in_sync", json["status"]!.GetValue<string>());
             Assert.Equal("in_sync", json["sources"]![0]!["status"]!.GetValue<string>());
             Assert.Contains(handler.Calls, call =>
