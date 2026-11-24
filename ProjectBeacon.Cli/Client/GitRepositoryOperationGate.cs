@@ -26,6 +26,16 @@ internal static class GitRepositoryOperationGate
         return new GateLease(state.Gate);
     }
 
+    /// <summary>Attempts to acquire the repository operation gate without waiting indefinitely.</summary>
+    public static async ValueTask<IDisposable?> TryAcquireAsync(
+        string repositoryRoot, TimeSpan timeout, CancellationToken ct)
+    {
+        var state = GetState(repositoryRoot);
+        return await state.Gate.WaitAsync(timeout, ct)
+            ? new GateLease(state.Gate)
+            : null;
+    }
+
     public static IDisposable RegisterSession(string repositoryRoot) =>
         RegisterSession(repositoryRoot, repositoryRoot);
 

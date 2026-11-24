@@ -200,7 +200,13 @@ internal sealed class GitSyncService
             if (checkoutLease is null)
                 return Complete(Refused(state, GitSyncRefusalCode.CheckoutBusy, null, state.Head));
             using var checkoutOperation = checkoutLease;
-            using var repositoryOperation = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+            IDisposable? repositoryOperation = automatic
+                ? await GitRepositoryOperationGate.TryAcquireAsync(
+                    repositoryRoot, TimeSpan.FromMilliseconds(150), ct)
+                : await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+            if (repositoryOperation is null)
+                return Complete(Refused(state, GitSyncRefusalCode.CheckoutBusy, null, state.Head));
+            using var repositoryOperationLease = repositoryOperation;
 
             state = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
             if (state.Error is not null)

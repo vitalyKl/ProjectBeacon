@@ -516,6 +516,35 @@ public sealed class GitSyncServiceTests
         Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
     }
 
+    [Fact]
+    public async Task AutomaticPull_SkipsWhenRepositoryOperationGateIsBusy()
+    {
+        await using var repo = await RepositoryFixture.CreateAsync();
+        await repo.PushRemoteCommitAsync("remote.txt", "upstream change");
+        using var repositoryLease = await GitRepositoryOperationGate.AcquireAsync(
+            repo.Root, CancellationToken.None);
+        var headBefore = await Git(repo.Root, "rev-parse", "HEAD");
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = repo.ProjectId,
+            mode = GitSyncMode.PullFastForward.ToString()
+        });
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var execution = await _service.ExecuteAsync(
+            repo.Root, repo.ProjectId, payload, CancellationToken.None, automatic: true);
+        stopwatch.Stop();
+
+        Assert.True(execution.Ok, execution.Error);
+        var result = JsonSerializer.Deserialize<GitSyncResultDto>(
+            execution.Result!, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(GitSyncOutcome.Refused, result.Outcome);
+        Assert.Equal(GitSyncRefusalCode.CheckoutBusy, result.ReasonCode);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.Equal(headBefore, await Git(repo.Root, "rev-parse", "HEAD"));
+        Assert.False(File.Exists(Path.Combine(repo.Root, "remote.txt")));
+    }
+
     private async Task<GitSyncResultDto> ExecuteAsync(
         RepositoryFixture repo,
         GitSyncMode mode,
