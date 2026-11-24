@@ -2,14 +2,18 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Security.Cryptography;
 using System.Text;
+using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Application.Audit;
 using Application.Authorization;
 using Domain.Entities.Content;
 using Domain.Entities.Audit;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
+using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
+using Domain.Entities.Roadmap;
 using Domain.Enums;
 using Application.Persistence;
 using Application.Proposals;
@@ -30,6 +34,7 @@ internal static class CommandCompletions
         new EvalRunCompletion(),
         new ReviewCheckCompletion(),
         new GitLandCompletion(),
+        new ReleasePrepareCompletion(),
         new DesiredStateCompletion(),
         new ChatSessionCompletion(),
         new PipelineSessionCompletion()
@@ -978,6 +983,347 @@ internal sealed class GitLandCompletion : ICommandCompletion
 
     private static bool IsSha256(string? value) =>
         value is { Length: 64 } && value.All(Uri.IsHexDigit);
+}
+
+
+internal sealed class ReleasePrepareCompletion : ICommandCompletion
+{
+    public async Task ApplyAsync(
+        IBeaconDb db,
+        WorkstationCommand row,
+        bool success,
+        string? resultJson,
+        string? error,
+        CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.ReleasePrepare || row.ProjectId is not { } projectId)
+            return;
+        if (!TryObject(row.PayloadJson, out var payload))
+            return;
+
+        var action = ReadString(payload, "action");
+        if (action is not ("Prepare" or "VerifyLanding"))
+            return;
+        var releaseId = ReadGuid(payload, "releaseId");
+        var candidateId = ReadGuid(payload, "candidateId");
+        if (releaseId == Guid.Empty || candidateId == Guid.Empty)
+            return;
+
+        var release = await db.Releases.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == releaseId && item.ProjectId == projectId, ct);
+        if (release is null || release.PreparationDeviceId != row.DeviceId
+            || release.CandidateId != candidateId)
+            return;
+
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == projectId, ct);
+        if (project is null)
+            return;
+
+        if (action == "Prepare")
+        {
+            if (release.PreparationCommandId != row.Id
+                || release.PreparationStatus != ReleasePreparationStatus.PrepareQueued)
+                return;
+
+            if (!success)
+            {
+                release.RecordPrepareFailure(row.Id, error ?? row.Error ?? "ReleasePrepare workstation command failed.");
+                AddAudit(db, project, releaseId, "project.release.prepare_failed",
+                    new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+                return;
+            }
+
+            if (!TryValidatePrepareResult(payload, resultJson, out var invalidReason))
+            {
+                release.RecordPrepareFailure(row.Id, invalidReason ?? "ReleasePrepare returned invalid evidence.");
+                AddAudit(db, project, releaseId, "project.release.prepare_failed",
+                    new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+                return;
+            }
+
+            release.RecordPrepareSuccess(row.Id, resultJson!);
+            if (TryObject(resultJson, out var preparedResult))
+            {
+                AddAudit(db, project, releaseId, "project.release.prepared",
+                    new
+                    {
+                        candidateId,
+                        workstationId = row.DeviceId,
+                        preparedCommitSha = ReadString(preparedResult, "preparedCommitSha"),
+                        pullRequestUrl = ReadString(preparedResult, "pullRequestUrl"),
+                        preparationRevision = release.PreparationRevision
+                    });
+            }
+            return;
+        }
+
+        if (release.VerificationCommandId != row.Id
+            || release.PreparationStatus != ReleasePreparationStatus.VerifyQueued)
+            return;
+
+        if (!success)
+        {
+            release.RecordVerificationFailure(row.Id, error ?? row.Error ?? "VerifyLanding workstation command failed.");
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+            return;
+        }
+
+        if (!TryValidateVerifyResult(payload, release.PreparationResultJson, resultJson,
+            release, row.DeviceId, out var verified, out var invalidVerifyReason))
+        {
+            release.RecordVerificationFailure(row.Id, invalidVerifyReason ?? "VerifyLanding returned invalid evidence.");
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+            return;
+        }
+
+        if (project.VersionPolicyRevision != verified.VersionPolicyRevision
+            || release.Revision != verified.ReleaseRevision
+            || !ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var currentPolicy, out _)
+            || !ProjectVersionPolicyCatalog.TryNormalizeVersion(currentPolicy, verified.Version, out _, out _))
+        {
+            release.RecordVerificationFailure(row.Id,
+                "Project version policy or Release changed after Prepare. Candidate evidence was not committed.");
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+            return;
+        }
+
+        try
+        {
+            var snapshot = ReleaseCandidateSnapshot.Create(
+                projectId,
+                releaseId,
+                candidateId,
+                row.DeviceId,
+                verified.Version,
+                verified.TagName,
+                verified.TargetBranch,
+                verified.BaseSha,
+                verified.PreparedCommitSha,
+                verified.CandidateSha,
+                verified.CandidateTreeSha,
+                verified.VersionPolicyRevision,
+                verified.ReleaseRevision,
+                verified.ManifestSha256,
+                verified.SnapshotJson,
+                verified.VerifiedAtUtc);
+            release.MarkCandidate(snapshot);
+            project.SetOfficialVersionFromRelease(verified.Version);
+            db.ReleaseCandidateSnapshots.Add(snapshot);
+            AddAudit(db, project, releaseId, "project.release.candidate_created",
+                new
+                {
+                    candidateId,
+                    workstationId = row.DeviceId,
+                    version = verified.Version,
+                    tagName = verified.TagName,
+                    targetBranch = verified.TargetBranch,
+                    candidateSha = verified.CandidateSha,
+                    candidateTreeSha = verified.CandidateTreeSha,
+                    manifestSha256 = verified.ManifestSha256,
+                    officialVersion = project.OfficialVersion
+                });
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            release.RecordVerificationFailure(row.Id, "Candidate evidence was rejected: " + Clip(exception.Message));
+            AddAudit(db, project, releaseId, "project.release.verify_failed",
+                new { candidateId, workstationId = row.DeviceId, error = release.PreparationError });
+        }
+    }
+
+    private sealed record VerifiedEvidence(
+        string Version,
+        string TagName,
+        string TargetBranch,
+        string BaseSha,
+        string PreparedCommitSha,
+        string CandidateSha,
+        string CandidateTreeSha,
+        int VersionPolicyRevision,
+        int ReleaseRevision,
+        string ManifestSha256,
+        string SnapshotJson,
+        DateTime VerifiedAtUtc);
+
+    private static bool TryValidatePrepareResult(
+        JsonObject payload, string? resultJson, out string? error)
+    {
+        error = null;
+        if (!TryObject(resultJson, out var result))
+            return Fail("Prepare result is not a JSON object.", out error);
+
+        var projectId = ReadGuid(payload, "projectId");
+        var releaseId = ReadGuid(payload, "releaseId");
+        var candidateId = ReadGuid(payload, "candidateId");
+        var version = ReadString(payload, "version");
+        var targetBranch = ReadString(payload, "targetBranch");
+        var snapshotJson = ReadString(payload, "snapshotJson");
+        if (ReadString(result, "action") != "Prepare"
+            || ReadGuid(result, "projectId") != projectId
+            || ReadGuid(result, "releaseId") != releaseId
+            || ReadGuid(result, "candidateId") != candidateId
+            || ReadString(result, "version") != version
+            || ReadString(result, "targetBranch") != targetBranch
+            || ReadString(result, "snapshotJson") != snapshotJson)
+            return Fail("Prepare result identity or immutable snapshot does not match the queued payload.", out error);
+
+        var tagName = ReadString(result, "tagName");
+        var baseSha = ReadString(result, "baseSha");
+        var preparedSha = ReadString(result, "preparedCommitSha");
+        var manifestSha = ReadString(result, "manifestSha256");
+        var releaseBranch = ReadString(result, "releaseBranch");
+        var pullRequestUrl = ReadString(result, "pullRequestUrl");
+        var pullRequestNumber = ReadInt(result, "pullRequestNumber");
+        var publicationTagCreated = ReadBool(result, "publicationTagCreated");
+        if (!ProjectVersionPolicyCatalog.TryRead(ReadString(payload, "versionPolicyJson"), out var policy, out _)
+            || tagName != ProjectVersionPolicyCatalog.FormatTag(policy, version)
+            || !IsGitSha(baseSha)
+            || !IsGitSha(preparedSha)
+            || !IsSha256(manifestSha)
+            || !ProjectVersionPolicyCatalog.IsSafeBranchName(releaseBranch)
+            || pullRequestNumber < 1
+            || !IsGitHubPullRequestUrl(pullRequestUrl)
+            || ReadPullRequestNumber(pullRequestUrl) != pullRequestNumber
+            || publicationTagCreated)
+            return Fail("Prepare result is missing valid commit, manifest, tag, PR or no-tag evidence.", out error);
+
+        return true;
+    }
+
+    private static bool TryValidateVerifyResult(
+        JsonObject payload,
+        string? prepareResultJson,
+        string? verifyResultJson,
+        Release release,
+        Guid deviceId,
+        out VerifiedEvidence evidence,
+        out string? error)
+    {
+        evidence = null!;
+        error = null;
+        if (!TryObject(prepareResultJson, out var prepared)
+            || !TryObject(verifyResultJson, out var verified))
+            return Fail("Prepare or VerifyLanding result is not a JSON object.", out error);
+
+        var projectId = ReadGuid(payload, "projectId");
+        var releaseId = ReadGuid(payload, "releaseId");
+        var candidateId = ReadGuid(payload, "candidateId");
+        var version = ReadString(payload, "version");
+        var tagName = ReadString(prepared, "tagName");
+        var targetBranch = ReadString(payload, "targetBranch");
+        var preparedSha = ReadString(prepared, "preparedCommitSha");
+        var manifestSha = ReadString(prepared, "manifestSha256");
+        var baseSha = ReadString(prepared, "baseSha");
+        var snapshotJson = ReadString(payload, "snapshotJson");
+        var versionPolicyRevision = ReadInt(payload, "versionPolicyRevision");
+        var releaseRevision = ReadInt(payload, "releaseRevision");
+
+        if (release.PreparationDeviceId != deviceId
+            || release.CandidateId != candidateId
+            || ReadString(payload, "action") != "VerifyLanding"
+            || ReadString(verified, "action") != "VerifyLanding"
+            || ReadGuid(verified, "projectId") != projectId
+            || ReadGuid(verified, "releaseId") != releaseId
+            || ReadGuid(verified, "candidateId") != candidateId
+            || ReadString(verified, "version") != version
+            || ReadString(verified, "tagName") != tagName
+            || ReadString(verified, "targetBranch") != targetBranch
+            || ReadString(verified, "baseSha") != baseSha
+            || ReadString(verified, "preparedCommitSha") != preparedSha
+            || ReadString(verified, "manifestSha256") != manifestSha
+            || ReadString(verified, "snapshotJson") != snapshotJson
+            || ReadInt(verified, "versionPolicyRevision") != versionPolicyRevision
+            || ReadInt(verified, "releaseRevision") != releaseRevision
+            || versionPolicyRevision < 1
+            || releaseRevision != release.Revision)
+            return Fail("VerifyLanding result does not match the exact pinned Prepare evidence.", out error);
+
+        var candidateSha = ReadString(verified, "candidateSha");
+        var candidateTreeSha = ReadString(verified, "candidateTreeSha");
+        if (!IsGitSha(baseSha) || !IsGitSha(preparedSha)
+            || !IsGitSha(candidateSha) || !IsGitSha(candidateTreeSha)
+            || !IsSha256(manifestSha)
+            || !DateTime.TryParse(ReadString(verified, "verifiedAtUtc"), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var verifiedAt))
+            return Fail("VerifyLanding result contains invalid Git hashes, manifest hash or verification time.", out error);
+
+        evidence = new VerifiedEvidence(
+            version, tagName, targetBranch, baseSha, preparedSha, candidateSha, candidateTreeSha,
+            versionPolicyRevision, releaseRevision, manifestSha, snapshotJson,
+            DateTime.SpecifyKind(verifiedAt, DateTimeKind.Utc));
+        return true;
+    }
+
+    private static void AddAudit(IBeaconDb db, Project project, Guid releaseId, string action, object details)
+    {
+        var actor = new ActorContext(
+            ActorType.Worker, null, false, null, null, project.Id, project.OrgId, ApiTokenCapability.None);
+        db.AuditEvents.Add(AuditEventFactory.ForActor(
+            actor, action, "Release", releaseId.ToString("D"), project.OrgId, project.Id,
+            detailsJson: JsonSerializer.Serialize(details)));
+    }
+
+    private static bool TryObject(string? json, out JsonObject value)
+    {
+        value = new JsonObject();
+        try
+        {
+            value = JsonNode.Parse(json ?? string.Empty) as JsonObject ?? new JsonObject();
+            return value.Count > 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string ReadString(JsonObject value, string name) =>
+        value[name] is JsonValue element && element.TryGetValue<string>(out var text) ? text ?? string.Empty : string.Empty;
+
+    private static Guid ReadGuid(JsonObject value, string name) =>
+        Guid.TryParse(ReadString(value, name), out var id) ? id : Guid.Empty;
+
+    private static int ReadInt(JsonObject value, string name) =>
+        value[name] is JsonValue element && element.TryGetValue<int>(out var number) ? number : 0;
+
+    private static bool ReadBool(JsonObject value, string name) =>
+        value[name] is JsonValue element && element.TryGetValue<bool>(out var flag) && flag;
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsGitHubPullRequestUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+        && System.Text.RegularExpressions.Regex.IsMatch(
+            uri.AbsolutePath, @"^/[^/]+/[^/]+/pull/[1-9][0-9]*$", RegexOptions.CultureInvariant);
+
+    private static int ReadPullRequestNumber(string? value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            return 0;
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length == 4 && segments[2] == "pull"
+            && int.TryParse(segments[3], NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                ? number
+                : 0;
+    }
+
+    private static bool Fail(string message, out string? error)
+    {
+        error = message;
+        return false;
+    }
+
+    private static string Clip(string value) => value.Length <= 4000 ? value : value[..4000];
 }
 
 internal sealed class DesiredStateCompletion : ICommandCompletion
