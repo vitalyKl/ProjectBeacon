@@ -71,6 +71,7 @@ public static class McpToolNames
     public const string DeleteTaskStep = "delete_task_step";
     public const string FinishWork = "finish_work";
     public const string GetTaskVersionImpact = "get_task_version_impact";
+    public const string ReviewVersionImpact = "review_version_impact";
     public const string ContextCompile = "context_compile";
     public const string ContextCreateDraft = "context_create_draft";
     public const string ConstraintPropose = "constraint_propose";
@@ -197,6 +198,8 @@ public static class McpToolCatalog
                 McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.GetTaskVersionImpact),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.VersionImpact),
+            ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite, McpToolSurface.Pipeline,
+                McpToolNames.ReviewVersionImpact),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus,
                 McpToolNames.SetTaskSubstage, McpToolNames.ClaimTask, McpToolNames.AddTaskComment,
