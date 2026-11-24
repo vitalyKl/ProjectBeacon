@@ -691,7 +691,7 @@ internal static class AgentTaskGitHubPullRequestOperations
         var inlineReviewComments = new JsonArray();
         var workflowRuns = new JsonArray();
 
-        if (pullRequestNumber is { } number && view is "all" or "reviews")
+        if (pullRequestNumber is { } number && (view is "all" or "reviews"))
         {
             var reviewResult = await ReadForgeApiAsync(
                 ghPath, context.WorktreeRoot, ct,
