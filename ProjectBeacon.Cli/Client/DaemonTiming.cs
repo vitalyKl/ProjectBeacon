@@ -15,6 +15,7 @@ internal sealed class DaemonTiming
     public TimeProvider TimeProvider { get; }
 
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan AutoSyncInterval { get; set; } = TimeSpan.FromMinutes(2);
     public TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
     public TimeSpan ErrorBackoffInterval { get; set; } = TimeSpan.FromSeconds(3);
     public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; }
