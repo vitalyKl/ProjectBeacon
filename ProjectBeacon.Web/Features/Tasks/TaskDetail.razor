@@ -984,7 +984,7 @@ else
             return;
         if (_actorContext.UserId is null || !_actorContext.IsHuman)
         {
-            Notifications.Add(L["WorkspaceHumanIdentityRequired"].Value, Severity.Error);
+            Notifications.Failure(L["WorkspaceHumanIdentityRequired"].Value, L["Tasks"].Value, ErrorCodes.ValidationFailed, L["Add"].Value);
             return;
         }
 

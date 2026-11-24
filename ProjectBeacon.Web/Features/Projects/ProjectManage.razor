@@ -725,7 +725,7 @@ else
             return;
         if (string.IsNullOrWhiteSpace(_projectName))
         {
-            Notifications.Add(L["ProjectNameRequired"].Value, Severity.Error);
+            Notifications.Failure(L["ProjectNameRequired"].Value, L["ProjectSettings"].Value, ErrorCodes.ValidationFailed, L["Save"].Value);
             return;
         }
         _busy = true;

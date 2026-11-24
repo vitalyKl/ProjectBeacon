@@ -208,7 +208,7 @@ else if (_error)
     {
         if (_project is null)
         {
-            Notifications.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Failure(L["NoProjectAvailable"].Value, L["Board"].Value, ErrorCodes.ValidationFailed, L["Create"].Value);
             return;
         }
 

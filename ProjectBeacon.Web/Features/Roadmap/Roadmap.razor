@@ -322,7 +322,7 @@ else
     {
         if (_project is null)
         {
-            Notifications.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            Notifications.Failure(L["NoProjectAvailable"].Value, L["Roadmap"].Value, ErrorCodes.ValidationFailed, L["Create"].Value);
             return;
         }
 
