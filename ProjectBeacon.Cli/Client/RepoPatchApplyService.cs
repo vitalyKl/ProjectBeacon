@@ -84,7 +84,16 @@ internal sealed class RepoPatchApplyService
             await idle;
 
             checkoutLease = await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
-            operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+            try
+            {
+                operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+            }
+            catch
+            {
+                checkoutLease.Dispose();
+                checkoutLease = null;
+                throw;
+            }
             if (!GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
                 break;
 

@@ -361,9 +361,10 @@ public sealed class ListDeviceProjectRuntimesHandler
             return [];
 
         await using var db = _dbFactory.CreateDbContext();
-        var deviceExists = await db.DaemonDevices.AsNoTracking()
-            .AnyAsync(device => device.Id == deviceId && device.RevokedAt == null, ct);
-        if (!deviceExists)
+        var device = await db.DaemonDevices.AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == deviceId && candidate.RevokedAt == null, ct);
+        if (device is null
+            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.GitAutoSyncV1))
             return [];
 
         var runtimes = await db.ProjectRuntimes.AsNoTracking()
@@ -382,7 +383,9 @@ public sealed class ListDeviceProjectRuntimesHandler
                 && (command.Status == WorkstationCommandStatus.Pending
                     || command.Status == WorkstationCommandStatus.Running)
                 && (command.Kind == WorkstationCommandKind.GitSync
-                    || command.Kind == WorkstationCommandKind.GitLand))
+                    || command.Kind == WorkstationCommandKind.GitLand
+                    || command.Kind == WorkstationCommandKind.ApplyProposalPatch
+                    || command.Kind == WorkstationCommandKind.InitProject))
             .Select(command => new { command.ProjectId, command.Kind, command.PayloadJson })
             .ToListAsync(ct);
 

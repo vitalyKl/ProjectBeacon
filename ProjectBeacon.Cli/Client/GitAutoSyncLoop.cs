@@ -105,6 +105,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 RecordSkipped(project, "GitLandActive", now);
                 continue;
             }
+            if (project.CheckoutMutationActive)
+            {
+                RecordSkipped(project, "CheckoutMutationActive", now);
+                continue;
+            }
             if (_backoff.TryGetValue(project.ProjectId, out var retry) && retry.RetryAt > now)
                 continue;
 
