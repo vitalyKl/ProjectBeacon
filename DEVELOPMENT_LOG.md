@@ -295,6 +295,72 @@ Run [#45409649488](https://github.com/vitalyKl/ProjectBeacon/actions/runs/454096
 - [ ] Complete S6 release-aware Planner mode, onboarding and a second version scheme proof project.
 - [ ] Keep tag/deploy publication fail-closed until tag protection and production Environment reviewers are verified.
 
+
+
+## 2026-11-24 — S3 publication and S5 Hotfix / forward-port implementation checkpoint
+
+**Branch head before this journal update:** `c0aea83d1a12b7aaa14b4cf075b8717ca21af614`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), open, ready for review, unmerged.  
+**Base:** `main` at `1290eae570d48c79f8523222b3293c5b536de99f`.
+
+### S3 — Publication workflow added after the earlier ReleasePrepare checkpoint
+
+- Added a separate explicit PublishRelease command and server-side handler, with an explicit human confirmation boundary.
+- Added workstation capability negotiation; publication is advertised only when the client can use the supported GitHub CLI.
+- Added a bounded publication executor that validates the immutable annotated tag identity and exact candidate SHA before pushing. It does not rewrite or force-update existing tags.
+- Added workflow-run observation and deployment verification. The publication result is only considered successful when the GitHub release workflow and configured deployment version endpoint report the expected version and commit SHA.
+- Publication evidence is stored separately from Candidate state (tag pushed, workflow run id/url, deployed version/SHA/time). Candidate does not by itself mean Published or deployed.
+- No tag or production deployment was triggered by this work.
+
+### S5 — Hotfix from deployed production SHA and forward-port lineage
+
+- Added immutable task lineage fields for source Release, deployed SHA, target branch, Hotfix request id, and forward-port origin task, with project-scoped composite relationships and filtered unique indexes.
+- Added an authenticated Release Hotfix request handler/API and project Roadmap action to create Hotfix tasks from Published releases.
+- Added a device-only workspace bootstrap endpoint so a Hotfix workspace is based on the verified currently deployed production SHA, not the ordinary task base.
+- Added client bootstrap flow and a second production-SHA check immediately before Hotfix worktree start. If production advanced after the request was created, the workspace is not started from a stale deployed SHA.
+- Added forward-port task creation only after the Hotfix landing is verified. The Hotfix remains targeted at its deployed production branch; forward-port is a separate ordinary task that follows the normal review/landing workflow.
+- Added Hotfix origin and forward-port lineage to task details and task lists, localized in en/de/ru/ja/zh.
+- Added tests for deployed-SHA bootstrap, production advancing before start, Hotfix authorization, and forward-port creation only after verified landing.
+
+### S4 — GitHub awareness
+
+- The earlier `forge_read` implementation checkpoint remains in effect: read-only PR/review/workflow evidence, bounded output, current workstation's task checkout identity, and explicit untrusted-evidence treatment.
+- No GitHub write or merge authority was added to `forge_read`.
+
+### CI run #45429491586 — findings on older head
+
+Run [#45429491586](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45429491586) tested head `00a50a2f081e0dec87e61e023a74d5cb966d8e30`, not the current branch head. All three platform builds completed; the run failed during EF migration verification and tests.
+
+Confirmed failures:
+1. **EF pending model changes:** `dotnet ef migrations has-pending-model-changes` reported model changes after build. PostgreSQL-backed API/Web test initializers then failed at `Database.Migrate()` with `PendingModelChangesWarning`; these are cascading migration-model failures, not separate product failures.
+2. **forge_read unsupported collection:** `ParseForgeCollection("[]", "unsupported", 5)` returned an empty array because unknown collection names were not rejected before iterating the JSON array.
+3. **Calendar version test:** policy validation rejected the test tag pattern `release-{version}` because it required a literal leading `v`, although the project policy is intended to own the tag format.
+4. **MCP test discovery:** `VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision` was missing `[Fact]`, so xUnit did not discover it.
+
+### Fixes committed after that run
+
+- Added an explicit allowlist for the four supported `forge_read` collections before JSON parsing.
+- Removed the hard-coded leading-`v` requirement. The default remains `v{version}`, but customer projects may configure another valid Git tag pattern such as `release-{version}`.
+- Added the missing `[Fact]` attribute to the Actor version-impact MCP test.
+- Corrected the Hotfix/forward-port partial-index filter strings in configuration, migration and EF model snapshot to use the exact quoted PostgreSQL column identifiers. Current source inspection shows these strings aligned; the new CI run must confirm that the pending-model check now passes.
+
+### Current validation state
+
+- The run above remains a failed historical run on head `00a50a2f`; it is not the result for the current branch.
+- No green CI run exists on the exact current branch head yet.
+- PostgreSQL integration tests are run on the Linux job; the Windows/macOS test jobs report them as skipped when `BEACON_TEST_SKIP_POSTGRES` is set.
+- Local .NET SDK is still unavailable in this execution environment.
+
+### Remaining work
+
+- [ ] Run CI on the current branch head and fix every remaining failure.
+- [ ] Complete S6: release-aware Planner mode, user-facing onboarding/productization, and an independent project proving a second version scheme (for example package.json) end-to-end.
+- [ ] Resolve/record the final remote landing authority decision and verify ReleasePrepare/landing do not create competing GitLand and GitHub merge authorities.
+- [ ] Re-verify GitHub tag protection and production Environment reviewers before any user-authorized publication test.
+- [ ] Do not mark S0–S5 complete or merge PR #230 until the exact head has green required CI and the above review blockers are resolved.
+
+No SaaS Control Plane or billing changes. Main remains unchanged by this implementation branch.
+
 ## Update format
 
 For every subsequent work session append:
