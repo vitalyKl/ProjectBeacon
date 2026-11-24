@@ -3627,4 +3627,15 @@ No Beacon-hosted coding agent.</value>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>This task is based on the exact commit deployed to production. Its branch and base commit are protected by Beacon.</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>This ordinary task was created after the source Hotfix was verified as landed. Complete it through the normal Planner, Actor, Reviewer and landing workflow.</value></data>
   <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release workflow: configure the authoritative version and manifest files in Project Settings, create a Release here, then associate its milestones with that Release. Tasks linked to those milestones receive the Release target version and branch in Planner context. Release preparation creates an immutable Candidate; production publication is a separate, explicitly confirmed action.</value></data>
+  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>Prepare Candidate</value></data>
+  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>Open release pull request</value></data>
+  <data name="VerifyReleaseLanding" xml:space="preserve"><value>Verify landing</value></data>
+  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>Release preparation is in progress on the pinned workstation.</value></data>
+  <data name="ReleasePrepareQueued" xml:space="preserve"><value>Release preparation was queued on the pinned workstation.</value></data>
+  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>Landing verification was queued on the same workstation.</value></data>
+  <data name="PublishRelease" xml:space="preserve"><value>Publish to production</value></data>
+  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>Confirm production publication</value></data>
+  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Publish release “{0}” as version {1} using tag “{2}” from branch “{3}”? This creates an immutable Git tag and starts the configured GitHub release workflow, which may deploy to production. A pushed tag is never moved or deleted; retries reuse the same Candidate and tag.</value></data>
+  <data name="ReleasePublicationQueued" xml:space="preserve"><value>Publication was queued on the pinned workstation. Beacon will verify the GitHub workflow and deployed version/SHA.</value></data>
+  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>The immutable release tag has already been pushed. Retrying will not move it.</value></data>
 </root>
