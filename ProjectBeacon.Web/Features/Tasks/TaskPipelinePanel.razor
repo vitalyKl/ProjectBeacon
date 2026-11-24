@@ -203,6 +203,20 @@
     [Parameter] public EventCallback<LandingAttemptDto> OnExecuteLanding { get; set; }
     [Parameter] public EventCallback<LandingAttemptDto> OnRevertLanding { get; set; }
     private string _landingRationale = "Approved task branch ready for landing.";
+    private readonly Dictionary<string, string> _unknownReasonMessages = new(StringComparer.Ordinal);
+
+    private string UnknownReasonMessage(string code, string resourceKey, string operation, object? context = null)
+    {
+        var cacheKey = $"{resourceKey}:{operation}:{code}";
+        if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
+            return message;
+
+        message = Notifications.FormatUnknownReasonCode(code, resourceKey, operation, context);
+        if (_unknownReasonMessages.Count >= 32)
+            _unknownReasonMessages.Clear();
+        _unknownReasonMessages[cacheKey] = message;
+        return message;
+    }
 
     private bool CanRequestPreview(LandingAttemptDto? attempt) => attempt is null
         || attempt.Status is LandingAttemptStatus.Failed or LandingAttemptStatus.Conflicted or LandingAttemptStatus.Reverted;
@@ -227,11 +241,11 @@
         };
 
         if (resourceKey is null)
-            return Notifications.FormatUnknownReasonCode(code, "LandingReasonUnknown", "display Git landing reason");
+            return UnknownReasonMessage(code, "LandingReasonUnknown", "display Git landing reason");
 
         var localized = L[resourceKey];
         return localized.ResourceNotFound
-            ? Notifications.FormatUnknownReasonCode(code, "LandingReasonUnknown", "display Git landing reason")
+            ? UnknownReasonMessage(code, "LandingReasonUnknown", "display Git landing reason")
             : localized.Value;
     }
 
@@ -324,7 +338,7 @@
         {
             var localized = L[reason];
             return localized.ResourceNotFound
-                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read pipeline launch preflight", new { TaskId = Pipeline?.TaskId })
+                ? UnknownReasonMessage(reason, "PipelinePreflightReasonUnknown", "read pipeline launch preflight", new { TaskId = Pipeline?.TaskId })
                 : localized.Value;
         }
 
@@ -332,7 +346,7 @@
         {
             var localized = L[workstationReason];
             return localized.ResourceNotFound
-                ? Notifications.FormatUnknownReasonCode(workstationReason, "PipelinePreflightReasonUnknown", "read task workstation preflight", new { TaskId = Pipeline?.TaskId })
+                ? UnknownReasonMessage(workstationReason, "PipelinePreflightReasonUnknown", "read task workstation preflight", new { TaskId = Pipeline?.TaskId })
                 : localized.Value;
         }
 

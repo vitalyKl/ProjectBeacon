@@ -92,6 +92,23 @@
     private bool HasSessionFailure => Subtask.Status == SubtaskStatus.Failed
         && Sessions.Any(session => !string.IsNullOrWhiteSpace(session.FailureReason));
 
+    private readonly Dictionary<string, string> _unknownReasonMessages = new(StringComparer.Ordinal);
+
+    private string UnknownReasonMessage(string code, object? context)
+    {
+        const string resourceKey = "PipelinePreflightReasonUnknown";
+        const string operation = "read subtask pipeline preflight";
+        var cacheKey = $"{code}:{Subtask.Id}";
+        if (_unknownReasonMessages.TryGetValue(cacheKey, out var message))
+            return message;
+
+        message = Notifications.FormatUnknownReasonCode(code, resourceKey, operation, context);
+        if (_unknownReasonMessages.Count >= 16)
+            _unknownReasonMessages.Clear();
+        _unknownReasonMessages[cacheKey] = message;
+        return message;
+    }
+
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
@@ -101,7 +118,7 @@
         {
             var localized = L[reason];
             return localized.ResourceNotFound
-                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read subtask launch preflight", new { TaskId, SubtaskId = Subtask.Id })
+                ? UnknownReasonMessage(reason, new { TaskId, SubtaskId = Subtask.Id })
                 : localized.Value;
         }
 
@@ -115,7 +132,7 @@
             var reason = Preflight.PipelineWorkstationBlockedReason!;
             var localized = L[reason];
             return localized.ResourceNotFound
-                ? Notifications.FormatUnknownReasonCode(reason, "PipelinePreflightReasonUnknown", "read subtask workstation preflight", new { TaskId, SubtaskId = Subtask.Id })
+                ? UnknownReasonMessage(reason, new { TaskId, SubtaskId = Subtask.Id })
                 : localized.Value;
         }
 
