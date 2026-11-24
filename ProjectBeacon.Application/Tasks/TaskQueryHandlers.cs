@@ -109,7 +109,13 @@ public class ListTasksByStatusHandler : ICommandHandler<ListTasksByStatusCommand
             t.Priority, t.Type,
             t.Status == TaskItemStatus.InProgress ? t.SubStage : null,
             t.ProjectId, t.LabelId, t.MilestoneId, t.ReviewNotes,
-            t.CreatedAt, t.CompletedAt, [], []));
+            t.CreatedAt, t.CompletedAt, [], [],
+            t.ContentRevision,
+            t.HotfixSourceReleaseId,
+            t.HotfixDeployedSha,
+            t.HotfixTargetBranch,
+            t.HotfixRequestId,
+            t.ForwardPortOfTaskId));
 
         return Result.Ok((IList<TaskItemDto>)result.ToList());
     }
