@@ -69,6 +69,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<ChatPart> ChatParts { get; }
     DbSet<EvalRun> EvalRuns { get; }
     DbSet<ReviewRun> ReviewRuns { get; }
+    DbSet<RemoteLandingProof> RemoteLandingProofs { get; }
     DbSet<ContextSection> ContextSections { get; }
     DbSet<ContextRevision> ContextRevisions { get; }
     DbSet<ContentVersion> ContentVersions { get; }
