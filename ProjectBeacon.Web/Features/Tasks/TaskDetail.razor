@@ -26,6 +26,7 @@
 @inject RevertLandingHandler RevertLanding
 @inject EnqueueProjectGitSyncHandler EnqueueGitSync
 @inject GetProjectGitSyncCommandHandler GetGitSyncCommand
+@inject CancelPendingProjectGitSyncCommandHandler CancelGitSync
 @inject ListProposalsHandler ListProposals
 @inject ListContentVersionsHandler ListContentVersions
 @inject RestoreContentVersionHandler RestoreContentVersion
@@ -119,6 +120,16 @@ else
                         @if (_gitSyncCommandPending && !_gitSyncBusy)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["GitSyncStillRunning"]</MudText>
+                            @if (_gitSyncCommandCancellable && _gitSyncCommandId is not null)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="OnCancelGitSync"
+                                           Disabled="_busy || _gitSyncBusy">
+                                    @L["Cancel"]
+                                </MudButton>
+                            }
                         }
                     }
                     else if (_pipeline.Preflight.RepositorySyncBlocked)
@@ -481,6 +492,7 @@ else
     private bool _gitSyncBusy;
     private bool _canManageRepositorySync;
     private bool _gitSyncCommandPending;
+    private bool _gitSyncCommandCancellable;
     private Guid? _gitSyncCommandId;
     private Guid? _gitSyncProjectId;
     private Guid? _gitSyncTargetDeviceId;
@@ -636,7 +648,12 @@ else
                             _gitSyncCommandId = null;
                             _gitSyncProjectId = null;
                             _gitSyncCommandPending = false;
+                            _gitSyncCommandCancellable = false;
                             await HandleGitSyncTerminalCommandAsync(terminal, ct);
+                        }
+                        else if (current.Success && current.Value is { } activeCommand)
+                        {
+                            _gitSyncCommandCancellable = activeCommand.Status == WorkstationCommandStatus.Pending;
                         }
                         else if (!current.Success)
                         {
@@ -658,6 +675,7 @@ else
                         && _pipeline?.Preflight?.RepositorySyncInProgress != true)
                     {
                         _gitSyncCommandPending = false;
+                        _gitSyncCommandCancellable = false;
                         _gitSyncTargetDeviceId = null;
                     }
 
@@ -882,6 +900,7 @@ else
                 _gitSyncProjectId = task.ProjectId;
                 _gitSyncTargetDeviceId = command.DeviceId;
                 _gitSyncCommandPending = true;
+                _gitSyncCommandCancellable = command.Status == WorkstationCommandStatus.Pending;
             }
             else if (!pending.Success)
             {
@@ -1247,6 +1266,7 @@ else
             _gitSyncProjectId = _task.ProjectId;
             _gitSyncTargetDeviceId = deviceId;
             _gitSyncCommandPending = true;
+            _gitSyncCommandCancellable = queued.Value.Status == WorkstationCommandStatus.Pending;
             var deadline = DateTime.UtcNow.AddSeconds(65);
             while (DateTime.UtcNow < deadline)
             {
@@ -1260,12 +1280,14 @@ else
                     return;
                 }
 
+                _gitSyncCommandCancellable = current.Value.Status == WorkstationCommandStatus.Pending;
                 if (current.Value.Status is WorkstationCommandStatus.Succeeded
                     or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 {
                     _gitSyncCommandId = null;
                     _gitSyncProjectId = null;
                     _gitSyncCommandPending = false;
+                    _gitSyncCommandCancellable = false;
                     await HandleGitSyncTerminalCommandAsync(current.Value, ct);
                     return;
                 }
@@ -1308,6 +1330,42 @@ else
         }
     }
 
+    private async Task OnCancelGitSync()
+    {
+        if (!_canManageRepositorySync || _gitSyncBusy || !_gitSyncCommandCancellable
+            || _gitSyncCommandId is not { } commandId
+            || _gitSyncProjectId is not { } projectId)
+            return;
+
+        if (!await ConfirmActionAsync(L["Cancel"].Value, L["GitSyncCancelPendingConfirm"].Value))
+            return;
+
+        _gitSyncBusy = true;
+        try
+        {
+            var result = await CancelGitSync.HandleAsync(
+                projectId, commandId, _actorContext, _pipelinePoll?.Token ?? CancellationToken.None);
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                await ReloadPipeline();
+                return;
+            }
+
+            _gitSyncCommandId = null;
+            _gitSyncProjectId = null;
+            _gitSyncTargetDeviceId = null;
+            _gitSyncCommandPending = false;
+            _gitSyncCommandCancellable = false;
+            Snackbar.Add(L["GitSyncCancelledBeforeStart"].Value, Severity.Info);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _gitSyncBusy = false;
+        }
+    }
+
     private async Task HandleGitSyncTerminalCommandAsync(
         WorkstationCommandDto command,
         CancellationToken ct)
@@ -1335,7 +1393,13 @@ else
         }
         else if (command.Status == WorkstationCommandStatus.Cancelled)
         {
-            Snackbar.Add(L["CommandCancelled"].Value, Severity.Warning);
+            var cancelledMessage = command.Error switch
+            {
+                "GitSyncPendingExpired" => L["GitSyncPendingExpired"].Value,
+                "GitSyncCancelledByUser" => L["GitSyncCancelledBeforeStart"].Value,
+                _ => L["CommandCancelled"].Value
+            };
+            Snackbar.Add(cancelledMessage, Severity.Warning);
         }
         else if (command.Status == WorkstationCommandStatus.Succeeded)
         {
