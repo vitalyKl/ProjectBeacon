@@ -100,6 +100,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 continue;
 
             var now = _timing.TimeProvider.GetUtcNow();
+            if (project.GitLandActive)
+            {
+                RecordSkipped(project, "GitLandActive", now);
+                continue;
+            }
             if (_backoff.TryGetValue(project.ProjectId, out var retry) && retry.RetryAt > now)
                 continue;
 
@@ -136,41 +141,34 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 && result.HasUpstream
                 && !result.Diverged)
             {
-                if (project.GitLandActive)
+                var pull = await ExecuteGitSyncAsync(project, GitSyncMode.PullFastForward, automatic: true, ct);
+                if (pull.Result is { } pullResult)
                 {
-                    blockedReason = "GitLandActive";
+                    current = pullResult;
+                    if (pullResult.Outcome == GitSyncOutcome.FastForwarded
+                        && IsSha(pullResult.HeadBefore) && IsSha(pullResult.HeadAfter))
+                    {
+                        lastAutoPull = new GitAutoPullEvent(
+                            _timing.TimeProvider.GetUtcNow(),
+                            pullResult.HeadBefore!,
+                            pullResult.HeadAfter!,
+                            result.Behind);
+                    }
+                    else if (pullResult.Outcome == GitSyncOutcome.Refused)
+                    {
+                        blockedReason = pullResult.ReasonCode?.ToString() ?? "PullRefused";
+                    }
+                    else if (pullResult.Outcome == GitSyncOutcome.Failed)
+                    {
+                        var code = pullResult.ReasonCode?.ToString() ?? "GitFetchFailed";
+                        RecordFailure(project, code, _timing.TimeProvider.GetUtcNow(), pullResult);
+                        continue;
+                    }
                 }
                 else
                 {
-                    var pull = await ExecuteGitSyncAsync(project, GitSyncMode.PullFastForward, automatic: true, ct);
-                    if (pull.Result is { } pullResult)
-                    {
-                        current = pullResult;
-                        if (pullResult.Outcome == GitSyncOutcome.FastForwarded
-                            && IsSha(pullResult.HeadBefore) && IsSha(pullResult.HeadAfter))
-                        {
-                            lastAutoPull = new GitAutoPullEvent(
-                                _timing.TimeProvider.GetUtcNow(),
-                                pullResult.HeadBefore!,
-                                pullResult.HeadAfter!,
-                                result.Behind);
-                        }
-                        else if (pullResult.Outcome == GitSyncOutcome.Refused)
-                        {
-                            blockedReason = pullResult.ReasonCode?.ToString() ?? "PullRefused";
-                        }
-                        else if (pullResult.Outcome == GitSyncOutcome.Failed)
-                        {
-                            var code = pullResult.ReasonCode?.ToString() ?? "GitFetchFailed";
-                            RecordFailure(project, code, _timing.TimeProvider.GetUtcNow(), pullResult);
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        RecordFailure(project, pull.Error ?? "GitSyncFailed", _timing.TimeProvider.GetUtcNow(), result);
-                        continue;
-                    }
+                    RecordFailure(project, pull.Error ?? "GitSyncFailed", _timing.TimeProvider.GetUtcNow(), result);
+                    continue;
                 }
             }
             else if (!result.HasUpstream)

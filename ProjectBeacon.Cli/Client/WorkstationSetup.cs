@@ -67,6 +67,12 @@ public static class WorkstationSetup
             settings.AgentDataDir = legacyData.GetString();
         if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)
             settings.ProjectsRoot = projects.GetString();
+        if (root.TryGetProperty("autoPullMode", out var autoPull) && autoPull.ValueKind == JsonValueKind.String)
+            settings.AutoPullMode = string.Equals(autoPull.GetString()?.Trim(), "Off", StringComparison.OrdinalIgnoreCase)
+                ? "Off" : "WhenSafe";
+        if (root.TryGetProperty("autoSyncIntervalMinutes", out var autoInterval)
+            && autoInterval.TryGetInt32(out var interval))
+            settings.AutoSyncIntervalMinutes = Math.Clamp(interval, 2, 120);
         settings.Save(settingsPath);
         return JsonSerializer.Serialize(settings, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
