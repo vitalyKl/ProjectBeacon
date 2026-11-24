@@ -52,6 +52,9 @@ def safe_relative_path(raw: Any) -> Path:
         fail("release manifest contains an invalid source path")
     if "\\" in raw or raw.startswith("/") or ":" in raw or any(ord(ch) < 32 for ch in raw):
         fail(f"unsafe version source path: {raw!r}")
+    raw_parts = raw.split("/")
+    if any(part in ("", ".", "..") for part in raw_parts):
+        fail(f"version source path is not canonical or escapes the repository: {raw!r}")
     posix = PurePosixPath(raw)
     if posix.is_absolute() or any(part in ("", ".", "..") for part in posix.parts):
         fail(f"version source path escapes the repository: {raw!r}")
@@ -250,8 +253,8 @@ def main() -> None:
     policy = manifest.get("policy")
     if not isinstance(version, str) or not version or len(version) > 100 or any(ch.isspace() for ch in version):
         fail("release manifest version must be a non-empty version string of at most 100 characters")
-    if not isinstance(tag_pattern, str) or tag_pattern.count(VERSION_TOKEN) != 1:
-        fail("release manifest tagPattern must contain exactly one {version} placeholder")
+    if not isinstance(tag_pattern, str) or not tag_pattern.startswith("v") or tag_pattern.count(VERSION_TOKEN) != 1:
+        fail("release manifest tagPattern must start with 'v' and contain exactly one {version} placeholder")
     expected_tag = tag_pattern.replace(VERSION_TOKEN, version)
     if tag_name != expected_tag or tag_name != tag:
         fail(f"release tag mismatch: manifest expects {expected_tag!r}, workflow tag is {tag!r}")
@@ -271,6 +274,8 @@ def main() -> None:
         if not isinstance(source, dict):
             fail("release manifest source entries must be objects")
         raw_path = source.get("path")
+        if not isinstance(raw_path, str):
+            fail("version source path must be a string")
         if raw_path in paths:
             fail(f"duplicate version source path: {raw_path!r}")
         paths.add(raw_path)
