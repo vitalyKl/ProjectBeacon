@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Endpoints;
 using Application.Authorization;
 using Application.Common;
 using Application.Releases;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
