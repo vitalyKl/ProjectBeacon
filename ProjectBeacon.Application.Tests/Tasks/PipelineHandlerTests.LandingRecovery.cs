@@ -211,6 +211,22 @@ public sealed partial class PipelineHandlerTests
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
 
+        // SeedDoneSubtaskAsync leaves the original Planner session Ready. Runtime
+        // attachment is correctly blocked while any pipeline session is open, so close
+        // that unused session before adding the second workstation for this proof test.
+        using (TenantScope.EnterUnscoped())
+        {
+            var openSessions = await _db.PipelineSessions.IgnoreQueryFilters()
+                .Where(session => session.TaskId == done.Task.Id
+                    && (session.Status == SessionStatus.Ready
+                        || session.Status == SessionStatus.Active
+                        || session.Status == SessionStatus.WaitingForUser))
+                .ToListAsync(TestContext.Current.CancellationToken);
+            foreach (var openSession in openSessions)
+                openSession.Close();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
         var (otherUser, otherDevice) = await SeedOnlineRuntimeAsync(done.ProjectId);
         await SetReviewCheckCommandAsync(done.ProjectId, "dotnet test");
         var commandHash = Convert.ToHexString(
