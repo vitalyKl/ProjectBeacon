@@ -96,6 +96,7 @@ public static class PipelineToolPolicy
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint, McpToolNames.ListDecisions,
             McpToolNames.GetDecision, McpToolNames.ListMilestones,
+            McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.GetTaskVersionImpact,
             McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.WorkspaceWrite
         }).Concat(PlannerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ReviewerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
@@ -104,7 +105,8 @@ public static class PipelineToolPolicy
             McpToolNames.GetProject, McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint,
-            McpToolNames.ListDecisions, McpToolNames.GetDecision
+            McpToolNames.ListDecisions, McpToolNames.GetDecision,
+            McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.GetTaskVersionImpact
         }).Concat(ReviewerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
@@ -112,6 +114,7 @@ public static class PipelineToolPolicy
         McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
+        McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.VersionImpact, McpToolNames.GetTaskVersionImpact,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
         McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
         McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
