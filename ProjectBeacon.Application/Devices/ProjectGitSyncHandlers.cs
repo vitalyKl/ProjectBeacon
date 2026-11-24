@@ -65,6 +65,7 @@ public sealed class EnqueueProjectGitSyncHandler
             if (projectLocked == 0)
                 return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
 
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
             await ProjectGitSyncPreflight.ExpireStalePendingCommandsAsync(
                 db, now, ct, projectId);
 
@@ -86,7 +87,6 @@ public sealed class EnqueueProjectGitSyncHandler
                 : await db.DaemonDevices.IgnoreQueryFilters()
                     .Where(device => deviceIds.Contains(device.Id) && device.RevokedAt == null)
                     .ToListAsync(ct);
-            var now = _timeProvider.GetUtcNow().UtcDateTime;
             var compatible = runtimes
                 .Join(devices, runtime => runtime.DeviceId, device => device.Id,
                     (runtime, device) => new { Runtime = runtime, Device = device })
