@@ -210,7 +210,7 @@
                 <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
                 <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
                 <MudTd DataLabel="@L["Error"]">
-                    <span class="beacon-diagnostic-output" title="@(context.Error ?? string.Empty)">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</span>
+                    <span class="beacon-diagnostic-output" title="@CommandErrorMessage(context)">@CommandErrorMessage(context)</span>
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
@@ -246,6 +246,7 @@
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
+    private readonly Dictionary<Guid, (string Error, string Message)> _commandErrorMessages = [];
     private string _clientCurrentVersion = "-";
     private string _clientLatestVersion = "-";
     private bool? _clientUpdateAvailable;
@@ -288,7 +289,9 @@
         if (_userId != Guid.Empty)
         {
             var totp = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
-            _totpEnabled = totp.Success && totp.Value!.Enabled;
+            if (!totp.Success)
+                Notifications.Failure(totp, L["Workstations"].Value, L["Check"].Value);
+            _totpEnabled = totp.Success && totp.Value?.Enabled == true;
         }
         await ReloadDevices();
     }
@@ -299,17 +302,29 @@
     {
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
-        _devices = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _devices = [];
+            _wsDeviceId = null;
+            Notifications.Failure(listed, L["Workstations"].Value, L["Load"].Value);
+            return;
+        }
+        _devices = listed.Value?.ToList() ?? [];
         if (_wsDeviceId is not { } selectedId || _devices.All(d => d.Id != selectedId))
             _wsDeviceId = _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
         if (_wsDeviceId is { } id)
         {
             LoadWorkstation(id, loadWorkstationSettings);
-            LoadCommands(id);
+            await LoadCommands(id);
+        }
+        else
+        {
+            _commands = [];
+            _commandErrorMessages.Clear();
         }
     }
 
-    private Task OnWorkstationDeviceChanged(Guid? id)
+    private async Task OnWorkstationDeviceChanged(Guid? id)
     {
         _wsDeviceId = id;
         _clientCurrentVersion = _clientLatestVersion = "-";
@@ -317,18 +332,58 @@
         _clientUpdateActive = false;
         _clientUpdatePercent = null;
         _clientUpdateMessage = null;
+        _commands = [];
+        _commandErrorMessages.Clear();
         if (id is { } deviceId)
         {
             LoadWorkstation(deviceId);
-            LoadCommands(deviceId);
+            await LoadCommands(deviceId);
         }
-        return Task.CompletedTask;
     }
 
-    private async void LoadCommands(Guid deviceId)
+    private async Task LoadCommands(Guid deviceId)
     {
-        var res = await ListCommands.HandleAsync(new ListCommandsCommand(new ListCommandsRequest(deviceId, _userId)), CancellationToken.None);
-        _commands = res.Success ? res.Value!.ToList() : [];
+        try
+        {
+            var result = await ListCommands.HandleAsync(
+                new ListCommandsCommand(new ListCommandsRequest(deviceId, _userId)), CancellationToken.None);
+            if (!result.Success)
+            {
+                _commands = [];
+                _commandErrorMessages.Clear();
+                Notifications.Failure(result, L["Workstations"].Value, L["Load"].Value);
+                return;
+            }
+
+            _commands = result.Value?.ToList() ?? [];
+            _commandErrorMessages.Clear();
+        }
+        catch (Exception exception)
+        {
+            _commands = [];
+            _commandErrorMessages.Clear();
+            Notifications.ReportException(
+                exception, "WorkstationCommandsLoadFailed", "load workstation command history", new { DeviceId = deviceId });
+        }
+    }
+
+    private string CommandErrorMessage(WorkstationCommandDto command)
+    {
+        if (string.IsNullOrWhiteSpace(command.Error))
+            return "-";
+
+        if (_commandErrorMessages.TryGetValue(command.Id, out var cached)
+            && string.Equals(cached.Error, command.Error, StringComparison.Ordinal))
+            return cached.Message;
+
+        var message = Notifications.FormatFailure(
+            command.Error,
+            L["Workstations"].Value,
+            ErrorCodes.InternalError,
+            ChromeLabels.CommandKind(L, command.Kind),
+            new { DeviceId = _wsDeviceId, CommandId = command.Id, CommandKind = command.Kind });
+        _commandErrorMessages[command.Id] = (command.Error, message);
+        return message;
     }
 
     private void LoadWorkstation(Guid deviceId, bool loadSettings = true)
@@ -360,8 +415,9 @@
             _contextResponseReserveTokens = root.TryGetProperty("contextResponseReserveTokens", out var reserve)
                 && reserve.TryGetInt32(out var reserveTokens) ? Math.Clamp(reserveTokens, 0, 1_000_000) : 0;
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(exception, "WorkstationSettingsInvalid", "read workstation settings", new { DeviceId = deviceId });
         }
     }
 
@@ -396,8 +452,9 @@
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(exception, "WorkstationProbeInvalid", "read workstation diagnostics", new { DeviceId = _wsDeviceId });
         }
     }
 
@@ -476,7 +533,7 @@
                 Notifications.Failure(queued, L["Workstations"].Value, L["Save"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Save"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
                 Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Save"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
@@ -514,7 +571,7 @@
                 Notifications.Failure(queued, L["Workstations"].Value, L["Install"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Install"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
                 Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Install"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
@@ -541,7 +598,7 @@
                 Notifications.Failure(queued, L["Workstations"].Value, L["Check"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id);
+            var finished = await WaitAsync(queued.Value!.Id, operationLabel: L["Check"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
                 Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Check"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
@@ -587,7 +644,7 @@
                 Notifications.Failure(queued, L["Workstations"].Value, L["Update"].Value);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id, 660);
+            var finished = await WaitAsync(queued.Value!.Id, 660, L["Update"].Value);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
                 Notifications.Failure(finished?.Error ?? _lifecycle, L["Workstations"].Value, ErrorCodes.InternalError, L["Update"].Value, new { DeviceId = deviceId, CommandId = queued.Value.Id });
@@ -616,11 +673,15 @@
 
     private async Task<bool> WaitForUpdatedClientAsync(Guid deviceId, DateTime? previousHeartbeat, string expectedVersion)
     {
+        string? lastReadError = null;
+        string? lastReadErrorCode = null;
         for (var attempt = 0; attempt < 60; attempt++)
         {
             var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
             if (listed.Success)
             {
+                lastReadError = null;
+                lastReadErrorCode = null;
                 _devices = listed.Value!.ToList();
                 var device = _devices.FirstOrDefault(d => d.Id == deviceId);
                 var reportedVersion = device is null ? null : ReadClientVersion(device.ProbeJson);
@@ -630,18 +691,27 @@
                     && IsClientVersionAtLeast(reportedVersion, expectedVersion))
                 {
                     _clientCurrentVersion = reportedVersion;
-                    _clientUpdateMessage = $"Daemon restarted and reported version {reportedVersion}.";
+                    _clientUpdateMessage = string.Format(L["WorkstationUpdateReportedVersion"].Value, reportedVersion);
                     await InvokeAsync(StateHasChanged);
                     return true;
                 }
             }
 
-            await InvokeAsync(StateHasChanged);
+           else
+            {
+                lastReadError = listed.Error;
+                lastReadErrorCode = listed.ErrorCode;
+            }
+
+ await InvokeAsync(StateHasChanged);
             await Task.Delay(1000);
         }
 
         _clientUpdateActive = false;
-        _clientUpdateMessage = "Update handoff completed, but the restarted daemon has not reported the new version yet. Check the workstation log.";
+        _clientUpdateMessage = string.IsNullOrWhiteSpace(lastReadError)
+            ? L["WorkstationUpdatePending"].Value
+            : Notifications.FormatFailure(lastReadError, L["Workstations"].Value,
+                lastReadErrorCode, L["Read"].Value, new { DeviceId = deviceId });
         await InvokeAsync(StateHasChanged);
         return false;
     }
@@ -691,7 +761,7 @@
                 ? value.GetBoolean()
                 : null;
 
-    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId, int maxAttempts = 80)
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId, int maxAttempts = 80, string? operationLabel = null)
     {
         SetLifecycle(WorkstationCommandStatus.Pending, null);
         for (var i = 0; i < maxAttempts; i++)
@@ -699,10 +769,13 @@
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
             if (!got.Success)
             {
-                SetLifecycle(WorkstationCommandStatus.Failed, got.Error);
+                SetLifecycle(
+                    WorkstationCommandStatus.Failed,
+                    Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value),
+                    detailAlreadyFormatted: true);
                 return null;
             }
-            SetLifecycle(got.Value!.Status, got.Value.Error);
+            SetLifecycle(got.Value!.Status, got.Value.Error, operationLabel, new { DeviceId = _wsDeviceId, CommandId = commandId });
             ApplyClientUpdateProgress(got.Value);
             await InvokeAsync(StateHasChanged);
             if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
@@ -745,7 +818,7 @@
         }
     }
 
-    private void SetLifecycle(WorkstationCommandStatus status, string? detail)
+    private void SetLifecycle(WorkstationCommandStatus status, string? detail, string? operationLabel = null, object? context = null, bool detailAlreadyFormatted = false)
     {
         _lifecycleState = status switch
         {
@@ -757,6 +830,11 @@
             _ => status.ToString()
         };
         _lifecycle = StatusLabel(status);
-        _lifecycleDetail = detail;
+        _lifecycleDetail = status == WorkstationCommandStatus.Failed
+            && !string.IsNullOrWhiteSpace(detail)
+            && !detailAlreadyFormatted
+                ? Notifications.FormatFailure(detail, L["Workstations"].Value, ErrorCodes.InternalError,
+                    operationLabel ?? L["Execute"].Value, context)
+                : detail;
     }
 }

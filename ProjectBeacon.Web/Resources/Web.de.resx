@@ -3277,4 +3277,7 @@ orthstar</value>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>Der Landing-Versuch hat einen Grund gemeldet, den die Oberfläche nicht kennt. Prüfen Sie das Workstation-Protokoll und geben Sie dem Support die Diagnose-ID unten.</value>
   </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>Die Workstation wurde neu gestartet und hat Version {0} gemeldet.</value>
+  </data>
 </root>

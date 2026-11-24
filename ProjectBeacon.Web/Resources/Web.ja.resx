@@ -3285,4 +3285,7 @@ orthstar</value>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
   </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>ワークステーションが再起動し、バージョン {0} を報告しました。</value>
+  </data>
 </root>

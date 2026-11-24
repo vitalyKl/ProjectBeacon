@@ -3285,4 +3285,7 @@ orthstar</value>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>合并尝试返回了界面无法识别的原因。请检查工作站日志，并向支持人员提供下面的诊断 ID。</value>
   </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>工作站已重新启动并报告版本 {0}。</value>
+  </data>
 </root>

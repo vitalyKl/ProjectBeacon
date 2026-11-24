@@ -3267,4 +3267,7 @@
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
   </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>Рабочая станция перезапустилась и сообщила версию {0}.</value>
+  </data>
 </root>

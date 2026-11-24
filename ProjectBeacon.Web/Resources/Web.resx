@@ -3476,4 +3476,7 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>The landing attempt reported a reason the UI does not recognize. Check the workstation log and share the diagnostic ID below with support.</value>
   </data>
+  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
+    <value>The workstation restarted and reported version {0}.</value>
+  </data>
 </root>
