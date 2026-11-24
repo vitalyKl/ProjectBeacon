@@ -80,6 +80,26 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsCalendarTargetVersionAndAutoSyncPolicyMetadata()
+    {
+        const string detailsJson = """{"newState":"NumericComponents","policyCode":"ReleaseManagement.Enabled","reasonCode":"Escalate","resultCode":"AutoSync.Enabled","targetVersion":"2026/11/24","count":4}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_AcceptsReleaseLifecycleMetadata()
+    {
+        const string detailsJson = """{"previousState":"Planned","newState":"Release.FieldsUpdated","targetVersion":"0.7.5.9+build.12","targetBranch":"release/0.7.5.9","count":3}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
     public void Create_RejectsFreeFormReleaseAndReviewContent()
     {
         Assert.Throws<ArgumentException>(() =>
