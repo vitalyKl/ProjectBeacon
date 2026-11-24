@@ -198,6 +198,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RevokeDeviceHandler>();
         services.AddTransient<HeartbeatDeviceHandler>();
         services.AddTransient<GetDeviceAutoSyncTargetsHandler>();
+        services.AddTransient<GetDeviceTaskWorkspaceBootstrapHandler>();
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<EnqueueProjectGitSyncHandler>();
         services.AddTransient<GetProjectGitSyncCommandHandler>();
