@@ -258,6 +258,33 @@ public sealed class ReleaseHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task PreparedReleaseFreezesItsMilestoneTaskScope()
+    {
+        var release = Release.Create("Frozen scope", null, _projectId, "0.7.5.9", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        var milestone = Milestone.Create("Included work", null, _projectId, 1);
+        milestone.AssignRelease(release.Id);
+        var task = TaskItem.Create("Included task", _projectId);
+        task.SetMilestone(milestone.Id);
+        _db.Releases.Add(release);
+        _db.Milestones.Add(milestone);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var planned = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            _db, _projectId, [milestone.Id], TestContext.Current.CancellationToken);
+        Assert.Null(planned);
+
+        release.BeginPreparation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), """{"version":"0.7.5.9"}""");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var prepared = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            _db, _projectId, [milestone.Id], TestContext.Current.CancellationToken);
+        Assert.NotNull(prepared);
+        Assert.Contains("Frozen scope", prepared, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ManualCandidateTransitionIsRejected()
     {
         var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
