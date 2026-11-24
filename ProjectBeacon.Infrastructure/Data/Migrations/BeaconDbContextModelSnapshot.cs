@@ -1788,6 +1788,21 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("OfficialVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("VersionPolicyJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{\\"scheme\\":\\"SemVer\\",\\"componentCount\\":3,\\"calendarFormat\\":null,\\"tagPattern\\":\\"v{version}\\",\\"allowPrerelease\\":false,\\"sources\\":[]}");
+
+                    b.Property<int>("VersionPolicyRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("ReviewCheckCommand")
                         .HasColumnType("text");
 
@@ -2465,6 +2480,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("VersionImpact")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("VersionImpactRationale")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("VersionImpactAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
