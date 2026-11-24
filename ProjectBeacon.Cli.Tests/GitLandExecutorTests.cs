@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed partial class AgentTaskGitOperationsTests
 {
@@ -1176,6 +1177,76 @@ public sealed partial class AgentTaskGitOperationsTests
         {
             if (taskWorktree is not null)
                 await taskWorktree.DisposeAsync();
+            try { await GitAsync(repository, "worktree", "prune"); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task GitLand_ExecuteAndRevertOnGitHubOriginRequirePullRequestLanding()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+        await GitAsync(repository, "remote", "add", "origin", "https://github.com/acme/project-beacon.git");
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, TestContext.Current.CancellationToken);
+            Assert.NotNull(opened.Worktree);
+            worktree = opened.Worktree!;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(worktree.WorkingDirectory, "task-change.txt"),
+                "reviewed task change\n",
+                TestContext.Current.CancellationToken);
+            var committed = await worktree.CommitChangesAsync(
+                "ProjectBeacon: reviewed task change", TestContext.Current.CancellationToken);
+            Assert.True(committed.Success, committed.Error);
+            var sourceSha = committed.CommitSha!;
+            var treeSha = await GitAsync(repository, "rev-parse", sourceSha + "^{tree}");
+            var command = "echo review-ok";
+            var commandHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(command))).ToLowerInvariant();
+            var settings = new WorkstationSettings
+            {
+                WorkspaceMode = "Branch",
+                WorktreeRoot = worktreeRoot
+            };
+
+            var execute = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Execute", sourceSha, treeSha, commandHash, command),
+                settings, TestContext.Current.CancellationToken);
+
+            Assert.True(execute.Ok, execute.Error ?? execute.Result);
+            using var executeJson = JsonDocument.Parse(execute.Result!);
+            Assert.Equal("failed", executeJson.RootElement.GetProperty("status").GetString());
+            Assert.Equal("GitHubRemoteRequiresPullRequest", executeJson.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal(
+                await GitAsync(repository, "rev-parse", "main"),
+                await GitAsync(repository, "rev-parse", "refs/heads/main"));
+            Assert.Equal(string.Empty, await GitAsync(repository, "status", "--porcelain", "--untracked-files=all"));
+
+            var revert = await GitLandExecutor.ExecuteAsync(
+                projectRoot, projectId,
+                Payload(projectId, taskId, attemptId, "Revert", sourceSha, treeSha, commandHash, null,
+                    mergeCommitSha: sourceSha),
+                settings, TestContext.Current.CancellationToken);
+            Assert.True(revert.Ok, revert.Error ?? revert.Result);
+            using var revertJson = JsonDocument.Parse(revert.Result!);
+            Assert.Equal("failed", revertJson.RootElement.GetProperty("status").GetString());
+            Assert.Equal("GitHubRemoteRequiresPullRequest", revertJson.RootElement.GetProperty("errorCode").GetString());
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
             try { await GitAsync(repository, "worktree", "prune"); } catch { }
             try { Directory.Delete(root, recursive: true); } catch { }
         }
