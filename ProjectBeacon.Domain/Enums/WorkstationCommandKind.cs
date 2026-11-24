@@ -31,5 +31,6 @@ public enum WorkstationCommandKind
     GitSync,
     ApplyProposalPatch,
     GitLand,
-    ReleasePrepare
+    ReleasePrepare,
+    PublishRelease
 }
