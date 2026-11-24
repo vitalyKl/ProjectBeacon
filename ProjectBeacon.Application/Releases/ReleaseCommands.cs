@@ -16,7 +16,15 @@ public sealed record ReleaseDto(
     DateTime? UpdatedAt,
     DateTime? PublishedAt,
     int Revision,
-    int MilestoneCount);
+    int MilestoneCount,
+    ReleasePreparationStatus PreparationStatus = ReleasePreparationStatus.NotStarted,
+    int PreparationRevision = 1,
+    Guid? PreparationDeviceId = null,
+    Guid? CandidateId = null,
+    Guid? PreparationCommandId = null,
+    Guid? VerificationCommandId = null,
+    string? PreparationResultJson = null,
+    string? PreparationError = null);
 
 public sealed record CreateReleaseRequest(
     string Name,
