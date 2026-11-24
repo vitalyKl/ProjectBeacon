@@ -1308,6 +1308,7 @@ internal static class GitLandExecutor
         {
             var value = path.Replace('\\', '/');
             var builtIn = value.Equals("SECURITY.md", StringComparison.OrdinalIgnoreCase)
+                || value.Equals(".beacon/release.json", StringComparison.OrdinalIgnoreCase)
                 || value.StartsWith(".github/workflows/", StringComparison.OrdinalIgnoreCase)
                 || value.Equals(".github/workflows", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("global.json", StringComparison.OrdinalIgnoreCase)
