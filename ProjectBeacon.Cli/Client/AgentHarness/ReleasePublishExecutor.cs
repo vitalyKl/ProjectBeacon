@@ -261,7 +261,7 @@ internal static class ReleasePublishExecutor
         if (!Succeeded(remote))
             return new TagEvidence(false, false, "Could not inspect the remote release tag. No tag was created.");
 
-        var localTag = await ReadTagEvidenceAsync(root, filters, request.TagName, ct);
+        var localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
         if (localTag.Exists && !localTag.Valid)
             return new TagEvidence(false, false, "A local tag with this name exists but does not match the immutable Candidate. Refusing to overwrite it.");
 
@@ -279,7 +279,7 @@ internal static class ReleasePublishExecutor
             if (!Succeeded(fetch))
                 return new TagEvidence(false, false,
                     "The remote release tag exists but could not be fetched without moving local refs. Refusing to overwrite it.");
-            localTag = await ReadTagEvidenceAsync(root, filters, request.TagName, ct);
+            localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
         }
         else if (hasRemote && localTag.Exists)
         {
@@ -305,13 +305,13 @@ internal static class ReleasePublishExecutor
             {
                 // A concurrent create may have won. Accept only after reading and validating
                 // the resulting annotated tag object.
-                localTag = await ReadTagEvidenceAsync(root, filters, request.TagName, ct);
+                localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
                 if (!localTag.Valid)
                     return new TagEvidence(false, false, "Git could not create the immutable release tag: " + Clip(create.StdErr));
             }
             else
             {
-                localTag = await ReadTagEvidenceAsync(root, filters, request.TagName, ct);
+                localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
             }
         }
         if (!localTag.Valid)
@@ -361,25 +361,29 @@ internal static class ReleasePublishExecutor
     private sealed record TagRead(bool Exists, bool Valid, string? Error);
 
     private static async Task<TagRead> ReadTagEvidenceAsync(
-        string root, string[] filters, string tagName, CancellationToken ct)
+        string root, string[] filters, PublishRequest request, CancellationToken ct)
     {
-        var type = await GitValue(root, ct, filters, "cat-file", "-t", "refs/tags/" + tagName);
+        var reference = "refs/tags/" + request.TagName;
+        var type = await GitValue(root, ct, filters, "cat-file", "-t", reference);
         if (!string.Equals(type.Value, "tag", StringComparison.Ordinal))
             return new TagRead(type.Value is not null, false, "Release tag must be annotated.");
-        var tagObject = await GitValue(root, ct, filters, "cat-file", "-p", "refs/tags/" + tagName);
-        var target = await GitValue(root, ct, filters, "rev-parse", "refs/tags/" + tagName + "^{}");
+        var tagObject = await GitValue(root, ct, filters, "cat-file", "-p", reference);
+        var target = await GitValue(root, ct, filters, "rev-parse", reference + "^{}");
         if (tagObject.Error is not null || target.Error is not null)
             return new TagRead(true, false, "Could not inspect annotated release tag metadata.");
-        var messageAt = tagObject.Value!.IndexOf("\n\n", StringComparison.Ordinal);
+        var messageAt = tagObject.Value!.IndexOf("\\n\\n", StringComparison.Ordinal);
         var message = messageAt >= 0 ? tagObject.Value[(messageAt + 2)..] : string.Empty;
         var expectedIdentity =
-            message.Contains("ProjectBeacon-Release: ", StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Candidate: ", StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Candidate-SHA: ", StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Version: ", StringComparison.Ordinal);
+            message.Contains("ProjectBeacon-Release: " + request.ReleaseId.ToString("D"), StringComparison.Ordinal)
+            && message.Contains("ProjectBeacon-Candidate: " + request.CandidateId.ToString("D"), StringComparison.Ordinal)
+            && message.Contains("ProjectBeacon-Candidate-SHA: " + request.CandidateSha, StringComparison.Ordinal)
+            && message.Contains("ProjectBeacon-Version: " + request.Version, StringComparison.Ordinal);
+        var targetMatches = string.Equals(target.Value, request.CandidateSha, StringComparison.OrdinalIgnoreCase);
         return new TagRead(true,
-            expectedIdentity && string.Equals(target.Value, target.Value, StringComparison.Ordinal),
-            expectedIdentity ? null : "Annotated tag message does not contain the required ProjectBeacon identity trailers.");
+            expectedIdentity && targetMatches,
+            !targetMatches
+                ? "Annotated tag points to a different commit than the immutable Candidate."
+                : expectedIdentity ? null : "Annotated tag message does not contain the exact ProjectBeacon Release/Candidate identity.");
     }
 
     private sealed record RemoteTagMap(Dictionary<string, string> ShaByRef, string? Error);
