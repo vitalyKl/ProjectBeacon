@@ -324,7 +324,7 @@ public static class ProjectVersionPolicyCatalog
         var wanted = selector.Split('.');
         string section = string.Empty;
         string? value = null;
-        foreach (var raw in content.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var line = raw.Split('#', 2)[0].Trim();
             if (line.Length == 0)
