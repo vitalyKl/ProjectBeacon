@@ -3247,4 +3247,20 @@ No Beacon-hosted coding agent.</value>
   <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>This value can be initialized once. Further official version changes require the ReleasePrepare workflow.</value></data>
   <data name="SaveVersionPolicy" xml:space="preserve"><value>Save version policy</value></data>
   <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Each version source must use path|Format|selector.</value></data>
+  <data name="ProjectVersionScheme" xml:space="preserve"><value>Version scheme</value></data>
+  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
+  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
+  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>Number of numeric components (1–8)</value></data>
+  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Calendar format (invariant .NET date format)</value></data>
+  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
+  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
+  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
+  <data name="ProjectOfficialVersion" xml:space="preserve"><value>Official project version (Beacon authoritative)</value></data>
+  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Initial official version</value></data>
+  <data name="ProjectVersionSources" xml:space="preserve"><value>Version file projections</value></data>
+  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>One source per line: relative/path|Xml, Json, Toml or Regex|selector. XML uses XPath; JSON uses JSON Pointer; TOML uses a dotted key; Regex uses a named 'version' group or capture group 1. Files must stay inside the project workspace.</value></data>
+  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Only project Owners and Admins can change version policy.</value></data>
+  <data name="ProjectVersionSave" xml:space="preserve"><value>Save version policy</value></data>
+  <data name="ProjectVersionSaved" xml:space="preserve"><value>Version policy saved</value></data>
 </root>
