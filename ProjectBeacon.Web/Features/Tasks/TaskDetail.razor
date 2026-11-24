@@ -537,6 +537,8 @@ else
             return L["RepoSyncGitSyncBusy"].Value;
         if (status.LastError is { } error)
             return RepoSyncErrorMessage(error.Code);
+        if (status.AutoPullBlockedReason == "RuntimeChanged")
+            return L["RepoSyncRuntimeChanged"].Value;
         if (status.AutoPullBlockedReason == "NotGitRepository")
             return L["RepoSyncNotGit"].Value;
         if (status.Diverged || status.AutoPullBlockedReason == "Diverged")

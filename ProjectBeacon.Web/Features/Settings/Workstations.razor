@@ -619,6 +619,8 @@
 
     private string RepoSyncStatusLabel(RepoSyncUiRow row)
     {
+        if (row.BlockedReason == "RuntimeChanged")
+            return L["RepoSyncRuntimeChanged"].Value;
         if (row.BlockedReason == "NotGitRepository")
             return L["RepoSyncNotGit"].Value;
         if (row.BlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
