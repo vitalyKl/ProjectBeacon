@@ -3367,4 +3367,7 @@ orthstar</value>
   <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>Die Aufgabe konnte nicht geladen werden. Der Dienst für Aufgabendetails ist nicht verfügbar. Solange diese Seite geöffnet bleibt, wird automatisch erneut versucht. Diagnose-ID: {0}</value>
   </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Die Workstation-Metriken konnten nicht geladen werden. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut. Diagnose-ID: {0}</value>
+  </data>
 </root>

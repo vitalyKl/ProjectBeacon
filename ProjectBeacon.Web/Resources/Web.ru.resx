@@ -3357,4 +3357,7 @@
   <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>Не удалось загрузить задачу. Сервис получения сведений о задаче недоступен. Страница будет автоматически повторять запрос. Диагностический ID: {0}</value>
   </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Не удалось загрузить метрики рабочей станции. Проверьте её подключение и повторите попытку. Диагностический ID: {0}</value>
+  </data>
 </root>

@@ -3375,4 +3375,7 @@ orthstar</value>
   <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>无法加载任务。任务详情服务当前不可用。此页面保持打开时将自动重试。诊断 ID：{0}</value>
   </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>无法加载工作站指标。请检查工作站连接后重试。诊断 ID：{0}</value>
+  </data>
 </root>

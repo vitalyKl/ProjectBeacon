@@ -3566,4 +3566,7 @@ No Beacon-hosted coding agent.</value>
   <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>Could not load this task. The task details service is unavailable. Retry automatically while this page remains open. Diagnostic ID: {0}</value>
   </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Could not load workstation metrics. Check the workstation connection and try again. Diagnostic ID: {0}</value>
+  </data>
 </root>

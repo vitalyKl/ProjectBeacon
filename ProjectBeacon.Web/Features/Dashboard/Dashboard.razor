@@ -14,6 +14,7 @@
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Logging.ILogger<Dashboard> Logger
 @inject AuthenticationStateProvider Auth
 @inject GetProjectPulseHandler Pulse
 @inject GetProxyStatusHandler Proxy
@@ -48,6 +49,14 @@ else if (_pulse is null)
 }
 else
 {
+    @if (_proxyStatusErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_proxyStatusErrorMessage</MudAlert>
+    }
+    @if (_hostSamplesErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_hostSamplesErrorMessage</MudAlert>
+    }
     @if (_attention.Count > 0)
     {
         <div class="beacon-attention-banner">
@@ -242,6 +251,10 @@ else
     private Guid _userId;
     private CancellationTokenSource? _poll;
     private List<DeviceHostSampleDto> _samples = [];
+    private string? _proxyStatusErrorMessage;
+    private string? _hostSamplesErrorMessage;
+    private readonly UiBackgroundFailureTracker _proxyStatusFailures = new();
+    private readonly UiBackgroundFailureTracker _hostSamplesFailures = new();
     private List<ChartSeries<double>> _loadSeries = [];
     private string[] _xLabels = [];
     private readonly LineChartOptions _loadChartOptions = new()
@@ -331,7 +344,7 @@ else
         {
             while (await timer.WaitForNextTickAsync(_poll.Token))
             {
-                await RefreshHost();
+                await RefreshHost(isBackground: true);
                 await InvokeAsync(StateHasChanged);
             }
         }
@@ -347,22 +360,45 @@ else
 
         var running = await TasksByStatus.HandleAsync(
             new ListTasksByStatusCommand(new ListTasksByStatusRequest(_pulse.ProjectId, "InProgress")));
-        _running = running.Success && running.Value is not null ? running.Value.Take(6).ToList() : [];
+        if (running.Success)
+            _running = running.Value?.Take(6).ToList() ?? [];
+        else
+        {
+            _running = [];
+            Notifications.Warning(Notifications.FormatFailure(
+                running, L["Dashboard"].Value, L["Load"].Value, new { Resource = "running tasks", ProjectId = _pulse.ProjectId }));
+        }
+
         _lead = null;
         if (_running.Count > 0)
         {
             var lead = await Pipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(_running[0].Id)));
             if (lead.Success && lead.Value?.Stage is not null && lead.Value.Stage != TaskPipelineStage.None)
                 _lead = lead.Value;
+            else if (!lead.Success)
+                Notifications.Warning(Notifications.FormatFailure(
+                    lead, L["Dashboard"].Value, L["Load"].Value, new { Resource = "task pipeline", TaskId = _running[0].Id }));
         }
 
         var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
-        _devices = devices.Success && devices.Value is not null ? devices.Value.ToList() : [];
+        if (devices.Success)
+            _devices = devices.Value?.ToList() ?? [];
+        else
+        {
+            _devices = [];
+            Notifications.Warning(Notifications.FormatFailure(
+                devices, L["Dashboard"].Value, L["Load"].Value, new { Resource = "workstations" }));
+        }
 
         var mine = await MyProjects.HandleAsync(_userId, isAdmin);
-        _recent = mine.Success && mine.Value is not null
-            ? mine.Value.RecentTasks.Where(t => t.ProjectId == _pulse.ProjectId).Take(6).ToList()
-            : [];
+        if (mine.Success)
+            _recent = mine.Value?.RecentTasks.Where(t => t.ProjectId == _pulse.ProjectId).Take(6).ToList() ?? [];
+        else
+        {
+            _recent = [];
+            Notifications.Warning(Notifications.FormatFailure(
+                mine, L["Dashboard"].Value, L["Load"].Value, new { Resource = "recent activity", ProjectId = _pulse.ProjectId }));
+        }
 
         var attention = new List<AttentionItem>();
         var offline = _devices.Count(d => !d.Online);
@@ -424,46 +460,126 @@ else
         _ => 0
     };
 
-    private async Task RefreshHost()
+    private async Task RefreshHost(bool isBackground = false)
     {
-        var proxy = await Proxy.HandleAsync(new GetProxyStatusCommand());
-        if (proxy.Success)
-            _status = proxy.Value;
+        try
+        {
+            var proxy = await Proxy.HandleAsync(new GetProxyStatusCommand());
+            if (proxy.Success)
+            {
+                _status = proxy.Value;
+                _proxyStatusFailures.RecordSuccess();
+                _proxyStatusErrorMessage = null;
+            }
+            else
+            {
+                var errorCode = proxy.ErrorCode ?? ErrorCodes.For(proxy.Kind);
+                var permanent = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || permanent || _proxyStatusFailures.RecordFailure())
+                {
+                    if (!isBackground || permanent)
+                        _proxyStatusFailures.RecordSuccess();
+                    _proxyStatusErrorMessage = Notifications.FormatFailure(
+                        proxy, L["Dashboard"].Value, L["Read"].Value, new { Resource = "runtime status" });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient dashboard runtime status read failure. ErrorCode={ErrorCode}, Detail={Detail}",
+                        errorCode, proxy.Error);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _proxyStatusFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(
+                    exception, "read dashboard runtime status", new { UserId = _userId });
+                _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ProxyStatusUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient dashboard runtime status exception; retrying.");
+        }
+
         if (_userId == Guid.Empty)
             return;
-        var samples = await HostSamples.HandleAsync(new ListHostSamplesCommand(new ListHostSamplesRequest(_userId)));
-        if (!samples.Success || samples.Value is null || samples.Value.Count == 0)
+
+        try
         {
-            _samples = [];
-            _loadSeries = [];
-            return;
-        }
-        var rows = samples.Value.ToList();
-        _samples = rows;
-        _xLabels = SparseTimes(rows);
-        var series = new List<ChartSeries<double>>
-        {
-            new() { Name = L["Cpu"].Value, Data = new ChartData<double>(rows.Select(s => s.CpuPercent ?? 0).ToList()) }
-        };
-        if (rows.Any(s => s.RamTotalBytes is > 0))
-        {
-            series.Add(new ChartSeries<double>
+            var samples = await HostSamples.HandleAsync(new ListHostSamplesCommand(new ListHostSamplesRequest(_userId)));
+            if (!samples.Success)
             {
-                Name = L["Ram"].Value,
-                Data = new ChartData<double>(rows.Select(s => s.RamTotalBytes is > 0 && s.RamUsedBytes is { } used
-                    ? 100d * used / s.RamTotalBytes.Value
-                    : 0d).ToList())
-            });
-        }
-        if (rows.Any(s => s.GpuUtilizationPercent is not null))
-        {
-            series.Add(new ChartSeries<double>
+                var errorCode = samples.ErrorCode ?? ErrorCodes.For(samples.Kind);
+                var permanent = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || permanent || _hostSamplesFailures.RecordFailure())
+                {
+                    if (!isBackground || permanent)
+                        _hostSamplesFailures.RecordSuccess();
+                    _hostSamplesErrorMessage = Notifications.FormatFailure(
+                        samples, L["Dashboard"].Value, L["Load"].Value, new { Resource = "workstation metrics", UserId = _userId });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient dashboard host sample read failure. UserId={UserId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        _userId, errorCode, samples.Error);
+                return;
+            }
+
+            _hostSamplesFailures.RecordSuccess();
+            _hostSamplesErrorMessage = null;
+            if (samples.Value is null || samples.Value.Count == 0)
             {
-                Name = L["Gpu"].Value,
-                Data = new ChartData<double>(rows.Select(s => s.GpuUtilizationPercent ?? 0).ToList())
-            });
+                _samples = [];
+                _loadSeries = [];
+                _xLabels = [];
+                return;
+            }
+
+            var rows = samples.Value.ToList();
+            _samples = rows;
+            _xLabels = SparseTimes(rows);
+            var series = new List<ChartSeries<double>>
+            {
+                new() { Name = L["Cpu"].Value, Data = new ChartData<double>(rows.Select(s => s.CpuPercent ?? 0).ToList()) }
+            };
+            if (rows.Any(s => s.RamTotalBytes is > 0))
+            {
+                series.Add(new ChartSeries<double>
+                {
+                    Name = L["Ram"].Value,
+                    Data = new ChartData<double>(rows.Select(s => s.RamTotalBytes is > 0 && s.RamUsedBytes is { } used
+                        ? 100d * used / s.RamTotalBytes.Value
+                        : 0d).ToList())
+                });
+            }
+            if (rows.Any(s => s.GpuUtilizationPercent is not null))
+            {
+                series.Add(new ChartSeries<double>
+                {
+                    Name = L["Gpu"].Value,
+                    Data = new ChartData<double>(rows.Select(s => s.GpuUtilizationPercent ?? 0).ToList())
+                });
+            }
+            _loadSeries = series;
         }
-        _loadSeries = series;
+        catch (Exception exception)
+        {
+            if (!isBackground || _hostSamplesFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _hostSamplesFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(
+                    exception, "read dashboard workstation metrics", new { UserId = _userId });
+                _hostSamplesErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "DashboardHostSamplesUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient dashboard host sample read exception; retrying. UserId={UserId}", _userId);
+        }
     }
 
     private static string[] SparseTimes(IReadOnlyList<DeviceHostSampleDto> rows)

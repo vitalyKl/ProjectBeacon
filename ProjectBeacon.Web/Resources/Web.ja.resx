@@ -3375,4 +3375,7 @@ orthstar</value>
   <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>タスクを読み込めませんでした。タスク詳細サービスを利用できません。このページを開いている間、自動的に再試行します。診断 ID: {0}</value>
   </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>ワークステーションのメトリクスを読み込めませんでした。接続を確認して、もう一度お試しください。診断 ID: {0}</value>
+  </data>
 </root>
