@@ -289,6 +289,8 @@ public static class ProjectVersionPolicyCatalog
             || path.StartsWith("/", StringComparison.Ordinal)
             || path.Contains('\\') || path.Contains(':') || path.Any(char.IsControl))
             return false;
+        if (!path.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or '/'))
+            return false;
         var segments = path.Split('/');
         return segments.All(segment => segment.Length > 0 && segment is not ("." or ".."));
     }
