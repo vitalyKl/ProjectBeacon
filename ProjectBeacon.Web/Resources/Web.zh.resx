@@ -3433,4 +3433,6 @@ orthstar</value>
   <data name="HotfixDeploymentRun" xml:space="preserve"><value>打开部署工作流运行</value></data>
   <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix 的向前移植任务</value></data>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix 与向前移植任务</value></data>
+  <data name="HotfixOriginNotice" xml:space="preserve"><value>此任务基于实际部署到生产环境的确切提交。Beacon 会保护其来源分支和基础提交。</value></data>
+  <data name="ForwardPortNotice" xml:space="preserve"><value>此普通任务是在来源 Hotfix 确认成功落地后创建的。请通过标准 Planner、Actor、Reviewer 和 landing 流程完成。</value></data>
 </root>
