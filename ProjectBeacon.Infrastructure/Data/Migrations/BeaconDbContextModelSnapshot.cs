@@ -2039,6 +2039,81 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("Releases");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaseSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CandidateSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CandidateTreeSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ManifestSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("PreparedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreparedCommitSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReleaseRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("TagName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TargetBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("VersionPolicyRevision")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("ProjectId", "ReleaseId");
+
+                    b.HasIndex("ProjectId", "CandidateSha");
+
+                    b.ToTable("ReleaseCandidateSnapshots");
+                });
+
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
                     b.Property<string>("ActivityJson")
@@ -3159,7 +3234,28 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                    b.Navigation("CandidateSnapshot");
                 });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", "Release")
+                        .WithOne("CandidateSnapshot")
+                        .HasForeignKey("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", "ProjectId", "ReleaseId")
+                        .HasPrincipalKey("ProjectBeacon.Domain.Entities.Roadmap.Release", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                    b.Navigation("Release");
+                });
+
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
@@ -3370,6 +3466,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Release", b =>
                 {
                     b.Navigation("Milestones");
+                    b.Navigation("CandidateSnapshot");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskItem", b =>
