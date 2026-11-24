@@ -32,6 +32,44 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void TaskDetail_ShowsVersionImpactAndReviewerDecisionWhenReleaseManagementIsEnabled()
+    {
+        var project = DbContext.Projects.Single();
+        var task = DbContext.Tasks.First();
+        var user = DbContext.Users.Single();
+        var auth = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        auth.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString("D")),
+                new Claim("isAdmin", "true"),
+                new Claim("project_id", project.Id.ToString("D")),
+                new Claim("org_id", project.OrgId.ToString("D"))
+            },
+            "TestAuth");
+
+        project.SetVersionPolicyJson(ProjectBeacon.Domain.Entities.Projects.ProjectVersionPolicyCatalog.Serialize(
+            new ProjectBeacon.Domain.Entities.Projects.ProjectVersionPolicy(
+                "NumericComponents", 4, null, "v{version}", false, [], ReleaseManagementEnabled: true)));
+        task.SetVersionImpact("minor", "Adds an optional API capability without breaking existing clients.");
+        task.ReviewVersionImpact(
+            "Confirmed", "The change is backward-compatible and the impact is correctly classified.", Guid.NewGuid());
+        DbContext.SaveChanges();
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
+            builder => builder.Add(component => component.TaskId, task.Id));
+
+        Assert.Contains("task-version-impact", cut.Markup);
+        Assert.Contains("Version impact", cut.Markup);
+        Assert.Contains("Minor", cut.Markup);
+        Assert.Contains("Confirmed", cut.Markup);
+        Assert.Contains("Adds an optional API capability without breaking existing clients.", cut.Markup);
+        Assert.Contains("The change is backward-compatible and the impact is correctly classified.", cut.Markup);
+    }
+
+    [Fact]
     public void TaskDetail_HidesGitSyncActionFromProjectMembersWithoutAdminRole()
     {
         var task = DbContext.Tasks.First();
