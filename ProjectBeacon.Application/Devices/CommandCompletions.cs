@@ -5,6 +5,7 @@ using System.Text;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Application.Audit;
 using Application.Authorization;
 using Domain.Entities.Content;
