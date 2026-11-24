@@ -18,6 +18,7 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Equal(20_000, policy.MaxChangedLines);
         Assert.Equal("Off", policy.AutoRevertMode);
         Assert.True(policy.IntegrationBranchAvailable);
+        Assert.False(policy.AutoSyncEnabled);
     }
 
     [Fact]
@@ -29,7 +30,8 @@ public sealed class ProjectGitPolicyCatalogTests
             40,
             2_500,
             "OnPostCheckFail",
-            "LandViaIntegration");
+            "LandViaIntegration",
+            autoSyncEnabled: true);
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 7, out var policy));
         Assert.Equal(1, policy.AutonomyLevel);
@@ -38,7 +40,25 @@ public sealed class ProjectGitPolicyCatalogTests
         Assert.Equal(40, policy.MaxChangedFiles);
         Assert.Equal(2_500, policy.MaxChangedLines);
         Assert.Equal("OnPostCheckFail", policy.AutoRevertMode);
+        Assert.True(policy.AutoSyncEnabled);
         Assert.Equal(new[] { "docs/private/*.md", "src/generated/**" }, policy.ProtectedPaths);
+    }
+
+    [Fact]
+    public void TryRead_LegacyPolicyWithoutAutoSyncFlagDefaultsDisabled()
+    {
+        const string json = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\"}";
+
+        Assert.True(ProjectGitPolicyCatalog.TryRead(json, 4, out var policy));
+        Assert.False(policy.AutoSyncEnabled);
+    }
+
+    [Fact]
+    public void TryRead_RejectsNonBooleanAutoSyncFlag()
+    {
+        const string json = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\",\\"autoSyncEnabled\\":\\"yes\\"}";
+
+        Assert.False(ProjectGitPolicyCatalog.TryRead(json, 1, out _));
     }
 
     [Fact]
