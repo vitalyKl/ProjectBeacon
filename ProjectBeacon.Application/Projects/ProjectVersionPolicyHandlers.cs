@@ -186,12 +186,11 @@ public sealed class SetProjectVersionPolicyHandler
             project.Id,
             detailsJson: JsonSerializer.Serialize(new
             {
-                scheme = command.Policy.Scheme,
-                sources = command.Policy.Sources.Count,
-                releaseManagementEnabled = command.Policy.ReleaseManagementEnabled,
-                officialVersionInitialized = currentState is null && initialVersion is not null,
-                officialVersion = project.OfficialVersion,
-                revision = project.VersionPolicyRevision
+                newState = command.Policy.Scheme,
+                count = command.Policy.Sources.Count,
+                policyCode = command.Policy.ReleaseManagementEnabled
+                    ? "ReleaseManagement.Enabled"
+                    : "ReleaseManagement.Disabled"
             })));
 
         try
