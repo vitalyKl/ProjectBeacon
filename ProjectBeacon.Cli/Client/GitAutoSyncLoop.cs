@@ -206,6 +206,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             // Keep a previous failure count until both status and any required
             // AutoPull operation succeed. Pull performs its own fetch and can fail
             // independently after a successful Status fetch.
+            var previous = _snapshot.Get(project.ProjectId);
             var lastAutoPull = previous?.LastAutoPull;
             GitAutoSyncError? lastError = null;
             string? blockedReason = null;
