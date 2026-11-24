@@ -3590,4 +3590,24 @@ No Beacon-hosted coding agent.</value>
 <data name="NotConfigured" xml:space="preserve"><value>Not configured</value></data>
 <data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Enable Release Management for this project</value></data>
 <data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>When enabled, releases become available in the Roadmap and milestones can be grouped into a release. Existing milestones remain independent. Disabled by default.</value></data>
+  <data name="ProjectReleases" xml:space="preserve"><value>Project releases</value></data>
+  <data name="Releases" xml:space="preserve"><value>releases</value></data>
+  <data name="NewRelease" xml:space="preserve"><value>New release</value></data>
+  <data name="ReleaseName" xml:space="preserve"><value>Release name</value></data>
+  <data name="ReleaseTargetVersion" xml:space="preserve"><value>Target version</value></data>
+  <data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>Optional. Must match the version scheme configured in Project Settings.</value></data>
+  <data name="ReleaseTargetBranch" xml:space="preserve"><value>Target branch</value></data>
+  <data name="ReleaseStart" xml:space="preserve"><value>Start</value></data>
+  <data name="ReleaseMarkCandidate" xml:space="preserve"><value>Mark candidate</value></data>
+  <data name="CancelRelease" xml:space="preserve"><value>Cancel release</value></data>
+  <data name="ReleaseCreated" xml:space="preserve"><value>Release created</value></data>
+  <data name="ReleaseDeleted" xml:space="preserve"><value>Release deleted</value></data>
+  <data name="MilestoneRelease" xml:space="preserve"><value>Release</value></data>
+  <data name="NoRelease" xml:space="preserve"><value>Not assigned to a release</value></data>
+  <data name="NoReleases" xml:space="preserve"><value>No releases have been created for this project.</value></data>
+  <data name="ReleaseStatusPlanned" xml:space="preserve"><value>Planned</value></data>
+  <data name="ReleaseStatusInProgress" xml:space="preserve"><value>In progress</value></data>
+  <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Candidate</value></data>
+  <data name="ReleaseStatusPublished" xml:space="preserve"><value>Published</value></data>
+  <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Cancelled</value></data>
 </root>
