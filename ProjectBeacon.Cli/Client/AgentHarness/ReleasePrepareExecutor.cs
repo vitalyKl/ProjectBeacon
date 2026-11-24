@@ -178,7 +178,7 @@ internal static class ReleasePrepareExecutor
             var updated = await WriteVersionSourceAsync(resolved.Path!, source, policy, version, ct);
             if (!updated.Success)
                 return Fail(updated.Error ?? "Could not update configured version source.");
-            var repositoryPath = ToRepositoryPath(projectPrefix, source.Path);
+            var repositoryPath = RepositoryRelative(projectPrefix, source.Path);
             changedPaths.Add(repositoryPath);
             manifestSources.Add(new JsonObject
             {
@@ -328,7 +328,7 @@ internal static class ReleasePrepareExecutor
 
         foreach (var source in policy.Sources)
         {
-            var repositoryPath = ToRepositoryPath(projectPrefix, source.Path);
+            var repositoryPath = RepositoryRelative(projectPrefix, source.Path);
             var file = await Git(repositoryRoot, ct, filters, "show", candidateSha.Value + ":" + repositoryPath);
             if (!Succeeded(file))
                 return GitFailure("Remote candidate is missing version source '" + repositoryPath + "'.", file.StdErr);
