@@ -647,6 +647,101 @@ public sealed class McpApiToolsTests
             call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/proposals/{proposalId:D}/withdraw");
     }
 
+    [Fact]
+    public async Task VersionCheck_ParsesConfiguredManifestProjectionAgainstOfficialVersion()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "Directory.Build.props"),
+                "<Project><PropertyGroup><Version>0.7.5.8</Version></PropertyGroup></Project>");
+            var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", projectId.ToString("D")),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var handler = new RecordingHandler();
+            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                McpToolNames.VersionCheck, new JsonObject(), api, env);
+
+            Assert.False(result.IsError, result.Text);
+            var json = JsonNode.Parse(result.Text)!;
+            Assert.Equal("0.7.5.8", json["officialVersion"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["status"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["sources"]![0]!["status"]!.GetValue<string>());
+            Assert.Contains(handler.Calls, call =>
+                call.Method == "GET" && call.Path == $"/v1/projects/{projectId:D}/version-policy");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.VersionImpact,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["impact"] = "patch",
+                ["rationale"] = "Fixes a regression without changing public behavior.",
+                ["expectedRevision"] = 3
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal("PUT", call.Method);
+        Assert.Equal($"/v1/tasks/{taskId:D}/version-impact", call.Path);
+        Assert.Contains("\\"expectedRevision\\":3", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\\"impact\\":\\"patch\\"", call.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReviewVersionImpact_UsesReviewerSessionRouteAndRevision()
+    {
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Review"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.ReviewVersionImpact,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["decision"] = "Challenged",
+                ["note"] = "The change removes a previously supported field.",
+                ["expectedRevision"] = 4
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal("POST", call.Method);
+        Assert.Equal($"/v1/tasks/{taskId:D}/version-impact/review", call.Path);
+        Assert.Contains("\\"expectedRevision\\":4", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\\"decision\\":\\"Challenged\\"", call.Body, StringComparison.Ordinal);
+    }
+
+
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
@@ -727,6 +822,8 @@ public sealed class McpApiToolsTests
                 "/v1/models" => """{"projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","backends":[],"bindings":[]}""",
                 "/v1/models/proxy/status" => """{"available":false}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/context/compile" => """{"success":true,"value":{"briefMarkdown":"# Project\n\n## Goals\n\nDone."}}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.8","revision":2}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => "[]",
                 _ => """{"ok":true}"""
             };
             return new HttpResponseMessage(HttpStatusCode.OK)
