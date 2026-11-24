@@ -56,7 +56,7 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId);
 }
 /// <summary>
 /// Updates a milestone name, description, or order.
@@ -121,7 +121,7 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId);
 }
 /// <summary>
 /// Deletes a milestone.
@@ -215,7 +215,7 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId);
 }
 /// <summary>
 /// Lists milestones for a project.
@@ -242,7 +242,7 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
             .Select(m => new MilestoneDto(
-                m.Id, m.Name, m.Description, m.ProjectId, m.Order, m.CreatedAt, m.UpdatedAt, m.ClosedAt, m.Revision))
+                m.Id, m.Name, m.Description, m.ProjectId, m.Order, m.CreatedAt, m.UpdatedAt, m.ClosedAt, m.Revision, m.ReleaseId))
             .ToListAsync(ct);
 
         return Result.Ok((IList<MilestoneDto>)milestones);
@@ -295,7 +295,7 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
         }
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
+            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId));
     }
 }
 /// <summary>
@@ -345,6 +345,6 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
         }
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision));
+            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId));
     }
 }
