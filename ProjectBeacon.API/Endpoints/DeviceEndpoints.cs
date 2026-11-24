@@ -89,7 +89,7 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> ListDeviceProjectRuntimes(
-        ListDeviceProjectRuntimesHandler handler, HttpContext ctx, CancellationToken ct)
+        [FromServices] ListDeviceProjectRuntimesHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         return Results.Ok(await handler.HandleAsync(actor.DeviceId!.Value, ct));
