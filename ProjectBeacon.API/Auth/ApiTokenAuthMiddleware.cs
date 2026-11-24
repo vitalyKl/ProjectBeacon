@@ -589,9 +589,6 @@ public sealed class ApiTokenAuthMiddleware
             && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
             return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
                 || IsMcpToolGranted(grants, McpToolNames.GetTaskVersionImpact);
-        if (segments.Length == 4 && segments[1] == "tasks"
-            && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
-            return IsMcpToolGranted(grants, McpToolNames.GetTaskVersionImpact);
         return false;
     }
 
