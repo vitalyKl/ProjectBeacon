@@ -249,7 +249,7 @@ public static partial class McpStdioServer
         {
             var fullRoot = Path.GetFullPath(root);
             var fullPath = Path.GetFullPath(path, fullRoot);
-            var relativePath = Path.GetRelativePath(fullRoot, fullPath).Replace('\\\\', '/');
+            var relativePath = Path.GetRelativePath(fullRoot, fullPath).Replace('\\', '/');
             if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)
                 || Path.IsPathRooted(relativePath))
                 return null; // FileWorkspace will report the workspace boundary violation.
@@ -278,7 +278,7 @@ public static partial class McpStdioServer
             {
                 if (source?["path"]?.GetValue<string>() is not { } sourcePath)
                     return "Version policy contains an invalid source entry; refusing file modification.";
-                var normalizedSource = sourcePath.Replace('\\\\', '/');
+                var normalizedSource = sourcePath.Replace('\\', '/');
                 if (string.Equals(relativePath, normalizedSource, StringComparison.OrdinalIgnoreCase))
                     return $"'{relativePath}' is configured as a protected version source. Ordinary agent sessions cannot modify official version files; use the authorized ReleasePrepare operation.";
             }
