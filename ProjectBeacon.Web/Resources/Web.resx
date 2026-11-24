@@ -3614,4 +3614,14 @@ No Beacon-hosted coding agent.</value>
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate is created by ReleasePrepare after policy, impact, landing, and validation checks pass.</value></data>
   <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Production version endpoint</value></data>
   <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS URL ending in /v1/version. Beacon uses this endpoint after the release workflow succeeds and requires both version and gitSha to match the Candidate.</value></data>
+  <data name="CreateHotfixTask" xml:space="preserve"><value>Create Hotfix task</value></data>
+  <data name="HotfixTaskTitle" xml:space="preserve"><value>Hotfix task title</value></data>
+  <data name="HotfixTaskDescription" xml:space="preserve"><value>Describe the production issue and required fix</value></data>
+  <data name="HotfixTaskCreated" xml:space="preserve"><value>Hotfix task created from the deployed Release</value></data>
+  <data name="HotfixSourceRelease" xml:space="preserve"><value>Source Release</value></data>
+  <data name="HotfixDeployedVersion" xml:space="preserve"><value>Deployed version</value></data>
+  <data name="HotfixDeployedSha" xml:space="preserve"><value>Production deployed commit</value></data>
+  <data name="HotfixDeploymentRun" xml:space="preserve"><value>Open deployment workflow run</value></data>
+  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Forward-port of Hotfix</value></data>
+  <data name="HotfixTasks" xml:space="preserve"><value>Hotfix and forward-port tasks</value></data>
 </root>
