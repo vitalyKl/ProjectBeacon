@@ -420,7 +420,7 @@
                 new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode, L["Create"].Value);
+                Notifications.Failure(result, L["Workstations"].Value, L["Create"].Value);
                 return;
             }
             _deviceToken = result.Value!.Token;
@@ -443,7 +443,7 @@
         var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Workstations"].Value, result.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(result, L["Workstations"].Value, L["Delete"].Value);
             return;
         }
         Notifications.Add(L["DeviceRevoked"].Value, Severity.Success);
@@ -473,7 +473,7 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.SaveWorkstation, payload, null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Save"].Value);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Save"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
@@ -511,7 +511,7 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.Install, JsonSerializer.Serialize(new { id }), null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Install"].Value);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Install"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
@@ -538,7 +538,7 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.CheckClientUpdate, "{}", null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Check"].Value);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Check"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
@@ -584,7 +584,7 @@
                 new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.UpdateClient, "{}", null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Update"].Value);
+                Notifications.Failure(queued, L["Workstations"].Value, L["Update"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id, 660);

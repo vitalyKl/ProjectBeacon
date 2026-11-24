@@ -748,7 +748,7 @@ else
                 limit: 50);
             if (!result.Success)
             {
-                Notifications.Add(Notifications.FormatFailure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Load"].Value), Severity.Warning);
+                Notifications.Add(Notifications.FormatFailure(result, L["Tasks"].Value, L["Load"].Value), Severity.Warning);
                 _taskContentHistory = [];
                 return;
             }
@@ -779,7 +779,7 @@ else
                 _task.Id));
             if (!restored.Success)
             {
-                Notifications.Failure(restored.Error, L["Tasks"].Value, restored.ErrorCode, L["Restore"].Value);
+                Notifications.Failure(restored, L["Tasks"].Value, L["Restore"].Value);
                 return;
             }
 
@@ -947,7 +947,7 @@ else
             new WorkspaceReadRequest(TaskId, key, Offset: 0, Limit: 8000)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Load"].Value);
+            Notifications.Failure(result, L["Tasks"].Value, L["Load"].Value);
             return;
         }
         _selectedWorkspace = result.Value;
@@ -971,7 +971,7 @@ else
                     _workspaceAbstract, _workspaceContent, "create"), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Create"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Create"].Value);
                 return;
             }
             _workspaceTitle = string.Empty;
@@ -1009,7 +1009,7 @@ else
             var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Add"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Add"].Value);
                 return;
             }
             _stepTitle = string.Empty;
@@ -1026,7 +1026,7 @@ else
         var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Update"].Value);
+            Notifications.Failure(result, L["Tasks"].Value, L["Update"].Value);
             return;
         }
         await ReloadSteps();
@@ -1037,7 +1037,7 @@ else
         var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id)));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(result, L["Tasks"].Value, L["Delete"].Value);
             return;
         }
         await ReloadSteps();
@@ -1071,7 +1071,7 @@ else
                 new CancelPipelineCommand(new CancelPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Cancel"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
             Notifications.Add(L["PipelineCancelled"].Value, Severity.Info);
@@ -1098,7 +1098,7 @@ else
                 new RestartPipelineCommand(new RestartPipelineRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Restart"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Restart"].Value);
                 return;
             }
             Notifications.Add(L["PipelineRestarted"].Value, Severity.Success);
@@ -1125,7 +1125,7 @@ else
                 new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(TaskId, session.Id)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Cancel"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
             Notifications.Add(L["WorkCancelled"].Value, Severity.Info);
@@ -1150,7 +1150,7 @@ else
                 new CancelSubtaskCommand(new CancelSubtaskRequest(TaskId, subtask.Id)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Cancel"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Cancel"].Value);
                 return;
             }
             Notifications.Add(L["WorkCancelled"].Value, Severity.Info);
@@ -1175,7 +1175,7 @@ else
                 new DeleteTaskCommand(new DeleteTaskRequest(TaskId), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Delete"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Delete"].Value);
                 return;
             }
             Navigation.NavigateTo("/");
@@ -1200,14 +1200,14 @@ else
             var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Start"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 await ReloadPipeline();
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Notifications.Failure(launch.Error, L["Tasks"].Value, launch.ErrorCode, L["Start"].Value);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
                 Notifications.Add(L["PipelineStarted"].Value, Severity.Success);
             await Reload();
@@ -1440,7 +1440,7 @@ else
                 new RequestLandingRequest(TaskId, rationale), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Request"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Request"].Value);
                 return;
             }
             Notifications.Add(L["LandingPreviewQueued"].Value, Severity.Success);
@@ -1463,7 +1463,7 @@ else
                 new ExecuteLandingRequest(TaskId, attempt.Id), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Execute"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Execute"].Value);
                 return;
             }
             Notifications.Add(L["LandingExecuteQueued"].Value, Severity.Success);
@@ -1494,7 +1494,7 @@ else
                 new RevertLandingRequest(TaskId, attempt.Id), _actorContext));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Revert"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Revert"].Value);
                 return;
             }
             Notifications.Add(L["LandingRevertQueued"].Value, Severity.Success);
@@ -1515,13 +1515,13 @@ else
             var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Start"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Notifications.Failure(launch.Error, L["Tasks"].Value, launch.ErrorCode, L["Start"].Value);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
                 Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
@@ -1541,7 +1541,7 @@ else
             var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Start"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
             Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
@@ -1563,14 +1563,14 @@ else
                 new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Restart"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Restart"].Value);
                 return;
             }
 
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Notifications.Failure(launch.Error, L["Tasks"].Value, launch.ErrorCode, L["Start"].Value);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
                 Notifications.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
@@ -1595,13 +1595,13 @@ else
             var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Start"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Start"].Value);
                 return;
             }
             var launch = await LaunchSession.HandleAsync(
                 new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
             if (!launch.Success)
-                Notifications.Failure(launch.Error, L["Tasks"].Value, launch.ErrorCode, L["Start"].Value);
+                Notifications.Failure(launch, L["Tasks"].Value, L["Start"].Value);
             else
                 Notifications.Add(L["ReviewStarted"].Value, Severity.Success);
             await Reload();

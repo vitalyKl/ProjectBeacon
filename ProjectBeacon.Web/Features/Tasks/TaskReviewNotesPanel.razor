@@ -43,7 +43,7 @@
             new AddReviewNotesRequest(Task.Id, _draft.Trim(), Task.ContentRevision), actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Save"].Value);
+            Notifications.Failure(result, L["Tasks"].Value, L["Save"].Value);
             return;
         }
         await OnSaved.InvokeAsync();

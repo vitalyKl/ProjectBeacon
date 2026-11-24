@@ -36,11 +36,43 @@ internal sealed class UiNotificationService : IUiNotificationService
     public void Warning(string message) => Add(message, Severity.Warning);
     public void Error(string message) => Add(message, Severity.Error);
 
+    public string? Failure(Result result, string section, string? operationLabel = null, object? context = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Success
+            ? null
+            : Failure(result.Error, section, result.ErrorCode ?? ErrorCodes.For(result.Kind), operationLabel, context);
+    }
+
+    public string? Failure<T>(Result<T> result, string section, string? operationLabel = null, object? context = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Success
+            ? null
+            : Failure(result.Error, section, result.ErrorCode ?? ErrorCodes.For(result.Kind), operationLabel, context);
+    }
+
     public string? Failure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null)
     {
         var diagnosticId = UnexpectedFailureDiagnosticId(detail, section, operationLabel, errorCode, context);
         Add(FormatFailureMessage(detail, section, errorCode, diagnosticId, operationLabel), Severity.Error);
         return diagnosticId;
+    }
+
+    public string FormatFailure(Result result, string section, string? operationLabel = null, object? context = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Success
+            ? string.Empty
+            : FormatFailure(result.Error, section, result.ErrorCode ?? ErrorCodes.For(result.Kind), operationLabel, context);
+    }
+
+    public string FormatFailure<T>(Result<T> result, string section, string? operationLabel = null, object? context = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Success
+            ? string.Empty
+            : FormatFailure(result.Error, section, result.ErrorCode ?? ErrorCodes.For(result.Kind), operationLabel, context);
     }
 
     public string FormatFailure(string? detail, string section, string? errorCode = null, string? operationLabel = null, object? context = null)

@@ -212,7 +212,7 @@ else
             _project.Id, _title, _context, _body, _consequences, _actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Decisions"].Value, result.ErrorCode, L["Create"].Value);
+            Notifications.Failure(result, L["Decisions"].Value, L["Create"].Value);
             return;
         }
         _title = _context = _body = _consequences = string.Empty;
@@ -225,7 +225,7 @@ else
         var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Decisions"].Value, result.ErrorCode, L["Accept"].Value);
+            Notifications.Failure(result, L["Decisions"].Value, L["Accept"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);
@@ -237,7 +237,7 @@ else
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Decisions"].Value, result.ErrorCode, L["Deprecate"].Value);
+            Notifications.Failure(result, L["Decisions"].Value, L["Deprecate"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);
@@ -263,7 +263,7 @@ else
             _project.Id, ContentTargetKind.Decision, _selected.Id, _actor, 50);
         _selectedHistory = history.Success ? history.Value!.ToList() : [];
         if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history.Error, L["Decisions"].Value, history.ErrorCode, L["Load"].Value), Severity.Warning);
+            Notifications.Add(Notifications.FormatFailure(history, L["Decisions"].Value, L["Load"].Value), Severity.Warning);
     }
 
     private async Task RestoreSelectedVersion(ContentVersionDto version)
@@ -280,7 +280,7 @@ else
                 ContentTargetKind.Decision, decisionId));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Decisions"].Value, result.ErrorCode, L["Restore"].Value);
+                Notifications.Failure(result, L["Decisions"].Value, L["Restore"].Value);
                 return;
             }
 
@@ -334,7 +334,7 @@ else
         var result = await SupersedeDecision.HandleAsync(_superseding.Id, _replacementId.Value, _actor);
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Decisions"].Value, result.ErrorCode, L["Replace"].Value);
+            Notifications.Failure(result, L["Decisions"].Value, L["Replace"].Value);
             return;
         }
         CancelSupersede();

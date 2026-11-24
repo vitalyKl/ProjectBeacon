@@ -113,7 +113,7 @@
                 projectId, _inviteEmail.Trim(), _inviteRole, Actor));
             if (!created.Success)
             {
-                Notifications.Failure(created.Error, L["Projects"].Value, created.ErrorCode, L["Send"].Value);
+                Notifications.Failure(created, L["Projects"].Value, L["Send"].Value);
                 return;
             }
             _inviteUrl = created.Value!.Url;
@@ -136,7 +136,7 @@
         var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, Actor));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Projects"].Value, result.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(result, L["Projects"].Value, L["Delete"].Value);
             return;
         }
         Notifications.Add(L["Saved"].Value, Severity.Success);

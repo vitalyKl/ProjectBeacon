@@ -115,7 +115,7 @@
                 new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ScanGguf, "{}", null)));
             if (!queued.Success)
             {
-                Notifications.Failure(queued.Error, L["Agents"].Value, queued.ErrorCode, L["Create"].Value);
+                Notifications.Failure(queued, L["Agents"].Value, L["Create"].Value);
                 return;
             }
             WorkstationCommandDto? finished = null;
@@ -183,7 +183,7 @@
                 flags.Count > 0 ? flags : null, _concurrent, _note, _providerModelId)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Load"].Value);
+                Notifications.Failure(result, L["Agents"].Value, L["Load"].Value);
                 return;
             }
             await NudgeModels.HandleAsync(new NudgeModelsCommand(UserId));

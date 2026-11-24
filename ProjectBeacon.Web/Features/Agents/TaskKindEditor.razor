@@ -145,7 +145,7 @@
                 _phases.Select(p => new TaskKindPhaseInput(p.Key, p.Title, p.Instruction, p.FanOut, p.ModelId)).ToList())));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["Agents"].Value, saved.ErrorCode, L["Save"].Value);
+                Notifications.Failure(saved, L["Agents"].Value, L["Save"].Value);
                 return;
             }
             _kindId = saved.Value!.Id;
@@ -168,7 +168,7 @@
         var deleted = await DeleteKind.HandleAsync(new DeleteTaskKindCommand(new DeleteTaskKindRequest(id, UserId)));
         if (!deleted.Success)
         {
-            Notifications.Failure(deleted.Error, L["Agents"].Value, deleted.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(deleted, L["Agents"].Value, L["Delete"].Value);
             return;
         }
         _kindId = null;
@@ -182,7 +182,7 @@
         var reset = await ResetKind.HandleAsync(new ResetBuiltInTaskKindCommand(UserId));
         if (!reset.Success)
         {
-            Notifications.Failure(reset.Error, L["Agents"].Value, reset.ErrorCode, L["Reset"].Value);
+            Notifications.Failure(reset, L["Agents"].Value, L["Reset"].Value);
             return;
         }
         _kindId = reset.Value!.Id;

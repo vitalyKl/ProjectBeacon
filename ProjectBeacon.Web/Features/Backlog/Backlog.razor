@@ -113,7 +113,7 @@ else
         if (!listed.Success)
         {
             _error = true;
-            _errorMessage = Notifications.FormatFailure(listed.Error, L["Backlog"].Value, listed.ErrorCode, L["Load"].Value);
+            _errorMessage = Notifications.FormatFailure(listed, L["Backlog"].Value, L["Load"].Value);
             _tasks = [];
             return;
         }
@@ -162,7 +162,7 @@ else
         var deleted = await DeleteTaskHandler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId)));
         if (!deleted.Success)
         {
-            Notifications.Failure(deleted.Error, L["Backlog"].Value, deleted.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(deleted, L["Backlog"].Value, L["Delete"].Value);
             return;
         }
 

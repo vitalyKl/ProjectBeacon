@@ -144,7 +144,7 @@
             var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
             if (!org.Success)
             {
-                _error = Notifications.FormatFailure(org.Error, L["Projects"].Value, org.ErrorCode, L["Create"].Value);
+                _error = Notifications.FormatFailure(org, L["Projects"].Value, L["Create"].Value);
                 return;
             }
 
@@ -152,7 +152,7 @@
                 _projectName, _description, org.Value!.Id), actor));
             if (!project.Success)
             {
-                _error = Notifications.FormatFailure(project.Error, L["Projects"].Value, project.ErrorCode, L["Create"].Value);
+                _error = Notifications.FormatFailure(project, L["Projects"].Value, L["Create"].Value);
                 return;
             }
 
@@ -162,7 +162,7 @@
                     new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
                 if (!attached.Success)
                 {
-                    _error = Notifications.FormatFailure(attached.Error, L["Projects"].Value, attached.ErrorCode, L["Attach"].Value);
+                    _error = Notifications.FormatFailure(attached, L["Projects"].Value, L["Attach"].Value);
                     return;
                 }
                 if (_initOnDevice)
@@ -186,7 +186,7 @@
                         new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.InitProject, payload, project.Value.Id)));
                     if (!queued.Success)
                     {
-                        _error = Notifications.FormatFailure(queued.Error, L["Workstations"].Value, queued.ErrorCode, L["Initialize"].Value);
+                        _error = Notifications.FormatFailure(queued, L["Workstations"].Value, L["Initialize"].Value);
                         return;
                     }
                     var finished = await WaitAsync(queued.Value!.Id);

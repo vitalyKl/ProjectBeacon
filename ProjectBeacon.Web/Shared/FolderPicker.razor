@@ -107,7 +107,7 @@ else
                 new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ListDir, payload, null)));
             if (!queued.Success)
             {
-                _error = Notifications.FormatFailure(queued.Error, Label ?? L["Projects"].Value, queued.ErrorCode, L["Browse"].Value);
+                _error = Notifications.FormatFailure(queued, Label ?? L["Projects"].Value, L["Browse"].Value);
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
@@ -147,7 +147,7 @@ else
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, UserId)));
             if (!got.Success)
             {
-                _error = Notifications.FormatFailure(got.Error, Label ?? L["Projects"].Value, got.ErrorCode, L["Read"].Value);
+                _error = Notifications.FormatFailure(got, Label ?? L["Projects"].Value, L["Read"].Value);
                 return null;
             }
             _phase = got.Value!.Status == WorkstationCommandStatus.Pending

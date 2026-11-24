@@ -132,7 +132,7 @@
     {
         var listed = await ListConnections.HandleAsync(new ListAgentProviderConnectionsCommand(_userId));
         if (!listed.Success)
-            Notifications.Failure(listed.Error, L["Connections"].Value, listed.ErrorCode, L["Load"].Value);
+            Notifications.Failure(listed, L["Connections"].Value, L["Load"].Value);
         _rows = listed.Success ? listed.Value!.ToList() : [];
     }
 
@@ -154,7 +154,7 @@
                 new SaveAgentProviderConnectionRequest(_userId, _model[..slash], _model[(slash + 1)..], _custom ? _baseUrl : null, _apiKey)));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["Connections"].Value, saved.ErrorCode, L["Save"].Value);
+                Notifications.Failure(saved, L["Connections"].Value, L["Save"].Value);
                 return;
             }
             _apiKey = string.Empty;
@@ -177,7 +177,7 @@
         var deleted = await DeleteConnection.HandleAsync(new DeleteAgentProviderConnectionCommand(new DeleteAgentProviderConnectionRequest(_userId, row.Id)));
         if (!deleted.Success)
         {
-            Notifications.Failure(deleted.Error, L["Connections"].Value, deleted.ErrorCode, L["Delete"].Value);
+            Notifications.Failure(deleted, L["Connections"].Value, L["Delete"].Value);
             return;
         }
         await Reload();

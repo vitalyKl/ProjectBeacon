@@ -37,7 +37,7 @@
         }
         var result = await Rename.HandleAsync(new RenameChatSessionCommand(new RenameChatSessionRequest(session.Id, actor.UserId.Value, _title ?? string.Empty)));
         if (!result.Success)
-            Notifications.Failure(result.Error, L["Chat"].Value, result.ErrorCode, L["Rename"].Value);
+            Notifications.Failure(result, L["Chat"].Value, L["Rename"].Value);
         else
             Instance?.Close();
     }

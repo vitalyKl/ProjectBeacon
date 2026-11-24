@@ -118,7 +118,7 @@
 
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Tasks"].Value, result.ErrorCode, L["Create"].Value);
+                Notifications.Failure(result, L["Tasks"].Value, L["Create"].Value);
                 return;
             }
 

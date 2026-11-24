@@ -131,6 +131,41 @@ public sealed class UiNotificationServiceTests
         finally { CultureInfo.CurrentUICulture = previousCulture; }
     }
 
+
+    [Fact]
+    public void FormatFailure_ResultOverload_UsesMachineReadableErrorCode()
+    {
+        var previousCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
+            using var context = CreateContext();
+            var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+            var result = Result<string>.Failure("internal detail should be ignored", ErrorCodes.Conflict, ErrorKind.Conflict);
+
+            var message = notifications.FormatFailure(result, "настройки проекта", "Сохранить");
+
+            Assert.Contains("конфликт", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("настройки проекта", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Сохранить", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("internal detail", message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousCulture;
+        }
+    }
+
+    [Fact]
+    public void FormatFailure_SuccessfulResult_ReturnsNoErrorMessage()
+    {
+        using var context = CreateContext();
+        var notifications = context.Services.GetRequiredService<IUiNotificationService>();
+        var result = Result<string>.Ok("saved");
+
+        Assert.Equal(string.Empty, notifications.FormatFailure(result, "настройки проекта", "Сохранить"));
+    }
+
     private static TestContext CreateContext()
     {
         var context = new TestContext();

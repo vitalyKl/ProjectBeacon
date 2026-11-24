@@ -61,7 +61,7 @@
         var result = await MyProjects.HandleAsync(uid, isAdmin);
         if (!result.Success || result.Value is null)
         {
-            Notifications.Failure(result.Error, L["Projects"].Value, result.ErrorCode, L["Load"].Value);
+            Notifications.Failure(result, L["Projects"].Value, L["Load"].Value);
             return;
         }
 

@@ -101,7 +101,7 @@ else
         _busy = false;
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode, L["Run"].Value);
+            Notifications.Failure(result, L["Reports"].Value, L["Run"].Value);
             return;
         }
         await Reload();
@@ -114,7 +114,7 @@ else
         var result = await GetReport.HandleAsync(new GetReportRequest(_project.Id, report.Id));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Reports"].Value, result.ErrorCode, L["Read"].Value);
+            Notifications.Failure(result, L["Reports"].Value, L["Read"].Value);
             return;
         }
         _open = result.Value;

@@ -729,7 +729,7 @@ else
                 _project.Id, proposal.Id, _actor, GetAcceptedPayload(proposal)));
             if (!result.Success)
             {
-                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value),
+                Notifications.Add(Notifications.FormatFailure(result, L["ProposalInbox"].Value, L["Accept"].Value),
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -757,7 +757,7 @@ else
                 _project.Id, proposal.Id, _actor, string.IsNullOrWhiteSpace(_decisionNote) ? null : _decisionNote));
             if (!result.Success)
             {
-                Notifications.Add(Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Reject"].Value),
+                Notifications.Add(Notifications.FormatFailure(result, L["ProposalInbox"].Value, L["Reject"].Value),
                     result.Kind == ErrorKind.Conflict ? Severity.Warning : Severity.Error);
                 if (result.Kind == ErrorKind.Conflict)
                 {
@@ -794,7 +794,7 @@ else
                     var conflict = result.Kind == ErrorKind.Conflict;
                     var status = conflict ? L["Conflicted"].Value : L["Error"].Value;
                     batchResults.Add(new BatchAcceptResult(
-                        $"{itemName}: {Notifications.FormatFailure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value)}",
+                        $"{itemName}: {Notifications.FormatFailure(result, L["ProposalInbox"].Value, L["Accept"].Value)}",
                         conflict ? Severity.Warning : Severity.Error));
                 }
                 else if (result.Value?.Status == ProposalStatus.Applying)
@@ -845,7 +845,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await AcceptDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Accept"].Value);
+        if (!result.Success) Notifications.Failure(result, L["ProposalInbox"].Value, L["Accept"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -853,7 +853,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await DeprecateDecision.HandleAsync(decision.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Deprecate"].Value);
+        if (!result.Success) Notifications.Failure(result, L["ProposalInbox"].Value, L["Deprecate"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -861,7 +861,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await ActivateConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Activate"].Value);
+        if (!result.Success) Notifications.Failure(result, L["ProposalInbox"].Value, L["Activate"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 
@@ -869,7 +869,7 @@ else
     {
         if (!_canGovernance) return;
         var result = await RejectConstraint.HandleAsync(constraint.Id, _actor);
-        if (!result.Success) Notifications.Failure(result.Error, L["ProposalInbox"].Value, result.ErrorCode, L["Reject"].Value);
+        if (!result.Success) Notifications.Failure(result, L["ProposalInbox"].Value, L["Reject"].Value);
         else { Notifications.Add(L["Saved"].Value, Severity.Success); await Reload(); }
     }
 }

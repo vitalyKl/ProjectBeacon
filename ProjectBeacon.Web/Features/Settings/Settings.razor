@@ -159,7 +159,7 @@
         var status = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
         if (!status.Success)
         {
-            Notifications.Failure(status.Error, L["Settings"].Value, status.ErrorCode, L["Load"].Value);
+            Notifications.Failure(status, L["Settings"].Value, L["Load"].Value);
             return;
         }
         _totpEnabled = status.Value!.Enabled;
@@ -190,7 +190,7 @@
         var begun = await BeginTotp.HandleAsync(new BeginTotpCommand(_userId));
         if (!begun.Success)
         {
-            Notifications.Failure(begun.Error, L["Settings"].Value, begun.ErrorCode, L["Enable"].Value);
+            Notifications.Failure(begun, L["Settings"].Value, L["Enable"].Value);
             return;
         }
         await ReloadTotp();
@@ -201,7 +201,7 @@
         var confirmed = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(_userId, _totpCode)));
         if (!confirmed.Success)
         {
-            Notifications.Failure(confirmed.Error, L["Settings"].Value, confirmed.ErrorCode, L["Verify"].Value);
+            Notifications.Failure(confirmed, L["Settings"].Value, L["Verify"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -214,7 +214,7 @@
         var disabled = await DisableTotp.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(_userId, _totpCode)));
         if (!disabled.Success)
         {
-            Notifications.Failure(disabled.Error, L["Settings"].Value, disabled.ErrorCode, L["Disable"].Value);
+            Notifications.Failure(disabled, L["Settings"].Value, L["Disable"].Value);
             return;
         }
         _totpCode = string.Empty;
@@ -227,11 +227,11 @@
             return;
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (!registry.Success)
-            Notifications.Failure(registry.Error, L["Settings"].Value, registry.ErrorCode, L["Load"].Value);
+            Notifications.Failure(registry, L["Settings"].Value, L["Load"].Value);
         _chatModels = registry.Success ? registry.Value!.Backends.ToList() : [];
         var current = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
         if (!current.Success)
-            Notifications.Failure(current.Error, L["Settings"].Value, current.ErrorCode, L["Load"].Value);
+            Notifications.Failure(current, L["Settings"].Value, L["Load"].Value);
         _chatModelId = current.Success ? current.Value : null;
     }
 
@@ -245,7 +245,7 @@
             var saved = await SetChatModel.HandleAsync(new SetChatModelCommand(new SetChatModelRequest(_userId, _chatModelId)));
             if (!saved.Success)
             {
-                Notifications.Failure(saved.Error, L["Settings"].Value, saved.ErrorCode, L["Save"].Value);
+                Notifications.Failure(saved, L["Settings"].Value, L["Save"].Value);
                 return;
             }
             Notifications.Add(L["ChatModelSaved"].Value, Severity.Success);
@@ -268,7 +268,7 @@
             var result = await ChangePassword.HandleAsync(new ChangePasswordRequest(_userId, _currentPassword, _newPassword));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Settings"].Value, result.ErrorCode, L["Change"].Value);
+                Notifications.Failure(result, L["Settings"].Value, L["Change"].Value);
                 return;
             }
             _currentPassword = string.Empty;

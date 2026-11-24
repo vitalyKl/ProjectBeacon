@@ -81,7 +81,7 @@
         }
         else
         {
-            _errorMessage = Notifications.FormatFailure(listed.Error, L["ContextCostReport"].Value, listed.ErrorCode, L["Load"].Value);
+            _errorMessage = Notifications.FormatFailure(listed, L["ContextCostReport"].Value, L["Load"].Value);
         }
 
         if (_selectedTaskId is not null)
@@ -115,7 +115,7 @@
         else
         {
             _report = null;
-            _errorMessage = Notifications.FormatFailure(result.Error, L["ContextCostReport"].Value, result.ErrorCode, L["Load"].Value);
+            _errorMessage = Notifications.FormatFailure(result, L["ContextCostReport"].Value, L["Load"].Value);
         }
     }
 

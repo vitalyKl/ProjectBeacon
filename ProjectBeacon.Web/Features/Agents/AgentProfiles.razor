@@ -129,7 +129,7 @@ else
         var result = await GetOverrides.HandleAsync(new GetAgentProfileOverridesCommand(UserId));
         if (!result.Success)
         {
-            Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Load"].Value);
+            Notifications.Failure(result, L["Agents"].Value, L["Load"].Value);
             _profiles = [];
         }
         else
@@ -181,7 +181,7 @@ else
                     profile.ApplyPolicy)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Save"].Value);
+                Notifications.Failure(result, L["Agents"].Value, L["Save"].Value);
                 return;
             }
             Notifications.Add(L["ExecutionProfileSaved"].Value, Severity.Success);
@@ -204,7 +204,7 @@ else
                 new ResetAgentProfileOverrideRequest(UserId, profile.Basis.Key)));
             if (!result.Success)
             {
-                Notifications.Failure(result.Error, L["Agents"].Value, result.ErrorCode, L["Reset"].Value);
+                Notifications.Failure(result, L["Agents"].Value, L["Reset"].Value);
                 return;
             }
             Notifications.Add(L["ExecutionProfileResetDone"].Value, Severity.Success);
