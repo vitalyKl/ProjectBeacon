@@ -79,9 +79,9 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
                 .AnyAsync(session => session.ProjectId == projectId
                     && session.TaskId == taskId
-                    && session.Status is Domain.Enums.SessionStatus.Ready
-                        or Domain.Enums.SessionStatus.Active
-                        or Domain.Enums.SessionStatus.WaitingForUser, ct);
+                    && (session.Status == Domain.Enums.SessionStatus.Ready
+                        || session.Status == Domain.Enums.SessionStatus.Active
+                        || session.Status == Domain.Enums.SessionStatus.WaitingForUser), ct);
             if (activeSession)
                 continue;
 
