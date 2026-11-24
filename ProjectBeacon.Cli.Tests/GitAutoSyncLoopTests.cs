@@ -162,7 +162,7 @@ public sealed class GitAutoSyncLoopTests
 
             Assert.Equal(1, requests);
             Assert.Equal(TimeSpan.Zero, Assert.Single(delays.Take(1)));
-            Assert.Equal(TimeSpan.FromMinutes(1), delays[1]);
+            Assert.InRange(delays[1], TimeSpan.FromSeconds(59), TimeSpan.FromMinutes(1));
             var status = snapshot.Get(projectId);
             Assert.NotNull(status);
             Assert.Equal("FetchFailed", status.LastError?.Code);

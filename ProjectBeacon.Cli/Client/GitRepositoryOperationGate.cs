@@ -98,9 +98,11 @@ internal static class GitRepositoryOperationGate
         // operation so a lease registered through an alias matches Git's physical path.
         if (!OperatingSystem.IsWindows())
         {
+            // realpath requires the complete path to exist. For a not-yet-created
+            // checkout (for example InitProject's target directory), keep the normalized
+            // lexical path instead of falling through to FileSystemInfo.ResolveLinkTarget.
             var physicalPath = TryResolvePhysicalPath(fullPath);
-            if (physicalPath is not null)
-                return TrimRoot(physicalPath);
+            return TrimRoot(physicalPath ?? fullPath);
         }
 
         // Windows junctions and symbolic links are resolved component by component.

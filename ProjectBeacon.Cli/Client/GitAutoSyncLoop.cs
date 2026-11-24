@@ -194,12 +194,12 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 }
                 if (permission.Project is null)
                 {
-                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow());
+                    RecordSkipped(project, "RuntimeChanged", _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
                 if (permission.Project.ManualGitSyncActive)
                 {
-                    RecordSkipped(project, "ManualGitSyncActive", _timing.TimeProvider.GetUtcNow());
+                    RecordSkipped(project, "ManualGitSyncActive", _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
                 if (!SameLocalRoot(project.LocalRoot, permission.Project.LocalRoot))
@@ -209,12 +209,12 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
                 }
                 if (permission.Project.GitLandActive)
                 {
-                    RecordSkipped(project, "GitLandActive", _timing.TimeProvider.GetUtcNow());
+                    RecordSkipped(project, "GitLandActive", _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
                 if (permission.Project.CheckoutMutationActive)
                 {
-                    RecordSkipped(project, "CheckoutMutationActive", _timing.TimeProvider.GetUtcNow());
+                    RecordSkipped(project, "CheckoutMutationActive", _timing.TimeProvider.GetUtcNow(), result);
                     continue;
                 }
 
@@ -307,26 +307,32 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         }
     }
 
-    private void RecordSkipped(DeviceProjectRuntimeDto project, string reason, DateTimeOffset now)
+    private void RecordSkipped(
+        DeviceProjectRuntimeDto project,
+        string reason,
+        DateTimeOffset now,
+        GitSyncResultDto? latestStatus = null)
     {
         if (reason is "NotGitRepository" or "RuntimeChanged")
             _backoff.Remove(project.ProjectId);
 
         var previous = _snapshot.Get(project.ProjectId);
-        var state = new GitAutoSyncProjectState(
-            project.ProjectId,
-            previous?.Branch,
-            previous?.Upstream,
-            previous?.Ahead ?? 0,
-            previous?.Behind ?? 0,
-            previous?.Clean ?? false,
-            previous?.Detached ?? false,
-            previous?.HasUpstream ?? false,
-            previous?.Diverged ?? false,
-            now,
-            previous?.LastAutoPull,
-            reason is "NotGitRepository" or "RuntimeChanged" ? null : previous?.LastError,
-            reason);
+        var state = latestStatus is not null
+            ? ToState(project.ProjectId, latestStatus, now, previous?.LastAutoPull, null, reason)
+            : new GitAutoSyncProjectState(
+                project.ProjectId,
+                previous?.Branch,
+                previous?.Upstream,
+                previous?.Ahead ?? 0,
+                previous?.Behind ?? 0,
+                previous?.Clean ?? false,
+                previous?.Detached ?? false,
+                previous?.HasUpstream ?? false,
+                previous?.Diverged ?? false,
+                now,
+                previous?.LastAutoPull,
+                reason is "NotGitRepository" or "RuntimeChanged" ? null : previous?.LastError,
+                reason);
         if (_snapshot.Set(state))
             _runtimeState.Log($"repository auto-sync skipped for project {project.ProjectId}: {reason}");
     }
