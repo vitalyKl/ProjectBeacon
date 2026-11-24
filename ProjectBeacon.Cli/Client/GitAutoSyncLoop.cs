@@ -110,6 +110,8 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         var projects = await response.Content.ReadFromJsonAsync<List<DeviceProjectRuntimeDto>>(_json, ct) ?? [];
         var ids = projects.Select(project => project.ProjectId).ToHashSet();
         _snapshot.KeepProjects(ids);
+        foreach (var staleProjectId in _backoff.Keys.Where(projectId => !ids.Contains(projectId)).ToArray())
+            _backoff.Remove(staleProjectId);
 
         var settings = _loadSettings();
         foreach (var project in projects)
@@ -301,7 +303,7 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
             previous?.Diverged ?? false,
             now,
             previous?.LastAutoPull,
-            previous?.LastError,
+            reason == "NotGitRepository" ? null : previous?.LastError,
             reason);
         if (_snapshot.Set(state))
             _runtimeState.Log($"repository auto-sync skipped for project {project.ProjectId}: {reason}");
