@@ -124,6 +124,27 @@ public sealed class SessionPromptsTests
     }
 
     [Fact]
+    public void PlannerPromptsEnforceReleaseAwareModeAndImmutableReleaseStates()
+    {
+        var projectId = Guid.NewGuid();
+        var task = TaskItem.Create("Deliver the current release.", projectId);
+        var planner = SessionPrompts.Planner(task, "Release project");
+        var wake = SessionPrompts.PlannerWake(task, [], [], 1, 8);
+
+        foreach (var prompt in new[] { planner, wake })
+        {
+            Assert.Contains("Task -> Milestone -> Release", prompt);
+            Assert.Contains("activeTaskReleaseMode", prompt);
+            Assert.Contains("targetVersion", prompt);
+            Assert.Contains("targetBranch", prompt);
+            Assert.Contains("Candidate", prompt);
+            Assert.Contains("Published", prompt);
+            Assert.Contains("Cancelled", prompt);
+            Assert.Contains("do not create", prompt, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public void PlannerWake_IncludesReportsWorkspaceIndexAndProfileCatalog()
     {
         var projectId = Guid.NewGuid();
