@@ -718,18 +718,11 @@
 
     private static string? ReadClientVersion(string? probeJson)
     {
-        try
-        {
-            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
-            return document.RootElement.TryGetProperty("clientVersion", out var version)
-                && version.ValueKind == JsonValueKind.String
-                    ? version.GetString()
-                    : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+        return document.RootElement.TryGetProperty("clientVersion", out var version)
+            && version.ValueKind == JsonValueKind.String
+                ? version.GetString()
+                : null;
     }
 
     private static bool IsClientVersionAtLeast(string installedVersion, string expectedVersion)
