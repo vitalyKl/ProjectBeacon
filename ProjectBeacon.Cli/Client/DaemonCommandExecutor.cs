@@ -245,12 +245,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         : (false, null, initialized.Error);
                 }
 
-                var projectAction = kind switch
-                {
-                    _ => null
-                };
-                if (projectAction is not null)
-                    return projectAction.Success ? (true, projectAction.Value, null) : (false, null, projectAction.Error);
             }
             if (kind == WorkstationCommandKind.ChatAbort)
                 return await _chat.AbortAsync(payload, ct);
