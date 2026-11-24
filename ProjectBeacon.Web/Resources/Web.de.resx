@@ -3304,4 +3304,10 @@ orthstar</value>
   <data name="WorkstationProbeInvalid" xml:space="preserve">
     <value>Die Workstation hat Diagnosedaten in einem nicht lesbaren Format zurückgegeben. Aktualisieren Sie die Diagnose und prüfen Sie bei erneutem Auftreten das Workstation-Protokoll.</value>
   </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>Der Einladungslink enthält kein Einladungstoken. Öffnen Sie den vollständigen Link aus der Einladungs-E-Mail.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet. Bitten Sie den Einladenden um eine neue Einladung.</value>
+  </data>
 </root>

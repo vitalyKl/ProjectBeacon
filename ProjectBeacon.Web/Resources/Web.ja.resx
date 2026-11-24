@@ -3312,4 +3312,10 @@ orthstar</value>
   <data name="WorkstationProbeInvalid" xml:space="preserve">
     <value>ワークステーションから読み取り不能な形式の診断情報が返されました。診断情報を更新し、問題が続く場合はログを確認してください。</value>
   </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>招待リンクに招待トークンが含まれていません。招待メールに記載された完全なリンクを開いてください。</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>この招待は無効か、有効期限切れ、または使用済みです。招待者に新しい招待を依頼してください。</value>
+  </data>
 </root>

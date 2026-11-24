@@ -3294,4 +3294,10 @@
   <data name="WorkstationProbeInvalid" xml:space="preserve">
     <value>Рабочая станция вернула диагностику в нечитаемом формате. Обновите диагностику и проверьте журнал станции, если проблема повторится.</value>
   </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>В ссылке приглашения отсутствует токен. Откройте полную ссылку из письма с приглашением.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>Приглашение недействительно, истекло или уже использовано. Попросите отправителя прислать новое приглашение.</value>
+  </data>
 </root>

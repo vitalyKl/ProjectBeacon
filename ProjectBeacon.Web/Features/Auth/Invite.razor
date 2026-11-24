@@ -69,19 +69,46 @@
             _token = token.ToString();
         var state = await Auth.GetAuthenticationStateAsync();
         _signedIn = state.User.Identity?.IsAuthenticated == true;
-        if (string.IsNullOrEmpty(_token))
+        if (string.IsNullOrWhiteSpace(_token))
         {
-            _error = L["Error"].Value;
+            _error = L["InviteTokenMissing"].Value;
             return;
         }
 
-        var response = await Http.GetAsync($"/v1/invites/{Uri.EscapeDataString(_token)}");
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            _error = L["Error"].Value;
-            return;
+            using var response = await Http.GetAsync($"/v1/invites/{Uri.EscapeDataString(_token)}");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _error = L["InviteInvalidOrExpired"].Value;
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = Notifications.FormatFailure(
+                    L["AuthRequestFailed"].Value,
+                    L["AuthInviteOperation"].Value,
+                    response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                        ? ErrorCodes.Unauthorized
+                        : response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                            ? ErrorCodes.Forbidden
+                            : response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
+                                ? ErrorCodes.Unavailable
+                                : ErrorCodes.Unclassified,
+                    L["Load"].Value);
+                return;
+            }
+
+            _preview = await response.Content.ReadFromJsonAsync<InvitePreview>();
+            if (_preview is null)
+                _error = L["InviteInvalidOrExpired"].Value;
         }
-        _preview = await response.Content.ReadFromJsonAsync<InvitePreview>();
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(exception, "load invitation preview");
+            _error = string.Format(L["AuthUnexpectedError"].Value, diagnosticId);
+        }
     }
 
     private async Task Accept()

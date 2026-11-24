@@ -3503,4 +3503,10 @@ No Beacon-hosted coding agent.</value>
   <data name="WorkstationProbeInvalid" xml:space="preserve">
     <value>The workstation returned diagnostics in an unreadable format. Refresh the diagnostics and check the workstation log if the problem persists.</value>
   </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>This invitation link does not contain an invitation token. Open the complete link from the invitation email.</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>This invitation is invalid, has expired, or has already been used. Ask the inviter to send a new invitation.</value>
+  </data>
 </root>

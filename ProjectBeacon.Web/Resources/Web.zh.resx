@@ -3312,4 +3312,10 @@ orthstar</value>
   <data name="WorkstationProbeInvalid" xml:space="preserve">
     <value>工作站返回了无法读取格式的诊断信息。请刷新诊断信息；如果问题仍然存在，请检查工作站日志。</value>
   </data>
+  <data name="InviteTokenMissing" xml:space="preserve">
+    <value>此邀请链接不包含邀请令牌。请打开邀请邮件中的完整链接。</value>
+  </data>
+  <data name="InviteInvalidOrExpired" xml:space="preserve">
+    <value>此邀请无效、已过期或已被使用。请联系邀请人重新发送邀请。</value>
+  </data>
 </root>
