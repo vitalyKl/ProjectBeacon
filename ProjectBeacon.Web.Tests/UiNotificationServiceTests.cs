@@ -141,7 +141,7 @@ public sealed class UiNotificationServiceTests
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ru");
             using var context = CreateContext();
             var notifications = context.Services.GetRequiredService<IUiNotificationService>();
-            var result = Result<string>.Failure("internal detail should be ignored", ErrorCodes.Conflict, ErrorKind.Conflict);
+            var result = Result.Failure<string>("internal detail should be ignored", ErrorCodes.Conflict, ErrorKind.Conflict);
 
             var message = notifications.FormatFailure(result, "настройки проекта", "Сохранить");
 
@@ -161,7 +161,7 @@ public sealed class UiNotificationServiceTests
     {
         using var context = CreateContext();
         var notifications = context.Services.GetRequiredService<IUiNotificationService>();
-        var result = Result<string>.Ok("saved");
+        var result = Result.Ok<string>("saved");
 
         Assert.Equal(string.Empty, notifications.FormatFailure(result, "настройки проекта", "Сохранить"));
     }
