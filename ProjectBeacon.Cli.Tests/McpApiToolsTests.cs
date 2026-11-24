@@ -803,6 +803,64 @@ public sealed class McpApiToolsTests
     }
 
 
+    [Fact]
+    public async Task DeploymentVersionCheck_RequiresExactOfficialVersionAndValidGitSha()
+    {
+        const string sha = "0123456789abcdef0123456789abcdef01234567";
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.OK, $"""{"version":"0.7.5.9","gitSha":"{{sha}}"}"""));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("in_sync", result["status"]!.GetValue<string>());
+        Assert.Equal("0.7.5.9", result["deployedVersion"]!.GetValue<string>());
+        Assert.Equal(sha, result["deployedCommitSha"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task DeploymentVersionCheck_ReportsDriftForVersionOrShaMismatch()
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.OK, """{"version":"0.7.5.8","gitSha":"not-a-sha"}"""));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("drift", result["status"]!.GetValue<string>());
+        Assert.False(result["versionMatches"]!.GetValue<bool>());
+        Assert.False(result["gitShaValid"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task DeploymentVersionCheck_DoesNotFollowRedirects()
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.Redirect, """{"version":"0.7.5.9","gitSha":"0123456789abcdef0123456789abcdef01234567"}"""));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("unreachable", result["status"]!.GetValue<string>());
+        Assert.Contains("redirected", result["error"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("http://beacon.example/v1/version")]
+    [InlineData("https://beacon.example/v1/version?token=secret")]
+    public async Task DeploymentVersionCheck_RejectsUnsafeEndpointConfiguration(string endpoint)
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(HttpStatusCode.OK, "{}"));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            endpoint, "0.7.5.9", TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("invalid_configuration", result["status"]!.GetValue<string>());
+    }
+
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
