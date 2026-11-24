@@ -283,21 +283,34 @@ def main() -> None:
         if projected != version:
             fail(f"version source {raw_path!r} projects {projected!r}, expected {version!r}")
 
-    changed = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()))
+    # The release preparation commit can be an ancestor of the tagged commit
+    # when GitHub merges its PR with a merge/squash commit. Locate the commit
+    # that introduced .beacon/release.json and verify its trailer and path scope.
+    release_commit = git("log", "-1", "--format=%H", "HEAD", "--", ".beacon/release.json")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", release_commit):
+        fail("could not locate the Beacon ReleasePrepare commit")
+    parents = git("rev-list", "--parents", "-n", "1", release_commit).split()
+    if len(parents) != 2:
+        fail("ReleasePrepare commit must have exactly one parent")
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", release_commit, "HEAD"],
+        cwd=ROOT, check=False,
+    )
+    if ancestry.returncode != 0:
+        fail("ReleasePrepare commit is not an ancestor of the tagged commit")
+    changed = set(filter(None, git(
+        "diff-tree", "--no-commit-id", "--name-only", "-r", release_commit
+    ).splitlines()))
     allowed = paths | {".beacon/release.json"}
     unexpected = sorted(changed - allowed)
     if unexpected:
         fail("release preparation commit changes paths outside its version projections and release manifest: "
              + ", ".join(unexpected[:20]))
     if ".beacon/release.json" not in changed:
-        fail("tagged release commit does not modify .beacon/release.json")
-
-    parents = git("rev-list", "--parents", "-n", "1", "HEAD").split()
-    if len(parents) != 2:
-        fail("ReleasePrepare commit must have exactly one parent")
-    trailers = git("log", "-1", "--format=%(trailers:key=Beacon-Release,valueonly)", "HEAD").splitlines()
+        fail("ReleasePrepare commit does not modify .beacon/release.json")
+    trailers = git("log", "-1", "--format=%(trailers:key=Beacon-Release,valueonly)", release_commit).splitlines()
     if len(trailers) != 1 or trailers[0].strip() != release_id:
-        fail("tagged commit must contain exactly one Beacon-Release trailer matching releaseId")
+        fail("ReleasePrepare commit must contain exactly one Beacon-Release trailer matching releaseId")
 
     print(
         f"Release manifest verified: project={project_id} release={release_id} "
