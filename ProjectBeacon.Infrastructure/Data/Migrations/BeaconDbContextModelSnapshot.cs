@@ -2707,6 +2707,23 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("HotfixDeployedSha")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("HotfixRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("HotfixSourceReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HotfixTargetBranch")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ForwardPortOfTaskId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -2749,11 +2766,35 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("ProjectId", "Id");
+
                     b.HasIndex("LabelId");
+
+                    b.HasIndex("ProjectId", "HotfixRequestId")
+                        .IsUnique()
+                        .HasFilter("\\"HotfixRequestId\\" IS NOT NULL");
+
+                    b.HasIndex("ProjectId", "ForwardPortOfTaskId")
+                        .IsUnique()
+                        .HasFilter("\\"ForwardPortOfTaskId\\" IS NOT NULL");
+
+                    b.HasIndex("ProjectId", "HotfixSourceReleaseId");
 
                     b.HasIndex("MilestoneId");
 
                     b.HasIndex("ProjectId", "Status");
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "HotfixSourceReleaseId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ForwardPortOfTaskId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.ToTable("Tasks");
                 });
