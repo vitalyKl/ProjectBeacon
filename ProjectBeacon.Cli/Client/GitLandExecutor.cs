@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 /// <summary>
 /// Executes daemon-authorized Git landing operations. All repository, task branch, target branch,
@@ -97,6 +98,28 @@ internal static class GitLandExecutor
         if (filters.Error is not null)
             return BusinessFailure("GitFilterConfigurationUnavailable");
         var disabledFilters = filters.Filters!;
+
+        // GitHub is the authoritative merge executor for GitHub-origin repositories.
+        // Preview remains available, but a local ref-only GitLand Execute/Revert would
+        // create a second, competing landing authority and bypass branch protection.
+        if (request.Action is "Execute" or "Revert")
+        {
+            var origin = await Git(
+                repositoryRoot, disabledFilters, ct, "remote", "get-url", "--all", "origin");
+            if (origin.TimedOut)
+                return BusinessFailure("GitRemoteInspectionFailed");
+            if (origin.ExitCode == 0)
+            {
+                var originUrls = origin.StdOut.Split(
+                    ['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (AgentTaskGitOperations.HasGitHubOrigin(originUrls))
+                    return BusinessFailure("GitHubRemoteRequiresPullRequest");
+            }
+            else if (origin.ExitCode != 2)
+            {
+                return BusinessFailure("GitRemoteInspectionFailed");
+            }
+        }
 
         var version = await Git(repositoryRoot, disabledFilters, ct, "--version");
         if (!Succeeded(version) || !AgentTaskWorktree.SupportsBranchWorkflow(version.StdOut))
