@@ -58,6 +58,31 @@ public sealed class PipelineToolPolicyTests
     }
 
     [Fact]
+    public void VersionTools_AreScopedByPipelineRole()
+    {
+        var actor = PipelineToolPolicy.ToolsForRole("Actor");
+        Assert.Contains(McpToolNames.VersionCheck, actor);
+        Assert.Contains(McpToolNames.ReleaseContext, actor);
+        Assert.Contains(McpToolNames.GetTaskVersionImpact, actor);
+        Assert.Contains(McpToolNames.VersionImpact, actor);
+        Assert.DoesNotContain(McpToolNames.ReviewVersionImpact, actor);
+
+        var planner = PipelineToolPolicy.ToolsForRole("Planner");
+        Assert.Contains(McpToolNames.VersionCheck, planner);
+        Assert.Contains(McpToolNames.ReleaseContext, planner);
+        Assert.Contains(McpToolNames.GetTaskVersionImpact, planner);
+        Assert.DoesNotContain(McpToolNames.VersionImpact, planner);
+        Assert.DoesNotContain(McpToolNames.ReviewVersionImpact, planner);
+
+        var reviewer = PipelineToolPolicy.ToolsForRole("Review");
+        Assert.Contains(McpToolNames.VersionCheck, reviewer);
+        Assert.Contains(McpToolNames.ReleaseContext, reviewer);
+        Assert.Contains(McpToolNames.GetTaskVersionImpact, reviewer);
+        Assert.Contains(McpToolNames.ReviewVersionImpact, reviewer);
+        Assert.DoesNotContain(McpToolNames.VersionImpact, reviewer);
+    }
+
+    [Fact]
     public void StructuredGitTools_AreRestrictedByPipelineRole()
     {
         Assert.Equal(
