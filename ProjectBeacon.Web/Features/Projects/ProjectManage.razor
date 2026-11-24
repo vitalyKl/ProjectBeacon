@@ -1107,7 +1107,7 @@ else
         if (status.AutoPullBlockedReason is "ManualGitSyncActive" or "GitSyncBusy")
             return L["RepoSyncGitSyncBusy"].Value;
         if (status.LastError is { } error)
-            return string.Format(L["RepoSyncError"].Value, error.Code);
+            return RepoSyncErrorMessage(error.Code);
         if (status.AutoPullBlockedReason == "NotGitRepository")
             return L["RepoSyncNotGit"].Value;
         if (status.Diverged || status.AutoPullBlockedReason == "Diverged")
@@ -1134,6 +1134,16 @@ else
             ? string.Format(L["RepoSyncBehind"].Value, status.Behind)
             : L["RepoSyncUpToDate"].Value;
     }
+
+    private string RepoSyncErrorMessage(string code) => code switch
+    {
+        "AuthenticationFailed" => L["RepoSyncAuthenticationFailed"].Value,
+        "FetchFailed" => L["RepoSyncFetchFailed"].Value,
+        "Timeout" => L["RepoSyncTimeout"].Value,
+        "RuntimeDiscoveryUnavailable" => L["RepoSyncDiscoveryFailed"].Value,
+        "ProjectDirectoryUnavailable" => L["RepoSyncDirectoryUnavailable"].Value,
+        _ => string.Format(L["RepoSyncError"].Value, code)
+    };
 
     private string RepoSyncAge(DateTimeOffset checkedAt)
     {
