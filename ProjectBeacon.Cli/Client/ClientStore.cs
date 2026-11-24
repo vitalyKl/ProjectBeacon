@@ -129,6 +129,10 @@ public sealed class WorkstationSettings
     public int PipelineIdleTimeoutMinutes { get; set; } = 15;
     /// <summary>Agent workspace strategy for task/pipeline runs. New and legacy-default installations use persistent task branches.</summary>
     public string WorkspaceMode { get; set; } = WorkstationWorkspaceMode.Branch;
+    /// <summary>Automatic update policy for the real project checkout.</summary>
+    public string AutoPullMode { get; set; } = "WhenSafe";
+    /// <summary>Background repository status interval, clamped to 2..120 minutes.</summary>
+    public int AutoSyncIntervalMinutes { get; set; } = 10;
     /// <summary>True when the user explicitly chose a workspace mode. Missing values are migrated to Branch.</summary>
     public bool WorkspaceModeConfigured { get; set; }
     /// <summary>Persistent root for task worktrees. Blank uses the per-user ProjectBeacon worktree directory.</summary>

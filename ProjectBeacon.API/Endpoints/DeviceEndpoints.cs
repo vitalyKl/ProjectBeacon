@@ -22,6 +22,7 @@ public static class DeviceEndpoints
         app.MapGet("/v1/devices", ListDevices).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/devices/{id:guid}", RevokeDevice).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost(ApiRoutes.DeviceHeartbeatRoute, Heartbeat).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet("/v1/devices/me/project-runtimes", ListDeviceProjectRuntimes).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet(ApiRoutes.DeviceCommandsRoute, ClaimCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.CommandCompleteRoute, CompleteCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost(ApiRoutes.CommandProgressRoute, ReportCommandProgress).RequireAuthorization().DisableAntiforgery().RequireDevice();

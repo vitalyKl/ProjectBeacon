@@ -336,3 +336,62 @@ internal static class ProjectRuntimeMutationGate
                 && session.Status == ChatSessionStatus.Streaming, ct);
     }
 }
+
+
+/// <summary>Project roots attached to the authenticated workstation device.</summary>
+public sealed record DeviceProjectRuntimeDto(
+    Guid ProjectId,
+    string LocalRoot,
+    bool ManualGitSyncActive,
+    bool GitLandActive);
+
+/// <summary>Returns only runtimes owned by the authenticated device; paths never enter heartbeat probe data.</summary>
+public sealed class ListDeviceProjectRuntimesHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ListDeviceProjectRuntimesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<IReadOnlyList<DeviceProjectRuntimeDto>> HandleAsync(
+        Guid deviceId,
+        CancellationToken ct = default)
+    {
+        if (deviceId == Guid.Empty)
+            return [];
+
+        await using var db = _dbFactory.CreateDbContext();
+        var deviceExists = await db.DaemonDevices.AsNoTracking()
+            .AnyAsync(device => device.Id == deviceId && device.RevokedAt == null, ct);
+        if (!deviceExists)
+            return [];
+
+        var runtimes = await db.ProjectRuntimes.AsNoTracking()
+            .Where(runtime => runtime.DeviceId == deviceId)
+            .OrderBy(runtime => runtime.ProjectId)
+            .Select(runtime => new { runtime.ProjectId, runtime.LocalRoot })
+            .ToListAsync(ct);
+        if (runtimes.Count == 0)
+            return [];
+
+        var projectIds = runtimes.Select(runtime => runtime.ProjectId).ToArray();
+        var active = await db.WorkstationCommands.AsNoTracking()
+            .Where(command => command.DeviceId == deviceId
+                && command.ProjectId != null
+                && projectIds.Contains(command.ProjectId.Value)
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running)
+                && (command.Kind == WorkstationCommandKind.GitSync
+                    || command.Kind == WorkstationCommandKind.GitLand))
+            .Select(command => new { command.ProjectId, command.Kind })
+            .ToListAsync(ct);
+
+        return runtimes.Select(runtime => new DeviceProjectRuntimeDto(
+            runtime.ProjectId,
+            runtime.LocalRoot,
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && command.Kind == WorkstationCommandKind.GitSync),
+            active.Any(command => command.ProjectId == runtime.ProjectId
+                && command.Kind == WorkstationCommandKind.GitLand)))
+            .ToArray();
+    }
+}
