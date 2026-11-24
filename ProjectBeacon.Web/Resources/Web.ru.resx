@@ -3038,4 +3038,20 @@
   <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>Значение можно задать только один раз. Дальнейшее изменение официальной версии выполняется только через ReleasePrepare.</value></data>
   <data name="SaveVersionPolicy" xml:space="preserve"><value>Сохранить политику версии</value></data>
   <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Источник должен иметь формат path|Format|selector.</value></data>
+  <data name="ProjectVersionScheme" xml:space="preserve"><value>Схема версионирования</value></data>
+  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Числовые компоненты</value></data>
+  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Календарная версия</value></data>
+  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>Количество числовых компонентов (1–8)</value></data>
+  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Формат календарной версии (инвариантный формат даты .NET)</value></data>
+  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Шаблон Git-тега</value></data>
+  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Используйте ровно один маркер {version}, например v{version}.</value></data>
+  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Разрешить prerelease-версии SemVer</value></data>
+  <data name="ProjectOfficialVersion" xml:space="preserve"><value>Официальная версия проекта (источник истины — Beacon)</value></data>
+  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Начальная официальная версия</value></data>
+  <data name="ProjectVersionSources" xml:space="preserve"><value>Файлы-проекции версии</value></data>
+  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Одна запись на строку: относительный/путь|Xml, Json, Toml или Regex|селектор. XML использует XPath, JSON — JSON Pointer, TOML — путь из ключей через точку, Regex — именованную группу 'version' или группу 1. Файлы должны находиться внутри workspace проекта.</value></data>
+  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Изменять политику версии могут только Owner и Admin проекта.</value></data>
+  <data name="ProjectVersionSave" xml:space="preserve"><value>Сохранить политику версии</value></data>
+  <data name="ProjectVersionSaved" xml:space="preserve"><value>Политика версии сохранена</value></data>
 </root>
