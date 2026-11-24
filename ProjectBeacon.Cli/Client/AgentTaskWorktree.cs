@@ -109,7 +109,9 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
         Guid projectId,
         Guid taskId,
         string? configuredWorktreeRoot,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? baseBranchOverride = null,
+        string? baseShaOverride = null)
     {
         string? warning = null;
         FileStream? lease = null;
@@ -166,7 +168,62 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
             if (branchResult.ExitCode is not (0 or 1) || branchResult.TimedOut)
                 return Fail("Could not identify the current base branch safely.");
 
-            if (!string.IsNullOrWhiteSpace(baseBranch))
+            if (baseBranchOverride is not null || baseShaOverride is not null)
+            {
+                if (string.IsNullOrWhiteSpace(baseBranchOverride)
+                    || string.IsNullOrWhiteSpace(baseShaOverride)
+                    || !IsGitSha(baseShaOverride))
+                    return Fail("A Hotfix workspace override must include a safe target branch and a full deployed Git SHA.");
+
+                var branchCheck = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters,
+                    "check-ref-format", "--branch", baseBranchOverride);
+                if (branchCheck.ExitCode != 0 || branchCheck.TimedOut)
+                    return Fail("The server supplied an invalid Hotfix target branch.");
+
+                var remote = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters, "remote", "get-url", "origin");
+                if (remote.ExitCode != 0 || remote.TimedOut || string.IsNullOrWhiteSpace(remote.StdOut))
+                    return Fail("Hotfix workspaces require the configured origin remote; refusing to fall back to the local checkout.");
+
+                var remoteUrl = remote.StdOut.Trim();
+                if (!IsSupportedFetchRemote(remoteUrl))
+                    return Fail("The origin remote uses an unsupported Git transport; refusing to start a Hotfix from a local or unverified base.");
+
+                var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
+                    repositoryRoot,
+                    disabledFilters,
+                    ct,
+                    remoteUrl,
+                    "fetch", "--no-tags", "--no-recurse-submodules",
+                    "--upload-pack=git-upload-pack", "--", remoteUrl,
+                    $"+refs/heads/{baseBranchOverride}:refs/remotes/origin/{baseBranchOverride}");
+                if (fetch.ExitCode != 0 || fetch.TimedOut)
+                    return Fail("Could not fetch the Hotfix target branch from origin; the deployed SHA has not been verified against the remote branch.");
+
+                var remoteHead = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters,
+                    "rev-parse", "--verify", $"refs/remotes/origin/{baseBranchOverride}");
+                if (remoteHead.ExitCode != 0 || remoteHead.TimedOut || !IsGitSha(remoteHead.StdOut.Trim()))
+                    return Fail("Could not resolve the fetched Hotfix target branch.");
+
+                var deployedCommit = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters,
+                    "cat-file", "-e", baseShaOverride + "^{commit}");
+                if (deployedCommit.ExitCode != 0 || deployedCommit.TimedOut)
+                    return Fail("The deployed Hotfix SHA is not present as a Git commit after fetching origin.");
+
+                var ancestry = await AgentSessionWorktree.RunGitAsync(
+                    repositoryRoot, ct, disabledFilters,
+                    "merge-base", "--is-ancestor", baseShaOverride,
+                    $"refs/remotes/origin/{baseBranchOverride}");
+                if (ancestry.ExitCode != 0 || ancestry.TimedOut)
+                    return Fail("The deployed Hotfix SHA is no longer an ancestor of the remote target branch. Refusing to use a different base.");
+
+                baseBranch = baseBranchOverride;
+                baseSha = baseShaOverride.ToLowerInvariant();
+            }
+            else if (!string.IsNullOrWhiteSpace(baseBranch))
             {
                 var remote = await AgentSessionWorktree.RunGitAsync(
                     repositoryRoot, ct, disabledFilters, "remote", "get-url", "origin");
@@ -290,6 +347,10 @@ internal sealed class AgentTaskWorktree : IAgentSessionWorktree
                     || !string.Equals(metadata.BranchName, branchName, StringComparison.Ordinal)
                     || !IsGitSha(metadata.BaseSha))
                     return Fail("Existing task worktree metadata does not match this project and repository.");
+                if ((baseBranchOverride is not null || baseShaOverride is not null)
+                    && (!string.Equals(metadata.BaseBranch, baseBranchOverride, StringComparison.Ordinal)
+                        || !string.Equals(metadata.BaseSha, baseShaOverride, StringComparison.OrdinalIgnoreCase)))
+                    return Fail("Existing task worktree base does not match the deployed Hotfix SHA and target branch; refusing to reuse it.");
                 baseBranch = metadata.BaseBranch;
                 baseSha = metadata.BaseSha;
             }
