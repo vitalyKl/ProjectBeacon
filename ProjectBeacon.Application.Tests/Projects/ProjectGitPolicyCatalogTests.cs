@@ -47,7 +47,7 @@ public sealed class ProjectGitPolicyCatalogTests
     [Fact]
     public void TryRead_LegacyPolicyWithoutAutoSyncFlagDefaultsDisabled()
     {
-        const string json = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\"}";
+        const string json = """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off"}""";
 
         Assert.True(ProjectGitPolicyCatalog.TryRead(json, 4, out var policy));
         Assert.False(policy.AutoSyncEnabled);
@@ -56,7 +56,7 @@ public sealed class ProjectGitPolicyCatalogTests
     [Fact]
     public void TryRead_RejectsNonBooleanAutoSyncFlag()
     {
-        const string json = "{\\"autonomyLevel\\":0,\\"dirtyCheckoutBehavior\\":\\"Escalate\\",\\"protectedPaths\\":[],\\"maxChangedFiles\\":200,\\"maxChangedLines\\":20000,\\"autoRevertMode\\":\\"Off\\",\\"autoSyncEnabled\\":\\"yes\\"}";
+        const string json = """{"autonomyLevel":0,"dirtyCheckoutBehavior":"Escalate","protectedPaths":[],"maxChangedFiles":200,"maxChangedLines":20000,"autoRevertMode":"Off","autoSyncEnabled":"yes"}""";
 
         Assert.False(ProjectGitPolicyCatalog.TryRead(json, 1, out _));
     }
