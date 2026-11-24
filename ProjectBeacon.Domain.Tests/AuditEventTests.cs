@@ -42,6 +42,47 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsReleaseVersionAndMilestoneAssociationMetadata()
+    {
+        var previousReleaseId = Guid.NewGuid();
+        var releaseId = Guid.NewGuid();
+        const string detailsJson = """{"newState":"Planned","targetVersion":"0.7.5.9","targetBranch":"release/0.7.5.9","previousReleaseId":"11111111-1111-1111-1111-111111111111","releaseId":"22222222-2222-2222-2222-222222222222","count":3}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+        Assert.NotEqual(previousReleaseId, releaseId);
+    }
+
+    [Fact]
+    public void Create_AcceptsReviewerDecisionSessionMetadata()
+    {
+        var sessionId = Guid.NewGuid();
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            previousState = "patch",
+            newState = "Confirmed",
+            reviewSessionId = sessionId.ToString("D"),
+            count = 4
+        });
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_RejectsFreeFormReleaseAndReviewContent()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"rationale":"This is a free-form description."}"""));
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"note":"The reviewer wrote a long note."}"""));
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"targetVersion":"version with spaces"}"""));
+    }
+
+    [Fact]
     public void Create_RejectsUnlistedSensitiveMetadataKeys()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"password":"secret"}"""));
