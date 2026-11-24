@@ -3612,4 +3612,6 @@ No Beacon-hosted coding agent.</value>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Cancelled</value></data>
 
   <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate is created by ReleasePrepare after policy, impact, landing, and validation checks pass.</value></data>
+  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Production version endpoint</value></data>
+  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS URL ending in /v1/version. Beacon uses this endpoint after the release workflow succeeds and requires both version and gitSha to match the Candidate.</value></data>
 </root>
