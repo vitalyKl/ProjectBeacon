@@ -345,7 +345,7 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
                 new
                 {
                     name = "CI",
-                    event = "pull_request",
+                    @event = "pull_request",
                     status = "completed",
                     conclusion = "failure",
                     head_branch = "beacon/task/0123456789abcdef0123456789abcdef",
