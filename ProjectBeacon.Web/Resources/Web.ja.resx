@@ -3436,4 +3436,15 @@ orthstar</value>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>このタスクは本番環境にデプロイされた正確なコミットを基点にしています。ブランチとベースコミットは Beacon によって保護されます。</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>この通常タスクは、元の Hotfix の landing が確認された後に作成されました。通常の Planner、Actor、Reviewer、landing ワークフローで完了してください。</value></data>
   <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release の流れ: Project Settings で正本となるバージョンとマニフェストファイルを設定し、ここで Release を作成して Milestone を関連付けます。関連 Milestone のタスクは Planner コンテキストで目標バージョンとブランチを受け取ります。Release の準備で不変の Candidate が作成され、本番公開には別途明示的な確認が必要です。</value></data>
+  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>Candidate を準備</value></data>
+  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>リリース Pull Request を開く</value></data>
+  <data name="VerifyReleaseLanding" xml:space="preserve"><value>Landing を検証</value></data>
+  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>固定されたワークステーションでリリース準備を実行中です。</value></data>
+  <data name="ReleasePrepareQueued" xml:space="preserve"><value>固定されたワークステーションにリリース準備をキュー登録しました。</value></data>
+  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>同じワークステーションに Landing 検証をキュー登録しました。</value></data>
+  <data name="PublishRelease" xml:space="preserve"><value>本番環境へ公開</value></data>
+  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>本番公開の確認</value></data>
+  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>リリース「{0}」をバージョン {1}、タグ「{2}」、ブランチ「{3}」で公開しますか？不変の Git タグを作成し、本番環境へデプロイする可能性のある GitHub Release ワークフローを開始します。push 済みタグは移動・削除されず、再試行では同じ Candidate とタグを使用します。</value></data>
+  <data name="ReleasePublicationQueued" xml:space="preserve"><value>固定されたワークステーションに公開処理をキュー登録しました。Beacon は GitHub ワークフローとデプロイ済みバージョン/SHA を検証します。</value></data>
+  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不変のリリースタグはすでに push 済みです。再試行しても移動しません。</value></data>
 </root>
