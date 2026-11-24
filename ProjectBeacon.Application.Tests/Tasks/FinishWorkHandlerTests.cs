@@ -557,6 +557,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<Report> Reports => _inner.Reports;
         public DbSet<Milestone> Milestones => _inner.Milestones;
         public DbSet<Release> Releases => _inner.Releases;
+        public DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots => _inner.ReleaseCandidateSnapshots;
         public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
@@ -639,6 +640,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<Report> Reports => _inner.Reports;
         public DbSet<Milestone> Milestones => _inner.Milestones;
         public DbSet<Release> Releases => _inner.Releases;
+        public DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots => _inner.ReleaseCandidateSnapshots;
         public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
