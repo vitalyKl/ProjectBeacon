@@ -94,7 +94,14 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
 
     internal async Task DelayUntilNextCycleAsync(TimeSpan requestedDelay, CancellationToken ct)
     {
-        var remaining = requestedDelay < TimeSpan.Zero ? TimeSpan.Zero : requestedDelay;
+        if (requestedDelay <= TimeSpan.Zero)
+        {
+            await _timing.DelayAsync(TimeSpan.Zero, ct);
+            ct.ThrowIfCancellationRequested();
+            return;
+        }
+
+        var remaining = requestedDelay;
         var checkInterval = _timing.GitAutoSyncWakeCheckInterval > TimeSpan.Zero
             ? _timing.GitAutoSyncWakeCheckInterval
             : TimeSpan.FromSeconds(15);

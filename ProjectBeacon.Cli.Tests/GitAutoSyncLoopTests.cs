@@ -234,7 +234,9 @@ public sealed class GitAutoSyncLoopTests
             timing.DelayAsync = (delay, _) =>
             {
                 delays.Add(delay);
-                if (delays.Count == 2)
+                var scheduledRetryElapsed = delays.Skip(1)
+                    .Aggregate(TimeSpan.Zero, (total, item) => total + item);
+                if (delays.Count > 1 && scheduledRetryElapsed >= TimeSpan.FromMinutes(1))
                     cancellation.Cancel();
                 return Task.CompletedTask;
             };
@@ -246,8 +248,10 @@ public sealed class GitAutoSyncLoopTests
             await loop.RunAsync(cancellation.Token);
 
             Assert.Equal(1, requests);
-            Assert.Equal(TimeSpan.Zero, Assert.Single(delays.Take(1)));
-            Assert.InRange(delays[1], TimeSpan.FromSeconds(59), TimeSpan.FromMinutes(1));
+            Assert.Equal(TimeSpan.Zero, delays[0]);
+            Assert.Equal(TimeSpan.FromMinutes(1),
+                delays.Skip(1).Aggregate(TimeSpan.Zero, (total, item) => total + item));
+            Assert.All(delays.Skip(1), delay => Assert.Equal(TimeSpan.FromSeconds(15), delay));
             var status = snapshot.Get(projectId);
             Assert.NotNull(status);
             Assert.Equal("FetchFailed", status.LastError?.Code);
