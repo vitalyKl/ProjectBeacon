@@ -2612,6 +2612,9 @@ orthstar</value>
   <data name="GitSyncNow" xml:space="preserve"><value>同期</value></data>
   <data name="GitSyncWorking" xml:space="preserve"><value>ワークステーションで Git 操作が完了するのを待っています…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Git 操作はまだ実行中です。このページでは状態の確認が自動的に続行されます。</value></data>
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>このリポジトリ同期リクエストをキャンセルしますか？ワークステーションがコマンドを取得する前に限りキャンセルできます。</value></data>
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>ワークステーションで開始される前に、リポジトリ同期リクエストがキャンセルされました。</value></data>
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>10 分以内にワークステーションが取得しなかったため、リポジトリ同期リクエストの有効期限が切れました。</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>このプロジェクトには GitSync 対応のオンラインワークステーションが接続されていません。</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>ブランチ</value></data>
   <data name="GitSyncUpstream" xml:space="preserve"><value>Upstream</value></data>
