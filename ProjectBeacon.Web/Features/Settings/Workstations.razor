@@ -280,7 +280,7 @@
     private List<RepoSyncUiRow> _repoSyncRows = [];
     private CancellationTokenSource? _refreshCts;
     private Task? _refreshTask;
-    private sealed record RepoSyncUiRow(Guid ProjectId, string? Branch, int Ahead, int Behind, bool Clean, bool Detached, bool HasUpstream, bool Diverged, DateTime? CheckedAt, int? LastAutoPullCommits, string? BlockedReason, string? LastErrorCode);
+    private sealed record RepoSyncUiRow(Guid ProjectId, string? Branch, int Ahead, int Behind, bool Clean, bool Detached, bool HasUpstream, bool Diverged, DateTimeOffset? CheckedAt, int? LastAutoPullCommits, string? BlockedReason, string? LastErrorCode);
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
     private int _contextResponseReserveTokens;
@@ -478,10 +478,14 @@
                         || projectIdElement.ValueKind != JsonValueKind.String
                         || !Guid.TryParse(projectIdElement.GetString(), out var projectId))
                         continue;
-                    DateTime? checkedAt = item.TryGetProperty("checkedAt", out var checkedAtElement)
+                    DateTimeOffset? checkedAt = item.TryGetProperty("checkedAt", out var checkedAtElement)
                         && checkedAtElement.ValueKind == JsonValueKind.String
-                        && DateTime.TryParse(checkedAtElement.GetString(), out var parsedAt)
-                            ? DateTime.SpecifyKind(parsedAt, DateTimeKind.Utc) : null;
+                        && DateTimeOffset.TryParse(checkedAtElement.GetString(),
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.AssumeUniversal
+                                | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsedAt)
+                                ? parsedAt : null;
                     int? lastPullCommits = null;
                     if (item.TryGetProperty("lastAutoPull", out var lastPull)
                         && lastPull.ValueKind == JsonValueKind.Object
@@ -564,9 +568,9 @@
             : L["RepoSyncUpToDate"].Value;
     }
 
-    private string RepoSyncUpdatedLabel(DateTime checkedAt)
+    private string RepoSyncUpdatedLabel(DateTimeOffset checkedAt)
     {
-        var minutes = Math.Max(0, (DateTime.UtcNow - DateTime.SpecifyKind(checkedAt, DateTimeKind.Utc)).TotalMinutes);
+        var minutes = Math.Max(0, (DateTimeOffset.UtcNow - checkedAt.ToUniversalTime()).TotalMinutes);
         return minutes < 1
             ? L["RepoSyncJustNow"].Value
             : string.Format(L["RepoSyncUpdatedMinutes"].Value, (int)Math.Floor(minutes));
