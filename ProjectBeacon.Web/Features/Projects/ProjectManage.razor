@@ -761,68 +761,6 @@ else
         _initialOfficialVersion = policy.OfficialVersion ?? string.Empty;
     }
 
-    private async Task ReloadVersionPolicy()
-    {
-        if (_projectId is not { } projectId)
-            return;
-        var result = await GetVersionPolicy.HandleAsync(projectId, _actor);
-        if (!result.Success || result.Value is null)
-        {
-            _versionPolicy = null;
-            Snackbar.Add(result.Error ?? L["ProjectVersionPolicyUnavailable"].Value, Severity.Warning);
-            return;
-        }
-        ApplyVersionPolicy(result.Value);
-    }
-
-    private async Task SaveVersionPolicy()
-    {
-        if (_projectId is not { } projectId || !_canEditProposalPolicies
-            || _versionPolicyBusy || _versionPolicy is null)
-            return;
-
-        var sources = new List<ProjectVersionSourcePolicy>();
-        foreach (var line in _versionSourcesText.Split(
-            ['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var fields = line.Split('|', 3, StringSplitOptions.TrimEntries);
-            if (fields.Length != 3)
-            {
-                Snackbar.Add(L["VersionSourceLineInvalid"].Value, Severity.Error);
-                return;
-            }
-            sources.Add(new ProjectVersionSourcePolicy(fields[0], fields[1], fields[2]));
-        }
-
-        _versionPolicyBusy = true;
-        try
-        {
-            var policy = new ProjectVersionPolicy(
-                _versionScheme,
-                _versionScheme == "SemVer" ? 3 : _versionComponentCount,
-                _versionScheme == "Calendar" ? _versionCalendarFormat : null,
-                _versionTagPattern,
-                _versionScheme == "SemVer" && _versionAllowPrerelease,
-                sources);
-            var saved = await SetVersionPolicy.HandleAsync(new SetProjectVersionPolicyCommand(
-                projectId, policy,
-                string.IsNullOrWhiteSpace(_initialOfficialVersion) ? null : _initialOfficialVersion.Trim(),
-                _versionPolicy.Revision, _actor));
-            if (!saved.Success || saved.Value is null)
-            {
-                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
-                await ReloadVersionPolicy();
-                return;
-            }
-            ApplyVersionPolicy(saved.Value);
-            Snackbar.Add(L["VersionPolicySaved"].Value, Severity.Success);
-        }
-        finally
-        {
-            _versionPolicyBusy = false;
-        }
-    }
-
     private static string ProposalPolicyKey(ProposalPolicyDto policy) =>
         $"{policy.TargetKind}:{policy.Operation}";
 
